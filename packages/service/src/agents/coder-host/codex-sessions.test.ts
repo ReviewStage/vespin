@@ -18,6 +18,7 @@ import {
   recordAgentNativeSession,
   updateAgentChoice,
 } from "@repo/database/models/agent-store";
+import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
 import {
   type KeyRing,
@@ -762,8 +763,15 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         );
         const opened = yield* sessions.open(message(agent, "Fix the invitations."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        // The events route records Codex's thread as the runner reports it, and the run ends.
+        // The events route records Codex's thread as the runner reports it, the store holding its
+        // rollout from its first line as the runner mirrors it, and the run ends.
         assert.equal(yield* recordAgentNativeSession(userId, agent.id, THREAD), true);
+        yield* appendSessionEntries(
+          userId,
+          agent.conversationId,
+          { projectKey: "codex", sessionId: THREAD, subpath: `sessions/rollout-${THREAD}.jsonl` },
+          [{ type: "session_meta", payload: { id: THREAD } }],
+        );
         yield* runnerTook(agent.id);
         const [first] = api.commands;
         const firstBearer = launchBearer(api, first, SERVICE_HOST);

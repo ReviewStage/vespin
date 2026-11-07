@@ -51,9 +51,9 @@
  * the turn the message awaits is delivered through its queue
  * (`turn-delivery.ts`), whose consumer resumes the place and launches the
  * runner anew (`deliverTurn`), the launch setting the repository's
- * credential at its firewall again, with the harness's session to resume
- * and the next event number, whose session files the machine's disk kept; a
- * Mac's runner, fed on its stdin, and a message naming files are launched
+ * credential at its firewall again, with the next event number and the
+ * harness's session to resume where one may be resumed (`resumedSessionOf`),
+ * a fresh one otherwise, handed the agent's steps; a Mac's runner, fed on its stdin, and a message naming files are launched
  * in the request instead. A runner warm past its machine's window
  * (`CODER.RUNNER_WARM`), or one a Stop was written to since its launch, is
  * ended rather than written to, and the message relaunches it, so no line
@@ -133,7 +133,7 @@ import {
   recordAgentNativeSession,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
-import { holdsSessionEntries } from "@repo/database/models/claude-session-entries";
+import { holdsSession } from "@repo/database/models/claude-session-entries";
 import {
   clearNativeRewindHanded,
   readNativeRewind,
@@ -407,6 +407,19 @@ function besideBytes(turnText: string | undefined, content: readonly ContentBloc
   ];
   const files = content.filter((block) => block.type !== "text").length;
   return new TextEncoder().encode(words.join("\n\n")).byteLength + fileBlocksBytes(files);
+}
+
+/**
+ * The session a launch resumes, as `resumedSessionOf` decides it: the
+ * harness's session, forked as the CLI's own where it is a continued or
+ * forked agent's source's; none for a fresh one, which `replay` says is
+ * handed the agent's steps so far, since the session the agent had is one
+ * no launch may resume.
+ */
+interface ResumedSession {
+  readonly resume?: string;
+  readonly fork?: boolean;
+  readonly replay?: boolean;
 }
 
 /** The message line as the runner takes it, the turn's own words ahead of the developer's, and what to keep once the runner took it. */
@@ -918,15 +931,13 @@ export const runnerSessions = <
       },
       layout: MachineLayout,
       first: RunnerMessage | undefined,
-      resume: string | undefined,
+      from: ResumedSession,
       credential: HarnessLaunch,
       alongside: Effect.Effect<void, AE, AR>,
       /** How the message reached the place, as the launch's span names it; none where its machine names none. */
       path: LaunchPath | undefined,
       /** The first message as the Start composed and queued it before it answered, which the launch takes over rather than composes again, its words marked handed once the runner has it. */
       queuedFirst?: OpenedLine,
-      /** Whether the session resumed is the source's of a continued or forked agent, which the CLI forks as its own. */
-      fork = false,
     ) =>
       Effect.gen(function* () {
         // The launch's trace, read here on its span, for a runner in the cloud's sandbox to trace
@@ -976,9 +987,9 @@ export const runnerSessions = <
                 const rewind = Option.getOrUndefined(
                   yield* readNativeRewind({ userId, conversationId: agent.conversationId }),
                 );
-                const rewindBefore = resume === undefined ? undefined : rewind;
+                const rewindBefore = from.resume === undefined ? undefined : rewind;
                 const config = yield* harness
-                  .config(agent, layout, resume, firstSequence, rewindBefore)
+                  .config(agent, layout, from.resume, firstSequence, rewindBefore)
                   .pipe(Effect.withSpan("web/runnerConfig"));
                 // Note that a runner stays warm past the agent's turn only on a machine with a warm
                 // window (`CODER.RUNNER_WARM`), ending itself once it passes.
@@ -992,7 +1003,7 @@ export const runnerSessions = <
                     ...(layout.transcriptsKept
                       ? { transcriptsUrl: options.transcriptsUrl }
                       : undefined),
-                    ...(fork ? { fork } : undefined),
+                    ...(from.fork === true ? { fork: true } : undefined),
                     ...(warm ? { warm, warmForMs } : undefined),
                     ...(trace === undefined ? undefined : { trace }),
                   },
@@ -1000,14 +1011,21 @@ export const runnerSessions = <
                 };
               });
               // The turn's words ahead of the first message, on what the harness's session has handed;
-              // a session not resumed is fresh, and its history holds none of it. A first message the
-              // Start already composed and queued is taken over as it stands, its words handed once.
+              // a session not resumed is fresh, and its history holds none of it, but for the agent's
+              // steps replayed where it lets go of one. A first message the Start or the send already
+              // composed and queued is taken over as it stands, its words handed once.
               const opened =
                 first === undefined
                   ? Effect.succeed(undefined)
                   : queuedFirst !== undefined
                     ? Effect.succeed(queuedFirst)
-                    : openedLine(agent, place.session, first, resume === undefined);
+                    : openedLine(
+                        agent,
+                        place.session,
+                        first,
+                        from.resume === undefined,
+                        from.replay === true,
+                      );
               // The launch's record is written before its command starts, so an END the launch it
               // replaces posts late is told apart from this one's and stops nothing.
               const [, made, opening] = yield* Effect.all(
@@ -1312,26 +1330,37 @@ export const runnerSessions = <
       );
 
     /**
-     * The session a new place resumes where the service keeps the CLI's
-     * transcript: the conversation's own where the service holds it, as for
-     * a place made anew in place of one whose disk was lost, or, at a
-     * continued or forked agent's first
-     * open, its source's, whose transcript the Start copied, forked as its
-     * own; none for an agent that has neither.
+     * The session a launch resumes, the one decision every launch, the line
+     * a send queues for one, and a warm call ask. On a machine that keeps the
+     * CLI's transcript (`MachineLayout`'s `transcriptsKept`), the harness
+     * resumes from the store whenever it holds any entry of the session, and
+     * from those alone, whatever the disk holds, so a session resumes only
+     * where the store holds it from its first entry (`holdsSession`); one it
+     * holds a tail of, or none of, as a session begun before it kept
+     * transcripts, is let go, and the fresh session that opens in its place
+     * is handed the agent's steps so far (`replay`). On a machine that keeps
+     * none, the session resumes from the disk alone, so not in a place made
+     * anew (`created`), whose disk is gone. A continued or forked agent with
+     * no session of its own yet forks its source's in a new place, where the
+     * Start copied a transcript the store holds from its first entry.
      */
-    const keptSessionOf = (agent: Agent) =>
+    const resumedSessionOf = (agent: Agent, layout: MachineLayout, created: boolean) =>
       Effect.gen(function* () {
         const routing = yield* readAgentRouting(userId, agent.id);
         const own = Option.getOrUndefined(
           Option.flatMapNullishOr(routing, (read) => read.nativeSession),
         );
-        // Note that an agent from before the store keeps no transcript there, so its session starts fresh.
+        const { conversationId } = agent;
         if (own !== undefined) {
-          const held = yield* holdsSessionEntries(userId, agent.conversationId);
-          return held ? { resume: own, fork: false } : {};
+          const resumes = layout.transcriptsKept
+            ? yield* holdsSession(userId, conversationId, own)
+            : !created;
+          return (resumes ? { resume: own } : { replay: true }) satisfies ResumedSession;
         }
         const source = agent.startedFrom?.session;
-        return source === undefined ? {} : { resume: source, fork: true };
+        if (!created || !layout.transcriptsKept || source === undefined) return {};
+        const held = yield* holdsSession(userId, conversationId, source);
+        return (held ? { resume: source, fork: true } : {}) satisfies ResumedSession;
       });
 
     /**
@@ -1359,7 +1388,7 @@ export const runnerSessions = <
     ) =>
       Effect.gen(function* () {
         const target: ConversationTarget = { userId, conversationId: agent.conversationId };
-        const from = layout.transcriptsKept ? yield* keptSessionOf(agent) : {};
+        const from = yield* resumedSessionOf(agent, layout, true);
         yield* machine.open(
           {
             session: sessionId,
@@ -1381,7 +1410,7 @@ export const runnerSessions = <
                 { name: opened.name, running: opened.place, session: sessionId },
                 layout,
                 first,
-                from.resume,
+                from,
                 credential,
                 Effect.all([opened.finishCheckout, writeInstalledSkills(opened.place, skills)], {
                   concurrency: "unbounded",
@@ -1389,7 +1418,6 @@ export const runnerSessions = <
                 }),
                 path ?? opened.path,
                 queuedFirst,
-                from.fork,
               ),
             ).pipe(Effect.annotateLogs(runningLogId(opened.place.running))),
         );
@@ -1397,14 +1425,11 @@ export const runnerSessions = <
 
     /**
      * The runner launched again in the running place given, its credential set
-     * afresh by the launch and the harness's session resumed; with no message
-     * of its own where it only hands on the lines an earlier launch never
-     * took. In a place made anew in place of one whose disk was lost
-     * (`created`), the harness's session and the member's installed skills
-     * went with that disk, so the skills are uploaded again, as a new
-     * place's are, and its session resumes only where the service keeps its
-     * transcript (`MachineLayout`'s `transcriptsKept`) and holds it, starting
-     * fresh otherwise.
+     * afresh by the launch and the harness's session resumed where it may be
+     * (`resumedSessionOf`); with no message of its own where it only hands on
+     * the lines an earlier launch never took. In a place made anew in place
+     * of one whose disk was lost (`created`), the member's installed skills
+     * went with that disk, so they are uploaded again, as a new place's are.
      */
     const relaunched = (
       agent: Agent,
@@ -1421,28 +1446,20 @@ export const runnerSessions = <
         const target = { userId, conversationId: agent.conversationId };
         // Note that a repository added beside the agent's own while its place stood is cloned here, which its launch then shares,
         // as is the agent's own where the place holds no checkout of it, as a launch whose checkout failed leaves it.
-        const [, routing, credential] = yield* Effect.all(
+        const [, from, credential] = yield* Effect.all(
           [
             machine.checkOutMissing(running, target, agent, false),
-            readAgentRouting(userId, agent.id),
+            resumedSessionOf(agent, layout, created),
             harness.launch(agent, layout),
           ],
           { concurrency: "unbounded" },
         );
-        // Note that a place made anew still resumes the session where the service keeps its transcript.
-        const kept =
-          created && layout.transcriptsKept
-            ? yield* holdsSessionEntries(userId, agent.conversationId)
-            : !created;
-        const resume = kept
-          ? Option.getOrUndefined(Option.flatMapNullishOr(routing, (read) => read.nativeSession))
-          : undefined;
         yield* launch(
           agent,
           { name, running, session: sessionId },
           layout,
           sent,
-          resume,
+          from,
           credential,
           created
             ? Effect.flatMap(nativeSkills(target, agent, harness.skillRoots), (skills) =>
@@ -1532,11 +1549,18 @@ export const runnerSessions = <
         // the line. Note that the request answers once it is queued, so a resume that waits out a
         // stop's snapshot never holds the send past the store's dispatch deadline.
         const queuedForDelivery = Effect.gen(function* () {
-          const routing = yield* readAgentRouting(userId, agent.id);
-          const fresh = Option.isNone(
-            Option.flatMapNullishOr(routing, (read) => read.nativeSession),
-          );
-          const opened = restartLine ?? (yield* openedLine(agent, sessionId, sent, fresh));
+          // Note that a machine whose runner reads its lines keeps the CLI's transcript, so whether
+          // the session resumes does not turn on whether the delivery's place is made anew.
+          const from = yield* resumedSessionOf(agent, layout, false);
+          const opened =
+            restartLine ??
+            (yield* openedLine(
+              agent,
+              sessionId,
+              sent,
+              from.resume === undefined,
+              from.replay === true,
+            ));
           yield* queued(agent, ANY_LAUNCH, [opened.line]);
           yield* opened.taken;
           return accepted;
@@ -1692,7 +1716,7 @@ export const runnerSessions = <
           // (`CODER.SANDBOX_SNAPSHOTS`), so it can never resume: the session goes on in a fresh one
           // under the session's tag, its checkout cloned again. The harness's own session files went
           // with the old filesystem, so its session resumes from the transcript the service keeps
-          // (`keptSessionOf`). The expired sandbox is deleted only once
+          // (`resumedSessionOf`). The expired sandbox is deleted only once
           // the fresh one runs, so a launch that fails (a clone refused, say) leaves the session
           // standing for the next message to try again rather than retired; a delete that fails
           // leaves the expired one beside the fresh one, which `listTagged` lists after it as the
@@ -1977,6 +2001,9 @@ export const runnerSessions = <
         if (live !== undefined) {
           return yield* deliveredTo(machine, userId, agent.id, live, [{ type: INPUT_LINE.WARM }]);
         }
+        // Note that a session no launch may resume is let go by the next message, whose line carries
+        // the agent's steps replayed, so none is launched warm with no line to hand them.
+        if ((yield* resumedSessionOf(agent, yield* machine.layout(agent), false)).replay) return;
         yield* launchedWithoutMessage(sessionId, agent);
       });
 

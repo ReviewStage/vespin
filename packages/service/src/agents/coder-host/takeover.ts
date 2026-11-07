@@ -9,10 +9,7 @@ import {
   readAgentContext,
   readAgentRouting,
 } from "@repo/database/models/agent-store";
-import {
-  copySessionEntries,
-  holdsSessionEntries,
-} from "@repo/database/models/claude-session-entries";
+import { copySessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
@@ -693,8 +690,9 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The source's CLI session a continue or a fork of a whole agent forks as
- * its own, in place of a replay of its steps: one the service keeps the
- * transcript of, on the harness the new agent runs (`runtime`), for an agent
+ * its own, in place of a replay of its steps: one the service holds the
+ * transcript of from its first entry (`holdsSession`), since the fork reads
+ * the copy alone, on the harness the new agent runs (`runtime`), for an agent
  * in the cloud, where its runner reads the transcript back; none for a fork
  * at a message, which is replayed to that message, and wherever else.
  */
@@ -712,7 +710,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   if (read?.nativeSession == null) return undefined;
   if ((yield* runtime).runtime !== read.runtime) return undefined;
   const held = yield* hostedStoreOrUnavailable(
-    holdsSessionEntries(source.userId, source.conversationId),
+    holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
   return held ? read.nativeSession : undefined;
 });

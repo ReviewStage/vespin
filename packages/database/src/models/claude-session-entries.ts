@@ -9,6 +9,13 @@
  * the main transcript. Beside them, a Start copies its source's rows to the
  * conversation it starts, so a continued or forked agent forks the source's
  * transcript as its own.
+ *
+ * A session is held from its first entry where the store holds the entry
+ * that opens it (`opensTranscript`), which an append marks as it inserts it.
+ * The Agent SDK resumes from the store whenever it holds any entry of the
+ * session, and from the store's entries alone, so a session the store holds
+ * only a tail of, as one the CLI began before the store kept transcripts, is
+ * never resumed (`../../../service/src/agents/coder-host/runner-sessions.ts`).
  */
 
 import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
@@ -74,11 +81,16 @@ const insertEntries = SqlSchema.void({
   Request: Schema.Struct({ ...KeyFields, entries: Schema.Array(EntrySchema) }),
   execute: ({ conversationId, projectKey, sessionId, subpath, entries }) =>
     Database.use((db) =>
-      db
-        .insert(claudeSessionEntries)
-        .values(
-          entries.map((entry) => ({ conversationId, projectKey, sessionId, subpath, entry })),
-        ),
+      db.insert(claudeSessionEntries).values(
+        entries.map((entry) => ({
+          conversationId,
+          projectKey,
+          sessionId,
+          subpath,
+          entry,
+          opens: opensTranscript(subpath, entry),
+        })),
+      ),
     ),
 });
 
@@ -176,6 +188,7 @@ const copyEntries = SqlSchema.void({
             sessionId: claudeSessionEntries.sessionId,
             subpath: claudeSessionEntries.subpath,
             entry: claudeSessionEntries.entry,
+            opens: claudeSessionEntries.opens,
             createdAt: claudeSessionEntries.createdAt,
           })
           .from(claudeSessionEntries)
@@ -186,19 +199,40 @@ const copyEntries = SqlSchema.void({
     ),
 });
 
-const findAnyEntry = SqlSchema.findOneOption({
-  Request: Schema.Struct(OwnerFields),
+const findOpening = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...OwnerFields, sessionId: Schema.String }),
   Result: Schema.Struct({ id: Schema.Number }),
-  execute: ({ userId, conversationId }) =>
+  execute: ({ userId, conversationId, sessionId }) =>
     Database.use((db) =>
       db
         .select({ id: claudeSessionEntries.id })
         .from(claudeSessionEntries)
         .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
-        .where(ownConversation(userId, conversationId))
+        .where(
+          and(
+            ownConversation(userId, conversationId),
+            eq(claudeSessionEntries.conversationId, conversationId),
+            eq(claudeSessionEntries.sessionId, sessionId),
+            eq(claudeSessionEntries.opens, true),
+          ),
+        )
         .limit(1),
     ),
 });
+
+/**
+ * Whether the entry opens its transcript: a Claude Code session's root,
+ * the main transcript's user entry with no parent, which every later entry
+ * of its chain descends from; or a Codex rollout's first line, its
+ * `session_meta`. The migration that added the mark backfilled it by the
+ * same predicate. Note that a CLI that stopped writing either marks nothing,
+ * so its sessions start afresh rather than resume a transcript we cannot
+ * tell is whole.
+ */
+function opensTranscript(subpath: string | null, entry: SessionEntry): boolean {
+  if (entry.type === "session_meta") return true;
+  return subpath === null && entry.type === "user" && entry.parentUuid === null;
+}
 
 /** A key's fields as the requests take them: no subpath as null. */
 function keyFields(userId: string, conversationId: string, key: SessionEntryKey) {
@@ -272,9 +306,13 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds any transcript entry. */
-export function holdsSessionEntries(userId: string, conversationId: string): EntryEffect<boolean> {
-  return findAnyEntry({ userId, conversationId }).pipe(Effect.map(Option.isSome));
+/** Whether the account's conversation holds the session given from its first entry, the entry that opens it among its own. */
+export function holdsSession(
+  userId: string,
+  conversationId: string,
+  sessionId: string,
+): EntryEffect<boolean> {
+  return findOpening({ userId, conversationId, sessionId }).pipe(Effect.map(Option.isSome));
 }
 
 /** Every row of the source conversation, read as its own account, copied to the conversation given in their order. */

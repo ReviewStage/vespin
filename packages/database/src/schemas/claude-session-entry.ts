@@ -11,14 +11,19 @@
  * through the service (`../models/claude-session-entries.ts`).
  */
 
-import { bigserial, index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigserial, boolean, index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { createdAt } from "./_helpers.js";
 import { conversations } from "./storage.js";
 
 /**
  * One transcript entry, in the order it was appended (`id`). `subpath` is
  * null for the main transcript and names a subagent's transcript otherwise.
- * `entry` is the line as the CLI wrote it, opaque to us.
+ * `entry` is the line as the CLI wrote it, opaque to us but for whether it
+ * opens its transcript (`opens`): the root of a Claude Code session, or the
+ * first line of a Codex rollout, marked in the insert that carries it
+ * (`../models/claude-session-entries.ts`), so a session the store holds
+ * from its first entry is told from one it holds only a tail of.
  */
 export const claudeSessionEntries = pgTable(
   "claude_session_entries",
@@ -31,6 +36,7 @@ export const claudeSessionEntries = pgTable(
     sessionId: text("session_id").notNull(),
     subpath: text("subpath"),
     entry: jsonb("entry").notNull(),
+    opens: boolean("opens").notNull().default(false),
     createdAt: createdAt(),
   },
   (table) => [
@@ -42,5 +48,9 @@ export const claudeSessionEntries = pgTable(
       table.subpath,
       table.id,
     ),
+    // Whether a session is held from its first entry, one row a session, which a launch asks before it resumes it.
+    index("claude_session_entries_opens_idx")
+      .on(table.conversationId, table.sessionId)
+      .where(sql`${table.opens}`),
   ],
 );

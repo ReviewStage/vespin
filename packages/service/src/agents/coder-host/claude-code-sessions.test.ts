@@ -187,6 +187,10 @@ const RELAY_INSTALLATION: InstallationFixture = {
   repositories: [RELAY],
 };
 const CLI_SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+/** Where the Agent SDK keeps the CLI's session in the store: the checkout's project, the main transcript. */
+const CLI_TRANSCRIPT = { projectKey: "-workspace-repository", sessionId: CLI_SESSION };
+/** The CLI session's root, its first entry, which every later one descends from. */
+const CLI_ROOT = { type: "user", uuid: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e01", parentUuid: null };
 
 const NO_KEYS: HostedEnvironmentValues = {
   posthogPersonalApiKey: undefined,
@@ -336,6 +340,16 @@ const sentAndDelivered = (
       yield* sessions.deliverTurn(sessionId, agent.conversationId);
     }
     return answer;
+  });
+
+/** The CLI's session as the events route records it from the runner's init, the store holding it from its root as the Agent SDK mirrors it. */
+const recordHeldSession = (
+  userId: string,
+  agent: { readonly id: string; readonly conversationId: string },
+) =>
+  Effect.gen(function* () {
+    assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+    yield* appendSessionEntries(userId, agent.conversationId, CLI_TRANSCRIPT, [CLI_ROOT]);
   });
 
 /** The developer's words of a message line: what follows the turn's own words, which lead every message (`turn-message.ts`). */
@@ -1458,7 +1472,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const target = { userId, conversationId: agent.conversationId };
         // The events route records the CLI's session from the runner's init, and the run ends.
-        assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+        yield* recordHeldSession(userId, agent);
         const firstBearer = launchBearer(api, api.commands[0], SERVICE_HOST);
         sequence.next = 42;
 
@@ -1512,6 +1526,60 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message to an agent whose stopped sandbox kept the CLI's session, which the store holds only a tail of, lets that session go and opens a fresh one with the agent's steps replayed, rather than resuming a session the CLI finds no conversation in",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 0 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        // The session began before the store kept transcripts: the store holds only the line its
+        // last launch wrote as it ended, and the Agent SDK would resume from that line alone.
+        assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+        yield* appendSessionEntries(userId, agent.conversationId, CLI_TRANSCRIPT, [
+          { type: "cost-state", sessionId: CLI_SESSION },
+        ]);
+        yield* (yield* Database).insert(messages).values({
+          id: randomUUID(),
+          ...target,
+          seq: 1,
+          clientId: "first-step",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [{ type: "text", text: "I renamed InviteToken to InvitationToken." }],
+          metadata: { author: MESSAGE_AUTHOR.MODEL },
+          placedAt: new Date(0),
+          finishedAt: new Date(0),
+        });
+        sequence.next = 42;
+        yield* runnerTook(agent.id);
+        yield* runnerEnded({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
+          Effect.provide(api.layer),
+        );
+        assert.equal(api.sandboxes[0]?.status, "stopped");
+
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.sandboxes.length, 1);
+        const relaunch = api.commands[1];
+        const [config] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig];
+        const [line] = yield* handedLines(userId, relaunch);
+        assert.equal(config.resume, undefined);
+        const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
+        assert.ok(
+          ahead?.type === "text" &&
+            ahead.text.includes("I renamed InviteToken to InvitationToken."),
+          JSON.stringify(ahead),
+        );
+        assert.deepEqual(developerContent(line), [{ type: "text", text: "Now the emails." }]);
+      }),
+  );
+
+  it.effect(
     "a message to an agent whose sandbox stopped answers once its line is queued, and its turn's delivery resumes the sandbox once the stop's snapshot is taken",
     () =>
       Effect.gen(function* () {
@@ -1522,7 +1590,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
         const opened = yield* sessions.open(message(agent, "Fix the invitations."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+        yield* recordHeldSession(userId, agent);
         sequence.next = 42;
         yield* runnerTook(agent.id);
         yield* runnerEnded({
@@ -1569,7 +1637,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
       const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
       const opened = yield* sessions.open(message(agent, "Fix the invitations."));
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-      assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+      yield* recordHeldSession(userId, agent);
       sequence.next = 42;
       yield* runnerTook(agent.id);
       const target = { userId, conversationId: agent.conversationId };
@@ -1873,7 +1941,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
         const opened = yield* sessions.open(message(agent, "Fix the invitations."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+        yield* recordHeldSession(userId, agent);
         // The runner took its first message, and a message queued as it ended was never read.
         yield* runnerTook(agent.id);
         const sent = yield* sessions.send(
@@ -1932,7 +2000,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
         const opened = yield* sessions.open(message(agent, "Fix the invitations."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+        yield* recordHeldSession(userId, agent);
         yield* runnerTook(agent.id);
         const ended = yield* runnerEnded({
           target: { userId, conversationId: agent.conversationId },
@@ -2029,7 +2097,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         // The runner took its message, and its events were applied.
         yield* runnerTook(agent.id);
         sequence.next = 1;
-        assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
+        yield* recordHeldSession(userId, agent);
         const target = { userId, conversationId: agent.conversationId };
         const lineId = randomUUID();
         yield* (yield* Database).insert(messages).values({
@@ -2146,15 +2214,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
           const opened = yield* sessions.open(message(agent, "Fix the invitations."));
           assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-          assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
-          if (stored) {
-            yield* appendSessionEntries(
-              userId,
-              agent.conversationId,
-              { projectKey: "-workspace-repository", sessionId: CLI_SESSION },
-              [{ type: "user", uuid: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e01" }],
-            );
-          }
+          if (stored) yield* recordHeldSession(userId, agent);
+          else assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
           sequence.next = 42;
           yield* runnerTook(agent.id);
           yield* runnerEnded({
@@ -3456,6 +3517,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
         const continued = Option.getOrThrow(started).agent;
+        // The Start copied the source's transcript, which the store holds from its root.
+        yield* appendSessionEntries(userId, continued.conversationId, CLI_TRANSCRIPT, [CLI_ROOT]);
 
         const opened = yield* sessions.open(message(continued, "Go on."));
 
