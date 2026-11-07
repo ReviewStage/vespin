@@ -55,6 +55,7 @@ export type AutomationFiringMessage = typeof automationFiringMessageSchema.Type;
 /** What the cadence was asked to do when Vercel did not take it. */
 const CADENCE_OPERATION = {
   KEEP: "keep",
+  LIST: "list",
   FORGET: "forget",
   PUBLISH: "publish",
 } as const;
@@ -102,6 +103,14 @@ export interface AutomationCadenceShape {
   readonly forget: (
     automation: Pick<CadencedAutomation, "id" | "organizationId">,
   ) => Effect.Effect<void, AutomationCadenceUnavailable>;
+  /**
+   * Of the automations, those with no schedule standing. Temporary: it serves
+   * the minute sweep's backfill alone (`automation-schedules-backfill.ts`)
+   * and leaves with it.
+   */
+  readonly unscheduled: (
+    automations: readonly CadencedAutomation[],
+  ) => Effect.Effect<readonly CadencedAutomation[], AutomationCadenceUnavailable>;
   /** The firing handed on to be recorded and started. */
   readonly publish: (
     firing: AutomationFiringMessage,
@@ -130,6 +139,7 @@ export const recordFiring = Effect.fnUntraced(function* (firing: AutomationFirin
 const RECORDED_ONLY: AutomationCadenceShape = {
   keep: () => Effect.void,
   forget: () => Effect.void,
+  unscheduled: () => Effect.succeed([]),
   publish: (firing) => Effect.asVoid(recordFiring(firing)),
 };
 
@@ -193,10 +203,50 @@ const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation
   }
 });
 
+/** The names of the schedules standing in a namespace Vercel knows, read a page of Vercel's at a time. */
+const listNames = Effect.fnUntraced(function* (namespace: string) {
+  const names = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const after = cursor;
+    const page = yield* vercelCall(CADENCE_OPERATION.LIST, () =>
+      Schedules.list({ namespace, limit: 100, ...(after === undefined ? {} : { cursor: after }) }),
+    );
+    for (const schedule of page.data) names.add(schedule.name);
+    cursor = page.cursor ?? undefined;
+  } while (cursor !== undefined);
+  return names;
+});
+
+/**
+ * The names of every schedule standing in the namespace. Note that a
+ * namespace Vercel does not know holds none,
+ * because a workspace whose automations were all saved before the move has
+ * never had a schedule made in it.
+ */
+const namesIn = (namespace: string) =>
+  listNames(namespace).pipe(
+    Effect.catchIf(
+      (failure) => failure.code === NOT_FOUND,
+      () => Effect.succeed(new Set<string>()),
+    ),
+  );
+
+/** The automations whose workspace's namespace holds no schedule of their name, each namespace listed once. */
+const unscheduledOf = Effect.fnUntraced(function* (automations: readonly CadencedAutomation[]) {
+  const namespaces = new Set(automations.map((automation) => automation.organizationId));
+  const standing = new Map<string, ReadonlySet<string>>();
+  for (const namespace of namespaces) standing.set(namespace, yield* namesIn(namespace));
+  return automations.filter(
+    (automation) => !standing.get(automation.organizationId)?.has(automation.id),
+  );
+});
+
 /** On production: schedules kept in Vercel Schedules under the deployment's own token, and firings sent to the topic. */
 const VERCEL_CADENCE: AutomationCadenceShape = {
   keep: keepSchedule,
   forget: forgetSchedule,
+  unscheduled: unscheduledOf,
   publish: (firing) =>
     Effect.asVoid(vercelCall(CADENCE_OPERATION.PUBLISH, () => send(AUTOMATION_RUNS.TOPIC, firing))),
 };

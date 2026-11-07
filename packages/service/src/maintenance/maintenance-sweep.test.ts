@@ -61,6 +61,7 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
         recorded.republished.push(now);
         return 0;
       }),
+    keepAutomationSchedules: () => Effect.succeed(0),
     ...overrides,
   };
   return { options, recorded };

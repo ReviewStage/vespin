@@ -1,5 +1,8 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { scheduledAutomations } from "@repo/database/models/automation-store";
+import {
+  type ScheduledAutomation,
+  scheduledAutomations,
+} from "@repo/database/models/automation-store";
 import { Effect, Layer, type Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
@@ -70,6 +73,40 @@ const keepPage = Effect.fnUntraced(function* (after: string | null) {
     refused: kept.filter((each) => !each).length,
     next: page.length < BACKFILL.PAGE || last === undefined ? null : last.id,
   };
+});
+
+/**
+ * The minute sweep's backfill: the scheduled automations walked a page at a
+ * time from the first, each call anew, until a page holds some with no
+ * schedule standing, which are kept and the walk ends; answers how many it
+ * kept. Note that it starts from the first page every call rather than
+ * carrying a cursor, because a full pass is cheap (one query and one list
+ * per workspace a page, eleven automations in one workspace on production)
+ * and keeps nothing once every schedule stands, so it needs no row of its
+ * own. A schedule Vercel refuses fails the step, which the sweep logs and
+ * runs on past (`maintenance-sweep.ts`), and the next minute asks again.
+ *
+ * Temporary: it leaves with this module, the route, and
+ * `scripts/backfill-automation-schedules.sh` once production holds every
+ * scheduled automation's schedule.
+ */
+export const keepMissingSchedules = Effect.fnUntraced(function* () {
+  const cadence = yield* AutomationCadence;
+  let after: string | null = null;
+  while (true) {
+    const page: readonly ScheduledAutomation[] = yield* scheduledAutomations(after, BACKFILL.PAGE);
+    const missing = yield* cadence.unscheduled(page);
+    if (missing.length > 0) {
+      yield* Effect.forEach(missing, cadence.keep, {
+        concurrency: BACKFILL.CONCURRENCY,
+        discard: true,
+      });
+      return missing.length;
+    }
+    const last = page.at(-1);
+    if (page.length < BACKFILL.PAGE || last === undefined) return 0;
+    after = last.id;
+  }
 });
 
 /** POST: one page of the backfill, under the deployment's secret. */
