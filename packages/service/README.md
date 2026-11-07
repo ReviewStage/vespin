@@ -1928,9 +1928,10 @@ turn sees the run a message opens as its own (`src/agents/coder-host/status.ts`)
 `starting` before one, `running`, `completed`, `failed`, or `cancelled`,
 with a running turn carrying a Stop stamp reading as canceled already, an
 agent still without a turn row five minutes after its Start
-(`CODER.STARTING_GRACE`) reading as failed rather than starting forever,
-and an agent with a message of the developer's still awaiting its turn
-(`awaitingLinesOf`) reading as running whatever its newest turn says.
+(`CODER.STARTING_GRACE`) reading as failed rather than starting forever.
+A message of the developer's is written with the turn it awaits, queued
+for its runner (`packages/database/src/models/turn-state.ts`), so the
+newest turn alone says where the agent stands.
 `GET /api/agents/{id}/messages?after=<seq>:<revision>` answers the
 conversation's rows past the cursor as `UIMessage`s, the cursor to read on
 from, the agent's status as the page was read, and, where that status is

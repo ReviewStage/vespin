@@ -1,11 +1,5 @@
 import { Schema as EffectSchema } from "effect";
-import {
-  agentStatusAt,
-  lineAwaitsTurn,
-  type StatusTurn,
-  statusClockEdge,
-  turnStoppable,
-} from "./agent-status.js";
+import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
   AGENT_BRIEF,
   AGENT_MACHINE,
@@ -176,12 +170,13 @@ const agentLiveRowSchema = EffectSchema.Struct({
   turnId: EffectSchema.NullOr(EffectSchema.String),
   turnStatus: EffectSchema.NullOr(EffectSchema.String),
   cancelRequested: EffectSchema.NullOr(EffectSchema.Boolean),
-  /** When the newest turn's Stop was asked; absent from a statement before it was carried. */
-  cancelRequestedAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   queuedAt: EffectSchema.NullOr(countedNumber),
   startedAt: EffectSchema.NullOr(countedNumber),
   settledAt: EffectSchema.NullOr(countedNumber),
-  /** Until when the newest turn's runner is held to be at work; absent from a statement before it was carried. */
+  // Note that the four columns below are read by the status rule of a desktop released before
+  // the turn record, and by nothing of this build: carried until the next desktop release is the
+  // oldest in use, then dropped with the service's statement. `awaitingLineAt` is always null.
+  cancelRequestedAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   leaseUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   turnSessionEnded: EffectSchema.NullOr(EffectSchema.Boolean),
   awaitingLineAt: EffectSchema.NullOr(countedNumber),
@@ -273,34 +268,20 @@ function newestFirst<Row extends { readonly id: string; readonly createdAt: numb
 function turnOf(row: AgentLiveRow): StatusTurn | undefined {
   return row.turnId === null || row.turnStatus === null
     ? undefined
-    : {
-        status: row.turnStatus,
-        cancelRequested: row.cancelRequested === true,
-        cancelRequestedAt: row.cancelRequestedAt ?? undefined,
-        queuedAt: row.queuedAt ?? row.createdAt,
-        settledAt: row.settledAt,
-        sessionEnded: row.turnSessionEnded === true,
-        leaseUntil: row.leaseUntil ?? undefined,
-      };
+    : { status: row.turnStatus, cancelRequested: row.cancelRequested === true };
 }
 
-/** Where the agent stands at `now`, as the status rule reads it: its Start, its newest awaiting line where one stands, and whether it was started blank. */
+/** Where the agent stands at `now`, as the status rule reads it: its Start, and whether it was started blank. */
 function standingOf(row: AgentLiveRow, now: number) {
-  return {
-    createdAt: row.createdAt,
-    now,
-    awaitingLineAt: row.awaitingLineAt ?? undefined,
-    blank: row.brief === AGENT_BRIEF.BLANK,
-  };
+  return { createdAt: row.createdAt, now, blank: row.brief === AGENT_BRIEF.BLANK };
 }
 
 function statusOf(row: AgentLiveRow, now: number): AgentStatus {
   return agentStatusAt(turnOf(row), standingOf(row, now));
 }
 
-/** When the run the status is read from began: the newest turn's start, or its queueing, the agent's own before any turn, and none while a line awaits its turn. */
-function runStartedAt(row: AgentLiveRow, now: number): number | undefined {
-  if (lineAwaitsTurn(turnOf(row), standingOf(row, now))) return undefined;
+/** When the run the status is read from began: the newest turn's start, or its queueing before a runner took it, and the agent's own before any turn. */
+function runStartedAt(row: AgentLiveRow): number | undefined {
   return turnOf(row) === undefined ? row.createdAt : (row.startedAt ?? row.queuedAt ?? undefined);
 }
 
@@ -485,7 +466,7 @@ function agentSummaryOf(
     (name) => integrationConnectionOf(name) !== undefined,
   );
   const archivedBy = archivedByOf(row);
-  const started = runStartedAt(row, now);
+  const started = runStartedAt(row);
   const status = statusOf(row, now);
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
@@ -681,7 +662,7 @@ export interface TaskListDrawing {
   readonly agentPullRequests: readonly ListedPullRequest[];
   /** The reader's pins of agents on a plan, the archived left out. */
   readonly taskAgentPins: readonly TaskAgentPin[];
-  /** The next instant past the one drawn at that the clock alone moves it: the first agent whose starting grace or awaiting line's grace ends; none where none waits on one. */
+  /** The next instant past the one drawn at that the clock alone moves it: the first agent with no turn yet whose starting grace ends; none where none waits on one. */
   readonly edge: number | undefined;
 }
 

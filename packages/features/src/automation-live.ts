@@ -50,9 +50,11 @@ const runAgentFields = {
   turnId: EffectSchema.NullOr(EffectSchema.String),
   turnStatus: EffectSchema.NullOr(EffectSchema.String),
   cancelRequested: EffectSchema.NullOr(EffectSchema.Boolean),
+  // Note that the five columns below are read by the status rule of a desktop released before
+  // the turn record, and by nothing of this build: carried until the next desktop release is the
+  // oldest in use, then dropped with the service's statement. `awaitingLineAt` is always null.
   turnQueuedAt: EffectSchema.NullOr(countedNumber),
   turnSettledAt: EffectSchema.NullOr(countedNumber),
-  /** Until when the newest turn's runner is held to be at work; absent from a statement before it was carried. */
   turnLeaseUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   turnSessionEnded: EffectSchema.NullOr(EffectSchema.Boolean),
   awaitingLineAt: EffectSchema.NullOr(countedNumber),
@@ -189,14 +191,7 @@ type RunAgentRow = EffectSchema.Struct<typeof runAgentFields>["Type"];
 function turnOf(row: RunAgentRow): StatusTurn | undefined {
   return row.turnId === null || row.turnStatus === null
     ? undefined
-    : {
-        status: row.turnStatus,
-        cancelRequested: row.cancelRequested === true,
-        queuedAt: row.turnQueuedAt ?? row.agentCreatedAt ?? 0,
-        settledAt: row.turnSettledAt,
-        sessionEnded: row.turnSessionEnded === true,
-        leaseUntil: row.turnLeaseUntil ?? undefined,
-      };
+    : { status: row.turnStatus, cancelRequested: row.cancelRequested === true };
 }
 
 /**
@@ -212,11 +207,7 @@ function runAgentOf(
   if (row.agentId === null || row.agentCreatedAt === null) return null;
   const status = handedOn
     ? AGENT_STATUS.COMPLETED
-    : agentStatusAt(turnOf(row), {
-        createdAt: row.agentCreatedAt,
-        now,
-        awaitingLineAt: row.awaitingLineAt ?? undefined,
-      });
+    : agentStatusAt(turnOf(row), { createdAt: row.agentCreatedAt, now });
   const failureReason =
     status === AGENT_STATUS.FAILED && row.failureWord !== null ? row.failureWord : undefined;
   return {
@@ -231,11 +222,7 @@ function runAgentOf(
 /** The next instant past `now` the clock alone moves a run's agent; none where only a row moves it. */
 function clockEdgeOf(row: RunAgentRow, now: number): number | undefined {
   if (row.agentCreatedAt === null) return undefined;
-  return statusClockEdge(turnOf(row), {
-    createdAt: row.agentCreatedAt,
-    now,
-    awaitingLineAt: row.awaitingLineAt ?? undefined,
-  });
+  return statusClockEdge(turnOf(row), { createdAt: row.agentCreatedAt, now });
 }
 
 /** The earliest of the edges given; none where there is none. */

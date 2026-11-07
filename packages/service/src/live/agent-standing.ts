@@ -1,5 +1,5 @@
 import { queryBuilder } from "@repo/database/core/query";
-import { lastSettledTurnAt, newestAwaitingLineAt } from "@repo/database/models/message-reads";
+import { lastSettledTurnAt } from "@repo/database/models/message-reads";
 import { turns } from "@repo/database/schemas/storage";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
 import { desc, eq, type SQL, type SQLWrapper, sql } from "drizzle-orm";
@@ -7,10 +7,10 @@ import { FAILURE_WORDS } from "../agents/coder-host/status.js";
 import { TURN_FAILURE, TURN_STATUS } from "../core.js";
 
 /**
- * agent-standing.ts -- what a coding agent's status is read from, written for Neon Realtime: its newest turn, when the newest line of the developer's awaiting its turn was written, and why its newest turn failed.
+ * agent-standing.ts -- what a coding agent's status is read from, written for Neon Realtime: its newest turn, and why it failed.
  *
  * Each is the same rule the held reads read an agent by
- * (`message-reads.ts`'s `findLatestTurns` and `awaitingLinesOfReached`, and
+ * (`message-reads.ts`'s `findLatestTurns`, and
  * `coder-host/status.ts`'s `agentFailureOf`), as a fragment a live
  * statement joins or selects beside the agent's own row. Nothing here reads
  * the clock: the status itself, which turns on it, is the reader's to read
@@ -42,17 +42,12 @@ export function latestTurnOf(conversationId: SQLWrapper, name: string) {
 /** The latest turn as `latestTurnOf` names it. */
 type LatestTurn = ReturnType<typeof latestTurnOf>;
 
-/** When the newest line of the developer's awaiting its turn in the conversation named was written, or null, as `awaitingLinesOfReached` reads it. */
-export function awaitingLineAtIn(conversationId: SQLWrapper): SQL<Date | null> {
-  return newestAwaitingLineAt(sql`${conversationId}`);
-}
-
 /** When the newest turn to end in the conversation named ended, or null, as `lastSettledTurnsOfReached` reads it: what the list reads an agent's activity from. */
 export function lastSettledAtIn(conversationId: SQLWrapper): SQL<Date | null> {
   return lastSettledTurnAt(sql`${conversationId}`);
 }
 
-/** Whether the newest turn failed because its session ended for good, which leaves every line awaiting nothing; null where no turn stands. */
+/** Whether the newest turn failed because its session ended for good; null where no turn stands. Read by the status rule of a desktop released before the turn record alone (`@repo/features/task-list-live`). */
 export function sessionEndedOf(latest: LatestTurn): SQL<boolean | null> {
   return sql<boolean | null>`${latest.failure} = ${TURN_FAILURE.SESSION_ENDED}`;
 }

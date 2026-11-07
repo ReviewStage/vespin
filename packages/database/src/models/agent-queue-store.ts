@@ -58,7 +58,6 @@
 import { randomUUID } from "node:crypto";
 import type { HostedApiError } from "@repo/features";
 import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
-import { LINE_GRACE_MILLIS } from "@repo/features/agent-status";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { and, asc, count, eq, exists, isNotNull, isNull, lte, max, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
@@ -144,11 +143,11 @@ function messageOf(row: typeof QueuedRowSchema.Type): QueuedMessageRow {
   };
 }
 
-/** The rows no send stands claimed on at `now`: never claimed, or claimed by a send cut off a line's grace ago. */
+/** The rows no send stands claimed on at `now`: never claimed, or claimed by a send cut off a claim's length ago. */
 function unclaimedAt(now: Date) {
   return or(
     isNull(queuedMessage.claimedAt),
-    lte(queuedMessage.claimedAt, new Date(now.getTime() - LINE_GRACE_MILLIS)),
+    lte(queuedMessage.claimedAt, new Date(now.getTime() - AGENT_QUEUE_BOUNDS.CLAIM_MS)),
   );
 }
 
@@ -922,11 +921,11 @@ export function refuseQueuedMessage(
   );
 }
 
-/** Whether a send stands claimed on the message at `now`, one cut off lapsing after a line's grace. */
+/** Whether a send stands claimed on the message at `now`, one cut off lapsing after a claim's length. */
 export function claimedAt(message: QueuedMessageRow, now: Date): boolean {
   return (
     message.claimedAt !== undefined &&
-    message.claimedAt.getTime() > now.getTime() - LINE_GRACE_MILLIS
+    message.claimedAt.getTime() > now.getTime() - AGENT_QUEUE_BOUNDS.CLAIM_MS
   );
 }
 

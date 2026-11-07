@@ -16,8 +16,9 @@ import {
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
 import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
-import { awaitingLinesOfReached, readMessageByClientId } from "@repo/database/models/message-reads";
+import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
@@ -913,8 +914,8 @@ it.layer(getTestDB())("a delivery told to the agents on its pull request", (it) 
           review,
         );
         assert.ok(
-          (yield* awaitingLinesOfReached([agent.conversationId])).has(agent.conversationId),
-          "GitHub's line awaits the agent's turn as the developer's does",
+          Option.isSome(yield* queuedTurnOf(agent.conversationId)),
+          "GitHub's line queued the turn it awaits as the developer's does",
         );
       }),
   );

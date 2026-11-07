@@ -1,104 +1,25 @@
 import { NO_AGENT_OWNER_FACTS } from "@repo/database/models/agent-owners";
-import type { AgentLatestTurn, AgentLine } from "@repo/database/models/agent-store";
+import type { AgentLine } from "@repo/database/models/agent-store";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
   AGENT_KIND,
   AGENT_MACHINE,
-  AGENT_STATUS,
   CONTEXT_WINDOW,
 } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { Duration } from "effect";
 import { expect, test } from "vitest";
 import { TURN_FAILURE, TURN_STATUS } from "../../core.js";
-import { CODER } from "./bounds.js";
-import { agentFailureOf, agentStatusOf, agentSummary } from "./status.js";
-
-/**
- * status.test.ts -- how long a line of the developer's awaiting its turn
- * reads it running; why a failed turn failed, a prompt past the model's
- * window told apart; and the Mac a local agent's summary names, and when it
- * last beat.
- */
-
-const LINE_GRACE_MS = Duration.toMillis(CODER.LINE_GRACE);
+import { agentFailureOf, agentSummary } from "./status.js";
 
 const STARTED = new Date(1_000);
 
-/** A turn of the agent's, queued at `queuedAt`, begun at `startedAt`, and settled at `settledAt` where it has. */
-function turn(times: {
-  queuedAt: number;
-  startedAt?: number;
-  settledAt?: number;
-}): AgentLatestTurn {
-  return {
-    conversationId: "conversation-1",
-    id: "turn-1",
-    status: times.settledAt === undefined ? "running" : "settled",
-    runtimeTurnId: null,
-    failure: null,
-    failureDetail: null,
-    cancelRequestedAt: null,
-    queuedAt: new Date(times.queuedAt),
-    startedAt: times.startedAt === undefined ? null : new Date(times.startedAt),
-    settledAt: times.settledAt === undefined ? null : new Date(times.settledAt),
-    model: null,
-    usage: null,
-    fastRefused: false,
-  };
-}
-
-test("a line sent to an idle agent reads it running for the grace its turn opens in, and failed past it, unanswered", () => {
-  const settled = turn({ queuedAt: 2_000, startedAt: 2_500, settledAt: 3_000 });
-  const awaitingLineAt = new Date(10_000);
-  const at = (now: number) => agentStatusOf(settled, { createdAt: STARTED, now, awaitingLineAt });
-  expect(at(10_000 + LINE_GRACE_MS)).toBe(AGENT_STATUS.RUNNING);
-  expect(at(10_001 + LINE_GRACE_MS)).toBe(AGENT_STATUS.FAILED);
-});
-
-test("a line sent before the first turn reads the agent failed past the grace rather than running", () => {
-  const awaitingLineAt = new Date(2_000);
-  const now = 2_001 + LINE_GRACE_MS;
-  expect(agentStatusOf(undefined, { createdAt: STARTED, now, awaitingLineAt })).toBe(
-    AGENT_STATUS.FAILED,
-  );
-});
-
-test("a line sent while a turn runs reads the agent running however long the turn's step runs", () => {
-  const now = 3_000 + 10 * LINE_GRACE_MS;
-  const running = { ...turn({ queuedAt: 2_000, startedAt: 2_500 }), leaseUntil: new Date(now + 1) };
-  const awaitingLineAt = new Date(3_000);
-  expect(agentStatusOf(running, { createdAt: STARTED, now, awaitingLineAt })).toBe(
-    AGENT_STATUS.RUNNING,
-  );
-});
-
-test("a line's grace counts from when the turn it was sent during ended, since nothing ran to take it only after", () => {
-  const settled = turn({ queuedAt: 2_000, startedAt: 2_500, settledAt: 2_500 + LINE_GRACE_MS });
-  const awaitingLineAt = new Date(3_000);
-  const now = 3_000 + LINE_GRACE_MS;
-  expect(agentStatusOf(settled, { createdAt: STARTED, now, awaitingLineAt })).toBe(
-    AGENT_STATUS.RUNNING,
-  );
-});
-
-test("a line older than the newest turn's queueing that the turn never took reads the agent as that turn ended", () => {
-  const settled = turn({ queuedAt: 4_000, startedAt: 4_500, settledAt: 9_000 });
-  const awaitingLineAt = new Date(3_000);
-  expect(agentStatusOf(settled, { createdAt: STARTED, now: 9_001, awaitingLineAt })).toBe(
-    AGENT_STATUS.COMPLETED,
-  );
-});
-
-test("a line sent while the newest turn was queued, and never taken, reads the agent failed past the grace from that turn's end", () => {
-  const settled = turn({ queuedAt: 4_000, startedAt: 6_000, settledAt: 9_000 });
-  const awaitingLineAt = new Date(5_000);
-  const at = (now: number) => agentStatusOf(settled, { createdAt: STARTED, now, awaitingLineAt });
-  expect(at(9_000 + LINE_GRACE_MS)).toBe(AGENT_STATUS.RUNNING);
-  expect(at(9_001 + LINE_GRACE_MS)).toBe(AGENT_STATUS.FAILED);
-});
+/**
+ * status.test.ts -- why a failed turn failed, a prompt past the model's
+ * window told apart; and the Mac a local agent's summary names, and when it
+ * last beat.
+ */
 
 /** A turn the model call failed, its failure detail as given. */
 const failedOnModel = (failureDetail: string) => ({
@@ -157,7 +78,7 @@ test("a local agent's summary names its Mac and when it last beat; an agent in a
   const seen = (lastSeenAt: number) =>
     agentSummary(
       line,
-      { turn: undefined, awaitingLineAt: undefined },
+      { turn: undefined },
       now,
       new Map(),
       NO_AGENT_OWNER_FACTS,

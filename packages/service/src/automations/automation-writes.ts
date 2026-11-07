@@ -126,11 +126,7 @@ function agentOf(
   standing: AgentTurnStanding,
   now: number,
 ): NonNullable<AutomationRunSummary["agent"]> {
-  const status = agentStatusOf(standing.turn, {
-    createdAt,
-    now,
-    awaitingLineAt: standing.awaitingLineAt,
-  });
+  const status = agentStatusOf(standing.turn, { createdAt, now });
   const failureReason = status === AGENT_STATUS.FAILED ? agentFailureOf(standing.turn) : undefined;
   return {
     id,

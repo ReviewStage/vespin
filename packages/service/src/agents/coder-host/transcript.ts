@@ -3,7 +3,6 @@ import {
   type Agent,
   type AgentDelegation,
   type AgentRouting,
-  awaitingLinesOf,
   delegationStartsOf,
   delegationsOf,
   delegationTitlesOf,
@@ -213,25 +212,18 @@ const WAITING_STATUSES: ReadonlySet<AgentStatus> = new Set([
 /** When an agent was started, and whether blank, which is what its status is read by beside its turns (`AgentStanding`). */
 type AgentStart = Pick<AgentStanding, "createdAt" | "blank">;
 
-/** The agent's status now, read from its newest turn and when the newest line awaiting one was written, when that run began, why where that turn failed, and the instant the clock alone would move it, where one stands. */
+/** The agent's status now, read from its newest turn, when that run began, why where that turn failed, and the instant the clock alone would move it, where one stands. */
 const statusNow = (target: ConversationTarget, { createdAt, blank }: AgentStart) =>
   Effect.gen(function* () {
-    const { turns, awaiting } = yield* Effect.all(
-      {
-        turns: latestTurnsOf(target.userId, [target.conversationId]),
-        awaiting: awaitingLinesOf(target.userId, [target.conversationId]),
-      },
-      { concurrency: CODER.READ_CONCURRENCY },
-    );
+    const turns = yield* latestTurnsOf(target.userId, [target.conversationId]);
     const now = yield* Clock.currentTimeMillis;
     const turn = turns.get(target.conversationId);
-    const awaitingLineAt = awaiting.get(target.conversationId);
-    const status = agentStatusOf(turn, { createdAt, now, awaitingLineAt, blank });
-    const runStartedAt = agentRunStartedAt(turn, { createdAt, now, awaitingLineAt });
+    const status = agentStatusOf(turn, { createdAt, now, blank });
+    const runStartedAt = agentRunStartedAt(turn, { createdAt });
     const failed = status === AGENT_STATUS.FAILED;
     const failureReason = failed ? agentFailureOf(turn) : undefined;
     const hostLost = failed ? hostLostOf(turn) : undefined;
-    const graceEdge = statusClockEdge(turn, { createdAt, now, awaitingLineAt, blank });
+    const graceEdge = statusClockEdge(turn, { createdAt, now, blank });
     return { status, runStartedAt, failureReason, hostLost, turn, graceEdge };
   });
 
@@ -630,7 +622,7 @@ function pagePast(
         messages: yield* transcriptMessagesOf(target, read.ok ? read.value : []),
         cursor,
         status,
-        ...(runStartedAt === undefined ? undefined : { runStartedAt }),
+        runStartedAt,
         ...(failureReason === undefined ? undefined : { failureReason }),
         ...(hostLost === undefined ? undefined : { hostLost }),
       },

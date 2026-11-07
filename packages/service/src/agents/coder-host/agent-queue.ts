@@ -38,7 +38,7 @@ import {
   refuseQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import { type Agent, readAgentOfConversation } from "@repo/database/models/agent-store";
-import { awaitingLinesOfReached, latestTurnsOfReached } from "@repo/database/models/message-reads";
+import { latestTurnsOfReached } from "@repo/database/models/message-reads";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import type { HostedApiError } from "@repo/features";
@@ -109,16 +109,12 @@ export function queueOnPage(agentId: string) {
   });
 }
 
-/** Whether the agent is at work, as its status reads: starting, a turn running, or a message sent to it awaiting its turn. */
+/** Whether the agent is at work, as its status reads: starting, or a turn queued for its runner or running. */
 const atWork = Effect.fn("web/queueAtWork")(function* (agent: Agent) {
   const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(agent.conversationId);
-  const awaitingLineAt = (yield* awaitingLinesOfReached([agent.conversationId])).get(
-    agent.conversationId,
-  );
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
-    awaitingLineAt,
     blank: startedBlank(agent),
   });
   return status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING;
@@ -235,7 +231,7 @@ const handOnQueue = Effect.fn("web/handOnQueue")(function* (
  * The agent's queue at a touch of the agent, once its lapsed runner is
  * settled: handed on where the queue stands unpaused, its head not being
  * edited, and no send stands claimed on it at the instant read, its head
- * never claimed or claimed by a hand-off cut off a line's grace ago. Note
+ * never claimed or claimed by a hand-off cut off a claim's length ago. Note
  * that the queue is read first without its lock, so a touch with nothing to
  * hand on, as nearly every one is, takes none, and that the hand-on claims
  * the head again under the lock, so a touch racing a turn's end sends the

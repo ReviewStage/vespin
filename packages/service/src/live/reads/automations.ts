@@ -52,12 +52,7 @@ import {
 import { and, desc, eq, inArray, isNotNull, type SQLWrapper, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
-import {
-  awaitingLineAtIn,
-  failureWordOf,
-  latestTurnOf,
-  sessionEndedOf,
-} from "../agent-standing.js";
+import { failureWordOf, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
 
 /** The most runs an automation's live history holds, as its held read answers them. */
@@ -122,7 +117,9 @@ function runAgentColumns(userId: string, latest: ReturnType<typeof latestTurnOf>
       turnQueuedAt: outerJoined(latest.queuedAt),
       turnSettledAt: latest.settledAt,
       turnLeaseUntil: latest.leaseUntil,
-      awaitingLineAt: awaitingLineAtIn(agentTable.conversationId),
+      // Note that a desktop released before the turn record reads a line awaiting its turn by this; null
+      // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
+      awaitingLineAt: sql<Date | null>`null::timestamptz`,
     },
   };
 }

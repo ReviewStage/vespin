@@ -8,10 +8,9 @@
  * launch by its first event number and the place of the last line the
  * runner read, and is answered the agent's lines past that place
  * (`@repo/database`'s `runner-line-store.ts`): those written for the launch,
- * and the message lines an earlier launch never took, queued no longer ago
- * than a line still reads as awaiting its turn (`CODER.LINE_GRACE`), so a
- * line the developer was already told went unanswered is never run behind
- * their back. Where nothing stands past the place, the read is held on the
+ * and the message lines an earlier launch never took whose turn still waits
+ * on them, so a line whose turn failed, which the developer was told of, is
+ * never run behind their back. Where nothing stands past the place, the read is held on the
  * agent's topic (`../../http/held-read.ts`), which a line queued wakes
  * through Sync, and answers none at the hold's end, as a device's read
  * is held; the runner asks again.
@@ -30,7 +29,7 @@ import { readAgentOfConversation } from "@repo/database/models/agent-store";
 import { type RunnerLine, runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { TOPIC } from "@repo/database/sync/notification";
 import { HTTP_METHOD } from "@repo/wire";
-import { DateTime, Duration, Effect, Layer, Option, Schema } from "effect";
+import { Duration, Effect, Layer, Option, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, type HttpServerResponse } from "effect/http";
 import { heldUntil } from "../../http/held-read.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
@@ -43,7 +42,6 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
-import { CODER } from "../coder-host/bounds.js";
 import { admitRunnerBearer, presentedBearer } from "../workspace-mcp/bearer.js";
 
 /** The path a runner reads its lines from. */
@@ -105,11 +103,9 @@ const runnerLinesEndpoint = /* @__PURE__ */ Effect.fn("web/runnerLinesEndpoint")
       readAgentOfConversation(target.userId, target.conversationId),
     );
     if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-    const now = yield* DateTime.nowAsDate;
     const read = runnerLinesPast(target.userId, agent.value.id, {
       launch: query.value[RUNNER_LINES.QUERY.LAUNCH],
       after: query.value[RUNNER_LINES.QUERY.AFTER],
-      since: new Date(now.getTime() - Duration.toMillis(CODER.LINE_GRACE)),
       limit: RUNNER_LINES_ANSWER.LIMIT,
     });
     const held = yield* hostedStoreOrUnavailable(

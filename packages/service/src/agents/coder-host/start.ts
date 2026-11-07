@@ -1319,7 +1319,6 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
       agent,
       {
         turn: undefined,
-        awaitingLineAt: undefined,
         runtime: runtimes.get(agent.conversationId),
       },
       yield* Clock.currentTimeMillis,

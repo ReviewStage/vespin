@@ -310,8 +310,8 @@ const message = (agent: Agent, text: string, lineId?: string) => ({
   ...(lineId === undefined ? undefined : { lineId }),
 });
 
-/** A Start's first message, written as the line awaiting the turn it queues (`start.ts`'s `openingLine`), and handed to the open under its line id. */
-const startLine = (agent: Agent, text: string) =>
+/** A message written as the line awaiting the turn its send queues or joins, as a Start's first line and a steer are (`start.ts`'s `openingLine`, `steer.ts`), and handed on under its line id. */
+const writtenLine = (agent: Agent, text: string) =>
   Effect.gen(function* () {
     const clientKey = randomUUID();
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
@@ -345,7 +345,6 @@ const handedLines = (userId: string, command: Parameters<typeof launchLines>[0])
     const read = yield* runnerLinesPast(userId, command.agentId, {
       launch: config.firstSequence,
       after: 0,
-      since: new Date(0),
       limit: 50,
     });
     return read.map((line) => JSON.parse(line.text) as InputLine);
@@ -1538,7 +1537,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const kept = keptAfterResponse();
 
         const sent = yield* sessions
-          .send(opened.sessionId, message(agent, "Now the emails."))
+          .send(opened.sessionId, yield* writtenLine(agent, "Now the emails."))
           .pipe(Effect.provide(kept.layer));
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
@@ -1609,7 +1608,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const kept = keptAfterResponse();
 
         const sent = yield* sessions
-          .send(opened.sessionId, message(agent, "Now the emails."))
+          .send(opened.sessionId, yield* writtenLine(agent, "Now the emails."))
           .pipe(Effect.provide(kept.layer));
         yield* across(kept.run, CODER.RESUME_WHILE_ENDING.SPACING, 4);
 
@@ -1645,14 +1644,12 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         );
         const db = yield* Database;
         const kept = keptAfterResponse();
+        const line = yield* writtenLine(agent, "Now the emails.");
 
         // Note that the table is taken away for the send alone, so the read of the experiments fails.
         const sent = yield* Effect.acquireUseRelease(
           db.execute(sql`alter table workspace_experiment rename to workspace_experiment_away`),
-          () =>
-            sessions
-              .send(opened.sessionId, message(agent, "Now the emails."))
-              .pipe(Effect.provide(kept.layer)),
+          () => sessions.send(opened.sessionId, line).pipe(Effect.provide(kept.layer)),
           () =>
             Effect.orDie(
               db.execute(sql`alter table workspace_experiment_away rename to workspace_experiment`),
@@ -1695,7 +1692,10 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const kept = keptAfterResponse();
 
         yield* sessions
-          .send(opened.sessionId, message(agent, `Now the emails. ${"y".repeat(60_000)}`))
+          .send(
+            opened.sessionId,
+            yield* writtenLine(agent, `Now the emails. ${"y".repeat(60_000)}`),
+          )
           .pipe(Effect.provide(kept.layer));
         yield* across(kept.run, CODER.RESUME_WHILE_ENDING.SPACING, 4);
 
@@ -1850,7 +1850,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           Effect.provide(services(api)),
         );
         const queuedAt = yield* Clock.currentTimeMillis;
-        const opened = yield* sessions.open(yield* startLine(agent, "Fix the invitations."));
+        const opened = yield* sessions.open(yield* writtenLine(agent, "Fix the invitations."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const untaken = Option.getOrThrow(yield* queuedTurnOf(agent.conversationId));
         /** The newest launch's runner crashes before it takes a line, and the message given relaunches it. */
@@ -1875,7 +1875,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           ),
         );
         // A line written past the deadline, before any reap, as one is while another call holds the runner lease.
-        yield* relaunched(yield* startLine(agent, "Try once more."));
+        yield* relaunched(yield* writtenLine(agent, "Try once more."));
         const relaunch = api.commands.at(-1);
         const reaped = yield* reconcileAgent(agent).pipe(Effect.provide(api.layer));
 
@@ -1905,7 +1905,10 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(yield* recordAgentNativeSession(userId, agent.id, CLI_SESSION), true);
         // The runner took its first message, and a message queued as it ended was never read.
         yield* runnerTook(agent.id);
-        const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
+        const sent = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Now the emails."),
+        );
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         sequence.next = 9;
 
@@ -1938,7 +1941,6 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: config.firstSequence,
           after: 0,
-          since: new Date(0),
           limit: 10,
         });
         assert.deepEqual(
@@ -2001,7 +2003,6 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: config.firstSequence,
           after: 0,
-          since: new Date(0),
           limit: 10,
         });
         const lines = read.map((line) => JSON.parse(line.text) as InputLine);
@@ -2699,7 +2700,6 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: 3,
           after: 0,
-          since: new Date(0),
           limit: 10,
         });
         // The developer's words close each message, the turn's own words ahead of them on the first
@@ -2757,7 +2757,6 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const read = yield* runnerLinesPast(userId, agent.id, {
           launch: 4,
           after: 0,
-          since: new Date(0),
           limit: 10,
         });
         assert.deepEqual(read, []);
@@ -3090,7 +3089,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         api.failStdin.status = 400;
 
         const opened = yield* sessions
-          .open(yield* startLine(agent, "Fix the invitations."))
+          .open(yield* writtenLine(agent, "Fix the invitations."))
           .pipe(Effect.provide(logger));
 
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
@@ -3128,7 +3127,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         api.hooks.onRun = (_env, command) =>
           command === "bash" ? Promise.reject(new Error("socket hang up")) : Promise.resolve();
 
-        yield* sessions.open(yield* startLine(agent, "Push a branch."));
+        yield* sessions.open(yield* writtenLine(agent, "Push a branch."));
 
         const detail = (yield* newestFailureDetail(agent)) ?? "";
         assert.ok(
@@ -3160,7 +3159,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           ),
         );
         yield* diedSessions
-          .open(yield* startLine(died.agent, "Go."))
+          .open(yield* writtenLine(died.agent, "Go."))
           .pipe(Effect.provide(diedKept.layer));
         yield* diedKept.run;
 
@@ -3173,7 +3172,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         ) =>
           Effect.gen(function* () {
             const kept = keptAfterResponse();
-            yield* sessions.open(yield* startLine(agent, "Go.")).pipe(Effect.provide(kept.layer));
+            yield* sessions.open(yield* writtenLine(agent, "Go.")).pipe(Effect.provide(kept.layer));
             const launching = yield* Effect.forkChild(kept.run);
             yield* Effect.promise(() => held.arrived);
             yield* Fiber.interrupt(launching);
@@ -3272,7 +3271,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           run.args.some((arg) => arg.includes("git config user.email"));
         const kept = keptAfterResponse();
         const opened = yield* sessions
-          .open(yield* startLine(agent, "Fix the relay."))
+          .open(yield* writtenLine(agent, "Fix the relay."))
           .pipe(Effect.provide(kept.layer));
         // The launch, then the base snapshot's fill, whose clone is refused too.
         yield* kept.run;
@@ -3285,13 +3284,13 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         // The clone goes through now, and the identity is refused.
         checkout.cloneRefused = false;
         yield* sessions
-          .send(opened.sessionId, message(agent, "Try again."))
+          .send(opened.sessionId, yield* writtenLine(agent, "Try again."))
           .pipe(Effect.provide(kept.layer));
         yield* kept.run;
         const clonedRuns = api.runs.length;
         checkout.identityRefused = false;
         const sent = yield* sessions
-          .send(opened.sessionId, message(agent, "Try again."))
+          .send(opened.sessionId, yield* writtenLine(agent, "Try again."))
           .pipe(Effect.provide(kept.layer));
         yield* kept.run;
 

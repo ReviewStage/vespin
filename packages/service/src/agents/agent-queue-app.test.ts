@@ -13,8 +13,7 @@ import { sentLineStands } from "@repo/database/models/message-reads";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace } from "@repo/database/testing";
-import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
-import { LINE_GRACE_MILLIS } from "@repo/features/agent-status";
+import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_KIND,
@@ -582,7 +581,7 @@ it.layer(getTestDB())("an agent's queue", (it) => {
           "a claim standing is a send under way",
         );
 
-        yield* TestClock.adjust(LINE_GRACE_MILLIS);
+        yield* TestClock.adjust(AGENT_QUEUE_BOUNDS.CLAIM_MS);
         yield* opened;
         yield* opened;
 

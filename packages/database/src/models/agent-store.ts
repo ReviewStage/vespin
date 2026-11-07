@@ -86,8 +86,6 @@ import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
 import { reopenAgentInboxItems, settleAgentInboxItems } from "./inbox-settle.js";
 import {
-  awaitingLinesOf,
-  awaitingLinesOfReached,
   type LatestTurn,
   lastSettledTurnsOfReached,
   latestTurnsOf,
@@ -260,8 +258,6 @@ export interface AgentStarted {
 /** The newest turn of an agent's conversation, as its status is read from it; nothing before the first turn. The read is the store's own (`message-reads.ts`), re-exported here beside the agents it is read for. */
 export type AgentLatestTurn = LatestTurn;
 export {
-  awaitingLinesOf,
-  awaitingLinesOfReached,
   lastSettledTurnsOfReached,
   latestTurnsOf,
   latestTurnsOfReached,

@@ -1059,6 +1059,8 @@ export const agentStartedOn = (
         });
       }
     }
+    // Note that the clock moves on past the turn's queueing, so a turn a later message queues is the newer, as it is on any clock that runs.
+    yield* TestClock.adjust(Duration.millis(1));
     /** The transcript as the owner reads it now: the developer's lines, and the status. */
     const transcript = () =>
       Effect.map(

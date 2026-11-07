@@ -1,61 +1,35 @@
 import { TURN_STATUS } from "@repo/wire";
 import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
-import { TURN_DEADLINE } from "./turn-deadline.js";
 
 /**
- * agent-status.ts -- where a coding agent stands, read from its newest turn at an instant: the one rule the service and the desktop both read an agent's status by.
+ * agent-status.ts -- where a coding agent stands, read from its newest turn: the one rule the service and the desktop both read an agent's status by.
  *
- * An agent's status is its conversation's newest turn row and the one
- * thing beside it, a message of the developer's still awaiting its turn:
- * `starting` before the first turn is queued, `running` while its harness runs a
- * turn or a line waits for the turn it will open, and how the newest turn
- * ended after. A turn still running that carries a Stop stamp reads as
- * canceled already, since the Stop is on its way to the agent's harness and nothing the
- * turn still does changes where it ends. An agent with no turn row long
- * past its Start (`STARTING_GRACE_MILLIS`) reads as failed rather than
- * starting forever, as one that never started.
+ * An agent's status is its conversation's newest turn row, the one record of
+ * a turn (`@repo/database`'s `turn-state.ts`): `running` while that turn is
+ * queued for a runner or runs, and how it ended after. A line of the
+ * developer's is written with the turn it awaits, so a line waiting reads
+ * through that turn, and a turn past its deadline is failed on its row by
+ * the minute sweep, so nothing here reads the clock to say a turn is over.
+ * A turn still running that carries a Stop stamp reads as canceled already,
+ * since the Stop is on its way to the agent's harness and nothing the turn
+ * still does changes where it ends.
  *
- * A line that awaits its turn reads as running whatever the newest turn
- * says, because the session took the message and the turn it opens is on
- * its way, but only for so long: a line that has waited past
- * `LINE_GRACE_MILLIS` with no turn running reads as failed, as one whose
- * turn is not coming, so the developer is offered Continue on it rather
- * than watching it run forever. A line older than the newest turn's
- * queueing that the turn never took awaits nothing: that turn was its, and
- * ended without the store hearing it received. A turn failed because its
- * session ended for good leaves every line awaiting nothing, since the
- * session that would have taken one is gone. A Stop wins over every line
- * written before it was asked, whether its turn still runs or has ended,
- * since the developer stopped that work too; a line written after it still
- * opens a turn of its own, and reads running.
- *
- * A turn still queued or running whose lease ran out is read as ended at
- * that instant, failed as its runner lost, or canceled where a Stop was
- * asked of it: its runner stopped posting (`@repo/database`'s
- * `turn-state.ts`), and the minute sweep settles the row so.
- *
- * The rule is pure and takes the instant it reads at, because the two
- * graces and the lease are the parts of it the rows alone do not say: a
+ * The one thing the row does not say is an agent's start before its first
+ * turn lands: an agent with no turn row reads as starting for
+ * `STARTING_GRACE_MILLIS` past its Start and as failed after, as one that
+ * never started, and an agent started blank, with no first turn on its way,
+ * as completed. That is why the rule takes the instant it reads at, and a
  * reader following the rows live reads the status again at
- * `statusClockEdge`, the next instant the clock alone moves it.
+ * `statusClockEdge`, the instant the clock alone moves it.
  */
 
 /**
  * How long after its Start an agent with no turn row yet still reads as
- * starting. The agent's harness took the session and opens its first turn; an
- * agent still without one past this is read as failed, so nothing reads
- * starting forever.
+ * starting. The Start writes its first line with the turn it queues, a
+ * moment after the agent's own row; an agent still without one past this is
+ * read as failed, so nothing reads starting forever.
  */
 export const STARTING_GRACE_MILLIS = 5 * 60 * 1000;
-
-/**
- * How long a line of the developer's may stand with no turn to take it
- * while none runs, and still read the agent as running. The agent's harness
- * opens the turn on a line it took, as it opens the first turn of a Start
- * (`STARTING_GRACE_MILLIS`, whose length this shares); a line still waiting
- * past this is one whose turn is not coming.
- */
-export const LINE_GRACE_MILLIS = 5 * 60 * 1000;
 
 /** The status a turn row's own status word reads as. */
 const STATUS_OF_TURN = {
@@ -72,110 +46,20 @@ function isTurnStatusWord(status: string): status is keyof typeof STATUS_OF_TURN
   return STATUS_WORDS.has(status);
 }
 
-/** What of an agent's newest turn its status is read from, each instant in epoch milliseconds. */
+/** What of an agent's newest turn its status is read from. */
 export interface StatusTurn {
   /** The turn's own status word. */
   readonly status: string;
   /** Whether a Stop was asked of it. */
   readonly cancelRequested: boolean;
-  /** When the Stop was asked, where the reader was told; none where no Stop was, or a row from before the instant was carried. */
-  readonly cancelRequestedAt?: number | undefined;
-  /** When it was queued. */
-  readonly queuedAt: number;
-  /** When it settled; none while it is queued or runs. */
-  readonly settledAt: number | null;
-  /** Whether it failed because its session ended for good. */
-  readonly sessionEnded: boolean;
-  /** Until when its runner is held to be at work while it is queued or runs; none for a row from before the lease, read as leased from its queueing (`TURN_DEADLINE.PROGRESS_MS`). */
-  readonly leaseUntil?: number | undefined;
 }
 
-/** When the agent was started and the instant it is read at, in epoch milliseconds, and when the newest line of the developer's still awaiting its turn was written, where one stands. */
+/** When the agent was started and the instant it is read at, in epoch milliseconds, and whether it was started blank. */
 export interface StatusStanding {
   readonly createdAt: number;
   readonly now: number;
-  readonly awaitingLineAt?: number | undefined;
   /** Whether the agent was started blank, handed neither the description nor a prompt, so no first turn is on its way; unsaid reads as not. */
   readonly blank?: boolean | undefined;
-}
-
-/** Where a line of the developer's with no turn stands: none, awaiting the turn it opens, or unanswered past the grace. */
-const LINE_STANDING = {
-  NONE: "none",
-  AWAITS: "awaits",
-  UNANSWERED: "unanswered",
-} as const;
-
-type LineStanding = (typeof LINE_STANDING)[keyof typeof LINE_STANDING];
-
-/** Where the newest awaiting line stands, and from when its grace is counted where the clock decides it. */
-interface LineReading {
-  readonly standing: LineStanding;
-  readonly since?: number;
-}
-
-/** Whether a turn row still runs, or is queued to: what takes a line at its next step, however long the step it is on runs. */
-function turnRuns(turn: StatusTurn): boolean {
-  return isTurnStatusWord(turn.status) && STATUS_OF_TURN[turn.status] === AGENT_STATUS.RUNNING;
-}
-
-/** The instant the turn's lease runs out: the one its row holds, or, for a row with none, a lease's length from its queueing. */
-function leaseEndOf(turn: StatusTurn): number {
-  return turn.leaseUntil ?? turn.queuedAt + TURN_DEADLINE.PROGRESS_MS;
-}
-
-/** Whether the turn still runs, or is queued to, past the instant its lease ran out: its runner is lost. */
-export function runnerLostAt(turn: StatusTurn | undefined, now: number): boolean {
-  return turn !== undefined && turnRuns(turn) && now > leaseEndOf(turn);
-}
-
-/** The turn as it stands at `now`: one whose runner is lost reads as ended when its lease ran out, failed, or canceled where a Stop was asked of it. */
-function turnAt(turn: StatusTurn | undefined, now: number): StatusTurn | undefined {
-  if (turn === undefined || !runnerLostAt(turn, now)) return turn;
-  return {
-    ...turn,
-    status: turn.cancelRequested ? TURN_STATUS.CANCELED : TURN_STATUS.FAILED,
-    settledAt: leaseEndOf(turn),
-  };
-}
-
-/**
- * Where the newest line awaiting a turn stands, and from when its grace is
- * counted where the clock decides it. A line written before the newest
- * turn's Stop awaits nothing, since the Stop ended it with the turn. A turn
- * still running takes it, so it awaits. With none running, a line written before the newest turn was
- * queued was that turn's opener, and the turn ended without the store
- * hearing it received, so it awaits nothing; a line written once the turn
- * was queued was a steer to it and still counts. Else it awaits for the
- * grace, counted from when it was written or the newest turn ended,
- * whichever came later, since that is how long it has stood with nothing
- * running to take it, and is unanswered past it.
- */
-function lineOf(
-  turn: StatusTurn | undefined,
-  standing: Pick<StatusStanding, "now" | "awaitingLineAt">,
-): LineReading {
-  const line = standing.awaitingLineAt;
-  if (line === undefined) return { standing: LINE_STANDING.NONE };
-  if (turn?.sessionEnded === true) return { standing: LINE_STANDING.NONE };
-  const stoppedAt = turn?.cancelRequestedAt;
-  if (stoppedAt !== undefined && line < stoppedAt) return { standing: LINE_STANDING.NONE };
-  if (turn !== undefined && turnRuns(turn)) return { standing: LINE_STANDING.AWAITS };
-  if (turn !== undefined && line < turn.queuedAt) return { standing: LINE_STANDING.NONE };
-  const since = Math.max(line, turn?.settledAt ?? 0);
-  return {
-    standing:
-      standing.now - since <= LINE_GRACE_MILLIS ? LINE_STANDING.AWAITS : LINE_STANDING.UNANSWERED,
-    since,
-  };
-}
-
-/** Whether a line of the developer's awaits the turn it opens, which keeps the agent at work: what an archive or a Stop reads the agent idle by. */
-export function lineAwaitsTurn(
-  turn: StatusTurn | undefined,
-  standing: Pick<StatusStanding, "now" | "awaitingLineAt">,
-): boolean {
-  return lineOf(turnAt(turn, standing.now), standing).standing === LINE_STANDING.AWAITS;
 }
 
 /**
@@ -189,54 +73,40 @@ export function turnStoppable(turn: StatusTurn | undefined): boolean {
 }
 
 /**
- * Where an agent stands, from its newest turn; running where a line awaits
- * its turn, failed where one went unanswered past its grace, starting with
- * no turn inside the grace, failed with none past it. An agent started blank
- * with no turn yet has done all it was asked, which is nothing, so it reads
- * as completed, however long ago it started: no first turn is on its way.
+ * Where an agent stands, from its newest turn: as that turn's status word
+ * reads, canceled where it still runs with a Stop asked of it; with no turn,
+ * completed where it was started blank, starting inside the grace, and failed
+ * past it.
  */
 export function agentStatusAt(
   newest: StatusTurn | undefined,
   standing: StatusStanding,
 ): AgentStatus {
-  const turn = turnAt(newest, standing.now);
-  const line = lineOf(turn, standing).standing;
-  if (line === LINE_STANDING.AWAITS) return AGENT_STATUS.RUNNING;
-  if (line === LINE_STANDING.UNANSWERED) return AGENT_STATUS.FAILED;
-  if (turn === undefined && standing.blank === true) return AGENT_STATUS.COMPLETED;
-  if (turn === undefined) {
+  if (newest === undefined && standing.blank === true) return AGENT_STATUS.COMPLETED;
+  if (newest === undefined) {
     return standing.now - standing.createdAt <= STARTING_GRACE_MILLIS
       ? AGENT_STATUS.STARTING
       : AGENT_STATUS.FAILED;
   }
   // A word outside the vocabulary is a state a newer service writes of a turn not yet ended, since every ending is
   // already a word here, so it reads as running; the service's deadlines, not this reader, are what end it.
-  const status = isTurnStatusWord(turn.status) ? STATUS_OF_TURN[turn.status] : AGENT_STATUS.RUNNING;
-  return status === AGENT_STATUS.RUNNING && turn.cancelRequested ? AGENT_STATUS.CANCELED : status;
+  const status = isTurnStatusWord(newest.status)
+    ? STATUS_OF_TURN[newest.status]
+    : AGENT_STATUS.RUNNING;
+  return status === AGENT_STATUS.RUNNING && newest.cancelRequested ? AGENT_STATUS.CANCELED : status;
 }
 
 /**
  * The next instant past which the clock alone moves the agent's status, in
- * epoch milliseconds: a running turn's lease running out, from running to
- * failed, a line's grace running out, likewise, or, with no turn and no
- * line, the starting grace running out, from starting to failed. None where
- * nothing but a row changing can move it: the turn has ended, a line
- * counts for nothing, or the grace is already past.
+ * epoch milliseconds: with no turn yet, the starting grace running out, from
+ * starting to failed. None where only a row changing can move it: a turn
+ * stands, the agent was started blank, or the grace is already past.
  */
 export function statusClockEdge(
   newest: StatusTurn | undefined,
   standing: StatusStanding,
 ): number | undefined {
-  const turn = turnAt(newest, standing.now);
-  const lapses = turn !== undefined && turnRuns(turn) ? leaseEndOf(turn) + 1 : undefined;
-  const line = lineOf(turn, standing);
-  if (line.standing === LINE_STANDING.AWAITS) {
-    // A line a running turn takes awaits for as long as the turn runs, so its turn's lease is its edge.
-    return line.since === undefined ? lapses : line.since + LINE_GRACE_MILLIS + 1;
-  }
-  if (lapses !== undefined) return lapses;
-  if (line.standing === LINE_STANDING.UNANSWERED || turn !== undefined) return undefined;
-  if (standing.blank === true) return undefined;
+  if (newest !== undefined || standing.blank === true) return undefined;
   const edge = standing.createdAt + STARTING_GRACE_MILLIS;
   return standing.now <= edge ? edge + 1 : undefined;
 }

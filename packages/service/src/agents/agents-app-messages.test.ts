@@ -811,13 +811,13 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a plan's archive is refused as not ready while one of its agents holds a message awaiting its turn, which no Stop can name yet, before any Stop is sent, and leaves the plan and the agent standing",
+    "a plan's archive is refused as not ready while one of its agents holds a message whose turn no runner has taken yet, which no Stop can name, before any Stop is sent, and leaves the plan and the agent standing",
     () =>
       Effect.gen(function* () {
         const { owner, task, agent, ask, sent, agentSessions } = yield* messagedAgent(
           fakeAgentSessions(),
           {
-            running: true,
+            running: false,
           },
         );
         yield* sent("Rename the subject line too.");
@@ -943,7 +943,7 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a line no runner ever takes reads its agent running until its turn's pickup deadline, alike on its page, in its task's list, and on its transcript, and the agent's reconcile then fails that turn as untaken",
+    "a line no runner ever takes reads its agent running until its turn's pickup deadline, and the agent's reconcile then fails that turn as untaken, alike on its page, in its task's list, and on its transcript",
     () =>
       Effect.gen(function* () {
         const { owner, task, agent, ask, transcript, sent, target } = yield* messagedAgent(
@@ -989,6 +989,11 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
         });
         yield* TestClock.adjust(Duration.millis(1));
         assert.equal((yield* reconciled).length, 1);
+        assert.deepEqual(yield* statuses(), {
+          page: AGENT_STATUS.FAILED,
+          list: AGENT_STATUS.FAILED,
+          transcript: AGENT_STATUS.FAILED,
+        });
         const turn = (yield* latestTurnsOfReached([target.conversationId])).get(
           target.conversationId,
         );

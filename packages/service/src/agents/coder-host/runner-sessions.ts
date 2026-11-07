@@ -115,7 +115,6 @@ import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
-  awaitingLinesOfReached,
   hasRepository,
   lastSettledTurnsOfReached,
   latestTurnsOfReached,
@@ -981,7 +980,7 @@ export const runnerSessions = <
             }),
             first === undefined ? Effect.void : filesWritten(place.running, first),
             // An earlier launch's lines go but its untaken messages in the window, which this launch is handed.
-            layout.linesRead ? clearedForLaunch(userId, agent.id) : Effect.void,
+            layout.linesRead ? clearRunnerLines(userId, agent.id) : Effect.void,
             recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer)),
             // The launch's swaps stand before the runner starts, so its first request carries the
             // real value: the machine starts the runner once every step here is done. Note that a
@@ -1884,13 +1883,13 @@ export const runnerSessions = <
 
     /**
      * The lines an earlier launch never took handed on, under the agent's
-     * runner lease: where a message line no launch took was queued no longer
-     * ago than a line reads as awaiting its turn (`CODER.LINE_GRACE`), the
-     * runner is launched to read them (`launchedWithoutMessage`).
+     * runner lease: where a message line no launch took still has its turn
+     * waiting on it (`runnerLinesWaiting`), the runner is launched to read
+     * them (`launchedWithoutMessage`).
      */
     const deliverWaitingHolding = (sessionId: string, agent: Agent) =>
       Effect.gen(function* () {
-        if (!(yield* linesWaitAt(userId, agent.id))) return undefined;
+        if (!(yield* runnerLinesWaiting(userId, agent.id))) return undefined;
         return yield* launchedWithoutMessage(sessionId, agent);
       });
 
@@ -2036,8 +2035,8 @@ export const runnerSessions = <
      * A queued message's hand-on (`handedOn`) run past the answer, under the
      * lease, waiting on it as long as a lease can stand, so it outlasts a
      * launch it is behind. Note that a hand-on that fails is only
-     * logged, and its line read as failed once it has waited past
-     * `CODER.LINE_GRACE`, which offers Continue.
+     * logged, and the turn its line awaits is failed by the minute sweep
+     * past its pickup deadline (`reconcile.ts`), which offers Continue.
      */
     const handedOnAfter = (
       sessionId: string,
@@ -2414,27 +2413,16 @@ export interface RunnerEnding {
 
 /**
  * Whether the agent's runner may have taken a message since its turn ended:
- * a turn of its run queued or running, or a line of the developer's no turn
- * has taken yet, written not so long ago that it reads as unanswered
- * (`CODER.LINE_GRACE`). A send writes its line's row before it takes the
- * runner lease, and the runner names the line taken only in an event posted
- * after its IDLE, so read under the lease this sees every message a send
- * wrote to the runner ahead of it. Note that a line is not weighed against
- * when the turn ended, because that is when the IDLE's batch landed, which
- * may come after the next line was written.
+ * its newest turn is still open, queued for a runner or running. A send
+ * writes its line with the turn it awaits before it takes the runner lease
+ * (`turn-state.ts`), so read under the lease this sees every message a send
+ * wrote to the runner ahead of it.
  */
-const runnerMayBeAtWork = (agentId: string, now: Date) =>
-  Effect.gen(function* () {
-    const standing = yield* readNativeRunStanding(agentId);
-    if (Option.isNone(standing)) return false;
-    const { conversationId, endedAt } = standing.value;
-    if (endedAt === null) return true;
-    const awaiting = (yield* awaitingLinesOfReached([conversationId])).get(conversationId);
-    return (
-      awaiting !== undefined &&
-      now.getTime() - awaiting.getTime() <= Duration.toMillis(CODER.LINE_GRACE)
-    );
-  });
+const runnerMayBeAtWork = (agentId: string) =>
+  Effect.map(
+    readNativeRunStanding(agentId),
+    (standing) => Option.isSome(standing) && standing.value.endedAt === null,
+  );
 
 /** A warm runner a retire names: the session its place is found by, the agent's starter, whose account its retire line is queued under, the agent, and the machine's session the caller found the place running. */
 interface WarmRunner {
@@ -2451,7 +2439,7 @@ interface WarmRunner {
  */
 const retiredHolding = (machine: MachineLifecycle, retiring: WarmRunner) =>
   Effect.gen(function* () {
-    if (yield* runnerMayBeAtWork(retiring.agentId, yield* DateTime.nowAsDate)) return false;
+    if (yield* runnerMayBeAtWork(retiring.agentId)) return false;
     const found = yield* firstPlace(machine, retiring.userId, retiring.sessionId);
     if (Option.isNone(found)) return false;
     const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
@@ -2557,24 +2545,6 @@ export const runnerIdled = Effect.fn("web/runnerIdled")(function* (idle: RunnerE
   });
 });
 
-/** The agent's lines a new launch is not handed dropped (`clearRunnerLines`): a message is handed no longer after it was queued than a line reads as awaiting its turn. */
-const clearedForLaunch = (userId: string, agentId: string) =>
-  Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    yield* clearRunnerLines(userId, agentId, new Date(now - Duration.toMillis(CODER.LINE_GRACE)));
-  });
-
-/** Whether a message line of the agent no launch took waits, queued no longer ago than a line reads as awaiting its turn. */
-const linesWaitAt = (userId: string, agentId: string) =>
-  Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    return yield* runnerLinesWaiting(
-      userId,
-      agentId,
-      new Date(now - Duration.toMillis(CODER.LINE_GRACE)),
-    );
-  });
-
 /** The stop `runnerEnded` decides, on the place as it stands when read here. */
 const stoppedAtEnd = Effect.fn("web/stoppedAtEnd")(function* (
   machine: MachineLifecycle,
@@ -2590,7 +2560,7 @@ const stoppedAtEnd = Effect.fn("web/stoppedAtEnd")(function* (
     launch?.linesRead === true &&
     agentId !== undefined &&
     ending.reason !== RUNNER_END.FAILED &&
-    (yield* linesWaitAt(ending.target.userId, agentId))
+    (yield* runnerLinesWaiting(ending.target.userId, agentId))
   ) {
     return RUNNER_ENDED.LINES_WAITING;
   }

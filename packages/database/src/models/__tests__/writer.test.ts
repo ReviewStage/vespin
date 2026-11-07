@@ -26,7 +26,7 @@ import { CONVERSATION_KIND, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB } from "../../testing/index.js";
 import { LOST_TURNS, settleRunnerLostTurns } from "../abandoned-turns.js";
 import { lineSendersOf } from "../agent-store.js";
-import { awaitingLinesOf, listMessagesPast, readMessageByClientId } from "../message-reads.js";
+import { latestTurnsOf, listMessagesPast, readMessageByClientId } from "../message-reads.js";
 import { STORE_WRITE_EFFECT, storeWriter } from "../writer.js";
 
 /**
@@ -465,7 +465,8 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         assert.deepEqual(refused, Result.succeed(Option.none()));
         assert.ok(page.read.ok);
         assert.equal(page.read.value.length, 0);
-        assert.equal((yield* awaitingLinesOf(target.userId, [target.conversationId])).size, 0);
+        // The turn its send queued went with it, so nothing awaits it.
+        assert.equal((yield* latestTurnsOf(target.userId, [target.conversationId])).size, 0);
 
         const turnId = randomUUID();
         yield* writer.enqueueTurn(target, {

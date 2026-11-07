@@ -23,7 +23,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   archiveUnmovedAgent,
-  awaitingLinesOfReached,
   latestTurnsOfReached,
   readAgentOfConversation,
 } from "@repo/database/models/agent-store";
@@ -64,15 +63,10 @@ function finishedStatuses(agents: readonly FinishedAgentRead[], now: number) {
   return Effect.gen(function* () {
     const conversations = agents.map((agent) => agent.conversationId);
     const turns = yield* latestTurnsOfReached(conversations);
-    const awaiting = yield* awaitingLinesOfReached(conversations);
     return new Map(
       agents.map((agent) => [
         agent.agentId,
-        agentStatusOf(turns.get(agent.conversationId), {
-          createdAt: agent.createdAt,
-          now,
-          awaitingLineAt: awaiting.get(agent.conversationId),
-        }),
+        agentStatusOf(turns.get(agent.conversationId), { createdAt: agent.createdAt, now }),
       ]),
     );
   });

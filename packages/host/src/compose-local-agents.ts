@@ -1283,8 +1283,8 @@ export function composeLocalAgents(
          * relaunches it on the new release. Asked under `claiming`, and only
          * where no line is claimed or waits to be delivered, so no message
          * this device took lands on a runner's stdin behind the line; one the
-         * service writes as the runner ends is not fenced here, and its turn
-         * reads failed past `CODER.LINE_GRACE`.
+         * service writes as the runner ends is not fenced here, and the turn
+         * it awaits is failed past its pickup deadline by the service's sweep.
          */
         const retiredWarm = claiming.withPermit(
           Effect.suspend(() =>

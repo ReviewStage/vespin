@@ -40,7 +40,7 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
-import { LINE_GRACE_MILLIS, STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
+import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_ARCHIVER,
   AGENT_KIND,
@@ -445,17 +445,19 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const messaged = yield* openAgent(owner, { taskId: plan.id }, 40 * 60_000);
         const ended = yield* turnOf(messaged, TURN_STATUS.SETTLED, 35 * 60_000, { settled: true });
         yield* lineOf(messaged, 1, "Fix the flaky test.", ended);
+        // Its second line queued the next turn, which no runner has taken yet.
+        yield* turnOf(messaged, TURN_STATUS.QUEUED, 1000);
         yield* lineOf(messaged, 2, "And the other one.", null);
         const archived = yield* openAgent(owner, { taskId: plan.id }, 90 * 60_000);
         yield* turnOf(archived, TURN_STATUS.FAILED, 80 * 60_000, { settled: true });
         yield* archiveAgent(owner, archived.id, true);
-        // A line no turn took past its grace, and a line after a turn whose session ended for good.
+        // A line no turn took long ago, and a line after a turn whose session ended for good: the turn alone says each status.
         const unanswered = yield* openAgent(owner, { taskId: plan.id }, 45 * 60_000);
         const answered = yield* turnOf(unanswered, TURN_STATUS.SETTLED, 44 * 60_000, {
           settled: true,
         });
         yield* lineOf(unanswered, 1, "Start the export.", answered);
-        yield* lineOf(unanswered, 2, "Are you there?", null, LINE_GRACE_MILLIS + 60_000);
+        yield* lineOf(unanswered, 2, "Are you there?", null, 6 * 60_000);
         const orphaned = yield* openAgent(owner, { taskId: plan.id }, 25 * 60_000);
         yield* turnOf(orphaned, TURN_STATUS.FAILED, 24 * 60_000, {
           settled: true,
@@ -597,13 +599,13 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const pullRequests = pullRequestsOfTask(taskPullRequestsOfLiveRows(rows), plan.id);
         assert.equal(pullRequests[0]?.queued, true, "a queued pull request says so");
         assert.equal(pullRequests[0]?.author, "octo-dev", "it names who opened it");
-        assert.ok(
-          agentsOfTask(taskAgentsOfLiveRows(rows, NOW), plan.id).every(
-            (line) =>
-              ![unanswered.id, orphaned.id].includes(line.id) ||
-              line.status === AGENT_STATUS.FAILED,
+        const liveAgents = agentsOfTask(taskAgentsOfLiveRows(rows, NOW), plan.id);
+        assert.deepEqual(
+          [unanswered.id, orphaned.id].map(
+            (id) => liveAgents.find((line) => line.id === id)?.status,
           ),
-          "a line unanswered past its grace, or after an ended session, reads failed",
+          [AGENT_STATUS.COMPLETED, AGENT_STATUS.FAILED],
+          "a line no turn took moves nothing: its settled turn reads completed, and its ended session failed",
         );
         assert.deepEqual(
           read.planlessAgents
@@ -771,28 +773,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         assert.deepEqual(read, yield* heldListOf(owner, later));
         assert.deepEqual(yield* liveStatusesOf(owner, plan.id, later), [AGENT_STATUS.FAILED]);
-      }),
-  );
-
-  it.effect(
-    "a line awaiting its turn reads running inside its grace and failed once the grace ends, as the held read reads it then",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openUser;
-        const plan = yield* startTask(owner, { name: "Teammate invitations" });
-        const agent = yield* openAgent(owner, { taskId: plan.id }, 10 * 60_000);
-        const ended = yield* turnOf(agent, TURN_STATUS.SETTLED, 9 * 60_000, { settled: true });
-        yield* lineOf(agent, 1, "Fix the flaky test.", ended);
-        yield* lineOf(agent, 2, "And the other one.", null);
-
-        for (const [at, status] of [
-          [NOW, AGENT_STATUS.RUNNING],
-          [NOW - 1000 + LINE_GRACE_MILLIS + 1, AGENT_STATUS.FAILED],
-        ] as const) {
-          const read = yield* liveListOf(owner, at);
-          assert.deepEqual(read, yield* heldListOf(owner, at));
-          assert.deepEqual(yield* liveStatusesOf(owner, plan.id, at), [status]);
-        }
       }),
   );
 

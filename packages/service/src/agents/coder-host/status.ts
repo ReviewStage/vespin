@@ -12,7 +12,6 @@ import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schem
 import {
   agentStatusAt,
   type StatusTurn,
-  lineAwaitsTurn as sharedLineAwaitsTurn,
   statusClockEdge as sharedStatusClockEdge,
   turnStoppable,
 } from "@repo/features/agent-status";
@@ -47,43 +46,27 @@ import { CODER_REFUSAL } from "./bounds.js";
 /**
  * status.ts -- where a coding agent stands, read from its newest turn.
  *
- * An agent's status is its conversation's newest turn row and the one
- * thing beside it, a message of the developer's still awaiting its turn:
- * `starting` before the first turn is queued, `running` while its harness runs a
- * turn or a line waits for the turn it will open, and how the newest turn
- * ended after. A turn still running that carries a Stop stamp
- * reads as canceled already, since the Stop is on its way to its harness and
- * nothing the turn still does changes where it ends. An agent with no turn
- * row long past its Start (`STARTING_GRACE_MILLIS`) reads as failed rather
- * than starting forever, as one that never started: its harness took the session,
- * and its first turn lands in seconds or not at all. A line that awaits its
- * turn reads as running whatever the newest turn says, because the session
- * took the message and the turn it opens is on its way
- * (`@repo/database/models/message-reads`'s `awaitingLinesOf` is where a
- * line is counted as waiting), but only for so long: a line that has
- * waited past `LINE_GRACE_MILLIS` with no turn running reads as failed, as
- * one whose turn is not coming, so the developer is offered Continue on it
- * rather than watching it run forever. Failed rather than as the newest
- * turn says, because the line went unanswered, and a settled agent would
- * offer neither Continue nor any word of why. A line older than the newest
- * turn's queueing that the turn never took awaits nothing either: that turn
- * was its, and ended without the store hearing it received. A failed turn
- * is also read for why, as one of the wire's fixed words: the sweep's own
- * word for a turn it settled, else the host's refusal sentences where the
- * turn's detail carries one, GitHub's or the sandbox's, else a provider's
- * refusal of a prompt longer than the model's window, else the model
- * call, which is what every other failure of a coding turn is. An
- * unanswered line after a turn that did not fail has no word, and its end
- * line says Failed alone. Nothing of the detail itself leaves here.
+ * An agent's status is its conversation's newest turn row, the one record
+ * of a turn, as the shared rule reads it (`@repo/features/agent-status`):
+ * `running` while that turn is queued for a runner or runs, and how it ended
+ * after, a turn still running with a Stop stamped reading canceled already.
+ * A line of the developer's awaits the turn its send queued or joined, so it
+ * reads through that turn, and a turn past its deadline is failed on its row
+ * by the minute sweep (`reconcile.ts`). An agent with no turn row reads as
+ * starting until `STARTING_GRACE_MILLIS` past its Start and as failed after,
+ * and one started blank as completed. A failed turn is also read for why, as
+ * one of the wire's fixed words: the sweep's own word for a turn it settled,
+ * else the host's refusal sentences where the turn's detail carries one,
+ * GitHub's or the sandbox's, else a provider's refusal of a prompt longer
+ * than the model's window, else the model call, which is what every other
+ * failure of a coding turn is. Nothing of the detail itself leaves here.
  */
 
-/** When the agent was started, when it is being read, which is what an agent with no turn is judged by, when the newest line of the developer's still awaiting its turn was written, and whether it was started blank. */
+/** When the agent was started and when it is being read, which is what an agent with no turn is judged by, and whether it was started blank. */
 export interface AgentStanding {
   readonly createdAt: Date;
   /** Epoch milliseconds now. */
   readonly now: number;
-  /** When the newest message of the developer's standing in the transcript with no turn yet was written; none where none stands or unsaid. */
-  readonly awaitingLineAt?: Date | undefined;
   /** Whether the agent was started blank, handed neither the description nor a prompt, so no first turn is on its way; unsaid reads as not. */
   readonly blank?: boolean | undefined;
 }
@@ -94,67 +77,45 @@ export function startedBlank(agent: Agent | Pick<AgentLine, "brief">): boolean {
   return brief === AGENT_BRIEF.BLANK;
 }
 
-/** What of the newest turn the shared rule reads (`@repo/features/agent-status`), each instant in epoch milliseconds. */
+/** What of the newest turn the shared rule reads (`@repo/features/agent-status`). */
 function statusTurnOf(turn: AgentLatestTurn | undefined): StatusTurn | undefined {
   return turn === undefined
     ? undefined
-    : {
-        status: turn.status,
-        cancelRequested: turn.cancelRequestedAt !== null,
-        cancelRequestedAt: turn.cancelRequestedAt?.getTime(),
-        queuedAt: turn.queuedAt.getTime(),
-        settledAt: turn.settledAt?.getTime() ?? null,
-        sessionEnded: turn.failure === TURN_FAILURE.SESSION_ENDED,
-        leaseUntil: turn.leaseUntil?.getTime(),
-      };
+    : { status: turn.status, cancelRequested: turn.cancelRequestedAt !== null };
 }
 
-/** Whether a line of the developer's awaits the turn it opens, which keeps the agent at work: what an archive or a Stop reads the agent idle by. */
-export function lineAwaitsTurn(
-  turn: AgentLatestTurn | undefined,
-  standing: Pick<AgentStanding, "now" | "awaitingLineAt">,
-): boolean {
-  return sharedLineAwaitsTurn(statusTurnOf(turn), {
+/** The agent's standing as the shared rule reads it, in epoch milliseconds. */
+function statusStandingOf(standing: AgentStanding) {
+  return {
+    createdAt: standing.createdAt.getTime(),
     now: standing.now,
-    awaitingLineAt: standing.awaitingLineAt?.getTime(),
-  });
+    blank: standing.blank === true,
+  };
 }
 
 /**
- * Where an agent stands, from its newest turn; running where a line awaits
- * its turn, failed where one went unanswered past its grace, starting with
- * no turn inside the grace, failed with none past it. An agent started blank
- * with no turn yet has done all it was asked, which is nothing, so it reads
- * as completed, however long ago it started: no first turn is on its way.
+ * Where an agent stands, from its newest turn; starting with no turn inside
+ * the grace, failed with none past it. An agent started blank with no turn
+ * yet has done all it was asked, which is nothing, so it reads as completed,
+ * however long ago it started: no first turn is on its way.
  */
 export function agentStatusOf(
   turn: AgentLatestTurn | undefined,
   standing: AgentStanding,
 ): AgentStatus {
-  return agentStatusAt(statusTurnOf(turn), {
-    createdAt: standing.createdAt.getTime(),
-    now: standing.now,
-    awaitingLineAt: standing.awaitingLineAt?.getTime(),
-    blank: standing.blank === true,
-  });
+  return agentStatusAt(statusTurnOf(turn), statusStandingOf(standing));
 }
 
 /**
  * The next instant past which the clock alone moves the agent's status, in
- * epoch milliseconds: a line's grace running out, from running to failed,
- * or, with no turn and no line, the starting grace running out, from
+ * epoch milliseconds: with no turn yet, the starting grace running out, from
  * starting to failed. None where nothing but a row changing can move it.
  */
 export function statusClockEdge(
   turn: AgentLatestTurn | undefined,
   standing: AgentStanding,
 ): number | undefined {
-  return sharedStatusClockEdge(statusTurnOf(turn), {
-    createdAt: standing.createdAt.getTime(),
-    now: standing.now,
-    awaitingLineAt: standing.awaitingLineAt?.getTime(),
-    blank: standing.blank === true,
-  });
+  return sharedStatusClockEdge(statusTurnOf(turn), statusStandingOf(standing));
 }
 
 /**
@@ -318,22 +279,20 @@ export function agentFailureOf(
   return named?.[0] ?? AGENT_FAILURE.MODEL;
 }
 
-/** What an agent's status is read from: its newest turn, and when the newest line of the developer's awaiting its turn was written. */
+/** What an agent's status is read from: its newest turn. */
 export interface AgentTurnStanding {
   readonly turn: AgentLatestTurn | undefined;
-  readonly awaitingLineAt: Date | undefined;
   /** The provider's own harness its conversation runs on; none on the retired runtime, and where the read named none. */
   readonly runtime?: NativeAgentRuntime | undefined;
   /** Whether its sandbox stands open (`openSandboxesOfReached`); none where the read named none. */
   readonly sandboxOpen?: boolean | undefined;
 }
 
-/** When the run the status is read from began: the newest turn's start, or its queueing before its harness starts it, the agent's own before any turn, and none while a line awaits its turn. */
+/** When the run the status is read from began: the newest turn's start, or its queueing before a runner takes it, and the agent's own before any turn. */
 export function agentRunStartedAt(
   turn: AgentLatestTurn | undefined,
-  standing: AgentStanding,
-): number | undefined {
-  if (lineAwaitsTurn(turn, standing)) return undefined;
+  standing: Pick<AgentStanding, "createdAt">,
+): number {
   return (turn === undefined ? standing.createdAt : (turn.startedAt ?? turn.queuedAt)).getTime();
 }
 
@@ -432,7 +391,6 @@ function summaryFields(
     status: agentStatusOf(standing.turn, {
       createdAt: agent.createdAt,
       now,
-      awaitingLineAt: standing.awaitingLineAt,
       blank: startedBlank(agent),
     }),
     turnId: standing.turn?.id ?? null,
@@ -461,16 +419,11 @@ function summaryFields(
           })),
         }),
   };
-  const started = agentRunStartedAt(standing.turn, {
-    createdAt: agent.createdAt,
-    now,
-    awaitingLineAt: standing.awaitingLineAt,
-  });
   const stoppable =
     summary.status !== AGENT_STATUS.RUNNING || turnStoppable(statusTurnOf(standing.turn));
   return {
     ...summary,
-    ...(started === undefined ? undefined : { runStartedAt: started }),
+    runStartedAt: agentRunStartedAt(standing.turn, agent),
     ...(stoppable ? undefined : { stoppable: false }),
     ...(standing.sandboxOpen === undefined ? undefined : { sandboxOpen: standing.sandboxOpen }),
   };

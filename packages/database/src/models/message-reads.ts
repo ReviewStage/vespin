@@ -1,6 +1,5 @@
 import { toolPartType } from "@repo/features/turn-run";
 import {
-  MESSAGE_CHANNEL,
   MESSAGE_ROLE,
   type MessageRole,
   type SchemaPath,
@@ -26,7 +25,6 @@ import {
   gt,
   inArray,
   isNotNull,
-  isNull,
   lt,
   max,
   notExists,
@@ -44,10 +42,8 @@ import {
   messages,
   type StoredTurnUsage,
   standingLine,
-  turnlessUserLine,
   turns,
 } from "../schemas/storage.js";
-import { CONVERSATION_KIND } from "../storage-vocabulary.js";
 import {
   EpochMillisColumnSchema,
   InstantColumnSchema,
@@ -1037,7 +1033,7 @@ export function turnStoppedUnderReached(
  * `lastSettledTurnsOfReached` reads it.
  */
 export function lastSettledTurnAt(conversationId: SQLWrapper): SQL<Date | null> {
-  // Note that the instant is selected bare, as `newestAwaitingLineAt`'s is, since a live statement takes no cast through text.
+  // Note that the instant is selected bare, because Drizzle's `max` casts it to text and a cast through text is no immutable function, which a live statement must hold to.
   return sql<Date | null>`(${queryBuilder
     .select({ settledAt: sql<Date | null>`max(${turns.settledAt})` })
     .from(turns)
@@ -1078,11 +1074,6 @@ export function lastSettledTurnsOfReached(
   );
 }
 
-const AwaitingLinesRowSchema = Schema.Struct({
-  conversationId: Schema.String,
-  newestAt: InstantColumnSchema,
-});
-
 /**
  * What the retired runtime put between two messages it handed a turn as one:
  * steers that arrived while a step was under way were coalesced into the next
@@ -1122,84 +1113,6 @@ export function noReceiptOfLine() {
       ),
   );
 }
-
-/**
- * The condition that a line no turn took is one of the developer's lines to
- * the agent, rather than one a call said or typed, whose ask a call answers
- * without a turn of the agent's: what both the held read and the live
- * statement count as awaiting a turn.
- */
-function lineOfTheAgents(): SQL {
-  return sql`(${messages.metadata} ->> 'channel' is distinct from ${MESSAGE_CHANNEL.VOICE} and ${messages.metadata} ->> 'voice_session_id' is null)`;
-}
-
-/**
- * When the newest of the developer's lines standing with no turn yet was
- * written in the coding-agent conversation `conversationId` names, by the
- * same rule `awaitingLinesOfReached` reads, or null where none stands: what
- * a live statement selects so its reader judges the line's grace
- * (`@repo/features/agent-status`) without the statement reading the
- * clock.
- */
-export function newestAwaitingLineAt(conversationId: SQLWrapper): SQL<Date | null> {
-  // Note that the newest instant is selected bare, because Drizzle's `max` casts it to text
-  // and a cast through text is no immutable function, which a live statement must hold to.
-  return sql<Date | null>`(${queryBuilder
-    .select({ newestAt: sql<Date | null>`max(${messages.createdAt})` })
-    .from(messages)
-    .innerJoin(conversations, eq(conversations.id, messages.conversationId))
-    .where(
-      and(
-        eq(messages.conversationId, conversationId),
-        eq(conversations.kind, CONVERSATION_KIND.AGENT),
-        turnlessUserLine(messages),
-        isNull(messages.withdrawnAt),
-        lineOfTheAgents(),
-        noReceiptOfLine(),
-      ),
-    )})`;
-}
-
-/**
- * When the newest of the developer's lines standing with no turn yet was
- * written, in each coding-agent conversation named that holds one: each is
- * a message the session took and the next turn will receive, which is what
- * reads an idle agent as running again until that turn opens, for as long
- * as the status allows it to wait (`coder-host/status.ts`). The kind is held
- * here as the writer holds it when it takes such a line, since a task
- * conversation's turnless user rows are its spoken asks and wait for no
- * turn of an agent's. A line a turn already received under another row
- * (`noReceiptOfLine`) is not counted, and neither is a line a past call
- * left (`lineOfTheAgents`), whose turn the call opened through an ask of its
- * own rather than through the line. Nor is a line its hand-over withdrew,
- * which the session did not take.
- */
-const newestAwaitingLines = SqlSchema.findAll({
-  Request: ConversationsReadSchema,
-  Result: AwaitingLinesRowSchema,
-  execute: ({ userId, conversationIds }) =>
-    Database.use((db) =>
-      db
-        .select({
-          conversationId: messages.conversationId,
-          newestAt: max(messages.createdAt),
-        })
-        .from(messages)
-        .innerJoin(conversations, eq(conversations.id, messages.conversationId))
-        .where(
-          and(
-            userId === null ? undefined : eq(messages.userId, userId),
-            inArray(messages.conversationId, [...conversationIds]),
-            eq(conversations.kind, CONVERSATION_KIND.AGENT),
-            turnlessUserLine(messages),
-            isNull(messages.withdrawnAt),
-            lineOfTheAgents(),
-            noReceiptOfLine(),
-          ),
-        )
-        .groupBy(messages.conversationId),
-    ),
-});
 
 const findSentLine = SqlSchema.findOneOption({
   Request: Schema.Struct({
@@ -1255,32 +1168,6 @@ export function sentLineStands(
       Option.isSome,
     ),
   );
-}
-
-function awaitingLinesRead(
-  userId: string | null,
-  conversationIds: readonly string[],
-): Effect.Effect<ReadonlyMap<string, Date>, StoreFailure, DatabaseServices> {
-  if (conversationIds.length === 0) return Effect.succeed(new Map());
-  return Effect.map(
-    newestAwaitingLines({ userId, conversationIds }),
-    (rows) => new Map(rows.map((row) => [row.conversationId, row.newestAt])),
-  );
-}
-
-/** The conversations among those named in which a developer's line awaits its turn, each with when the newest such line was written; one with none is absent. */
-export function awaitingLinesOf(
-  userId: string,
-  conversationIds: readonly string[],
-): Effect.Effect<ReadonlyMap<string, Date>, StoreFailure, DatabaseServices> {
-  return awaitingLinesRead(userId, conversationIds);
-}
-
-/** The conversations among those named, whoever owns them, in which a developer's line awaits its turn, each with when the newest was written; only for ids a gate already read, as `latestTurnsOfReached`. */
-export function awaitingLinesOfReached(
-  conversationIds: readonly string[],
-): Effect.Effect<ReadonlyMap<string, Date>, StoreFailure, DatabaseServices> {
-  return awaitingLinesRead(null, conversationIds);
 }
 
 /** A turn row is mutable, so its order is the latest instant any of its stamps was set. */

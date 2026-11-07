@@ -1,4 +1,4 @@
-import { LINE_GRACE_MILLIS, STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
+import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { GITHUB_TOKEN_REFRESH } from "@repo/features/host-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -156,22 +156,11 @@ export const CODER = {
   PUBLISHED_CLOSED_FRESH: Duration.minutes(10),
   /**
    * How long after its Start an agent with no turn row yet still reads as
-   * starting. The harness took the session and its first turn is on its way; an
+   * starting. The Start writes its first line with the turn it queues; an
    * agent still without one past this is read as failed, so nothing reads
    * starting forever and no transcript read is held for it.
    */
   STARTING_GRACE: Duration.millis(STARTING_GRACE_MILLIS),
-  /**
-   * How long a line of the developer's may stand with no turn to take it
-   * while none runs, and still read the agent as running. The harness opens
-   * the turn on a line it took, as it lands the first turn of a
-   * Start (`STARTING_GRACE`, whose length this shares); a line still
-   * waiting past this is one whose turn is not coming, as when the session
-   * failed with the store's hooks failing beside it, so no failed turn was
-   * written. It is read as failed rather than running forever, so the
-   * developer is offered Continue on it.
-   */
-  LINE_GRACE: Duration.millis(LINE_GRACE_MILLIS),
   /**
    * The lease one call holds on a native agent's runner across reading
    * whether it runs and writing to it or launching it

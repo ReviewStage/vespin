@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
+import { settleRunnerLostTurns } from "../abandoned-turns.js";
 import { createAgent } from "../agent-store.js";
 import {
   acceptRunnerLine,
@@ -14,13 +16,14 @@ import {
   queueRunnerLine,
   runnerLinesPast,
 } from "../runner-line-store.js";
+import { storeWriter } from "../writer.js";
 
 /**
  * The lines queued for a cloud agent's runner, over a real dialect: a launch
  * reads its own lines past its cursor in the order they were queued, however
  * old, and a message queued again under its id is queued once; a later launch is handed
- * the message lines an earlier one never acknowledged, within the window it
- * names, and nothing else of that launch's, even under the same first event
+ * the message lines an earlier one never acknowledged while the turn each
+ * awaits still waits on it, and nothing else of that launch's, even under the same first event
  * number once the new launch dropped them; and no account queues for,
  * reads, or acknowledges another's agent. Synthetic accounts and agents
  * throughout.
@@ -46,16 +49,27 @@ const openAccount = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
-  return { userId, agentId: Option.getOrThrow(started).agent.id };
+  const { agent } = Option.getOrThrow(started);
+  return { userId, agentId: agent.id, conversationId: agent.conversationId };
 });
 
-/** The texts a launch reads past its cursor, every line queued so far in the window. */
-const textsPast = (userId: string, agentId: string, launch: number, after = 0) =>
+/** A developer's line to the agent written as its send writes it, with the turn it awaits, under the line id it is queued for the runner by. */
+const lineSent = (account: { userId: string; conversationId: string }, clientKey: string) =>
   Effect.gen(function* () {
-    const since = new Date((yield* Clock.currentTimeMillis) - Duration.toMillis(Duration.hours(1)));
-    const lines = yield* runnerLinesPast(userId, agentId, { launch, after, since, limit: LIMIT });
-    return lines.map((line) => line.text);
+    const writer = yield* storeWriter({ tools: {} });
+    yield* writer.writeAwaitingLine(
+      { userId: account.userId, conversationId: account.conversationId },
+      { text: clientKey, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
+      Effect.succeed(true),
+    );
+    return sentLineId(clientKey);
   });
+
+/** The texts a launch reads past its cursor. */
+const textsPast = (userId: string, agentId: string, launch: number, after = 0) =>
+  Effect.map(runnerLinesPast(userId, agentId, { launch, after, limit: LIMIT }), (lines) =>
+    lines.map((line) => line.text),
+  );
 
 it.layer(getTestDB())("the runner line store", (it) => {
   it.effect("a launch reads its lines past its cursor, a message queued again once", () =>
@@ -97,19 +111,23 @@ it.layer(getTestDB())("the runner line store", (it) => {
   );
 
   it.effect(
-    "a later launch is handed the messages an earlier one never took, in the window, and nothing else of it",
+    "a later launch is handed the messages an earlier one never took while their turn waits on them, and nothing else of it",
     () =>
       Effect.gen(function* () {
-        const { userId, agentId } = yield* openAccount;
+        const account = yield* openAccount;
+        const { userId, agentId, conversationId } = account;
         const queue = (launch: number, text: string, lineId?: string) =>
           queueRunnerLine(userId, { agentId, launch, text, ...(lineId ? { lineId } : {}) });
-        const stale = randomUUID();
-        yield* queue(LAUNCH.FIRST, "stale", stale);
-        yield* TestClock.adjust(Duration.hours(2));
-        const taken = randomUUID();
+        // A line whose turn failed, which the developer resends themselves rather than a launch behind their back.
+        const failed = yield* lineSent(account, "failed");
+        const writer = yield* storeWriter({ tools: {} });
+        yield* settleRunnerLostTurns(writer, conversationId, yield* Clock.currentTimeMillis);
+        const taken = yield* lineSent(account, "taken");
+        const untaken = yield* lineSent(account, "untaken");
+        yield* queue(LAUNCH.FIRST, "failed", failed);
         yield* queue(LAUNCH.FIRST, "taken", taken);
         yield* queue(LAUNCH.FIRST, "stop");
-        yield* queue(LAUNCH.FIRST, "untaken", randomUUID());
+        yield* queue(LAUNCH.FIRST, "untaken", untaken);
         yield* acceptRunnerLine(userId, agentId, taken);
         yield* queue(LAUNCH.NEXT, "next");
         assert.deepEqual(yield* textsPast(userId, agentId, LAUNCH.NEXT), ["untaken", "next"]);
@@ -117,10 +135,11 @@ it.layer(getTestDB())("the runner line store", (it) => {
   );
 
   it.effect(
-    "a launch that dropped its predecessor's lines reads only its untaken messages in the window under the same number",
+    "a launch that dropped its predecessor's lines reads only its untaken messages whose turn waits on them under the same number",
     () =>
       Effect.gen(function* () {
-        const { userId, agentId } = yield* openAccount;
+        const account = yield* openAccount;
+        const { userId, agentId, conversationId } = account;
         const queue = (text: string, lineId?: string) =>
           queueRunnerLine(userId, {
             agentId,
@@ -128,19 +147,17 @@ it.layer(getTestDB())("the runner line store", (it) => {
             text,
             ...(lineId ? { lineId } : {}),
           });
-        yield* queue("stale", randomUUID());
-        yield* TestClock.adjust(Duration.hours(2));
-        const taken = randomUUID();
+        const failed = yield* lineSent(account, "failed");
+        const writer = yield* storeWriter({ tools: {} });
+        yield* settleRunnerLostTurns(writer, conversationId, yield* Clock.currentTimeMillis);
+        const taken = yield* lineSent(account, "taken");
+        const untaken = yield* lineSent(account, "untaken");
+        yield* queue("failed", failed);
         yield* queue("taken", taken);
         yield* queue("stop");
-        yield* queue("untaken", randomUUID());
+        yield* queue("untaken", untaken);
         yield* acceptRunnerLine(userId, agentId, taken);
-        const now = yield* Clock.currentTimeMillis;
-        yield* clearRunnerLines(
-          userId,
-          agentId,
-          new Date(now - Duration.toMillis(Duration.hours(1))),
-        );
+        yield* clearRunnerLines(userId, agentId);
         yield* queue("first of the next");
         assert.deepEqual(yield* textsPast(userId, agentId, LAUNCH.FIRST), [
           "untaken",
@@ -153,7 +170,7 @@ it.layer(getTestDB())("the runner line store", (it) => {
     Effect.gen(function* () {
       const owner = yield* openAccount;
       const other = yield* openAccount;
-      const lineId = randomUUID();
+      const lineId = yield* lineSent(owner, "theirs");
       yield* queueRunnerLine(owner.userId, {
         agentId: owner.agentId,
         launch: LAUNCH.FIRST,

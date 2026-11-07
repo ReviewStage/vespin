@@ -14,7 +14,7 @@
  * A launch reads its own lines past its cursor, and beside them the
  * agent's message lines an earlier launch was written but never said it
  * took, so a launch that ended before it took a message hands it to the
- * next, within the window the read names. A line acknowledged is never
+ * next, while the turn the message awaits still waits on it. A line acknowledged is never
  * handed again; what an earlier launch was written of any other kind (a
  * stop, a model change, a retire) was that launch's alone, and the next
  * launch drops it as it starts, with the messages none took and none will
@@ -23,12 +23,27 @@
  * more.
  */
 
-import { and, asc, eq, gt, gte, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { TURN_STATUS } from "@repo/wire";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
 import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { runnerLine } from "../schemas/runner-line.js";
+import { messages, turns } from "../schemas/storage.js";
 
 type RunnerLineEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -114,17 +129,42 @@ const deleteExpired = SqlSchema.void({
     ),
 });
 
+/**
+ * That a message line's developer row still awaits a turn that is open: the
+ * turn its send queued or joined, which no failure, end, or Stop has closed
+ * (`turn-state.ts`). So a launch is handed a message an earlier launch never
+ * took only while its turn still waits on it, and never one whose turn
+ * failed, which the developer was told of and resends themselves.
+ */
+function awaitsOpenTurn() {
+  return exists(
+    queryBuilder
+      .select({ id: messages.id })
+      .from(messages)
+      .innerJoin(agentTable, eq(agentTable.conversationId, messages.conversationId))
+      .innerJoin(turns, eq(turns.id, messages.awaitsTurnId))
+      .where(
+        and(
+          eq(agentTable.id, runnerLine.agentId),
+          // Note that a line's id is the uuid its message's client id spells as text.
+          sql`${messages.clientId} = ${runnerLine.lineId}::text`,
+          isNull(messages.turnId),
+          inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+        ),
+      ),
+  );
+}
+
 const findLinesPast = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
     agentId: Schema.String,
     launch: Schema.Number,
     after: Schema.Number,
-    since: Schema.Date,
     limit: Schema.Number,
   }),
   Result: RunnerLineSchema,
-  execute: ({ userId, agentId, launch, after, since, limit }) =>
+  execute: ({ userId, agentId, launch, after, limit }) =>
     Database.use((db) =>
       db
         .select({ seq: runnerLine.seq, text: runnerLine.text })
@@ -138,11 +178,7 @@ const findLinesPast = SqlSchema.findAll({
             or(isNull(runnerLine.lineId), isNull(runnerLine.acceptedAt)),
             or(
               eq(runnerLine.launch, launch),
-              and(
-                lt(runnerLine.launch, launch),
-                isNotNull(runnerLine.lineId),
-                gte(runnerLine.createdAt, since),
-              ),
+              and(lt(runnerLine.launch, launch), isNotNull(runnerLine.lineId), awaitsOpenTurn()),
             ),
           ),
         )
@@ -152,9 +188,9 @@ const findLinesPast = SqlSchema.findAll({
 });
 
 const findWaiting = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, since: Schema.Date }),
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
   Result: Schema.Struct({ seq: Schema.Number }),
-  execute: ({ userId, agentId, since }) =>
+  execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
         .select({ seq: runnerLine.seq })
@@ -165,7 +201,7 @@ const findWaiting = SqlSchema.findAll({
             eq(runnerLine.agentId, agentId),
             isNotNull(runnerLine.lineId),
             isNull(runnerLine.acceptedAt),
-            gte(runnerLine.createdAt, since),
+            awaitsOpenTurn(),
           ),
         )
         .limit(1),
@@ -173,8 +209,8 @@ const findWaiting = SqlSchema.findAll({
 });
 
 const deleteHandedOn = SqlSchema.void({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, since: Schema.Date }),
-  execute: ({ userId, agentId, since }) =>
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
+  execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
         .delete(runnerLine)
@@ -184,7 +220,7 @@ const deleteHandedOn = SqlSchema.void({
             eq(runnerLine.agentId, agentId),
             or(
               isNull(runnerLine.lineId),
-              and(isNull(runnerLine.acceptedAt), lt(runnerLine.createdAt, since)),
+              and(isNull(runnerLine.acceptedAt), not(awaitsOpenTurn())),
             ),
           ),
         ),
@@ -273,47 +309,34 @@ export function queueRunnerLine(
 /**
  * The account's agent's lines the launch named is handed past its cursor,
  * in order, at most `limit`: those written for the launch, and the message
- * lines an earlier launch was written, never acknowledged, and queued since
- * `since`.
+ * lines an earlier launch was written and never acknowledged whose turn
+ * still waits on them (`awaitsOpenTurn`).
  */
 export function runnerLinesPast(
   userId: string,
   agentId: string,
-  read: {
-    readonly launch: number;
-    readonly after: number;
-    readonly since: Date;
-    readonly limit: number;
-  },
+  read: { readonly launch: number; readonly after: number; readonly limit: number },
 ): RunnerLineEffect<readonly RunnerLine[]> {
   return findLinesPast({ userId, agentId, ...read });
 }
 
-/** Whether a message line of the account's agent queued since `since` stands that no launch acknowledged, which a launch would be handed. */
-export function runnerLinesWaiting(
-  userId: string,
-  agentId: string,
-  since: Date,
-): RunnerLineEffect<boolean> {
-  return Effect.map(findWaiting({ userId, agentId, since }), (rows) => rows.length > 0);
+/** Whether a message line of the account's agent stands that no launch acknowledged and whose turn still waits on it, which a launch would be handed. */
+export function runnerLinesWaiting(userId: string, agentId: string): RunnerLineEffect<boolean> {
+  return Effect.map(findWaiting({ userId, agentId }), (rows) => rows.length > 0);
 }
 
 /**
  * The account's agent's lines dropped as a new launch starts, its caller
  * holding the agent's runner lease: every line an earlier launch was
  * written that is no message (a stop, a model change, a retire), which was
- * that launch's alone, and every message no launch took that was queued
- * before `since`, which none will be handed. Note that a launch that
- * applied no event before it ended leaves the next its first event number,
- * so such a line would otherwise read as the new launch's own, which a
- * launch reads whatever its age.
+ * that launch's alone, and every message no launch took whose turn no longer
+ * waits on it, which none will be handed. Note that a launch that applied
+ * no event before it ended leaves the next its first event number, so such
+ * a line would otherwise read as the new launch's own, which a launch reads
+ * whatever its age.
  */
-export function clearRunnerLines(
-  userId: string,
-  agentId: string,
-  since: Date,
-): RunnerLineEffect<void> {
-  return deleteHandedOn({ userId, agentId, since });
+export function clearRunnerLines(userId: string, agentId: string): RunnerLineEffect<void> {
+  return deleteHandedOn({ userId, agentId });
 }
 
 /** The account's agent's message line under its id withdrawn, where no launch took it, as for a launch that failed before its runner could read it, whose send answered failed. */

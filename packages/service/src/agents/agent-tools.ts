@@ -2,7 +2,6 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type Agent,
   type AgentLatestTurn,
-  awaitingLinesOfReached,
   continuationsOf,
   latestTurnsOfReached,
   type NativeRoute,
@@ -1437,22 +1436,20 @@ const journalsOf = (agent: Agent, limit: number) =>
     (read): readonly StoredMessageRecord[] => (read.ok ? read.value : []),
   );
 
-/** The agents' standings, read once for the lot: each one's newest turn, and whether a line of the developer's awaits one. The agents were read through their workspace's gate, so their conversations are read by id. */
+/** The agents' standings, read once for the lot: each one's newest turn. The agents were read through their workspace's gate, so their conversations are read by id. */
 const standingsOf = (agents: readonly Agent[]) =>
   Effect.gen(function* () {
     const ids = agents.map((agent) => agent.conversationId);
     const turns = yield* latestTurnsOfReached(ids);
-    const awaiting = yield* awaitingLinesOfReached(ids);
     const now = yield* Clock.currentTimeMillis;
     return (agent: Agent) => {
       const turn = turns.get(agent.conversationId);
       const status = agentStatusOf(turn, {
         createdAt: agent.createdAt,
         now,
-        awaitingLineAt: awaiting.get(agent.conversationId),
         blank: startedBlank(agent),
       });
-      // Why the newest turn failed is said only while the agent reads as failed: a line awaiting the next turn makes it running again.
+      // Why the newest turn failed is said only while the agent reads as failed.
       return {
         status,
         failureReason: status === AGENT_STATUS.FAILED ? agentFailureOf(turn) : undefined,
@@ -2607,7 +2604,6 @@ const stopOf = (call: AgentCall, agent: Agent) =>
     const status = agentStatusOf(after.turn, {
       createdAt: agent.createdAt,
       now: yield* Clock.currentTimeMillis,
-      awaitingLineAt: after.awaitingLineAt,
       blank: startedBlank(agent),
     });
     const standing = stopStands(before.turn) && after.turn?.id === before.turn?.id;

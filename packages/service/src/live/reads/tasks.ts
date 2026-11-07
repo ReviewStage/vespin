@@ -46,12 +46,7 @@ import { and, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
-import {
-  awaitingLineAtIn,
-  lastSettledAtIn,
-  latestTurnOf,
-  sessionEndedOf,
-} from "../agent-standing.js";
+import { lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
 
 /**
@@ -232,7 +227,9 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         startedAt: latest.startedAt,
         settledAt: latest.settledAt,
         leaseUntil: latest.leaseUntil,
-        awaitingLineAt: awaitingLineAtIn(agentTable.conversationId),
+        // Note that a desktop released before the turn record reads a line awaiting its turn by this; null
+        // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
+        awaitingLineAt: sql<Date | null>`null::timestamptz`,
         lastSettledAt: lastSettledAtIn(agentTable.conversationId),
       },
     },
