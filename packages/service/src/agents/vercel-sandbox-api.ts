@@ -103,6 +103,13 @@ const SESSION_ENDING = {
   CODES: new Set(["sandbox_stopping", "sandbox_snapshotting"]),
 } as const;
 
+/**
+ * Vercel's answer for a call to a session that has stopped, and the code its
+ * body names: the session ended, as one its sandbox no longer runs did. Note
+ * that Vercel's list may still name the sandbox running in that session.
+ */
+const SESSION_STOPPED = { STATUS: 410, CODE: "sandbox_stopped" } as const;
+
 const OK_STATUS = { FIRST: 200, LAST: 299 } as const;
 
 const SANDBOX_API = {
@@ -724,6 +731,14 @@ function isGone(failure: SandboxUnavailable): boolean {
   return failure.status === NOT_FOUND_STATUS;
 }
 
+/** Whether a call on a session failed because the session ended: gone, or stopped under it, which leaves nothing of it running. */
+function sessionGone(failure: SandboxUnavailable): boolean {
+  return (
+    isGone(failure) ||
+    (failure.status === SESSION_STOPPED.STATUS && failure.code === SESSION_STOPPED.CODE)
+  );
+}
+
 /** The SDK's own name for its network policy, from ours: the open internet by name, and every rule copied, since the SDK takes them as mutable arrays. */
 function sdkPolicyOf(policy: NetworkPolicy): SdkNetworkPolicy {
   if ("mode" in policy) return policy.mode;
@@ -968,7 +983,7 @@ function sessionCallsOf(current: Option.Option<Session>): SandboxSessionApi {
       }).pipe(
         Effect.timeoutOption(within),
         Effect.map((exit): CommandExit => (Option.isNone(exit) ? null : exit.value)),
-        Effect.catchIf(isGone, () => Effect.succeed<CommandExit>(COMMAND_GONE)),
+        Effect.catchIf(sessionGone, () => Effect.succeed<CommandExit>(COMMAND_GONE)),
         // Note that a wait Vercel ended before the command did answers it with no exit, which the SDK cannot read as a finished command.
         Effect.catchIf(
           (failure) => failure.status !== undefined && succeeded(failure.status),
@@ -989,7 +1004,7 @@ function sessionCallsOf(current: Option.Option<Session>): SandboxSessionApi {
     kill: (commandId) =>
       onCommand(SANDBOX_CALL.KILL, commandId, (command, signal) =>
         command.kill("SIGTERM", { abortSignal: signal }),
-      ).pipe(Effect.catchIf(isGone, () => Effect.void)),
+      ).pipe(Effect.catchIf(sessionGone, () => Effect.void)),
   };
 }
 

@@ -390,6 +390,17 @@ export function runnerSandboxApi() {
         { status: 422 },
       );
     }
+    if (current?.status === "stopped") {
+      return Response.json(
+        {
+          error: {
+            code: "sandbox_stopped",
+            message: "Sandbox has stopped execution and is no longer available",
+          },
+        },
+        { status: 410 },
+      );
+    }
     if (rest === "snapshot") {
       // A snapshot stops the session it is taken of, so a second one asked of it is refused.
       const taking = sandboxes.find(

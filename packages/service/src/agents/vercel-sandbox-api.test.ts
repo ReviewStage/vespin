@@ -328,6 +328,24 @@ it.effect(
 );
 
 it.effect(
+  "a session that stopped while its sandbox still names it, which Vercel answers 410 sandbox_stopped, reads as ended: its command is gone and a kill of it is done",
+  () =>
+    Effect.gen(function* () {
+      const { fake, api, ref, command } = yield* commandStarted;
+      const sandbox = fake.sandboxes[0];
+      assert.ok(sandbox !== undefined);
+      sandbox.status = "stopped";
+
+      const stopped = yield* api.session(ref);
+
+      assert.equal(yield* stopped.commandExit(command.id), COMMAND_GONE);
+      yield* stopped.kill(command.id);
+      const ran = yield* Effect.flip(stopped.run({ command: "true", args: [] }));
+      assert.equal(ran.status, 410);
+    }),
+);
+
+it.effect(
   "a command's exit reads as Vercel answers a read that waits for it: none while it runs, its code once it exited, and gone once Vercel no longer knows it",
   () =>
     Effect.gen(function* () {
