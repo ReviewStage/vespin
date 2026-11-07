@@ -454,6 +454,8 @@ function mount(
       linkReads: useLinkReads(),
       // A link's step is written by the window's history beside the tab, where one stands, else the task's place opens by its own door.
       visitTask: (at, step) => windowHistory?.onVisitTask(at, step) ?? false,
+      startStands: () => windowHistory?.onStartStands(),
+      leaveStart: () => windowHistory?.onLeaveStart() ?? false,
     });
     // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);

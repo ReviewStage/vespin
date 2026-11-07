@@ -10,6 +10,10 @@
  * by the host itself is one more place visited all the same, and a move
  * through the history is the window arriving where the history already
  * stands. It lives as long as the window does, the way a browser tab's does.
+ * The page a task New task starts stands on while its start is out, the task
+ * bound or Home, is no step of its own: the task it lands on takes that step
+ * in place (`onStartStands`, `onLeaveStart`), so Back from it returns to
+ * where New task was pressed, the Inbox among them.
  *
  * The history is written into the router history the window's root mounts
  * (`panel-router.tsx`), each place saved in its entry's state as what a step
@@ -302,6 +306,16 @@ export interface TaskVisits {
    * writes none, and the door goes to the task as any other door does.
    */
   onVisitTask: (at: TaskAt, step: LinkStep) => boolean;
+  /**
+   * Takes the step the window stands on as the page of a task New task is
+   * starting, which a door moved it to as the start was pressed: the task
+   * the start lands on takes that step in place (`onLeaveStart`), so Back
+   * from it returns to where New task was pressed, as the Inbox, rather than
+   * to the task or Home the start's page stood on.
+   */
+  onStartStands: () => void;
+  /** Answers whether the window stands on a start's page, which a move to a task's own place then takes in place, letting it go. */
+  onLeaveStart: () => boolean;
 }
 
 /**
@@ -329,6 +343,8 @@ interface WindowTrail {
   writing: boolean;
   /** Whether the trail is following a write the router made of its own, which the window already stands on. */
   routing: boolean;
+  /** The number of the step a task's start moved the window to for its page, which the move to the task it starts takes in place (`TaskVisits.onLeaveStart`); none once the trail stands elsewhere. */
+  standIn: number | undefined;
   readonly listeners: Set<() => void>;
 }
 
@@ -342,6 +358,8 @@ const trails = new WeakMap<RouterHistory, WindowTrail>();
 function standTrail(held: WindowTrail, next: Trail): void {
   if (next.entries === held.trail.entries && next.at === held.trail.at) return;
   held.trail = next;
+  // Note that a start's page stands in only while the trail stands on it, so any move off it, Back among them, lets it go.
+  if (held.standIn !== held.base + next.at) held.standIn = undefined;
   for (const listener of [...held.listeners]) listener();
 }
 
@@ -500,6 +518,7 @@ function trailOf(history: RouterHistory): WindowTrail {
     waiting: [],
     writing: false,
     routing: false,
+    standIn: undefined,
     listeners: new Set(),
   };
   held.trail = aloneOn(held, history.location);
@@ -594,6 +613,10 @@ function useHistory(input: {
   stepAway: () => boolean;
   /** Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`), answering whether the window held a step to write it after; it writes none where it holds none yet. */
   visit: (to: Place) => boolean;
+  /** Takes the step standing as a task's start's page (`WindowTrail.standIn`). */
+  standIn: () => void;
+  /** Answers whether the window stands on a task's start's page, letting it go. */
+  leaveStandIn: () => boolean;
 } {
   const { held, place, address, reachable, named, leaveFirst, sameDraft, opened, onTaskRoute } =
     input;
@@ -848,6 +871,14 @@ function useHistory(input: {
     away: reading.away,
     stepAway: () => goTo(awayFrom(held.trail, latest.current.reachable)),
     visit,
+    standIn: () => {
+      held.standIn = standingOf(held.trail) === undefined ? undefined : held.base + held.trail.at;
+    },
+    leaveStandIn: () => {
+      const standsIn = held.standIn !== undefined && held.standIn === held.base + held.trail.at;
+      held.standIn = undefined;
+      return standsIn;
+    },
   };
 }
 
@@ -1124,18 +1155,20 @@ export function useWindowHistory(input: {
       routedPlaceOf(router.matchRoutes(pathOf(address)), access) === ROUTED_PLACE.TASK,
     [router, access],
   );
-  const { backTo, upTo, stepBack, stepAway, visit, ...history } = useHistory({
-    held,
-    place,
-    address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
-    reachable,
-    named,
-    go,
-    leaveFirst: tasks.placeLeave.transitionalLeaveFirst,
-    sameDraft,
-    opened: tasks.sidePanel.opened,
-    onTaskRoute,
-  });
+  const { backTo, upTo, stepBack, stepAway, visit, standIn, leaveStandIn, ...history } = useHistory(
+    {
+      held,
+      place,
+      address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
+      reachable,
+      named,
+      go,
+      leaveFirst: tasks.placeLeave.transitionalLeaveFirst,
+      sameDraft,
+      opened: tasks.sidePanel.opened,
+      onTaskRoute,
+    },
+  );
   // A place a narrow room stands another in the place of, as a phone has no Home, stands that one as its declaration says.
   const instead =
     narrow && tasks.signedIn && untitled !== undefined && !isTaskPlace(untitled)
@@ -1191,6 +1224,8 @@ export function useWindowHistory(input: {
       upTo: (to, stand) => upTo(placeOf(to), stand),
       stepBack,
     },
+    onStartStands: standIn,
+    onLeaveStart: leaveStandIn,
   });
 }
 

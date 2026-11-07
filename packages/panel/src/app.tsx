@@ -486,6 +486,8 @@ function AppWindow(): React.JSX.Element {
   const linkReads = useLinkReads();
   // The history's door for a link's step on a task's own place, made after the tab it is handed to, read as a link opens.
   const visitTask = useRef<TaskVisits["onVisitTask"]>(() => false);
+  const startStands = useRef<TaskVisits["onStartStands"]>(() => undefined);
+  const leaveStart = useRef<TaskVisits["onLeaveStart"]>(() => false);
   const tasks = useTasksTab({
     tasks: planning ?? IDLE_TASKS_VIEW,
     run: run ?? IDLE_RUN,
@@ -512,6 +514,8 @@ function AppWindow(): React.JSX.Element {
     arrivals,
     linkReads,
     visitTask: (at, step) => visitTask.current(at, step),
+    startStands: () => startStands.current(),
+    leaveStart: () => leaveStart.current(),
   });
   // Note that a workspace an older service named no slug for is named in its address by its id (`workspace-routes.ts`).
   listedSlug.current =
@@ -659,6 +663,8 @@ function AppWindow(): React.JSX.Element {
   // Note that a door asking for the place already standing tells the leave guard its move stays, so a Leave of it keeps the page's ask.
   routedExits.stay = placeLeave.stays;
   visitTask.current = history.onVisitTask;
+  startStands.current = history.onStartStands;
+  leaveStart.current = history.onLeaveStart;
   // The place standing and the task the host binds follow each other, each on the other's edge (`places/place-binding.ts`).
   usePlaceBinding({
     known,

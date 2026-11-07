@@ -1305,6 +1305,10 @@ export function useTasksTab(input: {
   linkReads: LinkRead;
   /** Writes the step a link opens on a task's own place before the window stands there, as one move (`navigation-history.ts`'s `onVisitTask`). */
   visitTask: (at: TaskAt, step: LinkStep) => boolean;
+  /** Takes the step the window stands on as a start's page, which the task it starts takes in place (`navigation-history.ts`'s `onStartStands`). */
+  startStands: () => void;
+  /** Answers whether the window stands on a start's page, letting it go (`navigation-history.ts`'s `onLeaveStart`). */
+  leaveStart: () => boolean;
 }): TasksControl {
   const { shown, placeLeave } = input;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation, and
@@ -2223,7 +2227,8 @@ export function useTasksTab(input: {
     // Note that a link's door names what it opens there, so its step is written at once, at its address, with it.
     const step = linking.current;
     const visited = step !== undefined && step.taskId === toward && input.visitTask(at, step);
-    if (!visited) input.taskView.onOpen(at, takesStepless);
+    // Note that a start's page and the task it lands on are one step, so a move off that page takes its step in place.
+    if (!visited) input.taskView.onOpen(at, takesStepless, input.leaveStart());
     return true;
   };
   const standTask = useRef(standTaskPlace);
@@ -3129,12 +3134,14 @@ export function useTasksTab(input: {
     // Note that a start's page is let go only while it is still this start's, because another start may have replaced it.
     const letGoOfPage = () => setStartingTask((now) => (now?.line === line ? undefined : now));
     // Staying, an agent's start puts the card away at once and opens nothing; an opening one stands the task bound's own
-    // place, or Home, where its page draws, in place of whatever stood in it.
+    // place, or Home, where its page draws, in place of whatever stood in it, as a step the task it starts takes in place,
+    // so Back from that task returns to where New task was pressed.
     // Note that what stood at the press is where its address stood, which a refusal opens again.
     let standBack = pressedOverNow.current(true, false);
     if (handed !== undefined && stays) setNewTaskAsk(undefined);
     else if (line !== undefined) {
       const moved = standTask.current(boundFor);
+      if (moved) input.startStands();
       standBack = pressedOverNow.current(true, moved);
       setStartingTask({ line, choice: handed?.choice, arrivals: arrivals() + (moved ? 1 : 0) });
       setNewTaskAsk(undefined);
