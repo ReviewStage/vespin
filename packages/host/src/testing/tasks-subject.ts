@@ -313,8 +313,6 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   photos: Record<string, { contentType: WorkspacePhotoType; base64: string }>;
   /** Whether a write is refused as the account's role not allowing it. */
   notPermitted: boolean;
-  /** Whether a workspace's delete is refused as one of its agents not yet stoppable. */
-  agentNotReady: boolean;
   /** What a Sentry disconnect answers, once `integrationsGate` lets it. */
   sentryAnswer: WorkspaceCallResult<WorkspaceSentry>;
   /** What the Slack bot's read and every Slack write answer, once `integrationsGate` lets a write. */
@@ -723,7 +721,6 @@ export function fakeService(tasks: Task[]): FakeService {
     invitations: {},
     photos: {},
     notPermitted: false,
-    agentNotReady: false,
     sentryAnswer: UNANSWERED_WORKSPACE,
     slackBotAnswer: UNANSWERED_WORKSPACE,
     integrationsGate: Effect.void,
@@ -1020,9 +1017,7 @@ export function fakeService(tasks: Task[]): FakeService {
       delete: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`delete:${workspaceId}`);
-          if (service.agentNotReady) {
-            return { ok: false, failure: WORKSPACE_CALL_FAILURE.AGENT_NOT_READY } as const;
-          }
+          if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           service.memberships = service.memberships.filter((each) => each.id !== workspaceId);
           return { ok: true, answer: workspaceId } as const;
         }),

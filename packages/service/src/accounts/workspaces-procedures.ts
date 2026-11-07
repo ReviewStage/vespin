@@ -24,10 +24,9 @@
  * `POST /api/workspaces/delete` lets the owner alone delete a workspace,
  * though never the account's own first workspace, which goes only with the
  * account. Every agent of the workspace not archived, any member's, one
- * the owner cannot see among them, is stopped first under the account that
- * started it, and the delete is refused as not ready, stopping no one,
- * where one cannot be stopped yet;
- * the plugin then deletes the workspace and every row of it, and its hooks
+ * the owner cannot see among them, is let go of first under the account
+ * that started it: a turn under way stopped, and a session still starting
+ * retired (`everyLetGoByStarter`); the plugin then deletes the workspace and every row of it, and its hooks
  * delete the agents' conversations (`workspace-deletion.ts`).
  * `POST /api/workspaces/rename` lets an owner or admin rename a workspace,
  * answering it under its new name and its old slug; an account's first
@@ -85,7 +84,7 @@ import {
 } from "@repo/features/workspace-wire";
 import { isExperiment, isWorkspaceExperiment } from "@repo/settings";
 import { type Cause, Effect, Option } from "effect";
-import { everyStoppedByStarter, everyStopsForGood } from "../agents/coder-host/stop.js";
+import { everyLetGoByStarter } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
   recordServerEvent,
@@ -337,9 +336,7 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
       return { workspaceId };
     }),
     /**
-     * Note that every agent is read before any is stopped, so a delete
-     * refused as not ready cancels no one's work, and that the workspace's
-     * kind is our rule rather than the plugin's, because an account's
+     * Note that the workspace's kind is our rule rather than the plugin's, because an account's
      * deletion deletes its own first workspace through the same plugin call.
      */
     delete: session.delete.effect(function* ({ context, input }) {
@@ -347,11 +344,7 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
       const { workspaceId } = input;
       const workspace = yield* ownedWorkspace(userId, workspaceId);
       if (workspace.personal === true) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-      const agents = yield* workspaceAgentsToStop(workspace.id);
-      if (!(yield* everyStopsForGood(agents))) {
-        return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-      }
-      yield* everyStoppedByStarter(STOPPER, agents);
+      yield* everyLetGoByStarter(STOPPER, yield* workspaceAgentsToStop(workspace.id));
       yield* pluginCallOrRefused(seams.deleteWorkspace({ headers, organizationId: workspace.id }));
       yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.DELETE);
       return { workspaceId: workspace.id };

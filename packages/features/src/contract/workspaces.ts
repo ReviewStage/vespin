@@ -11,8 +11,7 @@
  * (`packages/service/src/accounts/workspaces-procedures.ts`): a workspace
  * the caller is not in (`not-found`), a role that does not allow the write
  * (`not-permitted`), and a slug the service will not give
- * (`workspace-slug-*`), and a delete refused while one of the workspace's
- * agents cannot yet be stopped (`agent-not-ready`). Every write through Better Auth's plugin also
+ * (`workspace-slug-*`). Every write through Better Auth's plugin also
  * declares the plugin's already-invited refusal, which its error codes may
  * answer on any of them (`workspace-access.ts`'s `pluginCallOrRefused`).
  */
@@ -28,9 +27,9 @@ import {
   WORKSPACE_PHOTO_BOUNDS,
   workspaceAnswerSchema,
   workspaceCreateRequestSchema,
-  workspaceExperimentSetRequestSchema,
   workspaceDeleteAnswerSchema,
   workspaceDeleteRequestSchema,
+  workspaceExperimentSetRequestSchema,
   workspaceLeaveAnswerSchema,
   workspaceLeaveRequestSchema,
   workspaceMemberRemovalSchema,
@@ -185,7 +184,6 @@ export const workspacesContract = {
       refuses(
         HOSTED_API_ERROR.NOT_FOUND,
         HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.AGENT_NOT_READY,
         HOSTED_API_ERROR.ALREADY_INVITED,
       ),
     )

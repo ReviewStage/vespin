@@ -73,6 +73,9 @@ import {
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import { NATIVE_SESSION_PREFIX } from "../agents/coder-host/native-runtime.js";
+import { NativeAgentSessions, type NativeSessions } from "../agents/coder-host/runtime-sessions.js";
+import { SESSION_RESET_OUTCOME, type SessionTurn } from "../agents/sessions/agent-sessions.js";
 import {
   recordingProductAnalytics,
   SERVER_EVENT,
@@ -123,6 +126,32 @@ const countedProperties = (userId: string, name: string) =>
   ANALYTICS.recorded
     .filter((event) => event.userId === userId && event.name === name)
     .map((event) => event.properties);
+
+/** The native sessions every retire asked to reset, across the file, by the account each acted for; a test reads its own session's. */
+const RESETS: { readonly account: string; readonly sessionId: string }[] = [];
+
+/** A function's native harnesses as far as a workspace's delete reaches them: a reset, recorded and answered done. */
+const RECORDED_RESETS = Layer.succeed(NativeAgentSessions, {
+  sessions: (_runtime, account) =>
+    Option.some(
+      Effect.succeed(
+        // SAFETY: a delete only resets a session here, and any other call fails the test.
+        new Proxy(
+          {
+            reset: (sessionId: string) =>
+              Effect.sync(() => {
+                RESETS.push({ account, sessionId });
+                return { outcome: SESSION_RESET_OUTCOME.RESET } as const;
+              }),
+          },
+          {
+            get: (target, key) =>
+              key === "reset" ? target.reset : () => assert.fail(`a delete asked ${String(key)}`),
+          },
+        ) as unknown as NativeSessions<SessionTurn>,
+      ),
+    ),
+});
 
 /** What Resend was asked to send, across the file; a test reads its own invitee's. */
 const RESEND = recordingHttpClient(() => jsonResponse({ id: "email-1" }));
@@ -273,6 +302,7 @@ const answered = <A>(
       github.layer,
       ANALYTICS.layer,
       INVITATION_MAIL,
+      RECORDED_RESETS,
     );
     if (HOSTED_PATHS.has(new URL(request.url).pathname)) {
       const context = yield* Effect.context<never>().pipe(Effect.provide(services));
@@ -1622,7 +1652,7 @@ it.effect(
 );
 
 it.effect(
-  "the owner's delete reads every agent of the workspace, one on a member's own GitHub the owner cannot see among them, and refuses while that one is still starting",
+  "the owner's delete retires the session of every agent still starting, one on a member's own GitHub the owner cannot see among them, under the member who started it",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -1632,20 +1662,28 @@ it.effect(
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
         const agentId = yield* openTaskAgent(grace, acme, null);
         // Grace's own token reaches its repository and Ada's reads none, so Ada cannot see it; started with a prompt and no turn yet, it is still starting.
-        yield* Database.use((db) =>
+        const [agent] = yield* Database.use((db) =>
           db
             .update(agentTable)
             .set({ githubAccess: GITHUB_ACCESS.TOKEN, prompt: "Fix the flaky test" })
-            .where(eq(agentTable.id, agentId)),
+            .where(eq(agentTable.id, agentId))
+            .returning({ conversationId: agentTable.conversationId }),
+        );
+        const sessionId = `${NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CLAUDE_CODE]}hidden`;
+        yield* Database.use((db) =>
+          db
+            .update(conversations)
+            .set({ runtimeSessionId: sessionId })
+            .where(eq(conversations.id, (agent ?? assert.fail("no agent")).conversationId)),
         );
 
-        const refused = yield* deleting(plugin, ada, acme);
+        const deleted = yield* deleting(plugin, ada, acme);
 
+        assert.deepEqual(deleted, { status: HOSTED_HTTP_STATUS.OK, body: { workspaceId: acme } });
         assert.deepEqual(
-          refused,
-          refusedAs(HOSTED_HTTP_STATUS.CONFLICT, HOSTED_API_ERROR.AGENT_NOT_READY),
+          RESETS.filter((reset) => reset.sessionId === sessionId),
+          [{ account: grace, sessionId }],
         );
-        assert.equal((yield* membersOf(acme)).length, 2);
       }).pipe(Effect.provide(plugin.database));
     }),
 );

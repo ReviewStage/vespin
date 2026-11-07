@@ -1539,7 +1539,7 @@ test("a member leaves after confirming, which names what stays and what stops, a
   assert.deepEqual(buttons(owner.page, "Leave"), []);
 });
 
-test("the owner deletes a team workspace once its name is typed, told what goes for everyone and what stays installed, and the window lands; a member is offered no Delete", async () => {
+test("the owner deletes a team workspace once its name is typed, told what goes for everyone and what stays installed, and the window lands saying so; a member is offered no Delete", async () => {
   const owner = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   const group = leaveGroup(owner.page) ?? assert.fail("no leave");
   act(() => button(group, "Delete").click());
@@ -1563,6 +1563,12 @@ test("the owner deletes a team workspace once its name is typed, told what goes 
     [{ workspaceId: ACME.id }],
   );
   assert.equal(owner.pressed.left, 1);
+  assert.deepEqual(
+    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
+      (words) => words.textContent,
+    ),
+    [`${ACME.name} was deleted`],
+  );
 
   const member = await mount(ACME);
   assert.deepEqual(buttons(leaveGroup(member.page) ?? assert.fail("no leave"), "Delete"), []);

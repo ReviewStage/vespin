@@ -61,9 +61,11 @@ import {
   SettingsSection,
   type SettingsSectionSkeletonShape,
   SettingsSectionsSkeleton,
+  STATUS_TONE,
   Stack,
   TEXT_FIELD_AUTO_COMPLETE,
   TextField,
+  TOAST_HOLD,
   useConfirmDialog,
   useFilePicker,
   useMenu,
@@ -109,6 +111,7 @@ import {
 } from "../live-reads.js";
 import { memberRows } from "../member-rows.js";
 import { useOpenPerson } from "../person-door.js";
+import { useToast } from "../toast.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
 import { useInviteDialog } from "./invite-dialog.js";
@@ -201,6 +204,8 @@ const READ_FAILED = {
  */
 const LEAVE_WORDS = {
   RUNNING: "Leaving",
+  /** The toast once the leave has landed, the workspace's name in it, so it stays masked in a recording. */
+  LEFT: (name: string) => `You left ${name}`,
   LINE: "You lose its tasks, agents, and inbox until someone invites you again.",
   TASKS: (name: string) => `Tasks you wrote stay in ${name}.`,
   AGENTS: "Agents you started that are still working stop.",
@@ -224,6 +229,8 @@ const DELETE_WORDS = {
   PRESS: "Delete",
   VERB: "Delete workspace",
   RUNNING: "Deleting",
+  /** The toast once the delete has landed, the workspace's name in it, so it stays masked in a recording. */
+  DELETED: (name: string) => `${name} was deleted`,
   LINE: "Deletes it and everything in it for every member. This can't be undone.",
   GONE: "Its tasks, agents and their transcripts, automations, memory, and invitations are deleted for everyone.",
   AGENTS: "Agents still working in it stop.",
@@ -630,9 +637,18 @@ function MemberLeave({
   const { mutateAsync: sendWorkspaceLeave, ...leaving } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_LEAVE),
   );
+  const toast = useToast();
   const workspaceId = workspace.id;
   const leaveAct = useConfirmAct(leaving, {
-    send: () => sendWorkspaceLeave({ workspaceId }).then(onLeft),
+    send: () =>
+      sendWorkspaceLeave({ workspaceId }).then(() => {
+        toast({
+          words: LEAVE_WORDS.LEFT(workspace.name),
+          tone: STATUS_TONE.COMPLETE,
+          hold: TOAST_HOLD.DONE,
+        });
+        onLeft();
+      }),
     answered: () => ACCEPTED,
     failed: refusedWith,
   });
@@ -860,9 +876,18 @@ function WorkspaceDelete({
   const { mutateAsync: sendWorkspaceDelete, ...deleting } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_DELETE),
   );
+  const toast = useToast();
   const workspaceId = workspace.id;
   const deleteAct = useConfirmAct(deleting, {
-    send: () => sendWorkspaceDelete({ workspaceId }).then(onDeleted),
+    send: () =>
+      sendWorkspaceDelete({ workspaceId }).then(() => {
+        toast({
+          words: DELETE_WORDS.DELETED(workspace.name),
+          tone: STATUS_TONE.COMPLETE,
+          hold: TOAST_HOLD.DONE,
+        });
+        onDeleted();
+      }),
     answered: () => ACCEPTED,
     failed: refusedWith,
   });
