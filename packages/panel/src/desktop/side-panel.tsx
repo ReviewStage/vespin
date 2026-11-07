@@ -51,6 +51,7 @@ import {
   useResizeEdge,
 } from "@repo/ui";
 import { ListIcon } from "@repo/ui/icons";
+import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import {
   agentOfTab,
@@ -2158,18 +2159,21 @@ function TabContent({
             value={codeFilesRead ? (path) => onBrowseFile(undefined, path, true) : undefined}
           >
             {/* The tab is a chunk of its own, read the first time one is drawn or its card hangs (`pages-on-demand.ts`). */}
-            <PULL_REQUEST_TAB.Surface
+            <LazyBoundary
               fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}
-              agentId={tab.changes}
-              number={tab.number}
-              control={agentsOf(tab.changes)}
-              shown={shown}
-              repository={repository}
-              tree={fileTree}
-              view={ofPullRequestTab(pullRequestViews, tab) ?? PULL_REQUEST_VIEW.CONVERSATION}
-              onView={(view) => onPullRequestView(tab, view)}
-              onActions={(actions) => onTabActions(tab, actions)}
-            />
+            >
+              <PULL_REQUEST_TAB
+                agentId={tab.changes}
+                number={tab.number}
+                control={agentsOf(tab.changes)}
+                shown={shown}
+                repository={repository}
+                tree={fileTree}
+                view={ofPullRequestTab(pullRequestViews, tab) ?? PULL_REQUEST_VIEW.CONVERSATION}
+                onView={(view) => onPullRequestView(tab, view)}
+                onActions={(actions) => onTabActions(tab, actions)}
+              />
+            </LazyBoundary>
           </OpenFileTabProvider>
         </PullRequestsOnGitHub>
       );

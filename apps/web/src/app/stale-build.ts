@@ -1,12 +1,12 @@
 /**
  * stale-build.ts -- a tab whose chunk failed to load asks to reload onto the build the origin serves now.
  *
- * Every surface the panel draws on demand, a route, a surface (`@repo/ui/lazy-surface`), or a side
+ * Every surface the panel draws on demand, a route, a `React.lazy` tab, or a side
  * bundle (`bundle-loader.ts`), is a chunk the build names by its hash, and a
  * deployment serves only its own: once a newer one is live, an older tab's
  * chunks answer 404, and every import of one it has not loaded yet fails for
  * good, Retry included, since the browser keeps a failed module for the
- * document's life (`lazy-surface.tsx`). Vite's preload helper, which wraps every
+ * document's life (`lazy-boundary.tsx`). Vite's preload helper, which wraps every
  * `import()` the build writes, says each such failure on the window as
  * `vite:preloadError` before the import rejects, so the one listener the
  * tab's root stands (`web-host.ts`) hears every lazy surface's, and leaves

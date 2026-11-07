@@ -110,7 +110,7 @@ function reloadDocument(): void {
  * Chromium keeps a module whose fetch failed in the document's module map
  * and answers every later import of it with the same failure, and
  * otherwise, a route that landed and threw while drawing, draws it again in
- * place, as `@repo/ui`'s `lazySurface` does.
+ * place.
  */
 function RouteFailed({ reset }: ErrorComponentProps): React.JSX.Element {
   const router = useRouter();

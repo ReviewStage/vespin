@@ -124,7 +124,7 @@ import {
   XIcon,
 } from "@repo/ui/icons";
 import { landedMark } from "@repo/ui/landed";
-import { lazySurface } from "@repo/ui/lazy-surface";
+import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
 import {
   VIRTUAL_ROWS_ANCHOR,
@@ -136,6 +136,7 @@ import { type UseQueryResult, useMutation, useQuery } from "@tanstack/react-quer
 import {
   type ComponentProps,
   createContext,
+  lazy,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -367,8 +368,8 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * chapter logic are opened seldom. What stands while
  * the chunk loads is the view's own wait, for a frame.
  */
-const CHAPTERS_TAB = lazySurface(() =>
-  import("./agent-chapters-tab.js").then((loaded) => loaded.AgentChaptersTab),
+const CHAPTERS_TAB = lazy(() =>
+  import("./agent-chapters-tab.js").then((loaded) => ({ default: loaded.AgentChaptersTab })),
 );
 
 /**
@@ -3658,20 +3659,23 @@ function PullRequestTabBody({
                     <HandTabActionsContext.Provider
                       value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}
                     >
-                      <CHAPTERS_TAB.Surface
+                      <LazyBoundary
                         fallback={
                           <SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />
                         }
-                        agentId={agentId}
-                        source={source}
-                        shown={shown && view === PULL_REQUEST_VIEW.CHAPTERS}
-                        repository={repository}
-                        tree={tree}
-                        chapters={chapters}
-                        changes={changes}
-                        threads={changesThreads}
-                        lineComments={{ pending: pendingReview, onWritten: written }}
-                      />
+                      >
+                        <CHAPTERS_TAB
+                          agentId={agentId}
+                          source={source}
+                          shown={shown && view === PULL_REQUEST_VIEW.CHAPTERS}
+                          repository={repository}
+                          tree={tree}
+                          chapters={chapters}
+                          changes={changes}
+                          threads={changesThreads}
+                          lineComments={{ pending: pendingReview, onWritten: written }}
+                        />
+                      </LazyBoundary>
                     </HandTabActionsContext.Provider>
                   ) : null}
                 </Fill>
