@@ -25,6 +25,12 @@ export const TURN_DELIVERY = {
   RETENTION: Duration.millis(TURN_DEADLINE.PICKUP_MS),
   /** How long a delivery that found the agent's runner lease held waits before it comes again: a launch under way holds it for seconds, a sandbox's open for most of a minute. */
   BUSY_AGAIN: Duration.seconds(5),
+  /**
+   * How long a publish is waited on before it is given up and said in the
+   * log, so a stalled call to the queue never holds the request that
+   * published past it; a send answers in milliseconds.
+   */
+  PUBLISH_WAIT: Duration.seconds(5),
   /** How long a delivery whose store or machine was unreachable waits before it comes again. */
   FAILED_AGAIN: Duration.seconds(15),
   /**

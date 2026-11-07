@@ -159,6 +159,7 @@ import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import { TURN_STATUS } from "@repo/wire";
 import type { UserContent } from "ai";
+import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import {
   Cause,
   Clock,
@@ -173,6 +174,7 @@ import {
   Result,
   Schedule,
 } from "effect";
+import { SqlError } from "effect/sql/SqlError";
 import { HostedEnvironment } from "../../environment.js";
 import {
   recordServerEvent,
@@ -821,13 +823,7 @@ function mayTakeAgain(failure: { readonly _tag: string }): boolean {
       (failure.status !== undefined && failure.status >= AGAIN_STATUS.SERVER_ERROR)
     );
   }
-  switch (failure._tag) {
-    case "SqlError":
-    case "EffectDrizzleQueryError":
-      return true;
-    default:
-      return false;
-  }
+  return failure instanceof SqlError || failure instanceof EffectDrizzleQueryError;
 }
 
 /** The sessions for one account on the harness given, over the calling fiber's services. */

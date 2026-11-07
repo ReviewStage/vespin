@@ -31,10 +31,11 @@ import {
   setPlanStatus,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
+import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { deviceAgentLaunchSecretsSchema } from "@repo/features/device-agent-wire";
@@ -43,6 +44,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
@@ -275,6 +277,32 @@ const message = (agent: Agent, text: string, lineId?: string) => ({
   message: text,
   ...(lineId === undefined ? undefined : { lineId }),
 });
+
+/** A message written as the line awaiting the turn its send queues, as a steer's is (`steer.ts`), and handed on under its line id. */
+const writtenLine = (agent: Agent, text: string) =>
+  Effect.gen(function* () {
+    const clientKey = randomUUID();
+    const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+    yield* writer.writeAwaitingLine(
+      { userId: agent.userId, conversationId: agent.conversationId },
+      { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
+      Effect.succeed(true),
+    );
+    return message(agent, text, sentLineId(clientKey));
+  });
+
+/** What the launch reads past its config: its own lines, and the messages no earlier launch took, as its runner is handed them. */
+const handedLines = (userId: string, command: Parameters<typeof launchLines>[0]) =>
+  Effect.gen(function* () {
+    const [config] = (yield* launchLines(command)) as [CodexConfig];
+    assert.ok(command?.agentId !== undefined);
+    const read = yield* runnerLinesPast(userId, command.agentId, {
+      launch: config.firstSequence,
+      after: 0,
+      limit: 50,
+    });
+    return read.map((line) => JSON.parse(line.text) as InputLine);
+  });
 
 /** A turn of the agent's under way, as the events route queues one, by the id a Stop names it by. */
 const turnUnderWay = (userId: string, agent: Agent) =>
@@ -749,7 +777,12 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         assert.equal(api.sandboxes[0]?.status, "stopped");
         yield* TestClock.adjust("55 minutes");
 
-        const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
+        const sent = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Now the emails."),
+        );
+        // The turn the message awaits is delivered, as the agent-turns consumer hands it over (`turn-delivery.ts`).
+        yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes.length, 1);
@@ -758,11 +791,12 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const relaunch = api.commands[1];
         assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
         assert.equal(openai.state.renewals, 1);
-        const [config, line] = (yield* launchLines(relaunch)) as [CodexConfig, InputLine];
+        const [config] = (yield* launchLines(relaunch)) as [CodexConfig];
+        const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.harness, RUNNER_HARNESS.CODEX);
         assert.equal(config.threadId, THREAD);
         assert.equal(config.firstSequence, 17);
-        assert.ok(line.type === INPUT_LINE.MESSAGE);
+        assert.ok(line?.type === INPUT_LINE.MESSAGE);
         assert.deepEqual(developerContent(line), [{ type: "text", text: "Now the emails." }]);
         // A fresh bearer for the new launch at the resumed session's firewall, recorded in place of the last.
         const bearer = launchBearer(api, relaunch, SERVICE_HOST);

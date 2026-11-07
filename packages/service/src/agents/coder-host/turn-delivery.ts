@@ -133,7 +133,14 @@ function sendOptions(turn: QueuedAgentTurn, how: TurnPublish) {
     : { retentionSeconds };
 }
 
-/** On Vercel: the turn sent to the topic, pinned to this deployment, as the SDK pins every send. */
+/**
+ * On Vercel: the turn sent to the topic, pinned to this deployment, as the
+ * SDK pins every send, waited on at most `TURN_DELIVERY.PUBLISH_WAIT`. A
+ * send that failed or was given up is said in the log: a keyed one is
+ * published again by the sweep, and an unkeyed one, a launch's end's, leaves
+ * the turn to the delivery its keyed publish already made, and else to the
+ * sweep's reap at its pickup deadline.
+ */
 const VERCEL_TURN_QUEUE: TurnQueueShape = {
   publish: (turn, how) =>
     Effect.tryPromise(() =>
@@ -143,7 +150,12 @@ const VERCEL_TURN_QUEUE: TurnQueueShape = {
         sendOptions(turn, how),
       ),
     ).pipe(
-      Effect.asVoid,
+      Effect.timeoutOption(TURN_DELIVERY.PUBLISH_WAIT),
+      Effect.flatMap((sent) =>
+        Option.isSome(sent)
+          ? Effect.void
+          : Effect.logWarning("a queued turn's publish outlasted its bound and was given up"),
+      ),
       Effect.catch((failure) =>
         Effect.logWarning(`a queued turn was not published: ${failureKind(failure)}`),
       ),
