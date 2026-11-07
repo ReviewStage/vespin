@@ -1,0 +1,52 @@
+diff --git a/build/npm/cjs/dev/profiling/UIProfiler.js b/build/npm/cjs/dev/profiling/UIProfiler.js
+index 379454a..bd57304 100644
+--- a/build/npm/cjs/dev/profiling/UIProfiler.js
++++ b/build/npm/cjs/dev/profiling/UIProfiler.js
+@@ -75,7 +75,7 @@ class UIProfiler {
+   }
+   /** Handle an already-active root span at integration setup time (used only in trace mode). */
+   notifyRootSpanActive(rootSpan) {
+-    if (this._lifecycleMode !== "trace" || !this._sessionSampled) {
++    if (this._lifecycleMode !== "trace" || !this._sessionSampled || !rootSpan.isRecording()) {
+       return;
+     }
+     const spanId = rootSpan.spanContext().spanId;
+diff --git a/build/npm/cjs/prod/profiling/UIProfiler.js b/build/npm/cjs/prod/profiling/UIProfiler.js
+index 379454a..bd57304 100644
+--- a/build/npm/cjs/prod/profiling/UIProfiler.js
++++ b/build/npm/cjs/prod/profiling/UIProfiler.js
+@@ -75,7 +75,7 @@ class UIProfiler {
+   }
+   /** Handle an already-active root span at integration setup time (used only in trace mode). */
+   notifyRootSpanActive(rootSpan) {
+-    if (this._lifecycleMode !== "trace" || !this._sessionSampled) {
++    if (this._lifecycleMode !== "trace" || !this._sessionSampled || !rootSpan.isRecording()) {
+       return;
+     }
+     const spanId = rootSpan.spanContext().spanId;
+diff --git a/build/npm/esm/dev/profiling/UIProfiler.js b/build/npm/esm/dev/profiling/UIProfiler.js
+index d953da0..6987f0e 100644
+--- a/build/npm/esm/dev/profiling/UIProfiler.js
++++ b/build/npm/esm/dev/profiling/UIProfiler.js
+@@ -73,7 +73,7 @@ class UIProfiler {
+   }
+   /** Handle an already-active root span at integration setup time (used only in trace mode). */
+   notifyRootSpanActive(rootSpan) {
+-    if (this._lifecycleMode !== "trace" || !this._sessionSampled) {
++    if (this._lifecycleMode !== "trace" || !this._sessionSampled || !rootSpan.isRecording()) {
+       return;
+     }
+     const spanId = rootSpan.spanContext().spanId;
+diff --git a/build/npm/esm/prod/profiling/UIProfiler.js b/build/npm/esm/prod/profiling/UIProfiler.js
+index d953da0..6987f0e 100644
+--- a/build/npm/esm/prod/profiling/UIProfiler.js
++++ b/build/npm/esm/prod/profiling/UIProfiler.js
+@@ -73,7 +73,7 @@ class UIProfiler {
+   }
+   /** Handle an already-active root span at integration setup time (used only in trace mode). */
+   notifyRootSpanActive(rootSpan) {
+-    if (this._lifecycleMode !== "trace" || !this._sessionSampled) {
++    if (this._lifecycleMode !== "trace" || !this._sessionSampled || !rootSpan.isRecording()) {
+       return;
+     }
+     const spanId = rootSpan.spanContext().spanId;
