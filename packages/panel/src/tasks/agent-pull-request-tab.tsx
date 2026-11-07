@@ -509,6 +509,11 @@ function partOf<A>(read: PartRead<A>): Part<A> {
     : { kind: PART.LANDED, value: answer.pullRequest };
 }
 
+/** Whether a part's read ended with nothing to draw: it failed, or answered that there is no pull request. */
+function unread(part: Part<unknown>): boolean {
+  return part.kind === PART.FAILED || part.kind === PART.NONE;
+}
+
 /** What a landed part holds; none while it is on its way or failed. */
 function landed<A>(part: Part<A>): A | undefined {
   return part.kind === PART.LANDED ? part.value : undefined;
@@ -1789,6 +1794,13 @@ interface OverviewParts {
   };
 }
 
+/** Asks again the pull request's own read and each other part whose read failed beside it, which the failure under the title speaks for. */
+function askUnreadAgain(parts: OverviewParts): void {
+  parts.ask.pullRequest();
+  if (unread(parts.conversation)) parts.ask.conversation();
+  if (unread(parts.checks)) parts.ask.checks();
+}
+
 /** The line under the title, in the people line's caption type: the branches, who opened it, its reviewers and labels. */
 function PeopleLine({ children }: { children: ReactNode }): React.JSX.Element {
   return (
@@ -1832,7 +1844,8 @@ function standingFactsOf(standing: LinkStanding | undefined): HeadFacts | undefi
  * line draws what its link standing holds, the read its chip's card draws
  * from, without the reviewers and the pickers, since that read is one ask
  * the host may already hold while the tab's waits on the merge box's; a
- * skeleton where neither has landed, and the tab's failure with Retry.
+ * skeleton where neither has landed, and the tab's failure with Retry,
+ * which speaks for every part that failed beside it and asks each again.
  */
 function PullRequestHead({
   parts,
@@ -1863,7 +1876,7 @@ function PullRequestHead({
         line={PULL_REQUEST_WORDS.FAILED}
         surface={FAILURE_SURFACE.PULL_REQUEST_READ}
         part={part}
-        onRetry={parts.ask.pullRequest}
+        onRetry={() => askUnreadAgain(parts)}
       />
     );
   }
@@ -2114,7 +2127,7 @@ function PreviewControl({
   );
 }
 
-/** The checks section as its read stands: every check once landed, its running counts moving while the tab is shown (`live`), a skeleton of rows while out, its failure with Retry. */
+/** The checks section as its read stands: every check once landed, its running counts moving while the tab is shown (`live`), a skeleton of rows while out, its failure with Retry, and nothing where the pull request's own read failed too, whose failure under the title speaks for it. */
 function ChecksPart({
   agentId,
   parts,
@@ -2123,8 +2136,9 @@ function ChecksPart({
   agentId: string;
   parts: OverviewParts;
   live: boolean;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const part = parts.checks;
+  if (unread(part) && unread(parts.pullRequest)) return null;
   if (part.kind === PART.LANDED) {
     return (
       <>
@@ -2209,7 +2223,7 @@ function DescriptionPart({
   );
 }
 
-/** The conversation as its read stands, under its heading and its filters: its entries once landed, as the filters leave them, the earlier ones counted first; a skeleton while out, its failure with Retry. */
+/** The conversation as its read stands, under its heading and its filters: its entries once landed, as the filters leave them, the earlier ones counted first; a skeleton while out, its failure with Retry, and nothing where the pull request's own read failed too, whose failure under the title speaks for it. */
 function ConversationPart({
   parts,
   shown,
@@ -2237,8 +2251,9 @@ function ConversationPart({
   landing: ThreadLanding | undefined;
   now: number;
   picture: GitHubPictureDrawer;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const part = parts.conversation;
+  if (unread(part) && unread(parts.pullRequest)) return null;
   if (part.kind !== PART.LANDED) {
     return (
       <Section title="Conversation" fold={fold} end={filterControls}>

@@ -2541,7 +2541,7 @@ test("a part whose read failed says so with a Retry that reads it alone, the oth
   assert.equal(tab.querySelectorAll(".pull-request-entry").length, 1);
 });
 
-test("where nothing of the pull request is held and its reads fail, each part says so with its own Retry, reporting what failed beneath it, and Files changed still reads on its own", async () => {
+test("where nothing of the pull request is held and its reads fail, the line under the title alone says so, reporting what failed beneath it, and its Retry reads every failed part again; Files changed still reads on its own", async () => {
   const failure = {
     failure: AGENT_CALL_FAILURE.UNANSWERED,
     cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: "timeout" },
@@ -2576,20 +2576,19 @@ test("where nothing of the pull request is held and its reads fail, each part sa
     pullRequests: new Map(),
   };
   const tab = await draw(control);
-  const retry = (within: Element) =>
-    [...within.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Retry",
-    ) ?? assert.fail("the part offers a retry");
   const header =
     tab.querySelector(".pull-request-header") ?? assert.fail("the header stands, failed");
   await vi.waitFor(() =>
     assert.match(header.textContent ?? "", /The pull request could not be read\./u),
   );
-  const conversation =
-    tab.querySelector('[aria-label="Conversation"]') ?? assert.fail("the conversation stands");
   await vi.waitFor(() =>
-    assert.match(conversation.textContent ?? "", /The conversation could not be read\./u),
+    assert.equal(
+      tab.querySelector('[aria-label="Conversation"]') === null,
+      true,
+      "the conversation's failure is the title's to say",
+    ),
   );
+  assert.equal(tab.querySelectorAll('[role="alert"]').length, 1);
   assert.deepEqual(
     reported.map((attributes) => [
       attributes["failure.surface"],
@@ -2597,10 +2596,7 @@ test("where nothing of the pull request is held and its reads fail, each part sa
       attributes["error.root.tag"],
       attributes["error.root.fault"],
     ]),
-    [
-      ["pull_request.read", "unanswered", "HostedUnanswered", "timeout"],
-      ["pull_request_conversation.read", "unanswered", "HostedUnanswered", "timeout"],
-    ],
+    [["pull_request.read", "unanswered", "HostedUnanswered", "timeout"]],
   );
 
   await choose(tab, "Files changed");
@@ -2610,12 +2606,14 @@ test("where nothing of the pull request is held and its reads fail, each part sa
     "the files read on their own",
   );
 
-  await act(async () => retry(header).click());
+  const retry =
+    [...header.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Retry",
+    ) ?? assert.fail("the title's failure offers a retry");
+  await act(async () => retry.click());
   await settle();
   assert.equal(tab.querySelector(".pull-request-title")?.textContent, "Expire invitations #42");
   await choose(tab, "Conversation");
-  await act(async () => retry(conversation).click());
-  await settle();
   assert.equal(tab.querySelectorAll(".pull-request-entry").length, 2);
 });
 
