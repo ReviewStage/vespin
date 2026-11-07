@@ -2614,6 +2614,7 @@ test("where nothing of the pull request is held and its reads fail, the line und
   await settle();
   assert.equal(tab.querySelector(".pull-request-title")?.textContent, "Expire invitations #42");
   await choose(tab, "Conversation");
+  await vi.waitFor(() => assert.match(tab.textContent ?? "", /Rename the flag\./u));
   assert.equal(tab.querySelectorAll(".pull-request-entry").length, 2);
 });
 
