@@ -227,23 +227,13 @@ export const CODER = {
    */
   RUNNER_WARM_SLACK: Duration.minutes(2),
   /**
-   * How long a message to a runner that reads its lines waits on that
-   * runner's exit, its liveness in place of the 404 a write to an exited
+   * How long a Stop, a retire, or a reap waits on the exit of a runner that
+   * reads its lines, its liveness in place of the 404 a write to an exited
    * command's stdin answers: a command that exited answers within one round
-   * trip, and one that runs answers nothing, so the wait is all it costs,
-   * run beside the message's own reads. A runner read as running that has
-   * in fact gone leaves its line waiting for the next message's read.
+   * trip, and one that runs answers nothing, so the wait is all it costs.
+   * A message reads no exit: it is queued for the runner its place records.
    */
   RUNNER_EXIT_READ: Duration.seconds(1),
-  /**
-   * How long renewing a running runner's credential may take once its
-   * message is written. The send answers only after it, inside the store's
-   * thirty-second dispatch deadline (`AWAITING_LINE_DISPATCH_DEADLINE`), and
-   * a send that timed out there records no line for a message the runner
-   * already took, so a renewal past this is given up and logged; the next
-   * message renews it.
-   */
-  CREDENTIAL_RENEWAL: Duration.seconds(5),
   /**
    * How long a rewind waits for a native agent's runner to end on its Stop
    * before ending its command: a turn interrupted mid-step settles in a

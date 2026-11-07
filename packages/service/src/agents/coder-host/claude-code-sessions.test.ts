@@ -301,11 +301,23 @@ function sessionsFor(userId: string, sequence: { next: number }) {
 }
 
 /** The first launch's runner as a row leaves it before the next message: as launched, or exited. */
-const asLaunched = (_api: ReturnType<typeof runnerSandboxApi>) => undefined;
+const asLaunched = (_api: ReturnType<typeof runnerSandboxApi>, _userId: string, _session: string) =>
+  Effect.void;
 const runnerExited = (api: ReturnType<typeof runnerSandboxApi>) => {
   const first = api.commands[0];
   if (first !== undefined) first.exitCode = 0;
 };
+/** The first launch's runner exited and let go, as its end or the reap leaves it: its place's record tells of no runner up. */
+const runnerLetGo = (api: ReturnType<typeof runnerSandboxApi>, userId: string, session: string) =>
+  Effect.gen(function* () {
+    runnerExited(api);
+    const recorded = Option.getOrThrow(yield* readAgentRunnerRecord(userId, session));
+    yield* writeAgentRunnerRecord(userId, session, {
+      ...recorded,
+      sandboxSessionId: null,
+      commandId: null,
+    });
+  });
 
 const message = (agent: Agent, text: string, lineId?: string) => ({
   conversationId: agent.conversationId,
@@ -1779,8 +1791,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
 
   it.effect.each([
     ["at its upload of the message's files", (rest: string) => rest === "fs/write", asLaunched],
-    ["at the read of its runner's exit", (rest: string) => /^cmd\/[^/]+$/u.test(rest), asLaunched],
-    ["at the relaunch's command", (rest: string) => rest === "cmd", runnerExited],
+    ["at the relaunch's command", (rest: string) => rest === "cmd", runnerLetGo],
   ] as const)(
     "a message that meets its sandbox stopping %s resumes the sandbox and runs on a runner launched in its next session",
     ([, call, leave]) =>
@@ -1795,7 +1806,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         yield* runnerTook(agent.id);
         sequence.next = 42;
         const first = api.commands[0];
-        leave(api);
+        yield* leave(api, userId, opened.sessionId);
         api.stopsAt.call = call;
         const pdf = Buffer.from("%PDF-1.7 the report").toString("base64");
 
@@ -2550,40 +2561,23 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
-  it.effect(
-    "a message to a running runner waits on a read of its exit no longer than its bound, then is queued for it",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent } = yield* openAgent;
-        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
-          Effect.provide(services(api)),
-        );
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        // A read that waits for the running command's exit is held until its reader gives up.
-        api.waits.hold = true;
+  it.effect("a message to a running runner is queued for it without waiting on its exit", () =>
+    Effect.gen(function* () {
+      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+      const api = runnerSandboxApi();
+      const { userId, agent } = yield* openAgent;
+      const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(api)));
+      const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+      assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+      // A read that waits for the running command's exit is held until its reader gives up.
+      api.waits.hold = true;
 
-        const sending = yield* Effect.forkChild(
-          sessions.send(opened.sessionId, message(agent, "Now the emails.")),
-        );
-        const settle = Effect.promise(async () => {
-          for (let turn = 0; turn < 200; turn += 1) {
-            await new Promise<void>((settled) => setImmediate(settled));
-          }
-        });
-        yield* settle;
-        assert.equal(sending.pollUnsafe(), undefined);
-        yield* TestClock.adjust(CODER.RUNNER_EXIT_READ);
-        yield* settle;
+      const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
 
-        const sent = sending.pollUnsafe();
-        assert.ok(sent !== undefined && Exit.isSuccess(sent));
-        assert.equal(sent.value.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.ok(JSON.stringify(yield* launchLines(api.commands[0])).includes("Now the emails."));
-        assert.equal(api.commands.length, 1);
-      }),
+      assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+      assert.ok(JSON.stringify(yield* launchLines(api.commands[0])).includes("Now the emails."));
+      assert.equal(api.commands.length, 1);
+    }),
   );
 
   it.effect(
@@ -3616,7 +3610,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
   it.effect(
-    "a renewal Vercel never answers is given up at its bound, well inside the store's dispatch deadline, and the message written ahead of it stands",
+    "a message to a running runner answers before its credential is renewed, which is set at its firewall past the answer",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3624,22 +3618,18 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
         const opened = yield* sessions.open(message(agent, "Fix the invitations."));
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        api.holdPolicy.remaining = 1;
+        const policiesBefore = api.policies.length;
+        const kept = keptAfterResponse();
 
-        const sending = yield* Effect.forkChild(
-          sessions.send(opened.sessionId, message(agent, "Now the emails.")),
-        );
-        yield* Effect.promise(async () => {
-          for (let turn = 0; turn < 200; turn += 1) {
-            await new Promise<void>((settle) => setImmediate(settle));
-          }
-        });
-        assert.ok(JSON.stringify(yield* launchLines(api.commands[0])).includes("Now the emails."));
-        assert.equal(sending.pollUnsafe(), undefined, "the renewal is still held");
-        yield* TestClock.adjust(CODER.CREDENTIAL_RENEWAL);
+        const sent = yield* sessions
+          .send(opened.sessionId, message(agent, "Now the emails."))
+          .pipe(Effect.provide(kept.layer));
 
-        const sent = yield* Fiber.join(sending);
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.ok(JSON.stringify(yield* launchLines(api.commands[0])).includes("Now the emails."));
+        assert.equal(api.policies.length, policiesBefore, "nothing is set before the answer");
+        yield* kept.run;
+        assert.equal(api.policies.length, policiesBefore + 1);
       }),
   );
   it.effect(
@@ -3658,10 +3648,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
 
         yield* sessions.send(opened.sessionId, message(agent, "Also the emails."));
-        // The runner exited, its sandbox still up.
-        const first = api.commands[0];
-        assert.ok(first !== undefined);
-        first.exitCode = 0;
+        // The runner exited and was let go, its sandbox still up.
+        yield* runnerLetGo(api, userId, opened.sessionId);
         sequence.next = 10;
         yield* sentAndDelivered(sessions, opened.sessionId, agent, "And the docs.");
         // The launch ended, and its END stopped the sandbox.
