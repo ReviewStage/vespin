@@ -66,6 +66,7 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { fakeHttpClientLayer, temporaryDirectory } from "@repo/wire/testing";
+import { sql } from "drizzle-orm";
 import {
   Clock,
   DateTime,
@@ -1532,6 +1533,42 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(developerContent(line), [{ type: "text", text: "Now the emails." }]);
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, agent.id));
         assert.equal(routing.nativeSession, null);
+      }),
+  );
+
+  it.effect(
+    "a message to an agent whose workspace's experiments cannot be read resumes its session, rather than opening it afresh as if every experiment were off",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent, sessions, opened } = yield* flippedSession(api);
+        // The session opened on what the workspace now has: Task descriptions on alone.
+        yield* recordNativeTurnHanded(
+          { userId, conversationId: agent.conversationId },
+          { experiments: { descriptionsOn: true, pilotOn: false, memoryOn: false } },
+        );
+        const db = yield* Database;
+        const kept = keptAfterResponse();
+
+        // Note that the table is taken away for the send alone, so the read of the experiments fails.
+        const sent = yield* Effect.acquireUseRelease(
+          db.execute(sql`alter table workspace_experiment rename to workspace_experiment_away`),
+          () =>
+            sessions
+              .send(opened.sessionId, message(agent, "Now the emails."))
+              .pipe(Effect.provide(kept.layer)),
+          () =>
+            Effect.orDie(
+              db.execute(sql`alter table workspace_experiment_away rename to workspace_experiment`),
+            ),
+        );
+        yield* across(kept.run, CODER.RESUME_WHILE_ENDING.SPACING, 4);
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 2);
+        const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
+        assert.equal(config.resume, CLI_SESSION);
       }),
   );
 

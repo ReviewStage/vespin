@@ -211,7 +211,7 @@ import {
   SandboxUnavailable,
   sessionEnding,
 } from "../vercel-sandbox-api.js";
-import { experimentsOnIn } from "../workspace-experiment-on.js";
+import { experimentsOnIn, experimentsReadIn } from "../workspace-experiment-on.js";
 import { BEARER_PREFIX, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { type AgentImage, AgentImageMissing } from "./agent-image.js";
 import { agentFailureSaid, agentLogIds, keptFailureWords, runningLogId } from "./agent-log.js";
@@ -1141,8 +1141,9 @@ export const runnerSessions = <
      * opened on (`native_handed`) are no longer the ones standing, since a
      * resumed Claude Code or Codex session keeps the instructions it opened
      * with until it compacts. Never while a turn runs, which goes on with what
-     * it has, the change caught by the next message after it; and never for a
-     * session opened before its experiments were kept. Note that the experiments
+     * it has, the change caught by the next message after it; never for a
+     * session opened before its experiments were kept; and never on a read of
+     * them that failed, which says nothing of whether they changed. Note that the experiments
      * are kept only once a runner took the line that opened the fresh session
      * (`openedLine`'s `taken`), so a restart whose launch failed stays pending,
      * its harness's session already let go, and the next message opens it
@@ -1156,7 +1157,10 @@ export const runnerSessions = <
           conversationId: agent.conversationId,
         })).experiments;
         if (opened === undefined) return false;
-        const standing = yield* experimentsOnIn(agent.organizationId);
+        // Note that a read that failed is no change, since restarting on it would open a session with every experiment off.
+        const read = yield* experimentsReadIn(agent.organizationId);
+        if (Option.isNone(read)) return false;
+        const standing = read.value;
         return (
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.pilotOn !== standing.pilotOn ||

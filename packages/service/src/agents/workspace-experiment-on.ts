@@ -81,22 +81,36 @@ export const NO_EXPERIMENT_ON: ExperimentsOn = {
   memoryOn: false,
 };
 
-/** The workspace's experiments, read in one statement; where they cannot be read, every one is off, logged for the operator. */
-export function experimentsOnIn(
+/**
+ * The workspace's experiments, read in one statement; none where they cannot
+ * be read, logged for the operator. For a caller that must tell a failed
+ * read from a workspace with every experiment off, as a restart does.
+ */
+export function experimentsReadIn(
   workspaceId: string,
-): Effect.Effect<ExperimentsOn, never, DatabaseServices> {
+): Effect.Effect<Option.Option<ExperimentsOn>, never, DatabaseServices> {
   return workspaceExperimentsOf(workspaceId).pipe(
     Effect.map((standings) => {
       const on = (experiment: WorkspaceExperiment) =>
         standings.some((standing) => standing.experiment === experiment && standing.on);
-      return {
+      return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         pilotOn: on(EXPERIMENT.PILOT),
         memoryOn: on(EXPERIMENT.MEMORY),
-      };
+      });
     }),
     Effect.tapError(logStoreFailure),
-    Effect.orElseSucceed(() => NO_EXPERIMENT_ON),
+    Effect.orElseSucceed(() => Option.none<ExperimentsOn>()),
+  );
+}
+
+/** The workspace's experiments, read in one statement; where they cannot be read, every one is off, logged for the operator. */
+export function experimentsOnIn(
+  workspaceId: string,
+): Effect.Effect<ExperimentsOn, never, DatabaseServices> {
+  return Effect.map(
+    experimentsReadIn(workspaceId),
+    Option.getOrElse(() => NO_EXPERIMENT_ON),
   );
 }
 
