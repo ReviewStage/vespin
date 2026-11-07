@@ -9,6 +9,7 @@ import {
   experimentsIn,
   HOST_CAPABILITY,
   type HostCapability,
+  isWorkspaceExperiment,
 } from "@repo/settings";
 import {
   SETTINGS_PAGE_LIST,
@@ -72,6 +73,12 @@ export function settingsPageExperimentStands(
 ): boolean {
   const experiment = PAGE_EXPERIMENT[view];
   return experiment === undefined || experimentOn(experiments, experiment);
+}
+
+/** Whether a page is held by a workspace's experiment, which stands only once the reader's workspaces are read. */
+export function settingsPageWaitsOnWorkspaces(view: SettingsView): boolean {
+  const experiment = PAGE_EXPERIMENT[view];
+  return experiment !== undefined && isWorkspaceExperiment(experiment);
 }
 
 /** The pages an experiment holds, whose names find its row in the search while those pages stand nowhere. */

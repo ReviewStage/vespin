@@ -24,7 +24,10 @@ import { SETTINGS_PAGE_LIST, type SettingsView } from "@repo/settings/settings-v
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useKeptChoice } from "./desktop/chosen-workspace.js";
-import { settingsPageExperimentStands } from "./settings/settings-rows.js";
+import {
+  settingsPageExperimentStands,
+  settingsPageWaitsOnWorkspaces,
+} from "./settings/settings-rows.js";
 import { loadedTasksFixture } from "./tasks/tasks-fixture-loader.js";
 import {
   appStateIn,
@@ -160,8 +163,9 @@ function experimentsAt(workspace: string | undefined, access: RouteAccess): Expe
  * Whether a Settings page stands: every page but one an experiment holds
  * that is off, the account's own or, for a workspace experiment, that of the
  * workspace Settings stands under (`workspace`), else the listed one. It
- * waits on the account's settings, and on its workspaces, while they are
- * unread, as a reloaded address's does.
+ * waits on the account's settings while they are unread, and a page a
+ * workspace experiment holds on its workspaces too, as a reloaded address's
+ * does.
  */
 export function settingsPageRouteStands(
   page: string,
@@ -169,7 +173,9 @@ export function settingsPageRouteStands(
   workspace?: string,
 ): boolean {
   const view = settingsViewOfPage(page);
-  if (view === undefined || !access.experimentsRead || access.workspaces.length === 0) return true;
+  if (view === undefined || !access.experimentsRead) return true;
+  // Note that only a page a workspace experiment holds waits on the workspaces, since an account's own experiment is read already.
+  if (access.workspaces.length === 0 && settingsPageWaitsOnWorkspaces(view)) return true;
   return settingsPageExperimentStands(view, experimentsAt(workspace, access));
 }
 

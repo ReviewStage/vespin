@@ -12,7 +12,7 @@ import { settingsPageRouteStands, workspaceRouteStands } from "./route-gates.js"
  * place waits on the reader's workspaces the same way.
  */
 
-test("a page a workspace experiment holds stands while the reader's workspaces are unread, and then by the choice of the workspace Settings stands under", () => {
+test("a page a workspace experiment holds stands while the reader's workspaces are unread, and then by the choice of the workspace Settings stands under, while one an account experiment holds waits on nothing", () => {
   const unread = {
     admin: false,
     experiments: NO_EXPERIMENTS,
@@ -33,6 +33,7 @@ test("a page a workspace experiment holds stands while the reader's workspaces a
   };
 
   assert.equal(settingsPageRouteStands(SETTINGS_VIEW.MEMORY, unread, "acme"), true);
+  assert.equal(settingsPageRouteStands(SETTINGS_VIEW.HOSTS, unread, "acme"), false);
   assert.equal(settingsPageRouteStands(SETTINGS_VIEW.MEMORY, read, "acme"), false);
   assert.equal(settingsPageRouteStands(SETTINGS_VIEW.MEMORY, read, "stage"), true);
 });
