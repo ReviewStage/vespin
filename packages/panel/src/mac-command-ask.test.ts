@@ -112,6 +112,14 @@ function button(name: string): HTMLButtonElement {
   );
 }
 
+function radio(label: string): HTMLElement {
+  return (
+    [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find((each) =>
+      each.textContent?.includes(label),
+    ) ?? assert.fail(`no ${label} radio`)
+  );
+}
+
 test("nothing is drawn while no ask waits", async () => {
   await mount([]);
   assert.equal(promptStands(), false);
@@ -122,12 +130,13 @@ test("the earliest ask is drawn with its command, and each answer goes back by t
   assert.equal(promptStands(), true);
   assert.equal(document.querySelector(".ui-file-text-words")?.textContent, FIRST.command);
 
-  await act(async () => button("Allow once").click());
-  await act(async () => button("Allow all commands").click());
+  await act(async () => button("Run").click());
+  await act(async () => radio("Just this once").click());
+  await act(async () => button("Run").click());
   await act(async () => button("Deny").click());
   assert.deepEqual(answered, [
-    { id: FIRST.id, decision: MAC_COMMAND_DECISION.ALLOW_ONCE },
     { id: FIRST.id, decision: MAC_COMMAND_DECISION.ALLOW_ALWAYS },
+    { id: FIRST.id, decision: MAC_COMMAND_DECISION.ALLOW_ONCE },
     { id: FIRST.id, decision: MAC_COMMAND_DECISION.DENY },
   ]);
 });

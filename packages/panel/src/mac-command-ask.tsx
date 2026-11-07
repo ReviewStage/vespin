@@ -4,6 +4,7 @@ import { MAC_COMMAND_DECISION, type MacCommandDecision } from "@repo/host/contra
 import { CommandAsk } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "./act-mutations.js";
+import { copyThroughShell } from "./copy-feedback.js";
 import { appStateQuery, selectMacCommands } from "./use-app-state.js";
 import { useHeldThroughExit } from "./use-held-through-exit.js";
 
@@ -40,6 +41,7 @@ export function MacCommandAskDialog(): React.JSX.Element | null {
       onAllowOnce={() => answer(MAC_COMMAND_DECISION.ALLOW_ONCE)}
       onAllowAlways={() => answer(MAC_COMMAND_DECISION.ALLOW_ALWAYS)}
       onDeny={() => answer(MAC_COMMAND_DECISION.DENY)}
+      copy={copyThroughShell}
     />
   );
 }

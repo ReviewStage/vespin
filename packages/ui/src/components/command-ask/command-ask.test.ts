@@ -7,10 +7,10 @@ import { afterEach, beforeAll, test } from "vitest";
 import { CommandAsk } from "./command-ask.js";
 
 /**
- * command-ask.test.ts -- the ask lands on Deny, names itself, says what
- * Allow all commands lets through and where it is undone, and shows the
- * command as written; each answer is heard as its own; and Escape, which
- * waves the card away, denies rather than runs.
+ * command-ask.test.ts -- the ask lands on Deny, names itself, says an
+ * agent is asking, and shows the command as written; Run allows always
+ * unless Just this once is picked; and Escape, which waves the card away,
+ * denies rather than runs.
  */
 
 const COMMAND = "git -C ~/code/app status";
@@ -36,6 +36,15 @@ function button(name: string): HTMLButtonElement {
   );
 }
 
+/** The radio whose label is `label`, wherever it stands. */
+function radio(label: string): HTMLElement {
+  return (
+    [...document.querySelectorAll<HTMLElement>('[role="radio"]')].find((each) =>
+      each.textContent?.includes(label),
+    ) ?? assert.fail(`no ${label} radio`)
+  );
+}
+
 /** The ask drawn, each answer counted under its name. */
 function asked(): Record<"once" | "always" | "deny", number> {
   const heard = { once: 0, always: 0, deny: 0 };
@@ -57,30 +66,29 @@ function asked(): Record<"once" | "always" | "deny", number> {
         onDeny: () => {
           heard.deny += 1;
         },
+        copy: () => Promise.resolve(),
       }),
     ),
   );
   return heard;
 }
 
-test("it lands on Deny, names itself, says what allowing all lets through, and shows the command as written", () => {
+test("it lands on Deny, names itself, says an agent is asking, and shows the command as written", () => {
   asked();
   const card = document.querySelector('[role="alertdialog"]') ?? assert.fail("no card");
   const title = document.getElementById(card.getAttribute("aria-labelledby") ?? "");
-  assert.equal(title?.textContent, "Run this command on your Mac?");
+  assert.equal(title?.textContent, "Run on this Mac?");
   const description = document.getElementById(card.getAttribute("aria-describedby") ?? "");
-  assert.equal(
-    description?.textContent,
-    "Allow all commands lets every agent run commands on this Mac without asking. You can change it in Settings › This Mac.",
-  );
+  assert.equal(description?.textContent, "An agent wants to run a command.");
   assert.equal(document.activeElement, button("Deny"));
   assert.equal(document.querySelector(".ui-file-text-words")?.textContent, COMMAND);
 });
 
-test("each answer is heard as its own, and Escape denies", () => {
+test("Run allows always unless Just this once is picked, Deny denies, and Escape denies", () => {
   const heard = asked();
-  act(() => button("Allow once").click());
-  act(() => button("Allow all commands").click());
+  act(() => button("Run").click());
+  act(() => radio("Just this once").click());
+  act(() => button("Run").click());
   act(() => button("Deny").click());
   assert.deepEqual(heard, { once: 1, always: 1, deny: 1 });
 

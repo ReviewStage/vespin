@@ -16,6 +16,12 @@
     background: var(--ui-color-code-ground);
   }
 
+  /* Note that a code card's own edge holds the text it is handed as its body, so the text draws none of its own. */
+  .ui-code-card .ui-file-text {
+    border: 0;
+    border-radius: 0;
+  }
+
   .ui-file-text-words {
     margin: 0;
     color: var(--ui-color-text);
