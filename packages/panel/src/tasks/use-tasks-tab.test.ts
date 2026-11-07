@@ -3515,6 +3515,8 @@ async function onInbox(
   const tab = mount(
     {
       shown: true,
+      // Note that the window's history stands beside the tab, since a door's step is written through it.
+      history: true,
       tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
     },
     {

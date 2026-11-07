@@ -174,3 +174,35 @@ test("what a door does once its held move lands is dropped where the page takes 
   assert.equal(window.asked.length, 1, "the move asked");
   assert.deepEqual(landed, []);
 });
+
+test.each<[string, (window: ReturnType<typeof mount>) => void]>([
+  // As an automation's Save landing while its ask is out, which takes the page's ask down while its dialog still asks.
+  ["the page takes its ask down while it is still asked", (window) => window.down()],
+  // As a new automation's Create landing in place, a write the history makes past the blocker.
+  [
+    "the window's own address is written in place",
+    (window) => act(() => window.history.replace(AUTOMATION, {}, { ignoreBlocker: true })),
+  ],
+])(
+  "what a door does once its held move lands runs on Leave where %s before Leave is pressed",
+  async (_meanwhile, meanwhile) => {
+    const window = mount(memoryAt(AUTOMATION));
+    const landed: string[] = [];
+
+    act(() =>
+      window.place().arrive(
+        () => window.history.push(LIST),
+        () => landed.push(LIST),
+      ),
+    );
+    await settleQueries();
+    meanwhile(window);
+    await settleQueries();
+    act(() => window.asked[0]?.leave());
+    await settleQueries();
+
+    assert.equal(window.asked.length, 1, "the move asked once");
+    assert.equal(window.history.location.pathname, LIST);
+    assert.deepEqual(landed, [LIST]);
+  },
+);

@@ -112,7 +112,8 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         standing.current = ask;
         setHeld(true);
         heard.current?.((leave) => ask(leave, NOTHING));
-        // Note that an ask taken down while it stands was never answered, so the moves it held never land.
+        // Note that an ask taken down while it stands was never answered, so the moves it held land only where the
+        // question it still has out is answered Leave.
         return () => {
           if (standing.current === ask) landings.current = [];
           release(ask);
@@ -206,9 +207,13 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
       blocker.proceed();
       return;
     }
+    // Note that Leave lands what this question held, though the page took its ask down while its question still stood
+    // or the history wrote in place meanwhile, either of which lets the landings waiting go.
+    const held = landings.current;
     ask(
       () => {
         release(ask);
+        landings.current = held;
         blocker.proceed();
       },
       () => {

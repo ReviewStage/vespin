@@ -3498,14 +3498,13 @@ export function useTasksTab(input: {
     resumeListed(taskId);
   };
 
-  // Note that a section is the description's, so while descriptions are off a mention of one opens its task's agents.
-  const anchorOf = (mention: DescriptionMention): string | undefined =>
-    mention.kind === MENTION_KIND.SECTION && descriptionsOnFor(mention.taskId)
-      ? mention.anchor
-      : undefined;
   // Each ask is its own, so the same section asked twice scrolls twice.
+  // Note that a section is the description's, so while descriptions are off a mention of one opens its task's agents.
   const showMention = (mention: DescriptionMention) => {
-    const anchor = anchorOf(mention);
+    const anchor =
+      mention.kind === MENTION_KIND.SECTION && descriptionsOnFor(mention.taskId)
+        ? mention.anchor
+        : undefined;
     if (anchor === undefined) {
       showTaskAgents(mention.taskId);
       return;
@@ -3832,31 +3831,9 @@ export function useTasksTab(input: {
       linking.current = undefined;
     }
   };
-  // A door to a tab of a task goes to the task's own place first, its step holding the tabs `shown` names as a link's
-  // does, and shows them once it lands there, so a move held at a page's leave ask and kept changes nothing
-  // (`places/place-leave.ts`).
-  const arriveOnTab = (shown: LinkStep, door: () => void) =>
-    placeLeave.arrive(
-      () =>
-        linkingTo(shown, () => {
-          standTaskPlace(shown.taskId);
-        }),
-      door,
-    );
-  // The column a side panel's tab is shown beside: the agent whose strip holds it, as `showOwnedTab` shows them. Note that
-  // the panel's tab is left for its landing to fill in, as a press does, since a link's step on it stands a narrow room at
-  // the tab's own address.
-  const panelStep = (taskId: string, tab: SidePanelTab): LinkStep => {
-    const owner = sidePanel.ownerOf(taskId, tab);
-    return { taskId, column: owner === undefined ? undefined : agentTab(owner) };
-  };
-  // A mention's task, on its Overview where it names a section of its description.
-  const mentionStep = (mention: DescriptionMention): LinkStep =>
-    anchorOf(mention) === undefined
-      ? { taskId: mention.taskId }
-      : { taskId: mention.taskId, column: MAIN_TAB.OVERVIEW };
+  // A mention goes to its task's own place first and shows what it names once it lands there.
   const arriveOnMention = (mention: DescriptionMention) =>
-    arriveOnTab(mentionStep(mention), () => showMention(mention));
+    arriveAt(mention.taskId, () => showMention(mention));
 
   /**
    * A link place opened as its route reads it (`places/link-places.ts`): a
@@ -4370,15 +4347,15 @@ export function useTasksTab(input: {
       setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
       select(taskId);
     },
-    // Each tab door goes to its task's own place first, its step holding the tab, and shows the tab once it lands there.
+    // Each tab door goes to its task's own place first, through the router's blocker, and shows the tab once it lands
+    // there. Note that the move is never a link's step written ahead (`linkingTo`), since the history writes that past
+    // the blocker.
     onShowAgent: (taskId, agentId) =>
-      arriveOnTab({ taskId, column: agentTab(agentId) }, () =>
+      arriveAt(taskId, () =>
         openOnTask(taskId, { kind: LINK_PLACE.AGENT, planId: taskId, agentId }),
       ),
-    onShowColumnTab: (taskId, tab) =>
-      arriveOnTab({ taskId, column: tab }, () => showColumnTab(taskId, tab)),
-    onShowPanelTab: (taskId, tab) =>
-      arriveOnTab(panelStep(taskId, tab), () => showPanelTab(taskId, tab)),
+    onShowColumnTab: (taskId, tab) => arriveAt(taskId, () => showColumnTab(taskId, tab)),
+    onShowPanelTab: (taskId, tab) => arriveAt(taskId, () => showPanelTab(taskId, tab)),
     inbox: input.inboxWaiting,
     inboxShown: shownInbox,
     inboxTasks: input.inboxTasks,
@@ -4460,8 +4437,7 @@ export function useTasksTab(input: {
     },
     onShowFile: showFile,
     // A version's Open lands where its writer wrote it: an agent's tab.
-    onShowSource: (taskId, source) =>
-      arriveOnTab({ taskId, column: agentTab(source.agentId) }, () => showSource(taskId, source)),
+    onShowSource: (taskId, source) => arriveAt(taskId, () => showSource(taskId, source)),
     // A task named by an Inbox item or a call's row opens on its agents.
     onShowTask: (taskId) => arriveAt(taskId, () => showTaskAgents(taskId)),
     // Each ask is its own, so the same section asked twice scrolls twice.
