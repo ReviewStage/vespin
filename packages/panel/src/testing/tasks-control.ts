@@ -607,6 +607,8 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       onRenamePins: ignore,
       onPlacePins: ignore,
       onOpen: ignore,
+      agent: undefined,
+      ownerOf: () => undefined,
       onOpenFile: ignore,
       onBrowseFile: ignore,
       onFileHistory: ignore,
