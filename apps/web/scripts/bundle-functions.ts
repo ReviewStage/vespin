@@ -46,9 +46,9 @@ const WEB = join(import.meta.dirname, "..");
 /**
  * The module that reads the agents' image reference beside a function's
  * entry. Every function whose bundle reaches it ships the reference, the
- * image's digest without the runner, and the runner's bundle in its
+ * image's digest without the runner's unit, and the runner's unit in its
  * `.func`, the reference computed here as CI computes the tag it pushes the image under
- * (`agent-image.ts`), and a build without the runner's bundle the image
+ * (`agent-image.ts`), and a build without every file of the runner's unit the image
  * carries fails here rather than deploy a launch that names no image.
  */
 const AGENT_IMAGE_READER = join(

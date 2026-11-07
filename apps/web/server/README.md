@@ -345,7 +345,7 @@ the three exceptions, and the signal it keeps is a fourth external appearing.
 Reachability reads a different field: `bundlesReaching` walks the metafile's
 inputs for a module, so an import esbuild inlined counts exactly as one it left
 external, and the build (`scripts/bundle-functions.ts`) uses it to ship the
-agent runner's bundle beside each function that reaches its reader.
+agent runner's unit beside each function that reaches its reader.
 
 The build's last step, `server/build-output.ts`, writes the Build Output tree
 Vercel deploys: `.vercel/output/config.json` (version 3), the site under

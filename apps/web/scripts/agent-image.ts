@@ -2,9 +2,10 @@
  * agent-image.ts -- the image every cloud agent's sandbox boots from: its build context, and the tag a digest of that context names it by.
  *
  * The context is `agent-image/` as committed, the Dockerfile and tmux's
- * settings, with what the build writes beside them: the runner's bundle and
- * Sentry's profiler binary, as `@repo/agent-runner`'s own build leaves them,
- * and the agent's recording pointer (`recording-cursor.ts`). Its tag is a digest of every file in it, so
+ * settings, with what the build writes beside them: the runner's unit
+ * (`@repo/agent-runner/pins`'s `RUNNER_UNIT`), every file of it as
+ * `@repo/agent-runner`'s own build leaves them, in a folder of its own, and
+ * the agent's recording pointer (`recording-cursor.ts`). Its tag is a digest of every file in it, so
  * the image changes exactly when what goes into it does, and a deploy that
  * changes none of it boots the image the one before it did.
  *
@@ -12,10 +13,11 @@
  * (`.github/workflows/ci.yml`'s `agent-image` job), and the web build computes
  * the same reference and ships it beside each function that opens a sandbox
  * (`bundle-functions.ts`), so a deploy names the image its own commit built.
- * Beside it go a digest of the context without the runner's bundle, which a
- * base snapshot is keyed on, and the bundle itself, which each launch writes
- * into the sandbox (`@repo/service/agents/coder-host/agent-image`), so a
- * runner's change alone leaves every base snapshot standing.
+ * Beside it go a digest of the context without the runner's unit, which a
+ * base snapshot is keyed on, and the unit itself, in its folder, which each
+ * launch installs whole in the sandbox
+ * (`@repo/service/agents/coder-host/agent-image`), so a runner's change
+ * alone leaves every base snapshot standing.
  *
  * Run as `tsx scripts/agent-image.ts <directory>`, it writes the context into
  * the directory and prints the tag.
@@ -23,27 +25,31 @@
 
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { dirname, join, posix, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import { RUNNER_UNIT } from "@repo/agent-runner/pins";
 import { RECORDING_CURSOR_SOURCE } from "@repo/service/agents/browser/recording-cursor";
 import {
   AGENT_IMAGE_BASE_FILE,
   AGENT_IMAGE_FILE,
   AGENT_IMAGE_REPOSITORY,
-  AGENT_RUNNER_FILE,
+  AGENT_RUNNER_FOLDER,
 } from "@repo/service/agents/coder-host/agent-image";
 
 const WEB = join(import.meta.dirname, "..");
 
-/** Where the context's files come from: the committed folder, and the runner's bundle as its build leaves it. */
+/** Where the context's files come from: the committed folder, and the runner's unit as its build leaves it. */
 const SOURCE = {
   DIRECTORY: join(WEB, "agent-image"),
   COMMITTED: ["Dockerfile", "tmux.conf"],
   RUNNER_DIST: join(WEB, "..", "..", "packages", "agent-runner", "dist"),
 } as const;
 
-/** The runner's build output the image carries: its bundle, and Sentry's profiler binary it requires from beside itself. */
-const RUNNER_FILES = [AGENT_RUNNER_FILE, "sentry_cpu_profiler-linux-x64-glibc-137.node"] as const;
+/** Each file of the runner's unit by its name in the context: in the unit's folder. */
+const RUNNER_FILES = Object.values(RUNNER_UNIT).map((name) => ({
+  name,
+  inContext: posix.join(AGENT_RUNNER_FOLDER, name),
+}));
 
 /** How many hex digits of the context's digest the tag keeps. */
 const TAG_DIGITS = 24;
@@ -54,17 +60,17 @@ export interface ContextFile {
   readonly contents: Uint8Array;
 }
 
-/** The context's files, by name, in the order the digest reads them; a build without the runner's bundle fails here. */
+/** The context's files, by name, in the order the digest reads them; a build without every file of the runner's unit fails here. */
 export async function agentImageContext(): Promise<readonly ContextFile[]> {
   const runner = await Promise.all(
-    RUNNER_FILES.map(async (name) => {
+    RUNNER_FILES.map(async ({ name, inContext }) => {
       const path = join(SOURCE.RUNNER_DIST, name);
       const contents = await readFile(path).catch(() => {
         throw new Error(
           `${relative(WEB, path)} is missing: run \`pnpm --filter @repo/agent-runner build\` first`,
         );
       });
-      return { name, contents };
+      return { name: inContext, contents };
     }),
   );
   const committed = await Promise.all(
@@ -91,12 +97,15 @@ function agentImageTag(context: readonly ContextFile[]): string {
 /**
  * The files each function that opens a sandbox ships: the image as a deploy
  * names it to Vercel, its repository in the project's registry and its tag; a
- * digest of the context without the runner's bundle; and that bundle.
+ * digest of the context without the runner's unit; and that unit, in its folder.
  */
 export function shippedBesideFunctions(context: readonly ContextFile[]): readonly ContextFile[] {
-  const runner = context.find((file) => file.name === AGENT_RUNNER_FILE);
-  if (runner === undefined) throw new Error(`the image's context holds no ${AGENT_RUNNER_FILE}`);
-  const withoutRunner = context.filter((file) => file !== runner);
+  const runner = RUNNER_FILES.map(({ inContext }) => {
+    const file = context.find((each) => each.name === inContext);
+    if (file === undefined) throw new Error(`the image's context holds no ${inContext}`);
+    return file;
+  });
+  const withoutRunner = context.filter((file) => !runner.includes(file));
   return [
     {
       name: AGENT_IMAGE_FILE,
@@ -106,15 +115,20 @@ export function shippedBesideFunctions(context: readonly ContextFile[]): readonl
       name: AGENT_IMAGE_BASE_FILE,
       contents: Buffer.from(`${agentImageTag(withoutRunner)}\n`, "utf8"),
     },
-    runner,
+    ...runner,
   ];
 }
 
 /** Writes the context into the directory given, and answers its tag. */
 async function stageAgentImage(directory: string): Promise<string> {
   const context = await agentImageContext();
-  await mkdir(directory, { recursive: true });
-  await Promise.all(context.map((file) => writeFile(join(directory, file.name), file.contents)));
+  await Promise.all(
+    context.map(async (file) => {
+      const path = join(directory, file.name);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, file.contents);
+    }),
+  );
   return agentImageTag(context);
 }
 

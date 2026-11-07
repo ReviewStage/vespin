@@ -183,7 +183,7 @@ function services(
     Layer.succeed(AgentImage, {
       reference: Effect.succeed(IMAGE),
       base: Effect.succeed(IMAGE),
-      runner: Effect.succeed(new Uint8Array()),
+      runner: Effect.succeed([]),
     }),
   );
 }

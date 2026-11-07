@@ -3,7 +3,7 @@
 # Dockerfile -- the image every cloud agent's sandbox boots from, as a Vercel Sandbox custom image
 # (https://vercel.com/docs/sandbox/concepts/images).
 #
-# CI's `agent-image` job stages this folder with the runner's bundle and the recording pointer beside
+# CI's `agent-image` job stages this folder with the runner's unit and the recording pointer beside
 # it (`apps/web/scripts/agent-image.ts`), tags the image with a digest of what it staged, and pushes it
 # to the project's registry, waiting until Vercel has it ready, before any deploy names that tag. It
 # builds on Vercel's own Node image: Ubuntu with Node, pnpm, git, and sudo, and the `ubuntu` user the
@@ -122,15 +122,16 @@ ADD --chmod=0755 --checksum=sha256:ffe9d48b6342faffc3b0cb420202ff1df32e24faf3269
     /usr/local/lib/gh-stack/gh-stack
 RUN runuser -u nobody -- env HOME=/tmp GH_STACK_NO_UPDATE_NOTIFIER=1 gh stack --help > /dev/null
 
-# The runner each launch starts, with Sentry's profiler binary it requires from beside itself, and
-# the agent's pointer as a recorded video draws it, which an agent's own Playwright script adds to
-# the pages it records. Note that their folders are made first, because a `COPY --chmod` gives
-# the folders it makes the file's own mode, which no user could pass through; the last line fails
-# the image where one still cannot read them.
+# The runner's unit each launch starts, its bundle and every file it loads from beside itself, as
+# the context's `agent-runner/` folder holds it (`@repo/agent-runner/pins`'s `RUNNER_UNIT`), which
+# each launch installs the deploy's over; and the agent's pointer as a recorded video draws it,
+# which an agent's own Playwright script adds to the pages it records. Note that their folders are
+# made first, because a `COPY --chmod` gives the folders it makes the file's own mode, which no
+# user could pass through; the last line fails the image where one still cannot read them.
 RUN install -d -m 0755 /opt/agent/agent-runner /usr/local/share/agent-recording
-COPY --chmod=0444 agent-runner.mjs sentry_cpu_profiler-linux-x64-glibc-137.node /opt/agent/agent-runner/
+COPY --chmod=0444 agent-runner/ /opt/agent/agent-runner/
 COPY --chmod=0644 cursor.js /usr/local/share/agent-recording/cursor.js
-RUN runuser -u nobody -- cat /opt/agent/agent-runner/agent-runner.mjs /opt/agent/agent-runner/sentry_cpu_profiler-linux-x64-glibc-137.node /usr/local/share/agent-recording/cursor.js > /dev/null
+RUN runuser -u nobody -- cat /opt/agent/agent-runner/* /usr/local/share/agent-recording/cursor.js > /dev/null
 
 # Where an agent's checkout is cloned, the default user's, who clones it.
 RUN install -d -o ubuntu -g ubuntu /workspace

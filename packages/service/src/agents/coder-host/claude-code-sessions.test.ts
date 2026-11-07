@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
+import { RUNNER_UNIT } from "@repo/agent-runner/pins";
 import {
   type ClaudeCodeConfig,
   INPUT_LINE,
@@ -146,8 +147,11 @@ import { recordNativeTurnHanded } from "./turn-message.js";
  */
 
 const IMAGE = "agent-image:fixture";
-/** The runner's bundle the deploy ships, which each launch writes into its sandbox. */
-const RUNNER_BUNDLE = new TextEncoder().encode("// the deploy's runner");
+/** The runner's unit the deploy ships, which each launch installs whole in its sandbox. */
+const RUNNER_FILES = [
+  { name: RUNNER_UNIT.BUNDLE, contents: new TextEncoder().encode("// the deploy's runner") },
+  { name: RUNNER_UNIT.PROFILER, contents: new TextEncoder().encode("the deploy's profiler") },
+];
 const EVENTS_URL = "https://app.test/api/agents/runner/events";
 const LINES_URL = "https://app.test/api/agents/runner-lines";
 const TRANSCRIPTS_URL = "https://app.test/api/agents/runner-transcripts";
@@ -200,7 +204,7 @@ function readyingScript(api: ReturnType<typeof runnerSandboxApi>): string {
 const FIXTURE_IMAGE = Layer.succeed(AgentImage, {
   reference: Effect.succeed(IMAGE),
   base: Effect.succeed(IMAGE),
-  runner: Effect.succeed(RUNNER_BUNDLE),
+  runner: Effect.succeed(RUNNER_FILES),
 });
 
 /** Everything but the store, around the fake Vercel given. */
@@ -620,6 +624,19 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
               run.args[0] === "-n" && (run.args.at(-1) ?? "").includes("core.sharedRepository"),
           ),
         );
+        // The launch uploaded the deploy's runner unit whole, and root installed every file of it
+        // over the image's before the runner started, so no file of it is the disk's own.
+        const uploaded = new Map(api.uploads.flatMap((upload) => [...upload]));
+        const installed = readyingScript(api)
+          .split("\n")
+          .find((line) =>
+            line.startsWith("install -o root -g root -m 0444 -t /opt/agent/agent-runner "),
+          );
+        for (const file of RUNNER_FILES) {
+          const upload = `/tmp/agent-runner/${file.name}`;
+          assert.equal(uploaded.get(upload), new TextDecoder().decode(file.contents));
+          assert.ok(installed?.split(" ").includes(upload));
+        }
         const [command] = api.commands;
         assert.ok(command !== undefined);
         assert.equal(command.user, "agent");

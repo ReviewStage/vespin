@@ -44,7 +44,7 @@ const SESSION = "wrun_fixture";
 const FIXTURE_IMAGE = {
   reference: Effect.succeed("agent-image:fixture"),
   base: Effect.succeed("agent-image-base:fixture"),
-  runner: Effect.succeed(new Uint8Array()),
+  runner: Effect.succeed([]),
 };
 const SANDBOX = "eve-sbx-vercel-fixture";
 const RUNNING_SESSION = "sbs_running";

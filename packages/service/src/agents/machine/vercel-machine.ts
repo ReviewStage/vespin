@@ -28,8 +28,8 @@
  * next message finds it.
  *
  * `launchRunner` readies the sandbox as root, sharing each checkout with the
- * `agent` user, and then starts the deploy's runner, written over the one
- * the sandbox's disk holds, as that user through the
+ * `agent` user, and then starts the deploy's runner, its whole unit written
+ * over the one the sandbox's disk holds, as that user through the
  * SDK (`asUser(...).runCommand`), as a detached command whose stdin stays
  * open. The harness's credential and the placeholder the firewall swaps for
  * the runner's bearer (`../coder-host/runner-sessions.ts`) are in that
@@ -74,6 +74,7 @@ import {
   AGENT_USER,
   CODEX_PIN,
   RUNNER_DIRECTORY,
+  RUNNER_UNIT,
   SANDBOX_TOOLS_DIRECTORY,
   SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME,
   SHARED_FILES_DIRECTORY,
@@ -224,14 +225,17 @@ const SANDBOX_LAYOUT: MachineLayout = {
  */
 export const SANDBOX_NAME_BEFORE_RENAME = "luke-agent-";
 
-/** The runner as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's. */
-const RUNNER_SCRIPT = `${RUNNER_DIRECTORY}/agent-runner.mjs`;
+/** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */
+const RUNNER_SCRIPT = `${RUNNER_DIRECTORY}/${RUNNER_UNIT.BUNDLE}`;
 
-/** Where a launch uploads the deploy's runner as the sandbox's default user, which its readying copies over `RUNNER_SCRIPT`. */
-const RUNNER_UPLOAD = "/tmp/agent-runner.mjs";
+/** Where a launch uploads the deploy's runner unit as the sandbox's default user, which its readying copies over `RUNNER_DIRECTORY`. */
+const RUNNER_UPLOAD = "/tmp/agent-runner";
 
-/** The uploaded runner's mode; the copy its readying makes is root's and read-only. */
+/** The uploaded unit's mode; the copy its readying makes is root's and read-only. */
 const RUNNER_UPLOAD_MODE = 0o644;
+
+/** Each file of the runner's unit where a launch uploads it. */
+const RUNNER_UPLOADS = Object.values(RUNNER_UNIT).map((name) => `${RUNNER_UPLOAD}/${name}`);
 
 /**
  * The link a sandbox made before the product's rename is given on each
@@ -295,10 +299,11 @@ const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not b
 
 /**
  * The launch's readying, run by bash as root through `sudo`, waited on before the runner starts:
- * `agent` put in the `docker` group, the deploy's runner the launch uploaded
- * copied over the one the sandbox's disk holds, root's and read-only as the
- * image makes it, so a sandbox created from a base snapshot or resumed on an
- * older runner runs the deploy's, and the upload removed (copied rather than
+ * `agent` put in the `docker` group, the deploy's runner unit the launch
+ * uploaded copied whole over the one the sandbox's disk holds, root's and
+ * read-only as the image makes it, so a sandbox created from a base snapshot
+ * or resumed on an older runner runs the deploy's bundle beside the files it
+ * loads, all from one build, and the upload removed (copied rather than
  * moved, so an upload a readying cut short leaves stays the default user's,
  * which the next launch overwrites); the member's installed skills, where
  * the sandbox's opening uploaded them,
@@ -318,8 +323,8 @@ function readyScript(extraCheckouts: readonly string[]): string {
     "set -euo pipefail",
     LINK_TOOLS_DIRECTORY,
     JOIN_DOCKER_GROUP,
-    `install -o root -g root -m 0444 ${RUNNER_UPLOAD} ${RUNNER_SCRIPT}`,
-    `rm -f ${RUNNER_UPLOAD}`,
+    `install -o root -g root -m 0444 -t ${RUNNER_DIRECTORY} ${RUNNER_UPLOADS.join(" ")}`,
+    `rm -rf ${RUNNER_UPLOAD}`,
     `if [ -d ${NATIVE_SKILLS_PATH.UPLOAD} ]; then rm -rf ${NATIVE_SKILLS_PATH.INSTALLED} && mkdir -p $(dirname ${NATIVE_SKILLS_PATH.INSTALLED}) && mv ${NATIVE_SKILLS_PATH.UPLOAD} ${NATIVE_SKILLS_PATH.INSTALLED} && chown -R root:root ${NATIVE_SKILLS_PATH.INSTALLED} && chmod -R u=rwX,go=rX ${NATIVE_SKILLS_PATH.INSTALLED}; fi`,
     ...[CODER.CHECKOUT_PATH, ...extraCheckouts].flatMap(sharedCheckout),
     `install -d -o ${AGENT_USER} -g ${AGENT_USER} -m 0755 ${SHARED_FILES_DIRECTORY}`,
@@ -1199,7 +1204,13 @@ export function vercelMachine(api: VercelSandboxApi, run: SandboxRunner): AgentM
         const ready = yield* launch.ready;
         const runner = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.runner);
         yield* session
-          .writeFiles([{ path: RUNNER_UPLOAD, contents: runner, mode: RUNNER_UPLOAD_MODE }])
+          .writeFiles(
+            runner.map((file) => ({
+              path: `${RUNNER_UPLOAD}/${file.name}`,
+              contents: file.contents,
+              mode: RUNNER_UPLOAD_MODE,
+            })),
+          )
           .pipe(Effect.withSpan("web/uploadRunner"));
         const readied = yield* session
           .run({

@@ -294,7 +294,7 @@ export const FAKE_SANDBOX = {
 export const FAKE_IMAGE: AgentImageService = {
   reference: Effect.succeed("agent-image:fixture"),
   base: Effect.succeed("agent-image-base:fixture"),
-  runner: Effect.succeed(new Uint8Array()),
+  runner: Effect.succeed([]),
 };
 
 /** Vercel's REST API over one sandbox as the scenario has it, and the commands it ran, by the session each ran in. */
