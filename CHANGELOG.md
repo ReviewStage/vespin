@@ -114,7 +114,7 @@ agents. Settings › Vespin CLI installs it from the Mac app and signs it in.
 [#6983](https://github.com/ReviewStage/vespin/pull/6983),
 [#7168](https://github.com/ReviewStage/vespin/pull/7168))
 
-![npm i -g vespin in light monospace, its vespin in copper, on Vespin's graphite, with the landing page's gray square dots gathering softly in the top-left and bottom-right corners.](apps/web/public/changelog/0.28.0/the-vespin-cli.png)
+![vespin cli in light monospace, its cli in copper, on Vespin's graphite, with the landing page's gray square dots gathering softly in the top-left and bottom-right corners.](apps/web/public/changelog/0.28.0/the-vespin-cli.png)
 
 ### Several repositories
 
@@ -122,7 +122,7 @@ A cloud agent can work in other repositories beside its own, each checked out
 beside it and picked together in New task's repository chip.
 ([#7117](https://github.com/ReviewStage/vespin/pull/7117))
 
-![New task's repository chip reading relay, web under Welcome back, Dean, its menu open with relay ticked as Primary and web ticked beside it, over the composer.](apps/web/public/changelog/0.28.0/several-repositories.png)
+![New task's repository chip reading relay, web, its menu open over the composer with relay ticked as Primary and web ticked beside it.](apps/web/public/changelog/0.28.0/several-repositories.png)
 
 ### Improvements
 

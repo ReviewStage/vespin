@@ -33,7 +33,7 @@ const c=document.getElementById('c'),x=c.getContext('2d');const W=2400,H=1592;
 x.fillStyle=ground;x.fillRect(0,0,W,H);
 const cell=7*S,dot=cell*0.42;const w=W/S,h=H/S;
 // The address, laid out once, for both the plate and the dotted lettering.
-const word1=q.get('w1')??'npm i -g ',word2=q.get('w2')??'vespin';x.font='120px Mono, monospace';
+const word1=q.get('w1')??'vespin ',word2=q.get('w2')??'cli';x.font='120px Mono, monospace';
 document.fonts.load('120px Mono, monospace').then(()=>{
  x.font='120px Mono, monospace';const w1=x.measureText(word1).width,w2=x.measureText(word2).width;const tw=w1+w2,tx=q.get('tx')?+q.get('tx'):(W-tw)/2,ty=q.get('ty')?+q.get('ty'):H/2+42;
  let mask=null;
