@@ -192,7 +192,7 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useFileTreeWidth } from "./folded-groups.js";
 import { AgentMenuTab } from "./main-tabs.js";
-import { PULL_REQUEST_TAB } from "./pages-on-demand.js";
+import { PULL_REQUEST_TAB, pullRequestTabLoaded } from "./pages-on-demand.js";
 import { paneTiming, pastRightEdge } from "./pane-motion.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
 import {
@@ -2161,6 +2161,7 @@ function TabContent({
             {/* The tab is a chunk of its own, read the first time one is drawn or its card hangs (`pages-on-demand.ts`). */}
             <LazyBoundary
               fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}
+              loaded={pullRequestTabLoaded}
             >
               <PULL_REQUEST_TAB
                 agentId={tab.changes}

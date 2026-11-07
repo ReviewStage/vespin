@@ -361,6 +361,9 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * (`ph-no-capture`).
  */
 
+/** Whether the Chapters view's module has landed, so its boundary's Reload knows a failed chunk from a failed draw. */
+let chaptersTabLanded = false;
+
 /**
  * The Chapters view, loaded as a chunk of its own the first time it is
  * shown rather than with the window, as Settings is, because the renderer
@@ -369,8 +372,14 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * the chunk loads is the view's own wait, for a frame.
  */
 const CHAPTERS_TAB = lazy(() =>
-  import("./agent-chapters-tab.js").then((loaded) => ({ default: loaded.AgentChaptersTab })),
+  import("./agent-chapters-tab.js").then((loaded) => {
+    chaptersTabLanded = true;
+    return { default: loaded.AgentChaptersTab };
+  }),
 );
+
+/** Whether the Chapters view's module has landed (`LazyBoundary`'s `loaded`). */
+const chaptersTabLoaded = (): boolean => chaptersTabLanded;
 
 /**
  * A view of the tab, filling the room under the header and the tabs, the
@@ -3663,6 +3672,7 @@ function PullRequestTabBody({
                         fallback={
                           <SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />
                         }
+                        loaded={chaptersTabLoaded}
                       >
                         <CHAPTERS_TAB
                           agentId={agentId}
