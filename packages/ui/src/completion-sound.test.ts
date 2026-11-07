@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 let started: number[];
 let clock: { now: number };
 let oscillatorsRefused: boolean;
+let contextState: string;
 
 class StandInParam {
   value = 0;
@@ -31,7 +32,10 @@ class StandInNode {
 }
 
 class StandInAudioContext {
-  readonly state = "running";
+  get state(): string {
+    return contextState;
+  }
+  resume = (): Promise<void> => Promise.resolve();
   readonly sampleRate = 8000;
   readonly destination = new StandInNode();
   get currentTime(): number {
@@ -60,6 +64,7 @@ describe("playCompletionSound", () => {
     started = [];
     clock = { now: 10 };
     oscillatorsRefused = false;
+    contextState = "running";
   });
 
   afterEach(() => {
@@ -81,6 +86,20 @@ describe("playCompletionSound", () => {
     clock.now += 2;
     play(COMPLETION_SOUND.PING);
     expect(started.length).toBeGreaterThan(first);
+  });
+
+  it("drops a sound asked for while the context is suspended rather than queueing it", async () => {
+    vi.stubGlobal("AudioContext", StandInAudioContext);
+    vi.stubGlobal("document", { addEventListener: () => undefined });
+    contextState = "suspended";
+    const play = await freshPlayer();
+
+    play(COMPLETION_SOUND.CHIME);
+    expect(started).toHaveLength(0);
+
+    contextState = "running";
+    play(COMPLETION_SOUND.CHIME);
+    expect(started.length).toBeGreaterThan(0);
   });
 
   it("is silent, and throws nothing, where Web Audio is missing or refuses", async () => {

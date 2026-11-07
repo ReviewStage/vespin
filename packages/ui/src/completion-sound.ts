@@ -8,11 +8,12 @@
  * ended well under 1.2 s. The envelopes keep each peak modest and the set
  * at about one loudness, so the softest pick is never drowned by the loudest.
  *
- * A browser keeps a context made outside a press suspended, so the first
- * press anywhere on the page resumes it (Safari on iOS runs a context only
- * from a gesture). A sound asked for while the context is suspended is
- * scheduled all the same and sounds when the press resumes it: the clock
- * stands still until then, so one chime waits, never a stack of them.
+ * A browser keeps a context made outside a press suspended (Safari on iOS
+ * runs a context only from a gesture), so a sound asked for while the
+ * context is not running is dropped, never queued: a chime that sounded
+ * minutes later, on some unrelated press, would say nothing true. The ask
+ * tries to resume the context, and the first press anywhere on the page
+ * resumes it, so the chimes after that play.
  *
  * A sound never raises an error: where Web Audio is missing or refuses, it
  * is silent.
@@ -242,6 +243,13 @@ function resumeOnPress(): void {
   shared?.resume().catch(() => undefined);
 }
 
+/** Tries to bring a context that is not running back, now and on the next press anywhere. */
+function resumeSoon(context: AudioContext): void {
+  context.resume().catch(() => undefined);
+  // Adding the same listener twice is one listener, so a run of drops arms one.
+  document.addEventListener("pointerdown", resumeOnPress, { capture: true, once: true });
+}
+
 /** The one context every sound plays on, made on first use; absent where the platform has no Web Audio. */
 function sharedContext(): AudioContext | undefined {
   if (shared?.state === "closed") {
@@ -251,23 +259,23 @@ function sharedContext(): AudioContext | undefined {
   if (shared !== undefined) return shared;
   if (typeof AudioContext === "undefined") return undefined;
   shared = new AudioContext();
-  if (shared.state === "suspended") {
-    document.addEventListener("pointerdown", resumeOnPress, { capture: true, once: true });
-  }
   return shared;
 }
 
 /**
  * Plays `sound` now, unless one is still sounding: a second call within a
  * sound's length plays nothing, so a burst of finishes is one chime and never
- * a loud stack. Returns nothing and throws nothing.
+ * a loud stack. A context that is not running, as a browser leaves one made
+ * outside a press, plays nothing. Returns nothing and throws nothing.
  */
 export function playCompletionSound(sound: CompletionSound): void {
   try {
     const context = sharedContext();
     if (context === undefined || context.currentTime < busyUntil) return;
-    // A press that calls this resumes the context here, in its own gesture.
-    if (context.state === "suspended") context.resume().catch(() => undefined);
+    if (context.state !== "running") {
+      resumeSoon(context);
+      return;
+    }
     const stage: Stage = { context, at: context.currentTime, end: 0 };
     RECIPES[sound](stage);
     busyUntil = stage.at + stage.end;
