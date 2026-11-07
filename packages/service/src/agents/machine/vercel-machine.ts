@@ -300,7 +300,8 @@ const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not b
  * image makes it, so a sandbox created from a base snapshot or resumed on an
  * older runner runs the deploy's, and the upload removed (copied rather than
  * moved, so an upload a readying cut short leaves stays the default user's,
- * which the next launch overwrites); the member's installed skills, where the sandbox's opening uploaded them,
+ * which the next launch overwrites); the member's installed skills, where
+ * the sandbox's opening uploaded them,
  * moved where only root writes and every user reads (`native-skills.ts`),
  * each checkout marked safe for git and shared with `agent`'s group, the
  * agent's own and those of the repositories it works in beside it at the
