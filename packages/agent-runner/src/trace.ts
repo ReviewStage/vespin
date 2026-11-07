@@ -23,6 +23,9 @@
  * sits beside the bundle in the agent image (`scripts/profiler-binary.mjs`),
  * and its module is imported only once a launch is handed a trace, because a
  * host's runner ships no binary and the module loads it as it is imported.
+ * A profiler that does not load, as on a sandbox whose disk predates its
+ * binary, leaves the startup traced without a profile, said once in the
+ * runner's log, because a launch never fails on its telemetry.
  *
  * Note that the spans are started inactive and parented by hand, because a
  * fiber does not carry the Node async context the SDK reads an active span
@@ -120,19 +123,22 @@ function keptAttributes<Attributes extends Record<string, unknown>>(
 
 /**
  * What the SDK starts with: the service's project, environment and release;
- * no integrations but the profiler, so nothing is instrumented and no
+ * no integrations but the profiler where it loaded, so nothing is instrumented and no
  * uncaught error is caught; every sampled trace profiled while its spans run; no error event, no client report, no metric; and the launch trace's own
  * sampling, with none of the runner's own where the trace named none.
  * Note that the runtime's module hooks stay off, because nothing here needs
  * them and the launch's start is to run as it did.
  */
-function sentryOptions(trace: RunnerTrace, profiling: ProfilingNode): Sentry.NodeOptions {
+function sentryOptions(
+  trace: RunnerTrace,
+  profiling: ProfilingNode | undefined,
+): Sentry.NodeOptions {
   return {
     dsn: trace.dsn,
     environment: trace.environment,
     ...(trace.release === undefined ? undefined : { release: trace.release }),
     defaultIntegrations: false,
-    integrations: [profiling.nodeProfilingIntegration()],
+    integrations: profiling === undefined ? [] : [profiling.nodeProfilingIntegration()],
     profileSessionSampleRate: 1,
     profileLifecycle: "trace",
     enableRuntimeChannelInjection: false,
@@ -145,6 +151,24 @@ function sentryOptions(trace: RunnerTrace, profiling: ProfilingNode): Sentry.Nod
 
 /** Sentry's Node profiler, imported only for a launch handed a trace. */
 type ProfilingNode = typeof import("@sentry/profiling-node");
+
+/**
+ * Sentry's Node profiler, or none where its module did not load, which says
+ * why in the runner's log. Note that the module throws as it is imported
+ * where its binary is missing or built for another Node, so the import's
+ * failure is the profiler's absence rather than the launch's.
+ */
+const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.tryPromise({
+  try: () => import("@sentry/profiling-node"),
+  catch: (cause) => (cause instanceof Error ? cause.message.split("\n", 1)[0] : String(cause)),
+}).pipe(
+  Effect.catch((why) =>
+    Effect.as(
+      Effect.logWarning(`agent-runner: the startup is traced without a profile: ${why}`),
+      undefined,
+    ),
+  ),
+);
 
 const RUNNER_EVENTS: ReadonlySet<string> = new Set(Object.values(RUNNER_EVENT));
 
@@ -216,7 +240,7 @@ function observed(startup: Startup, message: RunnerMessage): boolean {
 function begunStartup(
   trace: RunnerTrace,
   harness: RunnerHarness,
-  profiling: ProfilingNode,
+  profiling: ProfilingNode | undefined,
 ): Startup {
   Sentry.init(sentryOptions(trace, profiling));
   const attributes = {
@@ -304,10 +328,7 @@ export const launchTrace = (
     ? Effect.succeed(UNTRACED)
     : Effect.map(
         Effect.acquireRelease(
-          Effect.map(
-            Effect.promise(() => import("@sentry/profiling-node")),
-            (profiling) => begunStartup(trace, harness, profiling),
-          ),
+          Effect.map(loadedProfiler, (profiling) => begunStartup(trace, harness, profiling)),
           (startup) =>
             Effect.andThen(
               Effect.sync(() => endStartup(startup)),
