@@ -1577,6 +1577,26 @@ function withOwner(
   });
 }
 
+/** The state with the agent a file's tab was opened under following the tab to `to`, which the tab now shows in the place of `from`. */
+function withOwnerMoved(
+  held: HeldState,
+  taskId: string | undefined,
+  from: string,
+  to: string,
+): HeldState {
+  const was = fileTab(from);
+  return withTaskTabs(held, taskId, (tabs) =>
+    tabs.owners?.some((each) => sameTab(each.tab, was)) === true
+      ? {
+          ...tabs,
+          owners: tabs.owners.map((each) =>
+            sameTab(each.tab, was) ? { ...each, tab: fileTab(to) } : each,
+          ),
+        }
+      : tabs,
+  );
+}
+
 /** The state with the agent a tab was opened under let go of, as its close asks, so it opens afresh under whichever agent opens it next. */
 function withoutOwner(held: HeldState, taskId: string | undefined, tab: SidePanelTab): HeldState {
   return withTaskTabs(held, taskId, (was) =>
@@ -2514,7 +2534,12 @@ export function useSidePanel(
           return withFileShown(held, path, drawn, taskId, tree?.reads ?? fileReads);
         }
         const viewed = withChosenViewed(held, fileTab(path), drawn);
-        return withFileBrowsed(viewed, taskId, standing, path, standing.reads);
+        return withOwnerMoved(
+          withFileBrowsed(viewed, taskId, standing, path, standing.reads),
+          taskId,
+          standing.path,
+          path,
+        );
       }),
     [update, drawn, taskId, fileReads],
   );
@@ -2532,7 +2557,13 @@ export function useSidePanel(
         const open = held.files.find((each) => each.path === to);
         if (open !== undefined)
           return withOpenFileChosen(held, open, drawn, taskId, standing.reads);
-        return withFileStepped(withChosenViewed(held, fileTab(to), drawn), taskId, standing, step);
+        const stepped = withFileStepped(
+          withChosenViewed(held, fileTab(to), drawn),
+          taskId,
+          standing,
+          step,
+        );
+        return withOwnerMoved(stepped, taskId, from, to);
       }),
     [update, drawn, taskId],
   );
@@ -2563,11 +2594,13 @@ export function useSidePanel(
         const browsed =
           file !== undefined && file.browsedOn === taskId && !drawn.files.includes(file.path);
         const here = browsed ? { ...drawn, files: [...drawn.files, file.path] } : drawn;
-        const opened = withTab(withChosenViewed(restored, tab, here), tab, taskId);
+        // Note that a tab reopened stands under the agent shown, whose strip it is reopened in.
+        const owned = withOwner(restored, here, tab, columnAgent);
+        const opened = withTab(withChosenViewed(owned, tab, here), tab, taskId);
         return { ...withTabAt(opened, tab, at, here), open: true };
       });
     },
-    [update, drawn, taskId],
+    [update, drawn, taskId, columnAgent],
   );
   const onPin = useCallback(
     (holder: PinHolder, tab: PinnableTab, label: string) => {

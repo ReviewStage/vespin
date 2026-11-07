@@ -120,11 +120,12 @@ function launch(stood: Stood) {
   };
 }
 
-test("each agent's strip draws its own tabs and the files opened under it, and comes back to the tab it was left on", () => {
+test("each agent's strip draws its own tabs and the files opened or browsed to under it, and comes back to the tab it was left on", () => {
   const first = { task: TASK, taskAgents: [AGENT, OTHER_AGENT], agent: AGENT };
   const panel = launch(first);
   panel.open(CLOUD);
   act(() => panel.control().onOpenFile({ path: "src/a.ts" }));
+  act(() => panel.control().onBrowseFile("src/a.ts", "src/b.ts", false));
   panel.open(CLOUD);
 
   panel.render({ ...first, agent: OTHER_AGENT });
@@ -133,7 +134,7 @@ test("each agent's strip draws its own tabs and the files opened under it, and c
   assert.deepEqual(panel.control().strip, [OTHER_CLOUD]);
 
   panel.render(first);
-  assert.deepEqual(panel.control().strip, [CLOUD, fileTab("src/a.ts")]);
+  assert.deepEqual(panel.control().strip, [CLOUD, fileTab("src/b.ts")]);
   assert.deepEqual(panel.control().tab, CLOUD, "the tab it was left on");
 });
 

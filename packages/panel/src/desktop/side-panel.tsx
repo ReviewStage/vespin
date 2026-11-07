@@ -977,7 +977,7 @@ export function panelOffers(input: {
   return panelEntries({
     panel,
     kinds: offeredPanelKinds(holder),
-    changes: changesOffers(agents, changes),
+    changes: changesOffers(agents, changes).filter((offer) => mine(offer.agentId)),
     pages: input.pages,
     // Note that a panel that draws no Terminal, the Inbox's among them, offers none.
     ...(onNewTerminal === undefined || holder === SIDE_PANEL_HOLDER.INBOX
