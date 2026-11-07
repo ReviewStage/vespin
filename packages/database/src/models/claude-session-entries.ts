@@ -17,6 +17,7 @@ import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { claudeSessionEntries } from "../schemas/claude-session-entry.js";
 import { conversations } from "../schemas/storage.js";
+import { CONVERSATION_RUNTIME } from "../storage-vocabulary.js";
 
 type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -210,12 +211,18 @@ const findAnyEntry = SqlSchema.findOneOption({
         .where(
           and(
             ownConversation(userId, conversationId),
-            // Note that a row under a subpath is held as it is, because Codex keeps its rollouts there alone.
+            // Note that Codex's rows are held under a subpath alone, because it keeps its rollouts there and writes no main transcript.
             or(
-              isNotNull(claudeSessionEntries.subpath),
-              inArray(sql<string>`${claudeSessionEntries.entry}->>'type'`, [
-                ...CONVERSATION_ENTRY_TYPES,
-              ]),
+              and(
+                eq(conversations.runtime, CONVERSATION_RUNTIME.CODEX),
+                isNotNull(claudeSessionEntries.subpath),
+              ),
+              and(
+                isNull(claudeSessionEntries.subpath),
+                inArray(sql<string>`${claudeSessionEntries.entry}->>'type'`, [
+                  ...CONVERSATION_ENTRY_TYPES,
+                ]),
+              ),
             ),
           ),
         )
@@ -303,7 +310,7 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds a transcript a CLI resumes: a main one with a message, never bookkeeping alone, or any under a subpath, as Codex's rollouts are. */
+/** Whether the account's conversation holds a transcript its CLI resumes: Claude Code's main one with a message, never bookkeeping or a subagent's alone, or a Codex rollout under its subpath. */
 export function holdsSessionEntries(userId: string, conversationId: string): EntryEffect<boolean> {
   return findAnyEntry({ userId, conversationId }).pipe(Effect.map(Option.isSome));
 }

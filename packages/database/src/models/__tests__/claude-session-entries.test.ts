@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
+import { CONVERSATION_RUNTIME, type ConversationRuntime } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import {
@@ -37,8 +37,8 @@ const entry = (uuid: string) => ({ type: "user", uuid, message: { role: "user", 
 const loaded = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
   loadSessionEntries(userId, conversationId, key).pipe(Effect.map(Option.getOrElse(() => [])));
 
-/** An account of its own with an agent of its own, by the agent's conversation. */
-const openAgent = Effect.gen(function* () {
+/** An account of its own with an agent of its own on the runtime given, by the agent's conversation. */
+const openAgentOn = Effect.fnUntraced(function* (runtime: ConversationRuntime) {
   const userId = `user-${randomUUID()}`;
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
@@ -52,10 +52,12 @@ const openAgent = Effect.gen(function* () {
     descriptionSnapshot: "# Invitations\n",
     prompt: null,
     repository: null,
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    runtime,
   });
   return { userId, conversationId: Option.getOrThrow(started).agent.conversationId };
 });
+
+const openAgent = openAgentOn(CONVERSATION_RUNTIME.CLAUDE_CODE);
 
 it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
   it.effect("a session's transcripts load in order, list, and delete with their subpaths", () =>
@@ -119,13 +121,20 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
     }),
   );
 
-  it.effect("a rollout kept under a subpath alone, as Codex keeps it, is held", () =>
-    Effect.gen(function* () {
-      const { userId, conversationId } = yield* openAgent;
-      yield* appendSessionEntries(userId, conversationId, SUBAGENT, [{ type: "session_meta" }]);
+  it.effect(
+    "a transcript under a subpath alone is held for Codex's rollout, never Claude Code's subagent",
+    () =>
+      Effect.gen(function* () {
+        const codex = yield* openAgentOn(CONVERSATION_RUNTIME.CODEX);
+        const claude = yield* openAgent;
+        const rollout = { type: "session_meta" };
+        yield* appendSessionEntries(codex.userId, codex.conversationId, SUBAGENT, [rollout]);
+        yield* appendSessionEntries(claude.userId, claude.conversationId, SUBAGENT, [entry("s")]);
 
-      assert.equal(yield* holdsSessionEntries(userId, conversationId), true);
-    }),
+        assert.equal(yield* holdsSessionEntries(codex.userId, codex.conversationId), true);
+        assert.deepEqual(yield* loaded(codex.userId, codex.conversationId, SUBAGENT), [rollout]);
+        assert.equal(yield* holdsSessionEntries(claude.userId, claude.conversationId), false);
+      }),
   );
 
   it.effect("a Start copies its source's transcript, which the source keeps", () =>
