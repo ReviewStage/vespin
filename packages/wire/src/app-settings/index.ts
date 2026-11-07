@@ -4,6 +4,16 @@ export {
   isAppSettingId,
 } from "./app-settings.js";
 export {
+  COMPLETION_SOUND,
+  COMPLETION_SOUND_GROUP,
+  COMPLETION_SOUND_GROUP_LABEL,
+  COMPLETION_SOUND_GROUP_OF,
+  COMPLETION_SOUND_LABEL,
+  COMPLETION_SOUNDS,
+  type CompletionSound,
+  type CompletionSoundGroup,
+} from "./completion-sound.js";
+export {
   APP_PANEL_TAB,
   APP_SETTING_KIND,
   APP_TOGGLE_VALUE,

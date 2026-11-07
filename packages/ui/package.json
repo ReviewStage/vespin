@@ -11,6 +11,7 @@
     "./appearance": "./src/tokens/appearance.js",
     "./actor-model": "./src/actor-model.js",
     "./command": "./src/components/command/command-dialog.js",
+    "./completion-sound": "./src/completion-sound.js",
     "./composing-key": "./src/composing-key.js",
     "./accounts-sort": "./src/accounts-sort.js",
     "./data-table": "./src/components/data-table/data-table.js",
