@@ -23,6 +23,7 @@ import {
 } from "@repo/features/agent-wire";
 import { INBOX_ASK_STATUS, INBOX_IMAGE_TYPE, type InboxItem } from "@repo/features/inbox-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
+import { sandboxFetchOver } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -103,7 +104,6 @@ import {
 import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "../testing/integration-connect.js";
 import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
-import { sandboxFetchOver } from "../testing/vercel-sandbox-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
 export const ORIGIN = "https://app.test";

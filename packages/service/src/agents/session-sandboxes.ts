@@ -22,16 +22,12 @@
  *
  * Credentials are the deployment's own: the function's Vercel OIDC token,
  * which names this project and its team, as the agents' own sandboxes are
- * made with (`vercel-sandbox-api.ts`). A deployment without one answers every
+ * made with (`@repo/sandbox`). A deployment without one answers every
  * call as unavailable.
  */
 
 import { type Agent, readAgent } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
-import { Clock, Context, Duration, Effect, Layer, Option } from "effect";
-import { afterResponse } from "../http/after-response.js";
-import { discardedOrLogged } from "./device-discard.js";
-import { keepAliveExtension } from "./sandbox-keep-alive.js";
 import {
   deploymentOidcToken,
   SANDBOX_STATUS,
@@ -39,7 +35,12 @@ import {
   UP_STATUSES,
   type VercelSandboxApi,
   vercelSandboxApi,
-} from "./vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { Clock, Context, Duration, Effect, Layer, Option } from "effect";
+import { afterResponse } from "../http/after-response.js";
+import { SESSION_TAG } from "./agent-sandbox-open.js";
+import { discardedOrLogged } from "./device-discard.js";
+import { keepAliveExtension } from "./sandbox-keep-alive.js";
 
 const ARCHIVE_STOP = {
   /**
@@ -70,12 +71,12 @@ export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionS
   "SessionSandboxes",
 ) {}
 
-/** A session's sandboxes, kept alive or stopped, over the calls `vercel-sandbox-api.ts` makes. */
+/** A session's sandboxes, kept alive or stopped, over the calls `@repo/sandbox` makes. */
 function sessionSandboxesOver(api: VercelSandboxApi): SessionSandboxesService {
   return {
     keepAliveFor: (sessionId) =>
       Effect.gen(function* () {
-        const sandboxes = yield* api.listTagged(sessionId);
+        const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
         let extended = 0;
         for (const sandbox of sandboxes) {
           const running = sandbox.currentSessionId;
@@ -92,7 +93,7 @@ function sessionSandboxesOver(api: VercelSandboxApi): SessionSandboxesService {
       }),
     stopFor: (sessionId) =>
       Effect.gen(function* () {
-        const sandboxes = yield* api.listTagged(sessionId);
+        const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
         let stopped = 0;
         for (const sandbox of sandboxes) {
           const running = sandbox.currentSessionId;

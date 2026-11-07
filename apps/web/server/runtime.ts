@@ -1,6 +1,6 @@
+import { deploymentOidcToken } from "@repo/sandbox";
 import type { NativeAgentSessions } from "@repo/service/agents/coder-host/runtime-sessions";
 import { agentMachinesLayer } from "@repo/service/agents/machine/agent-machines";
-import { deploymentOidcToken } from "@repo/service/agents/vercel-sandbox-api";
 import { agentSandboxDoors } from "@repo/service/agents/workspace-mcp/sandbox-door";
 import { AfterResponse } from "@repo/service/http/after-response";
 import { sentryLayer, sentryQueueSent } from "@repo/service/observability/sentry";

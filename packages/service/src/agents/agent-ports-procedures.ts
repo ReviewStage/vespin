@@ -22,6 +22,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import type { SandboxUnavailable } from "@repo/sandbox";
 import { Clock, Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
@@ -29,7 +30,6 @@ import { accountMiddleware, hosted } from "../orpc/base.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
 import { shareHeldUntil } from "./terminal/port-share.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
-import type { SandboxUnavailable } from "./vercel-sandbox-api.js";
 
 export interface AgentPortsProcedureSeams {
   resolveUserId: UserIdResolver;

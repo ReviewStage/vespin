@@ -9,7 +9,7 @@
  * Each agent runs in a sandbox of its own, so what the source never
  * committed and pushed would be lost to the agent started from it. As that
  * Start is made, the service reaches the source's sandbox by its
- * session's tag (`../vercel-sandbox-api.ts`), wakes it where it stopped, as
+ * session's tag (`../agent-sandbox-open.ts`), wakes it where it stopped, as
  * the Terminal tab's resume does, and records its checkout whole: what it
  * committed, what it changed, and every file it made that git does not
  * ignore, as one commit on top of its `HEAD`, or `HEAD` itself where
@@ -45,12 +45,6 @@ import { latestTurnsOfReached } from "@repo/database/models/message-reads";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { holdSandbox, sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import { redactCredentials } from "@repo/features/credential-redaction";
-import { TURN_STATUS } from "@repo/wire";
-import { Clock, Duration, Effect, Option, Schedule } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import type { GitHubApp } from "../../github/github-app.js";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
-import { type RepositoryCredential, sandboxFirewall } from "../sandbox-firewall.js";
 import {
   deploymentOidcToken,
   type ListedSandbox,
@@ -58,7 +52,14 @@ import {
   UP_STATUSES,
   type VercelSandboxApi,
   vercelSandboxApi,
-} from "../vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { TURN_STATUS } from "@repo/wire";
+import { Clock, Duration, Effect, Option, Schedule } from "effect";
+import type * as HttpClient from "effect/http/HttpClient";
+import type { GitHubApp } from "../../github/github-app.js";
+import { SESSION_TAG } from "../agent-sandbox-open.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { type RepositoryCredential, sandboxFirewall } from "../sandbox-firewall.js";
 import { CODER } from "./bounds.js";
 import { agentRepositoryToken } from "./checkout.js";
 
@@ -183,7 +184,7 @@ const upSession = (api: VercelSandboxApi, sessionId: string, name: string) =>
   Effect.gen(function* () {
     const resumed = runningSession(yield* api.resume(name));
     if (resumed !== undefined) return resumed;
-    const listed = yield* api.listTagged(sessionId).pipe(
+    const listed = yield* api.listTagged(SESSION_TAG, sessionId).pipe(
       Effect.repeat({
         schedule: Schedule.spaced(SNAPSHOT.WAKE_POLL),
         until: (sandboxes) => runningSession(sandboxes[0]) !== undefined,
@@ -206,7 +207,7 @@ const stopMissed = (why: string) =>
  */
 const stopUp = <R>(api: VercelSandboxApi, ask: SnapshotAsk<R>) =>
   Effect.gen(function* () {
-    const listed = yield* api.listTagged(ask.sessionId);
+    const listed = yield* api.listTagged(SESSION_TAG, ask.sessionId);
     if (yield* ask.keepUp) return;
     for (const sandbox of listed) {
       if (sandbox.currentSessionId === undefined || !UP_STATUSES.has(sandbox.status ?? "")) {
@@ -233,7 +234,7 @@ const stopWoken = <R>(api: VercelSandboxApi, ask: SnapshotAsk<R>) =>
 /** The copy inside the scope a woken sandbox's stop is registered on. */
 const copyIn = <R>(api: VercelSandboxApi, ask: SnapshotAsk<R>) =>
   Effect.gen(function* () {
-    const [sandbox] = yield* api.listTagged(ask.sessionId);
+    const [sandbox] = yield* api.listTagged(SESSION_TAG, ask.sessionId);
     if (sandbox === undefined) {
       return { copied: false, miss: SNAPSHOT_MISS.NO_SANDBOX } as const;
     }

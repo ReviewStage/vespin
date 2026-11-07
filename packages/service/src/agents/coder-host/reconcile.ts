@@ -74,18 +74,18 @@ import { storeWriter } from "@repo/database/models/writer";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { causeKind } from "@repo/runtime/effect";
+import {
+  COMMAND_GONE,
+  type CommandExit,
+  deploymentOidcToken,
+  vercelSandboxApi,
+} from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, ErrorReporter, Exit, Option } from "effect";
 import { RUN_STATUS, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { FoundPlace, MachineLifecycle, RecordedRunner } from "../machine/agent-machine.js";
 import { RUNNER_RECORD } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { FAILURE_CHARS } from "../native-events/runner-moments.js";
-import {
-  COMMAND_GONE,
-  type CommandExit,
-  deploymentOidcToken,
-  vercelSandboxApi,
-} from "../vercel-sandbox-api.js";
 import { agentLogIds } from "./agent-log.js";
 import { CODER } from "./bounds.js";
 import { holdingRunnerIfFree } from "./runner-lease.js";

@@ -9,7 +9,7 @@
  */
 
 import { Layer } from "effect";
-import { SandboxFetch } from "../agents/vercel-sandbox-api.js";
+import { SandboxFetch } from "../vercel-sdk.js";
 
 const TEAM = "team_fixture";
 const PROJECT = "prj_fixture";

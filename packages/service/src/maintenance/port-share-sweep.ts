@@ -13,7 +13,15 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { agentConversation } from "@repo/database/models/agent-store";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
+import {
+  deploymentOidcToken,
+  type ListedSandbox,
+  SANDBOX_STATUS,
+  type VercelSandboxApi,
+  vercelSandboxApi,
+} from "@repo/sandbox";
 import { Duration, Effect, Option, Result } from "effect";
+import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
 import { agentTag } from "../agents/machine/vercel-machine.js";
 import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
 import {
@@ -22,14 +30,6 @@ import {
   shareHeldUntil,
   unsharePort,
 } from "../agents/terminal/port-share.js";
-import {
-  deploymentOidcToken,
-  type ListedSandbox,
-  SANDBOX_STATUS,
-  SESSION_TAG,
-  type VercelSandboxApi,
-  vercelSandboxApi,
-} from "../agents/vercel-sandbox-api.js";
 
 /** How many shared sandboxes are read at once. */
 const CONCURRENCY = 5;

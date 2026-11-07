@@ -69,6 +69,8 @@ import {
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { sessionKey } from "@repo/runtime/vocabulary";
+import { deploymentOidcToken } from "@repo/sandbox";
+import { fixtureToken, sandboxFetchOver } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -121,8 +123,7 @@ import {
   swappedBearer,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
-import { fixtureToken, sandboxFetchOver } from "../../testing/vercel-sandbox-fake.js";
-import { AGENT_TAG, SANDBOX_NAME } from "../agent-sandbox-open.js";
+import { AGENT_TAG, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
 import { BASE_SNAPSHOT } from "../base-snapshot.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -136,7 +137,6 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
-import { deploymentOidcToken, SESSION_TAG } from "../vercel-sandbox-api.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { CODER } from "./bounds.js";

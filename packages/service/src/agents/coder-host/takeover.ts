@@ -36,6 +36,7 @@ import {
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { bothInOrder } from "@repo/runtime/effect";
+import { deploymentOidcToken, SANDBOX_STATUS, vercelSandboxApi } from "@repo/sandbox";
 import { START_LINE_BRIEF } from "@repo/wire";
 import { Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -51,7 +52,6 @@ import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
-import { deploymentOidcToken, SANDBOX_STATUS, vercelSandboxApi } from "../vercel-sandbox-api.js";
 import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
 import { contextWindowOf } from "./context.js";
 import { agentPublished } from "./published.js";

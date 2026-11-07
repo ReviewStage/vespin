@@ -44,6 +44,8 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import { deploymentOidcToken } from "@repo/sandbox";
+import { fixtureToken, sandboxFetchOver } from "@repo/sandbox/testing";
 import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -66,7 +68,6 @@ import {
   runnerSandboxApi,
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
-import { fixtureToken, sandboxFetchOver } from "../../testing/vercel-sandbox-fake.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { vercelMachineLayer } from "../machine/vercel-machine.js";
@@ -76,7 +77,6 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
-import { deploymentOidcToken } from "../vercel-sandbox-api.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { type CodexSessionsOptions, codexSessions } from "./codex-sessions.js";

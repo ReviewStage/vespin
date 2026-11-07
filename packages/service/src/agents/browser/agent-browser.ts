@@ -2,7 +2,7 @@
  * agent-browser.ts -- an agent's browser as the service reaches it: a Chromium kept running in the agent's own sandbox, and a DevTools protocol session with it over the sandbox's PTY.
  *
  * A sandbox is found as the Terminal tab finds it, by the session it is
- * tagged with (`vercel-sandbox-api.ts`): a root session's own id, which a
+ * tagged with (`../agent-sandbox-open.ts`): a root session's own id, which a
  * worker's session names as its root, since a worker works in its parent's
  * sandbox. The brain's
  * sandbox and a coding agent's are reached alike. Making sure of the
@@ -41,6 +41,19 @@ import {
   type CdpSession,
   type PageTarget,
 } from "@repo/features/browser-cdp";
+import {
+  deploymentOidcToken,
+  IMAGE_NOT_READY,
+  type ListedSandbox,
+  ptyLinesOf,
+  SANDBOX_STATUS,
+  type SandboxSessionApi,
+  type SandboxUnavailable,
+  type SessionRef,
+  snapshotGone,
+  type VercelSandboxApi,
+  vercelSandboxApi,
+} from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   Context,
@@ -62,21 +75,9 @@ import type { HttpClient } from "effect/http";
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "../../core.js";
 import { jsonOf } from "../../http/http-effect.js";
 import type { RelaySocket } from "../../terminal/relay.js";
-import { agentSandboxName, openAgentSandboxPromptly } from "../agent-sandbox-open.js";
+import { agentSandboxName, openAgentSandboxPromptly, SESSION_TAG } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
-import { ptyLinesOf, SandboxPty, type SandboxPtyService, sandboxPtyLayer } from "../sandbox-pty.js";
-import {
-  deploymentOidcToken,
-  IMAGE_NOT_READY,
-  type ListedSandbox,
-  SANDBOX_STATUS,
-  type SandboxSessionApi,
-  type SandboxUnavailable,
-  type SessionRef,
-  snapshotGone,
-  type VercelSandboxApi,
-  vercelSandboxApi,
-} from "../vercel-sandbox-api.js";
+import { SandboxPty, type SandboxPtyService, sandboxPtyLayer } from "../sandbox-pty.js";
 import {
   BRIDGE_WORD,
   BROWSER_START_EXIT,
@@ -456,7 +457,7 @@ export interface BrowserSandboxApi
   ) => Effect.Effect<Pick<SandboxSessionApi, "run" | "openInteractive">, SandboxUnavailable>;
 }
 
-/** The service over the calls `vercel-sandbox-api.ts` makes, the PTY the sandbox serves, and the agents' image a sandbox is made again from. */
+/** The service over the calls `@repo/sandbox` makes, the PTY the sandbox serves, and the agents' image a sandbox is made again from. */
 export function agentBrowserOver(
   api: BrowserSandboxApi,
   pty: SandboxPtyService,
@@ -478,7 +479,9 @@ export function agentBrowserOver(
   /** The running session of the sandbox tagged with the session, opened again and waited for where it is not running. */
   const runningSession = (sessionId: string) =>
     Effect.gen(function* () {
-      const [sandbox] = yield* api.listTagged(sessionId).pipe(Effect.mapError(sandboxUnavailable));
+      const [sandbox] = yield* api
+        .listTagged(SESSION_TAG, sessionId)
+        .pipe(Effect.mapError(sandboxUnavailable));
       if (sandbox === undefined) return yield* unreachable(BROWSER_UNREACHABLE.NOT_OPENED);
       if (sandbox.status === SANDBOX_STATUS.RUNNING && sandbox.currentSessionId !== undefined) {
         return { name: sandbox.name, sessionId: sandbox.currentSessionId };

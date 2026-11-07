@@ -10,6 +10,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
+import { type SandboxUnavailable, snapshotGone } from "@repo/sandbox";
 import { Effect } from "effect";
 import {
   HOSTED_REFUSAL,
@@ -17,7 +18,6 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { controlsAgent, reachedAgentById } from "../agent-reach.js";
-import { type SandboxUnavailable, snapshotGone } from "../vercel-sandbox-api.js";
 
 /** The agent a sandbox route reaches: its conversation, the session its sandbox is tagged with, and the machine it runs on. */
 interface ReachedAgentSession {

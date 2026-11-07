@@ -2,7 +2,7 @@
  * agent-sandbox.ts -- a coding agent's sandbox as its Terminal tab reaches it: where it stands, its shells, and the developer's resume.
  *
  * The sandbox is found by the session the agent runs in, whose id it
- * carries as a tag (`vercel-sandbox-api.ts`). Where it stands is read and
+ * carries as a tag (`../agent-sandbox-open.ts`). Where it stands is read and
  * never changed by a read: a stopped sandbox stays stopped until the
  * developer's resume, which opens it as the agent's next turn does, through
  * the same `getOrCreate` (`../agent-sandbox-open.ts`): the one standing under
@@ -38,14 +38,6 @@ import {
   type TerminalSummary,
   type TerminalsAnswer,
 } from "@repo/features/terminal-wire";
-import { Context, Effect, Layer, Result } from "effect";
-import { agentSandboxName, openAgentSandboxPromptly } from "../agent-sandbox-open.js";
-import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
-import {
-  type FirewallSession,
-  type RepositoryCredential,
-  sandboxFirewall,
-} from "../sandbox-firewall.js";
 import {
   deploymentOidcToken,
   IMAGE_NOT_READY,
@@ -56,7 +48,15 @@ import {
   SandboxUnavailable,
   type VercelSandboxApi,
   vercelSandboxApi,
-} from "../vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { Context, Effect, Layer, Result } from "effect";
+import { agentSandboxName, openAgentSandboxPromptly, SESSION_TAG } from "../agent-sandbox-open.js";
+import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
+import {
+  type FirewallSession,
+  type RepositoryCredential,
+  sandboxFirewall,
+} from "../sandbox-firewall.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
 import { sharedPortOf, sharePort, unsharePort } from "./port-share.js";
 import {
@@ -167,7 +167,7 @@ function stateOf(sandbox: ListedSandbox | undefined): SandboxState {
   return STATE_OF_STATUS.get(sandbox.status ?? "") ?? SANDBOX_STATE.STOPPED;
 }
 
-/** The service over the calls `vercel-sandbox-api.ts` makes, the store its firewall's launch is read from, and the agents' image a sandbox is made again from. */
+/** The service over the calls `@repo/sandbox` makes, the store its firewall's launch is read from, and the agents' image a sandbox is made again from. */
 function agentSandboxOver(
   api: VercelSandboxApi,
   context: Context.Context<DatabaseServices>,
@@ -180,7 +180,7 @@ function agentSandboxOver(
    */
   const standing = (sessionId: string) =>
     Effect.gen(function* () {
-      const [sandbox] = yield* api.listTagged(sessionId);
+      const [sandbox] = yield* api.listTagged(SESSION_TAG, sessionId);
       const state = stateOf(sandbox);
       const sandboxSessionId =
         state === SANDBOX_STATE.RUNNING ? sandbox?.currentSessionId : undefined;

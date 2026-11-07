@@ -17,6 +17,12 @@
  */
 
 import type { CdpEvent, PageTarget } from "@repo/features/browser-cdp";
+import {
+  type CommandAsk,
+  type CommandRun,
+  type OpenedSandbox,
+  SandboxUnavailable,
+} from "@repo/sandbox";
 import { type Cause, Effect, Layer, Queue, Redacted, Ref, Schema, Stream } from "effect";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import {
@@ -40,12 +46,6 @@ import {
 } from "../agents/browser/sandbox-recorder.js";
 import type { AgentImageService } from "../agents/coder-host/agent-image.js";
 import type { SandboxPtyService } from "../agents/sandbox-pty.js";
-import {
-  type CommandAsk,
-  type CommandRun,
-  type OpenedSandbox,
-  SandboxUnavailable,
-} from "../agents/vercel-sandbox-api.js";
 import type { RelayFrame } from "../terminal/relay.js";
 
 /** Chrome's own refusal of a method it does not know, and of a target it does not hold. */
@@ -344,7 +344,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
       return listed();
     });
   const api: BrowserSandboxApi = {
-    listTagged: (sessionId) =>
+    listTagged: (_tag, sessionId) =>
       refused() ??
       Effect.succeed(sessionId === scenario.sessionId && status !== undefined ? [listed()] : []),
     resume: () => refused() ?? resumeRefused() ?? resumed(),

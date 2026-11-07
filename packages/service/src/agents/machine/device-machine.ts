@@ -93,6 +93,13 @@ import {
 } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
+  COMMAND_GONE,
+  type CommandExit,
+  NOT_FOUND_STATUS,
+  type SandboxFile,
+  SandboxUnavailable,
+} from "@repo/sandbox";
+import {
   Brand,
   Clock,
   type Context,
@@ -107,13 +114,6 @@ import {
 import { HostedEnvironment } from "../../environment.js";
 import { heldUntil } from "../../http/held-read.js";
 import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checkout.js";
-import {
-  COMMAND_GONE,
-  type CommandExit,
-  NOT_FOUND_STATUS,
-  type SandboxFile,
-  SandboxUnavailable,
-} from "../vercel-sandbox-api.js";
 import {
   type AgentMachineService,
   type DeliveredCredentials,

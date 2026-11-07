@@ -20,11 +20,11 @@
  */
 
 import type { TerminalSummary } from "@repo/features/terminal-wire";
+import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import { Result } from "effect";
 import { unparsedWire, wireUuidSchema } from "../../core.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
-import type { CommandAsk, CommandRun } from "../vercel-sandbox-api.js";
 
 export const TMUX = {
   /** What a Terminal tab's session names start with; the rest is the shell's id. */

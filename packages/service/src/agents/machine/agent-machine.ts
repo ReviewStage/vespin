@@ -40,6 +40,7 @@ import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
+import type { CommandExit, SandboxFile, SandboxUnavailable } from "@repo/sandbox";
 import { type Brand, Context, Data, type Duration, type Effect, type Redacted } from "effect";
 import type { AgentImage, AgentImageMissing } from "../coder-host/agent-image.js";
 import type { CheckoutRefused, CheckoutServices } from "../coder-host/checkout.js";
@@ -51,7 +52,6 @@ import type {
   PlaceholderSwap,
 } from "../sandbox-firewall.js";
 import type { KeyRefusal, PlanRefusal } from "../sessions/agent-sessions.js";
-import type { CommandExit, SandboxFile, SandboxUnavailable } from "../vercel-sandbox-api.js";
 
 /** Where a session runs now, as its machine names it: a Vercel sandbox's running session, or a local agent's id on its Mac. Opaque to every caller but the machine. */
 export type MachineRunning = string & Brand.Brand<"MachineRunning">;

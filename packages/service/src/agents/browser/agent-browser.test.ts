@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { CDP_FAILURE, type CdpFailure } from "@repo/features/browser-cdp";
+import { SANDBOX_STATUS } from "@repo/sandbox";
 import { Duration, Effect, Exit, Fiber, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { keptAfterResponse } from "../../http/after-response.js";
@@ -16,7 +17,7 @@ import {
   fakeCdpPeer,
   fakeSandboxApi,
 } from "../../testing/agent-browser-fake.js";
-import { SANDBOX_STATUS } from "../vercel-sandbox-api.js";
+import { SESSION_TAG } from "../agent-sandbox-open.js";
 import {
   AgentBrowser,
   agentBrowserOver,
@@ -338,7 +339,7 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(10));
       yield* Fiber.join(opening);
       // Read before the next open, which would resume the sandbox itself where the kept open failed.
-      const [opened] = yield* sandbox.listTagged(SESSION);
+      const [opened] = yield* sandbox.listTagged(SESSION_TAG, SESSION);
       const standing = yield* service.ensure(SESSION);
 
       assert.equal(unreachable.reason, BROWSER_UNREACHABLE.STARTING);
@@ -359,7 +360,7 @@ it.effect(
         snapshotGone: true,
         vcpus: 4,
       });
-      const [standing] = yield* sandbox.api.listTagged(SESSION);
+      const [standing] = yield* sandbox.api.listTagged(SESSION_TAG, SESSION);
       const service = agentBrowserOver(sandbox.api, fakeBridgePty(peer), FAKE_IMAGE);
 
       const ensured = yield* service.ensure(SESSION);

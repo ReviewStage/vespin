@@ -6,21 +6,21 @@ import { readFirewallLaunch } from "@repo/database/models/sandbox-firewall-store
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openTaskAgent, openWorkspace } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { Effect, Layer, Redacted } from "effect";
-import { LOCAL_AGENT_ENVIRONMENT } from "../testing/local-agent.js";
+import { vercelSandboxApi } from "@repo/sandbox";
 import {
   fixtureToken,
   sandboxFetchOver,
   sandboxFound,
   sessionAnswered,
-} from "../testing/vercel-sandbox-fake.js";
+} from "@repo/sandbox/testing";
+import { Effect, Layer, Redacted } from "effect";
+import { LOCAL_AGENT_ENVIRONMENT } from "../testing/local-agent.js";
 import {
   composePolicy,
   LAUNCH_SWAP,
   placeholderSwap,
   sandboxFirewall,
 } from "./sandbox-firewall.js";
-import { vercelSandboxApi } from "./vercel-sandbox-api.js";
 
 /**
  * A sandbox session's firewall as the service writes it, over Vercel's

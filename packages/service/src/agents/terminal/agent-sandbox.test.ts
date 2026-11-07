@@ -6,10 +6,7 @@ import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { Effect, Layer, Redacted, Result } from "effect";
-import { afterEach, vi } from "vitest";
-import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
-import { runnerSandboxApi } from "../../testing/runner-sandbox-fake.js";
+import { SandboxUnavailable, vercelSandboxApi } from "@repo/sandbox";
 import {
   commandRunStreamed,
   fixtureToken,
@@ -18,10 +15,13 @@ import {
   sandboxFound,
   sandboxListRefusal,
   sessionAnswered,
-} from "../../testing/vercel-sandbox-fake.js";
+} from "@repo/sandbox/testing";
+import { Effect, Layer, Redacted, Result } from "effect";
+import { afterEach, vi } from "vitest";
+import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
+import { runnerSandboxApi } from "../../testing/runner-sandbox-fake.js";
 import { openAgentSandbox } from "../agent-sandbox-open.js";
 import { AgentImage } from "../coder-host/agent-image.js";
-import { SandboxUnavailable, vercelSandboxApi } from "../vercel-sandbox-api.js";
 import { AgentSandbox, agentSandboxLayer, SHELL_REFUSAL } from "./agent-sandbox.js";
 import { TMUX_EXIT } from "./tmux.js";
 

@@ -5,9 +5,10 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { sessionOnFirstUse, type VercelSandboxApi, vercelSandboxApi } from "@repo/sandbox";
+import { fixtureToken } from "@repo/sandbox/testing";
 import { Duration, Effect, Fiber, Redacted } from "effect";
 import { runnerSandboxApi } from "../testing/runner-sandbox-fake.js";
-import { fixtureToken } from "../testing/vercel-sandbox-fake.js";
 import {
   BASE_SNAPSHOT,
   BASE_STATE,
@@ -20,11 +21,6 @@ import {
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import type { RepositorySandbox } from "./repository-shell.js";
 import { composePolicy } from "./sandbox-firewall.js";
-import {
-  sessionOnFirstUse,
-  type VercelSandboxApi,
-  vercelSandboxApi,
-} from "./vercel-sandbox-api.js";
 
 const IMAGE = "agent-image:fixture";
 const NEXT_IMAGE = "agent-image:next";

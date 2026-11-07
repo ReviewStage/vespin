@@ -33,8 +33,8 @@
  */
 
 import { PLAYWRIGHT_PIN } from "@repo/agent-runner/pins";
+import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { LINK_SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
-import type { CommandAsk, CommandRun } from "../vercel-sandbox-api.js";
 import { RECORDING_CURSOR_SOURCE, RECORDING_CURSOR_STOP } from "./recording-cursor.js";
 import { SANDBOX_BROWSER } from "./sandbox-browser.js";
 

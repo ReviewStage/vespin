@@ -35,6 +35,7 @@
     "@repo/host": "workspace:*",
     "@repo/panel": "workspace:*",
     "@repo/runtime": "workspace:*",
+    "@repo/sandbox": "workspace:*",
     "@repo/service": "workspace:*",
     "@repo/settings": "workspace:*",
     "@repo/brand": "workspace:*",

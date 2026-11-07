@@ -59,9 +59,6 @@ import {
   readFirewallLaunch,
 } from "@repo/database/models/sandbox-firewall-store";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { DateTime, Effect, Option, Redacted, Result, Schema } from "effect";
-import { HostedEnvironment } from "../environment.js";
-import type { GitHubTokenAccess } from "../github/github-app.js";
 import {
   type NetworkPolicy,
   type NetworkRule,
@@ -70,7 +67,10 @@ import {
   SandboxUnavailable,
   type SessionRef,
   type VercelSandboxApi,
-} from "./vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { DateTime, Effect, Option, Redacted, Result, Schema } from "effect";
+import { HostedEnvironment } from "../environment.js";
+import type { GitHubTokenAccess } from "../github/github-app.js";
 
 /**
  * The credentials a runner's launch holds at the firewall behind its

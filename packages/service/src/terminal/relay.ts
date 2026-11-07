@@ -47,6 +47,7 @@ import {
   TERMINAL_RELAY_FRAME,
   terminalRelayResizeSchema,
 } from "@repo/features/terminal-wire";
+import type { InteractiveShell, SandboxUnavailable } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -68,7 +69,6 @@ import { CODER } from "../agents/coder-host/bounds.js";
 import type { FirewallSession, RepositoryCredential } from "../agents/sandbox-firewall.js";
 import type { AgentSandboxService } from "../agents/terminal/agent-sandbox.js";
 import { attachTerminal, TMUX } from "../agents/terminal/tmux.js";
-import type { InteractiveShell, SandboxUnavailable } from "../agents/vercel-sandbox-api.js";
 import { jsonOf } from "../http/http-effect.js";
 import { frameBytes } from "../http/socket.js";
 

@@ -17,9 +17,9 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { deploymentOidcToken, vercelSandboxApi } from "@repo/sandbox";
 import { Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
-import { deploymentOidcToken, vercelSandboxApi } from "../vercel-sandbox-api.js";
 import { AgentMachine, type AgentMachineService, type MachineLifecycle } from "./agent-machine.js";
 import { type DeviceMachineService, deviceMachine } from "./device-machine.js";
 import { type VercelMachineOptions, vercelLifecycle, vercelMachine } from "./vercel-machine.js";

@@ -19,8 +19,8 @@
  */
 
 import { TUNNEL_KIND, type TunnelKind } from "@repo/features/sandbox-tunnel-wire";
+import type { CommandAsk } from "@repo/sandbox";
 import { CODER } from "../agents/coder-host/bounds.js";
-import type { CommandAsk } from "../agents/vercel-sandbox-api.js";
 import { MIRROR_BRIDGE_SOURCE } from "./mirror-bridge.js";
 
 /** A bridge a tunnel asks for: its kind, and the argument that kind takes. */

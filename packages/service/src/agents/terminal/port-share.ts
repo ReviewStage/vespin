@@ -20,9 +20,6 @@
  * the helper notices and leaves. Nothing here reads a byte the link carries.
  */
 
-import { Duration, Effect } from "effect";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
-import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 import {
   type CommandAsk,
   type ListedSandbox,
@@ -30,7 +27,10 @@ import {
   type SandboxSessionApi,
   SandboxUnavailable,
   type VercelSandboxApi,
-} from "../vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { Duration, Effect } from "effect";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
 export const PORT_SHARE = {
   /** The one port routed publicly: the helper's, which no dev server is likely to take. */

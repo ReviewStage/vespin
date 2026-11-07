@@ -6,6 +6,8 @@ import { Database } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { vercelSandboxApi } from "@repo/sandbox";
+import { commandRunStreamed, sandboxFetchOver } from "@repo/sandbox/testing";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { Deferred, Duration, Effect, Fiber, Layer, Logger, Redacted } from "effect";
 import { TestClock } from "effect/testing";
@@ -20,9 +22,7 @@ import {
   sourceCheckout,
   sourceSandbox,
 } from "../../testing/source-sandbox.js";
-import { commandRunStreamed, sandboxFetchOver } from "../../testing/vercel-sandbox-fake.js";
 import type { RepositoryCredential } from "../sandbox-firewall.js";
-import { vercelSandboxApi } from "../vercel-sandbox-api.js";
 import { SNAPSHOT, SNAPSHOT_MISS, type SnapshotOutcome, snapshotSource } from "./snapshot.js";
 
 /**

@@ -3,23 +3,20 @@
  *
  * The double answers Vercel Sandbox's API as the scenario has it: the
  * session's sandbox under the name given, stopped on a snapshot, or under a
- * name of eve's that no lookup by the session's name finds,
- * in the status given, a resume that brings it up under a
- * fresh session, a stop that stops it where it is sent as JSON and is
- * refused with 415 where not, as Vercel refuses it, a firewall policy
- * written down, and each command run in a checkout the test made by a real
- * POSIX shell with git, what it printed on stdout and stderr streamed back,
- * refused where it names any directory but the agent's checkout. The
- * checkout is the way an agent leaves one: cloned from a bare remote on
- * disk, one commit pushed, its identity set. Synthetic throughout.
+ * name no lookup by the session's name finds, in the status given, a resume
+ * that brings it up under a fresh session, a stop that stops it where it is
+ * sent as JSON and is refused with 415 where not, as Vercel refuses it, a
+ * firewall policy written down, and each command run in a checkout the test
+ * made by a real POSIX shell with git, what it printed on stdout and stderr
+ * streamed back, refused where it names any directory but the agent's
+ * checkout. The checkout is the way an agent leaves one: cloned from a bare
+ * remote on disk, one commit pushed, its identity set. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Deferred, Effect } from "effect";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import {
   commandRunStreamed,
   sandboxesListed,
@@ -27,7 +24,9 @@ import {
   sandboxListRefusal,
   sandboxStopRefusal,
   sessionAnswered,
-} from "./vercel-sandbox-fake.js";
+} from "@repo/sandbox/testing";
+import { Deferred, Effect } from "effect";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 
 export const SOURCE_SANDBOX = {
   NAME: "eve-sbx-vercel-fixture",
@@ -169,7 +168,7 @@ export function sourceSandbox(
       createdAt: 0,
       ...(snapshotted === undefined ? undefined : { currentSnapshotId: "snap_source" }),
     };
-    // A lookup by any other name finds none, as for a source whose sandbox eve named.
+    // A lookup by any other name finds none, as for a source whose sandbox was named otherwise.
     if (/^\/api\/v2\/sandboxes\/[^/]+$/u.test(parsed.pathname)) {
       return parsed.pathname === `/api/v2/sandboxes/${name}` && state.status !== undefined
         ? Response.json(sandboxFound(listed))

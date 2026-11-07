@@ -157,6 +157,14 @@ import { type ConversationTarget, storeWriter } from "@repo/database/models/writ
 import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
+import {
+  COMMAND_GONE,
+  type CommandExit,
+  NOT_FOUND_STATUS,
+  type SandboxFile,
+  SandboxUnavailable,
+  sessionEnding,
+} from "@repo/sandbox";
 import { TURN_STATUS } from "@repo/wire";
 import type { UserContent } from "ai";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
@@ -216,14 +224,6 @@ import {
   type SessionMessage,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
-import {
-  COMMAND_GONE,
-  type CommandExit,
-  NOT_FOUND_STATUS,
-  type SandboxFile,
-  SandboxUnavailable,
-  sessionEnding,
-} from "../vercel-sandbox-api.js";
 import { experimentsOnIn, experimentsReadIn } from "../workspace-experiment-on.js";
 import { BEARER_PREFIX, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { type AgentImage, AgentImageMissing } from "./agent-image.js";
@@ -383,7 +383,7 @@ function runnerBearer(bearer: string, host: string): RunnerCredential {
 /** How a file written for the agent is kept: readable by every user, written by none but the API's. */
 const ATTACHMENT_MODE = 0o644;
 
-/** How long a written file's name may be, which a tar header holds whole (`vercel-sandbox-api.ts`'s `tarOf`). */
+/** How long a written file's name may be, which a tar header holds whole. */
 const ATTACHMENT_NAME_CHARS = 80;
 
 /** The developer's line as the runner takes it, under our id for it. */

@@ -19,8 +19,8 @@
 import { INSTALLED_SKILLS } from "@repo/agent-runner/protocol";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SKILL_KEY } from "@repo/features/skill-file";
+import type { SandboxSessionApi } from "@repo/sandbox";
 import type { AgentSkill } from "../agent-runtime/skills.js";
-import type { SandboxSessionApi } from "../vercel-sandbox-api.js";
 
 /** One file as the sandbox's API writes it. */
 type SandboxFile = Parameters<SandboxSessionApi["writeFiles"]>[0][number];

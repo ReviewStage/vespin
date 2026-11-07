@@ -24,8 +24,8 @@
  */
 
 import { PLAYWRIGHT_PIN, SANDBOX_BROWSER_PIN } from "@repo/agent-runner/pins";
+import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
-import type { CommandAsk, CommandRun } from "../vercel-sandbox-api.js";
 
 export const SANDBOX_BROWSER = {
   /** The browser's DevTools port on the sandbox's loopback: apart from the 9222 an agent's own Chromium would take, and Node's inspector's 9229. */

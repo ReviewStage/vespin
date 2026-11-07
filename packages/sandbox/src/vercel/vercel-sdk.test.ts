@@ -1,27 +1,25 @@
 /**
- * vercel-sandbox-api.test.ts -- what a call of Vercel Sandbox through `@vercel/sandbox` says of a failure, against a scripted fake of Vercel behind the SDK's `fetch`: the call, its status, and Vercel's error or the cause's, every token-shaped run redacted; and what this module decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it with the 409, each list asks the query Vercel takes, and a sandbox or a snapshot already gone reads as gone.
+ * vercel-sdk.test.ts -- what a call of Vercel Sandbox through `@vercel/sandbox` says of a failure, against a scripted fake of Vercel behind the SDK's `fetch`: the call, its status, and Vercel's error or the cause's, every token-shaped run redacted; and what this module decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it with the 409, each list asks the query Vercel takes, and a sandbox or a snapshot already gone reads as gone.
  */
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Effect } from "effect";
-import { runnerSandboxApi } from "../testing/runner-sandbox-fake.js";
 import {
   fixtureToken,
   sandboxDeleted,
   sandboxesListed,
   sandboxFetchOver,
   sandboxFound,
-} from "../testing/vercel-sandbox-fake.js";
+} from "./testing/vercel-sandbox-fake.js";
+import { vercelSandboxApi } from "./vercel-sdk.js";
 import {
-  COMMAND_GONE,
   SANDBOX_CALL,
   type SandboxCall,
   type SandboxUnavailable,
   snapshotGone,
   type VercelSandboxApi,
-  vercelSandboxApi,
-} from "./vercel-sandbox-api.js";
+} from "./vocabulary.js";
 
 const SESSION = "sbs_fixture";
 const NAME = "luke-native-fixture";
@@ -56,7 +54,7 @@ const CALLS: readonly {
   { call: SANDBOX_CALL.CREATE, ask: (api) => api.create(CREATE_ASK) },
   { call: SANDBOX_CALL.TAGS, ask: (api) => api.updateTags(NAME, { sessionId: "s" }) },
   { call: SANDBOX_CALL.GET, ask: (api) => api.getNamed(NAME) },
-  { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("session_fixture") },
+  { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("sessionId", "session_fixture") },
 ];
 
 type Responder = (url: string, init: RequestInit) => Response | Promise<Response>;
@@ -146,7 +144,7 @@ it.effect("a token that could not be read names the call and why", () =>
     const unread = yield* apiOver(refusedWith(400), () =>
       Promise.reject(new Error("the token endpoint was down")),
     );
-    const failure = yield* Effect.flip(unread.listTagged("session_fixture"));
+    const failure = yield* Effect.flip(unread.listTagged("sessionId", "session_fixture"));
     assert.equal(failure.call, SANDBOX_CALL.LIST);
     assert.equal(failure.detail, "Error: the token endpoint was down");
 
@@ -290,91 +288,5 @@ it.effect(
       assert.equal(failure.status, 400);
       assert.equal(failure.detail, `${REFUSAL.code}: ${REFUSAL.message}`);
       assert.equal(failure.message.includes(fixtureToken()), false);
-    }),
-);
-
-/** A sandbox opened in the runner's fake, and its session held, with a detached command started in it. */
-const commandStarted = Effect.gen(function* () {
-  const fake = runnerSandboxApi();
-  const api = yield* vercelSandboxApi(async () => fixtureToken()).pipe(Effect.provide(fake.layer));
-  const opened = yield* api.create({ ...CREATE_ASK, env: {} });
-  const ref = { name: opened.name, sessionId: opened.currentSessionId };
-  const session = yield* api.session(ref);
-  const commandId = yield* session.start({ command: "node", args: ["runner.js"], sudo: false });
-  const command = fake.commands.find((each) => each.id === commandId);
-  assert.ok(command !== undefined);
-  return { fake, api, ref, session, command };
-});
-
-it.effect(
-  "a session its sandbox no longer runs answers as one Vercel no longer holds: a stop counts as stopped, a command reads as gone, and anything else is not found",
-  () =>
-    Effect.gen(function* () {
-      const { fake, api, ref, command } = yield* commandStarted;
-      const sandbox = fake.sandboxes[0];
-      assert.ok(sandbox !== undefined);
-      sandbox.status = "stopped";
-      yield* api.resume(ref.name);
-
-      const ended = yield* api.session(ref);
-
-      yield* ended.stop();
-      assert.equal(yield* ended.commandExit(command.id), COMMAND_GONE);
-      yield* ended.kill(command.id);
-      const ran = yield* Effect.flip(ended.run({ command: "true", args: [] }));
-      assert.equal(ran.status, 404);
-      assert.equal(sandbox.status, "running");
-    }),
-);
-
-it.effect(
-  "a session that stopped while its sandbox still names it, which Vercel answers 410 sandbox_stopped, reads as ended: its command is gone and a kill of it is done",
-  () =>
-    Effect.gen(function* () {
-      const { fake, api, ref, command } = yield* commandStarted;
-      const sandbox = fake.sandboxes[0];
-      assert.ok(sandbox !== undefined);
-      sandbox.status = "stopped";
-
-      const stopped = yield* api.session(ref);
-
-      assert.equal(yield* stopped.commandExit(command.id), COMMAND_GONE);
-      yield* stopped.kill(command.id);
-      const ran = yield* Effect.flip(stopped.run({ command: "true", args: [] }));
-      assert.equal(ran.status, 410);
-    }),
-);
-
-it.effect(
-  "a command's exit reads as Vercel answers a read that waits for it: none while it runs, its code once it exited, and gone once Vercel no longer knows it",
-  () =>
-    Effect.gen(function* () {
-      const { session, command } = yield* commandStarted;
-
-      const running = yield* session.commandExit(command.id);
-      command.exitCode = 0;
-      const exited = yield* session.commandExit(command.id);
-
-      assert.equal(running, null);
-      assert.equal(exited, 0);
-      assert.equal(yield* session.commandExit("cmd_unknown"), COMMAND_GONE);
-    }),
-);
-
-it.effect(
-  "a command that died is said by the tail of its stderr, every secret it was handed and every token-shaped run redacted, and one that printed nothing by none",
-  () =>
-    Effect.gen(function* () {
-      const { session, command } = yield* commandStarted;
-      command.exitCode = 1;
-      command.stderr = `agent-runner: RunnerFailed: was sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123\nbearer was a/b+c\n`;
-      const silent = yield* commandStarted;
-      silent.command.exitCode = 1;
-
-      assert.equal(
-        yield* session.commandStderrTail(command.id, ["a/b+c"]),
-        "agent-runner: RunnerFailed: was [redacted] bearer was [redacted]",
-      );
-      assert.equal(yield* silent.session.commandStderrTail(silent.command.id), undefined);
     }),
 );

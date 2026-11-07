@@ -80,7 +80,7 @@
   "src/agents/session-sandboxes.test.ts": 110,
   "src/agents/terminal/agent-sandbox.test.ts": 119,
   "src/agents/terminal/tmux.test.ts": 12,
-  "src/agents/vercel-sandbox-api.test.ts": 99,
+  "src/agents/vercel-sandbox-session.test.ts": 99,
   "src/auth/auth-account-linking.test.ts": 2696,
   "src/auth/auth-database.test.ts": 3874,
   "src/auth/auth-deployment.test.ts": 82,

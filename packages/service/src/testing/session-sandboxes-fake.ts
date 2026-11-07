@@ -6,10 +6,10 @@
  * keep-alive, which no archive asks, dies.
  */
 
+import type { SandboxUnavailable } from "@repo/sandbox";
 import { Effect, Layer, Queue } from "effect";
 import type { SandboxStopReach } from "../agents/session-sandboxes.js";
 import { SessionSandboxes } from "../agents/session-sandboxes.js";
-import type { SandboxUnavailable } from "../agents/vercel-sandbox-api.js";
 
 /** The stops asked of the sandboxes, each session named in the order the stops were asked, and the layer that answers them. */
 export function scriptedSessionSandboxes(

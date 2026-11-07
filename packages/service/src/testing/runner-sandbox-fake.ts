@@ -3,7 +3,7 @@
  *
  * It keeps every sandbox, command, stdin, upload, network policy, and run it
  * was asked for, opens and resumes sandboxes as Vercel does, and answers a
- * list and a stop only where Vercel would (`vercel-sandbox-fake.ts`). A
+ * list and a stop only where Vercel would (`@repo/sandbox/testing`). A
  * command `@vercel/sandbox` starts as a user (`asUser`) is kept as that user's
  * command, its environment read back off `sudo`'s command line, where the SDK
  * writes it.
@@ -20,11 +20,7 @@ import { gunzipSync } from "node:zlib";
 import { RUNNER_ENV, type RunnerConfig } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
 import { runnerLine } from "@repo/database/schemas/runner-line";
-import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { Effect, Layer } from "effect";
-import { agentTag } from "../agents/machine/vercel-machine.js";
-import type { NetworkPolicy } from "../agents/vercel-sandbox-api.js";
+import type { NetworkPolicy } from "@repo/sandbox";
 import {
   commandAnswered,
   commandLogsStreamed,
@@ -38,7 +34,11 @@ import {
   sandboxTagsRefusal,
   sessionAnswered,
   snapshotOf,
-} from "./vercel-sandbox-fake.js";
+} from "@repo/sandbox/testing";
+import { fakeHttpClientLayer } from "@repo/wire/testing";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { Effect, Layer } from "effect";
+import { agentTag } from "../agents/machine/vercel-machine.js";
 
 const TEAM = "team_fixture";
 const PROJECT = "prj_fixture";

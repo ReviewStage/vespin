@@ -36,6 +36,13 @@
  */
 
 import { createHash } from "node:crypto";
+import {
+  type ListedSandbox,
+  type OpenedSandbox,
+  SANDBOX_STATUS,
+  SandboxUnavailable,
+  type VercelSandboxApi,
+} from "@repo/sandbox";
 import { Clock, Duration, Effect, Option, type Redacted } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { CODER } from "./coder-host/bounds.js";
@@ -49,13 +56,6 @@ import {
   runInSandbox,
   snapshotRecordOf,
 } from "./repository-shell.js";
-import {
-  type ListedSandbox,
-  type OpenedSandbox,
-  SANDBOX_STATUS,
-  SandboxUnavailable,
-  type VercelSandboxApi,
-} from "./vercel-sandbox-api.js";
 
 export const BASE_SNAPSHOT = {
   /** Every base snapshot's sandbox is named with this, its digest after it. */

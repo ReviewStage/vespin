@@ -19,17 +19,16 @@
 
 import { createHash } from "node:crypto";
 import { AGENT_USER, CODEX_PIN } from "@repo/agent-runner/pins";
-import { Duration, Effect, Schedule } from "effect";
-import { afterResponse } from "../http/after-response.js";
-import { AgentImage } from "./coder-host/agent-image.js";
-import { CODER } from "./coder-host/bounds.js";
 import {
   IMAGE_NOT_READY,
   type OpenedSandbox,
   SandboxUnavailable,
-  SESSION_TAG,
   type VercelSandboxApi,
-} from "./vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { Duration, Effect, Schedule } from "effect";
+import { afterResponse } from "../http/after-response.js";
+import { AgentImage } from "./coder-host/agent-image.js";
+import { CODER } from "./coder-host/bounds.js";
 
 /**
  * What a sandbox we open is named as, beside a digest of its session's id
@@ -44,6 +43,9 @@ export const SANDBOX_NAME = "agent-sandbox-";
  * recorded in our store instead (`@repo/database/models/agent-runner-record`).
  */
 export const AGENT_TAG = "agentId";
+
+/** The tag every session's sandbox carries, its value the session's id. */
+export const SESSION_TAG = "sessionId";
 
 /** The variables the sandbox opens with. */
 export const SANDBOX_ENV = { NO_COLOR: "1", GH_STACK_NO_UPDATE_NOTIFIER: "1" } as const;

@@ -4,16 +4,16 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
-import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { Effect, Layer } from "effect";
-import type { HttpClient } from "effect/http";
 import {
   commandRunStreamed,
   sandboxesListed,
   sandboxFetchOver,
   sandboxFound,
   sandboxListRefusal,
-} from "../../testing/vercel-sandbox-fake.js";
+} from "@repo/sandbox/testing";
+import { fakeHttpClientLayer } from "@repo/wire/testing";
+import { Effect, Layer } from "effect";
+import type { HttpClient } from "effect/http";
 import { vercelMachineLayer } from "../machine/vercel-machine.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { agentSandboxDoors, SANDBOX_DOOR_MAX_BYTES } from "./sandbox-door.js";

@@ -10,13 +10,13 @@
  * entry may no longer be running by the time it is read.
  */
 
-import { Effect, Result } from "effect";
 import {
   LIST_ORDER,
   type ListedSandbox,
   type ListOrder,
   type VercelSandboxApi,
-} from "../agents/vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { Effect, Result } from "effect";
 
 /** How long an end of the list is listed from before the other end is: a sweep runs each minute, and the order alternates. */
 const ORDER_PERIOD_MS = 60_000;

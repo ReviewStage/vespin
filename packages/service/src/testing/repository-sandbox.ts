@@ -13,6 +13,7 @@
  */
 
 import { CHECKOUT_IDENTITY_VARIABLE } from "@repo/features/checkout-identity";
+import { type NetworkPolicy, OPEN_INTERNET_POLICY } from "@repo/sandbox";
 import { Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import type {
@@ -21,7 +22,6 @@ import type {
   SandboxRunOptions,
 } from "../agents/repository-shell.js";
 import { composePolicy, type FirewallSources } from "../agents/sandbox-firewall.js";
-import { type NetworkPolicy, OPEN_INTERNET_POLICY } from "../agents/vercel-sandbox-api.js";
 
 /** One run as the sandbox saw it. */
 interface SandboxRun {

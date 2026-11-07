@@ -897,7 +897,8 @@ it.layer(getTestDB())("the browser tool", (it) => {
           agentBrowserOver(
             {
               ...api,
-              listTagged: (session) => (opened ? api.listTagged(session) : Effect.succeed([])),
+              listTagged: (tag, session) =>
+                opened ? api.listTagged(tag, session) : Effect.succeed([]),
             },
             fakeBridgePty(peer),
             FAKE_IMAGE,

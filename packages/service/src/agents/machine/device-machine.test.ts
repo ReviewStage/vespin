@@ -45,6 +45,7 @@ import {
 } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
+import { SandboxUnavailable } from "@repo/sandbox";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect";
@@ -78,7 +79,6 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
-import { SandboxUnavailable } from "../vercel-sandbox-api.js";
 import { LaunchRefused } from "./agent-machine.js";
 import { deviceMachine } from "./device-machine.js";
 

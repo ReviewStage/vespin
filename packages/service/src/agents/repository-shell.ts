@@ -4,12 +4,12 @@ import {
   checkoutIdentityEnv,
 } from "@repo/features/checkout-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import type { SandboxUnavailable } from "@repo/sandbox";
 import { Data, Duration, Effect, Option, type Redacted, Tracer } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import type { FirewallSources } from "./sandbox-firewall.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
-import type { SandboxUnavailable } from "./vercel-sandbox-api.js";
 
 /**
  * repository-shell.ts -- an agent's checkout of the task's GitHub repository in its session's sandbox: the clone, its refresh, and the commit identity set in it.

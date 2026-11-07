@@ -48,7 +48,7 @@
  * sandbox's default user runs. A repository's command is
  * run in the running session and waited on, its environment named by `env`
  * on the command line rather than by the API, as our other commands are
- * run (`../vercel-sandbox-api.ts`).
+ * run (`@repo/sandbox`).
  *
  * A place is found again by the session's tag, and its runner by the record
  * a launch writes in our store under the agent's runner lease
@@ -91,6 +91,21 @@ import { type Agent, hasRepository, type WithRepository } from "@repo/database/m
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import {
+  type ListedSandbox,
+  NOT_FOUND_STATUS,
+  type OidcTokenRead,
+  type OpenedSandbox,
+  SANDBOX_STATUS,
+  type SandboxSessionApi,
+  SandboxUnavailable,
+  type SessionRef,
+  sessionOnFirstUse,
+  snapshotGone,
+  UP_STATUSES,
+  type VercelSandboxApi,
+  vercelSandboxApi,
+} from "@repo/sandbox";
 import { Brand, Context, Duration, Effect, Layer, Option, Redacted, Result, Tracer } from "effect";
 import type { HttpClient } from "effect/http";
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
@@ -101,6 +116,7 @@ import {
   agentSandboxTags,
   openAgentSandbox,
   SANDBOX_ENV,
+  SESSION_TAG,
 } from "../agent-sandbox-open.js";
 import {
   BASE_STATE,
@@ -145,21 +161,6 @@ import {
   placeholderSwap,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
-import {
-  type ListedSandbox,
-  NOT_FOUND_STATUS,
-  type OidcTokenRead,
-  type OpenedSandbox,
-  SANDBOX_STATUS,
-  type SandboxSessionApi,
-  SandboxUnavailable,
-  type SessionRef,
-  sessionOnFirstUse,
-  snapshotGone,
-  UP_STATUSES,
-  type VercelSandboxApi,
-  vercelSandboxApi,
-} from "../vercel-sandbox-api.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -667,7 +668,7 @@ export function vercelLifecycle(api: VercelSandboxApi): MachineLifecycle {
   /** The running session of the sandbox tagged with the session; unavailable where none is up. */
   const runningSession = (sessionId: string) =>
     Effect.gen(function* () {
-      const sandboxes = yield* api.listTagged(sessionId);
+      const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
       const up = sandboxes.find(
         (sandbox) => sandbox.status !== undefined && UP_STATUSES.has(sandbox.status),
       );
@@ -678,7 +679,7 @@ export function vercelLifecycle(api: VercelSandboxApi): MachineLifecycle {
   return {
     findPlaces: (userId, session) =>
       Effect.map(
-        Effect.all([api.listTagged(session), readAgentRunnerRecord(userId, session)], {
+        Effect.all([api.listTagged(SESSION_TAG, session), readAgentRunnerRecord(userId, session)], {
           concurrency: "unbounded",
         }),
         ([sandboxes, record]) =>

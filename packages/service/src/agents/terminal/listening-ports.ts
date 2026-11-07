@@ -11,8 +11,8 @@
  * root.
  */
 
+import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { SANDBOX_BROWSER } from "../browser/sandbox-browser.js";
-import type { CommandAsk, CommandRun } from "../vercel-sandbox-api.js";
 import { PORT_SHARE } from "./port-share.js";
 
 /** The kernel's TCP socket tables, IPv4's and IPv6's; a kernel without IPv6 has no second one, and `cat` prints the first alone. */

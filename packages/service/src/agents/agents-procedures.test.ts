@@ -17,6 +17,7 @@ import {
   type SandboxState,
   type TerminalSummary,
 } from "@repo/features/terminal-wire";
+import { SandboxUnavailable } from "@repo/sandbox";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -33,7 +34,6 @@ import { agentPortsProcedures } from "./agent-ports-procedures.js";
 import { agentsProcedures } from "./agents-procedures.js";
 import { type SandboxStopReach, SessionSandboxes } from "./session-sandboxes.js";
 import { AgentSandbox, type AgentSandboxService, SHELL_REFUSAL } from "./terminal/agent-sandbox.js";
-import { SandboxUnavailable } from "./vercel-sandbox-api.js";
 
 /**
  * A coding agent's terminals as its tab reaches them, through the hosted

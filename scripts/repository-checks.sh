@@ -209,6 +209,24 @@ if [[ -n "$undeclared_web_packages" ]]; then
     exit 1
 fi
 
+# Every call of a sandbox goes through `@repo/sandbox`, and its provider's SDK
+# through `packages/sandbox/src/vercel/` alone, so changing providers changes
+# that package and nothing else. The package itself reaches nothing of the
+# repository but `@repo/wire`, so it can never learn what an agent or a
+# session is. `tools/claude-code-probe`, a developer's command line, drives a
+# sandbox through the SDK by hand and is left out.
+sandbox_sdk_escapes=$(grep -rnE --include='*.ts' --include='*.tsx' --include='*.mjs' --include='package.json' \
+    --exclude-dir=node_modules '"@vercel/(sandbox|oidc)"' \
+    "$APP_REPO_ROOT/apps" "$APP_REPO_ROOT/packages" "$APP_REPO_ROOT/tools" |
+    grep -vE "^$APP_REPO_ROOT/(packages/sandbox/src/vercel/|packages/sandbox/package\.json:|tools/claude-code-probe/)" || true)
+sandbox_repository_reaches=$(grep -rnoE --include='*.ts' '(from|import) "@repo/[a-z-]+' \
+    "$APP_REPO_ROOT/packages/sandbox/src" | grep -v '"@repo/wire$' || true)
+if [[ -n "$sandbox_sdk_escapes" || -n "$sandbox_repository_reaches" ]]; then
+    printf 'error: only packages/sandbox/src/vercel/ names @vercel/sandbox or @vercel/oidc, and @repo/sandbox reaches no workspace package but @repo/wire:\n%s%s\n' \
+        "${sandbox_sdk_escapes:+$sandbox_sdk_escapes$'\n'}" "$sandbox_repository_reaches" >&2
+    exit 1
+fi
+
 # The renderer is a sandboxed browser context: it reaches the main process
 # through the preload bridge alone, so `@repo/host/bridge`, `#shared/messages/*`,
 # and the packages' own wire vocabularies are its widest doors. A `#main/` import compiles and bundles happily and then fails in the

@@ -16,6 +16,7 @@ export default defineConfig({
       "packages/credentials",
       "packages/database",
       "packages/service",
+      "packages/sandbox",
       "apps/desktop",
       "apps/web",
       "apps/host",

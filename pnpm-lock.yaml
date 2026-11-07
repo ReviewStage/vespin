@@ -52,6 +52,9 @@ catalogs:
     '@types/node':
       specifier: 26.2.0
       version: 26.2.0
+    '@vercel/oidc':
+      specifier: 4.0.0
+      version: 4.0.0
     '@vercel/sandbox':
       specifier: 3.9.1
       version: 3.9.1
@@ -419,6 +422,9 @@ importers:
       '@repo/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@repo/sandbox':
+        specifier: workspace:*
+        version: link:../../packages/sandbox
       '@repo/service':
         specifier: workspace:*
         version: link:../../packages/service
@@ -1017,6 +1023,40 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/browser-playwright@5.0.0)(@vitest/ui@5.0.0)(jsdom@30.0.1)(vite@7.3.1)
 
+  packages/sandbox:
+    dependencies:
+      '@repo/wire':
+        specifier: workspace:*
+        version: link:../wire
+      '@vercel/oidc':
+        specifier: 'catalog:'
+        version: 4.0.0
+      '@vercel/sandbox':
+        specifier: 'catalog:'
+        version: 3.9.1
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.4
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.3
+    devDependencies:
+      '@effect/vitest':
+        specifier: 'catalog:'
+        version: 4.0.4(effect@4.0.4)(vitest@5.0.0)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.2.0
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/browser-playwright@5.0.0)(@vitest/ui@5.0.0)(jsdom@30.0.1)(vite@7.3.1)
+
   packages/service:
     dependencies:
       '@ai-sdk/anthropic':
@@ -1070,6 +1110,9 @@ importers:
       '@repo/runtime':
         specifier: workspace:*
         version: link:../runtime
+      '@repo/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
       '@repo/settings':
         specifier: workspace:*
         version: link:../settings
@@ -1088,15 +1131,9 @@ importers:
       '@vercel/functions':
         specifier: 3.10.1
         version: 3.10.1(ws@8.21.3)
-      '@vercel/oidc':
-        specifier: 4.0.0
-        version: 4.0.0
       '@vercel/queue':
         specifier: 0.11.0
         version: 0.11.0(@opentelemetry/api@1.9.1)
-      '@vercel/sandbox':
-        specifier: 'catalog:'
-        version: 3.9.1
       '@vercel/schedules':
         specifier: 0.0.3
         version: 0.0.3

@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { getTestDB } from "@repo/database/testing";
-import { Duration, Effect, Layer } from "effect";
-import { TestClock } from "effect/testing";
-import { afterEach, vi } from "vitest";
+import { SandboxUnavailable } from "@repo/sandbox";
 import {
   fixtureToken,
   sandboxesListed,
@@ -12,10 +10,12 @@ import {
   sandboxListRefusal,
   sandboxStopRefusal,
   sessionAnswered,
-} from "../testing/vercel-sandbox-fake.js";
+} from "@repo/sandbox/testing";
+import { Duration, Effect, Layer } from "effect";
+import { TestClock } from "effect/testing";
+import { afterEach, vi } from "vitest";
 import { CODER } from "./coder-host/bounds.js";
 import { SessionSandboxes, sessionSandboxesLayer } from "./session-sandboxes.js";
-import { SandboxUnavailable } from "./vercel-sandbox-api.js";
 
 /**
  * A session's sandboxes stopped through `@vercel/sandbox`, as the deployment

@@ -16,12 +16,12 @@
  * a file larger than any is refused as larger rather than read whole.
  */
 
+import { SandboxUnavailable } from "@repo/sandbox";
 import { Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
-import { SandboxUnavailable } from "../vercel-sandbox-api.js";
 
 /** The most of one file a door reads: past every bound a tool holds a file to, a page's HTML and a kept picture among them. */
 export const SANDBOX_DOOR_MAX_BYTES = 8 * 1024 * 1024;
