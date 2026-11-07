@@ -3504,6 +3504,88 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
   assert.equal(asked.length, 3, "nothing is asked once the ask is down");
 });
 
+/** The task the doors below go to, listed beside the open one in the open one's workspace. */
+const BILLING = row("billing", 2);
+
+/** The window on the Inbox over the open task, as the doors below are pressed from it. */
+async function onInbox() {
+  const tab = mount(
+    {
+      shown: true,
+      tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+    },
+    {
+      [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
+      [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(),
+    },
+  );
+  await settle();
+  act(() => tab.control().inboxView.onOpen());
+  await settle();
+  return tab;
+}
+
+/** What a press leaves the window on: its address and steps, the task bound and asked for, the place standing, and the tab shown. */
+function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
+  const control = tab.control();
+  return {
+    at: tab.at(),
+    entries: tab.entries(),
+    bound: control.boundFor,
+    asked: opensAsked(tab.payloads),
+    inbox: control.inboxView.open,
+    agentPage: control.agentView.agentId,
+    tab: control.mainTabs.tab,
+    pin: control.chosenPin,
+  };
+}
+
+test.each<[string, (control: TasksControl) => void]>([
+  ["a list's press", (control) => control.onSelect(BILLING.id)],
+  [
+    "a row gone back to, from the sidebar, ⌘K, or Recent",
+    (control) => control.onResume(BILLING.id),
+  ],
+  ["the tab switcher's task", (control) => control.onRestoreTask(BILLING.id)],
+  ["a task named by the Inbox or a chip", (control) => control.onShowTask(BILLING.id)],
+  ["Home", (control) => control.onGoHome()],
+  ["leaving the task", (control) => control.onLeaveTask()],
+  ["an agent's page", (control) => control.agentView.onOpen(AGENT_ID)],
+  [
+    "a pinned tab",
+    (control) => control.onOpenPinnedTab({ task: BILLING.id, tab: PULLS, label: "#1", at: 1 }),
+  ],
+])(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press) => {
+    const unasked = await onInbox();
+    act(() => press(unasked.control()));
+    await settle();
+    const arrived = windowOf(unasked);
+    closeWindow();
+
+    const tab = await onInbox();
+    const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
+    act(() => void tab.control().placeLeave.stand((leave, stay) => asks.push({ leave, stay })));
+    await settle();
+    const stood = windowOf(tab);
+    act(() => press(tab.control()));
+    await settle();
+    act(() => asks[0]?.stay());
+    await settle();
+    const kept = windowOf(tab);
+    act(() => press(tab.control()));
+    await settle();
+    act(() => asks[1]?.leave());
+    await settle();
+
+    assert.equal(asks.length, 2, "each press asks once");
+    assert.deepEqual(kept, stood, "Cancel changes nothing");
+    assert.notDeepEqual(arrived, stood, "the press moves the window");
+    assert.deepEqual(windowOf(tab), arrived);
+  },
+);
+
 test("the Board stands in the plan's place over the Inbox, which it puts away", () => {
   const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
   act(() => tab.control().inboxView.onOpen());

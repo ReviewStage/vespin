@@ -31,6 +31,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { type PlaceLeave, usePlaceLeave } from "../places/place-leave.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
@@ -573,42 +574,47 @@ test("Home, pressed or by its chord from Settings, brings the Tasks tab forward 
   assert.equal(home, 2);
 });
 
-test("a sidebar press over a page holding unsaved work asks once, and Leave both leaves the routed place standing and opens the row", () => {
-  // As the window's guard does, the page holds one question, which a later ask takes the place of.
-  let asked: (() => void) | undefined;
-  let passing = false;
-  const guard: TasksControl["placeLeave"]["transitionalLeaveFirst"] =
-    (leave) =>
-    (...args) => {
-      if (passing) {
-        leave(...args);
-        return;
-      }
-      asked = () => {
-        passing = true;
-        try {
-          leave(...args);
-        } finally {
-          passing = false;
-        }
-      };
-    };
-  const went: string[] = [];
-  const control = tasksControl();
-  mount(
-    false,
+test("a sidebar row over a page holding unsaved work moves the window only once Leave is pressed, and brings the Tasks tab forward as it lands", async () => {
+  const tabs: PanelTab[] = [];
+  const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
+  let stand: PlaceLeave["stand"] | undefined;
+  function Shell() {
+    const placeLeave = usePlaceLeave();
+    stand = placeLeave.stand;
+    // Home is the router's move there, as the window's own Home door is.
+    const tasks = tasksControl({ placeLeave, onGoHome: () => routed().go(SHELL_AT.PLACES) });
+    return createElement(
+      DesktopShell,
+      shellProps(tasks, PANEL_TAB.TASKS, (tab) => tabs.push(tab), {}),
+    );
+  }
+  const container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  act(() => root?.render(withQueryClient(underRouter(createElement(Shell), SHELL_AT.AUTOMATIONS))));
+  await act(() => routed().settled());
+  act(() => void stand?.((leave, stay) => asks.push({ leave, stay })));
+  const at = () => routed().router.history.location.pathname;
+
+  act(() => homeRow(container).click());
+  await act(() => Promise.resolve());
+  act(() => asks[0]?.stay());
+  await act(() => Promise.resolve());
+  const kept = { at: at(), tabs: [...tabs] };
+  act(() => homeRow(container).click());
+  await act(() => Promise.resolve());
+  act(() => asks[1]?.leave());
+  await act(() => routed().settled());
+
+  assert.deepEqual(kept, { at: SHELL_AT.AUTOMATIONS, tabs: [] }, "Cancel changes nothing");
+  assert.deepEqual(
+    { at: at(), tabs, asked: asks.length },
     {
-      placeLeave: { ...control.placeLeave, transitionalLeaveFirst: guard },
-      onGoHome: guard(() => went.push("home")),
+      at: SHELL_AT.PLACES,
+      tabs: [PANEL_TAB.TASKS],
+      asked: 2,
     },
-    PANEL_TAB.TASKS,
-    guard((tab: PanelTab) => went.push(tab)),
   );
-
-  act(() => homeRow(document.body).click());
-  act(() => asked?.());
-
-  assert.deepEqual(went, [PANEL_TAB.TASKS, "home"]);
 });
 
 const ACME: Workspace = {

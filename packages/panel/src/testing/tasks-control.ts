@@ -387,6 +387,10 @@ export function agentHoldingsOf(
 export const NO_LEAVE_ASK: PlaceLeave = {
   stand: () => () => undefined,
   pass: (leave) => leave(),
+  arrive: (move, landed) => {
+    move();
+    landed();
+  },
   transitionalLeaveFirst: (leave) => leave,
 };
 

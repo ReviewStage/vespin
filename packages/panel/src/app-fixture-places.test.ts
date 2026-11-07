@@ -25,7 +25,7 @@ import { fakeActPortAnswering, fakeAppBridge, refusedOnPort } from "./testing/ap
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { stateWith } from "./testing/app-state.js";
 import { readAppState, withQueryClient } from "./testing/copy-feedback.js";
-import { windowRouter } from "./testing/window-router.js";
+import { type TestWindowRouter, windowRouter } from "./testing/window-router.js";
 
 /**
  * app-fixture-places.test.ts -- a fixture run, which main hands signed out
@@ -105,15 +105,17 @@ async function settle(): Promise<void> {
  * main's document is read
  * (`window-root.tsx`) and the synthetic tasks have landed (`App`).
  */
-function drawWindow(profile: string): Effect.Effect<void> {
+function drawWindow(profile: string): Effect.Effect<TestWindowRouter> {
   return Effect.gen(function* () {
     handFixtureRun(profile);
     // The document is in the client before the window draws, as the root's `ensureQueryData` leaves it.
     yield* Effect.promise(readAppState);
     yield* Effect.promise(loadTasksFixture);
     root = createRoot(document.body.appendChild(document.createElement("div")));
-    act(() => root?.render(withQueryClient(windowRouter().drawn())));
+    const router = windowRouter();
+    act(() => root?.render(withQueryClient(router.drawn())));
     yield* Effect.promise(settle);
+    return router;
   });
 }
 
@@ -269,5 +271,82 @@ it.effect(
       yield* Effect.promise(settle);
 
       assert.deepEqual([router.history.location.pathname, router.addresses().length], standing);
+    }),
+);
+
+/** The automation's editor the Automations runs profile opens, its name edited, so its page holds unsaved work and asks before it is left. */
+function editedAutomation(): Effect.Effect<TestWindowRouter> {
+  return Effect.gen(function* () {
+    const router = yield* drawWindow(RUN_PROFILE.AUTOMATIONS_RUNS);
+    const name = yield* Effect.promise(() =>
+      vi.waitFor(
+        () =>
+          document.querySelector<HTMLInputElement>("input[aria-label='Automation name']") ??
+          assert.fail("the automation's name stands"),
+      ),
+    );
+    typeInto(name, "Check each deploy, edited");
+    yield* Effect.promise(settle);
+    return router;
+  });
+}
+
+/** The button whose words are `words`, wherever it is drawn. */
+function buttonSaying(words: string): HTMLButtonElement {
+  return (
+    [...document.querySelectorAll("button")].find((button) => button.textContent === words) ??
+    assert.fail(`a button saying ${words} stands`)
+  );
+}
+
+/** Answers the window's ask to leave the edited automation with Leave. */
+function leaveAsked(): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    yield* Effect.promise(() => vi.waitFor(() => buttonSaying("Leave")));
+    act(() => buttonSaying("Leave").click());
+    yield* Effect.promise(settle);
+  });
+}
+
+it.effect(
+  "Home pressed in the sidebar over an edited automation goes Home in one step once Leave is pressed",
+  () =>
+    Effect.gen(function* () {
+      const router = yield* editedAutomation();
+      const before = router.addresses().slice(0, router.at() + 1);
+      const home =
+        [...document.querySelectorAll<HTMLElement>("aside.desktop-sidebar button")].find((row) =>
+          row.textContent?.startsWith("Home"),
+        ) ?? assert.fail("the sidebar's Home row stands");
+      act(() => home.click());
+      yield* leaveAsked();
+
+      assert.deepEqual(router.addresses().slice(0, router.at() + 1), [...before, "/personal"]);
+    }),
+);
+
+it.effect(
+  "a task jumped to with ⌘K over an edited automation opens once Leave is pressed, rather than leaving the window on the automation",
+  () =>
+    Effect.gen(function* () {
+      const router = yield* editedAutomation();
+      const automation = router.addresses()[router.at()];
+      act(() => runAppCommand(APP_COMMAND.COMMAND_PALETTE));
+      const search = yield* Effect.promise(() =>
+        vi.waitFor(
+          () =>
+            document.querySelector<HTMLInputElement>('[role="dialog"] input[role="combobox"]') ??
+            assert.fail("the palette's search stands"),
+        ),
+      );
+      typeInto(search, "Billing export");
+      yield* Effect.promise(settle);
+      act(() => {
+        search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      });
+      yield* leaveAsked();
+
+      assert.notEqual(router.addresses()[router.at()], automation);
+      assert.equal(document.body.textContent?.includes("Unsaved changes"), false);
     }),
 );

@@ -1879,23 +1879,28 @@ function SidebarColumn({
   // forward from Settings as well as choosing; a task's row goes back to work
   // on it, on the agent waiting on the developer where one does (`onResume`).
   // A press for a place of the window's state leaves a routed place standing for it, Settings or Admin (`panel-router.tsx`).
-  // Note that the leave and the door are one way out, asked once, because a page holding unsaved work holds one question, which a second ask would take the place of.
-  const leaveFor = (door: () => void) =>
-    tasks.placeLeave.transitionalLeaveFirst(() => {
-      onTabChange(PANEL_TAB.TASKS);
-      door();
-    })();
-  const openTask = (taskId: string) => leaveFor(() => tasks.onResume(taskId));
-  // Note that New task's card stands over whatever place stands, so it leaves only Settings, which takes the window, for it.
-  const newTaskOver = (door: () => void) => (onTasks ? door() : leaveFor(door));
+  // Note that the row's door moves the window first, which asks while a page holds unsaved work, and the Tasks tab is
+  // brought forward once it lands there, so a move kept at the ask changes nothing (`places/place-leave.ts`'s `arrive`).
+  const arriveFor = (door: () => void) =>
+    tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
+  const openTask = (taskId: string) => arriveFor(() => tasks.onResume(taskId));
+  // Note that New task's card stands over whatever place stands, so it leaves only Settings, which takes the window, for
+  // it; the leave and the card are one way out, asked once, because a page holding unsaved work holds one question.
+  const newTaskOver = (door: () => void) =>
+    onTasks
+      ? door()
+      : tasks.placeLeave.transitionalLeaveFirst(() => {
+          onTabChange(PANEL_TAB.TASKS);
+          door();
+        })();
   const newTask = () => newTaskOver(() => tasks.onNewTask());
-  const openPinnedTab = (pin: SidebarPin) => leaveFor(() => tasks.onOpenPinnedTab(pin));
+  const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
   const openInbox = () => tasks.inboxView.onOpen();
   const openBoard = () => tasks.boardView.onOpen();
   const openAutomations = () => tasks.automationsView.onOpen();
   const openAdmin = () => tasks.adminView.onOpen();
-  const goHome = () => leaveFor(() => tasks.onGoHome());
+  const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
   // composer is on it, so its row draws no Draft pencil for the words shown there.
   const atHome = onTasks && tasks.atHome;
@@ -1925,7 +1930,7 @@ function SidebarColumn({
   const agentShown = onTasks && !inAdmin ? tasks.agentView.agentId : undefined;
   const currentRow = (row: TaskRow) =>
     row.kind === TASK_ROW.TASK ? current(row.task.id) : row.agent.id === agentShown;
-  const openAgent = (agentId: string) => leaveFor(() => tasks.agentView.onOpen(agentId));
+  const openAgent = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   // The list is the chosen workspace's; the unread marks above read every task.
   const { listed: listedRows, listedAgents } = tasks;
   const pinned = tasks.listed.tasks.filter((task) => task.pinnedAt !== undefined);

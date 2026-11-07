@@ -628,6 +628,10 @@ test("a screen picked past unsaved work is restored only once the leave is confi
   const guarded = {
     stand: () => () => undefined,
     pass: (leave: () => void) => leave(),
+    arrive: (move: () => void, landed: () => void) => {
+      move();
+      landed();
+    },
     transitionalLeaveFirst:
       <Args extends readonly unknown[]>(leave: (...args: Args) => void) =>
       (...args: Args) =>

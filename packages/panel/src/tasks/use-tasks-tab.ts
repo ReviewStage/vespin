@@ -2276,11 +2276,12 @@ export function useTasksTab(input: {
     input.place.inTaskPlace;
   // Stands the own place of `taskId`, where a door opening it does, answering whether the window moved: not where it
   // stands already, read as the router stands at the call. Note that a fixture run binds its task for good, so its task's
-  // place stands for any, and Home where it binds none.
+  // place stands for any, and Home where it binds none. A door that leaves whatever place stands, `over` one standing
+  // beside the task's place too, stands it from there as well, as the sidebar's rows and ⌘K's do.
   // What the link opening now opens on its task's own place, which the window's move there holds (`places/link-places.ts`).
   const linking = useRef<LinkStep | undefined>(undefined);
-  const standTaskPlace = (taskId: string | undefined): boolean => {
-    if (!opensTaskPlace) return false;
+  const standTaskPlace = (taskId: string | undefined, over = false): boolean => {
+    if (!opensTaskPlace && !over) return false;
     const toward = fixture === undefined ? taskId : openTaskId;
     if (toward === undefined) {
       const moved = !input.homeView.open;
@@ -3102,6 +3103,12 @@ export function useTasksTab(input: {
     setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
     select(taskId);
   };
+  // A door to `taskId` goes to its own place first, `over` a place standing beside it too, and does the rest of what it
+  // does once it lands there, so a move held at a page's leave ask and kept changes nothing (`places/place-leave.ts`).
+  const arriveAt = (taskId: string, door: () => void, over = false) =>
+    placeLeave.arrive(() => {
+      standTaskPlace(taskId, over);
+    }, door);
   // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
   // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
@@ -3274,10 +3281,11 @@ export function useTasksTab(input: {
   // as an opening start would, on the agent's tab where its agent started,
   // or on the draft saying why where it did not, which the toast says too,
   // so a narrow room does not lay the plan over it as a list's press does.
-  // Note that Open asks first while a page stands unsaved work, as the
-  // sidebar's press does, and reads the opener of the render it is pressed in.
-  const selectNow = useRef(leaveFirst(openUnpinned));
-  selectNow.current = leaveFirst(openUnpinned);
+  // Note that Open goes to the task first, which asks while a page stands
+  // unsaved work, as the sidebar's press does, and reads the opener of the
+  // render it is pressed in.
+  const selectNow = useRef((taskId: string) => arriveAt(taskId, () => openUnpinned(taskId)));
+  selectNow.current = (taskId) => arriveAt(taskId, () => openUnpinned(taskId));
   const sayStarted = (planId: string, agentRan: boolean) =>
     toast({
       replayUnmasked: true,
@@ -4321,12 +4329,11 @@ export function useTasksTab(input: {
     // a narrow room's side panel shut over it; a link names its own place
     // (`openLink`), and a task arrived on by the history is asked for as it arrives (`onArriveTask`), the history standing
     // the panes its step held.
-    onSelect: leaveFirst(selectListed),
-    onResume: leaveFirst(resumeListed),
-    onRestoreTask: leaveFirst((taskId: string) => {
-      setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
-      select(taskId);
-    }),
+    // Each goes to the task's own place first and opens the task once it lands there; one gone back to from the sidebar,
+    // ⌘K, or Home's Recent leaves whatever place stands for it.
+    onSelect: (taskId) => arriveAt(taskId, () => selectListed(taskId)),
+    onResume: (taskId) => arriveAt(taskId, () => resumeListed(taskId), true),
+    onRestoreTask: (taskId) => arriveAt(taskId, () => openUnpinned(taskId)),
     onStandTask: () => {
       if (boundFor !== undefined) standTaskPlace(boundFor);
     },
@@ -4375,7 +4382,8 @@ export function useTasksTab(input: {
     agentView: {
       agentId: agentView?.agentId,
       pages: agentPages,
-      onOpen: leaveFirst((agentId: string) => openAgentPage(agentId)),
+      // An agent's page is only the router's move there, which asks as it goes while a page holds unsaved work.
+      onOpen: (agentId: string) => openAgentPage(agentId),
       onClose: leaveFirst(input.agentView.onClose),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
@@ -4424,7 +4432,7 @@ export function useTasksTab(input: {
     // A version's Open lands where its writer wrote it: an agent's tab.
     onShowSource: leaveFirst(showSource),
     // A task named by an Inbox item or a call's row opens on its agents.
-    onShowTask: leaveFirst(showTaskAgents),
+    onShowTask: (taskId) => arriveAt(taskId, () => showTaskAgents(taskId)),
     // Each ask is its own, so the same section asked twice scrolls twice.
     onShowMention: leaveFirst(showMention),
     onOpenLink: leaveFirst((link: ReadLink) => openLink(link)),
@@ -4451,23 +4459,30 @@ export function useTasksTab(input: {
       },
     ),
     // A pinned tab is in one of the task's columns, so a version history over it gives way as well.
-    onOpenPinnedTab: leaveFirst((pin: SidebarPin) => {
-      const { tab } = pin;
-      setChosen({ pin, over: openTaskId });
-      // A tab pinned on an agent's own page opens that page, its panel on the tab.
-      if ("agent" in pin) {
-        openAgentPage(pin.agent);
-        sidePanel.onShow(pin.agent, pin.tab);
-        return;
-      }
-      showTask(pin.task);
-      if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.AGENT) {
-        showOwnedTab(pin.task, tab);
-        return;
-      }
-      if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-      mainTabs.onShow(pin.task, tab);
-    }),
+    // Note that its holder's place stands first, from wherever the window stands, as the sidebar leaves it, and the tab once it lands.
+    onOpenPinnedTab: (pin: SidebarPin) =>
+      placeLeave.arrive(
+        () => {
+          if ("agent" in pin) openAgentPage(pin.agent);
+          else standTaskPlace(pin.task, true);
+        },
+        () => {
+          const { tab } = pin;
+          setChosen({ pin, over: openTaskId });
+          // A tab pinned on an agent's own page opens that page, its panel on the tab.
+          if ("agent" in pin) {
+            sidePanel.onShow(pin.agent, pin.tab);
+            return;
+          }
+          showTask(pin.task);
+          if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.AGENT) {
+            showOwnedTab(pin.task, tab);
+            return;
+          }
+          if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
+          mainTabs.onShow(pin.task, tab);
+        },
+      ),
     chosenPin: chosenPinOf(chosen, boundFor, agentView?.agentId),
     onReopenClosedTab: reopenable.length === 0 ? undefined : reopenClosedTab,
     repositories,
@@ -4530,8 +4545,9 @@ export function useTasksTab(input: {
       tasks: sidebar,
       onShowMention: leaveFirst(showMention),
     },
-    onLeaveTask: leaveFirst(() => leaveTask()),
-    onGoHome: leaveFirst(goHome),
+    // Leaving the task is going Home, whose arrival lets go of the task (`places/place-binding.ts`).
+    onLeaveTask: () => leaveTask(),
+    onGoHome: goHome,
     onUnbindTask: unbindTask,
     atHome: homeOpen && boundFor === undefined,
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
