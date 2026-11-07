@@ -25,7 +25,7 @@ import { Context, Predicate } from "effect";
 export const SENTRY_TRACES_SAMPLE_RATE = 0.1;
 
 /**
- * How main and each window profile, as Sentry's options name it: every launch,
+ * How each desktop window profiles, as Sentry's options name it: every launch,
  * and only while a kept trace's root span is open, so a profile is kept where
  * its trace is and never on a rate of its own.
  */

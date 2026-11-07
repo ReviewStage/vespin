@@ -146,9 +146,9 @@ token-shaped parts of addresses. Reports name your account by its id only. The
 Service does not send Sentry what was sent to or returned by a model, though an
 error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage. The
-Mac app and the Service send processor profiles of the traces Sentry keeps:
-which of their own functions ran and for how long, never the values they
-handled.
+Service and the Mac app's windows send processor profiles of the traces Sentry
+keeps: which of their own functions ran and for how long, never the values
+they handled.
 
 An agent running in Vespin's cloud also sends Sentry, from its sandbox, the
 timings of its own start: performance traces of its startup steps, in the same

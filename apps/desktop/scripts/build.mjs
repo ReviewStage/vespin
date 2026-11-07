@@ -277,10 +277,7 @@ await Promise.all([
     platform: "node",
     format: "cjs",
     target: "node22",
-    // Note that a native addon is never bundled: Sentry's CPU profiler names
-    // its prebuilt Node addons, none of which main loads, since it is pointed
-    // at the one built for Electron (`telemetry-service.ts`).
-    external: ["electron", "*.node"],
+    external: ["electron"],
     plugins: sentryPlugins(),
     define: {
       PACKAGED_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
