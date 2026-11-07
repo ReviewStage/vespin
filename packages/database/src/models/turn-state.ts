@@ -453,7 +453,7 @@ const findLapsedAgents = SqlSchema.findAll({
   execute: ({ at, limit }) =>
     Database.use((db) =>
       db
-        .selectDistinct({
+        .select({
           id: agentTable.id,
           userId: agentTable.userId,
           conversationId: agentTable.conversationId,
@@ -463,6 +463,15 @@ const findLapsedAgents = SqlSchema.findAll({
         .from(turns)
         .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
         .where(lapsedAt(at))
+        .groupBy(
+          agentTable.id,
+          agentTable.userId,
+          agentTable.conversationId,
+          agentTable.machine,
+          agentTable.deviceId,
+        )
+        // Note that the order is drawn afresh each sweep, so agents one sweep could not reap never hold back every other.
+        .orderBy(sql`random()`)
         .limit(limit),
     ),
 });
@@ -757,7 +766,13 @@ export function pastCap(turn: Pick<LapsedTurn, "startedAt">, at: Date): boolean 
 /** A coding agent with a turn lapsed: its ids, and where its runner lives. */
 export type LapsedAgent = typeof LapsedAgentSchema.Type;
 
-/** The coding agents, among every account's, with a turn still open that stands lapsed at `at`, at most `limit` of them. */
+/**
+ * The coding agents, among every account's, with a turn still open that
+ * stands lapsed at `at`, at most `limit` of them, drawn in an order of their
+ * own each read: so agents a sweep could not reap, their runner lease held
+ * by another call or their reap failed, are read again by a later sweep
+ * without keeping every other lapsed agent waiting behind them.
+ */
 export function lapsedAgents(at: Date, limit: number): TurnStateEffect<readonly LapsedAgent[]> {
   return findLapsedAgents({ at, limit });
 }

@@ -115,9 +115,9 @@ import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
-  type AgentLatestTurn,
   awaitingLinesOfReached,
   hasRepository,
+  lastSettledTurnsOfReached,
   latestTurnsOfReached,
   RUNNING_TURN_STATUSES,
   readAgent,
@@ -546,25 +546,28 @@ function launchFingerprint(
 }
 
 /**
- * Whether the agent's turn ended, and it was last on screen (`warm`),
+ * Whether the agent's last turn ended, and it was last on screen (`warm`),
  * longer ago than the warm window of the machine given
  * (`CODER.RUNNER_WARM`), so we have closed or are closing it, and the runner
  * may soon end itself (`CODER.RUNNER_WARM_SLACK`). Never where the window
- * is zero, whose runner is launched to end at its turn's end. An ended turn
- * with no settle time stamped reads as ended long ago. When it was on
- * screen is read only for a turn that ended past the window.
+ * is zero, whose runner is launched to end at its turn's end; never while a
+ * turn runs; and never before any turn ended, whose runner was launched for
+ * the turn that opened. Note that the window counts from the newest turn to
+ * end, whatever turn stands queued behind it, since no runner took that
+ * turn's line yet, this message's own among them. When it was on screen is
+ * read only for a turn that ended past the window.
  */
 function pastWarmWindow(
   machine: AgentMachineKind,
   agentId: string,
-  turn: AgentLatestTurn | undefined,
+  turnRunning: boolean,
+  lastEndedAt: Date | undefined,
   now: number,
 ) {
   return Effect.gen(function* () {
     const window = Duration.toMillis(CODER.RUNNER_WARM[machine]);
-    if (window === 0 || turn === undefined) return false;
-    if (RUNNING_TURN_STATUSES.has(turn.status)) return false;
-    if (turn.settledAt !== null && now - turn.settledAt.getTime() <= window) return false;
+    if (window === 0 || turnRunning || lastEndedAt === undefined) return false;
+    if (now - lastEndedAt.getTime() <= window) return false;
     const seenAt = yield* readAgentSeenAt(agentId);
     return seenAt === null || now - seenAt.getTime() > window;
   });
@@ -1479,7 +1482,13 @@ export const runnerSessions = <
           // has gone, so a line written to a runner on its way down is lost.
           if (
             restart ||
-            (yield* pastWarmWindow(found.value.machine, agent.id, turn, handedAt)) ||
+            (yield* pastWarmWindow(
+              found.value.machine,
+              agent.id,
+              turnRunning,
+              (yield* lastSettledTurnsOfReached([conversationId])).get(conversationId),
+              handedAt,
+            )) ||
             (yield* stopWritten(machine, running)) ||
             (yield* staleWarm(agent, layout, running.mark, turnRunning))
           ) {
