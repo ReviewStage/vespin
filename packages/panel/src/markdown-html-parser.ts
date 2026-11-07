@@ -15,9 +15,9 @@ import type * as RehypeRaw from "rehype-raw";
  *
  * The parser is not only for raw HTML: it parses every tree again, and that
  * moves bytes in words that hold none, the line breaks between a table's
- * rows among them. So a reply is never drawn without it. `MessageResponse`
- * draws nothing until it has landed, which, started after the panel's first
- * paint, is long before a transcript opens. The load is read through
+ * rows among them. So a reply drawn before it lands is drawn again through
+ * it once it has (`MessageResponse`), since a window reloaded over a
+ * transcript draws the transcript in its first paint. The load is read through
  * TanStack Query (`markdownHtmlParserQuery`), as an import is async data:
  * kept for the window's life once it settles, and asked for by whatever
  * reads it first.
@@ -31,8 +31,7 @@ let parser: typeof RehypeRaw.default | undefined;
  * transform once the parser has landed. Note that the parser is read as each
  * tree is drawn rather than as the plugin is attached, because Streamdown
  * keeps a processor once built for every reply after it. Before it lands the
- * tree passes untouched; nothing draws one then but a reply whose parser
- * failed to load, which is drawn as the words it can be.
+ * tree passes untouched, and the reply is drawn as the words it can be.
  */
 const rehypeRaw: typeof RehypeRaw.default = (options) => (tree, file) =>
   parser === undefined ? tree : parser(options)(tree, file);

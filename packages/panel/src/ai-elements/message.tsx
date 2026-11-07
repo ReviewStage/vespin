@@ -225,15 +225,18 @@ export type MessageResponseProps = Omit<MarkdownProps, "look" | "className"> & {
  * A reply's markdown, drawn as it streams, in `.transcript-markdown`
  * (tasks.css). Note that it is memoised on every prop rather than on the
  * words alone, as the registry has it, because a mode changed under the same
- * words has to be drawn too. Nothing is drawn until the HTML parser has
- * landed (`markdown-html-parser.ts`), because a reply drawn without it is not
- * the reply drawn with it.
+ * words has to be drawn too. The words are drawn at once, and drawn again
+ * through the HTML parser the moment it lands (`markdown-html-parser.ts`):
+ * a window reloaded over a transcript draws it before the parser's chunk has
+ * landed, and words that wait on it stand as empty bubbles meanwhile.
  */
 export const MessageResponse = memo(
   ({ line = false, ...props }: MessageResponseProps): ReactNode => {
-    if (useQuery(markdownHtmlParserQuery).isPending) return null;
+    const parsed = useQuery(markdownHtmlParserQuery).data === true;
+    // Note that the words are drawn anew once the parser lands, because Streamdown keeps each block it has drawn while its words stand.
     return (
       <Markdown
+        key={String(parsed)}
         look={line ? MARKDOWN_LOOK.TRANSCRIPT_LINE : MARKDOWN_LOOK.TRANSCRIPT}
         className="transcript-markdown"
         {...props}
