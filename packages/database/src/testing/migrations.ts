@@ -90,7 +90,7 @@ export function laterRenames(): Effect.Effect<{
   );
 }
 
-/** The tables a later migration dropped: the attachments' old names (`20261021000416_attachment_views_drop`), Chat's (`drop_chat`), the cut features' (`drop_retired_storage`), and the operator's (`operator_drop`). */
+/** The tables a later migration dropped: the attachments' old names (`20261021000416_attachment_views_drop`), Chat's (`drop_chat`), the cut features' (`drop_retired_storage`), the operator's (`operator_drop`), and the native agents' wakeups by both their names (`agent_wakeup_drop`). */
 const DROPPED_TABLES = [
   "chat_attachment",
   "inbox_attachment",
@@ -112,6 +112,8 @@ const DROPPED_TABLES = [
   "voice_session_usage",
   "operator_notice",
   "operator_wake",
+  "coding_agent_wakeup",
+  "agent_wakeup",
 ] as const;
 
 /** The indexes a later migration dropped on a table that stands, by every name each held: the operator's one per member (`operator_drop`). */
