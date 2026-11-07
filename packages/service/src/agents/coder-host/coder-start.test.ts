@@ -11,7 +11,11 @@ import { registerDevice } from "@repo/database/models/device-store";
 import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
-import { storeWriter } from "@repo/database/models/writer";
+import {
+  type QueuedAgentTurn,
+  QueuedTurnListener,
+  storeWriter,
+} from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -24,6 +28,7 @@ import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Result } from "effect";
+import { TestClock } from "effect/testing";
 import { MESSAGE_ROLE, RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
 import { extraRepositoryRefused, HOSTED_REFUSAL } from "../../http/http-effect.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
@@ -48,6 +53,7 @@ import {
   SESSION_SEND_OUTCOME,
   type SessionFailed,
   type SessionMessage,
+  type SessionOpened,
 } from "../sessions/agent-sessions.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
@@ -70,7 +76,7 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 10 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -239,6 +245,46 @@ it.layer(getTestDB())("an agent started in a workspace with no plan", (it) => {
   );
 
   it.effect(
+    "a Start's turn is handed on for its runner only once its open took the first line, and not at all where the open refused it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const queued: QueuedAgentTurn[] = [];
+        const listening = Layer.succeed(QueuedTurnListener, {
+          heard: (turn) => Effect.sync(() => void queued.push(turn)),
+        });
+        const heardAtOpen: number[] = [];
+        const opening = (outcome: SessionOpened) =>
+          Effect.succeed<AgentSessions>({
+            ...fakeAgentSessions().sessions,
+            open: () => Effect.sync(() => (heardAtOpen.push(queued.length), outcome)),
+          });
+
+        const started = yield* startAgent(
+          opening({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: "claude-session" }),
+          owner,
+          workspaceAsk(workspaceId),
+        ).pipe(Effect.provide(Layer.merge(services, listening)));
+        const heardOnce = [...queued];
+        const refused = yield* Effect.result(
+          startAgent(
+            opening({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 503 }),
+            owner,
+            workspaceAsk(workspaceId),
+          ).pipe(Effect.provide(Layer.merge(services, listening))),
+        );
+
+        assert.deepEqual(heardAtOpen, [0, 1]);
+        assert.deepEqual(
+          heardOnce.map((turn) => turn.conversationId),
+          [started.agent.conversationId],
+        );
+        assert.ok(Result.isFailure(refused));
+        assert.equal(queued.length, 1, "a refused open hands no turn on");
+      }),
+  );
+
+  it.effect(
     "a repository the workspace's installation does not reach is refused before the harness is asked",
     () =>
       Effect.gen(function* () {
@@ -267,7 +313,9 @@ it.layer(getTestDB())("an agent started in a workspace with no plan", (it) => {
             Effect.provide(services),
           ),
         );
-        // Each Start is held where it never gets past, and interrupted there.
+        // Each Start is held where it never gets past, and interrupted there. Note that one held while
+        // its open is asked waits out its first line's hand-over deadline, as a send's does, which the
+        // clock is moved past.
         const cutAt = (
           agentSessions: (reached: Deferred.Deferred<void>) => Effect.Effect<AgentSessions>,
         ) =>
@@ -279,7 +327,12 @@ it.layer(getTestDB())("an agent started in a workspace with no plan", (it) => {
               Effect.forkChild,
             );
             yield* Deferred.await(reached);
-            yield* Fiber.interrupt(starting);
+            const interrupting = yield* Effect.forkChild(Fiber.interrupt(starting));
+            for (let second = 0; second <= 30; second += 1) {
+              yield* Effect.yieldNow;
+              yield* TestClock.adjust("1 second");
+            }
+            yield* Fiber.join(interrupting);
             return yield* readAgentByKey(owner, ask.idempotencyKey);
           });
         const beforeAsking = yield* cutAt((reached) =>

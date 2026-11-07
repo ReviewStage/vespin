@@ -63,7 +63,7 @@ import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, type SlackLineMetadata, START_LINE_BRIEF } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Cause, Effect, Option, Result } from "effect";
+import { Cause, Effect, Option, Ref, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   recordServerEvent,
@@ -104,6 +104,7 @@ import {
   RUNTIME_REFUSAL,
   SESSION_SEND_OUTCOME,
   SESSION_TURN,
+  type SessionOpened,
   type TypedTurn,
 } from "../sessions/agent-sessions.js";
 import { experimentOnIn } from "../workspace-experiment-on.js";
@@ -703,10 +704,15 @@ function openingOf(
 
 /**
  * The first message of a Start, written as the line awaiting its turn under
- * a fresh key, as a steer's is (`steer.ts`), and its line id, which a native
- * runner is handed and names back as it takes the line. Its
- * dispatch has already happened by the time it matters: the line is written
- * standing, and the Start's own open is what hands it over.
+ * a fresh key, as a steer's is (`steer.ts`), and handed over by the open
+ * given as its dispatch, as a send hands a steer's: the line and its turn
+ * stand before the open claims the agent's session and queues the line, and
+ * the turn is handed on for a runner only once the open's answer is recorded
+ * taken (`turn-delivery.ts`), so its delivery never finds a session not yet
+ * opened. Answers what the open answered, none where its runtime could not be
+ * reached or it outlasted the dispatch's deadline; an open that did not take
+ * the line takes the line and its turn back with it. Fails where the store
+ * wrote no line.
  */
 const openingLine = (
   agent: Agent,
@@ -714,9 +720,15 @@ const openingLine = (
   files: readonly HandedFile[],
   mentioned: string | undefined,
   opened: { readonly sender: LineSender; readonly metadata: AwaitingLineMetadata },
+  open: (lineId: string) => Effect.Effect<SessionOpened | undefined>,
 ) =>
   Effect.gen(function* () {
     const clientKey = randomUUID();
+    const answered = yield* Ref.make<SessionOpened | undefined>(undefined);
+    const dispatch = open(sentLineId(clientKey)).pipe(
+      Effect.tap((answer) => Ref.set(answered, answer)),
+      Effect.map((answer) => answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED),
+    );
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const written = yield* hostedStoreOrUnavailable(
       writer.writeAwaitingLine(
@@ -728,14 +740,12 @@ const openingLine = (
           mentioned,
           ...opened,
         },
-        Effect.succeed(true),
+        dispatch,
       ),
     );
-    // A line refused, or one the store never landed, is no line the runner could name back.
-    if (Result.isFailure(written) || Option.isNone(written.success)) {
-      return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-    }
-    return sentLineId(clientKey);
+    // A line refused is no line the runner could name back.
+    if (Result.isFailure(written)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+    return yield* Ref.get(answered);
   });
 
 /** Where a Start's agent runs, as `machineOfStart` decides it: the machine and device it asks the runtime and machine choices for. */
@@ -1089,14 +1099,41 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
               undefined,
               yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
             );
+      // The runtime says why an open it refused was refused; one that could not be asked is said here.
+      const open = (lineId: string) =>
+        Effect.andThen(
+          Effect.sync(() => {
+            asked = true;
+          }),
+          sessions
+            .open({
+              conversationId: agent.conversationId,
+              turn: SESSION_TURN.TYPED,
+              message: turnContent(handed, files, mentioned),
+              lineId,
+            })
+            .pipe(
+              Effect.catchTag("SessionUnreachable", (failure) =>
+                Effect.as(
+                  agentFailureSaid(
+                    `the agent's runtime could not be reached to start a coding agent: ${describeUnreachable(failure)}`,
+                    failure._tag,
+                    true,
+                  ),
+                  undefined,
+                ),
+              ),
+            ),
+        );
       // The first message is written here, awaiting its turn, on every runtime, so it says what it is and
-      // who sent it: a native harness's runner names the line back as it takes it (`native-events/`).
-      const line = yield* openingLine(
+      // who sent it, and handed over by the open: a native harness's runner names the line back as it takes it (`native-events/`).
+      return yield* openingLine(
         agent,
         handed,
         files,
         mentioned,
         openingOf(agent, ask, brief, rules.startLine),
+        open,
       ).pipe(
         Effect.tapError((refusal) =>
           discardedAt(
@@ -1108,27 +1145,6 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
           ),
         ),
       );
-      // The runtime says why an open it refused was refused; one that could not be asked is said here.
-      asked = true;
-      return yield* sessions
-        .open({
-          conversationId: agent.conversationId,
-          turn: SESSION_TURN.TYPED,
-          message: turnContent(handed, files, mentioned),
-          lineId: line,
-        })
-        .pipe(
-          Effect.catchTag("SessionUnreachable", (failure) =>
-            Effect.as(
-              agentFailureSaid(
-                `the agent's runtime could not be reached to start a coding agent: ${describeUnreachable(failure)}`,
-                failure._tag,
-                true,
-              ),
-              undefined,
-            ),
-          ),
-        );
     }).pipe(
       Effect.onError((cause) =>
         Cause.hasFails(cause)

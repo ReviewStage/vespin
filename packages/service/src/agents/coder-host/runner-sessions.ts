@@ -15,10 +15,15 @@
  * `native_session`, which the events route records from what the runner
  * reports, and a relaunch resumes.
  *
- * `open` reads the harness's credential and answers; past the answer (`after-response.ts`) it opens
- * the agent's place with its repository checked out, writes the skills its member installed into
- * the app beside it (`native-skills.ts`), and launches the runner. A launch that
- * fails there is the agent's failed turn. The place, the launch, and every
+ * `open` reads the harness's credential, claims the conversation's record,
+ * and queues the first message, its files and what its words hand carried
+ * on its line, and answers; the turn the message awaits is delivered through
+ * its queue (`turn-delivery.ts`), whose consumer opens the agent's place with
+ * its repository checked out, writes the skills its member installed into
+ * the app beside it (`native-skills.ts`), and launches the runner
+ * (`deliverTurn`). A launch there that cannot succeed is the agent's failed
+ * turn. On a Mac, whose runner takes its lines on its stdin, the open
+ * launches it itself, a line its Mac takes up. The place, the launch, and every
  * write to the runner's stdin go through the agent's machine
  * (`../machine/agent-machine.ts`: Vercel Sandbox in
  * `../machine/vercel-machine.ts`, or the starter's Mac in
@@ -94,11 +99,11 @@
  * error naming the agent, in the failure's own words, Vercel's answer for a
  * sandbox's, and reported where no named refusal explains it (`agent-log.ts`);
  * a launch refused for the account's plan says which way its plan failed.
- * A launch past its Start's answer says each step it reaches, and one that
- * fails, dies, or is interrupted there is the agent's failed turn, with why.
- * Nothing is retried but a resume that meets its sandbox still stopping or
- * being snapshotted, and a create on an image the registry is still preparing
- * (`vercel-machine.ts`).
+ * A turn's delivery whose launch cannot succeed fails its turn, with why,
+ * and one whose store or machine was unreachable is delivered again by its
+ * queue. Nothing else is retried but a resume that meets its sandbox still
+ * stopping or being snapshotted, and a create on an image the registry is
+ * still preparing (`vercel-machine.ts`).
  */
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -149,11 +154,14 @@ import {
   clearRunnerLines,
   queueRunnerLine,
   runnerLinesWaiting,
+  waitingRunnerFiles,
   withdrawRunnerLine,
 } from "@repo/database/models/runner-line-store";
 import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
+import { turnAwaitedByLine } from "@repo/database/models/turn-state";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
+import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
 import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
@@ -164,20 +172,17 @@ import {
   SandboxUnavailable,
   sessionEnding,
 } from "@repo/sandbox";
-import { TURN_STATUS } from "@repo/wire";
+import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import {
-  Cause,
   Clock,
   Context,
-  Data,
   DateTime,
   Duration,
   Effect,
   Option,
   Redacted,
-  Ref,
   Result,
   Schedule,
 } from "effect";
@@ -242,7 +247,14 @@ import {
 } from "./runtime-sessions.js";
 import { nativeSkills } from "./skills.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
-import { coderTurnMessage, readNativeTurnHanded, recordNativeTurnHanded } from "./turn-message.js";
+import type { TurnHanded } from "./turn-context.js";
+import {
+  coderTurnMessage,
+  handedValue,
+  readNativeTurnHanded,
+  readPendingTurnHanded,
+  recordNativeTurnHanded,
+} from "./turn-message.js";
 
 /** What the sessions reach: the store, GitHub, Vercel, the agent's machine, the agents' image, and the deployment's key ring. */
 export type RunnerServices = CheckoutServices | AgentMachine | AgentImage | HostedEnvironment;
@@ -421,11 +433,24 @@ interface ResumedSession {
   readonly replay?: boolean;
 }
 
-/** The message line as the runner takes it, the turn's own words ahead of the developer's, and what to keep once the runner took it. */
+/** The message line as the runner takes it, the turn's own words ahead of the developer's, and what the session has handed once it took it. */
 interface OpenedLine {
   readonly line: InputLine;
-  /** What the session has handed once the line is, written on the row; run only once the runner took the line, so one it never took leaves it for the next. */
+  /**
+   * What the session has handed once the line is, as the row keeps it: a
+   * line queued for a runner that reads its lines carries it, and its
+   * runner's ACCEPTED writes it (`runner-line-store.ts`'s `acceptRunnerLine`),
+   * so a line no runner took hands nothing.
+   */
+  readonly handed: Option.Option<WireValue>;
+  /** The same written on the row at once, for a line written to a runner's stdin, which takes it as it is written. */
   readonly taken: Effect.Effect<void, never, DatabaseServices>;
+}
+
+/** What a message line carries beside its words to the launch that takes it: the files it names, and what the session has handed once it is taken. */
+interface CarriedLine {
+  readonly files: readonly SandboxFile[];
+  readonly handed: Option.Option<WireValue>;
 }
 
 /** A file's name as the sandbox's path holds it: a single segment of safe characters, cut short, its extension kept. */
@@ -695,13 +720,38 @@ function liveRunner(
   );
 }
 
+/** A file a message names, as its runner line carries it to the launch that takes it. */
+function carriedFile(file: SandboxFile): RunnerLineFile {
+  return {
+    path: file.path,
+    contents: Buffer.from(file.contents).toString("base64"),
+    mode: file.mode,
+  };
+}
+
+/** A file a waiting runner line carries, as its launch writes it into the place. */
+function writtenFile(file: RunnerLineFile): SandboxFile {
+  return {
+    path: file.path,
+    contents: new Uint8Array(Buffer.from(file.contents, "base64")),
+    mode: file.mode,
+  };
+}
+
 /**
  * Lines queued for the account's agent's runner to read, written for the
  * launch named by its first event number, each message line under its own
- * id, its caller holding the agent's runner lease, which keeps them in their
- * order; refused where the account holds the agent no longer.
+ * id with what it carries (`CarriedLine`), its caller holding the agent's
+ * runner lease, which keeps them in their order; refused where the account
+ * holds the agent no longer.
  */
-function queuedFor(userId: string, agentId: string, launch: number, lines: readonly InputLine[]) {
+function queuedFor(
+  userId: string,
+  agentId: string,
+  launch: number,
+  lines: readonly InputLine[],
+  carried?: CarriedLine,
+) {
   return Effect.forEach(
     lines,
     (each) =>
@@ -711,7 +761,17 @@ function queuedFor(userId: string, agentId: string, launch: number, lines: reado
           launch,
           text: JSON.stringify(each),
           ...(each.type === INPUT_LINE.MESSAGE && each.uuid !== undefined
-            ? { lineId: each.uuid }
+            ? {
+                lineId: each.uuid,
+                ...(carried === undefined
+                  ? undefined
+                  : {
+                      files: carried.files.map(carriedFile),
+                      ...(Option.isSome(carried.handed)
+                        ? { handed: carried.handed.value }
+                        : undefined),
+                    }),
+              }
             : undefined),
         }),
         (place) =>
@@ -765,40 +825,18 @@ function failedStatus(failure: { readonly _tag: string }): number {
     : FAILED_STATUS.UNAVAILABLE;
 }
 
-/** A launch past its Start's answer that died, or was interrupted, rather than failing: what ended it, by its kind alone. */
-class LaunchCut extends Data.TaggedError("LaunchCut")<{
-  readonly kind: string;
-  readonly interrupted: boolean;
-}> {}
-
-/** A launch's cause past its Start's answer as the failure it is written as: the failure where one failed it, else what cut it off. */
-function launchFailureOf(cause: Cause.Cause<{ readonly _tag: string }>): { readonly _tag: string } {
-  return Option.getOrElse(
-    Cause.findErrorOption(cause),
-    () => new LaunchCut({ kind: causeKind(cause), interrupted: Cause.hasInterruptsOnly(cause) }),
-  );
-}
-
 /**
  * A failure in the words a line and a turn's record keep: a refusal's
  * reason, with what the sandbox's run threw where it threw; a sandbox's own
- * words (Vercel's call, its status, and its error's code and message); what
- * cut a launch off; and the kind alone for any other.
+ * words (Vercel's call, its status, and its error's code and message); and
+ * the kind alone for any other.
  */
 function failureWords(failure: { readonly _tag: string }): string {
   if (failure instanceof LaunchRefused) return failure.reason;
   if (failure instanceof CheckoutRefused) {
     return failure.detail === undefined ? failure.reason : `${failure.reason} ${failure.detail}`;
   }
-  if (failure instanceof LaunchCut) {
-    return failure.interrupted ? "the launch was interrupted" : `the launch died: ${failure.kind}`;
-  }
   return failure instanceof SandboxUnavailable ? failure.message : failureKind(failure);
-}
-
-/** The failure's kind, as its line's `reason` annotation and its report name it. */
-function kindOf(failure: { readonly _tag: string }): string {
-  return failure instanceof LaunchCut ? failure.kind : failureKind(failure);
 }
 
 /**
@@ -1033,7 +1071,10 @@ export const runnerSessions = <
               );
               return { firstSequence, ...made, opening };
             }),
+            // The files the lines it is handed name go before its runner reads them: its first
+            // message's, and those of the messages waiting for a launch, which their lines carry.
             first === undefined ? Effect.void : filesWritten(place.running, first),
+            layout.linesRead ? waitingFilesWritten(agent, place.running) : Effect.void,
             // An earlier launch's lines go but its untaken messages in the window, which this launch is handed.
             layout.linesRead ? clearRunnerLines(userId, agent.id) : Effect.void,
             recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer)),
@@ -1080,7 +1121,10 @@ export const runnerSessions = <
               };
               const opened = made.opening === undefined ? [] : [made.opening.line];
               if (layout.linesRead) {
-                yield* queued(agent, made.firstSequence, opened);
+                yield* queued(agent, made.firstSequence, opened, {
+                  files: first?.files ?? [],
+                  handed: made.opening?.handed ?? Option.none(),
+                });
                 return { lines: line(made.config), mark };
               }
               // Note that a runner fed on its stdin is never launched without a message, which a launch that hands on waiting lines is only for one that reads them.
@@ -1097,7 +1141,8 @@ export const runnerSessions = <
             ),
         });
         // The runner was handed the first message, so what its words handed is kept for the next.
-        if (opening !== undefined) yield* opening.taken;
+        // A runner fed on its stdin has its first message as it starts; one that reads its lines hands it on its ACCEPTED.
+        if (opening !== undefined && !layout.linesRead) yield* opening.taken;
         if (rewind !== undefined) {
           yield* clearNativeRewindHanded(agent.conversationId, rewind).pipe(
             Effect.tapError(() =>
@@ -1122,8 +1167,12 @@ export const runnerSessions = <
       );
 
     /** Lines queued for the agent's runner to read, written for the launch named (`queuedFor`). */
-    const queued = (agent: Agent, launch: number, lines: readonly InputLine[]) =>
-      queuedFor(userId, agent.id, launch, lines);
+    const queued = (
+      agent: Agent,
+      launch: number,
+      lines: readonly InputLine[],
+      carried?: CarriedLine,
+    ) => queuedFor(userId, agent.id, launch, lines, carried);
 
     /** Lines handed to the runner a place records, as it takes them (`deliveredTo`). */
     const delivered = (agent: Agent, runner: RecordedRunner, lines: readonly InputLine[]) =>
@@ -1197,7 +1246,13 @@ export const runnerSessions = <
     ): Effect.Effect<OpenedLine, never, DatabaseServices> =>
       Effect.gen(function* () {
         const target: ConversationTarget = { userId, conversationId: agent.conversationId };
-        const handed = fresh ? {} : yield* readNativeTurnHanded(target);
+        // Note that a line still waiting for its runner hands what it composed once taken, so this one goes behind it.
+        const pending = yield* readPendingTurnHanded(target, agent.id);
+        const handed = Option.isSome(pending)
+          ? pending.value
+          : fresh
+            ? {}
+            : yield* readNativeTurnHanded(target);
         const admitted: AdmittedConversation = {
           caller: userId,
           target,
@@ -1205,7 +1260,12 @@ export const runnerSessions = <
           timeZone: sent.timeZone,
         };
         const now = yield* Clock.currentTimeMillis;
-        const turn = { kind: sent.turn, turnId: undefined };
+        // Note that the turn the line awaits is named, so its own words never read it as the turn before it.
+        const awaited = yield* turnAwaitedByLine(agent.conversationId, sent.line.uuid).pipe(
+          Effect.tapError(logStoreFailure),
+          Effect.orElseSucceed(() => Option.none<string>()),
+        );
+        const turn = { kind: sent.turn, turnId: Option.getOrUndefined(awaited) };
         const [opened, experiments] = yield* Effect.all(
           [
             coderTurnMessage(admitted, agent, turn, handed, now),
@@ -1221,11 +1281,16 @@ export const runnerSessions = <
         const words = [replay, opened.text].filter((part) => part !== undefined);
         const ahead: readonly ContentBlock[] =
           words.length === 0 ? [] : [{ type: "text", text: words.join("\n\n") }];
-        const taken = recordNativeTurnHanded(target, {
+        const next: TurnHanded = {
           ...opened.handed,
-          experiments: fresh ? experiments : (handed.experiments ?? experiments),
-        });
-        return { line: { ...sent.line, content: [...ahead, ...content] }, taken };
+          experiments:
+            fresh && Option.isNone(pending) ? experiments : (handed.experiments ?? experiments),
+        };
+        return {
+          line: { ...sent.line, content: [...ahead, ...content] },
+          handed: handedValue(next),
+          taken: recordNativeTurnHanded(target, next),
+        };
       });
 
     /**
@@ -1262,10 +1327,12 @@ export const runnerSessions = <
     const experimentsChanged = (agent: Agent, turnRunning: boolean) =>
       Effect.gen(function* () {
         if (turnRunning) return false;
-        const opened = (yield* readNativeTurnHanded({
-          userId,
-          conversationId: agent.conversationId,
-        })).experiments;
+        // Note that a line still waiting for its runner opens on what it composed, as `openedLine` reads it.
+        const target = { userId, conversationId: agent.conversationId };
+        const pending = yield* readPendingTurnHanded(target, agent.id);
+        const opened = (
+          Option.isSome(pending) ? pending.value : yield* readNativeTurnHanded(target)
+        ).experiments;
         if (opened === undefined) return false;
         // Note that a read that failed is no change, since restarting on it would open a session with every experiment off.
         const read = yield* experimentsReadIn(agent.organizationId);
@@ -1282,6 +1349,12 @@ export const runnerSessions = <
     const filesWritten = (place: MachinePlace, message: RunnerMessage) =>
       message.files.length === 0 ? Effect.void : machine.writeFiles(place, message.files);
 
+    /** The files the agent's messages waiting for a launch name, which their lines carry, written into the place a launch reads them in. */
+    const waitingFilesWritten = (agent: Agent, place: MachinePlace) =>
+      Effect.flatMap(waitingRunnerFiles(userId, agent.id), (files) =>
+        files.length === 0 ? Effect.void : machine.writeFiles(place, files.map(writtenFile)),
+      );
+
     /**
      * A failure as the log says it and the caller reads it, in its own words
      * (`failureWords`): said once as an error, since the caller refuses what
@@ -1292,7 +1365,7 @@ export const runnerSessions = <
       Effect.as(
         agentFailureSaid(
           `A ${harness.name} ${call} failed: ${keptFailureWords(failureWords(failure))}`,
-          kindOf(failure),
+          failureKind(failure),
           !namedOutcome(failure),
         ),
         {
@@ -1497,8 +1570,9 @@ export const runnerSessions = <
      * relaunched. `handsOn` says whether a runner that must be resumed or
      * launched again is left to the delivery of the turn the message awaits
      * (`deliverTurn`), the message queued for whichever launch runs next, and
-     * a runner that must not take it ended here; otherwise, for a runner fed
-     * on its stdin or a message naming files, it is launched here.
+     * a runner that must not take it ended here, as for every runner that
+     * reads its lines; otherwise, for a runner fed on its stdin, it is
+     * launched here.
      */
     const sendHolding = (
       sessionId: string,
@@ -1543,10 +1617,10 @@ export const runnerSessions = <
         const handed = (path: HandoffPath) =>
           handoffCounted(agent, path, turnRunning, turn?.settledAt ?? null, handedAt);
         // The message queued for whichever launch runs next, its words composed on whether the
-        // harness's session resumes, which the turn's delivery launches (`deliverTurn`). Its words
-        // count as handed once queued, as a warm runner's do, since whichever launch runs next reads
-        // the line. Note that the request answers once it is queued, so a resume that waits out a
-        // stop's snapshot never holds the send past the store's dispatch deadline.
+        // harness's session resumes, which the turn's delivery launches (`deliverTurn`), its files
+        // and what its words hand carried on its line for that launch to write and its runner's
+        // ACCEPTED to keep. Note that the request answers once it is queued, so a resume that waits
+        // out a stop's snapshot never holds the send past the store's dispatch deadline.
         const queuedForDelivery = Effect.gen(function* () {
           // Note that a machine whose runner reads its lines keeps the CLI's transcript, so whether
           // the session resumes does not turn on whether the delivery's place is made anew.
@@ -1560,8 +1634,10 @@ export const runnerSessions = <
               from.resume === undefined,
               from.replay === true,
             ));
-          yield* queued(agent, ANY_LAUNCH, [opened.line]);
-          yield* opened.taken;
+          yield* queued(agent, ANY_LAUNCH, [opened.line], {
+            files: sent.files,
+            handed: opened.handed,
+          });
           return accepted;
         });
         const running = found.value.runner;
@@ -1638,7 +1714,13 @@ export const runnerSessions = <
           const wrote =
             uploaded &&
             (reads
-              ? yield* Effect.as(queued(agent, running.mark.firstSequence, lines), true)
+              ? yield* Effect.as(
+                  queued(agent, running.mark.firstSequence, lines, {
+                    files: sent.files,
+                    handed: opened.handed,
+                  }),
+                  true,
+                )
               : yield* machine.writeLine(running.handle, lines.map(line).join("")).pipe(
                   Effect.as(true),
                   Effect.catchIf(
@@ -1650,7 +1732,8 @@ export const runnerSessions = <
                   ),
                 ));
           if (wrote) {
-            yield* opened.taken;
+            // A runner fed on its stdin has the line as it is written; one that reads its lines hands it on its ACCEPTED.
+            if (!reads) yield* opened.taken;
             // The installation token lives an hour, so each message sets a fresh one, past the
             // answer (`after-response.ts`): the runner already holds a token that stands, so the
             // message never waits on a GitHub mint and a policy write. Note that a renewal that
@@ -1673,65 +1756,23 @@ export const runnerSessions = <
         }
         // The place stopped or the runner ended: resumed, its credential set again, and the runner relaunched on the harness's session.
         if (handsOn) return yield* queuedForDelivery;
+        // A runner fed on its stdin, as a Mac's is, is launched again here, its launch a line its
+        // machine takes up (`device-machine.ts`), whose place is never lost the way a sandbox's is.
         const wasUp = found.value.running !== undefined;
-        // Note that a place whose stop began as the send reached it (a launch's end or the sweep
-        // stopped it a moment before) refuses every call until it has stopped, so it is resumed
-        // once more and the runner launched in the session that opens, as Vercel's SDK does.
-        const resumed = yield* Effect.gen(function* () {
-          const place = yield* machine.resume(found.value, agent);
-          if (place === PLACE_RESUME.GONE) return place;
-          yield* relaunched(
-            agent,
-            sessionId,
-            found.value.name,
-            place.place,
-            layout,
-            sent,
-            resumedPath(place.created, wasUp),
-            place.created,
-            restartLine,
-          );
-          return place;
-        }).pipe(Effect.retry({ times: 1, while: sessionEnding }));
-        if (resumed === PLACE_RESUME.GONE) {
-          // Note that the snapshot of a sandbox opened before `getOrCreate` expired
-          // (`CODER.SANDBOX_SNAPSHOTS`), so it can never resume: the session goes on in a fresh one
-          // under the session's tag, its checkout cloned again. The harness's own session files went
-          // with the old filesystem, so its session resumes from the transcript the service keeps
-          // (`resumedSessionOf`). The expired sandbox is deleted only once
-          // the fresh one runs, so a launch that fails (a clone refused, say) leaves the session
-          // standing for the next message to try again rather than retired; a delete that fails
-          // leaves the expired one beside the fresh one, which `listTagged` lists after it as the
-          // older.
-          yield* openedPlace(
-            agent,
-            sessionId,
-            layout,
-            sent,
-            yield* harness.launch(agent, layout),
-            restartLine,
-            undefined,
-            LAUNCH_PATH.FRESH,
-          );
-          yield* machine
-            .discard(found.value)
-            .pipe(
-              Effect.catch((failure) =>
-                Effect.logWarning(
-                  `An expired ${harness.name} sandbox was not deleted: ${failure.message}`,
-                ),
-              ),
-            );
-          yield* handed(SERVER_HANDOFF_PATH.FRESH);
-          return accepted;
-        }
-        yield* handed(
-          resumed.created
-            ? SERVER_HANDOFF_PATH.FRESH
-            : wasUp
-              ? SERVER_HANDOFF_PATH.RELAUNCHED
-              : SERVER_HANDOFF_PATH.RESUMED,
+        const place = yield* machine.resume(found.value, agent);
+        if (place === PLACE_RESUME.GONE) return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
+        yield* relaunched(
+          agent,
+          sessionId,
+          found.value.name,
+          place.place,
+          layout,
+          sent,
+          resumedPath(place.created, wasUp),
+          place.created,
+          restartLine,
         );
+        yield* handed(wasUp ? SERVER_HANDOFF_PATH.RELAUNCHED : SERVER_HANDOFF_PATH.RESUMED);
         return accepted;
       }).pipe(Effect.withSpan("web/runnerSend", { attributes: { harness: harness.runtime } }));
 
@@ -1901,7 +1942,7 @@ export const runnerSessions = <
      * one opened where its disk is gone, and the runner launched on the
      * harness's session, reading whatever lines wait for it. A resume that
      * meets the sandbox still stopping or being snapshotted waits it out
-     * (`RESUME_WHILE_ENDING`), since this runs past an answer. Nothing where
+     * (`RESUME_WHILE_ENDING`), since no request waits on it. Nothing where
      * the session's place is none or another agent's, where a runner runs,
      * or on a machine whose runner takes its lines on stdin, which is never
      * launched without a message. Answers how the launch reached its runner,
@@ -1949,16 +1990,40 @@ export const runnerSessions = <
       });
 
     /**
+     * The place a session that has none yet opens, as a Start's first turn
+     * finds it, and the runner launched there on the lines waiting for it:
+     * nothing on a machine whose runner takes its lines on stdin, whose open
+     * launched it already.
+     */
+    const openedForWaiting = (sessionId: string, agent: Agent) =>
+      Effect.gen(function* () {
+        const layout = yield* machine.layout(agent);
+        if (!layout.linesRead) return;
+        yield* openedPlace(
+          agent,
+          sessionId,
+          layout,
+          undefined,
+          yield* harness.launch(agent, layout),
+        );
+      });
+
+    /**
      * The lines a queued turn awaits handed on, under the agent's runner
      * lease: where a message line no launch took still has its turn waiting
-     * on it (`runnerLinesWaiting`), the runner is launched to read them
-     * where none is up (`launchedWithoutMessage`), and how it reached them
-     * counted. Nothing where none waits, as a Mac's lines, which its own
-     * runner's launch line carries.
+     * on it (`runnerLinesWaiting`), the place its session opens, a Start's
+     * first among them, is opened (`openedForWaiting`), or the runner is
+     * launched again in the place it has where none is up
+     * (`launchedWithoutMessage`), and how a message reached it counted, as a
+     * Start's first message is not. Nothing
+     * where none waits, as a Mac's lines, which its own runner's launch line
+     * carries.
      */
     const deliveredHolding = (sessionId: string, agent: Agent) =>
       Effect.gen(function* () {
         if (!(yield* runnerLinesWaiting(userId, agent.id))) return;
+        const found = yield* firstPlace(machine, userId, sessionId);
+        if (Option.isNone(found)) return yield* openedForWaiting(sessionId, agent);
         const path = yield* launchedWithoutMessage(sessionId, agent);
         if (path === undefined) return;
         yield* handoffCounted(agent, path, false, null, yield* Clock.currentTimeMillis);
@@ -1990,13 +2055,14 @@ export const runnerSessions = <
       });
 
     /**
-     * A launch that failed past its Start's answer, or died or was
-     * interrupted there: said once as an error with the agent's ids and why,
-     * and reported where no named refusal explains it (`agentFailureSaid`);
-     * then written as the agent's first turn, queued and settled failed as a
-     * turn whose runner was lost is (`settleRunnerLostTurns`), with why, so
-     * the agent reads failed at once rather than starting until its grace
-     * runs out. The line the Start wrote stands. A write that fails is logged.
+     * A turn's delivery whose launch could not succeed: said once as an error
+     * with the agent's ids and why, and reported where no named refusal
+     * explains it (`agentFailureSaid`); then the turns it was for settled
+     * failed as a turn whose runner was lost is (`settleRunnerLostTurns`),
+     * with why, so the agent reads failed at once rather than waiting out its
+     * pickup deadline. Its lines stand, for the developer to resend, and no
+     * launch is handed them, their turn no longer waiting. A write that fails
+     * is logged.
      */
     const launchFailed =
       (agent: Agent, sessionId: string) => (failure: { readonly _tag: string }) =>
@@ -2004,8 +2070,8 @@ export const runnerSessions = <
           const words = keptFailureWords(failureWords(failure));
           // The turn's failure is the one `settleRunnerLostTurns` writes below.
           yield* agentFailureSaid(
-            `A ${harness.name} launch failed after its Start: ${words}`,
-            kindOf(failure),
+            `A ${harness.name} launch failed on a turn's delivery: ${words}`,
+            failureKind(failure),
             !namedOutcome(failure),
             TURN_FAILURE.MODEL,
           );
@@ -2033,52 +2099,6 @@ export const runnerSessions = <
         );
 
     /**
-     * The launch a Start's open hands on past its answer, under the agent's
-     * runner lease, each step said in the log as it is reached (begun, its
-     * sandbox opened, its runner started), so a launch cut off where nothing
-     * can say so, its function frozen or ended under it, is known by the last
-     * step it reached. One that fails or dies takes its first message back
-     * and is written as the agent's failed turn (`launchFailed`), and so is
-     * one interrupted before its sandbox opened, in a finalizer the
-     * interruption cannot cut short. Note that one interrupted once its
-     * sandbox opened is said and reported alone, its first message and its
-     * turns left as they stand, because its runner may already have started
-     * and taken the message, and a failed turn would be written over its work.
-     */
-    const launchedAfterStart = <R>(
-      agent: Agent,
-      sessionId: string,
-      launching: (
-        sandboxOpened: Effect.Effect<void>,
-      ) => Effect.Effect<void, { readonly _tag: string }, R>,
-      withdrawn: Effect.Effect<void, never, DatabaseServices>,
-    ) =>
-      Effect.gen(function* () {
-        const opened = yield* Ref.make(false);
-        const failedWith = (cause: Cause.Cause<{ readonly _tag: string }>) =>
-          Effect.andThen(withdrawn, launchFailed(agent, sessionId)(launchFailureOf(cause)));
-        const interrupted = Effect.flatMap(Ref.get(opened), (up) =>
-          up
-            ? agentFailureSaid(
-                `A ${harness.name} launch was interrupted after its sandbox opened, so its runner may run`,
-                causeKind(Cause.interrupt()),
-                true,
-              )
-            : failedWith(Cause.interrupt()),
-        );
-        return yield* Effect.gen(function* () {
-          yield* Effect.logInfo(`A ${harness.name} launch began after its Start`);
-          yield* holdingRunner(agent.id, launching(Ref.set(opened, true)));
-          yield* Effect.logInfo(`A ${harness.name} launch started its runner`);
-        }).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause) ? Effect.failCause(cause) : failedWith(cause),
-          ),
-          Effect.onInterrupt(() => interrupted),
-        );
-      }).pipe(Effect.annotateLogs(agentLogIds(agent, sessionId)));
-
-    /**
      * A message to the session for the agent its conversation is, as `send`
      * hands it on: held behind the agent's runner lease, or queued at once
      * where the lease is another call's, as `send` says.
@@ -2087,7 +2107,7 @@ export const runnerSessions = <
       Effect.gen(function* () {
         const layout = yield* machine.layout(agent);
         const sent = messageLine(message, layout);
-        const queues = layout.linesRead && sent.files.length === 0;
+        const queues = layout.linesRead;
         const handed = yield* queues
           ? holdingRunnerIfFree(agent.id, sendHolding(sessionId, message, layout, sent, true))
           : Effect.map(
@@ -2115,9 +2135,14 @@ export const runnerSessions = <
         // up reads it, and where none is, the turn's delivery launches one (`deliverTurn`).
         const ahead = yield* harness.ahead(agent);
         const recorded = Option.isSome(found) ? found.value.runner : undefined;
+        // The files it names go into a place that runs before its line does, so a runner up reads
+        // the line with them; a place not up has them written by the launch its line carries them to.
+        const running = Option.isSome(found) ? found.value.running : undefined;
+        if (running !== undefined) yield* filesWritten(running, sent);
+        const carried = { files: sent.files, handed: Option.none() };
         yield* recorded === undefined
-          ? queued(agent, ANY_LAUNCH, [sent.line])
-          : queued(agent, recorded.mark.firstSequence, [...ahead.lines, sent.line]);
+          ? queued(agent, ANY_LAUNCH, [sent.line], carried)
+          : queued(agent, recorded.mark.firstSequence, [...ahead.lines, sent.line], carried);
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
@@ -2168,66 +2193,51 @@ export const runnerSessions = <
       });
 
     const sessions: NativeSessions<Turn> = {
-      // An open answers once the plan's credential is read, so a plan refused or at its limit is
-      // refused at once; the sandbox, the checkout, and the launch run past the answer of the
-      // request that asked (`after-response.ts`), under the runner lease. On a machine whose runner
-      // reads its lines, the first message is queued before the answer, so no message sent after it
-      // can be read ahead of it; the launch's own queue of it finds it queued under its id, and a
-      // message sent meanwhile is queued behind it.
+      // An open answers once the plan's credential is read and its session claims the conversation's
+      // record, so a plan refused or at its limit is refused at once, and nothing past it waits on a
+      // sandbox. On a machine whose runner reads its lines, the first message is queued, its files
+      // and what its words hand carried on its line, and the turn it awaits is delivered through its
+      // queue once its line's write records it taken (`turn-delivery.ts`), whose consumer opens the
+      // place and launches the runner (`deliverTurn`). On one fed on its stdin, as a Mac's is, the
+      // place is opened and the runner launched here, under the lease, its launch a line its
+      // machine takes up (`device-machine.ts`).
       open: (message) =>
         Effect.gen(function* () {
-          const after = yield* Effect.serviceOption(AfterResponse);
+          const agent = yield* agentOf(message.conversationId);
+          const sessionId = sessionIdOf(harness.sessionPrefix, yield* Clock.currentTimeMillis);
           return yield* Effect.gen(function* () {
-            const agent = yield* agentOf(message.conversationId);
-            const sessionId = sessionIdOf(harness.sessionPrefix, yield* Clock.currentTimeMillis);
-            return yield* Effect.gen(function* () {
-              const layout = yield* machine.layout(agent);
-              const credential = yield* harness.launch(agent, layout);
-              const recorded = yield* recordClaimed(agent, sessionId);
-              if (recorded !== sessionId) {
-                return yield* deferredTo(agent, recorded, message);
-              }
-              const first = messageLine(message, layout);
-              const withdrawn = layout.linesRead
-                ? Effect.ignore(withdrawRunnerLine(userId, agent.id, first.line.uuid))
-                : Effect.void;
-              const opened = layout.linesRead
-                ? yield* openedLine(agent, sessionId, first, true)
-                : undefined;
-              if (opened !== undefined) yield* queued(agent, ANY_LAUNCH, [opened.line]);
-              // Note that a launch that failed takes its first message back, as its turn reads failed,
-              // and so does an open that fails once it queued it, which answers failed.
-              yield* afterResponse(
-                `A ${harness.name} launch`,
-                launchedAfterStart(
-                  agent,
-                  sessionId,
-                  (sandboxOpened) =>
-                    openedPlace(agent, sessionId, layout, first, credential, opened, sandboxOpened),
-                  withdrawn,
-                ),
-              ).pipe(Effect.onError(() => withdrawn));
-              return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId } as const;
-            }).pipe(
-              Effect.catch(failed("open")),
-              Effect.annotateLogs(agentLogIds(agent, sessionId)),
-            );
-          }).pipe(
-            Effect.catch(failed("open")),
-            Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId })),
-            Effect.provideContext(
-              Option.isSome(after) ? Context.add(context, AfterResponse, after.value) : context,
-            ),
-          );
-        }),
+            const layout = yield* machine.layout(agent);
+            const credential = yield* harness.launch(agent, layout);
+            const recorded = yield* recordClaimed(agent, sessionId);
+            if (recorded !== sessionId) return yield* deferredTo(agent, recorded, message);
+            const first = messageLine(message, layout);
+            if (layout.linesRead) {
+              const opened = yield* openedLine(agent, sessionId, first, true);
+              yield* queued(agent, ANY_LAUNCH, [opened.line], {
+                files: first.files,
+                handed: opened.handed,
+              });
+            } else {
+              yield* holdingRunner(
+                agent.id,
+                openedPlace(agent, sessionId, layout, first, credential),
+                CODER.RUNNER_LEASE.SEND_WAIT,
+              );
+            }
+            return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId } as const;
+          }).pipe(Effect.catch(failed("open")), Effect.annotateLogs(agentLogIds(agent, sessionId)));
+        }).pipe(
+          Effect.catch(failed("open")),
+          Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId })),
+          Effect.provideContext(context),
+        ),
 
       // A message to a runner that reads its lines never waits behind another call's lease, as a
-      // Start's launch holds it while its sandbox comes up: it is queued at once, read by the runner
+      // turn's delivery holds it while its sandbox comes up: it is queued at once, read by the runner
       // that call leaves running. One that finds no runner up is queued too, for the launch the
       // turn it awaits is delivered to (`deliverTurn`), so the send answers once its line is
-      // written. Note that one naming files still waits on the lease, and resumes in the request,
-      // since they are written into a running place before its line names them, which a launch
-      // the turn's delivery started could read first.
+      // written. The files it names are written into a place that runs before its line, and carried
+      // on its line for a launch to write where none runs.
       send: (sessionId, message) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);

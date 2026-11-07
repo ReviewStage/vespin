@@ -33,6 +33,7 @@ import {
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
@@ -292,6 +293,24 @@ const writtenLine = (agent: Agent, text: string) =>
     return message(agent, text, sentLineId(clientKey));
   });
 
+/**
+ * A Start's open of its agent's session on the message given, whose line its
+ * Start wrote awaiting the turn it queues (`writtenLine`), and that turn
+ * delivered where the open took it, as the agent-turns consumer hands it
+ * over (`turn-delivery.ts`), which opens the place and launches the runner.
+ */
+const deliveredOpen = (
+  sessions: Effect.Success<ReturnType<typeof sessionsFor>>,
+  sent: Parameters<Effect.Success<ReturnType<typeof sessionsFor>>["open"]>[0],
+) =>
+  Effect.gen(function* () {
+    const opened = yield* sessions.open(sent);
+    if (opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
+      yield* sessions.deliverTurn(opened.sessionId, sent.conversationId);
+    }
+    return opened;
+  });
+
 /** What the launch reads past its config: its own lines, and the messages no earlier launch took, as its runner is handed them. */
 const handedLines = (userId: string, command: Parameters<typeof launchLines>[0]) =>
   Effect.gen(function* () {
@@ -308,7 +327,9 @@ const handedLines = (userId: string, command: Parameters<typeof launchLines>[0])
 /** A turn of the agent's under way, as the events route queues one, by the id a Stop names it by. */
 const turnUnderWay = (userId: string, agent: Agent) =>
   Effect.gen(function* () {
-    const turnId = randomUUID();
+    // The turn a line queued, as a Start's, is the one its runner takes up; one is queued where none stands.
+    const queued = yield* queuedTurnOf(agent.conversationId);
+    const turnId = Option.getOrElse(queued, () => randomUUID());
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     yield* writer.enqueueTurn(
       { userId, conversationId: agent.conversationId },
@@ -370,7 +391,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
               Effect.provide(machines),
               Effect.provide(services(runnerSandboxApi())),
             );
-            const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+            const opened = yield* deliveredOpen(
+              sessions,
+              yield* writtenLine(agent, "Fix the invitations."),
+            );
             assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
             const db = yield* Database;
             const [row] = yield* db
@@ -486,7 +510,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
               local ? Effect.provide(machines) : (effect) => effect,
               Effect.provide(services(runnerSandboxApi())),
             );
-            const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+            const opened = yield* deliveredOpen(
+              sessions,
+              yield* writtenLine(agent, "Fix the invitations."),
+            );
             assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
             const db = yield* Database;
             if (local) {
@@ -538,10 +565,12 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const openai = openAi();
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
-        const lineId = randomUUID();
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
+        const line = yield* writtenLine(agent, "Fix the invitations.");
+        const { lineId } = line;
+        assert.ok(lineId !== undefined);
 
-        const opened = yield* sessions.open(message(agent, "Fix the invitations.", lineId));
+        const opened = yield* deliveredOpen(sessions, line);
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.match(opened.sessionId, /^codex-[0-9a-f]{12}-[0-9a-f-]{36}$/u);
@@ -648,7 +677,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const api = runnerSandboxApi();
         const openai = openAi();
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [command] = api.commands;
         assert.ok(command !== undefined);
@@ -672,7 +704,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const gone = runnerSandboxApi();
         const without = yield* sessionsFor(userId).pipe(Effect.provide(services(gone)));
         assert.equal(
-          (yield* without.open(message(agent, "Go."))).outcome,
+          (yield* deliveredOpen(without, yield* writtenLine(agent, "Go."))).outcome,
           SESSION_SEND_OUTCOME.FAILED,
         );
         assert.deepEqual(gone.commands, []);
@@ -691,7 +723,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         yield* signIn(userId, 40);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
 
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
 
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(openai.state.renewals, 1);
@@ -711,7 +746,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api)));
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* updateAgentChoice(userId, agent.id, {
           model: "openai/gpt-4.1",
@@ -761,7 +799,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const sessions = yield* sessionsFor(userId, sequence).pipe(
           Effect.provide(services(api, openai)),
         );
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         // The events route records Codex's thread as the runner reports it, the store holding its
         // rollout from its first line as the runner mirrors it, and the run ends.
@@ -822,7 +863,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const { userId, agent } = yield* openAgent;
         const none = runnerSandboxApi();
         const withoutSignIn = yield* sessionsFor(userId).pipe(Effect.provide(services(none)));
-        assert.deepEqual(yield* withoutSignIn.open(message(agent, "Go.")), {
+        assert.deepEqual(yield* deliveredOpen(withoutSignIn, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           planRefusal: PLAN_REFUSAL.NONE,
@@ -846,7 +887,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           Effect.provide(services(invalid, openai)),
         );
 
-        assert.deepEqual(yield* signedOut.open(message(agent, "Go.")), {
+        assert.deepEqual(yield* deliveredOpen(signedOut, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           planRefusal: PLAN_REFUSAL.SIGNED_OUT,
@@ -877,7 +918,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         );
         const limited = runnerSandboxApi();
         const limitedSessions = yield* sessionsFor(userId).pipe(Effect.provide(services(limited)));
-        assert.deepEqual(yield* limitedSessions.open(message(agent, "Go.")), {
+        assert.deepEqual(yield* deliveredOpen(limitedSessions, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           planRefusal: PLAN_REFUSAL.LIMIT_REACHED,
@@ -890,7 +931,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const resetSessions = yield* sessionsFor(userId).pipe(
           Effect.provide(services(reset, openAi())),
         );
-        const reopened = yield* resetSessions.open(message(agent, "Go."));
+        const reopened = yield* deliveredOpen(resetSessions, yield* writtenLine(agent, "Go."));
         assert.equal(reopened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.notDeepEqual(reset.commands, []);
 
@@ -907,11 +948,14 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const ineligibleSessions = yield* sessionsFor(userId).pipe(
           Effect.provide(services(ineligible)),
         );
-        assert.deepEqual(yield* ineligibleSessions.open(message(agent, "Go on.")), {
-          outcome: SESSION_SEND_OUTCOME.FAILED,
-          status: 422,
-          planRefusal: PLAN_REFUSAL.INELIGIBLE,
-        });
+        assert.deepEqual(
+          yield* deliveredOpen(ineligibleSessions, yield* writtenLine(agent, "Go on.")),
+          {
+            outcome: SESSION_SEND_OUTCOME.FAILED,
+            status: 422,
+            planRefusal: PLAN_REFUSAL.INELIGIBLE,
+          },
+        );
         assert.deepEqual(ineligible.commands, []);
       }),
   );
@@ -927,7 +971,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         yield* signIn(userId, 50);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
 
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(openai.state.renewals, 0);
         // Ten minutes on, forty are left: renewed ahead of the message, and handed on nowhere.

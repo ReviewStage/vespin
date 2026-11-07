@@ -19,6 +19,9 @@ import { EventEmitter, once } from "node:events";
 import { gunzipSync } from "node:zlib";
 import { RUNNER_ENV, type RunnerConfig } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { recordNativeHanded } from "@repo/database/models/agent-store";
+import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { runnerLine } from "@repo/database/schemas/runner-line";
 import type { NetworkPolicy } from "@repo/sandbox";
 import {
@@ -37,7 +40,7 @@ import {
 } from "@repo/sandbox/testing";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { agentTag } from "../agents/machine/vercel-machine.js";
 
 const TEAM = "team_fixture";
@@ -581,14 +584,31 @@ export const launchLines = (command: FakeCommand | undefined) =>
     return [config, ...stdin, ...queued.map((row): unknown => JSON.parse(row.text))];
   });
 
-/** Every message queued for the agent's runner stamped taken, as each one's ACCEPTED would, which the fake runner never posts. */
+/** Every message queued for the agent's runner stamped taken, what its words handed kept, as each one's ACCEPTED would, which the fake runner never posts. */
 export const runnerTook = (agentId: string) =>
-  Effect.flatMap(Database, (db) =>
-    db
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const waiting = yield* db
+      .select({
+        lineId: runnerLine.lineId,
+        userId: runnerLine.userId,
+        conversationId: agentTable.conversationId,
+      })
+      .from(runnerLine)
+      .innerJoin(agentTable, eq(agentTable.id, runnerLine.agentId))
+      .where(and(eq(runnerLine.agentId, agentId), isNull(runnerLine.acceptedAt)))
+      .orderBy(asc(runnerLine.seq));
+    // Each message as its ACCEPTED takes it: stamped taken, and what its words handed kept.
+    for (const line of waiting) {
+      if (line.lineId === null) continue;
+      const handed = yield* acceptRunnerLine(line.userId, agentId, line.lineId);
+      if (Option.isSome(handed)) yield* recordNativeHanded(line, handed.value);
+    }
+    yield* db
       .update(runnerLine)
       .set({ acceptedAt: new Date(0) })
-      .where(and(eq(runnerLine.agentId, agentId), isNull(runnerLine.acceptedAt))),
-  );
+      .where(and(eq(runnerLine.agentId, agentId), isNull(runnerLine.acceptedAt)));
+  });
 
 /**
  * The bearer a network policy swaps in on the host given for a request that

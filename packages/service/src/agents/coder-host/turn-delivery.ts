@@ -18,7 +18,8 @@
  * running, settled, or failed, without acting. A turn still queued is handed
  * over once by the harness its agent runs on (`runtime-sessions.ts`'s
  * `turnHandedOver`): nothing where a runner is up to read its lines, else
- * the place resumed and the runner launched for them, and acknowledged; a
+ * the place opened, as a Start's first turn finds it, or resumed, and the
+ * runner launched for them, and acknowledged; a
  * hand-over that cannot succeed fails the turn with why through the store
  * writer, and is acknowledged. Where another call holds the agent's runner
  * lease, at work on its runner, the delivery comes again after

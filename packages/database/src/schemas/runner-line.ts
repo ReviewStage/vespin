@@ -8,11 +8,19 @@
  * account alike.
  */
 
+import type { WireValue } from "@repo/wire";
 import { sql } from "drizzle-orm";
-import { bigint, index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
+
+/** A file a message line names, as its line carries it: where it is written in the place, its bytes in base64, and its mode. */
+export interface RunnerLineFile {
+  readonly path: string;
+  readonly contents: string;
+  readonly mode: number;
+}
 
 /**
  * One line to a cloud agent's runner, in the order the service wrote them:
@@ -26,6 +34,13 @@ import { user } from "./auth.js";
  * repeated under it queues once; null for every other kind. `accepted_at`
  * is when the runner said it took a message line (its ACCEPTED event); a
  * message line no launch accepted is handed to the next launch too.
+ * `files` are the files a message line names, which a launch writes into its
+ * place before its runner reads the line, kept here so the line carries
+ * them to whichever launch takes it; null where it names none. `handed` is
+ * what the session will have been handed once its runner takes the message
+ * line, as the service composed the line against (the JSON the
+ * conversation's `native_handed` keeps), written there in the transaction
+ * that records the runner's ACCEPTED; null for every other kind.
  */
 export const runnerLine = pgTable(
   "runner_line",
@@ -48,6 +63,10 @@ export const runnerLine = pgTable(
     createdAt: createdAt(),
     /** When the runner said it took the message line; null until then, and for every other kind. */
     acceptedAt: timestamptz("accepted_at"),
+    /** The files the message line names, each its path, its bytes in base64, and its mode; null where it names none. */
+    files: jsonb("files").$type<readonly RunnerLineFile[]>(),
+    /** What the session will have been handed once its runner takes the message line; null for every other kind. */
+    handed: jsonb("handed").$type<WireValue>(),
   },
   (table) => [
     // A runner reads its agent's lines in order.

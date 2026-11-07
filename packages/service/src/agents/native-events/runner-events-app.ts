@@ -8,6 +8,7 @@ import {
   recordAgentCompaction,
   recordAgentNativeSession,
   recordAgentStep,
+  recordNativeHanded,
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
 import { markSessionBroken } from "@repo/database/models/claude-session-entries";
@@ -492,10 +493,15 @@ function landWrite(
         (result) => reportRefused("a turn's queueing", result),
       );
     case NATIVE_WRITE.TAKE_LINE:
-      // The runner's line is stamped taken, so no later launch is handed it again (`runner-lines-app.ts`).
+      // The runner's line is stamped taken, so no later launch is handed it again (`runner-lines-app.ts`),
+      // and what its words handed the session is kept now that the session has them, in the batch's transaction.
       return Effect.flatMap(
         Effect.andThen(
-          acceptRunnerLine(target.userId, applying.agentId, write.clientId),
+          Effect.flatMap(
+            acceptRunnerLine(target.userId, applying.agentId, write.clientId),
+            (handed) =>
+              Option.isSome(handed) ? recordNativeHanded(target, handed.value) : Effect.void,
+          ),
           writer.takeAwaitingLine(target, { clientId: write.clientId, turnId: write.turnId }),
         ),
         (result) => reportRefused("a line's taking", result),
