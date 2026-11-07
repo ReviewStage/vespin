@@ -207,6 +207,18 @@
   display: block;
 }
 
+/* Note that the caret between two dividers stands in their pair's gap
+   (`@repo/ui`'s prose.css), which it would otherwise close as it stands
+   between them, and in the middle of that gap rather than against the first:
+   below the first divider's own margin (prose.css's 0.3em), half a line down. */
+.description-document-text hr + .ProseMirror-gapcursor + hr {
+  margin-top: 1lh;
+}
+
+.description-document-text hr + .ProseMirror-gapcursor:has(+ hr)::after {
+  top: calc(0.5lh - 0.3em);
+}
+
 .description-document-text .ProseMirror-gapcursor::after {
   content: "";
   position: absolute;
