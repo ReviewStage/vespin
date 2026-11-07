@@ -2,9 +2,9 @@
  * agent-image.ts -- the image every cloud agent's sandbox boots from: its build context, and the tag a digest of that context names it by.
  *
  * The context is `agent-image/` as committed, the Dockerfile and tmux's
- * settings, with what the build writes beside them: the runner's bundle, as
- * `@repo/agent-runner`'s own build leaves it, and the agent's recording
- * pointer (`recording-cursor.ts`). Its tag is a digest of every file in it, so
+ * settings, with what the build writes beside them: the runner's bundle and
+ * Sentry's profiler binary, as `@repo/agent-runner`'s own build leaves them,
+ * and the agent's recording pointer (`recording-cursor.ts`). Its tag is a digest of every file in it, so
  * the image changes exactly when what goes into it does, and a deploy that
  * changes none of it boots the image the one before it did.
  *
@@ -30,8 +30,11 @@ const WEB = join(import.meta.dirname, "..");
 const SOURCE = {
   DIRECTORY: join(WEB, "agent-image"),
   COMMITTED: ["Dockerfile", "tmux.conf"],
-  RUNNER_BUNDLE: join(WEB, "..", "..", "packages", "agent-runner", "dist", "agent-runner.mjs"),
+  RUNNER_DIST: join(WEB, "..", "..", "packages", "agent-runner", "dist"),
 } as const;
+
+/** The runner's build output the image carries: its bundle, and Sentry's profiler binary it requires from beside itself. */
+const RUNNER_FILES = ["agent-runner.mjs", "sentry_cpu_profiler-linux-x64-glibc-137.node"] as const;
 
 /** How many hex digits of the context's digest the tag keeps. */
 const TAG_DIGITS = 24;
@@ -44,11 +47,17 @@ interface ContextFile {
 
 /** The context's files, by name, in the order the digest reads them; a build without the runner's bundle fails here. */
 async function agentImageContext(): Promise<readonly ContextFile[]> {
-  const runnerBundle = await readFile(SOURCE.RUNNER_BUNDLE).catch(() => {
-    throw new Error(
-      `${relative(WEB, SOURCE.RUNNER_BUNDLE)} is missing: run \`pnpm --filter @repo/agent-runner build\` first`,
-    );
-  });
+  const runner = await Promise.all(
+    RUNNER_FILES.map(async (name) => {
+      const path = join(SOURCE.RUNNER_DIST, name);
+      const contents = await readFile(path).catch(() => {
+        throw new Error(
+          `${relative(WEB, path)} is missing: run \`pnpm --filter @repo/agent-runner build\` first`,
+        );
+      });
+      return { name, contents };
+    }),
+  );
   const committed = await Promise.all(
     SOURCE.COMMITTED.map(async (name) => ({
       name,
@@ -57,7 +66,7 @@ async function agentImageContext(): Promise<readonly ContextFile[]> {
   );
   return [
     ...committed,
-    { name: "agent-runner.mjs", contents: runnerBundle },
+    ...runner,
     { name: "cursor.js", contents: Buffer.from(RECORDING_CURSOR_SOURCE, "utf8") },
   ];
 }

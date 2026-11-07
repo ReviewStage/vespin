@@ -537,6 +537,9 @@ importers:
       '@sentry/node':
         specifier: 11.7.0
         version: 11.7.0(@babel/core@7.29.7)(rollup@4.62.4)
+      '@sentry/profiling-node':
+        specifier: 11.7.0
+        version: 11.7.0(@babel/core@7.29.7)(rollup@4.62.4)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -547,6 +550,9 @@ importers:
       '@repo/wire':
         specifier: workspace:*
         version: link:../wire
+      '@sentry/cli':
+        specifier: 2.58.6
+        version: 2.58.6
       '@types/node':
         specifier: 'catalog:'
         version: 26.2.0
@@ -1063,7 +1069,7 @@ importers:
         version: 11.7.0(effect@4.0.4)
       '@sentry/profiling-node':
         specifier: 11.7.0
-        version: 11.7.0
+        version: 11.7.0(@babel/core@7.29.7)(rollup@4.62.4)
       '@vercel/connect':
         specifier: 2.4.1
         version: 2.4.1(@modelcontextprotocol/sdk@1.32.1)(ai@7.0.135)(better-auth@1.7.7)(eve@0.74.0)
@@ -10285,7 +10291,7 @@ snapshots:
       '@sentry/conventions': 0.27.0
       '@sentry/core': 11.8.0
 
-  '@sentry/profiling-node@11.7.0':
+  '@sentry/profiling-node@11.7.0(@babel/core@7.29.7)(rollup@4.62.4)':
     dependencies:
       '@sentry/core': 11.7.0
       '@sentry/node': 11.7.0(@babel/core@7.29.7)(rollup@4.62.4)

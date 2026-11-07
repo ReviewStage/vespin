@@ -17,6 +17,13 @@
  * only the attributes set here and Sentry's own `sentry.*` bookkeeping, so
  * nothing leaves but ids, names, kinds and durations.
  *
+ * A sampled startup is also profiled: Sentry's Node profiler samples the
+ * runner's stacks while the startup's span is open, so the profile holds the
+ * functions the startup ran and their timings, never a value. Its binary
+ * sits beside the bundle in the agent image (`scripts/profiler-binary.mjs`),
+ * and its module is imported only once a launch is handed a trace, because a
+ * host's runner ships no binary and the module loads it as it is imported.
+ *
  * Note that the spans are started inactive and parented by hand, because a
  * fiber does not carry the Node async context the SDK reads an active span
  * from.
@@ -113,18 +120,21 @@ function keptAttributes<Attributes extends Record<string, unknown>>(
 
 /**
  * What the SDK starts with: the service's project, environment and release;
- * no integrations, so nothing is instrumented and no uncaught error is
- * caught; no error event, no client report, no metric; and the launch trace's own
+ * no integrations but the profiler, so nothing is instrumented and no
+ * uncaught error is caught; every sampled trace profiled while its spans run; no error event, no client report, no metric; and the launch trace's own
  * sampling, with none of the runner's own where the trace named none.
  * Note that the runtime's module hooks stay off, because nothing here needs
  * them and the launch's start is to run as it did.
  */
-function sentryOptions(trace: RunnerTrace): Sentry.NodeOptions {
+function sentryOptions(trace: RunnerTrace, profiling: ProfilingNode): Sentry.NodeOptions {
   return {
     dsn: trace.dsn,
     environment: trace.environment,
     ...(trace.release === undefined ? undefined : { release: trace.release }),
     defaultIntegrations: false,
+    integrations: [profiling.nodeProfilingIntegration()],
+    profileSessionSampleRate: 1,
+    profileLifecycle: "trace",
     enableRuntimeChannelInjection: false,
     sendClientReports: false,
     tracesSampler: ({ inheritOrSampleWith }) => inheritOrSampleWith(0),
@@ -132,6 +142,9 @@ function sentryOptions(trace: RunnerTrace): Sentry.NodeOptions {
     beforeSendSpan: (span) => ({ ...span, attributes: keptAttributes(span.attributes) }),
   };
 }
+
+/** Sentry's Node profiler, imported only for a launch handed a trace. */
+type ProfilingNode = typeof import("@sentry/profiling-node");
 
 const RUNNER_EVENTS: ReadonlySet<string> = new Set(Object.values(RUNNER_EVENT));
 
@@ -200,8 +213,12 @@ function observed(startup: Startup, message: RunnerMessage): boolean {
 }
 
 /** The SDK started on the trace handed, and the startup's span begun at the process's start, its config's read beneath it. */
-function begunStartup(trace: RunnerTrace, harness: RunnerHarness): Startup {
-  Sentry.init(sentryOptions(trace));
+function begunStartup(
+  trace: RunnerTrace,
+  harness: RunnerHarness,
+  profiling: ProfilingNode,
+): Startup {
+  Sentry.init(sentryOptions(trace, profiling));
   const attributes = {
     [ATTRIBUTE.HARNESS]: harness,
     ...(trace.path === undefined ? undefined : { [ATTRIBUTE.PATH]: trace.path }),
@@ -287,7 +304,10 @@ export const launchTrace = (
     ? Effect.succeed(UNTRACED)
     : Effect.map(
         Effect.acquireRelease(
-          Effect.sync(() => begunStartup(trace, harness)),
+          Effect.map(
+            Effect.promise(() => import("@sentry/profiling-node")),
+            (profiling) => begunStartup(trace, harness, profiling),
+          ),
           (startup) =>
             Effect.andThen(
               Effect.sync(() => endStartup(startup)),
