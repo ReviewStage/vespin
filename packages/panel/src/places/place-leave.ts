@@ -79,9 +79,11 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
   const access = useRouteAccess();
   const standing = useRef<LeaveAsk | undefined>(undefined);
   const passing = useRef(false);
-  // The moves the blocker was asked about, and what is done once the move held lands, in the order the doors were made.
+  // The moves the blocker was asked about and where the last one went, and what is done once a move held lands, by
+  // where it goes, in the order the doors were made.
   const moves = useRef(0);
-  const landings = useRef<(() => void)[]>([]);
+  const askedTo = useRef<string | undefined>(undefined);
+  const landings = useRef<{ readonly to: string | undefined; readonly landed: () => void }[]>([]);
   // What the last ask made up front by a door that could not move first lets go on Leave.
   const waiting = useRef<(() => void)[]>([]);
   const heard = useRef(onStanding);
@@ -124,7 +126,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         const waitingBefore = waiting.current;
         move();
         if (moves.current !== asked) {
-          landings.current.push(landed);
+          landings.current.push({ to: askedTo.current, landed });
           return;
         }
         // Note that a door within `move` that asked already holds this one too, since the page holds one question.
@@ -163,6 +165,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
   const shouldBlockFn = useCallback<ShouldBlockFn>(
     ({ current, next }) => {
       moves.current += 1;
+      askedTo.current = next.pathname;
       if (standing.current === undefined || passing.current) return false;
       if (current.pathname === next.pathname) return false;
       return !sameDraftAt(
@@ -180,14 +183,15 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
     disabled: !held,
   });
   const { release } = doors;
-  // A move held at the ask lands on the router's history, where what its door does once there follows it.
+  // A move held at the ask lands on the router's history, where what its door does once there follows it. Note that
+  // any move settles every landing waiting, since one that went elsewhere means the move held never will.
   const { history } = router;
   useEffect(
     () =>
-      history.subscribe(() => {
+      history.subscribe(({ location }) => {
         const due = landings.current;
         landings.current = [];
-        for (const landed of due) landed();
+        for (const { to, landed } of due) if (to === location.pathname) landed();
       }),
     [history],
   );

@@ -153,3 +153,23 @@ test("the shell hears the ask while a page stands it, which asks the page, and n
   window.down();
   assert.equal(window.shell.heard, undefined);
 });
+
+test("what a door does once its held move lands is dropped where the page takes its ask down unanswered and the window moves elsewhere", async () => {
+  const window = mount(memoryAt(AUTOMATION));
+  const landed: string[] = [];
+
+  act(() =>
+    window.place().arrive(
+      () => window.history.push(LIST),
+      () => landed.push(LIST),
+    ),
+  );
+  await settleQueries();
+  window.down();
+  await settleQueries();
+  act(() => window.history.push("/acme/inbox"));
+  await settleQueries();
+
+  assert.equal(window.asked.length, 1, "the move asked");
+  assert.deepEqual(landed, []);
+});
