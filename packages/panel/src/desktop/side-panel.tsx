@@ -81,7 +81,6 @@ import { absurd } from "effect";
 import {
   Fragment,
   type ReactNode,
-  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -2159,19 +2158,18 @@ function TabContent({
             value={codeFilesRead ? (path) => onBrowseFile(undefined, path, true) : undefined}
           >
             {/* The tab is a chunk of its own, read the first time one is drawn or its card hangs (`pages-on-demand.ts`). */}
-            <Suspense fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}>
-              <PULL_REQUEST_TAB.Route
-                agentId={tab.changes}
-                number={tab.number}
-                control={agentsOf(tab.changes)}
-                shown={shown}
-                repository={repository}
-                tree={fileTree}
-                view={ofPullRequestTab(pullRequestViews, tab) ?? PULL_REQUEST_VIEW.CONVERSATION}
-                onView={(view) => onPullRequestView(tab, view)}
-                onActions={(actions) => onTabActions(tab, actions)}
-              />
-            </Suspense>
+            <PULL_REQUEST_TAB.Surface
+              fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}
+              agentId={tab.changes}
+              number={tab.number}
+              control={agentsOf(tab.changes)}
+              shown={shown}
+              repository={repository}
+              tree={fileTree}
+              view={ofPullRequestTab(pullRequestViews, tab) ?? PULL_REQUEST_VIEW.CONVERSATION}
+              onView={(view) => onPullRequestView(tab, view)}
+              onActions={(actions) => onTabActions(tab, actions)}
+            />
           </OpenFileTabProvider>
         </PullRequestsOnGitHub>
       );

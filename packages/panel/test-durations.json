@@ -111,7 +111,6 @@
   "src/history-titles.test.ts": 14,
   "src/hover-card.test.ts": 621,
   "src/kept-keys.test.ts": 87,
-  "src/lazy-route.test.ts": 160,
   "src/link-menu.test.ts": 830,
   "src/mac-command-ask.test.ts": 432,
   "src/markdown-html-parser.test.ts": 88,

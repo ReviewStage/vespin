@@ -124,6 +124,7 @@ import {
   XIcon,
 } from "@repo/ui/icons";
 import { landedMark } from "@repo/ui/landed";
+import { lazySurface } from "@repo/ui/lazy-surface";
 import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
 import {
   VIRTUAL_ROWS_ANCHOR,
@@ -137,7 +138,6 @@ import {
   createContext,
   type ReactNode,
   type RefObject,
-  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -162,7 +162,6 @@ import {
 } from "../desktop/strip-tabs.js";
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
-import { lazyRoute } from "../lazy-route.js";
 import {
   pullRequestChecksQuery,
   pullRequestConversationQuery,
@@ -368,7 +367,7 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * chapter logic are opened seldom. What stands while
  * the chunk loads is the view's own wait, for a frame.
  */
-const CHAPTERS_TAB = lazyRoute(() =>
+const CHAPTERS_TAB = lazySurface(() =>
   import("./agent-chapters-tab.js").then((loaded) => loaded.AgentChaptersTab),
 );
 
@@ -3656,25 +3655,24 @@ function PullRequestTabBody({
                   hidden={view !== PULL_REQUEST_VIEW.CHAPTERS}
                 >
                   {chaptersSeen ? (
-                    <Suspense
-                      fallback={<SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />}
+                    <HandTabActionsContext.Provider
+                      value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}
                     >
-                      <HandTabActionsContext.Provider
-                        value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}
-                      >
-                        <CHAPTERS_TAB.Route
-                          agentId={agentId}
-                          source={source}
-                          shown={shown && view === PULL_REQUEST_VIEW.CHAPTERS}
-                          repository={repository}
-                          tree={tree}
-                          chapters={chapters}
-                          changes={changes}
-                          threads={changesThreads}
-                          lineComments={{ pending: pendingReview, onWritten: written }}
-                        />
-                      </HandTabActionsContext.Provider>
-                    </Suspense>
+                      <CHAPTERS_TAB.Surface
+                        fallback={
+                          <SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />
+                        }
+                        agentId={agentId}
+                        source={source}
+                        shown={shown && view === PULL_REQUEST_VIEW.CHAPTERS}
+                        repository={repository}
+                        tree={tree}
+                        chapters={chapters}
+                        changes={changes}
+                        threads={changesThreads}
+                        lineComments={{ pending: pendingReview, onWritten: written }}
+                      />
+                    </HandTabActionsContext.Provider>
                   ) : null}
                 </Fill>
               </>

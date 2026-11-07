@@ -52,6 +52,7 @@
     "./image-zoom": "./src/image-zoom.js",
     "./confirm-state": "./src/confirm-state.js",
     "./error-boundary": "./src/components/error-boundary/error-boundary.js",
+    "./lazy-surface": "./src/components/lazy-surface/lazy-surface.js",
     "./use-state-with-ref": "./src/use-state-with-ref.js",
     "./use-inline-rename": "./src/use-inline-rename.js",
     "./description-comments": "./src/description-comments.js",
