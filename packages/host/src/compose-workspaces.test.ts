@@ -20,6 +20,7 @@ import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import {
   GITHUB_LAST_SIGN_IN_REFUSAL,
+  WORKSPACE_AGENT_NOT_READY_REFUSAL,
   WORKSPACE_NOT_PERMITTED_REFUSAL,
   WORKSPACE_SLUG_REFUSAL,
 } from "./acts.js";
@@ -1328,6 +1329,37 @@ it.effect(
 
       assert.equal(left, undefined);
       assert.equal(last()?.activeTaskId, undefined);
+    }),
+);
+
+it.effect(
+  "deleting the open plan's workspace closes the plan, and a delete refused while an agent starts keeps it open and says why",
+  () =>
+    Effect.gen(function* () {
+      const acmeTask = {
+        ...task(INVITES, "Teammate invitations", "# Draft", 10),
+        workspaceId: ACME.id,
+      };
+      const service = fakeService([acmeTask]);
+      service.memberships = [PERSONAL, ACME];
+      service.agentNotReady = true;
+      const { act, call, last, listed, openTask, settled } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listed();
+      yield* openTask(INVITES);
+
+      const refused = yield* act("WORKSPACE_DELETE", { workspaceId: ACME.id });
+
+      assert.deepEqual(refused, { refused: WORKSPACE_AGENT_NOT_READY_REFUSAL });
+      assert.equal(last()?.activeTaskId, INVITES);
+
+      service.agentNotReady = false;
+      const deleted = yield* act("WORKSPACE_DELETE", { workspaceId: ACME.id });
+      yield* settled;
+
+      assert.equal(deleted, undefined);
+      assert.equal(last()?.activeTaskId, undefined);
+      assert.deepEqual(last()?.workspaces, [PERSONAL]);
     }),
 );
 

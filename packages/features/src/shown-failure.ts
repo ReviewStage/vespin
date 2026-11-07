@@ -200,6 +200,7 @@ export const FAILURE_SURFACE = {
   WORKSPACE_CREATE: "workspace.create",
   WORKSPACE_EXPERIMENT: "workspace.experiment",
   WORKSPACE_ENVIRONMENT_READ: "workspace_environment.read",
+  WORKSPACE_DELETE: "workspace.delete",
   WORKSPACE_GITHUB: "workspace.github",
   WORKSPACE_GITHUB_DISCONNECT: "workspace_github.disconnect",
   WORKSPACE_INVITATIONS_READ: "workspace_invitations.read",
