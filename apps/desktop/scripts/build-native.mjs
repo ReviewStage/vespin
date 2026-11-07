@@ -1,10 +1,17 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { swiftCompilerArguments } from "./package-config.mjs";
-import { LIQUID_GLASS_ADDON, NATIVE_HELPERS, NODE_PTY } from "./package-layout.mjs";
+import {
+  LIQUID_GLASS_ADDON,
+  NATIVE_HELPERS,
+  NODE_PTY,
+  PACKAGED_ARCHITECTURE,
+  SENTRY_CPU_PROFILER,
+} from "./package-layout.mjs";
 
 if (process.platform !== "darwin") {
   process.stdout.write("Skipping the macOS helpers on this platform.\n");
@@ -104,3 +111,83 @@ fs.cpSync(path.join(nodePtySource, "lib"), path.join(nodePtyOutput, "lib"), {
 fs.cpSync(nodePtyPrebuilds, path.join(nodePtyOutput, NODE_PTY.prebuilds), { recursive: true });
 fs.chmodSync(path.join(nodePtyOutput, NODE_PTY.prebuilds, "spawn-helper"), 0o755);
 process.stdout.write(`Copied node-pty: ${NODE_PTY.folder}\n`);
+
+// Sentry's CPU profiler is compiled, from its own source, against the headers
+// of the Electron the app ships, since the package's prebuilt addons are for
+// Node's ABIs and Electron's differs. It is rebuilt only when its source, the
+// Electron, or these scripts changed, as the helpers are. Note that the copy
+// compiled leaves its measurements timer open at teardown rather than closing
+// it, because Electron frees main's environment after its loop last runs, so
+// a close requested then is never completed and Electron traps on it: every
+// quit would end in a crash. The process's exit takes the timer instead.
+const desktopPackage = JSON.parse(fs.readFileSync(path.join(appRoot, "package.json"), "utf8"));
+const electronVersion = desktopPackage.devDependencies.electron;
+const appRequire = createRequire(path.join(appRoot, "package.json"));
+const profilerRequire = createRequire(appRequire.resolve("@sentry/profiling-node"));
+const profilerSource = path.dirname(
+  profilerRequire.resolve(`${SENTRY_CPU_PROFILER.packageName}/package.json`),
+);
+const profilerOutput = path.join(outputDirectory, SENTRY_CPU_PROFILER.binary);
+const profilerStampPath = `${profilerOutput}.stamp`;
+const TIMER_CLOSE = `    if (!uv_is_closing(handle)) {
+      uv_close(handle, [](uv_handle_t *handle) { delete handle; });
+    }
+`;
+const profilerSourceText = fs.readFileSync(
+  path.join(profilerSource, "bindings", "cpu_profiler.cc"),
+  "utf8",
+);
+const profilerStamp = createHash("sha256");
+for (const part of scriptSources) profilerStamp.update(part);
+profilerStamp.update(profilerSourceText);
+profilerStamp.update(fs.readFileSync(path.join(profilerSource, "binding.gyp")));
+profilerStamp.update(electronVersion);
+const profilerStampText = profilerStamp.digest("hex");
+if (
+  fs.existsSync(profilerOutput) &&
+  fs.existsSync(profilerStampPath) &&
+  fs.readFileSync(profilerStampPath, "utf8") === profilerStampText
+) {
+  process.stdout.write(`Kept Sentry's CPU profiler: ${profilerOutput}\n`);
+} else {
+  if (!profilerSourceText.includes(TIMER_CLOSE)) {
+    throw new Error(
+      `${SENTRY_CPU_PROFILER.packageName}'s teardown changed: read its MeasurementsTicker destructor again before building it for Electron.`,
+    );
+  }
+  fs.rmSync(profilerStampPath, { force: true });
+  const profilerBuild = path.join(outputDirectory, "sentry-cpu-profiler-build");
+  fs.rmSync(profilerBuild, { recursive: true, force: true });
+  fs.mkdirSync(path.join(profilerBuild, "bindings"), { recursive: true });
+  fs.copyFileSync(
+    path.join(profilerSource, "binding.gyp"),
+    path.join(profilerBuild, "binding.gyp"),
+  );
+  fs.writeFileSync(
+    path.join(profilerBuild, "bindings", "cpu_profiler.cc"),
+    profilerSourceText.replace(TIMER_CLOSE, ""),
+  );
+  const result = spawnSync(
+    process.execPath,
+    [
+      appRequire.resolve("node-gyp/bin/node-gyp.js"),
+      "rebuild",
+      `--target=${electronVersion}`,
+      `--arch=${PACKAGED_ARCHITECTURE}`,
+      "--dist-url=https://electronjs.org/headers",
+    ],
+    { cwd: profilerBuild, stdio: "inherit" },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Could not build Sentry's CPU profiler for Electron (${result.status})`);
+  }
+  fs.copyFileSync(
+    path.join(profilerBuild, "build", "Release", "sentry_cpu_profiler.node"),
+    profilerOutput,
+  );
+  fs.writeFileSync(profilerStampPath, profilerStampText);
+  process.stdout.write(
+    `Built Sentry's CPU profiler for Electron ${electronVersion}: ${profilerOutput}\n`,
+  );
+}

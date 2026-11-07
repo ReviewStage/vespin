@@ -46,6 +46,19 @@ export const NODE_PTY = {
   binaries: ["pty.node", "spawn-helper"],
 };
 
+/**
+ * Sentry's CPU profiler, which profiles main's kept traces
+ * (`src/main/services/telemetry-service.ts`): `@sentry/node-cpu-profiler`'s
+ * addon, which the package ships prebuilt for Node's ABIs alone, so the native
+ * build compiles its source against the packaged Electron's headers, for the
+ * packaged architecture, and packaging ships and signs it as the helpers. The
+ * profiler's JavaScript is bundled into main, which names it this addon.
+ */
+export const SENTRY_CPU_PROFILER = {
+  packageName: "@sentry/node-cpu-profiler",
+  binary: "sentry-cpu-profiler.node",
+};
+
 export function packagedAppPath(repoRoot) {
   return path.join(
     repoRoot,

@@ -14,16 +14,14 @@ import {
   withoutAccessTokens,
 } from "@repo/features/sentry-breadcrumbs";
 import { type SentryCapture, sentryReporterLayer } from "@repo/features/sentry-reporting";
-import {
-  SENTRY_PROFILE_SESSION_SAMPLE_RATE,
-  sentryTracesSampler,
-} from "@repo/features/sentry-tracing";
+import { SENTRY_PROFILING, sentryTracesSampler } from "@repo/features/sentry-tracing";
 import { type RunMode, sentryReportingEnabled } from "@repo/host";
 import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import * as Sentry from "@sentry/electron/main";
 import { Effect, Exit, type Layer, Option, Scope, Stream, Tracer } from "effect";
+import { nativeHelperPath } from "../native/native-helper";
 import {
   type CpuSummary,
   sampleProcessCpu,
@@ -36,6 +34,12 @@ import type { DesktopConfig } from "./desktop-config";
 /** How long the quit waits for a queued crash report to leave; a flush must not hold a quit. */
 const CRASH_REPORT_FLUSH_MS = 2_000;
 
+/** Sentry's CPU profiler's addon, built for this Electron (`scripts/package-layout.mjs`'s `SENTRY_CPU_PROFILER`). */
+const CPU_PROFILER_ADDON = "sentry-cpu-profiler.node";
+
+/** The variable Sentry's CPU profiler reads its addon's path from as it loads. */
+const CPU_PROFILER_PATH_VARIABLE = "SENTRY_PROFILER_BINARY_PATH";
+
 declare const PACKAGED_SENTRY_DSN: string;
 /**
  * `<name>@X.Y.Z`, the release `build.mjs` uploads this bundle's source maps
@@ -45,6 +49,35 @@ declare const PACKAGED_SENTRY_DSN: string;
  * which build it was is the environment's to say instead.
  */
 declare const PACKAGED_SENTRY_RELEASE: string;
+
+/** A failure's code alone, which a log line may carry: its message may name a path in the developer's home. */
+function failureCode(cause: unknown): string {
+  return cause instanceof Error && "code" in cause ? String(cause.code) : "no code";
+}
+
+/**
+ * Adds Sentry's CPU profiler to main's SDK once its addon loads, from the
+ * path the native build put it at, a moment after the SDK starts; where it
+ * cannot load, main reports on unprofiled. Note that the path is named in
+ * main's environment only while the profiler loads, because every process
+ * main starts inherits that environment, a Node of the developer's own
+ * among them, which must not load an addon built for Electron.
+ */
+function profileMain(): void {
+  process.env[CPU_PROFILER_PATH_VARIABLE] = nativeHelperPath(CPU_PROFILER_ADDON);
+  void import("@sentry/profiling-node")
+    .then(
+      ({ nodeProfilingIntegration }) => Sentry.addIntegration(nodeProfilingIntegration()),
+      (cause: unknown) => {
+        console.error(
+          `Sentry's CPU profiler did not load (${failureCode(cause)}), so main is not profiled.`,
+        );
+      },
+    )
+    .finally(() => {
+      delete process.env[CPU_PROFILER_PATH_VARIABLE];
+    });
+}
 
 /**
  * Crash reporting, begun at the entry rather than inside `start`: Electron
@@ -57,28 +90,31 @@ declare const PACKAGED_SENTRY_RELEASE: string;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Main also decides, once a launch, whether its windows are profiled: where
- * they are, the SDK serves every document with `Document-Policy: js-profiling`,
- * which the browser's profiler needs, and each window profiles as it starts
- * (`renderer/desktop-sentry-sdk.ts`). Note that the choice is made here rather
- * than by each window's SDK, because the policy alone already costs a page:
- * Chromium readies its profiler for every document it is granted to, so a
- * launch left unprofiled is served none.
+ * Main and every window profile while a kept trace's root span is open
+ * (`SENTRY_PROFILING`), so a mirror's attempt, a send, and a launch's start
+ * each carry the stack frames that ran under them. The SDK serves every
+ * window's document with `Document-Policy: js-profiling`, which the browser's
+ * profiler needs (`renderer/desktop-sentry-sdk.ts`). Main's own profiler is
+ * Node's, whose addon Sentry ships for Node alone, so the native build
+ * compiles it for this Electron (`profileMain` below).
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
+  const enabled = sentryReportingEnabled(runMode.sendsNetwork, PACKAGED_SENTRY_DSN);
   Sentry.init({
     dsn: PACKAGED_SENTRY_DSN,
-    enabled: sentryReportingEnabled(runMode.sendsNetwork, PACKAGED_SENTRY_DSN),
+    enabled,
     release: PACKAGED_SENTRY_RELEASE,
     environment,
     tracesSampler: sentryTracesSampler,
-    enableRendererProfiling: Math.random() < SENTRY_PROFILE_SESSION_SAMPLE_RATE,
+    ...SENTRY_PROFILING,
+    enableRendererProfiling: true,
     integrations: [Sentry.startupTracingIntegration()],
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
     beforeSendSpan: Sentry.withStreamedSpan(spanWithoutAccessTokens),
   });
+  if (enabled) profileMain();
 }
 
 /** Sentry's status code for a span that ended in error, as its SDK writes it. */

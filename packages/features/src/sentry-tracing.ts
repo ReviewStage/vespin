@@ -25,10 +25,14 @@ import { Context, Predicate } from "effect";
 export const SENTRY_TRACES_SAMPLE_RATE = 0.1;
 
 /**
- * The share of launches whose windows are profiled, through the whole
- * launch: enough to find what runs hot in the field, not every Mac's cost.
+ * How main and each window profile, as Sentry's options name it: every launch,
+ * and only while a kept trace's root span is open, so a profile is kept where
+ * its trace is and never on a rate of its own.
  */
-export const SENTRY_PROFILE_SESSION_SAMPLE_RATE = 0.05;
+export const SENTRY_PROFILING = {
+  profileSessionSampleRate: 1,
+  profileLifecycle: "trace",
+} as const;
 
 /** The scheme `@sentry/electron` carries a renderer's reports to main on, by default. */
 const SENTRY_IPC_URL_PREFIX = "sentry-ipc://";

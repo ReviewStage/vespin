@@ -22,6 +22,7 @@ import {
   NATIVE_HELPERS,
   NODE_PTY,
   packagedAppPath,
+  SENTRY_CPU_PROFILER,
 } from "./package-layout.mjs";
 import { builderReleaseArtifactDirectory, RELEASE_VOLUME_NAME } from "./release-config.mjs";
 
@@ -116,7 +117,7 @@ export function createElectronBuilderConfig(env = process.env) {
       entitlementsInherit: packageAssets.entitlementsPath,
       minimumSystemVersion: MACOS_DEPLOYMENT_TARGET,
       binaries: [
-        ...[...NATIVE_HELPERS, LIQUID_GLASS_ADDON].map(macBinaryPath),
+        ...[...NATIVE_HELPERS, LIQUID_GLASS_ADDON, SENTRY_CPU_PROFILER].map(macBinaryPath),
         ...NODE_PTY.binaries.map((binary) =>
           path.join("Contents", "Resources", NODE_PTY.folder, NODE_PTY.prebuilds, binary),
         ),

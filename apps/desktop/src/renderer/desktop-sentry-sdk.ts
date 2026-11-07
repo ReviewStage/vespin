@@ -13,7 +13,11 @@ import {
   spanWithoutAccessTokens,
   withoutAccessTokens,
 } from "@repo/features/sentry-breadcrumbs";
-import { sentryTracesRequest, sentryTracesSampler } from "@repo/features/sentry-tracing";
+import {
+  SENTRY_PROFILING,
+  sentryTracesRequest,
+  sentryTracesSampler,
+} from "@repo/features/sentry-tracing";
 import { sendShownFailure } from "@repo/features/shown-failure";
 import { sentrySendTracer } from "@repo/panel/send-traces";
 import { appStateQuery } from "@repo/panel/use-app-state";
@@ -29,7 +33,6 @@ import {
   startInactiveSpan,
   startNewTrace,
   startSpan,
-  uiProfiler,
   withStreamedSpan,
 } from "@sentry/electron/renderer";
 import type { QueryClient } from "@tanstack/react-query";
@@ -71,14 +74,11 @@ const PANEL_SPAN_OP = "ui.panel";
  * (`@repo/panel/send-traces`), because main's own fetch tracing would carry
  * main's trace rather than the press's.
  *
- * The window profiles from the moment the SDK stands to its close, in
- * chunks of a minute, wherever main served its document with the profiling
- * policy, which it does for a sample of launches
- * (`SENTRY_PROFILE_SESSION_SAMPLE_RATE`); elsewhere the browser refuses the
- * profiler once and the SDK profiles nothing more. Note that it profiles the
- * whole session rather than only sampled traces, because a Mac running hot
- * is mostly the work no trace was open for. A profile is the panel's own
- * stack frames, function names and bundle paths, and none of a person's words.
+ * The window profiles while a kept trace's root span is open
+ * (`SENTRY_PROFILING`): a page load, a send pressed, and whatever else
+ * `sentryTracesSampler` keeps, as main serves every document with the
+ * profiling policy. A profile is the panel's own stack frames, function names
+ * and bundle paths, and none of a person's words.
  */
 export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
   init({
@@ -90,8 +90,7 @@ export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
       browserProfilingIntegration(),
     ],
     tracesSampler: sentryTracesSampler,
-    profileLifecycle: "manual",
-    profileSessionSampleRate: 1,
+    ...SENTRY_PROFILING,
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
     beforeSendLog: (log) =>
@@ -102,7 +101,6 @@ export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
     beforeSendSpan: withStreamedSpan(spanWithoutAccessTokens),
   });
-  uiProfiler.startProfiler();
   return {
     reportBlankWindow: (error, why) => {
       captureException(error, { mechanism: BLANK_WINDOW_MECHANISM[why] });

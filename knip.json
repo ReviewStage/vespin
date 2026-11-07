@@ -22,7 +22,8 @@
         "scripts/*.mjs",
         "electron-builder.ts"
       ],
-      "project": ["src/**", "scripts/**"]
+      "project": ["src/**", "scripts/**"],
+      "ignoreDependencies": ["node-gyp"]
     },
     "apps/host": {
       "entry": ["src/main.ts", "scripts/*.ts"],

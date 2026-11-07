@@ -276,6 +276,9 @@ importers:
       '@sentry/esbuild-plugin':
         specifier: 5.4.0
         version: 5.4.0(rollup@4.62.4)
+      '@sentry/profiling-node':
+        specifier: 11.8.0
+        version: 11.8.0(@babel/core@7.29.7)(rollup@4.62.4)
       '@tailwindcss/node':
         specifier: 4.3.3
         version: 4.3.3
@@ -312,6 +315,9 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1(@noble/hashes@2.3.0)
+      node-gyp:
+        specifier: 12.4.0
+        version: 12.4.0
       node-pty:
         specifier: 1.1.0
         version: 1.1.0
@@ -3986,6 +3992,10 @@ packages:
 
   '@sentry/profiling-node@11.7.0':
     resolution: {integrity: sha512-O0kaxqQL2DIOnKD02BfaalGR0l0shmGs7/D3u1k0v6Fg5uO6aSmZqtXG/WDoqivVoP1fyPcFlIx+KTE9T/A+pw==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
+  '@sentry/profiling-node@11.8.0':
+    resolution: {integrity: sha512-0hBXM22B4pUGX8/azqsuX6vEfxTqQyfQMrJlJC2HUrXx6xwEsfJ9BXTr9l/fBg+XLrEKYB6eaTTr55IkltnSVw==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
   '@sentry/replay-canvas@11.7.0':
@@ -10289,6 +10299,16 @@ snapshots:
     dependencies:
       '@sentry/core': 11.7.0
       '@sentry/node': 11.7.0(@babel/core@7.29.7)(rollup@4.62.4)
+      '@sentry/node-cpu-profiler': 2.4.4
+    transitivePeerDependencies:
+      - '@babel/core'
+      - rollup
+      - webpack
+
+  '@sentry/profiling-node@11.8.0(@babel/core@7.29.7)(rollup@4.62.4)':
+    dependencies:
+      '@sentry/core': 11.8.0
+      '@sentry/node': 11.8.0(@babel/core@7.29.7)(rollup@4.62.4)
       '@sentry/node-cpu-profiler': 2.4.4
     transitivePeerDependencies:
       - '@babel/core'
