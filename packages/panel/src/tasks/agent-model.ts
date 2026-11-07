@@ -6,6 +6,7 @@ import {
 } from "@repo/features/agent-failure-words";
 import { recordedVideosOf } from "@repo/features/agent-pictures-model";
 import { harnessNameOf } from "@repo/features/agent-runtime-models";
+import { newerTurn, turnAgentStatus, turnOpen } from "@repo/features/agent-status";
 import {
   AGENT_TOOL,
   CLAUDE_CODE_TOOL,
@@ -35,6 +36,7 @@ import {
   type AgentStatus,
   type AgentSummary,
   type AgentTranscriptMessage,
+  type AgentTurn,
   CONTEXT_WINDOW,
   type ContextWindow,
   EXTRA_REPOSITORY_REFUSAL,
@@ -116,6 +118,7 @@ import {
   MESSAGE_ROLE,
   type SlackLineMetadata,
   type ThreadLineMetadata,
+  TURN_STATUS,
   type UnparsedWireValue,
   USER_MESSAGE_METADATA,
   type UserMessageMetadata,
@@ -2555,16 +2558,18 @@ export function turnStretches(rows: readonly TurnRow<AgentPart>[]): readonly Tur
   return stretches;
 }
 
-/** What an agent is doing while it may still write, as its transcript's working line says it. */
-const WORKING_PHASE = {
+/** What an agent is doing while it may still write, as its newest turn's record says it and its working line words it. */
+export const WORKING_PHASE = {
   /** It is being taken back to an earlier line (`rewind-action.tsx`), and stopped first where it ran. */
   REWINDING: "rewinding",
-  /** Its session has not opened the turn that will answer the newest line. */
+  /** No turn of it is open yet: its first is still to be queued, or the line that opens the next is on its way. */
   STARTING: "starting",
-  /** The turn is open and its model has drawn nothing yet. */
-  THINKING: "thinking",
-  /** The turn has drawn something: a call, a thought, or words. */
+  /** Its newest turn is queued, waiting for a runner to take its line. */
+  WAITING: "waiting",
+  /** Its newest turn runs. */
   WORKING: "working",
+  /** A Stop was asked of its newest turn, which runs until its runner ends it. */
+  STOPPING: "stopping",
 } as const;
 
 export type WorkingPhase = (typeof WORKING_PHASE)[keyof typeof WORKING_PHASE];
@@ -2573,8 +2578,9 @@ export type WorkingPhase = (typeof WORKING_PHASE)[keyof typeof WORKING_PHASE];
 const WORKING_PHASE_WORDS = {
   [WORKING_PHASE.REWINDING]: "Rewinding…",
   [WORKING_PHASE.STARTING]: "Starting…",
-  [WORKING_PHASE.THINKING]: "Thinking…",
+  [WORKING_PHASE.WAITING]: "Waiting for the runner…",
   [WORKING_PHASE.WORKING]: "Working…",
+  [WORKING_PHASE.STOPPING]: "Stopping…",
 } as const satisfies Record<WorkingPhase, string>;
 
 /** What the working line says while a local agent's launch stands at a step that names neither its host nor its harness. */
@@ -2601,17 +2607,23 @@ export interface StartingLaunch {
   readonly runtime?: NativeAgentRuntime | undefined;
 }
 
+/** The phases before a runner opened the turn, which a local agent's launch words in their place. */
+const BEFORE_THE_RUNNER: ReadonlySet<WorkingPhase> = new Set([
+  WORKING_PHASE.STARTING,
+  WORKING_PHASE.WAITING,
+]);
+
 /**
- * What the working line says in a phase. While the agent starts, a local
- * agent whose page said where its launch stands (`AGENT_LAUNCH`) says what
- * its start waits on: its host, by the name its Runs on chip shows, taking
- * the launch, the folder, the repository, or its harness by name. With no
- * launch said, as for a cloud agent, an older host, or an older service, it
- * says "Starting…" as before. Note that a launch said once the turn has
- * opened says nothing, since the phase has left starting.
+ * What the working line says in a phase. Before a runner opened the turn, a
+ * local agent whose page said where its launch stands (`AGENT_LAUNCH`) says
+ * what its start waits on: its host, by the name its Runs on chip shows,
+ * taking the launch, the folder, the repository, or its harness by name.
+ * With no launch said, as for a cloud agent, it says the phase's own words.
+ * Note that a launch said once the turn runs says nothing, since the phase
+ * has left waiting.
  */
 export function workingLineWords(phase: WorkingPhase, starting?: StartingLaunch): string {
-  if (phase !== WORKING_PHASE.STARTING || starting === undefined) {
+  if (!BEFORE_THE_RUNNER.has(phase) || starting === undefined) {
     return WORKING_PHASE_WORDS[phase];
   }
   const { launch, host, runtime } = starting;
@@ -2625,38 +2637,75 @@ export function workingLineWords(phase: WorkingPhase, starting?: StartingLaunch)
   }
 }
 
+/** What a tab reads its agent standing by (`tabTurnOf`). */
+export interface TabTurn {
+  /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
+  readonly working: boolean;
+  /** What the working line says the agent is doing. */
+  readonly phase: WorkingPhase;
+  /** Where the agent stands by that turn, which the end row is drawn from once it no longer works. */
+  readonly status: AgentStatus;
+  /** Why that turn failed, in the wire's word; none where it did not. */
+  readonly failure: AgentFailure | undefined;
+}
+
+/** What of the composer a tab's standing is read from. */
+export interface TabSends {
+  /** The newest turn a send's answer named (`HeldComposer`'s `turn`). */
+  readonly turn: AgentTurn | undefined;
+  /** Whether a line sent has not been answered yet, which only its call's deadline bounds. */
+  readonly unanswered: boolean;
+  /** Whether a rewind is out, an edit's or a revert's, until its call answers. */
+  readonly rewinding: boolean;
+}
+
 /**
- * What a working agent is doing, as far as its transcript shows it, which
- * is what its working line says in place of a bare "Working…" between a
- * send and the turn's first row, as Codex and Cursor word a cloud agent's
- * start. It is starting while its session has not run a turn, or while
- * no turn has written a journal, or the newest journal is closed and a
- * line the developer sent after it awaits a turn of its own; thinking
- * while that journal is open and holds nothing drawn past its step
- * boundaries, which is the model at its first step, since a step's
- * reasoning lands only as the step ends and its words a finished sentence
- * at a time; and working once anything is drawn.
- * Note that a line sent while a turn runs steers that turn, so the open
- * journal before it is what the agent is doing, not the line; and that a
- * closed journal with no line after it stays working, because the page
- * that closes a journal can still say the agent runs until its turn row
- * settles a look later. While a rewind is out it is rewinding, whatever
- * the transcript shows.
+ * Where an agent's tab reads it standing, from one record: its newest
+ * turn's, the summary's, or the one a send's answer named where that is
+ * newer, as the live list catches up with it (`newerTurn`), the summary's
+ * where both name one turn. It works while that turn is open, which only
+ * its row's deadlines end, and while a line sent or a rewind has not been
+ * answered, which their calls' own deadlines end. How it ended, and why it
+ * failed, are that turn's. With no turn it reads as its summary's status:
+ * starting before its first, and, past the grace, failed as one that never
+ * started. Note that nothing here reads the transcript, which says what the
+ * turn wrote and never whether it runs.
  */
-export function agentWorkingPhase(
-  lines: readonly AgentTranscriptMessage[],
-  sessionStarting: boolean,
-  rewinding = false,
+export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: TabSends): TabTurn {
+  const turn = newerTurn(agent.turn, sends.turn);
+  const open = turn === undefined ? agentStillWriting(agent.status) : turnOpen(turn);
+  const status =
+    turn === undefined
+      ? agent.status
+      : turnAgentStatus({ status: turn.status, cancelRequested: turn.stopAsked === true });
+  return {
+    working: open || sends.unanswered || sends.rewinding,
+    phase: workingPhaseOf(turn, open, sends.rewinding),
+    status,
+    failure:
+      turn === undefined
+        ? status === AGENT_STATUS.FAILED
+          ? AGENT_FAILURE.NOT_STARTED
+          : undefined
+        : turn.failure,
+  };
+}
+
+/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open, then the open turn's state. */
+function workingPhaseOf(
+  turn: AgentTurn | undefined,
+  open: boolean,
+  rewinding: boolean,
 ): WorkingPhase {
   if (rewinding) return WORKING_PHASE.REWINDING;
-  const at = lines.findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
-  const journal = lines[at];
-  if (sessionStarting || journal === undefined) return WORKING_PHASE.STARTING;
-  // A closed journal with nothing after it is a turn ending, its row settling a look behind it.
-  if (journal.finishedAt !== undefined) {
-    return at === lines.length - 1 ? WORKING_PHASE.WORKING : WORKING_PHASE.STARTING;
-  }
-  return drawnParts(journal).length === 0 ? WORKING_PHASE.THINKING : WORKING_PHASE.WORKING;
+  if (turn === undefined || !open) return WORKING_PHASE.STARTING;
+  if (turn.stopAsked === true) return WORKING_PHASE.STOPPING;
+  return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.WAITING : WORKING_PHASE.WORKING;
+}
+
+/** What the working line says of a worker, which has no turn record of its own: starting until its own session reads running. */
+export function workerWorkingPhase(status: AgentStatus): WorkingPhase {
+  return status === AGENT_STATUS.STARTING ? WORKING_PHASE.STARTING : WORKING_PHASE.WORKING;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { TURN_STATUS, type TurnStatus } from "@repo/wire";
-import { AGENT_STATUS, type AgentStatus, turnStatusOfWord } from "./agent-wire.js";
+import { AGENT_STATUS, type AgentStatus, type AgentTurn, turnStatusOfWord } from "./agent-wire.js";
 
 /**
  * agent-status.ts -- where a coding agent stands, read from its newest turn: the one rule the service and the desktop both read an agent's status by.
@@ -82,8 +82,13 @@ export function agentStatusAt(
       ? AGENT_STATUS.STARTING
       : AGENT_STATUS.FAILED;
   }
-  const status = STATUS_OF_TURN[turnStatusOfWord(newest.status)];
-  return status === AGENT_STATUS.RUNNING && newest.cancelRequested ? AGENT_STATUS.CANCELED : status;
+  return turnAgentStatus(newest);
+}
+
+/** Where an agent stands by its newest turn alone: as the turn's status word reads, canceled where it still runs with a Stop asked of it. */
+export function turnAgentStatus(turn: StatusTurn): AgentStatus {
+  const status = STATUS_OF_TURN[turnStatusOfWord(turn.status)];
+  return status === AGENT_STATUS.RUNNING && turn.cancelRequested ? AGENT_STATUS.CANCELED : status;
 }
 
 /**
@@ -99,4 +104,35 @@ export function statusClockEdge(
   if (newest !== undefined || standing.blank === true) return undefined;
   const edge = standing.createdAt + STARTING_GRACE_MILLIS;
   return standing.now <= edge ? edge + 1 : undefined;
+}
+
+/** The turn statuses a turn has not ended in: queued for a runner, or running. */
+const OPEN_TURN_STATUSES: ReadonlySet<TurnStatus> = new Set([
+  TURN_STATUS.QUEUED,
+  TURN_STATUS.RUNNING,
+]);
+
+/**
+ * Whether a turn as its record says it has not ended: queued for a runner,
+ * or running, a Stop asked of it or not, since a stopped turn runs until its
+ * runner ends it. Its row's deadlines are what end a turn whose runner never
+ * does, never the reader's clock.
+ */
+export function turnOpen(turn: Pick<AgentTurn, "status">): boolean {
+  return OPEN_TURN_STATUSES.has(turn.status);
+}
+
+/**
+ * The newer of two turn records, by when each was queued and then by id, as
+ * the turns of a conversation are ordered; `a` where both name the same
+ * turn, so the reader passes the record it holds freshest first. Either may
+ * be absent, and the other is newer then.
+ */
+export function newerTurn(
+  a: AgentTurn | undefined,
+  b: AgentTurn | undefined,
+): AgentTurn | undefined {
+  if (a === undefined || b === undefined) return a ?? b;
+  if (a.queuedAt !== b.queuedAt) return a.queuedAt > b.queuedAt ? a : b;
+  return b.id > a.id ? b : a;
 }

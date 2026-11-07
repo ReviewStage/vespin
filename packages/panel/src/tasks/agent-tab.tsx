@@ -138,7 +138,6 @@ import {
   agentParts,
   agentRows,
   agentStillWriting,
-  agentWorkingPhase,
   agentWorkingSince,
   archivedByReading,
   CONTINUE_AGAIN_LABEL,
@@ -176,15 +175,19 @@ import {
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
   type TurnStretch,
+  tabTurnOf,
   teammateStarter,
   threadLineOf,
   transcriptRowKey,
   turnStretches,
   unreadOpeningLine,
+  WORKING_PHASE,
+  type WorkingPhase,
   wakeupDelayOf,
   workerLines,
   workerStatusOf,
   workerToolState,
+  workerWorkingPhase,
   workingLineWords,
 } from "./agent-model.js";
 import {
@@ -330,9 +333,10 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * names the chip that opens the skill's file (`skill-chip.tsx`), as a
  * "Loaded skill" row opens it too, hanging the same card; and while
  * the agent may still write, a shimmering line stands at the end saying
- * what it is doing, "Starting…" until its turn opens, or, for an agent on a
- * host, what its launch waits on there, "Thinking…" until
- * the turn draws its first row, and "Working…" after (`agentWorkingPhase`),
+ * what its newest turn's record says it is doing (`tabTurnOf`): "Waiting
+ * for the runner…" while the turn is queued, or, for an agent on a host,
+ * what its launch waits on there, "Working…" while it runs, and
+ * "Stopping…" once a Stop was asked of it,
  * counting how long the run has gone where the service said when it began
  * (`working-time.tsx`), as a running worker's row counts beside its
  * spinner, gone the moment it ends, so a finished turn ends on its own
@@ -1759,13 +1763,13 @@ export function AgentMessage({
  * Says the turn's end, a stop or a failure, once, as it lands. Note that it
  * is said by the transcript rather than its end line, because the line
  * mounts with its words and its failure is history, no alert; and that only
- * an end that follows a page saying the turn runs is said, never a row's
- * word alone, which may be stale, so the end a tab opens on is history too,
- * while a turn that fails before writing a word is still heard.
+ * an end that follows the tab seeing the agent work is said, so the end a
+ * tab opens on is history too, while a turn that fails before writing a
+ * word is still heard.
  */
-function useTurnEndSaid(ended: EndLineParts | undefined, pageRuns: boolean): void {
+function useTurnEndSaid(ended: EndLineParts | undefined, working: boolean): void {
   const [sawRunning, setSawRunning] = useState(false);
-  if (!sawRunning && pageRuns && ended === undefined) setSawRunning(true);
+  if (!sawRunning && working && ended === undefined) setSawRunning(true);
   useAnnounce(ANNOUNCE.POLITE, sawRunning ? (ended?.words ?? "") : "");
 }
 
@@ -2246,10 +2250,8 @@ function AgentTranscriptView({
   failed,
   failedWith,
   working,
-  pageRuns = false,
-  sessionStarting = false,
+  phase = WORKING_PHASE.WORKING,
   starting,
-  rewindOut = false,
   startedAt,
   ended,
   endReason = FAILURE_REASON.OTHER,
@@ -2291,14 +2293,10 @@ function AgentTranscriptView({
   failedWith?: unknown;
   /** Whether the agent may still write, which is when the transcript ends on a working line. */
   working: boolean;
-  /** Whether the last page read said the turn runs, after which an end that lands is said; none where no page tells it. */
-  pageRuns?: boolean;
-  /** Whether the agent's session has not run its first turn yet, which its working line says. */
-  sessionStarting?: boolean;
-  /** Where a local agent's launch stands while it starts, which its working line says in place of "Starting…"; none for one in the cloud, or where its page said none. */
+  /** What the agent is doing while it works, which its working line says (`tabTurnOf`); working where unsaid. */
+  phase?: WorkingPhase;
+  /** Where a local agent's launch stands before a runner opened its turn, which its working line says in place of the phase's words; none for one in the cloud, or where its page said none. */
   starting?: StartingLaunch | undefined;
-  /** Whether a rewind is out, which its working line says until the service answers. */
-  rewindOut?: boolean;
   /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
@@ -2345,7 +2343,7 @@ function AgentTranscriptView({
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
-  useTurnEndSaid(ended, pageRuns);
+  useTurnEndSaid(ended, working);
   // Note that the card stands alone in the end line's place, without its press, since its own presses answer the failure.
   const signInCard =
     ended?.unstarted === DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN && signIn !== undefined ? (
@@ -2519,13 +2517,7 @@ function AgentTranscriptView({
                   }}
                 </ConversationRows>
                 {working ? (
-                  <WorkingLine
-                    startedAt={startedAt}
-                    words={workingLineWords(
-                      agentWorkingPhase(messages, sessionStarting, rewindOut),
-                      starting,
-                    )}
-                  />
+                  <WorkingLine startedAt={startedAt} words={workingLineWords(phase, starting)} />
                 ) : null}
                 {ended === undefined && endTrail === undefined ? null : (
                   <div
@@ -2782,13 +2774,8 @@ function AgentTabView({
           },
     [composer.editing, onEdit, onCancelEdit, onSendEdit, onRevert, points, editor],
   );
-  // Note that a line on its way counts as work from the press, because the agent's status turns
-  // running only once the service takes the line, which may take seconds.
-  const lineGoing = composer.sent.some((line) => line.state === SENT_LINE_STATE.PENDING);
-  // Note that the transcript's own page says the agent runs before the agent's summary does, since a line that
-  // lands awaiting its turn moves the page and not the list the summary is read from.
-  const pageRuns = transcript.pageStatus !== undefined && agentStillWriting(transcript.pageStatus);
-  const working = agentStillWriting(agent.status) || pageRuns || lineGoing;
+  // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
+  const standing = tabTurnOf(agent, composer);
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
     pilotNote === undefined &&
@@ -2951,11 +2938,8 @@ function AgentTabView({
                         holding={holding}
                         failed={transcript.failed}
                         failedWith={transcript.failedWith}
-                        // Note that a rewind draws the working line from its press until its line reads back, however slow its stop and relaunch.
-                        working={working || composer.rewinding}
-                        pageRuns={pageRuns}
-                        rewindOut={composer.rewindOut}
-                        sessionStarting={agent.status === AGENT_STATUS.STARTING}
+                        working={standing.working}
+                        phase={standing.phase}
                         starting={
                           transcript.launch === undefined
                             ? undefined
@@ -2974,15 +2958,12 @@ function AgentTabView({
                               : (agentWorkingSince(lines) ?? startedAt)
                         }
                         ended={
-                          // Note that the end line waits for a page that has itself ended, so a stopped agent's tab never draws it over nothing, nor a failure's words before the page that carries its reason, and gives way to a line on its way, which the working line stands for.
-                          transcript.pages === 0 ||
-                          transcript.pageStatus === undefined ||
-                          agentStillWriting(transcript.pageStatus) ||
-                          lineGoing
+                          // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
+                          transcript.pages === 0 || standing.working
                             ? undefined
                             : endLineParts(
-                                agent.status,
-                                transcript.failure,
+                                standing.status,
+                                standing.failure,
                                 starter,
                                 continuable,
                                 transcript.hostLost,
@@ -2995,7 +2976,7 @@ function AgentTabView({
                                     },
                               )
                         }
-                        endReason={endLineReason(transcript.failure, starter)}
+                        endReason={endLineReason(standing.failure, starter)}
                         keyProvider={keyProvider}
                         onOpenApiKeys={
                           onOpenApiKeys === undefined ? undefined : () => onOpenApiKeys(keyProvider)
@@ -3018,7 +2999,7 @@ function AgentTabView({
         </AgentPicturesProvider>
       </MacOwnerProvider>
       <AgentTabFoot>
-        <TodosDock messages={lines} working={working} />
+        <TodosDock messages={lines} working={standing.working} />
         <PublishedDock published={published} doors={doors} />
         <ThreadsDock threads={threads} />
         <AgentPicturesProvider value={pictures}>
@@ -3086,7 +3067,7 @@ function AgentTabView({
               agent.runtime === undefined || !controlsQueue
                 ? undefined
                 : {
-                    working,
+                    working: standing.working,
                     enterQueues,
                     onQueue: queueEditing.queue,
                     editing: queueEditing.editing !== undefined,
@@ -3163,7 +3144,7 @@ export function StartingAgentTab({
         reading={false}
         failed={false}
         working
-        sessionStarting
+        phase={WORKING_PHASE.STARTING}
         // Note that the line counts from the press, as the agent's own tab goes on counting once the start answers.
         startedAt={line?.sentAt}
         onRetry={NO_RETRY}
@@ -3381,10 +3362,11 @@ function AgentTabBody({
   // On a pilot task only its pilot continues, so a coding agent there offers no Continue anywhere.
   const continues = offersContinue(control.mode, agent);
   // The failed end line holds the press, Continue again once another agent continued this one.
+  const { status, failure } = tabTurnOf(agent, composer);
   const ending = {
-    status: agent.status,
-    endReason: endLineReason(transcript.failure, starter),
-    failure: transcript.failure,
+    status,
+    endReason: endLineReason(failure, starter),
+    failure,
     continued: continued.length > 0,
     boxClosed: composer.closed !== undefined,
   };
@@ -3594,10 +3576,7 @@ export function AgentSubagentTab({
               failed={transcript.failed}
               failedWith={transcript.failedWith}
               working={agentStillWriting(status)}
-              pageRuns={
-                transcript.pageStatus !== undefined && agentStillWriting(transcript.pageStatus)
-              }
-              sessionStarting={status === AGENT_STATUS.STARTING}
+              phase={workerWorkingPhase(status)}
               startedAt={shown ? transcript.runStartedAt : undefined}
               ended={transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)}
               failureAbout={{ agentId, taskId: owner?.planId ?? undefined, callId }}

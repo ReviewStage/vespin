@@ -141,7 +141,7 @@ const REWOUND: AgentAgentAnswer = {
   },
 };
 
-test("an edit's send takes the agent back to just before the line, then sends the new words, leaving the box as it was", async () => {
+test("an edit's send takes the agent back to just before the line, then sends the new words, leaving the box as it was and rewinding no longer once both answered", async () => {
   const { calls, composer } = await box(REWOUND);
 
   await act(async () => composer().setDraft("Also update the tests."));
@@ -151,7 +151,11 @@ test("an edit's send takes the agent back to just before the line, then sends th
   const pressedAt = composer().rewoundAt;
   await settle();
 
-  assert.equal(meanwhile, true);
+  assert.equal(
+    meanwhile,
+    false,
+    "a rewind holds the tab only until its calls answer, the turn the send queued taking over",
+  );
   assert.ok(pressedAt !== undefined && Date.now() - pressedAt < 5_000, "it counts from the press");
   assert.deepEqual(calls, ["rewind:second-line", "send:second line, again"]);
   assert.equal(composer().editing, undefined);

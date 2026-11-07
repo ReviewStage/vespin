@@ -18,6 +18,7 @@ import {
   type AgentStatus,
   type AgentSummary,
   type AgentTranscriptMessage,
+  type AgentTurn,
 } from "@repo/features/agent-wire";
 import {
   DEVICE_LAUNCH_UNSTARTED,
@@ -29,7 +30,7 @@ import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
-import { ACTION_RESULT_STATUS, MESSAGE_ROLE } from "@repo/wire";
+import { ACTION_RESULT_STATUS, MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -99,6 +100,25 @@ function agentOf(id: string, overrides: Partial<AgentSummary> = {}): AgentSummar
     turnId: null,
     brief: AGENT_BRIEF.DESCRIPTION,
     ...overrides,
+  };
+}
+
+/** The turn word each status the tab is drawn at reads from. */
+const TURN_STATUS_OF = {
+  [AGENT_STATUS.RUNNING]: TURN_STATUS.RUNNING,
+  [AGENT_STATUS.COMPLETED]: TURN_STATUS.SETTLED,
+  [AGENT_STATUS.FAILED]: TURN_STATUS.FAILED,
+  [AGENT_STATUS.CANCELED]: TURN_STATUS.CANCELED,
+} as const;
+
+/** The agent's newest turn as its summary carries it at the status given, failed on the word given; none before its first turn, or for one that never started. */
+function turnOf(status: AgentStatus, failure: AgentFailure | undefined): AgentTurn | undefined {
+  if (status === AGENT_STATUS.STARTING || failure === AGENT_FAILURE.NOT_STARTED) return undefined;
+  return {
+    id: "3f6b8d2a-1c4e-4a7b-9e5d-0b2c4d6e8f10",
+    queuedAt: 1_000,
+    status: TURN_STATUS_OF[status],
+    ...(failure === undefined ? undefined : { failure }),
   };
 }
 
@@ -210,7 +230,12 @@ async function drawnTab(input: {
   fakeAppBridge({});
   if (input.ownHost === true) handState(experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST));
   if (input.copied !== undefined) fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(input.copied) });
-  const source = agentOf(SOURCE, { status: input.status, ...input.source });
+  const turn = turnOf(input.status, input.failure);
+  const source = agentOf(SOURCE, {
+    status: input.status,
+    ...(turn === undefined ? undefined : { turnId: turn.id, turn }),
+    ...input.source,
+  });
   const continued: {
     agentId: string;
     note: string | undefined;
