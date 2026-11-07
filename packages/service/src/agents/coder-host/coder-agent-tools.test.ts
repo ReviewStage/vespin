@@ -12,7 +12,6 @@ import {
   archiveAgent,
   createAgent,
   fillAgentTitle,
-  latestTurnsOf,
   readAgent,
   recordAgentPublished,
 } from "@repo/database/models/agent-store";
@@ -48,7 +47,7 @@ import { agentPin } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { device } from "@repo/database/schemas/device";
-import { messages } from "@repo/database/schemas/storage";
+import { messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
@@ -106,7 +105,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { Effect, Layer, Option, Redacted } from "effect";
 import { afterAll, test } from "vitest";
 import {
@@ -2920,11 +2919,18 @@ async function standingAsRead(
   ];
 }
 
-/** The turn of the agent's conversation newest now: its status, and why where it failed. */
-async function newestTurnOf(agent: StartedAgent): Promise<readonly unknown[]> {
-  const turns = await database.run(latestTurnsOf(agent.userId, [agent.conversationId]));
-  const newest = turns.get(agent.conversationId);
-  return [newest?.id, newest?.status, newest?.failure ?? undefined];
+/** The agent's turns, oldest first, each as its id, status, and failure word. */
+async function turnsOf(agent: StartedAgent): Promise<readonly (readonly unknown[])[]> {
+  const rows = await database.run(
+    Database.use((db) =>
+      db
+        .select({ id: turns.id, status: turns.status, failure: turns.failure })
+        .from(turns)
+        .where(eq(turns.conversationId, agent.conversationId))
+        .orderBy(asc(turns.queuedAt), asc(turns.id)),
+    ),
+  );
+  return rows.map((row) => [row.id, row.status, row.failure ?? undefined]);
 }
 
 /** The openings the harness was asked for, each as the conversation it names and the words it carries. */
@@ -3050,7 +3056,10 @@ test("a message to an agent whose session its harness no longer runs opens a fre
   assert.deepEqual(opened[0]?.slice(0, 2), [agents.teammates.conversationId, SESSION_TURN.TYPED]);
   assert.match(String(opened[0]?.[2]), new RegExp(NOTE, "u"));
   const settled = [turnId, TURN_STATUS.FAILED, TURN_FAILURE.SESSION_ENDED];
-  assert.deepEqual(await newestTurnOf(agents.teammates), settled);
+  // The words the fresh session took await a turn of their own, queued behind the one that ended.
+  const [ended, queued] = await turnsOf(agents.teammates);
+  assert.deepEqual(ended, settled);
+  assert.equal(queued?.[1], TURN_STATUS.QUEUED);
   // Counted as failed, with why.
   assert.deepEqual(
     countedWith(agents.teammates.userId, SERVER_EVENT.TURN_END).map((properties) =>
@@ -3079,7 +3088,7 @@ test("a message to an agent whose session its harness no longer runs opens a fre
     "the second message goes to the fresh session, which claimed the record",
   );
   assert.deepEqual(
-    await newestTurnOf(agents.teammates),
+    (await turnsOf(agents.teammates))[0],
     settled,
     "a second message settles nothing again",
   );
@@ -3158,7 +3167,14 @@ test("a message to an agent whose turn had already ended before its session did 
 
   assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(sent));
   assert.equal(openingsOf(agentSessions).length, 1);
-  assert.deepEqual(await newestTurnOf(agents.teammates), [turnId, TURN_STATUS.SETTLED, undefined]);
+  // The ended turn keeps its end, and the message awaits the turn its send queued.
+  assert.deepEqual(
+    (await turnsOf(agents.teammates)).map(([id, status]) => [id === turnId, status]),
+    [
+      [true, TURN_STATUS.SETTLED],
+      [false, TURN_STATUS.QUEUED],
+    ],
+  );
 });
 
 test("an agent whose starter has left the workspace archives no agent of it", async () => {

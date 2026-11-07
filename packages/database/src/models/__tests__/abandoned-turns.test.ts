@@ -14,25 +14,22 @@ import { eq } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { conversations, turns } from "../../schemas/storage.js";
+import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
 import { getTestDB } from "../../testing/index.js";
 import {
-  LOST_TURNS,
-  lapsedTurnIds,
   runningTurnIds,
   settleEndedSession,
   settleEndedSessionTurn,
   settleRunnerLostTurns,
 } from "../abandoned-turns.js";
 import { latestTurnsOfReached } from "../agent-store.js";
-import { renewTurnLease, TURN_LEASE } from "../turn-lease.js";
 import { type ConversationTarget, type StoreWriter, storeWriter } from "../writer.js";
 
 /**
- * How a coding agent's turn whose end is never coming is read and settled,
- * over a real dialect: read as lapsed once its lease ran out, settled as its
- * runner lost, and settled at once when its session ended for good.
+ * How a coding agent's turn whose end is never coming is settled, over a
+ * real dialect: settled as its runner lost, and settled at once when its
+ * session ended for good.
  *
  * Synthetic accounts, conversations, and turns throughout.
  */
@@ -270,66 +267,6 @@ it.layer(getTestDB())("a turn whose end is not coming", (it) => {
           TURN_STATUS.FAILED,
           TURN_FAILURE.SESSION_ENDED,
         ]);
-      }),
-  );
-
-  it.effect(
-    "a turn's lease runs from its queueing, a runner's post pushes it on, a turn queued behind the running one's with it, and only a turn still open past it reads as lapsed, as does one with no lease queued a lease ago and one whose Stop went unconfirmed",
-    () =>
-      Effect.gen(function* () {
-        const writer = yield* storeWriter({ tools: {} });
-        const target = yield* openAgentConversation;
-        // Note that the turns are queued at the test clock's start, the epoch.
-        const ahead = yield* turnIn(writer, target, TURN_STATUS.RUNNING);
-        // Queued behind the turn under way, which its runner's posts renew with it.
-        const renewed = yield* turnIn(writer, target, TURN_STATUS.QUEUED);
-        // Note that the running turn's lease is taken from the clock's start too, as the queued one's is,
-        // rather than from the fixture's own start instant.
-        yield* (yield* Database)
-          .update(turns)
-          .set({ leaseUntil: new Date(TURN_LEASE.MS) })
-          .where(eq(turns.id, ahead));
-        const other = yield* openAgentConversation;
-        const lapsed = yield* turnIn(writer, other, TURN_STATUS.QUEUED);
-        yield* turnIn(writer, other, TURN_STATUS.SETTLED);
-        // A turn an older writer queued with no lease, as one may while a deploy rolls out.
-        const unleased = yield* openAgentConversation;
-        const leaseless = yield* turnIn(writer, unleased, TURN_STATUS.RUNNING);
-        yield* (yield* Database)
-          .update(turns)
-          .set({ leaseUntil: null })
-          .where(eq(turns.id, leaseless));
-
-        // A turn whose runner beats on but never ended it on its Stop, its lease far ahead.
-        const stopping = yield* openAgentConversation;
-        const unconfirmed = yield* turnIn(writer, stopping, TURN_STATUS.RUNNING);
-        yield* writer.requestTurnCancel(stopping, { turnId: unconfirmed, at: new Date(0) });
-        const fresh = yield* renewTurnLease(target.conversationId, 60_000);
-        const pushed = yield* renewTurnLease(target.conversationId, 10 * 60_000);
-        const past = TURN_LEASE.MS + 1;
-
-        assert.equal(fresh, 0, "a lease with most of its run left is not written");
-        assert.equal(pushed, 2, "a turn queued behind the running one is renewed with it");
-        assert.deepEqual(yield* lapsedTurnIds(target.conversationId, TURN_LEASE.MS), []);
-        assert.deepEqual(yield* lapsedTurnIds(target.conversationId, past), []);
-        assert.deepEqual(yield* lapsedTurnIds(other.conversationId, TURN_LEASE.MS), []);
-        assert.deepEqual(yield* lapsedTurnIds(other.conversationId, past), [lapsed]);
-        assert.deepEqual(
-          [...(yield* lapsedTurnIds(target.conversationId, 10 * 60_000 + past))].sort(),
-          [ahead, renewed].sort(),
-          "the queued turn lapses only with the turn ahead of it",
-        );
-        assert.deepEqual(yield* lapsedTurnIds(unleased.conversationId, TURN_LEASE.MS), []);
-        assert.deepEqual(yield* lapsedTurnIds(unleased.conversationId, past), [leaseless]);
-        assert.deepEqual(
-          yield* lapsedTurnIds(stopping.conversationId, LOST_TURNS.STOP_CONFIRM_MS),
-          [],
-        );
-        assert.deepEqual(
-          yield* lapsedTurnIds(stopping.conversationId, LOST_TURNS.STOP_CONFIRM_MS + 1),
-          [unconfirmed],
-          "a Stop unconfirmed past its bound lapses whatever the lease",
-        );
       }),
   );
 

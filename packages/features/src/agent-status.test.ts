@@ -106,6 +106,8 @@ test("a Stop wins over a line written before it, while its turn runs and once it
   assert.equal(agentStatusAt(stamped, after), AGENT_STATUS.RUNNING);
   assert.equal(turnStoppable(stamped), false);
   assert.equal(turnStoppable(turn(TURN_STATUS.RUNNING)), true);
+  // A turn whose line no runner took yet has nothing running for a Stop to stop.
+  assert.equal(turnStoppable(turn(TURN_STATUS.QUEUED)), false);
 });
 
 test("a line written before the newest turn was queued was that turn's own, and awaits nothing once it ended", () => {

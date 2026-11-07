@@ -8,6 +8,7 @@ import { Database } from "@repo/database/core/query";
 import { readAgent } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { saveDescriptionText } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
@@ -1026,7 +1027,8 @@ export const agentStartedOn = (
     const sessionId = agentSessions.opened.at(-1)?.sessionId ?? "";
     assert.equal(yield* claimRuntimeSession(target, sessionId, new Date()), true);
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-    const turnId = randomUUID();
+    // The Start's first line queued the turn its runner opens (`turn-state.ts`).
+    const turnId = Option.getOrThrow(yield* queuedTurnOf(target.conversationId));
     if (turn !== undefined) {
       yield* writer.enqueueTurn(target, {
         turnId,

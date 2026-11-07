@@ -160,10 +160,9 @@ component, factored out of the surface where it builds the box by hand.
 Vercel's cron calls `/api/maintenance/sweep` once a minute (the root `vercel.json`;
 `packages/service/src/maintenance/maintenance-sweep.ts`) under the deployment's own
 `CRON_SECRET`, compared in constant time; a deployment missing that secret
-answers unavailable and sweeps nothing. A turn whose runner went quiet is no
-sweep's: its lease (`packages/database/src/models/turn-lease.ts`) runs out,
-readers take it as lost, and the next touch of the agent settles it
-(`packages/service/src/agents/coder-host/lapsed-runner.ts`).
+answers unavailable and sweeps nothing. A turn past the deadline its row holds
+(`packages/database/src/models/turn-state.ts`) is the sweep's: it fails it with
+why (`packages/service/src/agents/coder-host/reconcile.ts`); no read settles one.
 
 ## Testing
 

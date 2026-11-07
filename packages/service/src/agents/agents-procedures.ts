@@ -95,7 +95,6 @@ import {
 } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
-import { settleLapsedRunner } from "./coder-host/lapsed-runner.js";
 import {
   agentPullRequestReach,
   instancePublishedCache,
@@ -425,15 +424,12 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent as its own page, an agent with no task as much as one on a task. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      // An open of the agent settles a turn whose runner stopped posting past its answer, which never
-      // waits on the machine it asks, since every reader already reads that turn lost. Where it settled
-      // none, the queue a hand-off cut off left claimed is handed on once its claim lapsed; a turn it
-      // settled hands on, or pauses, the queue through its own end.
+      // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
+      // its claim lapsed. Note that it settles no turn: a turn past its deadline is the minute sweep's to
+      // reap (`coder-host/reconcile.ts`), never a read's.
       yield* afterResponse(
-        "a lapsed runner's settle",
-        Effect.flatMap(settleLapsedRunner(agent), (settled) =>
-          settled.length === 0 ? queueAtTouch(routedSessions, agent) : Effect.void,
-        ),
+        "an agent queue's hand-on at an open",
+        queueAtTouch(routedSessions, agent),
       );
       const standing = yield* standingsOf([agent.conversationId]);
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));

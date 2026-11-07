@@ -1,5 +1,6 @@
 import { TURN_STATUS } from "@repo/wire";
 import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
+import { TURN_DEADLINE } from "./turn-deadline.js";
 
 /**
  * agent-status.ts -- where a coding agent stands, read from its newest turn at an instant: the one rule the service and the desktop both read an agent's status by.
@@ -31,7 +32,7 @@ import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
  * A turn still queued or running whose lease ran out is read as ended at
  * that instant, failed as its runner lost, or canceled where a Stop was
  * asked of it: its runner stopped posting (`@repo/database`'s
- * `turn-lease.ts`), and the next touch of the agent settles the row so.
+ * `turn-state.ts`), and the minute sweep settles the row so.
  *
  * The rule is pure and takes the instant it reads at, because the two
  * graces and the lease are the parts of it the rows alone do not say: a
@@ -55,15 +56,6 @@ export const STARTING_GRACE_MILLIS = 5 * 60 * 1000;
  * past this is one whose turn is not coming.
  */
 export const LINE_GRACE_MILLIS = 5 * 60 * 1000;
-
-/**
- * How long a turn queued or running is held to be at work past its last
- * progress, or its queueing where none came yet: three of its runner's
- * heartbeats. `@repo/database`'s `turn-lease.ts` writes the lease by it, and a
- * row with none is read here as leased from its queueing, so no turn runs on
- * for good.
- */
-export const TURN_LEASE_MILLIS = 15 * 60 * 1000;
 
 /** The status a turn row's own status word reads as. */
 const STATUS_OF_TURN = {
@@ -94,7 +86,7 @@ export interface StatusTurn {
   readonly settledAt: number | null;
   /** Whether it failed because its session ended for good. */
   readonly sessionEnded: boolean;
-  /** Until when its runner is held to be at work while it is queued or runs; none for a row from before the lease, read as leased from its queueing (`TURN_LEASE_MILLIS`). */
+  /** Until when its runner is held to be at work while it is queued or runs; none for a row from before the lease, read as leased from its queueing (`TURN_DEADLINE.PROGRESS_MS`). */
   readonly leaseUntil?: number | undefined;
 }
 
@@ -129,7 +121,7 @@ function turnRuns(turn: StatusTurn): boolean {
 
 /** The instant the turn's lease runs out: the one its row holds, or, for a row with none, a lease's length from its queueing. */
 function leaseEndOf(turn: StatusTurn): number {
-  return turn.leaseUntil ?? turn.queuedAt + TURN_LEASE_MILLIS;
+  return turn.leaseUntil ?? turn.queuedAt + TURN_DEADLINE.PROGRESS_MS;
 }
 
 /** Whether the turn still runs, or is queued to, past the instant its lease ran out: its runner is lost. */
@@ -187,13 +179,13 @@ export function lineAwaitsTurn(
 }
 
 /**
- * Whether a Stop has something to stop: the newest turn still runs, or is
- * queued to, and no Stop was asked of it yet. What the Stop button is offered
- * by, so a second press on a turn already stopped, or one pressed while only
- * a line awaits its turn, is never taken and silently dropped.
+ * Whether a Stop has something to stop: the newest turn runs, and no Stop
+ * was asked of it yet. What the Stop button is offered by, so a second press
+ * on a turn already stopped, or one pressed while its line still awaits a
+ * runner to take it, is never taken and silently dropped.
  */
 export function turnStoppable(turn: StatusTurn | undefined): boolean {
-  return turn !== undefined && turnRuns(turn) && !turn.cancelRequested;
+  return turn?.status === TURN_STATUS.RUNNING && !turn.cancelRequested;
 }
 
 /**

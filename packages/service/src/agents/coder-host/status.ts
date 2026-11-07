@@ -172,7 +172,7 @@ const CONTEXT_OVERFLOW_WORDS: readonly string[] = [
 /**
  * What the turn of a run its host lost records after the host's name, the
  * run having been taken from a host that stopped beating
- * (`lapsed-runner.ts`): the same words in every such turn, the name
+ * (`reconcile.ts`): the same words in every such turn, the name
  * before them being the host's own.
  */
 const HOST_AWAY_DETAIL = " went away during this turn. Send a message to carry on once it's back.";

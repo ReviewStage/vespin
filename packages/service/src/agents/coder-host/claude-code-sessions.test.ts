@@ -50,7 +50,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import type { StoredStartedFrom } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import {
@@ -65,6 +65,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
+import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer, temporaryDirectory } from "@repo/wire/testing";
 import { sql } from "drizzle-orm";
 import {
@@ -290,6 +291,19 @@ const message = (agent: Agent, text: string, lineId?: string) => ({
   message: text,
   ...(lineId === undefined ? undefined : { lineId }),
 });
+
+/** A Start's first message, written as the line awaiting the turn it queues (`start.ts`'s `openingLine`), and handed to the open under its line id. */
+const startLine = (agent: Agent, text: string) =>
+  Effect.gen(function* () {
+    const clientKey = randomUUID();
+    const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+    yield* writer.writeAwaitingLine(
+      { userId: agent.userId, conversationId: agent.conversationId },
+      { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
+      Effect.succeed(true),
+    );
+    return message(agent, text, sentLineId(clientKey));
+  });
 
 /** The developer's words of a message line: what follows the turn's own words, which lead every message (`turn-message.ts`). */
 const developerContent = (line: InputLine | undefined) =>
@@ -2891,7 +2905,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         api.failStdin.status = 400;
 
         const opened = yield* sessions
-          .open(message(agent, "Fix the invitations."))
+          .open(yield* startLine(agent, "Fix the invitations."))
           .pipe(Effect.provide(logger));
 
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
@@ -2929,7 +2943,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         api.hooks.onRun = (_env, command) =>
           command === "bash" ? Promise.reject(new Error("socket hang up")) : Promise.resolve();
 
-        yield* sessions.open(message(agent, "Push a branch."));
+        yield* sessions.open(yield* startLine(agent, "Push a branch."));
 
         const detail = (yield* newestFailureDetail(agent)) ?? "";
         assert.ok(
@@ -2960,7 +2974,9 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
             ),
           ),
         );
-        yield* diedSessions.open(message(died.agent, "Go.")).pipe(Effect.provide(diedKept.layer));
+        yield* diedSessions
+          .open(yield* startLine(died.agent, "Go."))
+          .pipe(Effect.provide(diedKept.layer));
         yield* diedKept.run;
 
         // Each launch is held at a call it never gets past, and interrupted there: the clone, before
@@ -2972,7 +2988,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         ) =>
           Effect.gen(function* () {
             const kept = keptAfterResponse();
-            yield* sessions.open(message(agent, "Go.")).pipe(Effect.provide(kept.layer));
+            yield* sessions.open(yield* startLine(agent, "Go.")).pipe(Effect.provide(kept.layer));
             const launching = yield* Effect.forkChild(kept.run);
             yield* Effect.promise(() => held.arrived);
             yield* Fiber.interrupt(launching);
@@ -3005,7 +3021,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           yield* newestFailureDetail(cloned.agent),
           `${REPOSITORY_REFUSAL.SANDBOX_UNAVAILABLE} the launch was interrupted`,
         );
-        assert.equal((yield* newestTurn(started.agent)).status, undefined);
+        // The turn its line queued is left to the runner that was starting.
+        assert.equal((yield* newestTurn(started.agent)).status, TURN_STATUS.QUEUED);
       }),
   );
 
@@ -3070,7 +3087,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           run.args.some((arg) => arg.includes("git config user.email"));
         const kept = keptAfterResponse();
         const opened = yield* sessions
-          .open(message(agent, "Fix the relay."))
+          .open(yield* startLine(agent, "Fix the relay."))
           .pipe(Effect.provide(kept.layer));
         // The launch, then the base snapshot's fill, whose clone is refused too.
         yield* kept.run;

@@ -82,12 +82,7 @@ import {
 } from "../storage-vocabulary.js";
 import { LOST_TURNS } from "./abandoned-turns.js";
 import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
-import {
-  EpochMillisColumnSchema,
-  InstantColumnSchema,
-  nullable,
-  TurnUsageColumnSchema,
-} from "./columns.js";
+import { EpochMillisColumnSchema, InstantColumnSchema, nullable } from "./columns.js";
 import {
   DispatchClaimHeld,
   dispatchClaimStands,
@@ -97,7 +92,18 @@ import {
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
 import { COALESCED_LINE_SEPARATOR, noReceiptOfLine } from "./message-reads.js";
-import { leaseFrom } from "./turn-lease.js";
+import {
+  type AwaitedTurn,
+  awaitedTurn,
+  awaitTurn,
+  dropAwaitingNothing,
+  dropQueuedTurn,
+  endTurn,
+  queueTurn,
+  requeueUntaken,
+  startTurn,
+  stopTurn,
+} from "./turn-state.js";
 
 /**
  * The store writer: the one path by which a `messages` or `turns` row is
@@ -241,6 +247,8 @@ export const STORE_WRITE_REFUSAL = {
   FINISHED: "finished",
   MESSAGE_REFUSED: "message_refused",
   BUSY: "busy",
+  /** The turn stands open under another attempt than the move named, or its runner moved it on since a reap read it lapsed. */
+  FENCED: "fenced",
 } as const;
 
 type StoreWriteRefusal = (typeof STORE_WRITE_REFUSAL)[keyof typeof STORE_WRITE_REFUSAL];
@@ -275,6 +283,7 @@ export type StoreWriteResult = Result.Result<
       | typeof STORE_WRITE_REFUSAL.NO_TURN
       | typeof STORE_WRITE_REFUSAL.NO_CALL
       | typeof STORE_WRITE_REFUSAL.FINISHED
+      | typeof STORE_WRITE_REFUSAL.FENCED
     >
   | MessageRefused
 >;
@@ -463,9 +472,9 @@ export interface StoreWriter {
     target: ConversationTarget,
     events: readonly RunEvent[],
   ): Write<readonly StoreWriteResult[]>;
-  /** Writes a turn as queued, ahead of the stream telling its start; answers the turn's id. */
+  /** Writes a turn as queued, ahead of the stream telling its start, or records what it runs under on one its line already queued; answers the turn's id. */
   enqueueTurn(target: ConversationTarget, enqueue: TurnEnqueue): Write<TurnEnqueueResult>;
-  /** Stamps the instant a Stop was asked on a turn the conversation holds, once. */
+  /** Stamps the instant a Stop was asked on a turn the conversation holds, once, and pulls its deadline in to the Stop's. */
   requestTurnCancel(target: ConversationTarget, cancel: TurnCancelRequest): Write<TurnCancelResult>;
   /**
    * Writes the developer's line to a coding agent as a row awaiting its
@@ -527,6 +536,17 @@ export interface StoreWriter {
     target: ConversationTarget,
     dispatch: (line: LostLine) => Effect.Effect<boolean>,
   ): Write<LostLinesResent>;
+  /**
+   * Points the developer's line given, where no turn took it, at a turn of
+   * its own: the open turn it may join, or a turn queued for it now, as a
+   * line written now awaits one. For a line handed to a fresh session after
+   * the turn it joined failed for its session's end, which the fresh
+   * session's runner opens a turn on. Answers whether the line still awaited.
+   */
+  requeueLine(
+    target: ConversationTarget,
+    lineId: string,
+  ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
 }
 
 /** The plan's turn origin for each origin the brain's stream names: each is written as reported. */
@@ -607,8 +627,6 @@ const MessageRoleSchema = Schema.Literals(Object.values(MESSAGE_ROLE));
 
 const TurnStatusSchema = Schema.Literals(Object.values(TURN_STATUS));
 
-const TurnOriginSchema = Schema.Literals(Object.values(TURN_ORIGIN));
-
 const RowIdSchema = Schema.Struct({ id: Schema.String });
 
 /** A message row as its insert answers it: its id, and the transaction that wrote it, which Neon Realtime names the change by. */
@@ -654,6 +672,7 @@ const TurnRowSchema = Schema.Struct({
   status: TurnStatusSchema,
   queuedAt: Schema.Date,
   startedAt: Schema.NullOr(Schema.Date),
+  cancelRequestedAt: Schema.NullOr(Schema.Date),
 });
 
 const MessageInsertSchema = Schema.Struct({
@@ -674,6 +693,7 @@ const MessageInsertSchema = Schema.Struct({
   senderModel: Schema.NullOr(Schema.String),
   senderAgentId: Schema.NullOr(Schema.String),
   senderAutomationId: Schema.NullOr(Schema.String),
+  awaitsTurnId: Schema.NullOr(Schema.String),
 });
 
 const lockConversation = SqlSchema.findOneOption({
@@ -728,7 +748,12 @@ const findTurn = SqlSchema.findOneOption({
   execute: (request) =>
     Database.use((db) =>
       db
-        .select({ status: turns.status, queuedAt: turns.queuedAt, startedAt: turns.startedAt })
+        .select({
+          status: turns.status,
+          queuedAt: turns.queuedAt,
+          startedAt: turns.startedAt,
+          cancelRequestedAt: turns.cancelRequestedAt,
+        })
         .from(turns)
         .where(and(eq(turns.id, request.turnId), eq(turns.conversationId, request.conversationId))),
     ),
@@ -781,6 +806,7 @@ const insertMessageRow = SqlSchema.findOneOption({
           senderModel: row.senderModel,
           senderAgentId: row.senderAgentId,
           senderAutomationId: row.senderAutomationId,
+          awaitsTurnId: row.awaitsTurnId,
         })
         .returning({ id: messages.id, txid: CURRENT_TXID }),
     ),
@@ -901,110 +927,6 @@ const reviseJournal = SqlSchema.void({
         .where(eq(messages.id, row.id)),
     );
   },
-});
-
-const insertStartedTurn = SqlSchema.void({
-  Request: Schema.Struct({
-    turnId: Schema.String,
-    userId: Schema.String,
-    conversationId: Schema.String,
-    origin: TurnOriginSchema,
-    startedAt: Schema.Date,
-  }),
-  execute: (row) =>
-    Database.use((db) =>
-      db.insert(turns).values({
-        id: row.turnId,
-        userId: row.userId,
-        conversationId: row.conversationId,
-        origin: row.origin,
-        status: TURN_STATUS.RUNNING,
-        queuedAt: row.startedAt,
-        startedAt: row.startedAt,
-        leaseUntil: leaseFrom(row.startedAt),
-      }),
-    ),
-});
-
-const insertQueuedTurn = SqlSchema.void({
-  Request: Schema.Struct({
-    turnId: Schema.String,
-    userId: Schema.String,
-    conversationId: Schema.String,
-    origin: TurnOriginSchema,
-    runtimeTurnId: Schema.NullOr(Schema.String),
-    model: Schema.NullOr(Schema.String),
-    reasoningEffort: Schema.NullOr(Schema.String),
-    promptHash: Schema.NullOr(Schema.String),
-    toolSetHash: Schema.NullOr(Schema.String),
-    queuedAt: Schema.Date,
-  }),
-  execute: (row) =>
-    Database.use((db) =>
-      db.insert(turns).values({
-        id: row.turnId,
-        userId: row.userId,
-        conversationId: row.conversationId,
-        origin: row.origin,
-        status: TURN_STATUS.QUEUED,
-        runtimeTurnId: row.runtimeTurnId,
-        model: row.model,
-        reasoningEffort: row.reasoningEffort,
-        promptHash: row.promptHash,
-        toolSetHash: row.toolSetHash,
-        queuedAt: row.queuedAt,
-        leaseUntil: leaseFrom(row.queuedAt),
-      }),
-    ),
-});
-
-const startTurn = SqlSchema.void({
-  Request: Schema.Struct({ turnId: Schema.String, startedAt: Schema.Date }),
-  execute: (row) =>
-    Database.use((db) =>
-      db
-        .update(turns)
-        .set({
-          status: TURN_STATUS.RUNNING,
-          startedAt: row.startedAt,
-          leaseUntil: leaseFrom(row.startedAt),
-        })
-        .where(eq(turns.id, row.turnId)),
-    ),
-});
-
-/**
- * Note that the response ids no longer need the empty array written as a
- * literal: a driver infers a parameter's Postgres type from the value it is
- * handed and an empty array offers no element to infer one from, but a
- * `text[]` column renders its own value as the array literal it is, so the
- * ordinary case — a turn that called nothing and settles with no response
- * ids — is one more bound parameter.
- */
-const settleTurn = SqlSchema.void({
-  Request: Schema.Struct({
-    turnId: Schema.String,
-    status: TurnStatusSchema,
-    settledAt: Schema.Date,
-    failure: Schema.NullOr(Schema.String),
-    failureDetail: Schema.NullOr(Schema.String),
-    usage: Schema.NullOr(TurnUsageColumnSchema),
-    responseIds: Schema.Array(Schema.String),
-  }),
-  execute: (row) =>
-    Database.use((db) =>
-      db
-        .update(turns)
-        .set({
-          status: row.status,
-          settledAt: row.settledAt,
-          failure: row.failure,
-          failureDetail: row.failureDetail,
-          usage: row.usage,
-          responseIds: [...row.responseIds],
-        })
-        .where(eq(turns.id, row.turnId)),
-    ),
 });
 
 function pendingToolPart(name: string, callId: string, input: UnparsedWireValue): ToolPart {
@@ -1257,6 +1179,8 @@ const insertMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
     finishedAt: Date | undefined;
     /** What sent a developer's line to a coding agent; none for every other row. */
     sender?: LineSender;
+    /** The turn a developer's line to a coding agent awaits (`turn-state.ts`); none for every other row. */
+    awaitsTurnId?: string | undefined;
   },
 ): Effect.fn.Return<InsertedMessage, StoreFailure, DatabaseServices> {
   const seq = yield* allocateMessageSeq(context);
@@ -1282,6 +1206,7 @@ const insertMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
     senderAgentId: row.sender?.kind === MESSAGE_SENDER.AGENT ? row.sender.agentId : null,
     senderAutomationId:
       row.sender?.kind === MESSAGE_SENDER.AUTOMATION ? nullable(row.sender.automationId) : null,
+    awaitsTurnId: nullable(row.awaitsTurnId),
   });
   const written = yield* required(inserted, "the message insert answered no row");
   return { id: written.id, seq, txid: written.txid };
@@ -1360,23 +1285,17 @@ const turnStarted = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
   event: Extract<RunEvent, { kind: typeof RUN_EVENT.TURN_STARTED }>,
 ): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
-  const standing = yield* turnRow(context, event.turnId);
-  const startedAt = new Date(event.at);
-  if (Option.isNone(standing)) {
-    yield* insertStartedTurn({
+  const started = yield* startTurn(
+    context.target,
+    {
       turnId: event.turnId,
-      userId: context.target.userId,
-      conversationId: context.target.conversationId,
       origin: TURN_ORIGIN_OF_RUN_ORIGIN[event.origin],
-      startedAt,
-    });
-    return Result.succeed(STORE_WRITE_EFFECT.WRITTEN);
-  }
-  if (standing.value.status !== TURN_STATUS.QUEUED) {
-    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
-  }
-  yield* startTurn({ turnId: event.turnId, startedAt });
-  return Result.succeed(STORE_WRITE_EFFECT.WRITTEN);
+      attempt: event.attempt ?? 0,
+      at: new Date(event.at),
+    },
+    yield* turnRow(context, event.turnId),
+  );
+  return Result.succeed(started ? STORE_WRITE_EFFECT.WRITTEN : STORE_WRITE_EFFECT.REPEATED);
 });
 
 const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -1393,8 +1312,10 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
   // A failed turn names its failure word where the run had one, and the status
   // it ended in otherwise, so a timed-out or interrupted turn still says which.
   const failure = event.failure ?? (status === TURN_STATUS.FAILED ? event.status : undefined);
-  yield* settleTurn({
+  const ended = yield* endTurn(context.target, {
     turnId: event.turnId,
+    attempt: event.attempt ?? 0,
+    lapsedAt: event.lapsedAt === undefined ? null : new Date(event.lapsedAt),
     status,
     settledAt,
     failure: nullable(failure),
@@ -1409,6 +1330,15 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
     ),
     responseIds: event.responseIds,
   });
+  if (!ended) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FENCED });
+  // A turn that ended well hands the lines it never took to a turn queued for them; one a Stop was asked of leaves them awaiting nothing, and a failed one keeps them to resend.
+  if (
+    context.kind === CONVERSATION_KIND.AGENT &&
+    status === TURN_STATUS.SETTLED &&
+    standing.value.cancelRequestedAt === null
+  ) {
+    yield* requeueUntaken(context.target, event.turnId, settledAt, randomUUID);
+  }
   // A coding agent's own turn that settled is told the runtime's listener, once the write is done.
   if (context.kind === CONVERSATION_KIND.AGENT) {
     const { startedAt, queuedAt } = standing.value;
@@ -1741,22 +1671,26 @@ const enqueueTurn = /* @__PURE__ */ Effect.fn("web/enqueueTurn")(function* (
   enqueue: TurnEnqueue,
 ): Effect.fn.Return<TurnEnqueueResult, StoreFailure, DatabaseServices> {
   const turnId = enqueue.turnId ?? randomUUID();
-  if (Option.isSome(yield* turnRow(context, turnId))) {
-    return Result.succeed({ turnId, effect: STORE_WRITE_EFFECT.REPEATED });
-  }
-  yield* insertQueuedTurn({
+  // A turn its line queued already stands, and is told here what its runner runs it on.
+  const standing = Option.isSome(yield* turnRow(context, turnId));
+  yield* queueTurn(
+    context.target,
+    {
+      turnId,
+      origin: enqueue.origin,
+      runtimeTurnId: nullable(enqueue.runtimeTurnId),
+      model: nullable(enqueue.model),
+      reasoningEffort: nullable(enqueue.reasoningEffort),
+      promptHash: nullable(enqueue.promptHash),
+      toolSetHash: nullable(enqueue.toolSetHash),
+    },
+    context.now,
+    standing,
+  );
+  return Result.succeed({
     turnId,
-    userId: context.target.userId,
-    conversationId: context.target.conversationId,
-    origin: enqueue.origin,
-    runtimeTurnId: nullable(enqueue.runtimeTurnId),
-    model: nullable(enqueue.model),
-    reasoningEffort: nullable(enqueue.reasoningEffort),
-    promptHash: nullable(enqueue.promptHash),
-    toolSetHash: nullable(enqueue.toolSetHash),
-    queuedAt: context.now,
+    effect: standing ? STORE_WRITE_EFFECT.REPEATED : STORE_WRITE_EFFECT.WRITTEN,
   });
-  return Result.succeed({ turnId, effect: STORE_WRITE_EFFECT.WRITTEN });
 });
 
 /** A row of the conversation and the rows standing past it: one table under the two names the join reads it by. */
@@ -1803,6 +1737,7 @@ const findAwaitingLines = SqlSchema.findAll({
     clientId: Schema.String,
     parts: StoredPartsColumnSchema,
     withdrawn: Schema.Boolean,
+    awaitsTurnId: Schema.NullOr(Schema.String),
   }),
   execute: (key) =>
     Database.use((db) =>
@@ -1812,6 +1747,7 @@ const findAwaitingLines = SqlSchema.findAll({
           clientId: messages.clientId,
           parts: messages.parts,
           withdrawn: sql<boolean>`${messages.withdrawnAt} is not null`,
+          awaitsTurnId: messages.awaitsTurnId,
         })
         .from(messages)
         .innerJoin(conversations, eq(conversations.id, messages.conversationId))
@@ -1925,17 +1861,33 @@ function dispatchedWithinDeadline(
   });
 }
 
+/** The turn a coding agent's line written in this write awaits (`awaitedTurn`); none in any other conversation, whose lines no runner takes. */
+function awaitedTurnOf(context: WriterContext): Write<AwaitedTurn | undefined> {
+  return context.kind === CONVERSATION_KIND.AGENT
+    ? awaitedTurn(context.target, context.now, randomUUID)
+    : Effect.succeed(undefined);
+}
+
 /** A line's row written and the dispatch claim its hand-over runs under; or the row a send under the same key already wrote. */
 type LineClaimed = Result.Result<
-  | { readonly id: string; readonly txid: string; readonly claim: string }
+  | {
+      readonly id: string;
+      readonly txid: string;
+      readonly claim: string;
+      /** The turn queued for the line, which goes with it where its hand-over answers that it was not taken; none where it joined an open turn. */
+      readonly queuedTurnId: string | undefined;
+    }
   | { readonly id: string; readonly effect: typeof STORE_WRITE_EFFECT.REPEATED },
   typeof NO_CONVERSATION | typeof CONVERSATION_BUSY | MessageRefused
 >;
 
 /**
- * The line's row and the conversation's dispatch claim, written together
- * under the row lock before the line is handed over, so the take of the line
- * into the turn its runtime opens finds it standing (`dispatch-claim.ts`).
+ * The line's row, the turn it awaits, and the conversation's dispatch claim,
+ * written together under the row lock before the line is handed over, so the
+ * take of the line into the turn its runtime opens finds it standing
+ * (`dispatch-claim.ts`), and no line stands without a turn that takes it or
+ * fails: the open turn it joins, or a turn queued for it (`turn-state.ts`'s
+ * `awaitedTurn`).
  * Another hand-over's claim standing fails the write as `DispatchClaimHeld`,
  * nothing written, for the caller to try again; it is read before the repeat
  * check, so a retry of a send still under way waits for it to be recorded
@@ -1967,15 +1919,22 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
     parts: lineParts(line.text, line.attachments ?? [], line.mentioned),
   });
   if (Result.isFailure(read)) return Result.fail(read.failure);
+  const awaited = yield* awaitedTurnOf(context);
   const { id, txid } = yield* insertMessage(context, {
     clientId: read.success.id,
     turnId: undefined,
     message: read.success,
     finishedAt: context.now,
     sender: line.sender,
+    awaitsTurnId: awaited?.turnId,
   });
   const claim = yield* takeDispatchClaim(context.target.conversationId, place, id);
-  return Result.succeed({ id, txid, claim });
+  return Result.succeed({
+    id,
+    txid,
+    claim,
+    queuedTurnId: awaited?.queued === true ? awaited.turnId : undefined,
+  });
 });
 
 /**
@@ -2073,13 +2032,18 @@ const markLineWithdrawn = SqlSchema.void({
 /**
  * What the hand-over answered, written in a short transaction of its own
  * after it: the claim released, and a line the runtime did not take
- * withdrawn, tried again while the claim stands (`recordedWithinExpiry`).
+ * withdrawn with the turn queued for it, tried again while the claim stands
+ * (`recordedWithinExpiry`).
  * Note that the claim goes first, because its update takes the
  * conversation's row lock, which every writer takes before a message's.
  */
 function recordedLine(
   target: ConversationTarget,
-  claimed: { readonly id: string; readonly claim: string },
+  claimed: {
+    readonly id: string;
+    readonly claim: string;
+    readonly queuedTurnId: string | undefined;
+  },
   taken: boolean,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -2095,6 +2059,10 @@ function recordedLine(
           });
           if (removed.length > 0)
             yield* markLineWithdrawn({ conversationId: target.conversationId });
+          // The send failed and its sender was told, so the turn queued for its line goes with it.
+          if (claimed.queuedTurnId !== undefined) {
+            yield* dropQueuedTurn(target, claimed.queuedTurnId);
+          }
         }),
       ),
     ),
@@ -2104,14 +2072,17 @@ function recordedLine(
 /** A newer turn of the conversation than the one the read is at: the rows the newest-turn condition reads by. */
 const newerTurn = alias(turns, "newer_turn");
 
+/** The turn a lost line awaits, which failed. */
+const failedAwaited = alias(turns, "failed_awaited");
+
 /** A line of the developer's a turn took past the one the read is at. */
 const takenLater = alias(messages, "taken_later");
 
 /**
  * The developer's lines of a coding agent's conversation that the agent's
- * failed turn never took, oldest first: user rows no turn owns and no
- * hand-over withdrew, written before the newest turn was queued where that
- * turn failed and not for its session's end, which a new agent mends, and
+ * failed turns never took, oldest first: user rows no turn owns and no
+ * hand-over withdrew, awaiting a turn that failed, where the newest turn
+ * failed too, neither for its session's end, which a new agent mends, and
  * past every line an earlier turn took, so a line some turn took without the
  * store hearing it is never handed again. A line a turn received under another row
  * (`noReceiptOfLine`) and a line typed into a call are left out, as the take
@@ -2139,12 +2110,19 @@ const findLostLines = SqlSchema.findAll({
         .from(messages)
         .innerJoin(conversations, eq(conversations.id, messages.conversationId))
         .innerJoin(
+          failedAwaited,
+          and(
+            eq(failedAwaited.id, messages.awaitsTurnId),
+            eq(failedAwaited.status, TURN_STATUS.FAILED),
+            sql`${failedAwaited.failure} is distinct from ${TURN_FAILURE.SESSION_ENDED}`,
+          ),
+        )
+        .innerJoin(
           turns,
           and(
             eq(turns.conversationId, messages.conversationId),
             eq(turns.status, TURN_STATUS.FAILED),
             sql`${turns.failure} is distinct from ${TURN_FAILURE.SESSION_ENDED}`,
-            gt(turns.queuedAt, messages.createdAt),
           ),
         )
         .where(
@@ -2199,14 +2177,22 @@ const LinePlaceSchema = Schema.Struct({
 
 type LinePlace = typeof LinePlaceSchema.Type;
 
-/** A line's place, where it still stands awaiting its turn: no turn took it and no hand-over withdrew it. */
+/** A line's place, where it still stands awaiting its turn: no turn took it and no hand-over withdrew it; and the turn it awaits. */
 const findAwaitingPlace = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, id: Schema.String }),
-  Result: LinePlaceSchema,
+  Result: Schema.Struct({
+    ...LinePlaceSchema.fields,
+    awaitsTurnId: Schema.NullOr(Schema.String),
+  }),
   execute: (key) =>
     Database.use((db) =>
       db
-        .select({ seq: messages.seq, createdAt: messages.createdAt, placedAt: messages.placedAt })
+        .select({
+          seq: messages.seq,
+          createdAt: messages.createdAt,
+          placedAt: messages.placedAt,
+          awaitsTurnId: messages.awaitsTurnId,
+        })
         .from(messages)
         .where(
           and(
@@ -2241,9 +2227,19 @@ const placeAwaitingLine = SqlSchema.void({
     ),
 });
 
-/** A lost line's hand-over begun: the dispatch claim it runs under, and where the line stood before it was moved to the end. */
+/** Where a lost line stood before its resend moved it: its place, and the failed turn it awaited. */
+interface LostLineStood {
+  readonly place: LinePlace;
+  readonly awaitsTurnId: string | null;
+}
+
+/** A lost line's hand-over begun: the dispatch claim it runs under, where the line stood before it was moved to the end, and the turn queued for it, where one was. */
 type ResendClaimed = Result.Result<
-  Option.Option<{ readonly claim: string; readonly was: LinePlace }>,
+  Option.Option<{
+    readonly claim: string;
+    readonly was: LostLineStood;
+    readonly queuedTurnId: string | undefined;
+  }>,
   typeof NO_CONVERSATION | typeof CONVERSATION_BUSY
 >;
 
@@ -2253,8 +2249,9 @@ type ResendClaimed = Result.Result<
  * so the line reads as awaiting the turn its hand-over opens, which the turn
  * that failed was queued before, and the turn's work is drawn after it.
  * Nothing where the line no longer awaits, a turn having taken it meanwhile.
- * Readers holding an older cursor read the transcript afresh
- * (`markLineWithdrawn`), since the row left its place.
+ * The line awaits the turn its hand-over opens from then, as a line written
+ * now would (`awaitedTurn`). Readers holding an older cursor read the
+ * transcript afresh (`markLineWithdrawn`), since the row left its place.
  */
 const claimResend = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
@@ -2263,29 +2260,44 @@ const claimResend = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<ResendClaimed, StoreFailure | DispatchClaimHeld, DatabaseServices> {
   const { conversationId } = context.target;
   if (yield* dispatchClaimStands(conversationId, place)) return yield* new DispatchClaimHeld();
-  const was = yield* findAwaitingPlace({ conversationId, id });
-  if (Option.isNone(was)) return Result.succeed(Option.none());
+  const found = yield* findAwaitingPlace({ conversationId, id });
+  if (Option.isNone(found)) return Result.succeed(Option.none());
+  const { awaitsTurnId, ...was } = found.value;
   const seq = yield* allocateMessageSeq(context);
   yield* placeAwaitingLine({
     conversationId,
     id,
     place: { seq, createdAt: context.now, placedAt: context.now },
   });
+  const awaited = yield* awaitedTurn(context.target, context.now, randomUUID);
+  yield* awaitTurn(conversationId, [id], awaited.turnId);
   yield* markLineWithdrawn({ conversationId });
   const claim = yield* takeDispatchClaim(conversationId, place, id);
-  return Result.succeed(Option.some({ claim, was: was.value }));
+  return Result.succeed(
+    Option.some({
+      claim,
+      was: { place: was, awaitsTurnId },
+      queuedTurnId: awaited.queued ? awaited.turnId : undefined,
+    }),
+  );
 });
 
 /**
  * What a lost line's hand-over answered, written as `recordedLine` writes a
  * send's: the claim released, and a line the runtime did not take put back
- * where it stood, as written then, rather than withdrawn, so a resend
- * refused leaves the transcript as it found it and the line there to resend.
+ * where it stood, as written then, awaiting the failed turn it awaited,
+ * rather than withdrawn, and the turn queued for it dropped, so a resend
+ * refused leaves the transcript and the turns as it found them and the line
+ * there to resend.
  */
 function recordedResend(
   target: ConversationTarget,
   id: string,
-  claimed: { readonly claim: string; readonly was: LinePlace },
+  claimed: {
+    readonly claim: string;
+    readonly was: LostLineStood;
+    readonly queuedTurnId: string | undefined;
+  },
   taken: boolean,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -2297,14 +2309,32 @@ function recordedResend(
           yield* placeAwaitingLine({
             conversationId: target.conversationId,
             id,
-            place: claimed.was,
+            place: claimed.was.place,
           });
+          yield* awaitTurn(target.conversationId, [id], claimed.was.awaitsTurnId);
+          if (claimed.queuedTurnId !== undefined) {
+            yield* dropQueuedTurn(target, claimed.queuedTurnId);
+          }
           yield* markLineWithdrawn({ conversationId: target.conversationId });
         }),
       ),
     ),
   );
 }
+
+const requeueLine = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  lineId: string,
+): Effect.fn.Return<Result.Result<boolean, never>, StoreFailure, DatabaseServices> {
+  const found = yield* findAwaitingPlace({
+    conversationId: context.target.conversationId,
+    id: lineId,
+  });
+  if (Option.isNone(found)) return Result.succeed(false);
+  const awaited = yield* awaitedTurn(context.target, context.now, randomUUID);
+  yield* awaitTurn(context.target.conversationId, [lineId], awaited.turnId);
+  return Result.succeed(true);
+});
 
 const takeAwaitingLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
@@ -2331,61 +2361,34 @@ const takeAwaitingLine = /* @__PURE__ */ Effect.fnUntraced(function* (
       takenAfterStep,
     });
   }
+  // A turn queued for these lines that another turn took them into instead awaits nothing now.
+  const awaited = new Set(run.flatMap((line) => line.awaitsTurnId ?? []));
+  awaited.delete(take.turnId);
+  yield* dropAwaitingNothing(context.target, [...awaited]);
   return Result.succeed(run.map((line) => line.id));
-});
-
-const stampTurnCancel = SqlSchema.findAll({
-  Request: Schema.Struct({
-    turnId: Schema.String,
-    conversationId: Schema.String,
-    at: Schema.Date,
-    key: Schema.NullOr(Schema.String),
-    by: Schema.NullOr(Schema.String),
-  }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: (row) =>
-    Database.use((db) =>
-      db
-        .update(turns)
-        .set({
-          cancelRequestedAt: row.at,
-          cancelRequestKey: row.key,
-          cancelRequestedBy: row.by,
-        })
-        .where(
-          and(
-            eq(turns.id, row.turnId),
-            eq(turns.conversationId, row.conversationId),
-            isNull(turns.cancelRequestedAt),
-          ),
-        )
-        .returning({ id: turns.id }),
-    ),
 });
 
 /**
  * The Stop on a turn's row: the instant it was asked, the key of the
  * tool call that asked it where one did, and the agent that asked it where
  * one did, written once, so the record says a
- * Stop was asked whatever the harness does with it. A second Stop finds the first
- * instant standing and writes nothing, its key included; a turn the
- * conversation does not hold is refused.
+ * Stop was asked whatever the harness does with it, and the turn's deadline
+ * pulled in to the Stop's own (`turn-state.ts`'s `stopTurn`). A second Stop
+ * finds the first instant standing and writes nothing, its key included; a
+ * turn the conversation does not hold is refused.
  */
 const requestTurnCancel = /* @__PURE__ */ Effect.fn("web/requestTurnCancel")(function* (
   context: WriterContext,
   cancel: TurnCancelRequest,
 ): Effect.fn.Return<TurnCancelResult, StoreFailure, DatabaseServices> {
   if (Option.isNone(yield* turnRow(context, cancel.turnId))) return Result.fail(NO_TURN);
-  const stamped = yield* stampTurnCancel({
+  const stamped = yield* stopTurn(context.target, {
     turnId: cancel.turnId,
-    conversationId: context.target.conversationId,
     at: cancel.at,
     key: cancel.key ?? null,
     by: cancel.by ?? null,
   });
-  return Result.succeed(
-    stamped.length === 0 ? STORE_WRITE_EFFECT.REPEATED : STORE_WRITE_EFFECT.WRITTEN,
-  );
+  return Result.succeed(stamped ? STORE_WRITE_EFFECT.WRITTEN : STORE_WRITE_EFFECT.REPEATED);
 });
 
 /**
@@ -2595,6 +2598,8 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     takeAwaitingLine: (target, take) =>
       underConversation(target, (context) => takeAwaitingLine(context, take)),
     resendLostLines: (target, dispatch) => Effect.uninterruptible(resentLines(target, dispatch)),
+    requeueLine: (target, lineId) =>
+      underConversation(target, (context) => requeueLine(context, lineId)),
   };
 
   return Effect.flatMap(toolsRefusingUnknownOutcome(tools), (refusing) =>

@@ -1,5 +1,6 @@
 import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { RUNNER_LOST_DETAIL, settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
   type Agent,
   readAgentOfConversation,
@@ -15,7 +16,7 @@ import {
 } from "@repo/database/models/native-projection-store";
 import { setPlanStatus } from "@repo/database/models/provider-key-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
-import { renewTurnLease } from "@repo/database/models/turn-lease";
+import { progressTurns, queuedTurnOf, supersededTurnsOf } from "@repo/database/models/turn-state";
 import {
   type ConversationTarget,
   type SettledAgentTurn,
@@ -52,7 +53,7 @@ import {
   HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
-import { RUN_EVENT, type RunEvent, TURN_ORIGIN } from "../../core.js";
+import { RUN_EVENT, type RunEvent, TURN_FAILURE, TURN_ORIGIN } from "../../core.js";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
@@ -116,12 +117,19 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * whose sandbox is stopped instead. A batch with no events is the runner's
  * heartbeat (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`), posted while its
  * harness says nothing, as it may for an hour while a background command
- * runs; it applies nothing but that. The open turns' lease
- * (`@repo/database/models/turn-lease`), which they are read as lost by once
- * it runs out, is pushed on only by the turn's progress short of the
+ * runs; it applies nothing but that. The running turn's progress deadline
+ * (`@repo/database/models/turn-state`), which the minute sweep fails it by
+ * once it passes, is pushed on only by the turn's progress short of the
  * launch's end (`native-projection.ts`'s `turnProgressed`): any event, or a
  * heartbeat while the turn holds a call still unanswered or waits on
  * background work, so a runner alive with its harness stuck lapses too.
+ *
+ * Every turn the batch moves runs under the launch its bearer was recorded
+ * as (`agent.runner_launch`), read under the lock: a turn the runner opens
+ * is the one its line queued, where one stands queued, started under that
+ * launch, and a turn still running under an older launch, whose runner this
+ * one replaced, is failed as its runner lost before anything else is
+ * applied, so its end, which is not coming, waits on no deadline.
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -565,12 +573,55 @@ function landWrites(applying: Applying, writes: readonly NativeWrite[], now: num
   });
 }
 
+/**
+ * The conversation's turns still running under a launch older than the one
+ * posting, whose runner this launch replaced, failed as their runner lost,
+ * or canceled where a Stop was asked of them; and the projection without the
+ * turn it held, where that was one of them, so this launch opens its own.
+ */
+function supersededDropped(
+  applying: Applying,
+  state: NativeProjection,
+  launch: number,
+  now: number,
+) {
+  return Effect.gen(function* () {
+    const { conversationId } = applying.target;
+    const superseded = yield* supersededTurnsOf(conversationId, launch);
+    if (superseded.length === 0) return state;
+    const failed = yield* settleRunnerLostTurns(
+      applying.writer,
+      conversationId,
+      now,
+      RUNNER_LOST_DETAIL,
+      new Set(superseded),
+      TURN_FAILURE.RUNNER_LOST,
+    );
+    if (failed.length > 0) {
+      yield* Effect.logWarning("runner-events: a newer launch replaced a turn's runner").pipe(
+        Effect.annotateLogs({ turnId: failed.join(","), failure: TURN_FAILURE.RUNNER_LOST }),
+      );
+    }
+    const { turn, ...rest } = state;
+    return turn !== undefined && superseded.includes(turn.id) ? rest : state;
+  });
+}
+
 /** The batch's events not yet applied, projected and written, and the place the conversation keeps after them. */
 function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativeProjectionRow) {
   return Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const events = unapplied(batch, held.sequence);
-    let state: NativeProjection = heldProjection(held.projection);
+    const { conversationId } = applying.target;
+    let state: NativeProjection = yield* supersededDropped(
+      applying,
+      heldProjection(held.projection),
+      held.launch,
+      now,
+    );
+    // The next turn the runner opens is the one its line queued, where one stands queued.
+    let queuedTurnId = Option.getOrUndefined(yield* queuedTurnOf(conversationId));
+    const { launch } = held;
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
     for (const { sequence, message } of events) {
@@ -581,9 +632,11 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       };
       const moments = applying.read(message, held);
       const projected = projectMoments(state, moments, {
-        conversationId: applying.target.conversationId,
+        conversationId,
         sequence,
         now,
+        attempt: launch,
+        queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
         registered,
@@ -598,6 +651,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       // own, never the next turn's.
       for (const write of projected.writes) {
         if (write.kind !== NATIVE_WRITE.ENQUEUE) continue;
+        if (write.turnId === queuedTurnId) queuedTurnId = undefined;
         const taken = yield* takeAgentMentionedServers(
           applying.target.userId,
           applying.target.conversationId,
@@ -609,10 +663,10 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     yield* landWrites(applying, writes, now);
     const last = events.at(-1)?.sequence;
     const ends = runnerEndsOf(batch, held.sequence);
-    // Only the turn's progress pushes on its lease (`turn-lease.ts`), a heartbeat only where the turn
-    // is expected to be silent, so a runner gone quiet, or alive with its harness stuck, is read as lost.
+    // Only the turn's progress pushes on its deadline (`turn-state.ts`), a heartbeat only where the turn
+    // is expected to be silent, so a runner gone quiet, or alive with its harness stuck, lapses.
     if (ends.length === 0 && turnProgressed(events.length, state)) {
-      yield* renewTurnLease(applying.target.conversationId, now);
+      yield* progressTurns(conversationId, launch, now);
     }
     // Only the batch's last IDLE is told, and none where the launch ended in the same batch.
     const idle =

@@ -39,7 +39,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import { MESSAGE_CHANNEL } from "../../core.js";
+import { MESSAGE_CHANNEL, TURN_STATUS } from "../../core.js";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import {
@@ -71,8 +71,8 @@ import {
 import { experimentOnIn } from "../workspace-experiment-on.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { messageCredentialMissing } from "./agent-runtime-choice.js";
-import { settleLapsedRunner } from "./lapsed-runner.js";
 import { harnessOf } from "./native-runtime.js";
+import { reconciledBeforeWrite } from "./reconcile.js";
 import { failedCallRefusal, routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf } from "./status.js";
 
@@ -420,9 +420,9 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   // The line is written in the agent's conversation, which is its starter's whichever member sends it.
   const target = { userId: agent.userId, conversationId: agent.conversationId };
-  // A turn whose runner stopped posting is settled lost first, so the words open a turn of their own
-  // rather than steering one nothing runs (`lapsed-runner.ts`).
-  yield* settleLapsedRunner(agent);
+  // A turn past its deadline is reaped first, so the words open a turn of their own rather than
+  // joining one nothing runs (`reconcile.ts`).
+  yield* reconciledBeforeWrite(agent);
   // Note that the reads a refusal is decided by are made at once beside each other, since none waits on
   // another, and then judged one by one in the order below, so a send refused for two reasons is
   // refused for the same one it always was; a repeat reads them all for nothing, which is rare.
@@ -580,11 +580,17 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   if (outcome.ended && running !== undefined) yield* settledEnded(writer, agent, running);
   if (Option.isNone(written.success))
     return yield* Effect.fail(outcome.refused ?? HOSTED_REFUSAL.UNAVAILABLE);
-  const { txid, effect } = written.success.value;
+  const { txid, effect, id } = written.success.value;
+  // The words the fresh session took joined the ended session's turn as they were written, and await a turn of their own now.
+  if (outcome.ended && running !== undefined) {
+    yield* hostedStoreOrUnavailable(
+      Effect.flatMap(writer, (write) => write.requeueLine(target, id)),
+    );
+  }
   // A send that raced another under its key found the line standing under the lock, so it sent nothing new.
   const sent =
     effect === STORE_WRITE_EFFECT.WRITTEN
-      ? { sent: { runtime, turnRunning: running !== undefined } }
+      ? { sent: { runtime, turnRunning: running?.status === TURN_STATUS.RUNNING } }
       : undefined;
   return txid === undefined
     ? { outcome: STEER_OUTCOME.SENT, ...sent }

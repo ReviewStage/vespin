@@ -561,14 +561,8 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
           { text: "Draft the plan.", clientKey: "plan", sender: { kind: MESSAGE_SENDER.APP } },
           Effect.succeed(true),
         );
-        // The launch fails after the line was written, as the service writes it: a turn queued and settled failed.
+        // The launch fails after the line was written, as the service writes it: the turn the line queued settled failed.
         yield* TestClock.adjust(Duration.seconds(1));
-        const turnId = randomUUID();
-        yield* writer.enqueueTurn(target, {
-          turnId,
-          origin: TURN_ORIGIN.TYPED,
-          runtimeTurnId: turnId,
-        });
         yield* settleRunnerLostTurns(writer, target.conversationId, 1000, "the sandbox failed");
         const handed: string[] = [];
         const dispatch = (line: { readonly clientId: string }) =>
@@ -591,7 +585,7 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
       }),
   );
   it.effect(
-    "a resend the runtime refused partway stops there: the lines it took go to the end of the transcript, and the refused line stands where it was, still lost, for the next resend, even once the turn that took the first fails too",
+    "a resend the runtime refused partway stops there: the lines it took go to the end of the transcript, and the refused line stands where it was, still lost, for the resend once the turn that took the first fails too",
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation(CONVERSATION_KIND.AGENT);
@@ -604,12 +598,6 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
           );
         }
         yield* TestClock.adjust(Duration.seconds(1));
-        const turnId = randomUUID();
-        yield* writer.enqueueTurn(target, {
-          turnId,
-          origin: TURN_ORIGIN.TYPED,
-          runtimeTurnId: turnId,
-        });
         yield* settleRunnerLostTurns(writer, target.conversationId, 1000, "the sandbox failed");
         yield* TestClock.adjust(Duration.seconds(1));
         const handed: string[] = [];
@@ -635,9 +623,10 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
         assert.deepEqual(after[0], before[1]);
         assert.equal(after[1]?.[0], sentLineId("first"));
         assert.ok(Number(after[1]?.[1]) > Number(before[0]?.[1]), "the line taken is written anew");
+        // The line taken awaits a turn queued for it, so nothing is lost until that turn fails too.
         assert.ok(Result.isSuccess(again));
-        assert.deepEqual(again.success, { taken: [], stopped: true });
-        assert.deepEqual(handed, [sentLineId("first"), sentLineId("second"), sentLineId("second")]);
+        assert.deepEqual(again.success, { taken: [], stopped: false });
+        assert.deepEqual(handed, [sentLineId("first"), sentLineId("second")]);
 
         // The line taken opens a turn of its own, which fails too, as a launch can again.
         yield* TestClock.adjust(Duration.seconds(1));

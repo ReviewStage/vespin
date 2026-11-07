@@ -32,7 +32,7 @@ export const TURN_FAILURE = {
   MODEL: "model",
   /** A checkpoint could not be written, so the run stopped before or after an action. */
   PERSISTENCE: "persistence",
-  /** The run reached its execution deadline. */
+  /** The run reached its execution deadline: a coding agent's turn ran past its cap (`@repo/features/turn-deadline`). */
   DEADLINE: "deadline",
   /** The model stopped before a reply formed: an incomplete output, or the tool budget spent. */
   INCOMPLETE: "incomplete",
@@ -54,6 +54,12 @@ export const TURN_FAILURE = {
    * turn's end is never coming and its record says the session was lost.
    */
   SESSION_ENDED: "session_ended",
+  /** The turn's line stood queued past its pickup deadline with no runner taking it (`@repo/features/turn-deadline`). */
+  LINE_UNTAKEN: "line_untaken",
+  /** The turn's runner still ran, but the turn made no progress before its progress deadline, so the runner was ended. */
+  NO_PROGRESS: "no_progress",
+  /** The turn's runner ended, or was replaced by a newer launch, before the turn did. */
+  RUNNER_LOST: "runner_lost",
 } as const;
 
 export type TurnFailure = (typeof TURN_FAILURE)[keyof typeof TURN_FAILURE];

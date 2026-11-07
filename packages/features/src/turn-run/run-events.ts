@@ -197,6 +197,8 @@ export type RunEventBody =
       readonly origin: RunTurnOrigin;
       readonly trigger: TurnTrigger;
       readonly at: number;
+      /** The attempt the turn starts under: the launch of the runner that took it, which every later move of the turn must name (`turns.attempt`); absent for a turn no launch runs, read as 0. */
+      readonly attempt?: number;
     }
   | {
       readonly kind: typeof RUN_EVENT.STEP_STARTED;
@@ -245,6 +247,10 @@ export type RunEventBody =
       /** The id of every response the turn was answered with, in order. */
       readonly responseIds: readonly string[];
       readonly at: number;
+      /** The attempt the end is told by, which must be the one the turn runs under, so a launch the turn no longer runs under ends nothing; absent for a turn no launch runs, read as 0. */
+      readonly attempt?: number;
+      /** Where the end is a reap of a turn past its deadline, the instant it was found past it, at which it must still stand past it, so a turn its runner moved on since keeps running. */
+      readonly lapsedAt?: number;
     };
 
 export type RunEvent = RunEventBody & RunEventBase;

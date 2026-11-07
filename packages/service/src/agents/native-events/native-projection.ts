@@ -224,11 +224,15 @@ export type NativeWrite =
       readonly turnOpenedAt?: number;
     };
 
-/** What one event is projected under: its conversation and number, the instant, the model the agent runs on, and which tools the record holds. */
+/** What one event is projected under: its conversation and number, the instant, the launch posting it, the turn its line queued, the model the agent runs on, and which tools the record holds. */
 export interface NativeProjectionContext {
   readonly conversationId: string;
   readonly sequence: number;
   readonly now: number;
+  /** The launch of the runner posting the event (`agent.runner_launch`), which every turn it starts or ends runs under. */
+  readonly attempt: number;
+  /** The conversation's turn queued for a line no runner took yet, which the next turn opened is, rather than one minted; none where none is queued. */
+  readonly queuedTurnId: string | undefined;
   readonly model: string | undefined;
   /** Whether the starter's own API key pays for the agent, so a refusal of it is theirs to replace in Settings. */
   readonly ownKey: boolean;
@@ -308,18 +312,31 @@ class Fold {
     return { ...turn, told };
   }
 
-  /** The turn under way, opened here, by the event's own number, where none is. */
+  /**
+   * The turn under way, opened here where none is: the turn its line
+   * queued, where one stands queued, or else one by the event's own number,
+   * as a turn the harness opened itself is, on a wakeup or background work
+   * ending.
+   */
   turn(): Turn {
     const held = this.state.turn;
     if (held !== undefined) return held;
     const { warm: _warm, ...cold } = this.state;
     this.state = cold;
-    const id = nativeTurnId(this.#context.conversationId, this.#context.sequence);
+    const id =
+      this.#context.queuedTurnId ??
+      nativeTurnId(this.#context.conversationId, this.#context.sequence);
     this.writes.push({ kind: NATIVE_WRITE.ENQUEUE, turnId: id });
     const { origin, trigger } = SESSION_TURN_KIND[SESSION_TURN.TYPED];
     const opened = this.#tell(
       { id, told: 0, steps: 0, calls: {}, running: {}, openedAt: this.#context.now },
-      { kind: RUN_EVENT.TURN_STARTED, origin, trigger, at: this.#context.now },
+      {
+        kind: RUN_EVENT.TURN_STARTED,
+        origin,
+        trigger,
+        at: this.#context.now,
+        attempt: this.#context.attempt,
+      },
     );
     this.#setTurn(opened);
     return opened;
@@ -459,28 +476,35 @@ class Fold {
 
   /**
    * The turn a launch's end settles: the one under way, or, where the launch
-   * failed before its first, one opened for it, so why it failed is kept.
-   * None for any other end that finds no turn, nor for a warm launch's, whose
-   * turn already ended at its IDLE.
+   * failed before its first, one opened for it, the turn its line queued
+   * where one stands, so why it failed is kept, and whether it was opened for
+   * the end. None for any other end that finds no turn, nor for a warm
+   * launch's, whose turn already ended at its IDLE.
    */
   #endedTurn(
     moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>,
-  ): Turn | undefined {
+  ): { readonly turn: Turn; readonly openedForEnd: boolean } | undefined {
     const held = this.state.turn;
-    if (held !== undefined) return held;
+    if (held !== undefined) return { turn: held, openedForEnd: false };
     if (moment.launchFailed !== true || this.state.warm === true) return undefined;
-    return this.turn();
+    return { turn: this.turn(), openedForEnd: true };
   }
 
-  /** The turn's end: its words told whole, then its status, cost, and why it failed, where it did. */
+  /**
+   * The turn's end: its words told whole, then its status, cost, and why it
+   * failed, where it did. Note that a launch that failed before it took any
+   * line, as one whose line reads were refused does, fails its turn as its
+   * runner lost rather than as a model call, since no model ran.
+   */
   #ended(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>): void {
-    const held = this.#endedTurn(moment);
+    const ended = this.#endedTurn(moment);
     const { warm: _warm, ...cold } = this.state;
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
-    if (held === undefined) return;
-    const turn = this.#closed(held);
+    if (ended === undefined) return;
+    const turn = this.#closed(ended.turn);
     const status = statusOf(moment.ending, turn.failure);
     const failed = status === RUN_STATUS.FAILED;
+    const failure = ended.openedForEnd ? TURN_FAILURE.RUNNER_LOST : TURN_FAILURE.MODEL;
     // Note that a refusal of the starter's own key leads with the coder's word for it, so the window reads the failure as a key to replace rather than a model call failed.
     const ownKeyRefused =
       turn.refused === true && this.#context.ownKey ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED : undefined;
@@ -491,7 +515,7 @@ class Fold {
     this.#tell(turn, {
       kind: RUN_EVENT.TURN_ENDED,
       status,
-      ...(failed ? { failure: TURN_FAILURE.MODEL } : undefined),
+      ...(failed ? { failure } : undefined),
       ...(failed && detail.length > 0 ? { failureDetail: detail } : undefined),
       ...(turn.usage !== undefined ? { usage: turn.usage } : undefined),
       ...(turn.usage !== undefined && model !== undefined
@@ -499,12 +523,13 @@ class Fold {
         : undefined),
       responseIds: [],
       at: this.#context.now,
+      attempt: this.#context.attempt,
     });
     if (failed) {
       this.writes.push({
         kind: NATIVE_WRITE.FAILED,
         turnId: turn.id,
-        failure: TURN_FAILURE.MODEL,
+        failure,
         detail,
         expected: turn.limited === true || this.state.rateLimit !== undefined,
         refused: turn.refused === true,
@@ -688,7 +713,7 @@ function statusOf(
 /**
  * Whether a batch of the runner's, applying `applied` events and leaving the
  * projection at `state`, is its turn's progress: what pushes the turn's lease
- * on (`@repo/database`'s `turn-lease.ts`), which is the turn's progress
+ * on (`@repo/database`'s `turn-state.ts`), which is the turn's progress
  * deadline. Any event is progress: a step's words streaming, a call or its
  * answer, a subagent's inner work, the turn's end. A heartbeat alone, a batch
  * with no events, proves only that the runner lives, so it is progress only

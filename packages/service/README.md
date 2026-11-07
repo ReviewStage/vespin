@@ -2632,13 +2632,17 @@ answers what each did; one that fails is logged and answered as failed while
 the rest still run, and any failure fails the cron's check-in. In order:
 
 - `syncLog`: the sync log's transactions older than its keep pruned.
+- `portShares`: the shared ports' links no one visited for their idle bound closed.
+- `turns`: the coding agents' turns past their deadline failed with why
+  (`src/agents/coder-host/reconcile.ts`), a sweep's worth of agents at a time.
 
-No sweep settles a turn whose runner went quiet. Every post a runner makes,
-its heartbeat among them, pushes on its open turns' lease
-(`packages/database/src/models/turn-lease.ts`); every reader takes a turn
-past its lease as its runner lost, and the agent's next touch (a message, a
-Stop, an open of it) settles it (`src/agents/coder-host/lapsed-runner.ts`).
-Nor does one retire a local runner left warm past its device's window: the
+A turn's row holds the deadline of the state it stands in
+(`packages/features/src/turn-deadline.ts`), written by its one writer
+(`packages/database/src/models/turn-state.ts`): its pickup while queued, its
+progress deadline while it runs, which only its progress pushes on, a Stop's,
+and a cap from its start. The sweep is the one reaper; a send or a Stop
+reconciles its own agent before it writes, and no read settles a turn.
+No sweep retires a local runner left warm past its device's window: the
 runner ends itself (`CODER.RUNNER_WARM`), and a host waiting to update retires
 its own. Nor does one hand on an agent's queue: every settle of a turn, whichever
 path made it, hands the queue on through the store writer's settled-turn

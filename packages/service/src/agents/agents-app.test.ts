@@ -19,6 +19,7 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { saveDescriptionText } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
@@ -250,13 +251,46 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   /** A source whose session its harness opened is claimed, with a turn under way its harness knows as `turn_0`; answers the session. */
+  /** The source's first turn, which its Start queued, run and ended, so the source stands idle with its sandbox asleep. */
+  const sourceIdle = (stored: Agent) =>
+    Effect.gen(function* () {
+      const target = { userId: stored.userId, conversationId: stored.conversationId };
+      const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+      const turnId = Option.getOrThrow(yield* queuedTurnOf(stored.conversationId));
+      const turn = { conversationId: sessionKey(target.conversationId), turnId };
+      yield* writer.consume(target, {
+        ...turn,
+        kind: RUN_EVENT.TURN_STARTED,
+        sequence: 1,
+        origin: RUN_TURN_ORIGIN.TYPED,
+        trigger: TURN_TRIGGER.ASK,
+        at: 0,
+      });
+      // The source's lines are the turn's, so none is left for a turn of its own.
+      yield* Database.use((db) =>
+        db
+          .update(messages)
+          .set({ turnId })
+          .where(eq(messages.conversationId, stored.conversationId)),
+      );
+      yield* writer.consume(target, {
+        ...turn,
+        kind: RUN_EVENT.TURN_ENDED,
+        sequence: 2,
+        status: RUN_STATUS.SUCCEEDED,
+        responseIds: [],
+        at: 0,
+      });
+    });
+
   const sourceRunning = (stored: Agent, agentSessions: ReturnType<typeof fakeAgentSessions>) =>
     Effect.gen(function* () {
       const target = { userId: stored.userId, conversationId: stored.conversationId };
       const sessionId = agentSessions.opened[0]?.sessionId ?? "";
       assert.equal(yield* claimRuntimeSession(target, sessionId, new Date()), true);
       const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-      const turnId = randomUUID();
+      // The Start's first line queued the turn its runner opens (`turn-state.ts`).
+      const turnId = Option.getOrThrow(yield* queuedTurnOf(stored.conversationId));
       yield* writer.enqueueTurn(target, {
         turnId,
         origin: TURN_ORIGIN.TYPED,
@@ -535,6 +569,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
       );
       yield* claimRuntimeSession(opened.stored, "wrun_source", new Date());
+      yield* sourceIdle(opened.stored);
       const continued = Effect.gen(function* () {
         const started = readAnswer(
           agentAnswerSchema,

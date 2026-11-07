@@ -13,7 +13,9 @@ import {
 /**
  * The scheduled sweep: once a minute, Vercel's cron ends what no request
  * will. Each sweep is bounded on its own, and they run in turn, each kept
- * from the others, so one that fails is logged and the rest still run.
+ * from the others, so one that fails is logged and the rest still run. Each
+ * is idempotent and reconciles what the rows say, so a minute the cron skips
+ * or calls twice ends nothing it should not.
  */
 
 type SweepRead<A> = Effect.Effect<A, unknown, DatabaseServices>;
@@ -23,6 +25,8 @@ interface MaintenanceSweeps {
   pruneSyncLog: (now: number) => SweepRead<number>;
   /** Closes the shared ports' links no one has visited for their idle bound, holding the rest's sandboxes, answering how many closed. */
   sweepPortShares: (now: number) => SweepRead<number>;
+  /** Fails, with why, the coding agents' turns past their deadline, a sweep's worth of agents, answering how many turns it settled (`coder-host/reconcile.ts`). */
+  reconcileAgents: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -47,6 +51,8 @@ interface MaintenanceSweepAnswer {
   syncLog: Swept<number>;
   /** Shared ports' links closed for going unvisited. */
   portShares: Swept<number>;
+  /** Coding agents' turns settled past their deadline. */
+  turns: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -83,6 +89,7 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
   return {
     syncLog: yield* isolated("pruneSyncLog", sweeps.pruneSyncLog(now)),
     portShares: yield* isolated("sweepPortShares", sweeps.sweepPortShares(now)),
+    turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
   };
 });
 

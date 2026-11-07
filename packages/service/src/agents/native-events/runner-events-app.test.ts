@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { it } from "@effect/vitest";
 import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
-import { lapsedTurnIds } from "@repo/database/models/abandoned-turns";
 import {
   createAgent,
   readAgent,
@@ -19,6 +18,7 @@ import {
   saveProviderKey,
 } from "@repo/database/models/provider-key-store";
 import { readTask, updateTask } from "@repo/database/models/task-store";
+import { lapsedTurnsOf } from "@repo/database/models/turn-state";
 import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -477,9 +477,9 @@ it.layer(getTestDB())("the runner events route", (it) => {
           silence.push(yield* post(agent.bearer, []));
         }
         const midway = yield* transcriptOf(agent.target.conversationId);
-        const lapsed = yield* lapsedTurnIds(
+        const lapsed = yield* lapsedTurnsOf(
           agent.target.conversationId,
-          yield* Clock.currentTimeMillis,
+          new Date(yield* Clock.currentTimeMillis),
         );
 
         assert.deepEqual(early.body, { applied: 0, sequence: null });
@@ -568,12 +568,15 @@ it.layer(getTestDB())("the runner events route", (it) => {
           HOSTED_HTTP_STATUS.UNAUTHORIZED,
         ],
       );
-      // The awaiting line alone stands: nothing of the batch was applied.
+      // The awaiting line and the turn it queued alone stand: nothing of the batch was applied.
       assert.deepEqual(
         rows.map((row) => row.turnId),
         [null],
       );
-      assert.deepEqual(written, []);
+      assert.deepEqual(
+        written.map((turn) => turn.status),
+        [TURN_STATUS.QUEUED],
+      );
     }),
   );
 

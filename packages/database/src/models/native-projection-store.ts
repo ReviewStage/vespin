@@ -21,12 +21,14 @@ import type { ConversationTarget } from "./writer.js";
  * unread.
  */
 
-/** What the conversation keeps for its projection: the last event applied, and the projection's own state. */
+/** What the conversation keeps for its projection: the last event applied, and the projection's own state; and the launch whose bearer the batch was admitted under. */
 export interface NativeProjectionRow {
   /** The number of the last event applied; null before the first. */
   readonly sequence: number | null;
   /** The projection's state as it was saved; null before the first save. */
   readonly projection: WireValue | null;
+  /** The launch the runner posting is (`agent.runner_launch`), read under the lock with its bearer, which every turn it moves runs under. */
+  readonly launch: number;
 }
 
 const lockProjectionRow = SqlSchema.findOneOption({
@@ -38,6 +40,7 @@ const lockProjectionRow = SqlSchema.findOneOption({
   Result: Schema.Struct({
     sequence: Schema.NullOr(Schema.Number),
     projection: Schema.NullOr(WireValueSchema),
+    launch: Schema.Number,
   }),
   execute: ({ userId, conversationId, runnerTokenHash }) =>
     Database.use((db) =>
@@ -45,6 +48,7 @@ const lockProjectionRow = SqlSchema.findOneOption({
         .select({
           sequence: conversations.nativeSequence,
           projection: conversations.nativeProjection,
+          launch: agentTable.runnerLaunch,
         })
         .from(conversations)
         .innerJoin(agentTable, eq(agentTable.conversationId, conversations.id))

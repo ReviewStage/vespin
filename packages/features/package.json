@@ -65,6 +65,7 @@
     "./agent-failure-words": "./src/agent-failure-words.js",
     "./chapters-model-choice": "./src/chapters-model-choice.js",
     "./agent-status": "./src/agent-status.js",
+    "./turn-deadline": "./src/turn-deadline.js",
     "./agent-view": "./src/agent-view.js",
     "./agent-queue-wire": "./src/agent-queue-wire.js",
     "./agent-transcript-live": "./src/agent-transcript-live.js",

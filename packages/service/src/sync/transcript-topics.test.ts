@@ -8,6 +8,7 @@ import {
   takeQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import { createTask } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -138,13 +139,12 @@ it.layer(getTestDB())("what moves a coding agent's transcript notifies", (it) =>
   );
 
   it.effect(
-    "a line written, a turn queued, started, and settled, and the journal it writes each notify the conversation, and a turn the agent's, its task's, and its workspace's too",
+    "a line written with the turn it queues, that turn named, started, and settled, and the journal it writes each notify the conversation, and a turn the agent's, its task's, and its workspace's too",
     () =>
       Effect.gen(function* () {
         const { userId, target, params, agentTopics } = yield* openAgent;
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
         const conversation: readonly SyncTopic[] = [[TOPIC.CONVERSATION, target.conversationId]];
-        const turnId = randomUUID();
         const answer = new AssistantMessageBuilder();
         answer.stepStart();
         answer.text("The invites are sent.");
@@ -159,9 +159,10 @@ it.layer(getTestDB())("what moves a coding agent's transcript notifies", (it) =>
             },
             Effect.succeed(true),
           ),
-          conversation,
+          agentTopics,
           params,
         );
+        const turnId = Option.getOrThrow(yield* queuedTurnOf(target.conversationId));
         yield* wakesTheTranscript(
           writer.enqueueTurn(target, {
             turnId,

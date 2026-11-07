@@ -163,7 +163,6 @@ import {
   Result,
   Schedule,
 } from "effect";
-import { TURN_ORIGIN } from "../../core.js";
 import { HostedEnvironment } from "../../environment.js";
 import {
   recordServerEvent,
@@ -1922,12 +1921,7 @@ export const runnerSessions = <
             TURN_FAILURE.MODEL,
           );
           const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-          const turnId = randomUUID();
-          yield* writer.enqueueTurn(
-            { userId, conversationId: agent.conversationId },
-            { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED },
-          );
-          // The checkout's own sentence names GitHub or the sandbox (`status.ts`'s `FAILURE_WORDS`);
+          // The turn its first message queued is the one failed. The checkout's own sentence names GitHub or the sandbox (`status.ts`'s `FAILURE_WORDS`);
           // any other failure, a missing snapshot among them, reads as the sandbox's, with its reason,
           // and a sandbox's failure with Vercel's own answer after the sentence the status reads it by.
           const detail =

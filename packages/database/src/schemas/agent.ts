@@ -16,6 +16,7 @@ import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-reposito
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   index,
   jsonb,
   pgTable,
@@ -325,6 +326,14 @@ export const agentTable = pgTable(
      * conversation's lock (`steer.ts`), from another function's connection.
      */
     runnerTokenHash: text("runner_token_hash"),
+    /**
+     * How many launches have recorded a bearer for the agent's runner, counted
+     * up in the statement that records each one, so a launch is numbered
+     * apart from every launch before it: the attempt a turn its runner takes
+     * runs under (`turns.attempt`), which a launch the agent's runner no
+     * longer is moves nothing of. 0 before the first.
+     */
+    runnerLaunch: bigint("runner_launch", { mode: "number" }).notNull().default(0),
     /**
      * When a client last said a cloud agent was on screen, which keeps its runner warm for
      * `CODER.RUNNER_WARM` past it (`coder-host/runner-sessions.ts`'s `warm`); null where none has.

@@ -8,6 +8,7 @@ import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
+  latestTurnsOfReached,
   pinAgent,
   readAgent,
   recordAgentPublished,
@@ -70,9 +71,12 @@ import {
   TASK_STATUS,
   taskDeleteAnswerSchema,
 } from "@repo/features/task-wire";
+import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { TURN_FAILURE } from "@repo/features/turn-run";
 import { RUN_ON_MAC_OFF, workspaceToolsAnswerSchema } from "@repo/features/workspace-tools-wire";
 import { TURN_ORIGIN } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { noNetwork } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Clock, Duration, Effect, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -117,7 +121,7 @@ import {
 import { harnessFor } from "../testing/native-harness-fake.js";
 import { scriptedSessionSandboxes } from "../testing/session-sandboxes-fake.js";
 import { receivedMessage } from "./attached-files.js";
-import { CODER } from "./coder-host/bounds.js";
+import { reconcileAgent } from "./coder-host/reconcile.js";
 import { SESSION_SEND_OUTCOME, SESSION_TURN } from "./sessions/agent-sessions.js";
 
 it.layer(getTestDB())("messaging a coding agent", (it) => {
@@ -939,16 +943,16 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a line no turn ever took reads its agent running for the line's grace and failed past it, alike on its page, in its task's list, and on its transcript",
+    "a line no runner ever takes reads its agent running until its turn's pickup deadline, alike on its page, in its task's list, and on its transcript, and the agent's reconcile then fails that turn as untaken",
     () =>
       Effect.gen(function* () {
-        const { owner, task, agent, ask, transcript, sent } = yield* messagedAgent(
+        const { owner, task, agent, ask, transcript, sent, target } = yield* messagedAgent(
           fakeAgentSessions(),
           {
             running: false,
           },
         );
-        // The session takes the line and then fails with the store's hooks, so no turn row is written for it.
+        // The session takes the line, but no runner ever does, so the turn its send queued never starts.
         yield* TestClock.adjust(Duration.seconds(1));
         assert.equal(
           (yield* sent("Rename the subject line too.")).agent.status,
@@ -972,19 +976,23 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
               transcript: (yield* transcript()).status,
             };
           });
+        const reconciled = Effect.flatMap(readAgent(owner, agent.id), (stored) =>
+          reconcileAgent(Option.getOrThrow(stored)).pipe(Effect.provide(noNetwork)),
+        );
 
-        yield* TestClock.adjust(CODER.LINE_GRACE);
+        yield* TestClock.adjust(Duration.millis(TURN_DEADLINE.PICKUP_MS));
+        assert.deepEqual(yield* reconciled, [], "nothing lapses before the deadline");
         assert.deepEqual(yield* statuses(), {
           page: AGENT_STATUS.RUNNING,
           list: AGENT_STATUS.RUNNING,
           transcript: AGENT_STATUS.RUNNING,
         });
         yield* TestClock.adjust(Duration.millis(1));
-        assert.deepEqual(yield* statuses(), {
-          page: AGENT_STATUS.FAILED,
-          list: AGENT_STATUS.FAILED,
-          transcript: AGENT_STATUS.FAILED,
-        });
+        assert.equal((yield* reconciled).length, 1);
+        const turn = (yield* latestTurnsOfReached([target.conversationId])).get(
+          target.conversationId,
+        );
+        assert.equal(turn?.failure, TURN_FAILURE.LINE_UNTAKEN);
       }),
   );
 
