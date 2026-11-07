@@ -28,6 +28,14 @@ const NAVIGATION_TIMEOUT_MS = 60000;
 /** Matches `step.sh`'s default wait, so a caller that gave up is never answered later. */
 const STEP_DEADLINE_MS = 115000;
 const LOG_CHARS = 400;
+// The catalog a new account's server answers when it reaches AI Gateway: every model offered, none paid for yet.
+const NEW_ACCOUNT_MODELS = {
+  models: [
+    { id: "anthropic/claude-opus-5.5", name: "Opus 5.5", provider: "anthropic", efforts: ["low", "medium", "high"], credentialMissing: true },
+    { id: "anthropic/claude-sonnet-5.5", name: "Sonnet 5.5", provider: "anthropic", efforts: ["low", "medium", "high"], credentialMissing: true },
+    { id: "openai/gpt-6", name: "GPT-6", provider: "openai", efforts: ["low", "medium", "high"], credentialMissing: true },
+  ],
+};
 const AsyncFunction = (async () => {}).constructor;
 
 async function sql(text, params = []) {
@@ -121,6 +129,14 @@ async function main() {
       await route.abort().catch(() => {});
     }
   });
+  // Note that the local server cannot reach the model catalog, so `/api/models`
+  // answers 503 on every try and a new account's window waits on it, blank,
+  // forever. It is answered here as a new account's would be, which stands
+  // setup before the app; a step that registers a newer route with
+  // `credentialMissing: false` stands for an account with an agent connected.
+  await context.route(/\/api\/models(\?|$)/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(NEW_ACCOUNT_MODELS) }),
+  );
   context.setDefaultTimeout(STEP_TIMEOUT_MS);
   // Note that Vite compiles the panel on its first load, which takes far longer than a click.
   context.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);

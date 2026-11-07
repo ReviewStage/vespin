@@ -111,8 +111,13 @@ Leave these out of the findings; they are the stack's, not the product's.
   system", and Start with a faked repository is refused with "Vespin cannot
   see that repository on GitHub". A run ends there: no task is created, so no
   agent starts.
-- No model catalog (no outbound network): the model menu reads "The models
-  could not be read".
+- No model catalog (no outbound network): `/api/models` answers 503, and a
+  new account's window would wait on it, blank, forever. `driver.cjs` answers
+  it with a canned catalog in which no model is paid for, as a new account's
+  server would, so the window stands the setup steps (Welcome, Connect an
+  agent, GitHub, Tools). Setup's "Connect an agent" cannot be passed without
+  an agent; to reach Home, register a newer route in a step answering the same
+  catalog with `credentialMissing: false`, then reload.
 - No live socket (`/api/live/socket` answers 404 by design): the bottom-left
   offline mark and "You're offline." stay up. `driver.cjs` answers the long
   polls from Node so pages still load.
