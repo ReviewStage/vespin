@@ -675,12 +675,15 @@ body,
   top: 0;
 }
 
+/* The agent's tabs are parted from its conversation by a hairline, which
+   its edge is dragged on to resize them. */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
   > .side-panel:not([data-full-screen="true"]) {
   margin-left: 0;
+  border-left: 1px solid var(--ui-color-border);
 }
 
 :where(:root):not([data-ui-room="narrow"])
