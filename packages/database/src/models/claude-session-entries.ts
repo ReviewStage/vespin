@@ -199,25 +199,25 @@ const copyEntries = SqlSchema.void({
     ),
 });
 
-const findAnyEntry = SqlSchema.findOneOption({
-  Request: Schema.Struct(OwnerFields),
+const findHeldEntry = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...OwnerFields, sessionId: Schema.String }),
   Result: Schema.Struct({ id: Schema.Number }),
-  execute: ({ userId, conversationId }) =>
-    Database.use((db) =>
-      db
+  execute: ({ userId, conversationId, sessionId }) =>
+    Database.use((db) => {
+      const codex = eq(conversations.runtime, CONVERSATION_RUNTIME.CODEX);
+      return db
         .select({ id: claudeSessionEntries.id })
         .from(claudeSessionEntries)
         .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
         .where(
           and(
             ownConversation(userId, conversationId),
+            eq(claudeSessionEntries.sessionId, sessionId),
             // Note that Codex's rows are held under a subpath alone, because it keeps its rollouts there and writes no main transcript.
             or(
+              and(codex, isNotNull(claudeSessionEntries.subpath)),
               and(
-                eq(conversations.runtime, CONVERSATION_RUNTIME.CODEX),
-                isNotNull(claudeSessionEntries.subpath),
-              ),
-              and(
+                sql`${conversations.runtime} is distinct from ${CONVERSATION_RUNTIME.CODEX}`,
                 isNull(claudeSessionEntries.subpath),
                 inArray(sql<string>`${claudeSessionEntries.entry}->>'type'`, [
                   ...CONVERSATION_ENTRY_TYPES,
@@ -226,8 +226,8 @@ const findAnyEntry = SqlSchema.findOneOption({
             ),
           ),
         )
-        .limit(1),
-    ),
+        .limit(1);
+    }),
 });
 
 /** A key's fields as the requests take them: no subpath as null. */
@@ -310,9 +310,18 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds a transcript its CLI resumes: Claude Code's main one with a message, never bookkeeping or a subagent's alone, or a Codex rollout under its subpath. */
-export function holdsSessionEntries(userId: string, conversationId: string): EntryEffect<boolean> {
-  return findAnyEntry({ userId, conversationId }).pipe(Effect.map(Option.isSome));
+/**
+ * Whether the account's conversation holds the session's transcript as its
+ * CLI resumes it: Claude Code's main one with a message, never bookkeeping or
+ * a subagent's alone, or a Codex rollout under its subpath. Note that only the
+ * session given counts, because an earlier session's rows stay beside it.
+ */
+export function holdsSessionEntries(
+  userId: string,
+  conversationId: string,
+  sessionId: string,
+): EntryEffect<boolean> {
+  return findHeldEntry({ userId, conversationId, sessionId }).pipe(Effect.map(Option.isSome));
 }
 
 /** Every row of the source conversation, read as its own account, copied to the conversation given in their order. */

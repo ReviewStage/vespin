@@ -712,7 +712,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   if (read?.nativeSession == null) return undefined;
   if ((yield* runtime).runtime !== read.runtime) return undefined;
   const held = yield* hostedStoreOrUnavailable(
-    holdsSessionEntries(source.userId, source.conversationId),
+    holdsSessionEntries(source.userId, source.conversationId, read.nativeSession),
   );
   return held ? read.nativeSession : undefined;
 });

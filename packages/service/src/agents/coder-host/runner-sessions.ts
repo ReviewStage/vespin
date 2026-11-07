@@ -1259,7 +1259,7 @@ export const runnerSessions = <
         );
         // Note that an agent from before the store keeps no transcript there, so its session starts fresh.
         if (own !== undefined) {
-          const held = yield* holdsSessionEntries(userId, agent.conversationId);
+          const held = yield* holdsSessionEntries(userId, agent.conversationId, own);
           return held ? { resume: own, fork: false } : {};
         }
         const source = agent.startedFrom?.session;
@@ -1362,13 +1362,14 @@ export const runnerSessions = <
           { concurrency: "unbounded" },
         );
         // Note that a place made anew still resumes the session where the service keeps its transcript.
+        const session = Option.getOrUndefined(
+          Option.flatMapNullishOr(routing, (read) => read.nativeSession),
+        );
         const kept =
-          created && layout.transcriptsKept
-            ? yield* holdsSessionEntries(userId, agent.conversationId)
+          created && layout.transcriptsKept && session !== undefined
+            ? yield* holdsSessionEntries(userId, agent.conversationId, session)
             : !created;
-        const resume = kept
-          ? Option.getOrUndefined(Option.flatMapNullishOr(routing, (read) => read.nativeSession))
-          : undefined;
+        const resume = kept ? session : undefined;
         yield* launch(
           agent,
           { name, running, session: sessionId },

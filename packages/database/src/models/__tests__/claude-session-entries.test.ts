@@ -30,6 +30,7 @@ const PROJECT = "-workspace-repository";
 const SESSION = "6f1c2a4e-0d3b-4c55-9a8e-2f7d1b9c0e11";
 const MAIN = { projectKey: PROJECT, sessionId: SESSION };
 const SUBAGENT = { ...MAIN, subpath: "subagents/agent-1" };
+const EARLIER = { projectKey: PROJECT, sessionId: "0b7e5d2c-8a41-4f6e-b3c9-71d24e6a5f08" };
 
 const entry = (uuid: string) => ({ type: "user", uuid, message: { role: "user", content: uuid } });
 
@@ -110,30 +111,41 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
     Effect.gen(function* () {
       const { userId, conversationId } = yield* openAgent;
       const costState = { type: "cost-state", sessionId: SESSION, totalCostUSD: 0 };
+      // An earlier session's messages stay beside it, and hold nothing of this one.
+      yield* appendSessionEntries(userId, conversationId, EARLIER, [entry("e")]);
       yield* appendSessionEntries(userId, conversationId, MAIN, [costState]);
 
-      assert.equal(yield* holdsSessionEntries(userId, conversationId), false);
+      assert.equal(yield* holdsSessionEntries(userId, conversationId, SESSION), false);
       assert.deepEqual(yield* loaded(userId, conversationId, MAIN), []);
 
       yield* appendSessionEntries(userId, conversationId, MAIN, [entry("a")]);
-      assert.equal(yield* holdsSessionEntries(userId, conversationId), true);
+      assert.equal(yield* holdsSessionEntries(userId, conversationId, SESSION), true);
       assert.deepEqual(yield* loaded(userId, conversationId, MAIN), [costState, entry("a")]);
     }),
   );
 
   it.effect(
-    "a transcript under a subpath alone is held for Codex's rollout, never Claude Code's subagent",
+    "Codex holds its rollout under a subpath, and Claude Code never a subagent's alone",
     () =>
       Effect.gen(function* () {
         const codex = yield* openAgentOn(CONVERSATION_RUNTIME.CODEX);
+        const unrolled = yield* openAgentOn(CONVERSATION_RUNTIME.CODEX);
         const claude = yield* openAgent;
         const rollout = { type: "session_meta" };
         yield* appendSessionEntries(codex.userId, codex.conversationId, SUBAGENT, [rollout]);
+        yield* appendSessionEntries(unrolled.userId, unrolled.conversationId, MAIN, [entry("m")]);
         yield* appendSessionEntries(claude.userId, claude.conversationId, SUBAGENT, [entry("s")]);
 
-        assert.equal(yield* holdsSessionEntries(codex.userId, codex.conversationId), true);
+        assert.equal(yield* holdsSessionEntries(codex.userId, codex.conversationId, SESSION), true);
         assert.deepEqual(yield* loaded(codex.userId, codex.conversationId, SUBAGENT), [rollout]);
-        assert.equal(yield* holdsSessionEntries(claude.userId, claude.conversationId), false);
+        assert.equal(
+          yield* holdsSessionEntries(unrolled.userId, unrolled.conversationId, SESSION),
+          false,
+        );
+        assert.equal(
+          yield* holdsSessionEntries(claude.userId, claude.conversationId, SESSION),
+          false,
+        );
       }),
   );
 
@@ -147,8 +159,8 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         entry("b"),
       ]);
 
-      assert.equal(yield* holdsSessionEntries(empty.userId, empty.conversationId), false);
-      assert.equal(yield* holdsSessionEntries(source.userId, source.conversationId), true);
+      assert.equal(yield* holdsSessionEntries(empty.userId, empty.conversationId, SESSION), false);
+      assert.equal(yield* holdsSessionEntries(source.userId, source.conversationId, SESSION), true);
       yield* copySessionEntries(source, started.conversationId);
       assert.deepEqual(yield* loaded(started.userId, started.conversationId, MAIN), [
         entry("a"),
