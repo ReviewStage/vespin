@@ -1,6 +1,6 @@
-import { descriptionSections } from "@repo/features/description-document";
 import { sectionAnchors } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
+import { descriptionSections } from "@repo/features/description-document";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { DocumentIcon, HoverCard, HoverCardHead, HoverCardNote, useMinute } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import {
   useAutomation,
   useAutomationsLanded,
 } from "../automation-directory.js";
-import { descriptionDocumentQuery, pagesQuery } from "../live-reads.js";
+import { pagesQuery, descriptionDocumentQuery } from "../live-reads.js";
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { holderTaskId } from "./mention-holder.js";

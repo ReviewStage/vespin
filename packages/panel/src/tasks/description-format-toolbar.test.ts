@@ -128,9 +128,7 @@ async function opened() {
             children: createElement(DescriptionBody, {
               task: PLAN,
               sectionLinks: PAGE_LINKS,
-              edit: descriptionEditMutation(PLAN.id, () =>
-                Promise.resolve({ saved: true } as const),
-              ),
+              edit: descriptionEditMutation(PLAN.id, () => Promise.resolve({ saved: true } as const)),
             }),
           }),
         ),
