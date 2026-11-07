@@ -43,6 +43,7 @@ import {
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_ARCHIVER,
+  AGENT_FAILURE,
   AGENT_KIND,
   AGENT_MACHINE,
   AGENT_OWNER,
@@ -439,7 +440,9 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* turnOf(done, TURN_STATUS.SETTLED, 50 * 60_000, { settled: true });
         yield* recordAgentPublished(owner, done.id, PUBLISHED);
         const stopping = yield* openAgent(teammate, { taskId: plan.id }, 30 * 60_000);
-        yield* turnOf(stopping, TURN_STATUS.RUNNING, 20 * 60_000, { canceled: true });
+        const stoppingTurn = yield* turnOf(stopping, TURN_STATUS.RUNNING, 20 * 60_000, {
+          canceled: true,
+        });
         yield* openAgent(owner, { taskId: plan.id }, 60_000);
         yield* openAgent(owner, { taskId: plan.id }, STARTING_GRACE_MILLIS + 60_000);
         const messaged = yield* openAgent(owner, { taskId: plan.id }, 40 * 60_000);
@@ -459,7 +462,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* lineOf(unanswered, 1, "Start the export.", answered);
         yield* lineOf(unanswered, 2, "Are you there?", null, 6 * 60_000);
         const orphaned = yield* openAgent(owner, { taskId: plan.id }, 25 * 60_000);
-        yield* turnOf(orphaned, TURN_STATUS.FAILED, 24 * 60_000, {
+        const orphanedTurn = yield* turnOf(orphaned, TURN_STATUS.FAILED, 24 * 60_000, {
           settled: true,
           failure: TURN_FAILURE.SESSION_ENDED,
         });
@@ -606,6 +609,24 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           ),
           [AGENT_STATUS.COMPLETED, AGENT_STATUS.FAILED],
           "a line no turn took moves nothing: its settled turn reads completed, and its ended session failed",
+        );
+        assert.deepEqual(
+          [stopping.id, orphaned.id].map((id) => liveAgents.find((line) => line.id === id)?.turn),
+          [
+            {
+              id: stoppingTurn,
+              queuedAt: NOW - 20 * 60_000,
+              status: TURN_STATUS.RUNNING,
+              stopAsked: true,
+            },
+            {
+              id: orphanedTurn,
+              queuedAt: NOW - 24 * 60_000,
+              status: TURN_STATUS.FAILED,
+              failure: AGENT_FAILURE.SESSION_ENDED,
+            },
+          ],
+          "each summary carries its newest turn as the row records it, a Stop asked and why it failed among it",
         );
         assert.deepEqual(
           read.planlessAgents

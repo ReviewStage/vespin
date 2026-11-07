@@ -1,13 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { type DatabaseServices, READ_CONCURRENCY } from "@repo/database/core/query";
 import { readAccountPreferences } from "@repo/database/models/account-store";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type Agent,
   type AgentPlace,
   createAgent,
   discardAgent,
-  nativeRuntimesOfReached,
   readAgentByKey,
   readNewestAgentPlace,
   taskPilotStands,
@@ -65,7 +63,7 @@ import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, type SlackLineMetadata, START_LINE_BRIEF } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Cause, Clock, Effect, Option, Result } from "effect";
+import { Cause, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   recordServerEvent,
@@ -122,7 +120,6 @@ import {
 import type { NativeRuntime } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { failedCallRefusal } from "./runtime-sessions.js";
-import { agentSummary, summaryAccounts, summaryDevices } from "./status.js";
 import { agentLineSender } from "./steer.js";
 import { summaryOf } from "./stop.js";
 import {
@@ -1265,8 +1262,9 @@ export const requestedChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
  * place (`POST /api/agents/{id}/agents`), and a task's start that names an
  * agent (`POST /api/plans`) all take it, so they refuse and answer alike.
  * A choice the catalog refuses is refused as invalid; an empty note is none,
- * its files carrying it alone. A new agent's summary is read as it was just
- * made, with no turn; one a retry found under its key, as it stands now.
+ * its files carrying it alone. The agent's summary is read as it stands once
+ * the Start is done, with the first turn its opening queued, a new agent and
+ * one a retry found under its key alike.
  */
 export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   agentSessions: Effect.Effect<
@@ -1302,32 +1300,6 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     reached,
     landed,
   }).pipe(Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)));
-  if (!created) return { agent: yield* summaryOf(userId, agent), created };
-  const [names, runtimes, macs, owners] = yield* hostedStoreOrUnavailable(
-    Effect.all(
-      [
-        readAccountNames(summaryAccounts(agent)),
-        nativeRuntimesOfReached([agent.conversationId]),
-        devicesNamed(summaryDevices([agent])),
-        agentOwnerFactsOf([agent]),
-      ],
-      { concurrency: 4 },
-    ),
-  );
-  return {
-    agent: agentSummary(
-      agent,
-      {
-        turn: undefined,
-        runtime: runtimes.get(agent.conversationId),
-      },
-      yield* Clock.currentTimeMillis,
-      names,
-      owners,
-      [],
-      macs,
-    ),
-    created,
-    ...(txid === undefined ? undefined : { txid }),
-  };
+  const summary = yield* summaryOf(userId, agent);
+  return { agent: summary, created, ...(txid === undefined ? undefined : { txid }) };
 });

@@ -68,7 +68,7 @@ import {
   TASK_STATUS,
   taskStartAnswerSchema,
 } from "@repo/features/task-wire";
-import type { WireBoundaryInput } from "@repo/wire";
+import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq, sql } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -341,7 +341,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
   );
 
   it.effect(
-    "a Start with no choice runs on the account's default, snapshots the description as Copy would, and opens the session through its harness acting for the developer with the snapshot first, named by the line it stands as",
+    "a Start with no choice runs on the account's default, snapshots the description as Copy would, opens the session through its harness acting for the developer with the snapshot first, named by the line it stands as, and answers the agent with that line's turn queued",
     () =>
       Effect.gen(function* () {
         const { owner, task, agentSessions, ask } = yield* openTask();
@@ -359,8 +359,10 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         assert.equal(agent.planId, task.id);
         assert.equal(agent.model, AGENT_DEFAULT_CHOICE.model);
         assert.equal(agent.effort, AGENT_DEFAULT_CHOICE.effort);
-        assert.equal(agent.status, AGENT_STATUS.STARTING);
-        assert.equal(agent.turnId, null);
+        // The answer reads the agent once its opening queued the first turn, which awaits a runner.
+        assert.equal(agent.status, AGENT_STATUS.RUNNING);
+        assert.equal(agent.turn?.status, TURN_STATUS.QUEUED);
+        assert.equal(agent.turn?.id, agent.turnId);
         assert.equal(agent.brief, AGENT_BRIEF.DESCRIPTION);
         const stored = yield* readAgent(owner, agent.id);
         assert.ok(Option.isSome(stored));
@@ -428,7 +430,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
         assert.equal(agent.planId, plan.id);
         assert.equal(agent.brief, AGENT_BRIEF.PROMPT);
-        assert.equal(agent.status, AGENT_STATUS.STARTING);
+        assert.equal(agent.status, AGENT_STATUS.RUNNING, "its first turn is queued");
         assert.deepEqual(
           agentSessions.opened.map((opened) => [opened.authorization, opened.message.message]),
           [[harnessFor(owner), prompt]],

@@ -7,7 +7,9 @@ import {
   type AgentArchivedBy,
   type AgentStatus,
   type AgentSummary,
+  type AgentTurn,
   agentArchiverSchema,
+  agentFailureSchema,
   agentOwnerOf,
   agentPullRequestSchema,
   agentSourceSchema,
@@ -18,6 +20,7 @@ import {
   PULL_REQUEST_STATE,
   pullRequestAuthorOf,
   type TasklessAgent,
+  turnStatusOfWord,
 } from "./agent-wire.js";
 import { integrationConnectionOf } from "./integration-wire.js";
 import {
@@ -170,6 +173,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   turnId: EffectSchema.NullOr(EffectSchema.String),
   turnStatus: EffectSchema.NullOr(EffectSchema.String),
   cancelRequested: EffectSchema.NullOr(EffectSchema.Boolean),
+  /** Why the newest turn failed, in the wire's word; null where it did not fail or no turn stands, and absent from a statement before it was carried. */
+  turnFailure: EffectSchema.optionalKey(EffectSchema.NullOr(agentFailureSchema)),
   queuedAt: EffectSchema.NullOr(countedNumber),
   startedAt: EffectSchema.NullOr(countedNumber),
   settledAt: EffectSchema.NullOr(countedNumber),
@@ -269,6 +274,19 @@ function turnOf(row: AgentLiveRow): StatusTurn | undefined {
   return row.turnId === null || row.turnStatus === null
     ? undefined
     : { status: row.turnStatus, cancelRequested: row.cancelRequested === true };
+}
+
+/** The newest turn as the agent's summary carries it (`AgentSummary`'s `turn`); none before the first. */
+function agentTurnOf(row: AgentLiveRow): AgentTurn | undefined {
+  if (row.turnId === null || row.turnStatus === null || row.queuedAt === null) return undefined;
+  const failure = row.turnFailure ?? undefined;
+  return {
+    id: row.turnId,
+    queuedAt: row.queuedAt,
+    status: turnStatusOfWord(row.turnStatus),
+    ...(row.cancelRequested === true ? { stopAsked: true } : undefined),
+    ...(failure === undefined ? undefined : { failure }),
+  };
 }
 
 /** Where the agent stands at `now`, as the status rule reads it: its Start, and whether it was started blank. */
@@ -467,6 +485,7 @@ function agentSummaryOf(
   );
   const archivedBy = archivedByOf(row);
   const started = runStartedAt(row);
+  const turn = agentTurnOf(row);
   const status = statusOf(row, now);
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
@@ -493,6 +512,7 @@ function agentSummaryOf(
     createdAt: row.createdAt,
     status,
     turnId: row.turnId,
+    ...(turn === undefined ? undefined : { turn }),
     brief: row.brief,
     ...(row.archivedAt === null ? undefined : { archivedAt: row.archivedAt }),
     ...(archivedBy === undefined ? undefined : { archivedBy }),

@@ -27,9 +27,11 @@ import {
   type AgentPage,
   type AgentStatus,
   type AgentSummary,
+  type AgentTurn,
   agentOwnerOf,
   CONTEXT_WINDOW,
   type NativeAgentRuntime,
+  turnStatusOfWord,
 } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import {
@@ -279,6 +281,19 @@ export function agentFailureOf(
   return named?.[0] ?? AGENT_FAILURE.MODEL;
 }
 
+/** The newest turn as a summary carries it (`AgentSummary`'s `turn`); none before the first. */
+function agentTurnOf(turn: AgentLatestTurn | undefined): AgentTurn | undefined {
+  if (turn === undefined) return undefined;
+  const failure = agentFailureOf(turn);
+  return {
+    id: turn.id,
+    queuedAt: turn.queuedAt.getTime(),
+    status: turnStatusOfWord(turn.status),
+    ...(turn.cancelRequestedAt === null ? undefined : { stopAsked: true }),
+    ...(failure === undefined ? undefined : { failure }),
+  };
+}
+
 /** What an agent's status is read from: its newest turn. */
 export interface AgentTurnStanding {
   readonly turn: AgentLatestTurn | undefined;
@@ -374,6 +389,7 @@ function summaryFields(
         ? null
         : (owners.runAutomations.get(agent.automationRunId) ?? null),
   });
+  const turn = agentTurnOf(standing.turn);
   const summary: Omit<AgentSummary, "id" | "planId"> = {
     model: agent.model,
     effort: agent.effort,
@@ -394,6 +410,7 @@ function summaryFields(
       blank: startedBlank(agent),
     }),
     turnId: standing.turn?.id ?? null,
+    ...(turn === undefined ? undefined : { turn }),
     brief: agent.brief,
     ...(agent.archivedAt === null ? undefined : { archivedAt: agent.archivedAt.getTime() }),
     ...(agent.archivedAt === null || agent.archivedBy === null

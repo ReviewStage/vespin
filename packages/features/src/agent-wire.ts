@@ -4,6 +4,8 @@ import {
   literalsReadingLegacy,
   MESSAGE_ROLE,
   TURN_ORIGIN,
+  TURN_STATUS,
+  type TurnStatus,
   WireValueSchema,
 } from "@repo/wire";
 import { readEither, verbatimJsonSchema, wireKeys } from "@repo/wire/effect";
@@ -469,32 +471,81 @@ export const AGENT_FAILURE = {
 
 export type AgentFailure = (typeof AGENT_FAILURE)[keyof typeof AGENT_FAILURE];
 
+/**
+ * A word of a fixed vocabulary as a reader decodes it, read by `read`, which
+ * takes a word this build does not know as one it does rather than refusing
+ * the whole answer, so a service that writes one more word than a desktop
+ * knows still answers that desktop. Note that its encoded side is typed as
+ * the vocabulary alone, because a write never names a word outside it, so an
+ * answer's encoded type stays the one its callers hold; its guard lets any
+ * word in only for the decode to read it.
+ */
+function wordReadingUnknown<const Values extends ReadonlyArray<string>>(
+  values: Values,
+  read: (word: string) => Values[number],
+) {
+  return EffectSchema.declare(
+    (input: unknown): input is Values[number] => typeof input === "string",
+  ).pipe(
+    EffectSchema.decodeTo(
+      EffectSchema.Literals(values),
+      SchemaTransformation.transform({
+        decode: read,
+        encode: (word): Values[number] => word,
+      }),
+    ),
+  );
+}
+
 const FAILURE_WORDS: ReadonlySet<string> = new Set(Object.values(AGENT_FAILURE));
 
 function isAgentFailure(word: string): word is AgentFailure {
   return FAILURE_WORDS.has(word);
 }
 
-/**
- * A failure word as a reader decodes it: one this build does not know reads
- * as `other`, a failure it has no words for, rather than refusing the whole
- * answer, so a service that names one more failure than a desktop knows
- * still answers that desktop its page. Note that its encoded side is typed
- * as the vocabulary alone, because a write never names a word outside it,
- * so an answer's encoded type stays the one its callers hold; its guard lets
- * any word in only for the decode to read it.
- */
-export const agentFailureSchema = EffectSchema.declare(
-  (input: unknown): input is AgentFailure => typeof input === "string",
-).pipe(
-  EffectSchema.decodeTo(
-    EffectSchema.Literals(Object.values(AGENT_FAILURE)),
-    SchemaTransformation.transform({
-      decode: (word): AgentFailure => (isAgentFailure(word) ? word : AGENT_FAILURE.OTHER),
-      encode: (failure): AgentFailure => failure,
-    }),
-  ),
+/** A failure word as a reader takes it: one this build does not know reads as `other`, a failure it has no words for. */
+function agentFailureOfWord(word: string): AgentFailure {
+  return isAgentFailure(word) ? word : AGENT_FAILURE.OTHER;
+}
+
+/** A failure word as a reader decodes it (`agentFailureOfWord`). */
+export const agentFailureSchema = wordReadingUnknown(
+  Object.values(AGENT_FAILURE),
+  agentFailureOfWord,
 );
+
+const TURN_STATUS_WORDS: ReadonlySet<string> = new Set(Object.values(TURN_STATUS));
+
+function isTurnStatus(word: string): word is TurnStatus {
+  return TURN_STATUS_WORDS.has(word);
+}
+
+/**
+ * A turn row's status word as a reader takes it. One this build does not
+ * know is a state a newer service writes of a turn not yet ended, since every
+ * ending is already a word here, so it reads as running; the service's
+ * deadlines, not the reader, are what end it.
+ */
+export function turnStatusOfWord(word: string): TurnStatus {
+  return isTurnStatus(word) ? word : TURN_STATUS.RUNNING;
+}
+
+/**
+ * A coding agent's newest turn as its row records it, the one record of a
+ * turn's state (`@repo/database`'s `turn-state.ts`): its id and when it was
+ * queued, which order it against another turn, its status word as a reader
+ * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
+ * failed where it did, in the wire's word.
+ */
+export const agentTurnSchema = EffectSchema.Struct({
+  id: wireUuidSchema,
+  queuedAt: countedNumber,
+  status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
+  stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  failure: EffectSchema.optionalKey(agentFailureSchema),
+});
+
+export type AgentTurn = typeof agentTurnSchema.Type;
 
 /**
  * The files a message may carry, by the media type each travels as: an
@@ -1191,6 +1242,12 @@ export const agentSummarySchema = EffectSchema.Struct({
    * is running on the message's account.
    */
   turnId: EffectSchema.NullOr(wireUuidSchema),
+  /**
+   * The newest turn as its row records it, which a tab reads whether the
+   * agent works and how its newest turn ended from; absent before the first
+   * turn, and from a service older than it.
+   */
+  turn: EffectSchema.optionalKey(agentTurnSchema),
   /**
    * Epoch milliseconds the run the status is read from began, which is what
    * a tab counts how long the agent has been working from: the newest

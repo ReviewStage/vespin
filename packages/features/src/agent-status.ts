@@ -1,5 +1,5 @@
-import { TURN_STATUS } from "@repo/wire";
-import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
+import { TURN_STATUS, type TurnStatus } from "@repo/wire";
+import { AGENT_STATUS, type AgentStatus, turnStatusOfWord } from "./agent-wire.js";
 
 /**
  * agent-status.ts -- where a coding agent stands, read from its newest turn: the one rule the service and the desktop both read an agent's status by.
@@ -38,13 +38,7 @@ const STATUS_OF_TURN = {
   [TURN_STATUS.SETTLED]: AGENT_STATUS.COMPLETED,
   [TURN_STATUS.CANCELED]: AGENT_STATUS.CANCELED,
   [TURN_STATUS.FAILED]: AGENT_STATUS.FAILED,
-} as const satisfies Record<string, AgentStatus>;
-
-const STATUS_WORDS: ReadonlySet<string> = new Set(Object.keys(STATUS_OF_TURN));
-
-function isTurnStatusWord(status: string): status is keyof typeof STATUS_OF_TURN {
-  return STATUS_WORDS.has(status);
-}
+} as const satisfies Record<TurnStatus, AgentStatus>;
 
 /** What of an agent's newest turn its status is read from. */
 export interface StatusTurn {
@@ -88,11 +82,7 @@ export function agentStatusAt(
       ? AGENT_STATUS.STARTING
       : AGENT_STATUS.FAILED;
   }
-  // A word outside the vocabulary is a state a newer service writes of a turn not yet ended, since every ending is
-  // already a word here, so it reads as running; the service's deadlines, not this reader, are what end it.
-  const status = isTurnStatusWord(newest.status)
-    ? STATUS_OF_TURN[newest.status]
-    : AGENT_STATUS.RUNNING;
+  const status = STATUS_OF_TURN[turnStatusOfWord(newest.status)];
   return status === AGENT_STATUS.RUNNING && newest.cancelRequested ? AGENT_STATUS.CANCELED : status;
 }
 
