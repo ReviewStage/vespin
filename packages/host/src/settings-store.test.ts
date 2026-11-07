@@ -204,6 +204,8 @@ const SAMPLE_VALUE = {
   soundWhen: SOUND_WHEN.BACKGROUND,
   // The chime is the default, so another sound is the choice that has to survive a reopen.
   completionSound: COMPLETION_SOUND.QUACK,
+  // Off is the default, so a notification turned on is the choice that has to survive a reopen.
+  turnNotifications: true,
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,

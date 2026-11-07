@@ -388,6 +388,24 @@ export const APP_SETTING_SCHEMA = {
       view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
   }),
   /*
+   * Whether the OS posts a notification as an agent the account started
+   * finishes or asks, while the window is behind; off until the account
+   * turns it on, and apart from the sound. An account preference riding a
+   * part of the snapshot of its own, as the sound's choices do.
+   */
+  turnNotifications: accountToggleSetting({
+    field: "turnNotifications",
+    id: APP_SETTING_ID.TURN_NOTIFICATIONS,
+    label: "Show a notification",
+    default: false,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.SOUNDS,
+    order: 520,
+    // Nothing to run per write: an agent's finish reads the choice as it lands.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
    * Whether the account finished its setup after sign-in, so setup stands
    * once for the account rather than once on each device. An account
    * preference riding a part of the snapshot of its own, as Enter's choice

@@ -68,6 +68,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   completionSound: text("completion_sound").$type<CompletionSound>(),
   /**
+   * Whether the OS posts a notification as an agent the account started
+   * finishes or asks, while the window is behind; null until the account
+   * chooses, which reads as off. A part of the snapshot of its own, as the
+   * link choice is.
+   */
+  turnNotifications: boolean("turn_notifications"),
+  /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both
    * means the account has never chosen and starts on the catalog's default.
