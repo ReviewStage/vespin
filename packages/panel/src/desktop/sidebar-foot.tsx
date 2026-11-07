@@ -49,6 +49,7 @@ import { runAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useOpenPerson } from "../person-door.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
+import { useReadyToastStanding } from "../update-toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { ActionMenu, type MenuEntry } from "./action-menu.js";
 import { OfflineMark } from "./offline-mark.js";
@@ -128,7 +129,8 @@ function UpdatePill({
 /**
  * A newer release with something to press, between the account and the
  * gear: Restart, the very act Settings' Restart to update runs, once the
- * release is downloaded, on the working blue's wash: news, not urgency; or,
+ * release is downloaded and its toast (`update-toast.ts`) no longer stands,
+ * on the working blue's wash: news, not urgency; or,
  * once installing it failed, the download from the releases page that
  * Settings offers in its place, on the failure's red, its hint saying what
  * went wrong. One word each, so the account's name keeps its room. It
@@ -139,8 +141,11 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
   const { update } = updates;
   const offered =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.UPDATES) }).data === true;
+  const toastStanding = useReadyToastStanding();
   if (!offered || !updateInSidebar(update)) return null;
   if (update.status === UPDATE_STATUS.READY) {
+    // The toast offers the same Restart while it stands; the pill is the way back once it is dismissed.
+    if (toastStanding) return null;
     return (
       <UpdatePill
         word="Restart"

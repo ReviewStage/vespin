@@ -562,6 +562,13 @@ function withdrawToast(subject: string): void {
   stepToasts({ kind: TOAST_STEP.WITHDRAW, subject });
 }
 
+/** Whether a toast about `subject` stands in sight, not on its way out; the same answer while the stack holds it. */
+export function useToastStanding(subject: string): boolean {
+  return useSelector(toastStackStore, (stack) =>
+    stack.shown.some((toast) => !toast.leaving && toast.notice.subject === subject),
+  );
+}
+
 /** What a toast says aloud: its words, then its second line. */
 function spoken(notice: ToastNotice): string {
   return notice.detail === undefined ? notice.words : `${notice.words}. ${notice.detail}`;

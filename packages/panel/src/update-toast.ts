@@ -4,7 +4,8 @@
  * A release downloaded in the background is news the developer should not
  * have to find in the sidebar's foot, so it is said in a toast that stands,
  * with Restart, until it is dismissed or the release no longer waits. The
- * sidebar's pill stays beside it as the way back once it is dismissed.
+ * sidebar's pill, which offers the same Restart, stands only while the toast
+ * does not, as the way back to it.
  *
  * Main reports `UPDATED` on the first launch after an install, until its
  * first check overwrites it, which the Settings row words as where the
@@ -25,7 +26,7 @@ import { Option, Schema } from "effect";
 import { useEffect } from "react";
 import { pressMutation } from "./act-mutations.js";
 import { readKeptOption, writeKept } from "./kept-storage.js";
-import { useToast, useWithdrawToast } from "./toast.js";
+import { useToast, useToastStanding, useWithdrawToast } from "./toast.js";
 import { appStateQuery } from "./use-app-state.js";
 
 /** The storage key the version last announced is kept under. */
@@ -93,11 +94,21 @@ export function useUpdatedToast(update: UpdateSnapshot | undefined): void {
 }
 
 /**
+ * Whether the ready toast stands in sight, so the sidebar's pill, which
+ * offers the same Restart, stands only while it does not: once it is
+ * dismissed, or wherever it is gone otherwise, as when another account
+ * signing in emptied the stack.
+ */
+export function useReadyToastStanding(): boolean {
+  return useToastStanding(READY_SUBJECT);
+}
+
+/**
  * Says, in a toast that stands until it is dismissed, that a newer release
  * is downloaded and waiting on its restart, with Restart, the very act
  * Settings' Restart to update and the sidebar's pill run. Note that one
- * dismissed is not said again for that version, the sidebar's pill staying
- * as the way back to it, and that it is withdrawn once the release no
+ * dismissed is not said again for that version, the sidebar's pill standing
+ * in its place as the way back to it, and that it is withdrawn once the release no
  * longer waits, as when its install failed.
  */
 export function useReadyToast(): void {

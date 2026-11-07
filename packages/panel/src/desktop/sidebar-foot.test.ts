@@ -7,7 +7,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { HOST_CAPABILITY, type HostCapability } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { useAppCommand } from "../app-commands.js";
@@ -21,6 +21,7 @@ import {
 } from "../testing/app-state.js";
 import { settleQueries, startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { ToastHost } from "../toast.js";
+import { useReadyToast } from "../update-toast.js";
 import { SidebarFoot } from "./sidebar-foot.js";
 
 /**
@@ -81,6 +82,12 @@ async function stateArrived(): Promise<void> {
   });
 }
 
+/** The release-ready toast, mounted as `App` mounts it. */
+function ReadyToast(): null {
+  useReadyToast();
+  return null;
+}
+
 /** The Help menu's commands, offered as `App` offers them, each press written down. */
 function HelpOffers({ ran }: { ran: string[] }): null {
   useAppCommand(APP_COMMAND.SEND_FEEDBACK, () => ran.push(APP_COMMAND.SEND_FEEDBACK));
@@ -97,6 +104,8 @@ function mount(
     update?: UpdateSnapshot;
     settingsOpen?: boolean;
     onSettings?: () => void;
+    /** Whether the window's release-ready toast is mounted beside its toasts, as `App` mounts it. */
+    readyToast?: boolean;
   } = {},
 ): HTMLButtonElement {
   const container = document.createElement("div");
@@ -143,7 +152,18 @@ function mount(
   document.body.append(toasts);
   const toastRoot = createRoot(toasts);
   roots.push(toastRoot);
-  act(() => toastRoot.render(withQueryClient(createElement(ToastHost))));
+  act(() =>
+    toastRoot.render(
+      withQueryClient(
+        createElement(
+          Fragment,
+          null,
+          options.readyToast === true ? createElement(ReadyToast) : null,
+          createElement(ToastHost),
+        ),
+      ),
+    ),
+  );
   return (
     container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail("the foot draws the account's button")
@@ -418,27 +438,42 @@ test("the gear goes to Settings, and marks itself the page while Settings shows"
   assert.equal(gear().getAttribute("aria-current"), "page");
 });
 
-test("an update ready to install offers Restart in the sidebar on the desktop, and nothing on a platform without updates", async () => {
+test("an update ready to install offers Restart in the sidebar once its toast is dismissed, and nothing on a platform without updates", async () => {
   const ready: UpdateSnapshot = {
     status: UPDATE_STATUS.READY,
     currentVersion: "1.0.0",
     installSupported: true,
     latestVersion: "1.1.0",
   };
-  const restartShown = async (capabilities: readonly HostCapability[]) => {
-    await footOn({ run: { ...stateWith({}, {}).run, capabilities } }, { update: ready });
-    const shown = [...document.querySelectorAll("button")].some(
-      (button) => button.textContent === "Restart",
+  const footWith = (capabilities: readonly HostCapability[]) =>
+    footOn(
+      { run: { ...stateWith({}, {}).run, capabilities }, update: ready },
+      { update: ready, readyToast: true },
     );
-    for (const root of roots.splice(0)) act(() => root.unmount());
-    return shown;
-  };
+  // The sidebar's own Restart, not the toast's.
+  const sidebarRestart = () =>
+    [...document.querySelectorAll("button")].some(
+      (button) => button.textContent === "Restart" && button.closest(".ui-toast") === null,
+    );
+  window.localStorage.clear();
 
-  assert.equal(await restartShown(DESKTOP_CAPABILITIES), true);
-  assert.equal(
-    await restartShown(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.UPDATES)),
-    false,
+  // The release's toast stands, offering the same Restart, so the sidebar waits.
+  await footWith(DESKTOP_CAPABILITIES);
+  const dismiss = await vi.waitFor(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        '.ui-toast:not([data-leaving]) button[aria-label="Dismiss"]',
+      ) ?? assert.fail("the release's toast stands"),
   );
+  assert.equal(sidebarRestart(), false);
+  act(() => dismiss.click());
+  await vi.waitFor(() => assert.equal(sidebarRestart(), true));
+  for (const root of roots.splice(0)) act(() => root.unmount());
+
+  window.localStorage.clear();
+  await footWith(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.UPDATES));
+  assert.equal(sidebarRestart(), false);
+  window.localStorage.clear();
 });
 
 test("the Mac offline says so in the foot, and nothing does while it is online", async () => {
