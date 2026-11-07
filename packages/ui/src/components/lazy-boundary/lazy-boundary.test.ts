@@ -1,10 +1,10 @@
 /**
- * lazy-boundary.test.ts -- a lazy surface whose module landed and then threw while drawing is drawn again in place on Reload, the window left standing.
+ * lazy-boundary.test.ts -- a lazy surface whose chunk failed reloads the window from Reload, and one whose module landed and then threw while drawing is drawn again in place, the window left standing.
  */
 
 // @vitest-environment jsdom
 
-import { act, createElement } from "react";
+import { act, createElement, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, test, vi } from "vitest";
 import { LazyBoundary } from "./lazy-boundary.js";
@@ -43,6 +43,35 @@ test("a surface whose module landed and then threw is drawn again in place on Re
   act(() => reload?.click());
   expect(host.textContent).toBe("The page");
   expect(reloads).toEqual([]);
+  act(() => root.unmount());
+  vi.restoreAllMocks();
+});
+
+test("a surface whose chunk failed reloads the window from Reload", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const Page = lazy(() =>
+    Promise.reject<{ default: () => React.JSX.Element }>(
+      new TypeError("Failed to fetch dynamically imported module"),
+    ),
+  );
+  const reloads: string[] = [];
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  await act(async () =>
+    root.render(
+      createElement(LazyBoundary, {
+        fallback: "Loading",
+        loaded: () => false,
+        reload: () => reloads.push("window"),
+        children: createElement(Page),
+      }),
+    ),
+  );
+  const reload = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Reload",
+  );
+  act(() => reload?.click());
+  expect(reloads).toEqual(["window"]);
   act(() => root.unmount());
   vi.restoreAllMocks();
 });
