@@ -99,7 +99,9 @@ const DIFFERS_EXIT = 1;
  * is (`GROUP_WRITES`). Note that a Docker daemon the setup started is stopped
  * last, because the snapshot is taken of a stopped machine, which a daemon
  * killed mid-write would leave its images' store torn in; the image's
- * `docker` starts it again on first use. Note too that no credential and no
+ * `docker` starts it again on first use. A stop that found the daemon
+ * already gone is no failure, since the wait after it fails the setup where
+ * the daemon still runs. Note too that no credential and no
  * workspace variable stands for the setup, since whatever it wrote stays in
  * a snapshot every agent of the workspace starts from.
  */
@@ -107,7 +109,7 @@ const INSTALL_SCRIPT = [
   "set -e",
   GROUP_WRITES,
   `if [ -f ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_SCRIPT} ]; then bash ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_SCRIPT}; elif [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi`,
-  "if pgrep -x dockerd > /dev/null; then sudo -n pkill -x dockerd; timeout 30 sh -c 'while pgrep -x dockerd > /dev/null; do sleep 0.2; done'; fi",
+  "if pgrep -x dockerd > /dev/null; then sudo -n pkill -x dockerd || true; timeout 30 sh -c 'while pgrep -x dockerd > /dev/null; do sleep 0.2; done'; fi",
 ].join("\n");
 
 /** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
