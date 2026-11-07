@@ -26,11 +26,7 @@ import { MIRROR_BRIDGE_SOURCE } from "./mirror-bridge.js";
 /** A bridge a tunnel asks for: its kind, and the argument that kind takes. */
 export type TunnelBridge =
   | { readonly kind: typeof TUNNEL_KIND.PORT_FORWARD; readonly port: number }
-  | {
-      readonly kind: typeof TUNNEL_KIND.MIRROR;
-      /** Whether a stopped sandbox is resumed for the mirror, as the Mac asks while it has no worktree yet. */
-      readonly wake: boolean;
-    };
+  | { readonly kind: typeof TUNNEL_KIND.MIRROR };
 
 /** The bridge's own word, a line with a `bridge` key: ready, from then on speaking frames, or failed at the step it names, as it exits. */
 export const TUNNEL_BRIDGE_WORD = { KEY: "bridge", READY: "ready", FAILED: "failed" } as const;

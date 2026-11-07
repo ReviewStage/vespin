@@ -19,9 +19,8 @@ import { relayTunnel, type TunnelDependencies } from "./relay.js";
 
 /**
  * One tunnel as the relay pipes it, over sockets and a sandbox that answer
- * from a script, on the test clock: a stopped sandbox is never woken and
- * the tunnel closes as not running, but for a mirror that asks to wake,
- * which resumes it and starts its bridge; a running one starts the port bridge,
+ * from a script, on the test clock: a stopped sandbox is never woken, for
+ * any kind, and the tunnel closes as not running; a running one starts the port bridge,
  * and once it is ready frames cross both ways, holding the sandbox as they
  * do, until ten minutes without a byte close the tunnel as idle and end
  * its keep-alive.
@@ -57,24 +56,18 @@ const scriptedSocket = Effect.gen(function* () {
 
 type Scripted = Effect.Success<typeof scriptedSocket>;
 
-/** The relay's world: the agent reached, its sandbox standing as given until a resume wakes it, the lease, and every keep-alive asked. */
+/** The relay's world: the agent reached, its sandbox standing as given, the lease, and every keep-alive asked. */
 function world(pty: Scripted, standing: SandboxState = SANDBOX_STATE.RUNNING) {
   let heldUntil = 0;
-  let sandbox = standing;
-  const asked = { opened: 0, resumed: 0, connected: 0, keptAlive: [] as number[] };
+  const asked = { opened: 0, connected: 0, keptAlive: [] as number[] };
   const deps: TunnelDependencies = {
     reach: () => Effect.succeed(Option.some({ conversationId: CONVERSATION, sessionId: "wrun_1" })),
     open: () =>
       Effect.sync(() => {
         asked.opened += 1;
-        return sandbox === SANDBOX_STATE.RUNNING
-          ? { state: sandbox, shell: { url: "wss://pty.test", token: Redacted.make("pty-token") } }
-          : { state: sandbox };
-      }),
-    resume: () =>
-      Effect.sync(() => {
-        asked.resumed += 1;
-        sandbox = SANDBOX_STATE.RUNNING;
+        return standing === SANDBOX_STATE.RUNNING
+          ? { state: standing, shell: { url: "wss://pty.test", token: Redacted.make("pty-token") } }
+          : { state: standing };
       }),
     connect: () =>
       Effect.sync(() => {
@@ -103,38 +96,22 @@ const lines = (sent: readonly RelayFrame[]) =>
 
 const ready = { bytes: encode(`${JSON.stringify({ bridge: "ready" })}\r\n`) };
 
-it.effect("a stopped sandbox is never woken: the tunnel closes as not running", () =>
-  Effect.gen(function* () {
-    const device = yield* scriptedSocket;
-    const pty = yield* scriptedSocket;
-    const { deps, heldUntil } = world(pty, SANDBOX_STATE.STOPPED);
-
-    yield* Effect.scoped(relayTunnel(device.socket, ASK, deps));
-
-    assert.deepEqual(device.closed, [TUNNEL_CLOSE.NOT_RUNNING]);
-    assert.deepEqual(pty.sent, []);
-    assert.equal(heldUntil(), 0);
-  }),
-);
-
-it.effect(
-  "a mirror that asks to wake resumes a stopped sandbox and starts its bridge, holding nothing",
-  () =>
+it.effect.each([
+  ["a forwarded port", ASK],
+  ["a mirror", { ...ASK, bridge: { kind: TUNNEL_KIND.MIRROR } }],
+] as const)(
+  "a stopped sandbox is never woken for %s: the tunnel closes as not running",
+  ([_kind, ask]) =>
     Effect.gen(function* () {
       const device = yield* scriptedSocket;
       const pty = yield* scriptedSocket;
       const { deps, heldUntil } = world(pty, SANDBOX_STATE.STOPPED);
-      const mirror = { ...ASK, bridge: { kind: TUNNEL_KIND.MIRROR, wake: true } } as const;
 
-      const relay = yield* Effect.forkChild(
-        Effect.scoped(relayTunnel(device.socket, mirror, deps)),
-      );
-      yield* settle;
+      yield* Effect.scoped(relayTunnel(device.socket, ask, deps));
 
-      assert.equal(pty.sent.length > 0, true);
+      assert.deepEqual(device.closed, [TUNNEL_CLOSE.NOT_RUNNING]);
+      assert.deepEqual(pty.sent, []);
       assert.equal(heldUntil(), 0);
-      assert.deepEqual(device.closed, []);
-      yield* Fiber.interrupt(relay);
     }),
 );
 

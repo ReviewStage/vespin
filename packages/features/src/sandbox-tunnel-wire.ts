@@ -26,16 +26,10 @@ import { Schema as EffectSchema } from "effect";
  * each a state of the tunnel rather than a failure.
  */
 
-/**
- * The socket's path, and the query naming the agent, the bridge's kind, and
- * its argument: a port for a forward, and for the mirror `WAKE` set to
- * `WAKE_ASKED` where a stopped sandbox is to be resumed for it, as the
- * Mac's mirror asks only while it has no worktree yet.
- */
+/** The socket's path, and the query naming the agent, the bridge's kind, and its argument: a port for a forward, none for the mirror. */
 export const SANDBOX_TUNNEL = {
   PATH: "/api/terminal/tunnels",
-  QUERY: { AGENT: "agent", KIND: "kind", PORT: "port", WAKE: "wake" },
-  WAKE_ASKED: "1",
+  QUERY: { AGENT: "agent", KIND: "kind", PORT: "port" },
 } as const;
 
 /** The bridges a tunnel reaches, by kind. */
@@ -55,7 +49,7 @@ export const FORWARD_PORT = { MIN: 1024, MAX: 65_535 } as const;
 export const TUNNEL_CLOSE = {
   /** No byte crossed the tunnel either way for the idle bound; the desktop opens it again on the next connection. */
   IDLE: 4000,
-  /** The sandbox is not running, stopped or not opened yet; a tunnel wakes it only where a mirror asked (`WAKE`). */
+  /** The sandbox is not running, stopped or not opened yet; a tunnel never wakes it. */
   NOT_RUNNING: 4001,
   /** The agent was archived, or is no agent this account reaches. */
   GONE: 4003,

@@ -3,11 +3,10 @@
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, as a Terminal's does, then opens a PTY only on a sandbox that is
- * running: a stopped one is never woken here, since whatever the tunnel
- * would reach stopped with it, but for a mirror that asks to wake, which
- * the Mac asks only while its copy has no worktree to open in yet: that
- * sandbox is resumed as the Terminal's resume wakes it, the same named
- * sandbox the agent's next turn resumes. One never opened is not running.
+ * running: a stopped one is never woken here, whatever the kind, since
+ * whatever the tunnel would reach stopped with it. The mirror follows a
+ * sandbox something else keeps running and waits while it is stopped. One
+ * never opened is not running.
  * The bridge the socket asked for starts in that PTY (`bridge.ts`), and
  * once it says it is ready each channel frame the desktop sends goes to it
  * as one line and each line it writes comes back as one frame. A frame is
@@ -31,7 +30,7 @@
  * bytes the tunnel carries never are, nor a path.
  */
 
-import { TUNNEL_CLOSE, TUNNEL_KIND, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
+import { TUNNEL_CLOSE, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import { readEither } from "@repo/wire/effect";
 import {
@@ -99,8 +98,6 @@ export interface TunnelDependencies {
   ) => Effect.Effect<Option.Option<TunnelAgent>, unknown>;
   /** A PTY minted on the running sandbox the session is tagged with, or where it stands; never a resume. */
   readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxUnavailable>;
-  /** The stopped sandbox the session is tagged with resumed, as the Terminal's resume wakes it; one running is left as it is. */
-  readonly resume: (sessionId: string) => Effect.Effect<unknown, SandboxUnavailable>;
   /** Opens the PTY's socket for the connection's scope. */
   readonly connect: (
     shell: InteractiveShell,
@@ -133,7 +130,6 @@ const CLOSE_WHY = {
   REACH_FAILED: "reach-failed",
   GONE: "gone",
   NO_SESSION: "no-session",
-  RESUME_FAILED: "resume-failed",
   OPEN_FAILED: "open-failed",
   NOT_RUNNING: "not-running",
   CONNECT_FAILED: "connect-failed",
@@ -157,7 +153,6 @@ const EXPECTED_CLOSES: ReadonlySet<CloseWhy> = new Set([
 const TUNNEL_SPAN = {
   RELAY: "tunnel.relay",
   REACH: "tunnel.reach",
-  RESUME: "tunnel.resume",
   OPEN: "tunnel.open",
   CONNECT: "tunnel.connectPty",
   READY: "tunnel.bridgeReady",
@@ -291,7 +286,6 @@ export function relayTunnel(
   ask: TunnelAsk,
   deps: TunnelDependencies,
 ): Effect.Effect<void, never, Scope.Scope> {
-  const wakes = ask.bridge.kind === TUNNEL_KIND.MIRROR && ask.bridge.wake;
   const close = (code: number, why: CloseWhy, failedStep?: MirrorBridgeStep) =>
     closeFor(device, ask, code, why, failedStep);
   return Effect.gen(function* () {
@@ -306,14 +300,6 @@ export function relayTunnel(
     const { sessionId } = agent;
     if (sessionId === undefined) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NO_SESSION);
-    }
-    if (wakes) {
-      const resumed = yield* Effect.result(
-        deps.resume(sessionId).pipe(Effect.withSpan(TUNNEL_SPAN.RESUME)),
-      );
-      if (Result.isFailure(resumed)) {
-        return yield* close(TUNNEL_CLOSE.UNAVAILABLE, CLOSE_WHY.RESUME_FAILED);
-      }
     }
     const opened = yield* Effect.result(
       deps.open(sessionId).pipe(Effect.withSpan(TUNNEL_SPAN.OPEN)),
@@ -393,7 +379,6 @@ export function relayTunnel(
         "agent.id": ask.agentId,
         "user.id": ask.userId,
         "tunnel.kind": ask.bridge.kind,
-        "tunnel.wake": wakes,
       },
     }),
   );
