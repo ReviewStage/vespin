@@ -134,7 +134,10 @@ import {
 } from "@repo/database/models/conversation-rewind";
 import { deviceAgentAwaitsUpdate } from "@repo/database/models/device-agent-store";
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
-import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import {
+  claimRuntimeSession,
+  recordedRuntimeSession,
+} from "@repo/database/models/recorded-session";
 import {
   ANY_LAUNCH,
   clearRunnerLines,
@@ -2081,26 +2084,46 @@ export const runnerSessions = <
       });
 
     /**
-     * The conversation's record claimed for a session now opening, before its
-     * first line is queued or its launch scheduled, so a claim that fails
-     * fails the open with nothing started, rather than answering failed for
-     * words a launch then takes. Note that a claim refused is no failure,
-     * because the record then names a session minted after this one, which
-     * is the conversation's current one, as when a Start's open and a
-     * message's race on a fresh agent; it is said in the log and the open
-     * goes on.
+     * The session the conversation's record names once it is claimed for a
+     * session now opening, before that session's first line is queued or its
+     * launch scheduled: the session itself, or the one minted after it that
+     * holds the record already, as when a Start's open and a message's race
+     * on a fresh agent; none where the conversation is gone. A claim that
+     * fails fails the open with nothing started, rather than answering failed
+     * for words a launch then takes.
      */
-    const claimedRecord = (agent: Agent, sessionId: string) =>
+    const recordClaimed = (agent: Agent, sessionId: string) =>
       Effect.gen(function* () {
+        const target = { userId: agent.userId, conversationId: agent.conversationId };
         const now = yield* Clock.currentTimeMillis;
-        const recorded = yield* claimRuntimeSession(
-          { userId: agent.userId, conversationId: agent.conversationId },
-          sessionId,
-          new Date(now),
-        );
-        if (!recorded) {
-          yield* Effect.logInfo("a native session found its record held by a later session");
-        }
+        if (yield* claimRuntimeSession(target, sessionId, new Date(now))) return sessionId;
+        return yield* recordedRuntimeSession(target);
+      });
+
+    /**
+     * An open whose claim a later session won, its message handed to that
+     * session as a send would hand it, so one agent never runs two runners
+     * and the losing session launches nothing; failed where the conversation
+     * records no session, or the send was not taken, as a send's own failure
+     * fails the open.
+     */
+    const deferredTo = (
+      agent: Agent,
+      recorded: string | undefined,
+      message: SessionMessage<Turn>,
+      answersFirst: boolean,
+    ) =>
+      Effect.gen(function* () {
+        yield* Effect.logInfo("a native session found its record held by a later session");
+        const unavailable = {
+          outcome: SESSION_SEND_OUTCOME.FAILED,
+          status: FAILED_STATUS.UNAVAILABLE,
+        } as const;
+        if (recorded === undefined) return unavailable;
+        const sent = yield* sentTo(agent, recorded, message, answersFirst);
+        return sent.outcome === SESSION_SEND_OUTCOME.ACCEPTED
+          ? ({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: recorded } as const)
+          : unavailable;
       });
 
     const sessions: NativeSessions<Turn> = {
@@ -2119,7 +2142,10 @@ export const runnerSessions = <
             return yield* Effect.gen(function* () {
               const layout = yield* machine.layout(agent);
               const credential = yield* harness.launch(agent, layout);
-              yield* claimedRecord(agent, sessionId);
+              const recorded = yield* recordClaimed(agent, sessionId);
+              if (recorded !== sessionId) {
+                return yield* deferredTo(agent, recorded, message, Option.isSome(after));
+              }
               const first = messageLine(message, layout);
               const withdrawn = layout.linesRead
                 ? Effect.ignore(withdrawRunnerLine(userId, agent.id, first.line.uuid))

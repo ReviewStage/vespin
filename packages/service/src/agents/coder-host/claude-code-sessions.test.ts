@@ -1227,6 +1227,38 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
+  it.effect(
+    "an open whose record a session minted after it already holds launches nothing and hands its message to that session",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        yield* TestClock.adjust("1 minute");
+        const later = yield* sessions.open(message(agent, "Fix the invitations."));
+        assert.ok(later.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        // An open that raced it, its session minted a moment before.
+        yield* TestClock.setTime(30_000);
+        const earlier = yield* sessions.open(message(agent, "Also the emails."));
+
+        assert.deepEqual(earlier, {
+          outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+          sessionId: later.sessionId,
+        });
+        assert.equal(api.sandboxes.length, 1);
+        assert.equal(api.commands.length, 1);
+        assert.ok((yield* textsOf(api.commands[0])).flat().includes("Also the emails."));
+        assert.equal(
+          yield* recordedRuntimeSession({ userId, conversationId: agent.conversationId }),
+          later.sessionId,
+        );
+      }),
+  );
+
   it.effect("send writes a message line to the running runner, and cancel writes stop", () =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
