@@ -1,6 +1,5 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { AGENT_IMAGE_FILE } from "@repo/service/agents/coder-host/agent-image";
 import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 import { type BuildOptions, build } from "esbuild";
 import {
@@ -21,7 +20,7 @@ import {
   FUNCTION_BUNDLE_DIRECTORY,
   functionPublicPath,
 } from "../server/function-layout.js";
-import { agentImageReference } from "./agent-image.js";
+import { agentImageContext, shippedBesideFunctions } from "./agent-image.js";
 
 /**
  * Bundles the functions the routes under `server/routes/` and the hosted
@@ -46,8 +45,9 @@ const WEB = join(import.meta.dirname, "..");
 
 /**
  * The module that reads the agents' image reference beside a function's
- * entry. Every function whose bundle reaches it ships the reference in its
- * `.func`, computed here as CI computes the tag it pushes the image under
+ * entry. Every function whose bundle reaches it ships the reference, the
+ * image's digest without the runner, and the runner's bundle in its
+ * `.func`, the reference computed here as CI computes the tag it pushes the image under
  * (`agent-image.ts`), and a build without the runner's bundle the image
  * carries fails here rather than deploy a launch that names no image.
  */
@@ -106,7 +106,7 @@ function withSentrySourceMaps(options: BuildOptions): BuildOptions {
   };
 }
 
-const agentImage = Buffer.from(`${await agentImageReference()}\n`, "utf8");
+const agentImage = shippedBesideFunctions(await agentImageContext());
 
 const task = await functionBundlePlan(WEB);
 // Emptied first, so a bundle an earlier plan emitted can never sit beside the shipping ones and be read as one of them.
@@ -159,9 +159,7 @@ const emitted = await emitBuildOutput({
         maxDuration: definition.maxDuration,
         queueTopic: definition.queueTopic,
         files: [
-          ...(shipsImage.has(join(WEB, bundlePath(definition)))
-            ? [{ name: AGENT_IMAGE_FILE, contents: agentImage }]
-            : []),
+          ...(shipsImage.has(join(WEB, bundlePath(definition))) ? agentImage : []),
           ...[profilerBinary.get(join(WEB, bundlePath(definition)))].filter(
             (file) => file !== undefined,
           ),

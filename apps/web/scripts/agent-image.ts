@@ -12,6 +12,10 @@
  * (`.github/workflows/ci.yml`'s `agent-image` job), and the web build computes
  * the same reference and ships it beside each function that opens a sandbox
  * (`bundle-functions.ts`), so a deploy names the image its own commit built.
+ * Beside it go a digest of the context without the runner's bundle, which a
+ * base snapshot is keyed on, and the bundle itself, which each launch writes
+ * into the sandbox (`@repo/service/agents/coder-host/agent-image`), so a
+ * runner's change alone leaves every base snapshot standing.
  *
  * Run as `tsx scripts/agent-image.ts <directory>`, it writes the context into
  * the directory and prints the tag.
@@ -22,7 +26,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { RECORDING_CURSOR_SOURCE } from "@repo/service/agents/browser/recording-cursor";
-import { AGENT_IMAGE_REPOSITORY } from "@repo/service/agents/coder-host/agent-image";
+import {
+  AGENT_IMAGE_BASE_FILE,
+  AGENT_IMAGE_FILE,
+  AGENT_IMAGE_REPOSITORY,
+  AGENT_RUNNER_FILE,
+} from "@repo/service/agents/coder-host/agent-image";
 
 const WEB = join(import.meta.dirname, "..");
 
@@ -34,19 +43,19 @@ const SOURCE = {
 } as const;
 
 /** The runner's build output the image carries: its bundle, and Sentry's profiler binary it requires from beside itself. */
-const RUNNER_FILES = ["agent-runner.mjs", "sentry_cpu_profiler-linux-x64-glibc-137.node"] as const;
+const RUNNER_FILES = [AGENT_RUNNER_FILE, "sentry_cpu_profiler-linux-x64-glibc-137.node"] as const;
 
 /** How many hex digits of the context's digest the tag keeps. */
 const TAG_DIGITS = 24;
 
 /** One file of the context: its name in the folder the Dockerfile builds from, and its bytes. */
-interface ContextFile {
+export interface ContextFile {
   readonly name: string;
   readonly contents: Uint8Array;
 }
 
 /** The context's files, by name, in the order the digest reads them; a build without the runner's bundle fails here. */
-async function agentImageContext(): Promise<readonly ContextFile[]> {
+export async function agentImageContext(): Promise<readonly ContextFile[]> {
   const runner = await Promise.all(
     RUNNER_FILES.map(async (name) => {
       const path = join(SOURCE.RUNNER_DIST, name);
@@ -79,9 +88,26 @@ function agentImageTag(context: readonly ContextFile[]): string {
   return digest.digest("hex").slice(0, TAG_DIGITS);
 }
 
-/** The image as a deploy names it to Vercel: its repository in the project's registry, and its tag. */
-export async function agentImageReference(): Promise<string> {
-  return `${AGENT_IMAGE_REPOSITORY}:${agentImageTag(await agentImageContext())}`;
+/**
+ * The files each function that opens a sandbox ships: the image as a deploy
+ * names it to Vercel, its repository in the project's registry and its tag; a
+ * digest of the context without the runner's bundle; and that bundle.
+ */
+export function shippedBesideFunctions(context: readonly ContextFile[]): readonly ContextFile[] {
+  const runner = context.find((file) => file.name === AGENT_RUNNER_FILE);
+  if (runner === undefined) throw new Error(`the image's context holds no ${AGENT_RUNNER_FILE}`);
+  const withoutRunner = context.filter((file) => file !== runner);
+  return [
+    {
+      name: AGENT_IMAGE_FILE,
+      contents: Buffer.from(`${AGENT_IMAGE_REPOSITORY}:${agentImageTag(context)}\n`, "utf8"),
+    },
+    {
+      name: AGENT_IMAGE_BASE_FILE,
+      contents: Buffer.from(`${agentImageTag(withoutRunner)}\n`, "utf8"),
+    },
+    runner,
+  ];
 }
 
 /** Writes the context into the directory given, and answers its tag. */
