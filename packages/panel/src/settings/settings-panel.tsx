@@ -103,7 +103,9 @@ export function SettingsPanel({
             {panelView ? (
               <CommitsSection view={panelView} writes={writes} account={account} />
             ) : null}
-            {panelView ? <SoundsSection view={panelView} writes={writes} /> : null}
+            {panelView ? (
+              <SoundsSection view={panelView} writes={writes} notifications={notifications} />
+            ) : null}
             {panelView ? <TasksSection view={panelView} writes={writes} /> : null}
             {panelView ? <PrivacySection view={panelView} writes={writes} /> : null}
           </>

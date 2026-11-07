@@ -3,6 +3,7 @@
  */
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
+import type { LinkPlace } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { Effect, FiberSet, Queue, type Scope, Stream } from "effect";
@@ -21,6 +22,8 @@ import type { AppStateStore } from "./app-state-store.js";
 interface NoticePresenter {
   /** Brings the app's window forward, where the prompt for a command stands: a command ask's notification's click. */
   openMacCommandAsk: () => void;
+  /** Brings the app's window forward on a place, an agent's tab or an Inbox item: the click of a notification of news. */
+  openPlace: (place: LinkPlace) => void;
 }
 
 /** What the notification of a command waiting says: nothing of the command, which the prompt shows. */
@@ -101,8 +104,8 @@ function observeTranscripts(
 
 /**
  * The notices for the client's scope. They write the unseen agents and the
- * waiting inbox items into the document, and a command ask's notification's
- * click brings the window forward through the presenter. Whose inbox is
+ * waiting inbox items into the document, and a notification's click brings
+ * the window forward through the presenter, on the place the news names. Whose inbox is
  * read follows the document's account, which the launch's bootstrap writes as
  * well as every change after it. Two rules stand beside them: the agents with
  * no plan each list read carries are the notices' to hold, and a panel coming
@@ -150,6 +153,10 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
         sound: stored?.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
       };
     },
+    notify: () =>
+      state.snapshot().settings?.stored.turnNotifications ?? APP_SETTING_DEFAULTS.turnNotifications,
+    taskName: (taskId) => state.snapshot().tasks.tasks.find((task) => task.id === taskId)?.name,
+    open: presenter.openPlace,
     report,
   });
   // A note that throws is reported rather than left to end the fiber, which would never resume.
@@ -217,8 +224,8 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     ),
   );
   // A command asked while the window is behind would otherwise wait unseen
-  // until its timeout denies it, so each new ask is announced once, the one
-  // notification the app posts, since Ask every time is the developer's own ask
+  // until its timeout denies it, so each new ask is announced once, whatever the
+  // account's notifications switch, since Ask every time is the developer's own ask
   // to be asked; the window in front shows the prompt itself. Each is news
   // the notices chime for as well, where the account turned a sound on.
   const told = new Set<string>();

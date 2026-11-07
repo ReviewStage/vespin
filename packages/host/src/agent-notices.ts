@@ -13,6 +13,7 @@ import {
   type AgentSummary,
   type TasklessAgent,
 } from "@repo/features/agent-wire";
+import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
 import type { CompletionSound } from "@repo/wire/app-settings";
 import { Clock, Context, Duration, Effect, FiberHandle, type Scope, Stream } from "effect";
@@ -24,17 +25,24 @@ import type { AppInboxSlice, AppInboxWaitingItem } from "./app-state.js";
  * Nothing here announces anything the developer did not ask for. An agent's
  * turn ending, an Inbox item posted, or an automation's run failing to start
  * is said by the window's own marks and counts, focused or behind, and by no
- * toast and no notification, since news the developer did not ask for
- * interrupts more than it tells: the agent's unseen dot, the Inbox's counts
- * and the Dock's badge, and the Automations failed mark. The
- * one notification the app posts is a command waiting on this Mac
- * (`client/client-notices.ts`), through the same doors. A sound plays only
- * where the developer turned one on (`soundWhen`, Settings › Account ›
- * Sounds): as a turn of an agent the account started ends, completed or
- * failed and never a Stop, as an item asking the account something is
- * posted, and as a command waits on this Mac; in the background only while
- * the window is behind, and once for a burst. Each is heard in one place
- * (`heard`), which chimes through the doors, in one window of the app.
+ * toast, since news the developer did not ask for interrupts more than it
+ * tells: the agent's unseen dot, the Inbox's counts and the Dock's badge,
+ * and the Automations failed mark. A command waiting on this Mac is always
+ * posted as a notification (`client/client-notices.ts`), through the same
+ * doors, since Ask every time is the developer's own ask to be asked. The
+ * rest is told only where the developer turned it on, Settings › Account ›
+ * Sounds: as a turn of an agent the account started ends, completed or
+ * failed and never a Stop, and as an item asking the account something is
+ * posted, a sound plays (`soundWhen`), as it does as a command waits on this
+ * Mac, in the background only while the window is behind; and the OS posts
+ * a notification (`turnNotifications`), only while the window is behind,
+ * naming the agent or its task and saying it finished or failed, or naming
+ * the task and the question asked, its click opening the agent's tab or the
+ * Inbox item. Note that those names then reach the OS's notification
+ * center, which is why the notification waits on the developer's switch.
+ * A burst sounds once and posts one notification counting its news. Each
+ * is heard in one place (`heard`), which chimes and posts through the
+ * doors, in one window of the app.
  *
  * The panel reads an agent's status only while its tab is on screen, so
  * main keeps a ledger of its own, fed by every coding-agent answer that
@@ -91,8 +99,11 @@ const WRITING_STATUSES: ReadonlySet<AgentStatus> = new Set([
 /** How many pushes of the followed list in a row may leave out an agent only a Start answered before the ledger lets it go. */
 const UNNAMED_PUSHES_KEPT = 2;
 
-/** How long after a chime the news heard is told by that one chime rather than one of its own, so a burst of ends sounds once. */
-const CHIME_BURST = Duration.millis(1500);
+/** How long after a chime the news heard is told by that one chime rather than one of its own, so a burst of ends sounds once; and how long a notification gathers the news heard after its first, so a burst of ends posts once. */
+const BURST = Duration.millis(1500);
+
+/** What names an agent in a notification where neither it nor its task has a name yet. */
+const UNNAMED_AGENT = "Your agent";
 
 /** What kind of event a notice tells of. */
 export const NOTICE_KIND = {
@@ -116,6 +127,14 @@ export interface SoundChoice {
   readonly sound: CompletionSound;
 }
 
+/** What one piece of news says in a notification, and the place its click opens. */
+interface Told {
+  readonly kind: typeof NOTICE_KIND.AGENT_FINISHED | typeof NOTICE_KIND.ITEM_ASKED;
+  readonly title: string;
+  readonly body: string;
+  readonly place: LinkPlace;
+}
+
 /** The notification as the OS posts it: the event it tells of, what it says, and what its click does. */
 export interface AgentNotice {
   subject: NoticeSubject;
@@ -126,8 +145,9 @@ export interface AgentNotice {
 
 /**
  * The doors a notice leaves this process through: the OS's notification,
- * which only a command waiting on this Mac posts (`client/client-notices.ts`),
- * the Dock's badge, and the chime. A service rather than a dependency handed
+ * which a command waiting on this Mac posts (`client/client-notices.ts`), as
+ * does news where the account turned notifications on (`heard`), the Dock's
+ * badge, and the chime. A service rather than a dependency handed
  * in, because it is this process's door to Electron, so a test stands a Layer
  * of its own on it.
  */
@@ -165,7 +185,7 @@ function guardedDoors(
       }
     };
   return {
-    ...doors,
+    post: guarded("post", (notice: AgentNotice) => doors.post(notice)),
     badge: guarded("badge", (count: number) => doors.badge(count)),
     chime: guarded("chime", (sound: CompletionSound) => doors.chime(sound)),
   };
@@ -190,6 +210,12 @@ export interface AgentNoticesDependencies {
   onInboxChanged: (inbox: AppInboxSlice) => void;
   /** When a sound plays as news is heard, and which, read as each piece of news lands. */
   sound: () => SoundChoice;
+  /** Whether the account turned notifications on (`turnNotifications`), read as each piece of news lands and again as its notification is posted. */
+  notify: () => boolean;
+  /** A task's name as the account's list holds it; none for a task it does not. */
+  taskName: (taskId: string) => string | undefined;
+  /** Opens a place in the window, brought forward: a notification's click. */
+  open: (place: LinkPlace) => void;
   report: (line: string) => void;
 }
 
@@ -223,6 +249,8 @@ interface HeldAgent {
   pastTurns: ReadonlySet<string>;
   /** The id of the member who started it; none where no answer named them. */
   startedBy: string | undefined;
+  /** Its title as its tab shows it; null until it has one. */
+  title: string | null;
 }
 
 function stillWriting(status: AgentStatus): boolean {
@@ -436,6 +464,36 @@ function sameTasks(one: readonly AccountInboxTask[], other: readonly AccountInbo
   );
 }
 
+/** How many of a kind, as a notification's title counts them: "1 agent", "3 agents". */
+function agentsCounted(count: number): string {
+  return count === 1 ? "1 agent" : `${count} agents`;
+}
+
+/**
+ * The one notification a burst of news posts: one piece says its own
+ * title and body and opens its own place; several are counted ("3 agents
+ * finished"), name each in the body, and open the newest agent's tab, or
+ * the Inbox where any of them asks.
+ */
+function noticeOf(burst: readonly Told[]): Omit<AgentNotice, "subject" | "onClick"> & {
+  readonly place: LinkPlace;
+} {
+  const [only, ...rest] = burst;
+  if (only !== undefined && rest.length === 0) return only;
+  const finished = burst.filter((told) => told.kind === NOTICE_KIND.AGENT_FINISHED);
+  const asked = burst.length - finished.length;
+  const said = [
+    ...(finished.length > 0 ? [`${agentsCounted(finished.length)} finished`] : []),
+    ...(asked > 0 ? [`${finished.length > 0 ? asked : agentsCounted(asked)} need you`] : []),
+  ];
+  const newest = burst.at(-1);
+  return {
+    title: said.join(", "),
+    body: [...new Set(burst.map((told) => told.title))].join(", "),
+    place: asked > 0 || newest === undefined ? { kind: LINK_PLACE.INBOX } : newest.place,
+  };
+}
+
 /**
  * The notices, built on the ambient scope: the inbox follow forks into it
  * and the focus subscription is given back when it closes, so both end with
@@ -469,25 +527,57 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     let asking: ReadonlySet<string> | undefined;
     /** When the last chime played, by the Clock; none before the first. */
     let chimedAt: number | undefined;
+    /** The news the notification gathering now will tell of, the oldest first; none while none gathers. */
+    let gathering: Told[] = [];
+    /** Forks the wait for the gathering notification, on the services and the scope the notices were built with. */
+    const forkGathering = yield* FiberHandle.makeRuntime<never, never, void>();
 
     function publishUnseen(): void {
       onUnseenChanged([...unseen]);
     }
 
     /**
+     * A notification of news, where the account turned them on and the
+     * window is behind: the first piece opens a burst, which gathers what
+     * else is heard within `BURST` and is then posted as one notification,
+     * never a stack, unless the window came forward, the account turned
+     * notifications off, or another account signed in meanwhile. A command waiting on this Mac is posted
+     * by its own follow (`client/client-notices.ts`), so it tells nothing here.
+     */
+    function notify(subject: NoticeSubject, told: Told): void {
+      if (focused || !dependencies.notify()) return;
+      gathering.push(told);
+      if (gathering.length > 1) return;
+      const teller = dependencies.signedInAs();
+      forkGathering(
+        Effect.andThen(
+          Effect.sleep(BURST),
+          Effect.sync(() => {
+            const burst = gathering;
+            gathering = [];
+            if (focused || !dependencies.notify() || dependencies.signedInAs() !== teller) return;
+            const { title, body, place } = noticeOf(burst);
+            doors.post({ subject, title, body, onClick: () => dependencies.open(place) });
+          }),
+        ),
+      );
+    }
+
+    /**
      * News the developer may want told of, heard once each: the one place an
      * agent's finish, a new ask, and a command waiting on this Mac land. It
      * chimes where the account turned a sound on, in the background only
-     * while the window is behind, and once for a burst: news within
-     * `CHIME_BURST` of the last chime is told by that chime. Note that the
-     * news is named by its subject though a chime reads none of it, because
-     * a notification of it would.
+     * while the window is behind, and once for a burst: news within `BURST`
+     * of the last chime is told by that chime. What the notices heard
+     * themselves, an agent's finish or an ask, is said too (`told`), which
+     * a notification posts (`notify`).
      */
-    function heard(_subject: NoticeSubject): void {
+    function heard(subject: NoticeSubject, told?: Told): void {
+      if (told !== undefined) notify(subject, told);
       const { when, sound } = dependencies.sound();
       if (when === SOUND_WHEN.OFF || (when === SOUND_WHEN.BACKGROUND && focused)) return;
       const now = clock.currentTimeMillisUnsafe();
-      if (chimedAt !== undefined && now - chimedAt < Duration.toMillis(CHIME_BURST)) return;
+      if (chimedAt !== undefined && now - chimedAt < Duration.toMillis(BURST)) return;
       chimedAt = now;
       doors.chime(sound);
     }
@@ -499,7 +589,21 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       }
       const accountId = dependencies.accountId();
       if (accountId !== undefined && agent.startedBy === accountId) {
-        heard({ kind: NOTICE_KIND.AGENT_FINISHED, agentId });
+        const taskName = agent.taskId === null ? undefined : dependencies.taskName(agent.taskId);
+        heard(
+          { kind: NOTICE_KIND.AGENT_FINISHED, agentId },
+          {
+            kind: NOTICE_KIND.AGENT_FINISHED,
+            title: agent.title ?? taskName ?? UNNAMED_AGENT,
+            body:
+              agent.status === AGENT_STATUS.FAILED ? "Your agent failed." : "Your agent finished.",
+            place: {
+              kind: LINK_PLACE.AGENT,
+              ...(agent.taskId === null ? undefined : { planId: agent.taskId }),
+              agentId,
+            },
+          },
+        );
       }
       if (focused && shownAgent === agentId) return;
       unseen.add(agentId);
@@ -625,14 +729,29 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
      */
     function observeAsking(answer: InboxAnswered): void {
       const was = asking;
-      const now = new Set<string>();
-      for (const item of [...answer.items, ...(answer.planless ?? [])]) {
-        if (item.asking === true) now.add(item.id);
+      const now = new Map<string, Told>();
+      for (const item of answer.items) {
+        if (item.asking !== true) continue;
+        now.set(item.id, {
+          kind: NOTICE_KIND.ITEM_ASKED,
+          title: dependencies.taskName(item.planId) ?? item.agentTitle ?? UNNAMED_AGENT,
+          body: item.title,
+          place: { kind: LINK_PLACE.INBOX_ITEM, planId: item.planId, itemId: item.id },
+        });
       }
-      asking = now;
+      for (const item of answer.planless ?? []) {
+        if (item.asking !== true) continue;
+        now.set(item.id, {
+          kind: NOTICE_KIND.ITEM_ASKED,
+          title: item.agentTitle ?? item.automationName ?? UNNAMED_AGENT,
+          body: item.title,
+          place: { kind: LINK_PLACE.INBOX_ITEM, agentId: item.agentId, itemId: item.id },
+        });
+      }
+      asking = new Set(now.keys());
       if (was === undefined) return;
-      for (const itemId of now) {
-        if (!was.has(itemId)) heard({ kind: NOTICE_KIND.ITEM_ASKED, itemId });
+      for (const [itemId, told] of now) {
+        if (!was.has(itemId)) heard({ kind: NOTICE_KIND.ITEM_ASKED, itemId }, told);
       }
     }
 
@@ -682,12 +801,14 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       if (next.turnId === null ? was.turnId !== null : was.pastTurns.has(next.turnId)) return;
       // Note that a read naming no starter keeps the one an earlier read named, because not every read carries it.
       const startedBy = next.startedBy ?? was.startedBy;
+      // So does one naming no title, since a status page carries none.
+      const title = next.title ?? was.title;
       if (was.turnId === next.turnId) {
         // A turn that ended stays ended, so an end is never a second turn's,
         // and running again under the ended turn's id is a late read or a
         // message awaiting the next turn, which its own answer says.
         if (!stillWriting(was.status)) return;
-        const held = { ...next, pastTurns: was.pastTurns, startedBy };
+        const held = { ...next, pastTurns: was.pastTurns, startedBy, title };
         ledger.set(agentId, held);
         if (stillWriting(next.status)) return;
         ended(agentId, held);
@@ -696,7 +817,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       // A new turn: the one before it is left behind, and its own end is the next dot.
       const pastTurns = new Set(was.pastTurns);
       if (was.turnId !== null) pastTurns.add(was.turnId);
-      const held = { ...next, pastTurns, startedBy };
+      const held = { ...next, pastTurns, startedBy, title };
       ledger.set(agentId, held);
       if (!stillWriting(next.status)) ended(agentId, held);
     }
@@ -719,7 +840,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
 
     /** The agent as the ledger holds it, on a plan or with none. */
     function heldOf(
-      agent: Pick<AgentSummary, "planId" | "status" | "turnId" | "startedBy">,
+      agent: Pick<AgentSummary, "planId" | "status" | "turnId" | "startedBy" | "title">,
     ): HeldAgent {
       return {
         taskId: agent.planId,
@@ -727,6 +848,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         turnId: agent.turnId,
         pastTurns: new Set(),
         startedBy: agent.startedBy?.userId,
+        title: agent.title,
       };
     }
 
@@ -770,7 +892,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         seen(agentId);
       },
       seen,
-      heard,
+      heard: (subject) => heard(subject),
     };
 
     // Each account's inbox followed in turn, the follow for the last one

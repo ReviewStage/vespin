@@ -168,6 +168,19 @@ sends Sentry nothing.
 If you send feedback, we receive your words, any screenshots you attach, and,
 unless you untick it, your name and email.
 
+### Notifications
+
+If you turn on Show a notification in Settings › Account › Sounds, the Mac
+app, or the web app where your browser allows it, asks your system to show a
+notification when an agent you started finishes or asks you something while
+Vespin is in the background. **The notification shows the agent's or the
+task's name, and the title of the question asked**, and your system (macOS's
+Notification Center, or your browser and the system it runs on) shows it and
+may keep it in its notification history under its own settings, outside
+Vespin. Showing one sends nothing to us or anyone else. It is off until you
+turn it on. The notification that a command waits on your Mac, which the Mac
+app shows whatever this setting, names no command.
+
 ### Information stored on your Mac
 
 The Mac app keeps its window layout and the drafts of messages you have not
