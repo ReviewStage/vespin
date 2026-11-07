@@ -414,3 +414,10 @@ blockquote.markdown-quote > * {
 blockquote.markdown-quote > * + * {
   margin-top: 0.5em;
 }
+
+/* Two dividers in a row in a quote stand a line apart, as they do outside one
+   (`.ui-markdown hr + hr`, above), which the quote's blocks' rule would
+   otherwise outrank. */
+blockquote.markdown-quote > hr + hr {
+  margin-top: 1lh;
+}
