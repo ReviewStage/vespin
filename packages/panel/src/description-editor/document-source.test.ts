@@ -12,6 +12,7 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownExtensions } from "./description-editor.js";
 import {
   BLANK_ENDS,
+  type BlankEnds,
   documentManager,
   documentMarkdown,
   documentOpened,
@@ -63,8 +64,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The document in an editor, with what it would hand over now. */
-function opened(markdown: string) {
+/** The document in an editor, with what it would hand over now, as a document or, by `ends`, a message. */
+function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT) {
   const extensions = markdownExtensions();
   const manager = documentManager(extensions);
   const source = documentOpened(manager, markdown);
@@ -81,7 +82,7 @@ function opened(markdown: string) {
   return {
     editor,
     host,
-    handedOver: () => documentMarkdown(manager, editor.state.doc, held, BLANK_ENDS.KEPT),
+    handedOver: () => documentMarkdown(manager, editor.state.doc, held, ends),
     took: (sent: string, merged: string) => {
       const answer = documentTook(editor, manager, held, sent, merged);
       held = answer.held;
@@ -244,16 +245,21 @@ test("an empty task item left at the end of a checklist is saved as a checkbox t
   assert.equal(reopened.handedOver(), "- [x] testing here\n- [ ] then\n");
 });
 
-test("blank lines left before, between, and after paragraphs are saved as ones the read view draws, and open blank", () => {
-  const { editor, handedOver } = opened("One.\n");
+/** A blank line left before "One.", another between it and "Two." typed under it, and a third after. */
+function blankLinesAround(editor: Editor): void {
   editor.commands.setTextSelection(Selection.atStart(editor.state.doc).from);
   editor.commands.enter();
   editor.commands.setTextSelection(Selection.atEnd(editor.state.doc).from);
-
   editor.commands.enter();
   editor.commands.enter();
   editor.commands.insertContent("Two.");
   editor.commands.enter();
+}
+
+test("blank lines left before, between, and after paragraphs are saved as ones the read view draws, and open blank", () => {
+  const { editor, handedOver } = opened("One.\n");
+
+  blankLinesAround(editor);
   const saved = handedOver();
 
   assert.equal(saved, "&nbsp;\n\nOne.\n\n&nbsp;\n\nTwo.\n\n&nbsp;\n");
@@ -267,6 +273,14 @@ test("blank lines left before, between, and after paragraphs are saved as ones t
     opened(saved).editor.state.doc.children.map((block) => block.textContent),
     ["", "One.", "", "Two.", ""],
   );
+});
+
+test("a message drops the blank lines at its two ends and keeps the one between its paragraphs", () => {
+  const { editor, handedOver } = opened("One.\n", BLANK_ENDS.DROPPED);
+
+  blankLinesAround(editor);
+
+  assert.equal(handedOver(), "One.\n\n&nbsp;\n\nTwo.\n");
 });
 
 test("an empty text handed over is still empty", () => {
