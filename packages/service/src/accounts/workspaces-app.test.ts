@@ -1581,7 +1581,7 @@ it.effect(
 );
 
 it.effect(
-  "the owner's delete takes the workspace and its rows, and stamps its agents' conversations deleted, any member's",
+  "the owner's delete takes the workspace and its rows, and deletes its agents' conversations, any member's",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -1608,13 +1608,15 @@ it.effect(
           [],
         );
         assert.deepEqual(yield* membersOf(acme), []);
-        const [stamped] = yield* Database.use((db) =>
-          db
-            .select({ deletedAt: conversations.deletedAt })
-            .from(conversations)
-            .where(eq(conversations.id, conversationId)),
+        assert.deepEqual(
+          yield* Database.use((db) =>
+            db
+              .select({ id: conversations.id })
+              .from(conversations)
+              .where(eq(conversations.id, conversationId)),
+          ),
+          [],
         );
-        assert.ok(stamped?.deletedAt != null);
       }).pipe(Effect.provide(plugin.database));
     }),
 );

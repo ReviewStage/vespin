@@ -28,7 +28,7 @@
  * started it, and the delete is refused as not ready, stopping no one,
  * where one cannot be stopped yet;
  * the plugin then deletes the workspace and every row of it, and its hooks
- * stamp the agents' conversations deleted (`workspace-deletion.ts`).
+ * delete the agents' conversations (`workspace-deletion.ts`).
  * `POST /api/workspaces/rename` lets an owner or admin rename a workspace,
  * answering it under its new name and its old slug; an account's first
  * workspace is refused, since it is named by its owner's account name.
