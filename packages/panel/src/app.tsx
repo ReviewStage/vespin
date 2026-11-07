@@ -80,7 +80,7 @@ import { OpenAiKeyProvider } from "./openai-key.js";
 import { PANEL_TAB, type PanelTab } from "./panel-tabs.js";
 import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
-import { useLinkPlaceLandings } from "./places/link-places.js";
+import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";

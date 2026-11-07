@@ -1,22 +1,33 @@
 import assert from "node:assert/strict";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import type { PagePlace } from "@repo/features/page-wire";
+import { QueryClient } from "@tanstack/react-query";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { it } from "vitest";
+import { besideItem } from "./inbox-item-links.js";
+import { createPanelRouter } from "./panel-router.js";
+import { ON_STANDING_TASK, type OnStandingTask, onTasksTab } from "./places/link-places.js";
 import {
+  ADDRESS,
   addressOf,
   HERE,
-  type Here,
+  type InboxItemHere,
+  type Listed,
+  type PagesHere,
   ROUTE,
   type Route,
-  route,
   THING,
   type Thing,
+  throughWindow,
 } from "./route.js";
+import { openPullRequestsHere } from "./tasks/use-open-link.js";
 
 /**
  * route.test.ts -- where a link pressed opens, one row per kind of address
  * and the surface it was pressed on: an Inbox item, a task's page, an
- * agent's page, the window past them, and the Tasks tab going to a place.
- * Synthetic ids.
+ * agent's page, the window past them, and the Tasks tab going to a place,
+ * each a place in the app matched on the window's route tree, standing
+ * under Acme. Synthetic ids.
  */
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
@@ -31,6 +42,12 @@ const PR = "https://github.com/acme/relay/pull/42";
 const FILE = "https://github.com/acme/relay/blob/HEAD/src/invites.ts";
 const APP = "https://vespin.dev/acme";
 
+/** The window's router, standing on Acme's Inbox. */
+const ROUTER = createPanelRouter(
+  createMemoryHistory({ initialEntries: ["/acme/inbox"] }),
+  new QueryClient(),
+);
+
 /** A task's or an agent's: its repository, and one agent, which opened the pull request numbered 42. */
 const HOLDING = {
   repository: "acme/relay",
@@ -42,28 +59,26 @@ const HOLDING = {
 /** The same, its agent archived: no longer drawn, though still held. */
 const ARCHIVED = { ...HOLDING, agentIds: [], heldIds: [AGENT] };
 
-const ITEM: Here = { kind: HERE.INBOX_ITEM, taskId: TASK, agentId: undefined, ...HOLDING };
-const TASKLESS_ITEM: Here = {
+const ITEM: InboxItemHere = {
+  kind: HERE.INBOX_ITEM,
+  taskId: TASK,
+  agentId: undefined,
+  ...HOLDING,
+};
+const TASKLESS_ITEM: InboxItemHere = {
   kind: HERE.INBOX_ITEM,
   taskId: undefined,
   agentId: AGENT,
   ...HOLDING,
 };
-const ON_TASK: Here = { kind: HERE.TASK, taskId: TASK, ...HOLDING };
-const ON_AGENT: Here = { kind: HERE.AGENT, agentId: AGENT, ...HOLDING };
+const ON_TASK: PagesHere = { kind: HERE.TASK, taskId: TASK, ...HOLDING };
+const ON_AGENT: PagesHere = { kind: HERE.AGENT, agentId: AGENT, ...HOLDING };
 
-/** The window, listing the task, and an agent on no task, which opened the pull request numbered 43. */
-const WINDOW: Here = {
-  kind: HERE.WINDOW,
-  opensPlaces: true,
-  listed: {
-    tasks: [{ taskId: TASK, pullRequests: [{ url: PR, agentId: AGENT }] }],
-    agents: [{ id: OTHER, pullRequest: { url: "https://github.com/acme/relay/pull/43" } }],
-  },
+/** What the window lists: the task, and an agent on no task, which opened the pull request numbered 43. */
+const LISTED: Listed = {
+  tasks: [{ taskId: TASK, pullRequests: [{ url: PR, agentId: AGENT }] }],
+  agents: [{ id: OTHER, pullRequest: { url: "https://github.com/acme/relay/pull/43" } }],
 };
-
-/** The Tasks tab showing the task with nothing over its plan. */
-const STANDING: Here = { kind: HERE.TASKS_TAB, taskId: TASK };
 
 const NOTHING: Route = { kind: ROUTE.NOTHING };
 
@@ -75,7 +90,38 @@ function go(link: ReadLink): Route {
   return { kind: ROUTE.GO, link };
 }
 
-it.each<[string, string, Here, Route]>([
+/** What a task's or an agent's page opened beside it: a pull request in an agent's tab, by its number where it is another, or a page read on its place; none where it left the address to the window. */
+type OpenedBeside =
+  | { readonly pullRequest: readonly [string, number | undefined] }
+  | { readonly page: readonly [string, PagePlace] }
+  | undefined;
+
+/** What a press on `href` opens beside a task's or an agent's page. */
+function openedOnPage(href: string, here: PagesHere): OpenedBeside {
+  let opened: OpenedBeside;
+  const open = openPullRequestsHere(
+    here,
+    (agentId, number) => {
+      opened = { pullRequest: [agentId, number] };
+    },
+    (pageId, place) => {
+      opened = { page: [pageId, place] };
+    },
+  );
+  const took = open(addressOf(href, ROUTER));
+  assert.equal(took, opened !== undefined);
+  return opened;
+}
+
+/** The place in the app a link names, matched on the route tree. */
+function placeAt(href: string): LinkPlace {
+  const address = addressOf(href, ROUTER);
+  assert.equal(address.kind, ADDRESS.PLACE, href);
+  assert.notEqual(address.routed, undefined, href);
+  return address.routed?.link.place ?? address.link.place;
+}
+
+it.each<[string, string, InboxItemHere, Route]>([
   [
     "an Inbox item: a pull request one of its agents opened, however its page is spelled, in that agent's Pull request tab",
     `${PR}#issuecomment-1`,
@@ -260,172 +306,187 @@ it.each<[string, string, Here, Route]>([
     TASKLESS_ITEM,
     beside({ kind: THING.INBOX_ITEM, itemId: INBOX_ITEM, taskId: undefined, agentId: AGENT }),
   ],
+])("%s", (_, href, here, expected) => {
+  assert.deepEqual(besideItem(addressOf(href, ROUTER), here), expected);
+});
+
+it.each<[string, string, PagesHere, OpenedBeside]>([
   [
     "a task: a page under its agent's pull request's, in that agent's own Pull request tab",
     `${PR}/files`,
     ON_TASK,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT }),
+    { pullRequest: [AGENT, undefined] },
   ],
   [
     "a task: another pull request of its repository, by its number in its first agent's tab",
     "https://github.com/acme/relay/pull/41",
     ON_TASK,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT, number: 41 }),
+    { pullRequest: [AGENT, 41] },
   ],
   [
     "a task: a pull request of another repository, the window's",
     "https://github.com/acme/other/pull/41",
     ON_TASK,
-    NOTHING,
+    undefined,
   ],
   [
     "a task: an archived agent's pull request, merged or not, in its own Pull request tab",
     PR,
     { ...ON_TASK, ...ARCHIVED },
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT }),
+    { pullRequest: [AGENT, undefined] },
   ],
   [
     "a task: an app link, to its own page among them, the window's",
     `${APP}/plan/${TASK}/page/${PAGE}`,
     ON_TASK,
-    NOTHING,
+    undefined,
   ],
   [
     "a task: another task's page, a subtask's among them, beside it read on that task",
     `${APP}/plan/${OTHER}/page/${PAGE}`,
     ON_TASK,
-    beside({ kind: THING.PAGE, pageId: PAGE, place: { taskId: OTHER } }),
+    { page: [PAGE, { taskId: OTHER }] },
   ],
   [
     "a task: another task's agent, the window's, which opens it in the middle",
     `${APP}/plan/${OTHER}/agent/${OTHER}`,
     ON_TASK,
-    NOTHING,
+    undefined,
   ],
-  ["a task: a file of its repository, the window's", FILE, ON_TASK, NOTHING],
+  ["a task: a file of its repository, the window's", FILE, ON_TASK, undefined],
   [
     "an agent's page: the pull request it opened, in its Pull request tab",
     PR,
     ON_AGENT,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT }),
+    { pullRequest: [AGENT, undefined] },
   ],
   [
     "an agent's page: a task's page, beside it read on that task",
     `${APP}/plan/${TASK}/page/${PAGE}`,
     ON_AGENT,
-    beside({ kind: THING.PAGE, pageId: PAGE, place: { taskId: TASK } }),
+    { page: [PAGE, { taskId: TASK }] },
   ],
   [
     "an agent's page: a page under a task named by a number not found, the window's, which finds the task",
     `${APP}/task/42/page/${PAGE}`,
     ON_AGENT,
-    NOTHING,
+    undefined,
   ],
   [
     "an agent's page: another pull request of its repository, by its number",
     "https://github.com/acme/relay/pull/41",
     ON_AGENT,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT, number: 41 }),
+    { pullRequest: [AGENT, 41] },
   ],
+])("%s", (_, href, here, expected) => {
+  assert.deepEqual(openedOnPage(href, here), expected);
+});
+
+it.each<[string, string, boolean, Route]>([
   [
     "the window: an app link, to its place",
     `${APP}/agent/${AGENT}`,
-    WINDOW,
+    true,
     go({ workspace: "acme", place: { kind: LINK_PLACE.AGENT, agentId: AGENT } }),
   ],
   [
     "the window: a plan an older link names, to the plan",
     `luke://plan/${TASK}`,
-    WINDOW,
+    true,
     go({ workspace: "", place: { kind: LINK_PLACE.TASK, planId: TASK } }),
   ],
   [
     "the window: a pull request a listed task's agent opened, however spelled, to its Pull request tab on the task",
     `${PR}#issuecomment-1`,
-    WINDOW,
+    true,
     go({ workspace: "", place: { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT } }),
   ],
   [
     "the window: a pull request a listed agent on no task opened, to its Pull request tab",
     "https://github.com/acme/relay/pull/43",
-    WINDOW,
+    true,
     go({ workspace: "", place: { kind: LINK_PLACE.CHANGES, agentId: OTHER } }),
   ],
   [
     "the window: a pull request nothing listed names, to the browser",
     "https://github.com/acme/relay/pull/7",
-    WINDOW,
+    true,
     { kind: ROUTE.EXTERNAL, href: "https://github.com/acme/relay/pull/7" },
   ],
   [
     "the window: any other page, to the browser",
     "https://example.com/docs",
-    WINDOW,
+    true,
     { kind: ROUTE.EXTERNAL, href: "https://example.com/docs" },
   ],
   [
     "outside the window: an app link, to the browser",
     `${APP}/agent/${AGENT}`,
-    { kind: HERE.WINDOW, opensPlaces: false, listed: undefined },
+    false,
     { kind: ROUTE.EXTERNAL, href: `${APP}/agent/${AGENT}` },
   ],
+])("%s", (_, href, opensPlaces, expected) => {
+  assert.deepEqual(
+    throughWindow(addressOf(href, ROUTER), opensPlaces, opensPlaces ? LISTED : undefined, ROUTER),
+    expected,
+  );
+});
+
+it.each<[string, string, string | undefined, OnStandingTask]>([
   [
     "the Tasks tab: a page of the task it shows, in the panel beside it",
     `${APP}/plan/${TASK}/page/${PAGE}`,
-    STANDING,
-    beside({ kind: THING.PAGE, pageId: PAGE }),
+    TASK,
+    ON_STANDING_TASK.BESIDE,
   ],
   [
     "the Tasks tab: another task's page, to that task",
     `${APP}/plan/${OTHER}/page/${PAGE}`,
-    STANDING,
-    go({ workspace: "acme", place: { kind: LINK_PLACE.PAGE, planId: OTHER, pageId: PAGE } }),
+    TASK,
+    ON_STANDING_TASK.GO,
   ],
   [
     "the Tasks tab: the task it shows, its Overview",
     `${APP}/plan/${TASK}`,
-    STANDING,
-    { kind: ROUTE.OVERVIEW, place: { kind: LINK_PLACE.TASK, planId: TASK } },
+    TASK,
+    ON_STANDING_TASK.OVERVIEW,
   ],
   [
     "the Tasks tab: a section of the task it shows, its Overview at the section",
     `${APP}/plan/${TASK}#rollout`,
-    STANDING,
-    { kind: ROUTE.OVERVIEW, place: { kind: LINK_PLACE.SECTION, planId: TASK, anchor: "rollout" } },
+    TASK,
+    ON_STANDING_TASK.OVERVIEW,
   ],
   [
     "the Tasks tab: a comment of the task it shows, its Overview at the comment",
     `${APP}/plan/${TASK}?comment=${MESSAGE}`,
-    STANDING,
-    { kind: ROUTE.OVERVIEW, place: { kind: LINK_PLACE.COMMENT, planId: TASK, threadId: MESSAGE } },
+    TASK,
+    ON_STANDING_TASK.OVERVIEW,
   ],
   [
     "the Tasks tab: another task's section, to that task",
     `${APP}/plan/${OTHER}#rollout`,
-    STANDING,
-    go({
-      workspace: "acme",
-      place: { kind: LINK_PLACE.SECTION, planId: OTHER, anchor: "rollout" },
-    }),
+    TASK,
+    ON_STANDING_TASK.GO,
   ],
   [
     "the Tasks tab: a worker of the task it shows, in the panel beside it",
     `${APP}/plan/${TASK}/agent/${AGENT}/worker/${CALL}`,
-    STANDING,
-    beside({ kind: THING.WORKER, agentId: AGENT, callId: CALL }),
+    TASK,
+    ON_STANDING_TASK.BESIDE,
   ],
   [
     "the Tasks tab: a review thread of the task it shows, its agent's Changes in the panel beside it",
     `${APP}/plan/${TASK}/agent/${AGENT}/changes/files/thread/${THREAD}`,
-    STANDING,
-    beside({ kind: THING.CHANGES, agentId: AGENT }),
+    TASK,
+    ON_STANDING_TASK.BESIDE,
   ],
   [
     "the Tasks tab with something over the task's plan: the task's own Changes, to the task",
     `${APP}/plan/${TASK}/agent/${AGENT}/changes`,
-    { kind: HERE.TASKS_TAB, taskId: undefined },
-    go({ workspace: "acme", place: { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT } }),
+    undefined,
+    ON_STANDING_TASK.GO,
   ],
-])("%s", (_, href, here, expected) => {
-  assert.deepEqual(route(addressOf(href), here), expected);
+])("%s", (_, href, standing, expected) => {
+  assert.equal(onTasksTab(placeAt(href), standing), expected);
 });

@@ -50,6 +50,7 @@ import { handInboxItems, handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { holdFrames, settleFrames } from "../testing/frames.js";
 import { restOn } from "../testing/hint-rest.js";
+import { underWindowRouter } from "../testing/link-router.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import {
   listedAgent,
@@ -314,7 +315,7 @@ async function inbox(
   }
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(createElement(Page))));
+  act(() => root?.render(withQueryClient(underWindowRouter(createElement(Page)))));
   await settle();
   const panel = () => {
     assert.ok(control);

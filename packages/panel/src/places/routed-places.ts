@@ -64,13 +64,11 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";
 import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
+import { type PlaceParams, placeParamsOf } from "./place-params.js";
 import { openPanelTab, type TaskStep } from "./task-step.js";
 
 /** A route of the panel's tree, by its id. */
 type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
-
-/** The params an address's routes read, every match's together. */
-export type PlaceParams = Readonly<Record<string, string | undefined>>;
 
 /** What a declaration reads to name a step later: the task a version history's address names, the task an Inbox item is of, by the item's id, and what a task's step holds. */
 interface PlaceNaming {
@@ -565,11 +563,6 @@ export function stepPlaceOf(
   taskStep: TaskStep | undefined,
 ): RoutedPlace | undefined {
   return taskStep === undefined ? routedPlaceOf(matches, access) : ROUTED_PLACE.TASK;
-}
-
-/** The params every match of an address reads, together. */
-export function placeParamsOf(matches: readonly RouteMatchSeen[]): PlaceParams {
-  return Object.assign({}, ...matches.map((match) => match.params));
 }
 
 /**

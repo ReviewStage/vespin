@@ -83,7 +83,7 @@ import {
   PANEL_SPAN_ATTRIBUTE,
   type PanelSpan,
 } from "../panel-spans.js";
-import { useLinkPlaceLandings } from "../places/link-places.js";
+import { useLinkPlaceLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { useWindowPlace } from "../places/routed-places.js";
@@ -1264,7 +1264,7 @@ const TASKLESS_AGENT_ID = "5e2d8c1b-7a4f-4b3e-9c6d-2f1a0b9e8d7c";
 
 /** A link as the window is handed it, by its address, in any spelling a link or a mention was written in. */
 function linkAt(href: string): ReadLink {
-  const address = addressOf(href);
+  const address = addressOf(href, undefined);
   assert.equal(address.kind, ADDRESS.PLACE, href);
   return address.link;
 }

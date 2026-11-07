@@ -98,6 +98,7 @@ import { sidebarProps } from "./desktop-sidebar.js";
 import { holdFrames, settleFrames } from "./frames.js";
 import { heardWords } from "./heard-words.js";
 import { restOn } from "./hint-rest.js";
+import { underWindowRouter } from "./link-router.js";
 import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
@@ -907,7 +908,7 @@ export function mount(
       : createElement(Paneled, { at: room });
   const shown = toasts ? createElement(Fragment, null, inbox, createElement(ToastHost)) : inbox;
   const page = bundles === undefined ? shown : onSideBundles(bundles, shown);
-  act(() => world.root?.render(withQueryClient(page)));
+  act(() => world.root?.render(withQueryClient(underWindowRouter(page))));
   return { page: container, asked };
 }
 

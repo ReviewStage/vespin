@@ -135,10 +135,9 @@ import type { AutomationsRoute } from "./automations-route.js";
 import { liveStepTitle, type NamedStep } from "./history-titles.js";
 import type { InboxRoute } from "./inbox-route.js";
 import { workspaceMembersQuery } from "./live-reads.js";
+import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import {
-  type PlaceParams,
   type PlaceThere,
-  placeParamsOf,
   ROUTED_PLACE,
   type RoutedPlace,
   routedPlaceOf,

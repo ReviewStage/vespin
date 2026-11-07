@@ -11,12 +11,8 @@
  */
 
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import {
-  placeParamsOf,
-  ROUTED_PLACE,
-  routedPlaceOf,
-  useWindowPlace,
-} from "./places/routed-places.js";
+import { placeParamsOf } from "./places/place-params.js";
+import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
 
 /** An agent's page as the router stands it. */

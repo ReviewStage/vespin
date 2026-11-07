@@ -153,13 +153,18 @@ import {
   PANEL_SPAN_ATTRIBUTE,
   recordPanelSpan,
 } from "../panel-spans.js";
-import { LINK_ROUTED_PLACE, type RoutedLink, routedLinkOf } from "../places/link-places.js";
+import {
+  LINK_ROUTED_PLACE,
+  ON_STANDING_TASK,
+  onTasksTab,
+  type RoutedLink,
+  routedLinkOf,
+} from "../places/link-places.js";
 import type { LinkRead } from "../places/link-reads.js";
 import { PLACE_BINDING, useTaskAsk } from "../places/place-binding.js";
 import type { RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import type { RenameShape } from "../rename-write.js";
-import { ADDRESS, HERE, type OverviewPlace, ROUTE, route } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
@@ -406,6 +411,12 @@ const AGENT_PLACE_KINDS: ReadonlySet<LinkPlace["kind"]> = new Set<AgentPlaceKind
 function isAgentPlace(place: LinkPlace): place is AgentPlace {
   return AGENT_PLACE_KINDS.has(place.kind);
 }
+
+/** A place the task's Overview shows: the task itself, one of its description's sections, or one of its comments. */
+type OverviewPlace = Extract<
+  LinkPlace,
+  { readonly kind: typeof LINK_PLACE.TASK | typeof LINK_PLACE.SECTION | typeof LINK_PLACE.COMMENT }
+>;
 
 /** A place of a task's own that its side panel draws as a tab, named under the task. */
 type TaskTabPlace =
@@ -3451,18 +3462,15 @@ export function useTasksTab(input: {
     showTask(taskId);
     sidePanel.onShow(taskId, tab);
   };
+  // The task the Tasks tab shows with nothing standing over its plan, whose places a link opens in place (`places/link-places.ts`'s `onTasksTab`).
+  const standingTask = () => (!overPlan && !historyRoute.open ? tasks.activeTaskId : undefined);
   // The task's description shown at the place given: its column's Overview, which
   // holds it, chosen in place on the task standing, and on another task as
   // the window goes there (`route.ts`), a panel filling the window over the
   // column giving way.
   const showOverview = (place: OverviewPlace) => {
-    const standing = !overPlan && !historyRoute.open;
-    const routed = route(
-      { kind: ADDRESS.PLACE, link: { workspace: "", place } },
-      { kind: HERE.TASKS_TAB, taskId: standing ? tasks.activeTaskId : undefined },
-    );
     if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-    if (routed.kind === ROUTE.OVERVIEW) {
+    if (onTasksTab(place, standingTask()) === ON_STANDING_TASK.OVERVIEW) {
       mainTabs.onChoose(MAIN_TAB.OVERVIEW);
       return;
     }
@@ -3473,12 +3481,7 @@ export function useTasksTab(input: {
   // pressed there does; one to another task's goes there and opens
   // it as a tab of its own (`route.ts`).
   const linkPanelTab = (place: TaskTabPlace, tab: SidePanelTab) => {
-    const standing = !overPlan && !historyRoute.open;
-    const routed = route(
-      { kind: ADDRESS.PLACE, link: { workspace: "", place } },
-      { kind: HERE.TASKS_TAB, taskId: standing ? tasks.activeTaskId : undefined },
-    );
-    if (routed.kind === ROUTE.BESIDE) sidePanel.onOpen(tab);
+    if (onTasksTab(place, standingTask()) === ON_STANDING_TASK.BESIDE) sidePanel.onOpen(tab);
     else showPanelTab(place.planId, tab);
   };
 

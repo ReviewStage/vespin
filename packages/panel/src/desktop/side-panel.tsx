@@ -100,6 +100,7 @@ import { drawnVisibly, focusSeek } from "../focus-seek.js";
 import { panelTabPlace } from "../links-at-hand.js";
 import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { LINK_ROUTED_PLACE } from "../places/link-places.js";
 import { ADDRESS, type Address } from "../route.js";
 import { centerWithin } from "../scroll-within.js";
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
@@ -2766,8 +2767,10 @@ export function SidePanel({
   const { onCarry } = panel;
   const carryToAgent = useCallback(
     (address: Address) => {
-      if (address.kind !== ADDRESS.PLACE) return;
-      const { place } = address.link;
+      if (address.kind !== ADDRESS.PLACE || address.routed === undefined) return;
+      const { declared, link } = address.routed;
+      const { place } = link;
+      if (declared !== LINK_ROUTED_PLACE.AGENT && declared !== LINK_ROUTED_PLACE.MESSAGE) return;
       if (place.kind !== LINK_PLACE.AGENT && place.kind !== LINK_PLACE.MESSAGE) return;
       if (heldIds === undefined || heldIds.includes(place.agentId)) return;
       onCarry();
