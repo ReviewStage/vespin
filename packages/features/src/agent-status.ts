@@ -56,6 +56,15 @@ export const STARTING_GRACE_MILLIS = 5 * 60 * 1000;
  */
 export const LINE_GRACE_MILLIS = 5 * 60 * 1000;
 
+/**
+ * How long a turn queued or running is held to be at work past its last
+ * progress, or its queueing where none came yet: three of its runner's
+ * heartbeats. `@repo/database`'s `turn-lease.ts` writes the lease by it, and a
+ * row with none is read here as leased from its queueing, so no turn runs on
+ * for good.
+ */
+export const TURN_LEASE_MILLIS = 15 * 60 * 1000;
+
 /** The status a turn row's own status word reads as. */
 const STATUS_OF_TURN = {
   [TURN_STATUS.QUEUED]: AGENT_STATUS.RUNNING,
@@ -85,7 +94,7 @@ export interface StatusTurn {
   readonly settledAt: number | null;
   /** Whether it failed because its session ended for good. */
   readonly sessionEnded: boolean;
-  /** Until when its runner is held to be at work while it is queued or runs; none for a row from before the lease, or where the reader was not told. */
+  /** Until when its runner is held to be at work while it is queued or runs; none for a row from before the lease, read as leased from its queueing (`TURN_LEASE_MILLIS`). */
   readonly leaseUntil?: number | undefined;
 }
 
@@ -118,20 +127,23 @@ function turnRuns(turn: StatusTurn): boolean {
   return isTurnStatusWord(turn.status) && STATUS_OF_TURN[turn.status] === AGENT_STATUS.RUNNING;
 }
 
+/** The instant the turn's lease runs out: the one its row holds, or, for a row with none, a lease's length from its queueing. */
+function leaseEndOf(turn: StatusTurn): number {
+  return turn.leaseUntil ?? turn.queuedAt + TURN_LEASE_MILLIS;
+}
+
 /** Whether the turn still runs, or is queued to, past the instant its lease ran out: its runner is lost. */
 export function runnerLostAt(turn: StatusTurn | undefined, now: number): boolean {
-  return (
-    turn !== undefined && turnRuns(turn) && turn.leaseUntil !== undefined && now > turn.leaseUntil
-  );
+  return turn !== undefined && turnRuns(turn) && now > leaseEndOf(turn);
 }
 
 /** The turn as it stands at `now`: one whose runner is lost reads as ended when its lease ran out, failed, or canceled where a Stop was asked of it. */
 function turnAt(turn: StatusTurn | undefined, now: number): StatusTurn | undefined {
-  if (turn === undefined || !runnerLostAt(turn, now) || turn.leaseUntil === undefined) return turn;
+  if (turn === undefined || !runnerLostAt(turn, now)) return turn;
   return {
     ...turn,
     status: turn.cancelRequested ? TURN_STATUS.CANCELED : TURN_STATUS.FAILED,
-    settledAt: turn.leaseUntil,
+    settledAt: leaseEndOf(turn),
   };
 }
 
@@ -216,7 +228,7 @@ export function agentStatusAt(
  * epoch milliseconds: a running turn's lease running out, from running to
  * failed, a line's grace running out, likewise, or, with no turn and no
  * line, the starting grace running out, from starting to failed. None where
- * nothing but a row changing can move it: a turn runs on no lease, a line
+ * nothing but a row changing can move it: the turn has ended, a line
  * counts for nothing, or the grace is already past.
  */
 export function statusClockEdge(
@@ -224,10 +236,7 @@ export function statusClockEdge(
   standing: StatusStanding,
 ): number | undefined {
   const turn = turnAt(newest, standing.now);
-  const lapses =
-    turn !== undefined && turnRuns(turn) && turn.leaseUntil !== undefined
-      ? turn.leaseUntil + 1
-      : undefined;
+  const lapses = turn !== undefined && turnRuns(turn) ? leaseEndOf(turn) + 1 : undefined;
   const line = lineOf(turn, standing);
   if (line.standing === LINE_STANDING.AWAITS) {
     // A line a running turn takes awaits for as long as the turn runs, so its turn's lease is its edge.

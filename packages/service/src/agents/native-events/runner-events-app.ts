@@ -87,6 +87,7 @@ import {
   type NativeProjection,
   type NativeWrite,
   projectMoments,
+  turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
 import { redactKeepingPlanCodes } from "./runner-moments.js";
@@ -115,9 +116,12 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * whose sandbox is stopped instead. A batch with no events is the runner's
  * heartbeat (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`), posted while its
  * harness says nothing, as it may for an hour while a background command
- * runs; it applies nothing but that and the lease every post short of the
- * launch's end pushes on, which the turns it runs are read as lost by once
- * it runs out (`@repo/database/models/turn-lease`).
+ * runs; it applies nothing but that. The open turns' lease
+ * (`@repo/database/models/turn-lease`), which they are read as lost by once
+ * it runs out, is pushed on only by the turn's progress short of the
+ * launch's end (`native-projection.ts`'s `turnProgressed`): any event, or a
+ * heartbeat while the turn holds a call still unanswered or waits on
+ * background work, so a runner alive with its harness stuck lapses too.
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -605,9 +609,11 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     yield* landWrites(applying, writes, now);
     const last = events.at(-1)?.sequence;
     const ends = runnerEndsOf(batch, held.sequence);
-    // Any post short of the launch's end, a heartbeat among them, pushes on the open turns' lease
-    // (`turn-lease.ts`), so a runner gone quiet is read as lost once it runs out.
-    if (ends.length === 0) yield* renewTurnLease(applying.target.conversationId, now);
+    // Only the turn's progress pushes on its lease (`turn-lease.ts`), a heartbeat only where the turn
+    // is expected to be silent, so a runner gone quiet, or alive with its harness stuck, is read as lost.
+    if (ends.length === 0 && turnProgressed(events.length, state)) {
+      yield* renewTurnLease(applying.target.conversationId, now);
+    }
     // Only the batch's last IDLE is told, and none where the launch ended in the same batch.
     const idle =
       ends.length === 0

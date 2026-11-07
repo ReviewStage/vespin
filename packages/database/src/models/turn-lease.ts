@@ -2,15 +2,22 @@
  * turn-lease.ts -- how long a coding agent's runner is held to be at work on a turn, and its renewal by the runner's posts.
  *
  * A turn queued or running carries a lease (`turns.lease_until`), set as it
- * is queued or started and pushed on by every post its runner makes, its
- * heartbeat among them (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`), as a
- * queue's visibility timeout is pushed on by its consumer. Nothing watches
- * it: a reader takes a turn whose lease is past as its runner lost
+ * is queued or started and pushed on by its progress, as a queue's visibility
+ * timeout is pushed on by its consumer: any event its runner posts, but a
+ * heartbeat alone (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`) only while the
+ * turn is expected to be silent, a call of it still running or its harness
+ * waiting on background work (`@repo/service`'s `native-projection.ts`,
+ * `turnProgressed`). So the lease is the turn's progress deadline rather than
+ * its runner's liveness, which the heartbeat still proves to the sandbox's
+ * keep-alive, and a runner alive with its harness stuck lapses as one gone
+ * quiet does. Nothing watches it: a reader takes a turn whose lease is past,
+ * or with none a lease's length past its queueing, as its runner lost
  * (`@repo/features/agent-status`), and the next touch of the agent settles
  * it so (`./abandoned-turns.ts`'s `lapsedRunnerTurns`). The bound sits well
  * above the heartbeat, so a post or two lost on the way never lapses it.
  */
 
+import { TURN_LEASE_MILLIS } from "@repo/features/agent-status";
 import { TURN_STATUS } from "@repo/wire";
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { Effect, Schema } from "effect";
@@ -19,8 +26,8 @@ import { Database, type DatabaseServices, type QueryError } from "../core/query.
 import { turns } from "../schemas/storage.js";
 
 export const TURN_LEASE = {
-  /** How long past the runner's last post its turn's lease runs: three heartbeats. */
-  MS: 15 * 60 * 1000,
+  /** How long past the turn's last progress its lease runs: three heartbeats. */
+  MS: TURN_LEASE_MILLIS,
   /** How far a lease may run down before a post pushes it on, so a runner posting many batches a minute writes the row a few times an hour, never at each. */
   RENEW_AFTER_MS: 2 * 60 * 1000,
 } as const;
@@ -56,7 +63,7 @@ const pushLeases = SqlSchema.findAll({
 
 /**
  * Pushes on the lease of every turn still queued or running of the
- * conversation, as a post of its runner at `now` does; answers how many it
+ * conversation, as its progress at `now` does; answers how many it
  * wrote. A lease with more than its renewal's worth still to run is left as
  * it stands, so most posts write nothing.
  */

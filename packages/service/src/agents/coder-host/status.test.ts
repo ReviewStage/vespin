@@ -67,9 +67,9 @@ test("a line sent before the first turn reads the agent failed past the grace ra
 });
 
 test("a line sent while a turn runs reads the agent running however long the turn's step runs", () => {
-  const running = turn({ queuedAt: 2_000, startedAt: 2_500 });
-  const awaitingLineAt = new Date(3_000);
   const now = 3_000 + 10 * LINE_GRACE_MS;
+  const running = { ...turn({ queuedAt: 2_000, startedAt: 2_500 }), leaseUntil: new Date(now + 1) };
+  const awaitingLineAt = new Date(3_000);
   expect(agentStatusOf(running, { createdAt: STARTED, now, awaitingLineAt })).toBe(
     AGENT_STATUS.RUNNING,
   );

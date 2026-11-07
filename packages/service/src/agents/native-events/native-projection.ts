@@ -109,6 +109,14 @@ const TurnSchema = Schema.Struct({
   step: Schema.optionalKey(StepSchema),
   /** The calls the turn holds, by id, under the name each is stored under. */
   calls: Schema.Record(Schema.String, Schema.String),
+  /**
+   * The calls it holds that are still unanswered, by id, each with when it
+   * started in epoch milliseconds; absent on a turn kept from before it was
+   * recorded, whose open calls are not known (`turnProgressed`).
+   */
+  running: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
+  /** Whether the harness ended its model turn with background work still in flight, and waits on it (`NATIVE_MOMENT.WAITING`) with no step opened since. */
+  waiting: Schema.optionalKey(Schema.Boolean),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
   usage: Schema.optionalKey(UsageSchema),
@@ -261,6 +269,14 @@ function withSettledSubagents(turn: Turn, callId: string): Turn {
   return { ...turn, subagents };
 }
 
+/** The turn with the call answered: no longer running, and any background subagent under it settled. */
+function withSettledCall(turn: Turn, callId: string): Turn {
+  const settled = withSettledSubagents(turn, callId);
+  if (settled.running === undefined) return settled;
+  const { [callId]: _answered, ...running } = settled.running;
+  return { ...settled, running };
+}
+
 /** Everything one event's moments do, gathered as they are folded. */
 class Fold {
   state: NativeProjection;
@@ -302,7 +318,7 @@ class Fold {
     this.writes.push({ kind: NATIVE_WRITE.ENQUEUE, turnId: id });
     const { origin, trigger } = SESSION_TURN_KIND[SESSION_TURN.TYPED];
     const opened = this.#tell(
-      { id, told: 0, steps: 0, calls: {}, openedAt: this.#context.now },
+      { id, told: 0, steps: 0, calls: {}, running: {}, openedAt: this.#context.now },
       { kind: RUN_EVENT.TURN_STARTED, origin, trigger, at: this.#context.now },
     );
     this.#setTurn(opened);
@@ -341,7 +357,8 @@ class Fold {
       this.#setTurn(keyed);
       return keyed;
     }
-    const closed = this.#closed(turn);
+    // A step opened is the harness at work again, so whatever it waited on is behind it.
+    const { waiting: _waiting, ...closed } = this.#closed(turn);
     const steps = closed.steps + 1;
     const opened = this.#tell({ ...closed, steps }, { kind: RUN_EVENT.STEP_STARTED, step: steps });
     const fresh = { open: true, draft: EMPTY_DRAFT, reasoning: 0 };
@@ -388,7 +405,13 @@ class Fold {
       name: moment.name,
       input: moment.input,
     });
-    this.#setTurn({ ...told, calls: { ...told.calls, [moment.callId]: moment.name } });
+    const held = { ...told, calls: { ...told.calls, [moment.callId]: moment.name } };
+    // Note that a turn kept from before its open calls were recorded stays unknown, since a call it opened then is not in them.
+    this.#setTurn(
+      told.running === undefined
+        ? held
+        : { ...held, running: { ...told.running, [moment.callId]: this.#context.now } },
+    );
   }
 
   #toolSettled(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_SETTLED }>): void {
@@ -396,7 +419,7 @@ class Fold {
     const name = turn?.calls[moment.callId];
     if (turn === undefined || name === undefined) return;
     this.#setTurn(
-      this.#tell(withSettledSubagents(turn, moment.callId), {
+      this.#tell(withSettledCall(turn, moment.callId), {
         kind: RUN_EVENT.TOOL_CALL_SETTLED,
         callId: moment.callId,
         name,
@@ -617,7 +640,7 @@ class Fold {
       case NATIVE_MOMENT.WAITING: {
         // Note that a waiting turn is still under way: its words are told whole and nothing ends.
         const turn = this.state.turn;
-        if (turn !== undefined) this.#setTurn(this.#closed(turn));
+        if (turn !== undefined) this.#setTurn({ ...this.#closed(turn), waiting: true });
         return;
       }
       case NATIVE_MOMENT.ENDED:
@@ -660,6 +683,28 @@ function statusOf(
     case NATIVE_ENDING.FAILED:
       return RUN_STATUS.FAILED;
   }
+}
+
+/**
+ * Whether a batch of the runner's, applying `applied` events and leaving the
+ * projection at `state`, is its turn's progress: what pushes the turn's lease
+ * on (`@repo/database`'s `turn-lease.ts`), which is the turn's progress
+ * deadline. Any event is progress: a step's words streaming, a call or its
+ * answer, a subagent's inner work, the turn's end. A heartbeat alone, a batch
+ * with no events, proves only that the runner lives, so it is progress only
+ * where the turn is expected to be silent: it holds a call still unanswered,
+ * since a harness says nothing while a command runs and only answers once it
+ * ends, or it waits on background work after its model turn ended. Note that a
+ * turn kept from before its open calls were recorded has its heartbeats taken
+ * as progress, as every heartbeat was, because a call it opened then may
+ * still run; and with no turn under way there is no lease to push.
+ */
+export function turnProgressed(applied: number, state: NativeProjection): boolean {
+  if (applied > 0) return true;
+  const turn = state.turn;
+  if (turn === undefined) return false;
+  if (turn.running === undefined || turn.waiting === true) return true;
+  return Object.keys(turn.running).length > 0;
 }
 
 /** One event's moments folded into the projection: the state it moves to, and the writes it asks for, in order. */

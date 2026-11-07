@@ -265,6 +265,37 @@ function workflowTurn(lineId: string): readonly RunnerEvent[] {
   return messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent);
 }
 
+/** Events renumbered as the runner would have posted them alone. */
+function renumbered(messages: readonly RunnerEvent[]): readonly RunnerEvent[] {
+  return messages.map(({ message }, sequence) => ({ sequence, message }));
+}
+
+/**
+ * Where P00's workflow turn falls silent, and whether its runner's heartbeats
+ * hold the turn through that silence: through a call still unanswered (its
+ * `Write`, before its answer), through a wait on background work after its
+ * model turn (its two calls answered, then its `result` and WAITING), and,
+ * with neither, never, since a harness stuck between its steps beats on.
+ */
+const HEARTBEAT_SILENCES = [
+  {
+    name: "a call of it is still unanswered",
+    upTo: (events: readonly RunnerEvent[]) => events.slice(0, 3),
+    holds: true,
+  },
+  {
+    name: "it waits on background work",
+    upTo: (events: readonly RunnerEvent[]) =>
+      renumbered([...events.slice(0, 6), ...events.slice(8, 10)]),
+    holds: true,
+  },
+  {
+    name: "neither, as a harness stuck between its steps",
+    upTo: (events: readonly RunnerEvent[]) => events.slice(0, 6),
+    holds: false,
+  },
+] as const;
+
 /** The conversation's rows as a reader of the transcript sees them: each message's role and parts, and each turn's end. */
 const transcriptOf = (conversationId: string) =>
   Effect.gen(function* () {
@@ -426,21 +457,21 @@ it.layer(getTestDB())("the runner events route", (it) => {
       }),
   );
 
-  it.effect(
-    "a heartbeat with no events keeps a run's sandbox alive and its turn's lease running through its harness's silence, applying nothing, and none before the launch applied an event",
-    () =>
+  it.effect.each(HEARTBEAT_SILENCES)(
+    "a heartbeat with no events keeps a run's sandbox alive through its harness's silence, applying nothing, and none before the launch applied an event, and holds its turn only where $name",
+    ({ upTo, holds }) =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
         const post = yield* standingWith({
           alive: (alive) => Effect.sync(() => void told.push(alive)),
         });
         const agent = yield* agentWithBearer;
-        const events = workflowTurn(agent.lineId);
+        const events = upTo(workflowTurn(agent.lineId));
 
         const early = yield* post(agent.bearer, []);
-        yield* post(agent.bearer, events.slice(0, 9));
+        yield* post(agent.bearer, events);
         const silence = [];
-        // An hour and more of a background command, the harness saying nothing, and the runner beating.
+        // An hour and more of the harness saying nothing, and the runner beating.
         for (const _beat of [1, 2, 3, 4, 5, 6, 7]) {
           yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
           silence.push(yield* post(agent.bearer, []));
@@ -450,17 +481,16 @@ it.layer(getTestDB())("the runner events route", (it) => {
           agent.target.conversationId,
           yield* Clock.currentTimeMillis,
         );
-        // The END, a moment after the last heartbeat, is the stop's to settle.
-        yield* post(agent.bearer, events.slice(9));
 
         assert.deepEqual(early.body, { applied: 0, sequence: null });
         assert.equal(told.length, 8, "the first batch, then each heartbeat an interval apart");
-        assert.ok(silence.every((beat) => beat.body.applied === 0 && beat.body.sequence === 8));
+        const last = events.length - 1;
+        assert.ok(silence.every((beat) => beat.body.applied === 0 && beat.body.sequence === last));
         assert.deepEqual(
           midway.turns.map((turn) => turn.status),
           [TURN_STATUS.RUNNING],
         );
-        assert.deepEqual(lapsed, [], "a runner still beating holds its turn");
+        assert.equal(lapsed.length, holds ? 0 : 1);
       }),
   );
 
