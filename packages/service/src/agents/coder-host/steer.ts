@@ -15,10 +15,7 @@ import {
 import { type LineFileRead, lineRead } from "@repo/database/models/attached-file-parts";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { sentLineStands } from "@repo/database/models/message-reads";
-import {
-  claimRuntimeSession,
-  recordedRuntimeSession,
-} from "@repo/database/models/recorded-session";
+import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
@@ -243,19 +240,6 @@ const teammateLabel = (agent: Agent, sender: LineSender) => {
   );
 };
 
-/** The record claimed for the session just opened, forward only as its start would; a claim that fails is logged, and the session's own start claims it in time. */
-const claimedFor = (target: ConversationTarget, sessionId: string) =>
-  Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    yield* claimRuntimeSession(target, sessionId, new Date(now));
-  }).pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `a coding agent's fresh session did not claim its record: ${causeKind(cause)}`,
-      ),
-    ),
-  );
-
 /** The turn an ended session settles: the newest, where it still stood queued or running before the harness was asked; none otherwise. */
 const runningTurnOf = (agent: Agent) =>
   Effect.map(
@@ -336,7 +320,6 @@ interface HandOverOutcome {
  */
 const handedToHarness = (
   agentSessions: AgentSessions<TypedTurn>,
-  target: ConversationTarget,
   sessionId: string | undefined,
   message: SessionMessage<TypedTurn>,
   outcome: HandOverOutcome,
@@ -360,14 +343,13 @@ const handedToHarness = (
     const opened = yield* agentSessions
       .open(message)
       .pipe(Effect.catchTag("SessionUnreachable", unreached));
+    // Note that the open claims the fresh session's record before it answers accepted, still under the
+    // conversation's dispatch claim (`runtime-sessions.ts`), because a message sent in between would read
+    // the ended session, open a second fresh one, and the newer claim would refuse the first, words and all.
     if (opened.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
       outcome.refused = failedCallRefusal(opened);
       return false;
     }
-    // Note that the fresh session claims the record here, still under the conversation's dispatch claim, rather
-    // than only as its own start runs, because a message sent in between would read the ended session,
-    // open a second fresh one, and the newer claim would refuse the first, words and all.
-    yield* claimedFor(target, opened.sessionId);
     return true;
   });
 
@@ -535,7 +517,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     // The line's own id, which a native harness's runner names back as it takes the message.
     lineId: sentLineId(line.clientKey),
   };
-  const send = handedToHarness(agentSessions, target, sessionId, message, outcome);
+  const send = handedToHarness(agentSessions, sessionId, message, outcome);
   // Note that the archive is read again here, under the conversation's dispatch claim, because a plan's
   // archive takes the conversation's row lock the claim was taken under, and reads the line the claim
   // wrote as work under way, so the two never cross.
@@ -690,7 +672,7 @@ export const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(
         return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       }
       const message = yield* hostedStoreOrUnavailable(lostLineMessage(target, agent, line));
-      return yield* handedToHarness(agentSessions, target, sessionId, message, outcome);
+      return yield* handedToHarness(agentSessions, sessionId, message, outcome);
     }).pipe(
       Effect.catch((refusal: HostedRefusal) =>
         Effect.sync(() => {

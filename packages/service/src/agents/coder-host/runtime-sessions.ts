@@ -16,7 +16,7 @@
  *   starts one. A native one is
  *   handed to that harness's sessions acting for the agent's starter, whose
  *   plan pays for it, and a session it opens claims the conversation's
- *   record.
+ *   record, or the open answers failed.
  * - `cancel` and `reset` name a session alone, so they are
  *   answered by the harness that minted it (`native-runtime.ts`); a session
  *   no harness minted runs no turn and holds nothing, so it is answered so
@@ -140,6 +140,12 @@ const UNREAD = {
   status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
 } as const;
 
+/** What an open answers where the session it opened could not claim the conversation's record. */
+const UNCLAIMED = {
+  outcome: SESSION_SEND_OUTCOME.FAILED,
+  status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
+} as const;
+
 /** What a cancel of a session no harness minted answers: it ended for good, so no turn of it is under way. */
 const NO_TURN = { outcome: SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN } as const;
 
@@ -209,18 +215,31 @@ function routed<Turn extends SessionTurn>(
       Effect.annotateLogs(agentLogIds({ conversationId })),
     );
 
-  /** The session a native open answered claimed as the conversation's record; a claim that fails is logged, and the next message finds the session by its tag all the same. */
+  /**
+   * Whether the session a native open answered now stands as the
+   * conversation's record. Note that a claim refused or failed is said in the
+   * log and answers false, because every call that reads the record, the
+   * runner's keep-alive and END, the tunnel, the Terminal, and a Stop among
+   * them, would go on aiming at the session before it.
+   */
   const claimed = (starter: string, message: SessionMessage<Turn>, sessionId: string) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      yield* claimRuntimeSession(
+      const recorded = yield* claimRuntimeSession(
         { userId: starter, conversationId: message.conversationId },
         sessionId,
         new Date(now),
       );
+      if (!recorded) {
+        yield* Effect.logWarning("a native session's claim of its record was refused");
+      }
+      return recorded;
     }).pipe(
       Effect.catchCause((cause) =>
-        Effect.logWarning(`a native session did not claim its record: ${causeKind(cause)}`),
+        Effect.as(
+          Effect.logWarning(`a native session did not claim its record: ${causeKind(cause)}`),
+          false,
+        ),
       ),
       Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
       Effect.provideContext(store),
@@ -236,10 +255,8 @@ function routed<Turn extends SessionTurn>(
         const reached = harness(route.runtime, route.starter);
         if (Option.isNone(reached)) return NOT_HERE;
         const opened = yield* (yield* reached.value).open(message);
-        if (opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
-          yield* claimed(route.starter, message, opened.sessionId);
-        }
-        return opened;
+        if (opened.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return opened;
+        return (yield* claimed(route.starter, message, opened.sessionId)) ? opened : UNCLAIMED;
       }),
 
     send: (sessionId, message) =>

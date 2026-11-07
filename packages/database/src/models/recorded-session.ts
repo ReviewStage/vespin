@@ -19,7 +19,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  lt,
   not,
   or,
   type SQL,
@@ -45,6 +44,29 @@ const ClaimSchema = Schema.Struct({
   runtimeSessionId: Schema.String,
   now: Schema.Date,
 });
+
+/**
+ * What a minted session id ends with (`runner-sessions.ts`'s `sessionIdOf`):
+ * the instant it was minted in fixed-width hex, captured, then a UUID. The
+ * harness's prefix before it is left out, since it names the harness and
+ * says nothing of when, and every prefix ever minted under (`luke-claude-code-`,
+ * `claude-code-`, `codex-`, …) ends the same way.
+ */
+const MINTED_AT_PATTERN =
+  "([0-9a-f]{12})-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+
+/**
+ * A session id's place in the order a conversation's record moves forward
+ * in: the instant it was minted, then the id itself, which breaks a tie the
+ * same way every time. Note that an id carrying no instant, as the retired
+ * runtime's did, reads as minted before every id that does, so it never
+ * wins over a minted session and never keeps one from claiming; among
+ * themselves such ids keep their text's order. Both are compared bytewise,
+ * whatever the database's collation.
+ */
+function sessionOrder(id: SQL): SQL {
+  return sql`(coalesce(substring(${id} from ${MINTED_AT_PATTERN}::text), '') collate "C", ${id} collate "C")`;
+}
 
 const findStandingSession = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
@@ -133,7 +155,7 @@ const claimSession = SqlSchema.void({
             eq(conversations.userId, claim.userId),
             or(
               isNull(conversations.runtimeSessionId),
-              lt(conversations.runtimeSessionId, claim.runtimeSessionId),
+              sql`${sessionOrder(sql`${conversations.runtimeSessionId}`)} < ${sessionOrder(sql`${claim.runtimeSessionId}::text`)}`,
             ),
           ),
         ),
@@ -237,7 +259,8 @@ export function conversationReachableBy(
 
 /**
  * Claims the conversation for the runtime session now starting, only forward:
- * the row takes the id when it records none or an older one, and a start
+ * the row takes the id when it records none or one minted before it
+ * (`sessionOrder`), whatever harness prefix either begins with, and a start
  * replayed for a session the conversation has since rotated away from
  * changes nothing. Answers whether the row now records this session.
  */

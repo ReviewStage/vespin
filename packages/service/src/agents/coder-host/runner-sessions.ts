@@ -330,7 +330,8 @@ const MINTED_AT_DIGITS = 12;
  * A session id the harness's prefix begins, minted at the instant given: the
  * instant in fixed-width hex, then a fresh UUID. The instant first is what
  * lets a session opened later claim the conversation's record over one that
- * ended (`claimRuntimeSession`, forward only, by the ids' order).
+ * ended (`claimRuntimeSession`, forward only, by the instant each was minted in,
+ * whatever prefix either begins with).
  */
 function sessionIdOf(prefix: string, mintedAt: number): string {
   return `${prefix}${mintedAt.toString(16).padStart(MINTED_AT_DIGITS, "0")}-${randomUUID()}`;
