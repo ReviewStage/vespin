@@ -126,6 +126,7 @@ import {
   useUnknownWorkspaceRoute,
 } from "../workspace-routes.js";
 import { FIXTURE_AGENT_ID } from "./agent-fixture.js";
+import { REVISION_SOURCE } from "./description-history-model.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import { ofPullRequestTab } from "./pull-request-number.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
@@ -3507,8 +3508,10 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
 /** The task the doors below go to, listed beside the open one in the open one's workspace. */
 const BILLING = row("billing", 2);
 
-/** The window on the Inbox over the open task, as the doors below are pressed from it. */
-async function onInbox() {
+/** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead. */
+async function onInbox(
+  away: (control: TasksControl) => void = (control) => control.inboxView.onOpen(),
+) {
   const tab = mount(
     {
       shown: true,
@@ -3520,7 +3523,7 @@ async function onInbox() {
     },
   );
   await settle();
-  act(() => tab.control().inboxView.onOpen());
+  act(() => away(tab.control()));
   await settle();
   return tab;
 }
@@ -3535,10 +3538,37 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
     asked: opensAsked(tab.payloads),
     inbox: control.inboxView.open,
     agentPage: control.agentView.agentId,
+    automations: control.automationsView.open,
     tab: control.mainTabs.tab,
+    side: control.sidePanel.open ? control.sidePanel.tab : undefined,
     pin: control.chosenPin,
   };
 }
+
+/** The doors that show a tab of a task, each pressed for the task the doors below go to. */
+const TAB_DOORS: [string, (control: TasksControl) => void][] = [
+  ["a column tab", (control) => control.onShowColumnTab(BILLING.id, agentTab(AGENT_ID))],
+  ["a side panel tab", (control) => control.onShowPanelTab(BILLING.id, PULLS)],
+  ["an agent", (control) => control.onShowAgent(BILLING.id, AGENT_ID)],
+  [
+    "a version's source",
+    (control) =>
+      control.onShowSource(BILLING.id, { kind: REVISION_SOURCE.AGENT, agentId: AGENT_ID }),
+  ],
+  [
+    "a task's mention",
+    (control) => control.onShowMention({ kind: MENTION_KIND.TASK, taskId: BILLING.id }),
+  ],
+  [
+    "a section's mention",
+    (control) =>
+      control.onShowMention({ kind: MENTION_KIND.SECTION, taskId: BILLING.id, anchor: "rollout" }),
+  ],
+  [
+    "a mention in New task's card",
+    (control) => control.newTask.onShowMention({ kind: MENTION_KIND.TASK, taskId: BILLING.id }),
+  ],
+];
 
 test.each<[string, (control: TasksControl) => void]>([
   ["a list's press", (control) => control.onSelect(BILLING.id)],
@@ -3555,36 +3585,48 @@ test.each<[string, (control: TasksControl) => void]>([
     "a pinned tab",
     (control) => control.onOpenPinnedTab({ task: BILLING.id, tab: PULLS, label: "#1", at: 1 }),
   ],
+  ...TAB_DOORS,
 ])(
   "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
-  async (_door, press) => {
-    const unasked = await onInbox();
-    act(() => press(unasked.control()));
-    await settle();
-    const arrived = windowOf(unasked);
-    closeWindow();
-
-    const tab = await onInbox();
-    const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
-    act(() => void tab.control().placeLeave.stand((leave, stay) => asks.push({ leave, stay })));
-    await settle();
-    const stood = windowOf(tab);
-    act(() => press(tab.control()));
-    await settle();
-    act(() => asks[0]?.stay());
-    await settle();
-    const kept = windowOf(tab);
-    act(() => press(tab.control()));
-    await settle();
-    act(() => asks[1]?.leave());
-    await settle();
-
-    assert.equal(asks.length, 2, "each press asks once");
-    assert.deepEqual(kept, stood, "Cancel changes nothing");
-    assert.notDeepEqual(arrived, stood, "the press moves the window");
-    assert.deepEqual(windowOf(tab), arrived);
-  },
+  async (_door, press) => askedOver(press),
 );
+
+test.each(TAB_DOORS)(
+  "%s over an automation holding unsaved work, which the task opens under, asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press) => askedOver(press, (control) => control.automationsView.onOpen()),
+);
+
+/** A press made with no ask standing over `away`'s place, and again with one standing, kept with Cancel and let go with Leave. */
+async function askedOver(
+  press: (control: TasksControl) => void,
+  away?: (control: TasksControl) => void,
+) {
+  const unasked = await onInbox(away);
+  act(() => press(unasked.control()));
+  await settle();
+  const arrived = windowOf(unasked);
+  closeWindow();
+
+  const tab = await onInbox(away);
+  const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
+  act(() => void tab.control().placeLeave.stand((leave, stay) => asks.push({ leave, stay })));
+  await settle();
+  const stood = windowOf(tab);
+  act(() => press(tab.control()));
+  await settle();
+  act(() => asks[0]?.stay());
+  await settle();
+  const kept = windowOf(tab);
+  act(() => press(tab.control()));
+  await settle();
+  act(() => asks[1]?.leave());
+  await settle();
+
+  assert.equal(asks.length, 2, "each press asks once");
+  assert.deepEqual(kept, stood, "Cancel changes nothing");
+  assert.notDeepEqual(arrived, stood, "the press moves the window");
+  assert.deepEqual(windowOf(tab), arrived);
+}
 
 test("the Board stands in the plan's place over the Inbox, which it puts away", () => {
   const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
