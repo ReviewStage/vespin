@@ -51,7 +51,7 @@ index ce95059eb..0d80de11d 100644
  
  export type RunProfile = (typeof RUN_PROFILE)[keyof typeof RUN_PROFILE];
 diff --git a/packages/host/src/fixture-stage.ts b/packages/host/src/fixture-stage.ts
-index 53b4c4c29..e356d8ce4 100644
+index 53b4c4c29..a01bf219b 100644
 --- a/packages/host/src/fixture-stage.ts
 +++ b/packages/host/src/fixture-stage.ts
 @@ -66,7 +66,123 @@ export const FIXTURE_PAGE: PageVersion = funnelPage(2, "2026-10-07T16:51:00Z", [
@@ -68,7 +68,7 @@ index 53b4c4c29..e356d8ce4 100644
 +  shownBy: { kind: PAGE_SHOWER.AGENT, agentId: "8b2a0ec1-6d9f-4ab7-9cdf-9eafb0c1d2e8" },
 +  html: [
 +    "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Invite teammates</title><style>",
-+    "*{box-sizing:border-box}body{margin:0;background:#f3f1ec;color:#1b1d21;font:15px/1.5 -apple-system,'SF Pro Text','Helvetica Neue',Arial,sans-serif}",
++    "*{box-sizing:border-box}html{background:#f3f1ec;min-height:100%}body{margin:0;background:#f3f1ec;color:#1b1d21;font:15px/1.5 -apple-system,'SF Pro Text','Helvetica Neue',Arial,sans-serif}",
 +    "header{display:flex;align-items:center;gap:10px;padding:18px 56px;border-bottom:1px solid #e2e0da;background:#fff}",
 +    ".mark{width:26px;height:26px;border-radius:7px;background:#0f766e;display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px}",
 +    "header b{font-size:16px}header span{color:#6b6f76;margin-left:auto;font-size:14px}",
