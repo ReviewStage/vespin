@@ -217,6 +217,14 @@
   animation-play-state: var(--ui-loop-motion);
 }
 
+/* Note that reduced motion takes the blink away rather than pausing it,
+   because a blink paused in its hidden half would hide the caret. */
+@media (prefers-reduced-motion: reduce) {
+  .description-document-text .ProseMirror-gapcursor::after {
+    animation: none;
+  }
+}
+
 @keyframes description-gap-caret-blink {
   to {
     visibility: hidden;
