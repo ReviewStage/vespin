@@ -14,7 +14,8 @@ import * as SqlClient from "effect/sql/SqlClient";
  *
  * Over a database migrated up to it, holding the lines the turn record's
  * backfill left awaiting nothing: once it runs, the lines written after a
- * conversation's newest turn ended await one turn of their own, failed
+ * conversation's newest turn ended, or in one with no turn at all, await one
+ * turn of their own, failed
  * `line_untaken` from its queueing at the first of them, and lines taken,
  * withdrawn, written before that turn, or after a session that ended for good
  * are left as they stand. A second run writes nothing. Synthetic accounts
@@ -38,7 +39,7 @@ const foldersBefore = Effect.gen(function* () {
 });
 
 it.effect(
-  "the lines no turn took after a conversation's newest turn ended await one turn failed as untaken from the first of them, every other line is left as it stands, and a second run writes nothing",
+  "the lines no turn took after a conversation's newest turn ended, or in one with no turn, await one turn failed as untaken from the first of them, every other line is left as it stands, and a second run writes nothing",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -87,6 +88,9 @@ it.effect(
         const sessionEnded = yield* conversation();
         yield* turn(sessionEnded, "failed", "session_ended");
         const afterEnd = yield* line(sessionEnded, "2026-11-07T09:10:00Z");
+        // An agent whose first line no turn ever took, its conversation holding no turn at all.
+        const turnless = yield* conversation();
+        const unopened = yield* line(turnless, "2026-11-07T09:30:00Z");
 
         yield* runWebMigrations();
 
@@ -124,6 +128,11 @@ it.effect(
           [null, null, null, minted?.id, minted?.id, null],
         );
         assert.equal((yield* turnsOf(sessionEnded)).length, 1);
+        const [opened] = yield* turnsOf(turnless);
+        assert.deepEqual(
+          [opened?.failure, opened?.queuedAt, links.get(unopened)],
+          ["line_untaken", "2026-11-07 09:30:00+00", opened?.id],
+        );
 
         // A second run of the migration, as a deploy that ran it before recording it would, writes nothing.
         const fileSystem = yield* FileSystem;
@@ -134,6 +143,7 @@ it.effect(
         const linked = yield* awaited;
         yield* sql.unsafe(statement);
         assert.equal((yield* turnsOf(settled)).length, 2);
+        assert.equal((yield* turnsOf(turnless)).length, 1);
         assert.deepEqual(yield* awaited, linked);
       }),
     ).pipe(Effect.provide(Layer.provideMerge(unmigratedPgliteSqlClient, NodeServices.layer))),

@@ -1,7 +1,8 @@
--- A coding agent's lines written after its newest turn ended, which no turn took and the turn
--- record's backfill linked to nothing, get the record a line written now gets: one turn per
--- conversation, queued at the first of them and failed `line_untaken` at its pickup deadline,
--- which they await, so the agent reads failed with why and Continue resends them. Every such
+-- A coding agent's lines written after its newest turn ended, or in a conversation with no turn
+-- at all, which no turn took and the turn record's backfill linked to nothing, get the record a
+-- line written now gets: one turn per conversation, queued at the first of them and failed
+-- `line_untaken` at its pickup deadline, which they await, so the agent reads failed with why
+-- and Continue resends them. Every such
 -- line was written before lines carried their turn, so each is past its pickup deadline, and the
 -- turn is written failed with no deadline left open: no sweep reaps it and no runner is let go.
 -- A conversation whose newest turn failed for its session's end already reads failed, and is
@@ -16,14 +17,20 @@ WITH newest AS (
 stranded AS (
   SELECT m."id", m."conversation_id", m."created_at"
   FROM "messages" AS m
-  JOIN newest ON newest."conversation_id" = m."conversation_id"
+  JOIN "conversations" AS c ON c."id" = m."conversation_id" AND c."kind" = 'agent'
+  LEFT JOIN newest ON newest."conversation_id" = m."conversation_id"
   WHERE m."role" = 'user'
     AND m."turn_id" IS NULL
     AND m."withdrawn_at" IS NULL
     AND m."awaits_turn_id" IS NULL
-    AND m."created_at" > newest."queued_at"
-    AND newest."status" IN ('settled', 'cancelled', 'failed')
-    AND newest."failure" IS DISTINCT FROM 'session_ended'
+    AND (
+      newest."conversation_id" IS NULL
+      OR (
+        m."created_at" > newest."queued_at"
+        AND newest."status" IN ('settled', 'cancelled', 'failed')
+        AND newest."failure" IS DISTINCT FROM 'session_ended'
+      )
+    )
 ),
 minted AS (
   INSERT INTO "turns" ("user_id", "conversation_id", "origin", "status", "queued_at", "settled_at", "failure", "failure_detail")
