@@ -46,6 +46,9 @@ import {
   type HeadChecks,
   headCheckFailed,
   headChecksOf,
+  RENDERED_BODY,
+  type RenderedBody,
+  renderedBody,
   reviewLineComments,
 } from "./pull-requests.js";
 
@@ -177,8 +180,10 @@ export interface AgentWake {
   readonly verdict?: string | undefined;
   /** What the review or the comment says, as its author wrote it; empty where it says nothing. */
   readonly words?: string | undefined;
-  /** GitHub's id of a review, by which its inline comments are read. */
+  /** GitHub's id of a review, by which its inline comments and its rendering are read. */
   readonly reviewId?: number | undefined;
+  /** GitHub's id of a comment on the conversation, by which its rendering is read. */
+  readonly commentId?: number | undefined;
   /** The commit whose checks failed, or whose checks all finished, which the agent's pull request's head must then still be. */
   readonly sha?: string | undefined;
   /** Why the merge queue took the pull request out, in GitHub's own word for it. */
@@ -299,6 +304,7 @@ const CommentDeliverySchema = Schema.Struct({
   repository: RepositorySchema,
   sender: SenderSchema,
   comment: Schema.Struct({
+    id: Schema.optionalKey(Schema.Number),
     html_url: Schema.String,
     created_at: Schema.String,
     body: Schema.String,
@@ -439,6 +445,7 @@ function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undef
     ...githubAvatarOf(sender),
     at: instantOf(comment.created_at, now),
     words: comment.body,
+    ...(comment.id === undefined ? {} : { commentId: comment.id }),
   };
 }
 
@@ -786,6 +793,11 @@ function boundWords(words: string): string {
   return words.trim().slice(0, GITHUB_LINE_BOUNDS.WORDS_CHARS);
 }
 
+/** GitHub's rendering of what its author wrote, where it was read and fits the metadata's bound whole; HTML cut short would draw broken, so one past it is left out. */
+function boundRendering(html: string | undefined): string | undefined {
+  return html === undefined || html.length > GITHUB_LINE_BOUNDS.HTML_CHARS ? undefined : html;
+}
+
 /**
  * The finished checks a check line carries, within the metadata's bounds:
  * each by its name, cut to the bound, how it ended, and its page, left out
@@ -806,7 +818,8 @@ function lineChecks(read: HeadChecks): NonNullable<GitHubLineMetadata["checks"]>
 
 /**
  * What the line `agentWakeText` writes says carried it: the wake as GitHub
- * told it, its words and the inline comments read beside it, and, on a
+ * told it, its words and the inline comments read beside it, each with
+ * GitHub's rendering of it where that was read (`rendering`), and, on a
  * check line, whether a check failed and the head's finished checks where
  * they were read, so a window draws the line from these rather than from
  * the text. Note that the words are kept whole up to GitHub's own bound
@@ -818,16 +831,23 @@ function githubLine(
   inline: Option.Option<readonly GitHubReviewLineComment[]>,
   checks: Option.Option<HeadChecks>,
   outsideWords: boolean,
+  rendering: Option.Option<string>,
 ): GitHubLineMetadata {
   const words = boundWords(wake.words ?? "");
+  const html = words === "" ? undefined : boundRendering(Option.getOrUndefined(rendering));
   const comments = Option.getOrElse(inline, () => [])
     .slice(0, GITHUB_LINE_BOUNDS.COMMENTS)
-    .map((comment) => ({
-      path: comment.path,
-      ...(comment.line === undefined ? {} : { line: comment.line }),
-      url: comment.url,
-      body: boundWords(comment.body),
-    }));
+    .map((comment) => {
+      const body = boundWords(comment.body);
+      const bodyHtml = body === "" ? undefined : boundRendering(comment.html);
+      return {
+        path: comment.path,
+        ...(comment.line === undefined ? {} : { line: comment.line }),
+        url: comment.url,
+        body,
+        ...(bodyHtml === undefined ? {} : { body_html: bodyHtml }),
+      };
+    });
   const checkLine =
     wake.kind === AGENT_WAKE.CHECK_FAILED || wake.kind === AGENT_WAKE.CHECKS_COMPLETED;
   const failing =
@@ -845,6 +865,7 @@ function githubLine(
       : { by_avatar: wake.byAvatar }),
     ...(wake.verdict === undefined || wake.verdict === "" ? {} : { verdict: wake.verdict }),
     ...(words === "" ? {} : { words }),
+    ...(html === undefined ? {} : { words_html: html }),
     ...(comments.length === 0 ? {} : { comments }),
     ...(wake.sha === undefined ? {} : { sha: wake.sha }),
     outside_words: outsideWords,
@@ -921,6 +942,53 @@ function inlineCommentsOf(
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning("github webhook: a review's inline comments could not be read", {
+          failure: failure._tag,
+        }),
+        Option.none(),
+      ),
+    ),
+  );
+}
+
+/** The comment or review whose rendering a wake reads: the comment on the conversation, or the review, by the ids its delivery named; none for any other wake, or one that says nothing. */
+function renderedBodyOf(wake: AgentWake): RenderedBody | undefined {
+  if ((wake.words?.trim() ?? "") === "") return undefined;
+  if (wake.kind === AGENT_WAKE.COMMENT && wake.commentId !== undefined) {
+    return { kind: RENDERED_BODY.ISSUE_COMMENT, commentId: wake.commentId };
+  }
+  const { reviewId, pullRequest } = wake;
+  return wake.kind === AGENT_WAKE.REVIEW && reviewId !== undefined && pullRequest !== undefined
+    ? { kind: RENDERED_BODY.REVIEW, number: pullRequest, reviewId }
+    : undefined;
+}
+
+/**
+ * GitHub's own rendering of what a review or a comment says (`body_html`),
+ * which the delivery does not carry, read on the pull-request token of the
+ * agent given, as its inline comments are, so the transcript draws the
+ * words as github.com does; none for any other wake, or where the read
+ * fails, which is logged by its kind alone and leaves the line drawn from
+ * its markdown.
+ */
+function renderingOfWake(
+  wake: AgentWake,
+  told: OwnedAgent | undefined,
+): Effect.Effect<
+  Option.Option<string>,
+  never,
+  DatabaseServices | HttpClient.HttpClient | GitHubApp
+> {
+  const body = renderedBodyOf(wake);
+  if (body === undefined || told === undefined || !hasRepository(told.agent)) {
+    return Effect.succeed(Option.none());
+  }
+  const { repository } = told.on;
+  return agentPullRequestReach(told.userId, told.agent, repository).pipe(
+    Effect.flatMap(({ token }) => renderedBody(token, repository, body)),
+    // The kind alone: nothing of the words or the token rides the line.
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning("github webhook: GitHub's rendering of the words could not be read", {
           failure: failure._tag,
         }),
         Option.none(),
@@ -1091,6 +1159,7 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
       : admitted;
     // Read once for every agent told, since each is told the same review, or the same checks.
     const inline = yield* inlineCommentsOf(wake, woken[0]);
+    const rendering = yield* renderingOfWake(wake, woken[0]);
     const checks = yield* checksOfWake(wake, woken[0]);
     if (checksCompleted && Option.isNone(checks)) return [];
     const clientKey =
@@ -1105,7 +1174,7 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
           text: agentWakeText(wake, on.branch, inline, checks, agent.githubAccess),
           clientKey,
           sender: { kind: MESSAGE_SENDER.GITHUB, login: wake.by },
-          metadata: githubLine(wake, inline, checks, outside),
+          metadata: githubLine(wake, inline, checks, outside, rendering),
         });
         return true;
       }).pipe(

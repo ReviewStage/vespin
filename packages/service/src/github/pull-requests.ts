@@ -940,11 +940,12 @@ export const pullRequestPeople = /* @__PURE__ */ Effect.fn("web/pullRequestPeopl
   };
 });
 
-/** One inline comment of a review: the file and the line it is on, where GitHub still places it, its words, and its page. */
+/** One inline comment of a review: the file and the line it is on, where GitHub still places it, its words, GitHub's rendering of them where it answered one, and its page. */
 export interface GitHubReviewLineComment {
   readonly path: string;
   readonly line: number | undefined;
   readonly body: string;
+  readonly html: string | undefined;
   readonly url: string;
 }
 
@@ -955,6 +956,7 @@ const ReviewLineCommentsSchema = Schema.Array(
     line: Schema.optionalKey(Schema.NullOr(Schema.Number)),
     original_line: Schema.optionalKey(Schema.NullOr(Schema.Number)),
     body: Schema.String,
+    body_html: Schema.optionalKey(Schema.NullOr(Schema.String)),
     html_url: Schema.String,
   }),
 );
@@ -986,13 +988,78 @@ export const reviewLineComments = /* @__PURE__ */ Effect.fn("web/reviewLineComme
     `${repositoryPath(fullName)}/pulls/${number}/reviews/${reviewId}/comments`,
     ReviewLineCommentsSchema,
     REVIEW_COMMENTS_MAX_PAGES,
+    true,
   );
   return comments.map((comment) => ({
     path: comment.path,
     line: comment.line ?? comment.original_line ?? undefined,
     body: comment.body,
+    html: renderingOf(comment.body_html),
     url: comment.html_url,
   }));
+});
+
+/** A comment or a review as read for GitHub's rendering of its words alone. */
+const RenderedBodySchema = Schema.Struct({
+  body_html: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+
+/** A private upload's address as GitHub's rendering spells it, its path apart from the query that signs it. */
+const SIGNED_UPLOAD =
+  /(https:\/\/private-user-images\.githubusercontent\.com\/[^"'\s?#<>]*)\?[^"'\s#<>]*/gu;
+
+/**
+ * GitHub's rendering of a body, trimmed, for a line that keeps it; none
+ * where it answered none, or an empty one. Note that a private upload's
+ * address loses the query that signs it, because the line outlives the
+ * signature by far and the window reads an upload by its asset's id alone
+ * (`githubImageOf`), so a token GitHub minted is never kept.
+ */
+function renderingOf(html: string | null | undefined): string | undefined {
+  const rendered = html?.trim().replace(SIGNED_UPLOAD, "$1") ?? "";
+  return rendered === "" ? undefined : rendered;
+}
+
+/** Where GitHub answers one comment or review whose rendering a wake reads. */
+export const RENDERED_BODY = {
+  /** A comment on a pull request's conversation, by its id. */
+  ISSUE_COMMENT: "issue-comment",
+  /** A review of a pull request, by the pull request's number and the review's id. */
+  REVIEW: "review",
+} as const;
+
+/** One comment or review whose rendering a wake reads. */
+export type RenderedBody =
+  | { readonly kind: typeof RENDERED_BODY.ISSUE_COMMENT; readonly commentId: number }
+  | {
+      readonly kind: typeof RENDERED_BODY.REVIEW;
+      readonly number: number;
+      readonly reviewId: number;
+    };
+
+/** The path GitHub answers a comment or a review at, under its repository. */
+function renderedBodyPath(fullName: string, body: RenderedBody): string {
+  const repository = repositoryPath(fullName);
+  return body.kind === RENDERED_BODY.ISSUE_COMMENT
+    ? `${repository}/issues/comments/${body.commentId}`
+    : `${repository}/pulls/${body.number}/reviews/${body.reviewId}`;
+}
+
+/**
+ * GitHub's own rendering of one comment's or review's words (`body_html`),
+ * as github.com draws them, read on the token; none where the repository
+ * holds no such comment or review, or GitHub rendered nothing.
+ */
+export const renderedBody = /* @__PURE__ */ Effect.fn("web/renderedBody")(function* (
+  token: Redacted.Redacted,
+  fullName: string,
+  body: RenderedBody,
+): Effect.fn.Return<Option.Option<string>, PullRequestReadFailure, HttpClient.HttpClient> {
+  const read = yield* readOptional(
+    withRendering(githubRead(renderedBodyPath(fullName, body), token)),
+    RenderedBodySchema,
+  );
+  return Option.flatMap(read, (each) => Option.fromNullishOr(renderingOf(each.body_html)));
 });
 
 /**
