@@ -10,8 +10,9 @@
  * knows where its lines came from. A read the service did not answer is asked
  * again after a wait that doubles to its longest, as a post is, for as long
  * as the launch runs; one the service refused for good, as for a bearer a newer
- * launch replaced, stops the reads, since asking again would be refused
- * again, and the launch's events tell the service the rest.
+ * launch replaced, fails the reads with why, since asking again would be
+ * refused again, and the launch ends on it (`runner.ts`'s `runLaunch`)
+ * rather than stand up reading nothing.
  */
 
 import {
@@ -112,7 +113,7 @@ function readOnce(
 /**
  * The service's lines for the launch, read past its cursor for as long as the
  * launch runs and handed to `lines` in order, each once. Ends only where
- * the service refused a read for good, or `lines` was ended.
+ * `lines` was ended, and fails where the service refused a read for good.
  */
 export const readLines = Effect.fn("agent-runner/readLines")(function* (
   read: LinesRead,
@@ -125,11 +126,7 @@ export const readLines = Effect.fn("agent-runner/readLines")(function* (
       Effect.retry({ schedule: READ_BACKOFF, while: (unread) => unread.transient }),
       Effect.result,
     );
-    if (Result.isFailure(answered)) {
-      return yield* Effect.logWarning(
-        `agent-runner: stopped reading lines: ${answered.failure.detail}`,
-      );
-    }
+    if (Result.isFailure(answered)) return yield* answered.failure;
     for (const line of answered.success.lines) {
       if (line.seq <= after) continue;
       if (!(yield* Queue.offer(lines, line.text))) return;

@@ -260,7 +260,7 @@ const SIGNAL = {
   MESSAGE_TAKEN: "message_taken",
   TURN_COMPLETED: "turn_completed",
   EXITED: "exited",
-  UNDELIVERED: "undelivered",
+  CUT_OFF: "cut_off",
 } as const;
 
 type Signal =
@@ -274,7 +274,7 @@ type Signal =
       readonly error: string | undefined;
     }
   | { readonly kind: typeof SIGNAL.EXITED; readonly stderrTail: string }
-  | { readonly kind: typeof SIGNAL.UNDELIVERED };
+  | { readonly kind: typeof SIGNAL.CUT_OFF; readonly why: string };
 
 /**
  * A message the service sent, as Codex takes it, under the id Codex echoes when a
@@ -1103,8 +1103,8 @@ function takeSignal(
       return Effect.succeed(
         ended(RUNNER_END.FAILED, `app-server exited: ${signal.stderrTail.trim()}`.trim()),
       );
-    case SIGNAL.UNDELIVERED:
-      return Effect.succeed(ended(RUNNER_END.FAILED));
+    case SIGNAL.CUT_OFF:
+      return Effect.succeed(ended(RUNNER_END.FAILED, signal.why));
   }
 }
 
@@ -1179,7 +1179,7 @@ function pathWithCodexTools(executable: string, path: string | undefined): strin
 export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   context: LaunchContext<CodexConfig>,
 ) {
-  const { config, sink } = context;
+  const { config } = context;
   const backend = planBackendOf(context);
   if (backend === undefined) {
     return ended(RUNNER_END.FAILED, "the plan's backend is not one this runner knows");
@@ -1189,8 +1189,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     return ended(RUNNER_END.FAILED, "the runner was not started from its bundle");
   }
   const signals = yield* Queue.unbounded<Signal>();
-  yield* sink.undelivered.pipe(
-    Effect.andThen(Queue.offer(signals, { kind: SIGNAL.UNDELIVERED })),
+  yield* context.cutOff.pipe(
+    Effect.flatMap((why) => Queue.offer(signals, { kind: SIGNAL.CUT_OFF, why })),
     Effect.forkScoped,
   );
   // A thread resumed or forked has its rollout written back where the sandbox no longer holds it.

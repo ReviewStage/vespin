@@ -66,6 +66,7 @@ import {
   type LaunchOutcome,
   RunnerFailed,
   type RunnerSelf,
+  RunnerUnconfigured,
 } from "./launch.js";
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
@@ -80,6 +81,7 @@ import {
   INSTALLED_SKILLS,
   type InputLine,
   InputLineSchema,
+  RUNNER_CONFIG,
   RUNNER_CONTROL,
   RUNNER_END,
   RUNNER_ENV,
@@ -649,8 +651,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   );
   const reading = [
     yield* Effect.forkScoped(inputLoop),
-    yield* sink.undelivered.pipe(
-      Effect.andThen(Deferred.succeed(launch.ended, RUNNER_END.FAILED)),
+    yield* context.cutOff.pipe(
+      Effect.flatMap((why) => endFailed(launch, why)),
       Effect.forkScoped,
     ),
   ];
@@ -710,8 +712,19 @@ export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: Run
     Effect.flatMap((reads) => (reads ? Effect.void : Queue.end(lines))),
     Effect.forkScoped,
   );
+  // Note that a config that never comes ends the launch, because a runner waiting on it reads
+  // no line and posts no event, so nothing would ever tell the service it stands deaf.
   const first = yield* Queue.take(lines).pipe(
     Effect.mapError(() => new RunnerFailed({ detail: "stdin closed before the config line" })),
+    Effect.timeoutOrElse({
+      duration: Duration.millis(RUNNER_CONFIG.WAIT_MS),
+      orElse: () =>
+        Effect.fail(
+          new RunnerUnconfigured({
+            detail: `no config line came within ${Duration.format(Duration.millis(RUNNER_CONFIG.WAIT_MS))}`,
+          }),
+        ),
+    }),
   );
   const config = yield* decodeConfig(first).pipe(
     Effect.mapError(() => new RunnerFailed({ detail: "the config line is not a runner config" })),
@@ -751,11 +764,22 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
   };
   // A config that names the read has the service's later lines read from it, beside any
   // stdin still carries, into the same queue, so neither harness knows where a line came from.
+  // A read the service refused for good cuts the launch off, as a post it refused does.
+  const refused = yield* Deferred.make<string>();
   if (config.linesUrl !== undefined) {
     const read = { url: config.linesUrl, bearer, launch: config.firstSequence };
-    yield* Effect.forkScoped(readLines(read, lines));
+    yield* readLines(read, lines).pipe(
+      Effect.catch((unread) =>
+        Deferred.succeed(refused, `the service refused the launch's lines: ${unread.detail}`),
+      ),
+      Effect.forkScoped,
+    );
   }
-  const context = { lines, env: input.env, bearer, sink, trace, self: input.self };
+  const cutOff = Effect.race(
+    Effect.map(sink.undelivered, (undelivered) => undelivered.detail),
+    Deferred.await(refused),
+  );
+  const context = { lines, env: input.env, bearer, sink, cutOff, trace, self: input.self };
   const outcome: LaunchOutcome =
     config.harness === RUNNER_HARNESS.CODEX
       ? yield* runCodex({ ...context, config })

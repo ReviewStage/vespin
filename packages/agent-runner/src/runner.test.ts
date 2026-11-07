@@ -506,6 +506,27 @@ it.effect(
     }),
 );
 
+it.effect("ends the launch as failed, saying why, when Vespin refuses its line read for good", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const linesUrl = "https://app.test/runner/lines";
+    const respond: FakeResponder = (url, init) =>
+      url.startsWith(linesUrl) ? new Response(null, { status: 401 }) : service.respond(url, init);
+    const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
+      ...service,
+      layer: fakeHttpClientLayer(respond),
+    });
+    yield* write({ ...CONFIG, linesUrl });
+    yield* closeStdin;
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+    const end = service.applied.at(-1)?.message;
+    assert.ok(end !== undefined && "type" in end && end.type === RUNNER_EVENT.END);
+    assert.match(String("detail" in end ? end.detail : ""), /refused the launch's lines.*401/);
+    assert.equal(cli.closed, true);
+  }),
+);
+
 it.effect("a warm launch nobody retires ends as idled once the window it was handed passes", () =>
   Effect.gen(function* () {
     const warmForMs = 5 * 60 * 1_000;

@@ -625,6 +625,28 @@ export const RUNNER_END = {
 export type RunnerEnd = (typeof RUNNER_END)[keyof typeof RUNNER_END];
 
 /**
+ * How the runner's process exits: a launch that ended as the service asked or
+ * as its turn did, one that failed, and one whose config line never came
+ * within `RUNNER_CONFIG.WAIT_MS`, which has no route to say so but its exit,
+ * since the config is what names the events route.
+ */
+export const RUNNER_EXIT = {
+  ENDED: 0,
+  FAILED: 1,
+  UNCONFIGURED: 3,
+} as const;
+
+/**
+ * How long a launch waits for its config line before it exits as
+ * `RUNNER_EXIT.UNCONFIGURED` rather than stand up reading nothing: the
+ * service writes it right after it starts the command, or hands it with the
+ * launch on a Mac, so one that has not come in this long never will.
+ */
+export const RUNNER_CONFIG = {
+  WAIT_MS: 2 * 60 * 1_000,
+} as const;
+
+/**
  * How long a warm launch waits on its own before it ends itself. The service
  * hands each warm launch its window (`warmForMs`, from `CODER.RUNNER_WARM`),
  * and a launch past it is ended here rather than by a sweep: a message the

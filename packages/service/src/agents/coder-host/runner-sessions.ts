@@ -105,6 +105,7 @@ import {
   type LaunchPath,
   RUNNER_END,
   RUNNER_ENV,
+  RUNNER_EXIT,
   type RunnerConfig,
   type RunnerEnd,
   type RunnerTrace,
@@ -206,6 +207,7 @@ import {
 } from "../sessions/agent-sessions.js";
 import {
   COMMAND_GONE,
+  type CommandExit,
   NOT_FOUND_STATUS,
   type SandboxFile,
   SandboxUnavailable,
@@ -625,6 +627,21 @@ function firstPlace(machine: MachineLifecycle, userId: string, sessionId: string
 }
 
 /**
+ * A recorded runner's exit said in the log where it failed, so a runner that
+ * ended with nothing posted, as one whose config line never came
+ * (`RUNNER_EXIT.UNCONFIGURED`), is known after its sandbox's stop takes its
+ * own output with it; one that ended cleanly, runs, or is gone says nothing.
+ */
+function exitSaid(exit: CommandExit): Effect.Effect<void> {
+  if (typeof exit !== "number" || exit === RUNNER_EXIT.ENDED) return Effect.void;
+  return Effect.logWarning(
+    exit === RUNNER_EXIT.UNCONFIGURED
+      ? "A recorded runner had exited: its config line never came"
+      : `A recorded runner had exited: exit ${exit}`,
+  );
+}
+
+/**
  * The runner the found place records, where it is up in the session that
  * runner was started in, and that runner has not exited. Only an exit read,
  * or a command no longer known, says the runner is down; the machine not
@@ -640,9 +657,10 @@ function liveRunner(
 ): Effect.Effect<RecordedRunner | undefined, SandboxUnavailable> {
   const runner = found.runner;
   if (runner === undefined) return Effect.succeed(undefined);
-  return machine
-    .runnerExit(runner.handle, within)
-    .pipe(Effect.map((exit) => (exit === null ? runner : undefined)));
+  return machine.runnerExit(runner.handle, within).pipe(
+    Effect.tap(exitSaid),
+    Effect.map((exit) => (exit === null ? runner : undefined)),
+  );
 }
 
 /**
@@ -1499,6 +1517,7 @@ export const runnerSessions = <
               // neither fails the message nor relaunches beside a runner still reading.
               reads
                 ? machine.runnerExit(running.handle, CODER.RUNNER_EXIT_READ).pipe(
+                    Effect.tap(exitSaid),
                     Effect.catchIf(sessionEnding, () => Effect.succeed(COMMAND_GONE)),
                     Effect.orElseSucceed(() => null),
                   )
