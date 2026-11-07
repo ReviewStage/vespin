@@ -25,6 +25,7 @@ import {
 } from "@repo/database/models/recorded-session";
 import { keepRunsOnPick, readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { createTask } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -44,13 +45,14 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import { sessionKey } from "@repo/runtime/vocabulary";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
-import { Duration, Effect, Layer, Option, Redacted, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Option, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { sealCodexDeviceCredentials } from "../../accounts/chatgpt-credentials.js";
-import { TURN_ORIGIN } from "../../core.js";
+import { RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
 import {
   credentialMissing,
@@ -756,13 +758,24 @@ it.layer(Layer.merge(getTestDB(), GITHUB))(
           );
           assert.equal(codex.messages.at(-1)?.lineId, sentLineId("key-codex"));
 
-          // A Stop names the turn under way by its own id.
-          const turnId = randomUUID();
+          // A Stop names the turn under way by its own id: the one the message queued, which its runner took.
+          const target = { userId: owner, conversationId: onCodex.conversationId };
+          const turnId = Option.getOrThrow(yield* queuedTurnOf(onCodex.conversationId));
           const write = yield* writer;
-          yield* write.enqueueTurn(
-            { userId: owner, conversationId: onCodex.conversationId },
-            { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED },
-          );
+          yield* write.enqueueTurn(target, {
+            turnId,
+            runtimeTurnId: turnId,
+            origin: TURN_ORIGIN.TYPED,
+          });
+          yield* write.consume(target, {
+            kind: RUN_EVENT.TURN_STARTED,
+            conversationId: sessionKey(onCodex.conversationId),
+            turnId,
+            sequence: 1,
+            origin: RUN_TURN_ORIGIN.TYPED,
+            trigger: TURN_TRIGGER.ASK,
+            at: yield* Clock.currentTimeMillis,
+          });
           yield* stoppedTurn(writer, owner, onCodex).pipe(Effect.provide(native));
           assert.ok(
             codex.calls.at(-1)?.startsWith("cancel:") && codex.calls.at(-1)?.endsWith(turnId),
