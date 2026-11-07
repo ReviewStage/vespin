@@ -158,6 +158,9 @@ it.layer(getTestDB())("a turn's one record", (it) => {
         assert.equal(awaited.get(sentLineId("first")), queued.id);
         assert.equal(awaited.get(sentLineId("second")), queued.id);
         assert.equal(awaited.get(sentLineId("after the Stop")), rows[1]?.id);
+        // A runner that takes the stopped turn's line after all starts it under the Stop's own deadline.
+        yield* started(target, queued.id, 1);
+        assert.equal((yield* turnsOf(target))[0]?.leaseUntil, at + 2000 + TURN_DEADLINE.STOP_MS);
       }),
   );
 

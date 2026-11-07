@@ -12,20 +12,21 @@
  * The reap runs under the agent's runner lease, the lapsed turns read again
  * once it is held, and only where no other call holds it, since that call is
  * at work on the agent and the next minute's sweep reaps what is still
- * lapsed. Each turn ends by what its row and its runner say, read before
- * anything is written: canceled where a Stop was asked of it; failed
- * `deadline` past its cap; and otherwise, for a turn still queued,
- * `line_untaken`, or `runner_lost` where the runner it awaited exited on a
- * failure, as one whose config line never came does;
- * for a running one, `no_progress` where its runner's command still runs,
- * and `runner_lost` where it ended, with how it ended (its exit code and its
- * stderr's redacted tail) where that could be read. Every end is a
- * compare-and-set on the turn's status, its attempt, and its standing lapsed
- * at the instant read (`settleLapsedTurns`), and only then is the runner let
- * go: its bearer dropped, so nothing it posts after is taken; its command
- * ended where it still runs; and its record cleared, so the next message
- * relaunches. So a runner that posts in between is fenced out by the turn's
- * end, never the turn by the kill. Its place's firewall keeps its
+ * lapsed. Each turn ends by what its row says and what of its runner could
+ * be read, read before anything is written: canceled where a Stop was asked
+ * of it; failed `deadline` past its cap; and otherwise, for a turn still
+ * queued, `line_untaken`, or `runner_lost` where the runner it awaited
+ * exited on a failure, as one whose config line never came does; for a
+ * running one, `runner_lost` where its runner is known to be gone, with how
+ * it ended (its exit code and its stderr's redacted tail) where that could
+ * be read, and `no_progress` otherwise, which a turn past its progress
+ * deadline is whatever its runner's state. Every end is a compare-and-set on
+ * the turn's status, its attempt, and its standing lapsed at the instant
+ * read (`settleLapsedTurns`), and only then is the runner let go, as far as
+ * it was read: its bearer dropped, so nothing it posts after is taken; its
+ * command ended where it may still run; and its record cleared, so the next
+ * message relaunches. So a runner that posts in between is fenced out by the
+ * turn's end, never the turn by the kill. Its place's firewall keeps its
  * credentials until the place stops, as every place's does
  * (`../sandbox-firewall.ts`).
  *
@@ -163,39 +164,74 @@ function exitedDetail(exit: Exclude<CommandExit, null>, stderr: string | undefin
   return `${RUNNER_LOST_DETAIL}: ${redactCredentials(ended)}`.slice(0, FAILURE_CHARS);
 }
 
-/** Where the agent's runner stands, read before anything is written: its place, its runner, and its exit, null while it runs; none of them where none is recorded or the machine did not answer. */
-interface RunnerStanding {
-  readonly found: FoundPlace | undefined;
-  readonly exit: CommandExit | undefined;
-  readonly detail: string | undefined;
-}
+/** How the agent's runner stands, read before anything is written. */
+const RUNNER = {
+  /** Its place could not be read, so nothing of the runner is known, and nothing of it is touched. */
+  UNREAD: "unread",
+  /** Its place records no runner. */
+  NONE: "none",
+  /** Its runner's command still runs. */
+  RUNNING: "running",
+  /** Its runner's command ended, how it ended read. */
+  EXITED: "exited",
+  /** Its runner is recorded, but whether its command still runs could not be read. */
+  UNKNOWN: "unknown",
+} as const;
 
-/** A read of the runner's machine that could not be made, said, and read as nothing known: its turn fails as its runner lost. */
-const unread = (what: string) => (cause: Cause.Cause<unknown>) =>
-  Effect.as(
-    Effect.logWarning(`a lapsed turn's runner ${what} could not be read: ${causeKind(cause)}`),
-    undefined,
-  );
+/** Where the agent's runner stands, as `RUNNER` names each case, with its place where that was read. */
+type RunnerStanding =
+  | { readonly kind: typeof RUNNER.UNREAD }
+  | { readonly kind: typeof RUNNER.NONE; readonly found: FoundPlace | undefined }
+  | {
+      readonly kind: typeof RUNNER.RUNNING | typeof RUNNER.UNKNOWN;
+      readonly found: FoundPlace;
+      readonly runner: RecordedRunner;
+    }
+  | {
+      readonly kind: typeof RUNNER.EXITED;
+      readonly found: FoundPlace;
+      readonly exit: Exclude<CommandExit, null>;
+      readonly detail: string;
+    };
 
-/** A step of letting the runner go that could not be made, said; its bearer is dropped already, so it posts nothing that lands. */
+/** A read of the runner's machine that could not be made, said. */
+const unread = (what: string, cause: Cause.Cause<unknown>) =>
+  Effect.logWarning(`a lapsed turn's runner ${what} could not be read: ${causeKind(cause)}`);
+
+/** A step of letting the runner go that could not be made, said. */
 const unmade = (what: string) => (cause: Cause.Cause<unknown>) =>
   Effect.logWarning(`a lapsed turn's runner could not be ${what}: ${causeKind(cause)}`);
 
 /** The runner's standing as `RunnerStanding` says, read and nothing more. */
 const runnerStanding = (machine: MachineLifecycle, agent: ReconciledAgent) =>
   Effect.gen(function* () {
-    const found = yield* placeOf(machine, agent).pipe(Effect.catchCause(unread("place")));
+    const place = yield* Effect.exit(placeOf(machine, agent));
+    if (Exit.isFailure(place)) {
+      yield* unread("place", place.cause);
+      return { kind: RUNNER.UNREAD } satisfies RunnerStanding;
+    }
+    const found = place.value;
     const runner = found?.runner;
-    if (runner === undefined) return { found, exit: undefined, detail: undefined };
-    const exit = yield* machine
-      .runnerExit(runner.handle, CODER.RUNNER_EXIT_READ)
-      .pipe(Effect.catchCause(unread("exit")));
-    const detail =
-      exit === undefined || exit === null ? undefined : exitedDetail(exit, yield* stderrOf(runner));
-    return { found, exit, detail } satisfies RunnerStanding;
+    if (found === undefined || runner === undefined) {
+      return { kind: RUNNER.NONE, found } satisfies RunnerStanding;
+    }
+    const exit = yield* Effect.exit(machine.runnerExit(runner.handle, CODER.RUNNER_EXIT_READ));
+    if (Exit.isFailure(exit)) {
+      yield* unread("exit", exit.cause);
+      return { kind: RUNNER.UNKNOWN, found, runner } satisfies RunnerStanding;
+    }
+    if (exit.value === null)
+      return { kind: RUNNER.RUNNING, found, runner } satisfies RunnerStanding;
+    const detail = exitedDetail(exit.value, yield* stderrOf(runner));
+    return { kind: RUNNER.EXITED, found, exit: exit.value, detail } satisfies RunnerStanding;
   });
 
-/** How a lapsed turn ends, by what its row and its runner say, as the header lists. */
+/**
+ * How a lapsed turn ends, by what its row says and what of its runner is
+ * known, as the header lists. Note that a running turn past its progress
+ * deadline made no progress whatever its runner's state, and is failed as
+ * its runner lost only where that runner is known to be gone.
+ */
 function endOf(turn: LapsedTurn, runner: RunnerStanding, at: Date): LostTurnEnd {
   if (turn.cancelRequestedAt !== null) return { status: RUN_STATUS.CANCELED };
   if (pastCap(turn, at)) {
@@ -205,44 +241,60 @@ function endOf(turn: LapsedTurn, runner: RunnerStanding, at: Date): LostTurnEnd 
       failureDetail: PAST_CAP_DETAIL,
     };
   }
-  const exited = runner.detail;
+  // Note that a runner that ended cleanly, as a warm one does past its window, lost nothing of a line it never took.
+  const failedExit = runner.kind === RUNNER.EXITED && runner.exit !== RUNNER_EXIT.ENDED;
   if (turn.status === TURN_STATUS.QUEUED) {
-    // Note that a runner that ended cleanly, as a warm one does past its window, lost nothing of the line.
-    const failedExit = typeof runner.exit === "number" && runner.exit !== RUNNER_EXIT.ENDED;
-    return !failedExit || exited === undefined
+    return runner.kind === RUNNER.EXITED && failedExit
       ? {
+          status: RUN_STATUS.FAILED,
+          failure: TURN_FAILURE.RUNNER_LOST,
+          failureDetail: runner.detail,
+        }
+      : {
           status: RUN_STATUS.FAILED,
           failure: TURN_FAILURE.LINE_UNTAKEN,
           failureDetail: LINE_UNTAKEN_DETAIL,
-        }
-      : { status: RUN_STATUS.FAILED, failure: TURN_FAILURE.RUNNER_LOST, failureDetail: exited };
+        };
   }
-  return runner.found?.runner !== undefined && runner.exit === null
-    ? {
-        status: RUN_STATUS.FAILED,
-        failure: TURN_FAILURE.NO_PROGRESS,
-        failureDetail: NO_PROGRESS_DETAIL,
-      }
-    : {
-        status: RUN_STATUS.FAILED,
-        failure: TURN_FAILURE.RUNNER_LOST,
-        failureDetail: exited ?? RUNNER_LOST_DETAIL,
-      };
+  if (runner.kind === RUNNER.EXITED) {
+    return {
+      status: RUN_STATUS.FAILED,
+      failure: TURN_FAILURE.RUNNER_LOST,
+      failureDetail: runner.detail,
+    };
+  }
+  if (runner.kind === RUNNER.NONE) {
+    return {
+      status: RUN_STATUS.FAILED,
+      failure: TURN_FAILURE.RUNNER_LOST,
+      failureDetail: RUNNER_LOST_DETAIL,
+    };
+  }
+  return {
+    status: RUN_STATUS.FAILED,
+    failure: TURN_FAILURE.NO_PROGRESS,
+    failureDetail: NO_PROGRESS_DETAIL,
+  };
 }
 
 /**
- * The runner let go once its turns ended, as the header says: its bearer
- * dropped, its command ended where it still ran, and its record cleared.
+ * The runner let go once its turns ended, as far as it was read, as the
+ * header says: its bearer dropped, its command ended where it may still run,
+ * and its place's record cleared. Note that a runner whose place could not
+ * be read is left as it stands, bearer and record alike, since a record
+ * cleared of nothing, or a bearer dropped from a runner still recorded,
+ * would leave the next message written to a runner that can no longer read
+ * it; its turns are ended all the same.
  */
 const letGo = (machine: MachineLifecycle, agent: ReconciledAgent, runner: RunnerStanding) =>
   Effect.gen(function* () {
+    if (runner.kind === RUNNER.UNREAD) return;
     yield* recordAgentRunnerToken(agent.userId, agent.id, null);
-    const { found } = runner;
-    if (found === undefined) return;
-    if (found.runner !== undefined && runner.exit === null) {
-      yield* machine.kill(found.runner.handle).pipe(Effect.catchCause(unmade("ended")));
+    if (runner.kind === RUNNER.RUNNING || runner.kind === RUNNER.UNKNOWN) {
+      yield* machine.kill(runner.runner.handle).pipe(Effect.catchCause(unmade("ended")));
     }
-    const place = { ...found, userId: agent.userId, agentId: agent.id };
+    if (runner.found === undefined) return;
+    const place = { ...runner.found, userId: agent.userId, agentId: agent.id };
     yield* machine
       .recordRunner(place, { kind: RUNNER_RECORD.NONE })
       .pipe(Effect.catchCause(unmade("cleared from its place's record")));
@@ -349,7 +401,11 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
         ? [{ id: turn.id, failure: end.failure }]
         : [],
     );
-    yield* reported(agent, failed, runner.exit == null ? "none" : String(runner.exit));
+    yield* reported(
+      agent,
+      failed,
+      runner.kind === RUNNER.EXITED ? String(runner.exit) : runner.kind,
+    );
     return [...settled];
   });
 

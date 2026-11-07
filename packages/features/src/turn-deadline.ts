@@ -2,7 +2,7 @@
  * turn-deadline.ts -- the deadlines a coding agent's turn row holds for the state it stands in, which the minute sweep fails it by.
  *
  * A turn row is the one record of a turn (`@repo/database`'s
- * `models/turn-record.ts` is the one writer of its state): it is queued in
+ * `models/turn-state.ts` is the one writer of its state): it is queued in
  * the same transaction as the line that opens it, started as a runner takes
  * that line, and settled, canceled, or failed with the word that says why
  * (`@repo/features/turn-run`'s `TURN_FAILURE`). Every state short of an end

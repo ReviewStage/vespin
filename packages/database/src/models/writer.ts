@@ -97,7 +97,6 @@ import {
   awaitedTurn,
   awaitTurn,
   dropAwaitingNothing,
-  dropQueuedTurn,
   endTurn,
   queueTurn,
   requeueUntaken,
@@ -2059,9 +2058,9 @@ function recordedLine(
           });
           if (removed.length > 0)
             yield* markLineWithdrawn({ conversationId: target.conversationId });
-          // The send failed and its sender was told, so the turn queued for its line goes with it.
+          // The send failed and its sender was told, so the turn queued for its line goes with it, unless another line joined it meanwhile.
           if (claimed.queuedTurnId !== undefined) {
-            yield* dropQueuedTurn(target, claimed.queuedTurnId);
+            yield* dropAwaitingNothing(target, [claimed.queuedTurnId]);
           }
         }),
       ),
@@ -2313,7 +2312,7 @@ function recordedResend(
           });
           yield* awaitTurn(target.conversationId, [id], claimed.was.awaitsTurnId);
           if (claimed.queuedTurnId !== undefined) {
-            yield* dropQueuedTurn(target, claimed.queuedTurnId);
+            yield* dropAwaitingNothing(target, [claimed.queuedTurnId]);
           }
           yield* markLineWithdrawn({ conversationId: target.conversationId });
         }),

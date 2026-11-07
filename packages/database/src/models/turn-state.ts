@@ -156,14 +156,16 @@ const startQueued = SqlSchema.findAll({
     attempt: Schema.Number,
   }),
   Result: IdSchema,
-  execute: (row) =>
-    Database.use((db) =>
+  execute: (row) => {
+    const progressBy = new Date(row.startedAt.getTime() + TURN_DEADLINE.PROGRESS_MS);
+    return Database.use((db) =>
       db
         .update(turns)
         .set({
           status: TURN_STATUS.RUNNING,
           startedAt: row.startedAt,
-          leaseUntil: new Date(row.startedAt.getTime() + TURN_DEADLINE.PROGRESS_MS),
+          // A Stop asked while the turn stood queued keeps its own deadline, where that comes sooner.
+          leaseUntil: sql`case when ${turns.cancelRequestedAt} is null then ${progressBy} else least(coalesce(${turns.leaseUntil}, ${progressBy}), ${progressBy}) end`,
           attempt: row.attempt,
         })
         .where(
@@ -174,7 +176,8 @@ const startQueued = SqlSchema.findAll({
           ),
         )
         .returning({ id: turns.id }),
-    ),
+    );
+  },
 });
 
 /**
@@ -646,8 +649,9 @@ export function awaitTurn(
 
 /**
  * Deletes, among the turns named, each still queued that no line awaits any
- * more, its lines having been taken into another turn: a turn queued stands
- * only while a line awaits it.
+ * more, its lines having been taken into another turn, or its one line's
+ * hand-over having answered that its runtime did not take it: a turn queued
+ * stands only while a line awaits it.
  */
 export function dropAwaitingNothing(
   target: TurnTarget,
@@ -663,15 +667,6 @@ export function dropAwaitingNothing(
       }),
     { discard: true },
   );
-}
-
-/**
- * Deletes the turn queued for a line whose hand-over answered that its
- * runtime did not take it, where it still stands queued: the send failed,
- * its sender was told, and nothing awaits the turn.
- */
-export function dropQueuedTurn(target: TurnTarget, turnId: string): TurnStateEffect<void> {
-  return deleteQueued({ turnId, conversationId: target.conversationId });
 }
 
 /**
