@@ -1555,11 +1555,13 @@
    review thread in Files changed and the Conversation, and the app's note in a
    File tab. The review thread's quiet card (`@repo/ui`'s Card), as wide as
    its words up to a reading measure. Its columns are the custom properties below: the head's
-   chevron in a file header's 24px slot at its inset, the faces' column
-   after it, and the words' column after the faces, which the head's face
-   and name and every comment's face and words read alike. */
+   chevron in a file header's 24px slot at the file header's inset (a
+   disclosure row's start, `disclosure.css`), so its glyph stands where a
+   file's does and under the strip's words, the faces' column after it, and
+   the words' column after the faces, which the head's face and name and
+   every comment's face and words read alike. */
 .annotation-card {
-  --annotation-inset: var(--ui-space-4);
+  --annotation-inset: var(--ui-space-8);
   --annotation-turn: var(--ui-space-24);
   --annotation-gap: var(--ui-space-8);
   --annotation-face: var(--ui-space-20);
