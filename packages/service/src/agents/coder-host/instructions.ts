@@ -21,6 +21,7 @@ import { INTEGRATION_NAMES_SAID } from "../../integrations/integrations.js";
 import { SENDER_LABEL_LEAD } from "../attached-files.js";
 import { RECORDING_CURSOR_FILE } from "../browser/recording-cursor.js";
 import { COMMAND_DESCRIPTION_INSTRUCTION } from "../command-description.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
 import { MESSAGE_AGENT_TOOL } from "./agent-message.js";
@@ -662,11 +663,19 @@ function runOnMacWords(standing: AgentStanding): string {
 const SANDBOX_SETUP_WORDS =
   "You have passwordless `sudo`, so install what the repository's setup needs that the sandbox lacks, such as a system package with `sudo apt-get install`. Docker is installed too: `docker` and `docker compose` start its daemon on first use, and a port a container publishes is on `localhost`.";
 
+/**
+ * What an agent in a sandbox with a checkout is told of the repository's own
+ * sandbox setup, which the repository's base snapshot ran before the agent's
+ * sandbox was made from it (`../base-snapshot.ts`), and which a sandbox made
+ * otherwise has not run.
+ */
+const REPOSITORY_SETUP_WORDS = `A repository may keep its own setup for a sandbox like yours in \`${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_SCRIPT}\`, which usually ran before you started: where what it sets up is missing, run it with \`bash ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_SCRIPT}\` from the checkout. Where the developer asks for one, write it to set up a fresh sandbox from the checkout alone, such as installing the dependencies and pulling the images \`docker compose\` runs, since it runs in place of ${PRODUCT_NAME}'s own dependency install, with no credential or secret.`;
+
 /** The checkout section's words after where it stands and the tools' own: how GitHub is reached, and the Mac beside the sandbox. */
 function checkoutReachWords(machine: CoderMachine, standing: AgentStanding): string {
   return machine.local
     ? `GitHub is reachable through \`gh\` and \`git\` from the shell, already signed in for you, so never put a token in a URL or a command, and never try to sign in. ${DEVICE_DIRECT_WORDS} ${DEVICE_WORKTREE_WORDS}`
-    : `GitHub is reachable through \`gh\` and \`git\` from the shell: the credential is set at the sandbox's firewall and never in your environment, so never put a token in a URL or a command, and never try to sign in. ${SANDBOX_SETUP_WORDS}${runOnMacWords(standing)}`;
+    : `GitHub is reachable through \`gh\` and \`git\` from the shell: the credential is set at the sandbox's firewall and never in your environment, so never put a token in a URL or a command, and never try to sign in. ${SANDBOX_SETUP_WORDS} ${REPOSITORY_SETUP_WORDS}${runOnMacWords(standing)}`;
 }
 
 /** How the agent looks at what it built before it publishes: on the sandbox's Playwright, display, and browser, or on the developer's machine with whatever the repository runs. */

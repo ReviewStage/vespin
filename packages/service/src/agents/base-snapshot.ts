@@ -3,9 +3,10 @@
  *
  * Vercel's "Faster startups: skip dependency installation by snapshotting
  * after setup" (https://vercel.com/docs/sandbox/concepts/snapshots): a
- * sandbox from the agents' image clones the default branch and installs, then
- * is snapshotted, and every sandbox created from that snapshot starts with
- * both. A base snapshot is that, one per workspace and repository, recorded
+ * sandbox from the agents' image clones the default branch and sets it up,
+ * by the repository's own setup script where it keeps one and by installing
+ * its dependencies otherwise, then is snapshotted, and every sandbox created
+ * from that snapshot starts with both. A base snapshot is that, one per workspace and repository, recorded
  * by the sandbox that took it: named for the workspace and the repository
  * (`baseSnapshotName`), left stopped on it, its `currentSnapshotId` the base
  * snapshot. Its checkout stands as an agent's stands in its workspace
@@ -24,8 +25,8 @@
  * it is missing or out of date, and fills it again where the snapshot it
  * named was gone, since it lapses `LAPSE` after its last use and each
  * sandbox created from it is a use, or where the agent's fast-forward from
- * it moved a lockfile (`lockfileMoved`), which a fresh install would no
- * longer match. The sandbox's name is the lock: of fills that find none at
+ * it moved a lockfile or the setup folder (`lockfileMoved`), which a fresh
+ * setup would no longer match. The sandbox's name is the lock: of fills that find none at
  * once, Vercel lets one create it and refuses the rest with a 409, and a
  * fill replaces a standing base only where it is still the one read
  * (`deleteIfStill`). A fill that failed deletes its own sandbox, so agents
@@ -74,8 +75,12 @@ const CONFLICT_STATUS = 409;
 /** How much of the end of a failed install's error output the log is told. */
 const INSTALL_ERROR_TAIL_CHARS = 500;
 
-/** The lockfiles whose change on the default branch makes the base's install stale. */
-const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json"] as const;
+/** The lockfiles and the repository's setup folder, whose change on the default branch makes the base's install stale. */
+const LOCKFILES = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_FOLDER,
+] as const;
 
 /** The variable the lockfile diff reads the base's commit from, so no commit is written into a command. */
 const BASE_COMMIT_VARIABLE = "APP_BASE_COMMIT";
@@ -84,15 +89,25 @@ const BASE_COMMIT_VARIABLE = "APP_BASE_COMMIT";
 const DIFFERS_EXIT = 1;
 
 /**
- * The dependencies installed in the checkout: with pnpm where its lockfile
- * is pnpm's, with npm where it has a `package.json` and no such lockfile,
- * and nothing in a repository that has neither, which has none to install;
- * written group-writable, as the clone is (`GROUP_WRITES`).
+ * The checkout set up: by the repository's own setup script where it keeps
+ * one (`SETUP_SCRIPT`), run by bash from the checkout as the sandbox's
+ * default user, who may `sudo`, so it installs what it names, a system
+ * package, its dependencies, or a container image it pulls; and otherwise
+ * its dependencies installed, with pnpm where its lockfile is pnpm's, with
+ * npm where it has a `package.json` and no such lockfile, and nothing in a
+ * repository that has neither. Its writes are group-writable, as the clone
+ * is (`GROUP_WRITES`). Note that a Docker daemon the setup started is stopped
+ * last, because the snapshot is taken of a stopped machine, which a daemon
+ * killed mid-write would leave its images' store torn in; the image's
+ * `docker` starts it again on first use. Note too that no credential and no
+ * workspace variable stands for the setup, since whatever it wrote stays in
+ * a snapshot every agent of the workspace starts from.
  */
 const INSTALL_SCRIPT = [
   "set -e",
   GROUP_WRITES,
-  "if [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi",
+  `if [ -f ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_SCRIPT} ]; then bash ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_SCRIPT}; elif [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi`,
+  "if pgrep -x dockerd > /dev/null; then sudo -n pkill -x dockerd; timeout 30 sh -c 'while pgrep -x dockerd > /dev/null; do sleep 0.2; done'; fi",
 ].join("\n");
 
 /** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
@@ -256,9 +271,9 @@ export const checkoutCommit = (sandbox: RepositorySandbox) =>
   );
 
 /**
- * Whether the checkout's lockfiles moved since the base's commit given, as
- * a fast-forward from a base snapshot finds them: the base's install no
- * longer matches the default branch, so the base is filled again. A diff git
+ * Whether the checkout's lockfiles or its setup folder moved since the base's
+ * commit given, as a fast-forward from a base snapshot finds them: the base's
+ * install no longer matches the default branch, so the base is filled again. A diff git
  * could not make reads as no move.
  */
 export const lockfileMoved = (sandbox: RepositorySandbox, since: string) =>

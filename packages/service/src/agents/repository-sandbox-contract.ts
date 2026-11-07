@@ -22,6 +22,10 @@ export const REPOSITORY_SANDBOX_CONTRACT = {
     WORKSPACE: "/workspace",
     CHECKOUT: "/workspace/repository",
     CHECKOUT_RECORD: `${SANDBOX_STATE_FOLDER}/repository`,
+    /** The folder of a repository's own sandbox setup, relative to its checkout, whose change on the default branch makes its base snapshot stale. */
+    SETUP_FOLDER: ".vespin",
+    /** A repository's own sandbox setup, relative to its checkout, which its base snapshot's fill runs in place of the dependency install. */
+    SETUP_SCRIPT: ".vespin/setup.sh",
   },
   VARIABLE: {
     /** The repository the call is about, `owner/name`, read by the probe and the checkout. */
