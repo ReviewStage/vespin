@@ -52,6 +52,11 @@ const BLOCK_GAP = "\n\n";
 /** What a blank line the developer left is written as: TipTap's own mark for an empty paragraph, which its Markdown reads back as one. */
 const BLANK_LINE = "&nbsp;";
 
+/** What becomes of the blank lines at a text's two ends: a document keeps them, and a message drops them. */
+export const BLANK_ENDS = { KEPT: "kept", DROPPED: "dropped" } as const;
+
+export type BlankEnds = (typeof BLANK_ENDS)[keyof typeof BLANK_ENDS];
+
 /** The blocks a bullet list opens as, a run of plain items or of task items (`tokenSources`). */
 const LIST_BLOCKS = new Set([BulletList.name, TaskList.name]);
 
@@ -220,24 +225,33 @@ function blockMarkdown(manager: MarkdownManager, node: PmNode, held: HeldSources
 /**
  * The document as the editor holds it now: each block that is still the node
  * it opened as written as its source, each other block re-printed, the
- * document's own ending kept. A blank line the developer left before more
- * text is written as TipTap's own mark for an empty paragraph, which reads
- * back as one, since Markdown folds a run of blank lines into one gap; and
- * the lines left blank after the text's last words write nothing, so an
- * empty text stays empty.
+ * document's own ending kept. A blank line the developer left is written as
+ * TipTap's own mark for an empty paragraph, which reads back as one, since
+ * Markdown folds a run of blank lines into one gap. A document keeps every
+ * one, at its start and end too, as Notion and Linear do; a message drops
+ * those at its two ends, as a send does. The one empty line an empty text
+ * opens on writes nothing, so an empty text stays empty.
  */
-export function documentMarkdown(manager: MarkdownManager, doc: PmNode, held: HeldSources): string {
+export function documentMarkdown(
+  manager: MarkdownManager,
+  doc: PmNode,
+  held: HeldSources,
+  ends: BlankEnds,
+): string {
   const left = doc.children.map((node) => leftBlank(node, held));
   const blocks = doc.children.map((node) => blockMarkdown(manager, node, held));
   // Note that a new block that writes nothing, a picture still being kept, writes no blank line either.
   const worded = doc.children.map(
     (node, index) => held.sources.has(node) || (!left[index] && blocks[index]?.trim() !== ""),
   );
-  const last = worded.lastIndexOf(true);
+  const writes = worded.map((words, index) => words || left[index] === true);
+  const bounds = ends === BLANK_ENDS.KEPT ? writes : worded;
+  const first = bounds.indexOf(true);
+  const last = doc.childCount === 1 && left[0] === true ? -1 : bounds.lastIndexOf(true);
   let out = held.lead;
   blocks.forEach((block, index) => {
     const node = doc.child(index);
-    if (index > last || !(worded[index] || left[index])) return;
+    if (index < first || index > last || !writes[index]) return;
     if (index === last) {
       out += block.trimEnd() + held.ending;
       return;

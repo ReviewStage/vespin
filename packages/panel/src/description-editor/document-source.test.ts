@@ -11,6 +11,7 @@ import { MarkdownMessage } from "../markdown-message.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownExtensions } from "./description-editor.js";
 import {
+  BLANK_ENDS,
   documentManager,
   documentMarkdown,
   documentOpened,
@@ -80,7 +81,7 @@ function opened(markdown: string) {
   return {
     editor,
     host,
-    handedOver: () => documentMarkdown(manager, editor.state.doc, held),
+    handedOver: () => documentMarkdown(manager, editor.state.doc, held, BLANK_ENDS.KEPT),
     took: (sent: string, merged: string) => {
       const answer = documentTook(editor, manager, held, sent, merged);
       held = answer.held;
@@ -243,26 +244,33 @@ test("an empty task item left at the end of a checklist is saved as a checkbox t
   assert.equal(reopened.handedOver(), "- [x] testing here\n- [ ] then\n");
 });
 
-test("a blank line left between paragraphs is saved as one the read view draws, and opens blank", () => {
+test("blank lines left before, between, and after paragraphs are saved as ones the read view draws, and open blank", () => {
   const { editor, handedOver } = opened("One.\n");
+  editor.commands.setTextSelection(Selection.atStart(editor.state.doc).from);
+  editor.commands.enter();
   editor.commands.setTextSelection(Selection.atEnd(editor.state.doc).from);
 
   editor.commands.enter();
   editor.commands.enter();
   editor.commands.insertContent("Two.");
+  editor.commands.enter();
   const saved = handedOver();
 
-  assert.equal(saved, "One.\n\n&nbsp;\n\nTwo.\n");
+  assert.equal(saved, "&nbsp;\n\nOne.\n\n&nbsp;\n\nTwo.\n\n&nbsp;\n");
   assert.equal(
     renderToStaticMarkup(withQueryClient(createElement(MarkdownMessage, { words: saved }))).split(
       "<p",
     ).length - 1,
-    3,
+    5,
   );
   assert.deepEqual(
     opened(saved).editor.state.doc.children.map((block) => block.textContent),
-    ["One.", "", "Two."],
+    ["", "One.", "", "Two.", ""],
   );
+});
+
+test("an empty text handed over is still empty", () => {
+  assert.equal(opened("").handedOver(), "");
 });
 
 test("Vespin's block merged in after a blank line the developer left is laid into the open editor", () => {

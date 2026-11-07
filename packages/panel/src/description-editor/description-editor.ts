@@ -15,22 +15,25 @@ import StarterKit from "@tiptap/starter-kit";
 import { enterSends, modEnterSends } from "../enter-sends.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
-  type EditorAria,
-  type EditorSpan,
-  FINISH,
-  type MentionDrawer,
   DESCRIPTION_PLACEHOLDER,
-  type PlacedWords,
   type DescriptionEditorHandle,
   type DescriptionEditorPictures,
   type DescriptionEditorPlacement,
   type DescriptionEditorProps,
+  type EditorAria,
+  type EditorSpan,
+  FINISH,
+  type MentionDrawer,
+  type PlacedWords,
   rootAria,
   sameAria,
   type TaskBoxDrawer,
 } from "./contract.js";
+import { descriptionMentions } from "./description-mentions.js";
+import { descriptionSlash } from "./description-slash.js";
 import { diagramPreview } from "./diagram-preview.js";
 import {
+  BLANK_ENDS,
   documentManager,
   documentMarkdown,
   documentOpened,
@@ -52,8 +55,6 @@ import {
   removedPicture,
   settledPicture,
 } from "./picture-node.js";
-import { descriptionMentions } from "./description-mentions.js";
-import { descriptionSlash } from "./description-slash.js";
 import { editorFormatting, formatReports } from "./writing-format.js";
 import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
@@ -551,7 +552,10 @@ export function mountDescriptionEditor(
   // Note that the text is read with LF line endings and written back with its own, so a body saved with CRLF comes back as it was.
   const ending = lineEndingOf(markdown);
   const source = withLf(markdown);
-  const written = () => withLineEnding(documentMarkdown(manager, editor.state.doc, held), ending);
+  // Note that a message box's send drops the blank lines at its two ends, where a document keeps them.
+  const ends = sendsOnEnter ? BLANK_ENDS.DROPPED : BLANK_ENDS.KEPT;
+  const written = () =>
+    withLineEnding(documentMarkdown(manager, editor.state.doc, held, ends), ending);
   const opened = documentOpened(manager, source);
   held = { sources: new Map(), lead: opened.lead, ending: opened.ending };
   // The threads the editor carries marks for, and whether they are being laid on, which hands over no draft.
