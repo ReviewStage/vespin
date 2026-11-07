@@ -2,14 +2,16 @@
 -- at all, which no turn took and the turn record's backfill linked to nothing, get the record a
 -- line written now gets: one turn per conversation, queued at the first of them and failed
 -- `line_untaken` at its pickup deadline, which they await, so the agent reads failed with why
--- and Continue resends them. Every such
--- line was written before lines carried their turn, so each is past its pickup deadline, and the
--- turn is written failed with no deadline left open: no sweep reaps it and no runner is let go.
--- A conversation whose newest turn failed for its session's end already reads failed, and is
--- left as it stands. It inserts turns and links only lines that await nothing, so a second run
--- finds none and writes nothing.
+-- and Continue resends them. Every such line was written before lines carried their turn, so
+-- each is past its pickup deadline, and the turn is written failed with no deadline left open:
+-- no sweep reaps it and no runner is let go. A line written before a Stop asked of that newest
+-- turn was stopped with it, as a Stop leaves its untaken lines awaiting nothing, and is left as
+-- it stands, as is a conversation whose newest turn failed for its session's end, which already
+-- reads failed. Each line taken is written strictly after its newest turn's queueing, so the turn
+-- written for it is queued after that turn and stands newest. It inserts turns and links only
+-- lines that await nothing, so a second run finds none and writes nothing.
 WITH newest AS (
-  SELECT DISTINCT ON (t."conversation_id") t."conversation_id", t."status", t."failure", t."queued_at"
+  SELECT DISTINCT ON (t."conversation_id") t."conversation_id", t."status", t."failure", t."queued_at", t."cancel_requested_at"
   FROM "turns" AS t
   JOIN "conversations" AS c ON c."id" = t."conversation_id" AND c."kind" = 'agent'
   ORDER BY t."conversation_id", t."queued_at" DESC, t."id" DESC
@@ -26,7 +28,7 @@ stranded AS (
     AND (
       newest."conversation_id" IS NULL
       OR (
-        m."created_at" > newest."queued_at"
+        m."created_at" > coalesce(newest."cancel_requested_at", newest."queued_at")
         AND newest."status" IN ('settled', 'cancelled', 'failed')
         AND newest."failure" IS DISTINCT FROM 'session_ended'
       )

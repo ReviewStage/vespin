@@ -14,11 +14,11 @@ import * as SqlClient from "effect/sql/SqlClient";
  *
  * Over a database migrated up to it, holding the lines the turn record's
  * backfill left awaiting nothing: once it runs, the lines written after a
- * conversation's newest turn ended, or in one with no turn at all, await one
- * turn of their own, failed
- * `line_untaken` from its queueing at the first of them, and lines taken,
- * withdrawn, written before that turn, or after a session that ended for good
- * are left as they stand. A second run writes nothing. Synthetic accounts
+ * conversation's newest turn ended, past any Stop asked of it, or in one with
+ * no turn at all, await one turn of their own, failed `line_untaken` from its
+ * queueing at the first of them, and lines taken, withdrawn, written before
+ * that turn or before its Stop, or after a session that ended for good are
+ * left as they stand. A second run writes nothing. Synthetic accounts
  * throughout.
  */
 
@@ -39,7 +39,7 @@ const foldersBefore = Effect.gen(function* () {
 });
 
 it.effect(
-  "the lines no turn took after a conversation's newest turn ended, or in one with no turn, await one turn failed as untaken from the first of them, every other line is left as it stands, and a second run writes nothing",
+  "the lines no turn took after a conversation's newest turn ended, or after its Stop, or in one with no turn, await one turn failed as untaken from the first of them, every other line is left as it stands, and a second run writes nothing",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -52,11 +52,16 @@ it.effect(
             yield* sql`insert into conversations (id, user_id, kind) values (${id}, 'dean', 'agent')`;
             return id;
           });
-        const turn = (conversationId: string, status: string, failure: string | null) =>
+        const turn = (
+          conversationId: string,
+          status: string,
+          failure: string | null,
+          stoppedAt: string | null = null,
+        ) =>
           Effect.gen(function* () {
             const id = randomUUID();
-            yield* sql`insert into turns (id, user_id, conversation_id, origin, status, failure, queued_at, settled_at)
-              values (${id}, 'dean', ${conversationId}, 'typed', ${status}, ${failure}, '2026-11-07T09:00:00Z', '2026-11-07T09:01:00Z')`;
+            yield* sql`insert into turns (id, user_id, conversation_id, origin, status, failure, queued_at, settled_at, cancel_requested_at)
+              values (${id}, 'dean', ${conversationId}, 'typed', ${status}, ${failure}, '2026-11-07T09:00:00Z', '2026-11-07T09:01:00Z', ${stoppedAt})`;
             return id;
           });
         let seq = 0;
@@ -91,6 +96,11 @@ it.effect(
         // An agent whose first line no turn ever took, its conversation holding no turn at all.
         const turnless = yield* conversation();
         const unopened = yield* line(turnless, "2026-11-07T09:30:00Z");
+        // An agent stopped with a line its turn never took, then sent another after the Stop.
+        const stopped = yield* conversation();
+        yield* turn(stopped, "cancelled", null, "2026-11-07T09:00:50Z");
+        const beforeStop = yield* line(stopped, "2026-11-07T09:00:40Z");
+        const afterStop = yield* line(stopped, "2026-11-07T09:02:00Z");
 
         yield* runWebMigrations();
 
@@ -132,6 +142,12 @@ it.effect(
         assert.deepEqual(
           [opened?.failure, opened?.queuedAt, links.get(unopened)],
           ["line_untaken", "2026-11-07 09:30:00+00", opened?.id],
+        );
+        // The line written before the Stop was stopped with its turn, and awaits nothing still.
+        const [afterStopped] = yield* turnsOf(stopped);
+        assert.deepEqual(
+          [afterStopped?.queuedAt, links.get(beforeStop), links.get(afterStop)],
+          ["2026-11-07 09:02:00+00", null, afterStopped?.id],
         );
 
         // A second run of the migration, as a deploy that ran it before recording it would, writes nothing.
