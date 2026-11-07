@@ -16,9 +16,9 @@ import * as SqlClient from "effect/sql/SqlClient";
  * backfill left awaiting nothing: once it runs, the lines written after a
  * conversation's newest turn ended, past any Stop asked of it, or in one with
  * no turn at all, await one turn of their own, failed `line_untaken` from its
- * queueing at the first of them, and lines taken, withdrawn, written before
- * that turn or before its Stop, or after a session that ended for good are
- * left as they stand. A second run writes nothing. Synthetic accounts
+ * queueing at the first of them, and lines taken, withdrawn, spoken by a call,
+ * written before that turn or before its Stop, or after a session that ended
+ * for good are left as they stand. A second run writes nothing. Synthetic accounts
  * throughout.
  */
 
@@ -68,14 +68,18 @@ it.effect(
         const line = (
           conversationId: string,
           at: string,
-          kept: { readonly turnId?: string; readonly withdrawnAt?: string } = {},
+          kept: {
+            readonly turnId?: string;
+            readonly withdrawnAt?: string;
+            readonly metadata?: string;
+          } = {},
         ) =>
           Effect.gen(function* () {
             const id = randomUUID();
             seq += 1;
-            yield* sql`insert into messages (id, user_id, conversation_id, seq, client_id, role, parts, created_at, placed_at, turn_id, withdrawn_at)
+            yield* sql`insert into messages (id, user_id, conversation_id, seq, client_id, role, parts, metadata, created_at, placed_at, turn_id, withdrawn_at)
               values (${id}, 'dean', ${conversationId}, ${seq}, ${randomUUID()}, 'user', '[{"type":"text","text":"Rebase on main"}]'::jsonb,
-                ${at}, ${at}, ${kept.turnId ?? null}, ${kept.withdrawnAt ?? null})`;
+                ${kept.metadata ?? null}::jsonb, ${at}, ${at}, ${kept.turnId ?? null}, ${kept.withdrawnAt ?? null})`;
             return id;
           });
 
@@ -88,6 +92,10 @@ it.effect(
           withdrawnAt: "2026-11-07T09:06:00Z",
         });
         const first = yield* line(settled, "2026-11-07T09:10:00Z");
+        // A line a call spoke, which the call answers with no turn of the agent's.
+        const spoken = yield* line(settled, "2026-11-07T09:11:00Z", {
+          metadata: '{"channel":"voice"}',
+        });
         const second = yield* line(settled, "2026-11-07T09:12:00Z");
         // An agent whose session ended for good, which reads failed as it stands.
         const sessionEnded = yield* conversation();
@@ -134,8 +142,8 @@ it.effect(
         });
         const links = new Map((yield* awaited).map((each) => [each.id, each.awaits]));
         assert.deepEqual(
-          [before, taken, withdrawn, first, second, afterEnd].map((id) => links.get(id)),
-          [null, null, null, minted?.id, minted?.id, null],
+          [before, taken, withdrawn, first, spoken, second, afterEnd].map((id) => links.get(id)),
+          [null, null, null, minted?.id, null, minted?.id, null],
         );
         assert.equal((yield* turnsOf(sessionEnded)).length, 1);
         const [opened] = yield* turnsOf(turnless);

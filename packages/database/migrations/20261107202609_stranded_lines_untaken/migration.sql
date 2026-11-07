@@ -7,7 +7,9 @@
 -- no sweep reaps it and no runner is let go. A line written before a Stop asked of that newest
 -- turn was stopped with it, as a Stop leaves its untaken lines awaiting nothing, and is left as
 -- it stands, as is a conversation whose newest turn failed for its session's end, which already
--- reads failed. Each line taken is written strictly after its newest turn's queueing, so the turn
+-- reads failed, and a line a call spoke or typed, which the call answers with no turn of the
+-- agent's, as the line grace this replaces read it. Each line taken is written strictly after its
+-- newest turn's queueing, so the turn
 -- written for it is queued after that turn and stands newest. It inserts turns and links only
 -- lines that await nothing, so a second run finds none and writes nothing.
 WITH newest AS (
@@ -25,6 +27,8 @@ stranded AS (
     AND m."turn_id" IS NULL
     AND m."withdrawn_at" IS NULL
     AND m."awaits_turn_id" IS NULL
+    AND m."metadata" ->> 'channel' IS DISTINCT FROM 'voice'
+    AND m."metadata" ->> 'voice_session_id' IS NULL
     AND (
       newest."conversation_id" IS NULL
       OR (
