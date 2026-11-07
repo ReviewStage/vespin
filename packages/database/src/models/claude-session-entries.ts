@@ -11,7 +11,7 @@
  * transcript as its own.
  */
 
-import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -36,6 +36,18 @@ export interface SessionListing {
   readonly sessionId: string;
   readonly mtime: number;
 }
+
+/**
+ * The entry types a transcript resumes a conversation from: its messages.
+ * The CLI also writes bookkeeping beside them (`cost-state`, `last-prompt`,
+ * `mode`, …), which alone it answers "No conversation found" to.
+ */
+const CONVERSATION_ENTRY = { USER: "user", ASSISTANT: "assistant" } as const;
+const CONVERSATION_ENTRY_TYPES: readonly string[] = Object.values(CONVERSATION_ENTRY);
+
+/** Whether an entry is one of the conversation's messages. */
+const isConversationEntry = (entry: SessionEntry): boolean =>
+  typeof entry.type === "string" && CONVERSATION_ENTRY_TYPES.includes(entry.type);
 
 const OwnerFields = { userId: Schema.String, conversationId: Schema.String };
 const KeyFields = {
@@ -195,7 +207,15 @@ const findAnyEntry = SqlSchema.findOneOption({
         .select({ id: claudeSessionEntries.id })
         .from(claudeSessionEntries)
         .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
-        .where(ownConversation(userId, conversationId))
+        .where(
+          and(
+            ownConversation(userId, conversationId),
+            isNull(claudeSessionEntries.subpath),
+            inArray(sql<string>`${claudeSessionEntries.entry}->>'type'`, [
+              ...CONVERSATION_ENTRY_TYPES,
+            ]),
+          ),
+        )
         .limit(1),
     ),
 });
@@ -226,16 +246,24 @@ export function appendSessionEntries(
   });
 }
 
-/** The key's transcript in the account's conversation, in the order it was appended; none where it holds no entry. */
+/**
+ * The key's transcript in the account's conversation, in the order it was
+ * appended; none where it holds no entry, or where it is a main transcript
+ * holding no message. Note that we answer bookkeeping alone as none, because
+ * the SDK resumes from the store whatever it loads, and a CLI handed no
+ * message fails every turn, where answered none it resumes from its own disk.
+ */
 export function loadSessionEntries(
   userId: string,
   conversationId: string,
   key: SessionEntryKey,
 ): EntryEffect<Option.Option<readonly SessionEntry[]>> {
   return findEntries(keyFields(userId, conversationId, key)).pipe(
-    Effect.map((rows) =>
-      rows.length > 0 ? Option.some(rows.map((row) => row.entry)) : Option.none(),
-    ),
+    Effect.map((rows) => {
+      const entries = rows.map((row) => row.entry);
+      const resumable = key.subpath !== undefined || entries.some(isConversationEntry);
+      return entries.length > 0 && resumable ? Option.some(entries) : Option.none();
+    }),
   );
 }
 
@@ -272,7 +300,7 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds any transcript entry. */
+/** Whether the account's conversation holds a main transcript a CLI resumes: one with a message, never bookkeeping alone. */
 export function holdsSessionEntries(userId: string, conversationId: string): EntryEffect<boolean> {
   return findAnyEntry({ userId, conversationId }).pipe(Effect.map(Option.isSome));
 }

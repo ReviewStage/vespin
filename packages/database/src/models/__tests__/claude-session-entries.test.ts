@@ -104,6 +104,21 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
     }),
   );
 
+  it.effect("a main transcript of bookkeeping alone is neither held nor loaded", () =>
+    Effect.gen(function* () {
+      const { userId, conversationId } = yield* openAgent;
+      const costState = { type: "cost-state", sessionId: SESSION, totalCostUSD: 0 };
+      yield* appendSessionEntries(userId, conversationId, MAIN, [costState]);
+
+      assert.equal(yield* holdsSessionEntries(userId, conversationId), false);
+      assert.deepEqual(yield* loaded(userId, conversationId, MAIN), []);
+
+      yield* appendSessionEntries(userId, conversationId, MAIN, [entry("a")]);
+      assert.equal(yield* holdsSessionEntries(userId, conversationId), true);
+      assert.deepEqual(yield* loaded(userId, conversationId, MAIN), [costState, entry("a")]);
+    }),
+  );
+
   it.effect("a Start copies its source's transcript, which the source keeps", () =>
     Effect.gen(function* () {
       const source = yield* openAgent;
