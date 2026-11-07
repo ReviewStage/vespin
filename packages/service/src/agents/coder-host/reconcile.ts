@@ -17,12 +17,16 @@
  * of it; failed `deadline` past its cap; and otherwise, for a turn still
  * queued, `line_untaken`, or `runner_lost` where the runner it awaited
  * exited on a failure, as one whose config line never came does; for a
- * running one, `runner_lost` where its runner is known to be gone, with how
- * it ended (its exit code and its stderr's redacted tail) where that could
- * be read, and `no_progress` otherwise, which a turn past its progress
- * deadline is whatever its runner's state. Every end is a compare-and-set on
- * the turn's status, its attempt, and its standing lapsed at the instant
- * read (`settleLapsedTurns`), and only then is the runner let go, as far as
+ * running one, `runner_lost` where a newer launch replaced its runner, or
+ * its runner is known to be gone, with how it ended (its exit code and its
+ * stderr's redacted tail) where that could be read, and `no_progress`
+ * otherwise, which a turn past its progress deadline is whatever its
+ * runner's state. Every end is a compare-and-set on the turn's status, its
+ * attempt, and its standing lapsed at the instant read
+ * (`settleLapsedTurns`), and only then is the runner let go, where a turn
+ * it settled was that runner's own: one still queued, whose pickup deadline
+ * each launch restarts, or one running under the newest launch, which the
+ * lease keeps from moving while the reap runs. A runner is let go as far as
  * it was read: its bearer dropped, so nothing it posts after is taken; its
  * command ended where it may still run; and its record cleared, so the next
  * message relaunches. So a runner that posts in between is fenced out by the
@@ -47,7 +51,11 @@ import {
   settleLapsedTurns,
   settleRunnerLostTurns,
 } from "@repo/database/models/abandoned-turns";
-import { type Agent, recordAgentRunnerToken } from "@repo/database/models/agent-store";
+import {
+  type Agent,
+  recordAgentRunnerToken,
+  runnerLaunchOf,
+} from "@repo/database/models/agent-store";
 import {
   latestDeviceAgentLaunch,
   settleLapsedDeviceAgentLine,
@@ -99,6 +107,9 @@ const NO_PROGRESS_DETAIL = "the agent's runner made no progress on its turn befo
 
 /** What a turn that ran past its cap says of it. */
 const PAST_CAP_DETAIL = "the turn ran past the longest a turn may run";
+
+/** What a running turn whose runner a newer launch replaced says of it. */
+const REPLACED_DETAIL = "a newer launch replaced the runner the turn ran on";
 
 /**
  * A runner whose turn lapsed, reported as one issue whatever the agent,
@@ -227,12 +238,23 @@ const runnerStanding = (machine: MachineLifecycle, agent: ReconciledAgent) =>
   });
 
 /**
+ * Whether the lapsed turn was the agent's newest launch's, the one whose
+ * runner the reap read: a turn still queued awaits that runner, since each
+ * launch restarts its pickup deadline; a running one is its runner's where
+ * it started under that launch.
+ */
+function ownedByLaunch(turn: LapsedTurn, launch: number): boolean {
+  return turn.status === TURN_STATUS.QUEUED || turn.attempt === launch;
+}
+
+/**
  * How a lapsed turn ends, by what its row says and what of its runner is
  * known, as the header lists. Note that a running turn past its progress
  * deadline made no progress whatever its runner's state, and is failed as
- * its runner lost only where that runner is known to be gone.
+ * its runner lost only where that runner is known to be gone, or replaced
+ * by a newer launch, whose runner's state says nothing of it.
  */
-function endOf(turn: LapsedTurn, runner: RunnerStanding, at: Date): LostTurnEnd {
+function endOf(turn: LapsedTurn, runner: RunnerStanding, launch: number, at: Date): LostTurnEnd {
   if (turn.cancelRequestedAt !== null) return { status: RUN_STATUS.CANCELED };
   if (pastCap(turn, at)) {
     return {
@@ -254,6 +276,13 @@ function endOf(turn: LapsedTurn, runner: RunnerStanding, at: Date): LostTurnEnd 
           failure: TURN_FAILURE.LINE_UNTAKEN,
           failureDetail: LINE_UNTAKEN_DETAIL,
         };
+  }
+  if (!ownedByLaunch(turn, launch)) {
+    return {
+      status: RUN_STATUS.FAILED,
+      failure: TURN_FAILURE.RUNNER_LOST,
+      failureDetail: REPLACED_DETAIL,
+    };
   }
   if (runner.kind === RUNNER.EXITED) {
     return {
@@ -381,6 +410,8 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
     );
     if (lapsed.length === 0) return [];
     const machine = yield* deploymentLifecycle;
+    // Note that the launch is read under the lease, which every launch holds, so the runner read is that launch's.
+    const launch = yield* runnerLaunchOf(agent.id);
     const runner = yield* runnerStanding(machine, agent);
     const ends: readonly LapsedTurnEnd[] = lapsed.map((turn) => ({
       turn: {
@@ -389,12 +420,15 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
         userId: agent.userId,
         conversationId: agent.conversationId,
       },
-      end: endOf(turn, runner, at),
+      end: endOf(turn, runner, launch, at),
     }));
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const settled = new Set(yield* settleLapsedTurns(writer, agent.conversationId, ends, now, now));
     if (settled.size === 0) return [];
-    yield* letGo(machine, agent, runner);
+    // A runner is let go only for a turn of its own it settled: one a newer launch replaced leaves that launch's runner be.
+    if (lapsed.some((turn) => settled.has(turn.id) && ownedByLaunch(turn, launch))) {
+      yield* letGo(machine, agent, runner);
+    }
     const failed = ends.flatMap(({ turn, end }) =>
       settled.has(turn.id) && end.status === RUN_STATUS.FAILED
         ? [{ id: turn.id, failure: end.failure }]

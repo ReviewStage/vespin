@@ -1546,6 +1546,19 @@ const findAgentSeenAt = SqlSchema.findOneOption({
     ),
 });
 
+const findRunnerLaunch = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ launch: Schema.Number }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ launch: agentTable.runnerLaunch })
+        .from(agentTable)
+        .where(eq(agentTable.id, agentId))
+        .limit(1),
+    ),
+});
+
 /** The `last_step` column as the coder host writes it (`StoredAgentStep`). */
 const AgentStepColumnSchema = Schema.Struct({
   inputTokens: Schema.Number,
@@ -3730,6 +3743,18 @@ export function recordAgentSeen(userId: string, agentId: string): AgentStoreEffe
 export function readAgentSeenAt(agentId: string): AgentStoreEffect<Date | null> {
   return Effect.map(findAgentSeenAt({ agentId }), (row) =>
     Option.match(row, { onNone: () => null, onSome: ({ seenAt }) => seenAt }),
+  );
+}
+
+/**
+ * How many launches have recorded a bearer for the agent's runner: the
+ * attempt its newest launch's turns run under (`turns.attempt`); 0 where
+ * none has, or no agent has the id. Read with no account in hand, for an
+ * agent the reap holds the runner lease of, under which no launch moves it.
+ */
+export function runnerLaunchOf(agentId: string): AgentStoreEffect<number> {
+  return Effect.map(findRunnerLaunch({ agentId }), (row) =>
+    Option.match(row, { onNone: () => 0, onSome: ({ launch }) => launch }),
   );
 }
 

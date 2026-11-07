@@ -29,6 +29,7 @@ import {
   readAgentRouting,
   recordAgentNativeSession,
   recordAgentSeen,
+  runnerLaunchOf,
   updateAgentChoice,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
@@ -63,6 +64,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
@@ -91,6 +93,7 @@ import {
   MESSAGE_AUTHOR,
   RUN_EVENT,
   RUN_TURN_ORIGIN,
+  TURN_FAILURE,
   TURN_ORIGIN,
   TURN_STATUS,
   TURN_TRIGGER,
@@ -135,6 +138,7 @@ import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { CODER } from "./bounds.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
+import { reconcileAgent } from "./reconcile.js";
 import { RUNNER_ENDED, type RunnerSessionsOptions, runnerEnded } from "./runner-sessions.js";
 import { RUNNER_CHOICE } from "./runtime-sessions.js";
 import { agentFailureOf } from "./status.js";
@@ -1718,6 +1722,64 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const [, line] = (yield* launchLines(relaunch)) as [ClaudeCodeConfig, InputLine];
         assert.ok(line.type === INPUT_LINE.MESSAGE);
         assert.deepEqual(developerContent(line)[0], { type: "text", text: "Now the emails." });
+      }),
+  );
+
+  it.effect(
+    "a turn past its deadline whose runner a newer launch replaced fails as that runner lost, and its reap leaves the newer launch's runner running under its bearer",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 0 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        // The first launch's runner starts a turn under its launch, then exits without ending it.
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        const turnId = randomUUID();
+        yield* writer.enqueueTurn(target, {
+          turnId,
+          runtimeTurnId: turnId,
+          origin: TURN_ORIGIN.TYPED,
+        });
+        yield* writer.consume(target, {
+          kind: RUN_EVENT.TURN_STARTED,
+          conversationId: sessionKey(agent.conversationId),
+          turnId,
+          sequence: 1,
+          origin: RUN_TURN_ORIGIN.TYPED,
+          trigger: TURN_TRIGGER.ASK,
+          at: yield* Clock.currentTimeMillis,
+          attempt: yield* runnerLaunchOf(agent.id),
+        });
+        runnerExited(api);
+        sequence.next = 42;
+        // A message relaunches the runner before any reap, as one does while another call holds the agent's runner lease.
+        const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 2);
+        const relaunch = api.commands[1];
+        const bearer = launchBearer(api, relaunch, SERVICE_HOST);
+        assert.ok(bearer !== undefined);
+
+        yield* TestClock.adjust(Duration.millis(TURN_DEADLINE.PROGRESS_MS + 1));
+        const reaped = yield* reconcileAgent(agent).pipe(Effect.provide(api.layer));
+
+        assert.deepEqual(reaped, [turnId]);
+        const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
+          agent.conversationId,
+        );
+        assert.deepEqual(
+          [turn?.status, turn?.failure],
+          [TURN_STATUS.FAILED, TURN_FAILURE.RUNNER_LOST],
+        );
+        assert.equal(relaunch?.exitCode, null, "the newer launch's runner runs on");
+        const routing = Option.getOrThrow(yield* readAgentRouting(userId, agent.id));
+        assert.equal(routing.runnerTokenHash, runnerTokenDigest(bearer));
       }),
   );
 

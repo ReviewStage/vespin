@@ -11,8 +11,9 @@
  * A coding agent's line awaits a turn from the moment it is written
  * (`messages.awaits_turn_id`): the open turn it joins, where one stands that
  * no Stop was asked of, or a turn queued for it in the same transaction,
- * with a pickup deadline. A runner that takes the line starts that turn under
- * its own launch (`turns.attempt`), and from then every move of the turn
+ * with a pickup deadline, which each launch of the agent's runner restarts.
+ * A runner that takes the line starts that turn under its own launch
+ * (`turns.attempt`), and from then every move of the turn
  * names the attempt: a start, its progress pushing its deadline on, and its
  * end, so a runner a newer launch replaced, or whose turn was failed, moves
  * nothing. A turn that ends well with lines it never took queues a turn for
@@ -248,6 +249,27 @@ const pushDeadlines = SqlSchema.findAll({
             // A Stop's deadline is the Stop's: progress after it pushes nothing on.
             isNull(turns.cancelRequestedAt),
             lt(turns.leaseUntil, request.before),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+const pushPickups = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, until: Schema.Date }),
+  Result: IdSchema,
+  execute: (request) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({ leaseUntil: request.until })
+        .where(
+          and(
+            eq(turns.conversationId, request.conversationId),
+            eq(turns.status, TURN_STATUS.QUEUED),
+            // A Stop's deadline is the Stop's: a launch after it pushes nothing on.
+            isNull(turns.cancelRequestedAt),
+            lt(turns.leaseUntil, request.until),
           ),
         )
         .returning({ id: turns.id }),
@@ -716,6 +738,19 @@ export function progressTurns(
       until: new Date(now + TURN_DEADLINE.PROGRESS_MS),
       before: new Date(now + TURN_DEADLINE.PROGRESS_MS - TURN_DEADLINE.RENEW_AFTER_MS),
     }),
+    (rows) => rows.length,
+  );
+}
+
+/**
+ * Restarts the pickup deadline of the conversation's queued turns from a
+ * launch at `now`, since the runner it starts is the one to take their
+ * lines, and is owed the whole of it; answers how many it wrote. A turn a
+ * Stop was asked of keeps the Stop's deadline.
+ */
+export function restartPickup(conversationId: string, now: number): TurnStateEffect<number> {
+  return Effect.map(
+    pushPickups({ conversationId, until: new Date(now + TURN_DEADLINE.PICKUP_MS) }),
     (rows) => rows.length,
   );
 }
