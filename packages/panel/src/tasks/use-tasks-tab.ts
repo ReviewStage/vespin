@@ -3479,15 +3479,17 @@ export function useTasksTab(input: {
     mainTabs.onShow(taskId, tab);
   };
 
+  // A side panel tab shown on its task with the agent whose strip holds it shown in the task's
+  // column, read on that task rather than the one standing, since only that agent's strip draws it.
+  const showOwnedTab = (taskId: string, tab: SidePanelTab) => {
+    const owner = sidePanel.ownerOf(taskId, tab);
+    if (owner !== undefined) mainTabs.onShow(taskId, agentTab(owner));
+    sidePanel.onShow(taskId, tab);
+  };
   // A tab of the side panel, on its plan, out from under a version history or whatever stands in the plan's place.
-  // Note that the tab's agent is shown in the task's column too, since only that agent's strip draws it.
   const showPanelTab = (taskId: string, tab: SidePanelTab) => {
     showTask(taskId);
-    const owner = sidePanel.ownerOf(tab);
-    if (owner !== undefined && agents.agentIds?.includes(owner) === true) {
-      mainTabs.onShow(taskId, agentTab(owner));
-    }
-    sidePanel.onShow(taskId, tab);
+    showOwnedTab(taskId, tab);
   };
   // The task the Tasks tab shows with nothing standing over its plan, whose places a link opens in place (`places/link-places.ts`'s `onTasksTab`).
   const standingTask = () => (!overPlan && !historyRoute.open ? tasks.activeTaskId : undefined);
@@ -4523,7 +4525,7 @@ export function useTasksTab(input: {
       }
       showTask(pin.task);
       if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.AGENT) {
-        sidePanel.onShow(pin.task, tab);
+        showOwnedTab(pin.task, tab);
         return;
       }
       if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
