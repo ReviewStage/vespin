@@ -935,10 +935,12 @@ this Vercel project to the `vespin-web` Sentry project, owns `SENTRY_DSN`,
 `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`; a variable of those
 names set by hand stops it from syncing. Without `SENTRY_DSN` the SDK starts
 disabled. `VERCEL_ENV` names the environment, and the SDK reads
-`VERCEL_GIT_COMMIT_SHA` as the release. No build writes or uploads source
-maps, so a stack trace in Sentry reads as the minified bundle: uploading the
-client's, the functions', and the eve root's maps cost every production build
-60 to 75 seconds, and was dropped for it on 2026-10-27. Alert rules are set in
+`VERCEL_GIT_COMMIT_SHA` as the release. A production build that holds
+`SENTRY_AUTH_TOKEN` uploads the function bundles' source maps under that
+release (`scripts/bundle-functions.ts`) and deletes them, so a function's
+stack traces and profiles name the source; a Preview uploads none. The
+client's maps are not uploaded, so its traces read as the minified bundle.
+Alert rules are set in
 Sentry, not here: a Slack message on more than ten events in five
 minutes, and an email to the issue's owners on a high-priority issue.
 
