@@ -103,15 +103,24 @@ const nativeCoderInstructions = (
 ) =>
   Effect.gen(function* () {
     const target = { userId, conversationId: agent.conversationId };
-    const ciReadable = hasRepository(agent) ? yield* agentCiReadable(target, agent) : false;
-    const authorship = hasRepository(agent) ? yield* agentAuthorship(target, agent) : undefined;
-    const workspace = yield* workspaceStepOf(userId, agent.organizationId).pipe(
-      Effect.tapError(logStoreFailure),
-      Effect.orElseSucceed(() => agent.organizationId),
-    );
-    const taskNumber = yield* agentTaskNumber(userId, agent);
-    const standing = yield* standingOfAgent(Option.some(agent));
-    const extraRepositories = hasRepository(agent) ? yield* agentExtraCheckouts(userId, agent) : [];
+    // Note that we read these together, because none waits on another and the CI read alone takes over a second.
+    const [ciReadable, authorship, workspace, taskNumber, standing, extraRepositories] =
+      yield* Effect.all(
+        [
+          hasRepository(agent) ? agentCiReadable(target, agent) : Effect.succeed(false),
+          hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
+          workspaceStepOf(userId, agent.organizationId).pipe(
+            Effect.tapError(logStoreFailure),
+            Effect.orElseSucceed(() => agent.organizationId),
+          ),
+          agentTaskNumber(userId, agent),
+          standingOfAgent(Option.some(agent)),
+          hasRepository(agent)
+            ? agentExtraCheckouts(userId, agent)
+            : Effect.succeed<readonly ExtraCheckout[]>([]),
+        ],
+        { concurrency: "unbounded" },
+      );
     return agentCoderInstructions(agent, {
       ciReadable,
       authorship,
