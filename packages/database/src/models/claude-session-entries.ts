@@ -11,7 +11,7 @@
  * transcript as its own.
  */
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, max, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -210,10 +210,13 @@ const findAnyEntry = SqlSchema.findOneOption({
         .where(
           and(
             ownConversation(userId, conversationId),
-            isNull(claudeSessionEntries.subpath),
-            inArray(sql<string>`${claudeSessionEntries.entry}->>'type'`, [
-              ...CONVERSATION_ENTRY_TYPES,
-            ]),
+            // Note that a row under a subpath is held as it is, because Codex keeps its rollouts there alone.
+            or(
+              isNotNull(claudeSessionEntries.subpath),
+              inArray(sql<string>`${claudeSessionEntries.entry}->>'type'`, [
+                ...CONVERSATION_ENTRY_TYPES,
+              ]),
+            ),
           ),
         )
         .limit(1),
@@ -300,7 +303,7 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds a main transcript a CLI resumes: one with a message, never bookkeeping alone. */
+/** Whether the account's conversation holds a transcript a CLI resumes: a main one with a message, never bookkeeping alone, or any under a subpath, as Codex's rollouts are. */
 export function holdsSessionEntries(userId: string, conversationId: string): EntryEffect<boolean> {
   return findAnyEntry({ userId, conversationId }).pipe(Effect.map(Option.isSome));
 }

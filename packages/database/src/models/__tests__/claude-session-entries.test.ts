@@ -119,6 +119,15 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
     }),
   );
 
+  it.effect("a rollout kept under a subpath alone, as Codex keeps it, is held", () =>
+    Effect.gen(function* () {
+      const { userId, conversationId } = yield* openAgent;
+      yield* appendSessionEntries(userId, conversationId, SUBAGENT, [{ type: "session_meta" }]);
+
+      assert.equal(yield* holdsSessionEntries(userId, conversationId), true);
+    }),
+  );
+
   it.effect("a Start copies its source's transcript, which the source keeps", () =>
     Effect.gen(function* () {
       const source = yield* openAgent;
