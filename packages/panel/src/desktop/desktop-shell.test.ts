@@ -1581,7 +1581,7 @@ test("on a phone, the service not answering says so in a strip under the page's 
   handState({}, { network: { online: true, reachable: false } });
   const unreached = await mountNarrow({ inboxView });
   await vi.waitFor(() =>
-    assert.equal(stripUnderPhoneHead(unreached), "The service isn't answering."),
+    assert.equal(stripUnderPhoneHead(unreached), "Can't connect. Check your internet connection."),
   );
   act(() => root?.unmount());
   document.body.innerHTML = "";
