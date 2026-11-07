@@ -156,3 +156,27 @@ it("a checkout git cannot list ends the bridge, saying the step and no path", as
 
   assert.deepEqual(await frame(), { bridge: "failed", step: "list" });
 });
+
+it("a file the open could not read is sent once it can be, its stats unchanged", async (t) => {
+  const { root } = await checkout(t);
+  fs.chmodSync(path.join(root, "a.txt"), 0o000);
+  const { frame, next, send } = bridge(t, root);
+  assert.deepEqual(await frame(), { bridge: "ready" });
+  send({ type: "open", channel: CHANNEL });
+  await next();
+  const manifest = await next();
+  assert.equal(
+    manifest.type === "manifest" && manifest.files.some((file) => file.path === "a.txt"),
+    false,
+  );
+
+  // Note that b.sh goes beside it, and a delete is told after every file, so a bridge that never resends a.txt fails here rather than timing out.
+  fs.chmodSync(path.join(root, "a.txt"), 0o644);
+  fs.rmSync(path.join(root, "b.sh"));
+  assert.deepEqual(shown(await next()), {
+    type: "file",
+    path: "a.txt",
+    mode: "100644",
+    bytes: "tracked",
+  });
+});

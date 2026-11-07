@@ -86,7 +86,8 @@ const hashOf = (name) => createHash("${MIRROR_HASH.ALGORITHM}").update(fs.readFi
 const manifest = () => {
   const files = [];
   for (const [name, stat] of listing) {
-    try { files.push({ path: name, size: stat.size, hash: hashOf(name) }); } catch {}
+    // Note that a file the manifest cannot read leaves the listing too, because the Mac is told it is gone and the next listing must find it new.
+    try { files.push({ path: name, size: stat.size, hash: hashOf(name) }); } catch { listing.delete(name); }
   }
   return { type: "${MIRROR_FRAME.MANIFEST}", files };
 };
