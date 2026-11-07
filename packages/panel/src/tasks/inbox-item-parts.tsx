@@ -57,13 +57,11 @@ import {
   holderName,
   INBOX_HOLDER,
   INBOX_LINE,
-  INBOX_SETTLED_STANDING,
   type InboxHolder,
   type InboxLineKind,
   type InboxListed,
   inboxLineKind,
   inboxSettledStanding,
-  inboxSettledWords,
   itemWorkspaceId,
   NEEDS_YOU,
   needsYou as needsYouOf,
@@ -201,16 +199,6 @@ export function inboxLineGlyph(kind: InboxLineKind): React.JSX.Element | null {
   }
 }
 
-/** The mark of how a settled item ended, as its card's line wears it: Resolve's for a member's resolve, Withdrawn's for an ask its agent took back, and a tick for an answer. */
-function settledGlyph(item: InboxItem): React.JSX.Element {
-  if (item.status !== INBOX_STATUS.CLOSED) return <CheckIcon />;
-  return inboxSettledStanding(item) === INBOX_SETTLED_STANDING.RESOLVED ? (
-    <GLYPH.RESOLVED />
-  ) : (
-    <GLYPH.WITHDRAWN />
-  );
-}
-
 /**
  * An item's own glyph, as its chip wears it:
  * what it asks, as its row's second line leads with it (`inboxLineGlyph`),
@@ -235,9 +223,9 @@ function standingWords(item: InboxItem, needsYou: boolean, starter: Actor | unde
  * thread. It leads with its title, wearing no glyph, where it stands,
  * waiting on the reader, on a teammate, or settled, and when it last
  * moved; then what holds it, a task as its key
- * and its chip, which wears its status, or an automation by its name;
- * and how it ended, once it has. Note that it draws no message of the
- * thread, which the row's own second line already previews, and no open
+ * and its chip, which wears its status, or an automation by its name.
+ * Note that it draws no message of the thread, nor the answer that settled
+ * it, which the row's own second line already previews, and no open
  * ask's options or steps, because a card takes no press and they would
  * read as controls; the item's box answers. The agent that asked
  * stands at its foot, the loading spinner beside it while it works.
@@ -256,8 +244,7 @@ export function InboxItemCard({
   readerId: string | undefined;
 }): React.JSX.Element {
   const { holder, item } = listed;
-  const { needsYou, starter, nameOf } = useInboxStanding(listed, readerId);
-  const settled = inboxSettledWords(item, nameOf);
+  const { needsYou, starter } = useInboxStanding(listed, readerId);
   const listedAgent = useTaskAgent(item.agentId);
   const subject = itemSubject(holder, item.agentId, listedAgent, models, readerId);
   // Note that the list followed live names what each of a task's agents is doing; an agent with no task carries no such word, and shows no spinner.
@@ -271,13 +258,6 @@ export function InboxItemCard({
         corner={<Time at={item.updatedAt} now={now} hint={false} />}
       />
       <HolderDetail holder={holder} workspaceId={itemWorkspaceId(holder)} />
-      {settled === undefined ? null : (
-        <HoverCardRow
-          look={HOVER_CARD_ROW_LOOK.DETAIL}
-          glyph={settledGlyph(item)}
-          label={settled}
-        />
-      )}
       <HoverCardRule />
       <HoverCardRow
         look={HOVER_CARD_ROW_LOOK.DETAIL}

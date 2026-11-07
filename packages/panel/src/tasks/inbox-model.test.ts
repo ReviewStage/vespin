@@ -55,7 +55,6 @@ import {
   inboxPreview,
   inboxReply,
   inboxSettledStanding,
-  inboxSettledWords,
   inboxSteps,
   inboxThreadSend,
   isDone,
@@ -1435,57 +1434,7 @@ function standing(
   return ask === undefined ? message : { ...message, ask: { ...ask, status } };
 }
 
-test("a settled item's card says how it ended whatever its row's glyph: an answer even with words after it, an ask taken back and why, a member's close", () => {
-  const asked = asking({
-    type: INBOX_ASK.DECIDE,
-    options: [{ label: "7 days" }, { label: "14 days" }],
-  });
-  const answer = message({
-    text: "",
-    createdAt: 2_000,
-    member: YOU,
-    answers: { ask: asked.id, reply: INBOX_REPLY.CHOSE, choices: ["7 days"] },
-  });
-  const after = message({
-    text: "Thanks, on it.",
-    createdAt: 3_000,
-    author: INBOX_MESSAGE_AUTHOR.AGENT,
-  });
-  const settled = standing(asked, INBOX_ASK_STATUS.ANSWERED);
-  const answered = item({
-    id: "s1",
-    status: INBOX_STATUS.ANSWERED,
-    thread: [settled, answer, after],
-  });
-  assert.equal(inboxSettledWords(answered, previewName), "You: Chose 7 days");
-  assert.equal(
-    inboxLineKind(answered),
-    INBOX_LINE.SAID,
-    "the row's glyph reads only the last message",
-  );
-
-  const takenBack = item({
-    id: "s2",
-    status: INBOX_STATUS.CLOSED,
-    thread: [
-      {
-        ...asked,
-        ask: {
-          type: INBOX_ASK.DECIDE,
-          options: [{ label: "7 days" }, { label: "14 days" }],
-          status: INBOX_ASK_STATUS.WITHDRAWN,
-          withdrawnReason: "The deploy was **canceled**",
-        },
-      },
-    ],
-  });
-  assert.equal(inboxSettledWords(takenBack, previewName), "Withdrawn: The deploy was canceled");
-
-  const open = item({ id: "s3", thread: [asked] });
-  assert.equal(inboxSettledWords(open, previewName), undefined, "an open item has not ended");
-});
-
-test("a settled item's card names its ending in the word its line says it in: answered, resolved by a member, or withdrawn by its agent", () => {
+test("a settled item's card names its ending in one word: answered, resolved by a member, or withdrawn by its agent", () => {
   const asked = asking({
     type: INBOX_ASK.DECIDE,
     options: [{ label: "7 days" }, { label: "14 days" }],
@@ -1499,7 +1448,6 @@ test("a settled item's card names its ending in the word its line says it in: an
     closedBy: CHARLES,
     thread: [asked],
   });
-  assert.equal(inboxSettledWords(resolved, previewName), "Charles Pan: Resolved without an answer");
   assert.equal(inboxSettledStanding(resolved), "Resolved");
 
   // Note that the service's member close withdraws the ask it left open, saying no why.
@@ -1509,10 +1457,6 @@ test("a settled item's card names its ending in the word its line says it in: an
     closedBy: CHARLES,
     thread: [standing(asked, INBOX_ASK_STATUS.WITHDRAWN)],
   });
-  assert.equal(
-    inboxSettledWords(resolvedAsked, previewName),
-    "Charles Pan: Resolved without an answer",
-  );
   assert.equal(inboxSettledStanding(resolvedAsked), "Resolved");
 
   const takenBack = item({
@@ -1520,7 +1464,6 @@ test("a settled item's card names its ending in the word its line says it in: an
     status: INBOX_STATUS.CLOSED,
     thread: [standing(asked, INBOX_ASK_STATUS.WITHDRAWN)],
   });
-  assert.equal(inboxSettledWords(takenBack, previewName), "Withdrawn");
   assert.equal(inboxSettledStanding(takenBack), "Withdrawn");
 
   const before = item({ id: "w4", status: INBOX_STATUS.CLOSED, closedReason: "Merged already." });

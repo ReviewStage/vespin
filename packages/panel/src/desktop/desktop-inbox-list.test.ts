@@ -44,7 +44,6 @@ import {
   EXPIRY_ASK,
   headTitle,
   heardOf,
-  hoveredCard,
   INVITES,
   inOrder,
   item,
@@ -1494,48 +1493,6 @@ test("Me chosen in Addressed to with nothing of the reader's in the scope shown 
   chooseView(page, "Addressed to", "Me");
   assert.deepEqual(listed(page), []);
   assert.deepEqual(listEmpty(page), [undefined, "Nothing addressed to you", "Show anyone's"]);
-});
-
-test("an item its agent withdrew wears Withdrawn's own mark on its row's card where an answered item's card wears a check", async () => {
-  const [asking] = EXPIRY.thread ?? [];
-  assert.ok(asking?.ask !== undefined, "the item opens with its ask");
-  const withdrawn: InboxItem = {
-    ...EXPIRY,
-    status: INBOX_STATUS.CLOSED,
-    closedReason: "Product picked 14 days.",
-    settledAt: 4_500,
-    thread: [
-      {
-        ...asking,
-        ask: {
-          ...asking.ask,
-          status: INBOX_ASK_STATUS.WITHDRAWN,
-          withdrawnReason: "Product picked 14 days.",
-        },
-      },
-    ],
-  };
-  world.inboxes.set(BILLING.id, [THRESHOLD, RETRY]);
-  world.inboxes.set(INVITES.id, [withdrawn]);
-  const { page } = mount();
-  await settle();
-
-  const settledGlyph = (title: string) => {
-    hoveredCard(rowNamed(page, title), "[data-inbox-item-card]");
-    const card =
-      document.querySelector<HTMLElement>(".ui-tooltip-card [data-inbox-item-card]") ??
-      assert.fail("the row's card is hung");
-    return [
-      card.querySelector("svg.lucide-circle-arrow-out-up-left") !== null,
-      card.querySelector("svg.lucide-check") !== null,
-    ];
-  };
-  assert.deepEqual(settledGlyph("Expire after 7 days?"), [true, false], "withdrawn: its own mark");
-  assert.deepEqual(
-    settledGlyph("How is a failed email retried?"),
-    [false, true],
-    "answered: check",
-  );
 });
 
 test("an item marked read as it opened stays read once another plan's item is chosen, though the list's read of its plan, which a mark never moves, still holds it unread", async () => {

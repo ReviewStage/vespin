@@ -839,9 +839,6 @@ function closedByMember(item: InboxItem): boolean {
 /** A member named on an item, as an answer's or a message's writer. */
 type InboxMember = NonNullable<InboxItem["answeredBy"]>;
 
-/** What an item a member closed without an answer says of it, after who closed it. */
-export const CLOSED_WORDS = "Resolved without an answer";
-
 /** What parts a preview's words, as a menu's detail parts them. */
 const PREVIEW_PART = " · ";
 
@@ -942,37 +939,6 @@ export function inboxShownTicks(
   return shownTicks(ask, draft);
 }
 
-/**
- * How a settled item ended, as its hover card says it, whatever its row's
- * glyph: the latest answer on its thread by its answerer, even with words
- * after it; an ask the agent took back, and why; or a member's close. None
- * while it is open, or where its thread says nothing of how it ended, as a
- * notice nodded to with Got it.
- */
-export function inboxSettledWords(
-  item: InboxItem,
-  nameOf: (member: InboxMember | undefined) => string,
-): string | undefined {
-  if (item.status === INBOX_STATUS.OPEN) return undefined;
-  const thread = item.thread ?? [];
-  const answering = thread.findLast((each) => each.answers !== undefined);
-  if (answering?.answers !== undefined) {
-    const { answers } = answering;
-    const stamp = sentStamp(answers, thread.find((each) => each.id === answers.ask)?.ask).words;
-    const words = plainWords(answering.text);
-    return `${nameOf(answering.member)}: ${words === "" ? stamp : `${stamp}${PREVIEW_PART}${words}`}`;
-  }
-  // Note that a close naming its closer is a member's, though it withdrew the ask it left open; otherwise an ask the agent took back says so before a close is read as a member's, since a close naming no closer reads as one.
-  if (item.closedBy !== undefined) return `${nameOf(item.closedBy)}: ${CLOSED_WORDS}`;
-  const withdrawn = thread.findLast((each) => each.ask?.status === INBOX_ASK_STATUS.WITHDRAWN);
-  if (withdrawn?.ask !== undefined) {
-    const why = plainWords(withdrawn.ask.withdrawnReason ?? "");
-    return why === "" ? "Withdrawn" : `Withdrawn: ${why}`;
-  }
-  if (closedByMember(item)) return `${nameOf(item.closedBy)}: ${CLOSED_WORDS}`;
-  return undefined;
-}
-
 /** A settled item's standing in one word: answered, sent by the member who started it, resolved by a member without an answer, or withdrawn by its agent. */
 export const INBOX_SETTLED_STANDING = {
   ANSWERED: "Answered",
@@ -982,10 +948,9 @@ export const INBOX_SETTLED_STANDING = {
 } as const;
 
 /**
- * Where a settled item stands, as its row's card says it over how it ended
- * (`inboxSettledWords`), in that line's own word, read in that line's
- * order: a close naming its closer is a member's, though it withdrew the
- * ask it left open, then an ask the agent took back, so the card never
+ * Where a settled item stands, as its row's card says it under its title,
+ * in one word: a close naming its closer is a member's, though it withdrew
+ * the ask it left open, then an ask the agent took back, so the card never
  * calls one ending two names.
  */
 export function inboxSettledStanding(

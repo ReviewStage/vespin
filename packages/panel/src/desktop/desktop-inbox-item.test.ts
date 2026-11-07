@@ -739,7 +739,7 @@ test("an archived agent is still named by its name, its card saying it was archi
   assert.deepEqual(asked.previewedAgents, []);
 });
 
-test("an item's row hangs the thread's card beside it, as a sidebar task's row hangs its task's, the row wearing no tile of the agent's: its task, its title, where it stands, how it ended, and the agent that asked at its foot with the spinner while it works; a press on the card chooses nothing, and a press on the row chooses the item", async () => {
+test("an item's row hangs the thread's card beside it, as a sidebar task's row hangs its task's, the row wearing no tile of the agent's: its task, its title, where it stands, and the agent that asked at its foot with the spinner while it works; a press on the card chooses nothing, and a press on the row chooses the item", async () => {
   const { page, asked } = mount();
   await settle();
   const row = rowNamed(page, "How is a failed email retried?");
