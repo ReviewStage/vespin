@@ -143,7 +143,7 @@ const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 /** A remove the service did not take, said in the dialog that asked. */
 const REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "Could not reach the service. Try again.",
+  reason: "Could not connect. Check your internet connection and try again.",
 };
 
 /** A host as the list of machines names it (`machineName`). */

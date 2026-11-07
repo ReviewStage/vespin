@@ -35,7 +35,7 @@ import { AdminCollectionPage } from "./chrome/page-header.js";
 
 /** What the page says where the gate refused the read, in place of the view. */
 const GATE_WORDS = {
-  SIGNED_OUT: "Your session with the service has ended. Sign in again to read the admin dashboard.",
+  SIGNED_OUT: "Your session has ended. Sign in again to read the admin dashboard.",
   FORBIDDEN: "This account does not have the admin role, which is set in the database.",
 } as const;
 

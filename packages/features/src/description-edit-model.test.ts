@@ -63,7 +63,7 @@ test("a failed save keeps the words, says why, and waits to be tried again or ty
 
   assert.deepEqual(unanswered.state, {
     kind: DOCUMENT_EDITOR_STATE.FAILED,
-    note: "Not saved: the service did not answer.",
+    note: "Not saved: could not connect. Check your internet connection.",
   });
   assert.deepEqual(tooLong.state, {
     kind: DOCUMENT_EDITOR_STATE.FAILED,

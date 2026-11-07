@@ -8,7 +8,8 @@ import type { AccountPreferencesClient } from "./account-preferences-client.js";
 import type { SettingsStore } from "./settings-store.js";
 
 /** Why an experiment's switch did not move: the service did not answer the write. */
-export const EXPERIMENT_UNANSWERED = "The service did not answer. Try again.";
+export const EXPERIMENT_UNANSWERED =
+  "Could not connect. Check your internet connection and try again.";
 
 /** Why an experiment's switch did not move: the account it was pressed for signed out before the service answered. */
 export const EXPERIMENT_ACCOUNT_CHANGED = "The account changed before that switch landed.";

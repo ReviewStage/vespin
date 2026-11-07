@@ -103,7 +103,7 @@ const RETRY = { kind: TERMINAL_ACTION.RETRY, label: "Retry now" } as const;
 
 /** What the unreachable bar says, by why. */
 const UNREACHED_WORDS = {
-  [TERMINAL_UNREACHED.SERVICE]: "The service did not answer.",
+  [TERMINAL_UNREACHED.SERVICE]: "Could not connect. Check your internet connection.",
   [TERMINAL_UNREACHED.SANDBOX]: "The agent’s sandbox didn’t answer.",
   [TERMINAL_UNREACHED.SNAPSHOT_GONE]:
     "This sandbox shut down after being idle. Send the agent a message to start a fresh one.",
@@ -125,8 +125,8 @@ function exitedBar(code: number | undefined): TerminalBar {
 
 /** Why a Local tab's mirror failed, as its bar says it before it tries again. */
 const MIRROR_FAILURE_WORDS = {
-  [MIRROR_FAILURE.UNREACHABLE]: "The service did not answer",
-  [MIRROR_FAILURE.REFUSED]: "The service refused the mirror",
+  [MIRROR_FAILURE.UNREACHABLE]: "Could not connect",
+  [MIRROR_FAILURE.REFUSED]: "The mirror was refused",
   [MIRROR_FAILURE.NOT_RUNNING]: "The agent’s sandbox is not running",
   [MIRROR_FAILURE.UNAVAILABLE]: "The agent’s sandbox did not answer",
   [MIRROR_FAILURE.CLOSED]: "The connection to the agent’s sandbox closed",

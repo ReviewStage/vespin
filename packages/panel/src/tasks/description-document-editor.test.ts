@@ -1039,7 +1039,11 @@ test("words whose save is refused as the developer leaves the description are ke
   await settle();
 
   assert.equal(open().markdown, `${BODY}Mine.\n`, "the editor opens on the kept words");
-  assert.ok(container.textContent?.includes("Not saved: the service did not answer."));
+  assert.ok(
+    container.textContent?.includes(
+      "Not saved: could not connect. Check your internet connection.",
+    ),
+  );
   assert.equal(newestToastSays(), undefined, "the toast goes once the words are back");
   assert.equal(sent.length, 1, "nothing saves them on its own");
 });

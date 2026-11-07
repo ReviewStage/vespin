@@ -212,7 +212,8 @@ export function fencedSkillFile(text: string): string {
 
 /** What a failed call says, each after the skill it names where the service named one. */
 const FAILURE_WORDS = {
-  [INSTALLED_SKILL_CALL_FAILURE.UNANSWERED]: () => "The service could not be reached. Try again.",
+  [INSTALLED_SKILL_CALL_FAILURE.UNANSWERED]: () =>
+    "Could not connect. Check your internet connection and try again.",
   [INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND]: () =>
     "That skill or workspace is no longer yours to reach.",
   [INSTALLED_SKILL_CALL_FAILURE.NOT_PERMITTED]: () =>

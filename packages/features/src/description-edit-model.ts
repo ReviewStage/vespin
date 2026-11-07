@@ -69,7 +69,7 @@ export interface DocumentEditor {
 
 /** What a failed save says beside the editor, by why it failed. */
 const FAILURE_NOTE = {
-  [TASK_CALL_FAILURE.UNANSWERED]: "Not saved: the service did not answer.",
+  [TASK_CALL_FAILURE.UNANSWERED]: "Not saved: could not connect. Check your internet connection.",
   [TASK_CALL_FAILURE.NOT_FOUND]: "Not saved: this task no longer exists.",
   [DESCRIPTION_EDIT_REFUSAL.TOO_LONG]: "Not saved: the description is too long.",
 } as const satisfies Record<TasksEditFailure, string>;
