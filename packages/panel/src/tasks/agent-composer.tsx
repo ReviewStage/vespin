@@ -445,6 +445,7 @@ export function AgentComposer({
   agentId,
   status,
   stoppable = status === AGENT_STATUS.RUNNING,
+  steers = stoppable,
   composer,
   model,
   models,
@@ -481,8 +482,10 @@ export function AgentComposer({
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
   status: AgentStatus;
-  /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and only while a Stop has something to stop where the tab knows (`offersStop`). */
+  /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while it may still write where the tab knows (`offersStop`). */
   stoppable?: boolean;
+  /** Whether a message sent now steers a turn under way rather than opening one: where Stop stands, where unsaid (`turnUnderWay`). */
+  steers?: boolean;
   composer: AgentComposerControl;
   /** What the agent runs on and its chip's change; nothing while it is not yet known, which draws no chip. */
   model: AgentModelControl | undefined;
@@ -703,7 +706,7 @@ export function AgentComposer({
       statuses,
       place: {
         disabled: servers?.disabled ?? [],
-        handed: stoppable ? SERVER_HANDED.STEERS : SERVER_HANDED.OPENS,
+        handed: steers ? SERVER_HANDED.STEERS : SERVER_HANDED.OPENS,
       },
     },
     onNote: (words) => {

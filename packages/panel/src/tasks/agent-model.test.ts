@@ -4,6 +4,7 @@ import {
   AGENT_LAUNCH,
   AGENT_PAYER,
   AGENT_RUNTIME,
+  AGENT_STATUS,
   type AgentPullRequest,
   type AgentTranscriptMessage,
   CHECK_SUMMARY,
@@ -40,6 +41,7 @@ import {
   noteWhileOffline,
   offeredModels,
   offersContinue,
+  offersStop,
   openingLineOf,
   pilotTarget,
   placedMessages,
@@ -500,6 +502,15 @@ test("a working agent is starting until its turn opens, saying what a host's lau
   );
   assert.equal(workingLineWords("thinking", waiting), "Thinking…");
   assert.equal(workingLineWords("starting"), "Starting…");
+});
+
+test("Stop is offered while an agent may still write, a stalled one starting or awaiting its turn included, and not once it has ended", () => {
+  // A line awaiting a turn that never opens reads running with nothing yet to cancel, which a Stop settles where its runner went quiet.
+  const awaitingItsTurn = { status: AGENT_STATUS.RUNNING, stoppable: false } as const;
+  assert.equal(offersStop(awaitingItsTurn), true);
+  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), true);
+  assert.equal(offersStop({ status: AGENT_STATUS.COMPLETED }), false);
+  assert.equal(offersStop({ status: AGENT_STATUS.CANCELED }), false);
 });
 
 test("the working line counts from the press of the line that opened the turn, through the turn and a line steering it", () => {

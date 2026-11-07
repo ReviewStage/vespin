@@ -488,11 +488,19 @@ export function agentStillWriting(status: AgentStatus): boolean {
 }
 
 /**
- * Whether the agent's tab offers Stop: it runs, and its service has not said
- * a Stop would stop nothing (`stoppable`), as after a Stop already taken, so
- * a press is never dropped unheard. A starting agent has no turn yet to stop.
+ * Whether the agent's tab offers Stop: whenever it may still write, starting
+ * or with a line awaiting its turn included. Note that we offer it where no
+ * turn runs yet, because a Stop first settles a runner that went quiet
+ * (`lapsed-runner.ts`), which is all a stalled agent needs, as an agent's
+ * `stop_agent` already does; a press that found nothing to stop yet says so
+ * (`STOP_NOTHING_YET`), so it is never dropped unheard.
  */
-export function offersStop(agent: Pick<AgentSummary, "status" | "stoppable">): boolean {
+export function offersStop(agent: Pick<AgentSummary, "status">): boolean {
+  return agentStillWriting(agent.status);
+}
+
+/** Whether a turn of the agent's runs that a message steers, rather than one it opens: it runs, and its service has not said its turn is stopped or not open yet (`stoppable`). */
+export function turnUnderWay(agent: Pick<AgentSummary, "status" | "stoppable">): boolean {
   return agent.status === AGENT_STATUS.RUNNING && agent.stoppable !== false;
 }
 
@@ -748,6 +756,9 @@ export const START_FAILED_AWAY = "The agent could not be started.";
 
 /** What the toast says when the service did not stop an agent. */
 export const STOP_FAILED = "The agent could not be stopped. Try again.";
+
+/** What the toast says when the agent a Stop answered still reads at work: it found no turn open to cancel, and no runner gone quiet to settle. */
+export const STOP_NOTHING_YET = "There's nothing to stop yet. Try again once the agent is working.";
 
 /** What the toast says when the service took no Try again on a failed turn's end line, which then offers it again. */
 export const RETRY_FAILED = "The message could not be sent again.";

@@ -1176,9 +1176,9 @@ export const agentSummarySchema = EffectSchema.Struct({
    * False while the agent reads running but a Stop has nothing to stop
    * (`turnStoppable`): its turn already stopped, with a line written since
    * awaiting the turn it opens, or a line awaiting its turn beside none
-   * running. Its tab offers Stop only where this is not false, so a press is
-   * never taken and silently dropped. Absent otherwise, and from a service
-   * older than it.
+   * running. Its tab reads a message sent now as steering a turn under way
+   * only where this is not false. Absent otherwise, and from a service older
+   * than it.
    */
   stoppable: EffectSchema.optionalKey(EffectSchema.Literal(false)),
   /**

@@ -180,6 +180,7 @@ import {
   threadLineOf,
   transcriptRowKey,
   turnStretches,
+  turnUnderWay,
   unreadOpeningLine,
   wakeupDelayOf,
   workerLines,
@@ -3056,6 +3057,7 @@ function AgentTabView({
             agentId={agent.id}
             status={agent.status}
             stoppable={offersStop(agent)}
+            steers={turnUnderWay(agent)}
             composer={composer}
             model={model}
             models={models}
