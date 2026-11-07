@@ -453,7 +453,7 @@ interface SentCall {
 /**
  * The native harnesses as the suite's script answers them, acting for the
  * agent's starter, each call written down beside every other: an open takes
- * a new session, a message is retired once the script says so, and a cancel
+ * a new session and claims the record for it, a message is retired once the script says so, and a cancel
  * answers the status the script names.
  */
 function harnessRecording(
@@ -479,10 +479,14 @@ function harnessRecording(
       body: JSON.stringify(body),
     });
   const sessionsOf = (account: string): AgentSessions => ({
+    // An open claims the conversation's record for the session it takes, as the harness does (`runner-sessions.ts`).
     open: (message) =>
-      Effect.sync(() => {
+      Effect.promise(async () => {
         recorded(SESSIONS_PATH, account, message, { message: message.message });
-        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: sessionId() } as const;
+        const session = sessionId();
+        const target = { userId: account, conversationId: message.conversationId };
+        await database.run(claimRuntimeSession(target, session, new Date(NOW)));
+        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: session } as const;
       }),
     send: (session, message) =>
       Effect.sync(() => {

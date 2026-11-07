@@ -134,6 +134,7 @@ import {
 } from "@repo/database/models/conversation-rewind";
 import { deviceAgentAwaitsUpdate } from "@repo/database/models/device-agent-store";
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import {
   ANY_LAUNCH,
   clearRunnerLines,
@@ -328,8 +329,8 @@ const MINTED_AT_DIGITS = 12;
 
 /**
  * A session id the harness's prefix begins, minted at the instant given: the
- * instant in fixed-width hex, then a fresh UUID. The instant first is what
- * lets a session opened later claim the conversation's record over one that
+ * instant in fixed-width hex, then a fresh UUID. The instant is what lets a
+ * session opened later claim the conversation's record over one that
  * ended (`claimRuntimeSession`, forward only, by the instant each was minted in,
  * whatever prefix either begins with).
  */
@@ -2079,6 +2080,29 @@ export const runnerSessions = <
         } as const;
       });
 
+    /**
+     * The conversation's record claimed for a session now opening, before its
+     * first line is queued or its launch scheduled, so a claim that fails
+     * fails the open with nothing started, rather than answering failed for
+     * words a launch then takes. Note that a claim refused is no failure,
+     * because the record then names a session minted after this one, which
+     * is the conversation's current one, as when a Start's open and a
+     * message's race on a fresh agent; it is said in the log and the open
+     * goes on.
+     */
+    const claimedRecord = (agent: Agent, sessionId: string) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        const recorded = yield* claimRuntimeSession(
+          { userId: agent.userId, conversationId: agent.conversationId },
+          sessionId,
+          new Date(now),
+        );
+        if (!recorded) {
+          yield* Effect.logInfo("a native session found its record held by a later session");
+        }
+      });
+
     const sessions: NativeSessions<Turn> = {
       // An open answers once the plan's credential is read, so a plan refused or at its limit is
       // refused at once; the sandbox, the checkout, and the launch run past the answer of the
@@ -2095,6 +2119,7 @@ export const runnerSessions = <
             return yield* Effect.gen(function* () {
               const layout = yield* machine.layout(agent);
               const credential = yield* harness.launch(agent, layout);
+              yield* claimedRecord(agent, sessionId);
               const first = messageLine(message, layout);
               const withdrawn = layout.linesRead
                 ? Effect.ignore(withdrawRunnerLine(userId, agent.id, first.line.uuid))

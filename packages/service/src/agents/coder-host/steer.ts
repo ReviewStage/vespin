@@ -344,7 +344,7 @@ const handedToHarness = (
       .open(message)
       .pipe(Effect.catchTag("SessionUnreachable", unreached));
     // Note that the open claims the fresh session's record before it answers accepted, still under the
-    // conversation's dispatch claim (`runtime-sessions.ts`), because a message sent in between would read
+    // conversation's dispatch claim (`runner-sessions.ts`), because a message sent in between would read
     // the ended session, open a second fresh one, and the newer claim would refuse the first, words and all.
     if (opened.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
       outcome.refused = failedCallRefusal(opened);

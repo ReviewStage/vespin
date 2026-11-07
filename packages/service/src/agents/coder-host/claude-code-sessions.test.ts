@@ -43,6 +43,7 @@ import {
   setPlanStatus,
   setProviderKeyForAgents,
 } from "@repo/database/models/provider-key-store";
+import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
@@ -599,6 +600,11 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(sandbox !== undefined);
         assert.equal(sandbox.image, IMAGE);
         assert.equal(sandbox.tags.sessionId, opened.sessionId);
+        // The open claimed the conversation's record for the session it answered.
+        assert.equal(
+          yield* recordedRuntimeSession({ userId, conversationId: agent.conversationId }),
+          opened.sessionId,
+        );
         // The working folder an agent with no repository works in.
         assert.ok(
           api.runs.some((run) => run.args.join(" ").includes("mkdir -p /workspace/repository")),

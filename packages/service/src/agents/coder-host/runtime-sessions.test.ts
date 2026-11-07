@@ -19,10 +19,7 @@ import {
   setProviderKeyForAgents,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
-import {
-  claimRuntimeSession,
-  recordedRuntimeSession,
-} from "@repo/database/models/recorded-session";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { keepRunsOnPick, readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -311,6 +308,12 @@ it.layer(Layer.merge(getTestDB(), GITHUB))(
           const sessions = yield* routedSessions(teammate).pipe(Effect.provide(native));
           const nativeOpened = yield* sessions.open(messageTo(onClaudeCode));
           assert.ok(nativeOpened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+          // The harness claims the record as it opens (`runner-sessions.ts`), which this fake stands in for.
+          yield* claimRuntimeSession(
+            { userId: owner, conversationId: onClaudeCode.conversationId },
+            nativeOpened.sessionId,
+            new Date(0),
+          );
           yield* claimRuntimeSession(
             { userId: owner, conversationId: onRetired.conversationId },
             "wrun_eve",
@@ -368,17 +371,11 @@ it.layer(Layer.merge(getTestDB(), GITHUB))(
           assert.deepEqual(agentSessions.calls, []);
           assert.deepEqual(claudeCode.calls, []);
 
-          const nativeSession = yield* everyCall(sessions, onClaudeCode);
+          yield* everyCall(sessions, onClaudeCode);
           assert.deepEqual(heard(claudeCode), ["open", "send", "cancel", "reset"]);
           assert.deepEqual(agentSessions.calls, []);
           // A launch and a message act for the agent's starter, whose plan pays; a cancel or reset for the caller.
           assert.deepEqual(actingFor, [owner, owner, teammate, teammate]);
-          // The session the harness opened is the conversation's record.
-          const recorded = yield* recordedRuntimeSession({
-            userId: owner,
-            conversationId: onClaudeCode.conversationId,
-          });
-          assert.equal(recorded, nativeSession);
         }),
     );
 
@@ -729,15 +726,14 @@ it.layer(Layer.merge(getTestDB(), GITHUB))(
           const sessions = yield* routedSessions(teammate).pipe(Effect.provide(native));
           const session = yield* everyCall(sessions, onCodex);
           assert.ok(session.startsWith(NATIVE_SESSION_PREFIX.codex));
+          // The harness claims the record as it opens (`runner-sessions.ts`), which this fake stands in for.
+          yield* claimRuntimeSession(
+            { userId: owner, conversationId: onCodex.conversationId },
+            session,
+            new Date(0),
+          );
           assert.deepEqual(heard(codex), ["open", "send", "cancel", "reset"]);
           assert.deepEqual(actingFor, [owner, owner, teammate, teammate]);
-          assert.equal(
-            yield* recordedRuntimeSession({
-              userId: owner,
-              conversationId: onCodex.conversationId,
-            }),
-            session,
-          );
 
           // The agent doors' and the planner's router.
           const route = yield* sessionsRouter.pipe(Effect.provide(native));

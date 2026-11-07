@@ -16,7 +16,7 @@
  *   starts one. A native one is
  *   handed to that harness's sessions acting for the agent's starter, whose
  *   plan pays for it, and a session it opens claims the conversation's
- *   record, or the open answers failed where the claim did.
+ *   record before its launch is scheduled (`runner-sessions.ts`).
  * - `cancel` and `reset` name a session alone, so they are
  *   answered by the harness that minted it (`native-runtime.ts`); a session
  *   no harness minted runs no turn and holds nothing, so it is answered so
@@ -35,13 +35,10 @@ import {
   readAgentRouting,
   recordAgentSeen,
 } from "@repo/database/models/agent-store";
-import {
-  claimRuntimeSession,
-  recordedRuntimeSession,
-} from "@repo/database/models/recorded-session";
+import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
-import { causeKind, failureKind } from "@repo/runtime/effect";
-import { Clock, Context, Effect, Option } from "effect";
+import { failureKind } from "@repo/runtime/effect";
+import { Context, Effect, Option } from "effect";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
   HOSTED_REFUSAL,
@@ -60,7 +57,6 @@ import {
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
-  type SessionMessage,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
 import { agentLogIds } from "./agent-log.js";
@@ -140,12 +136,6 @@ const UNREAD = {
   status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
 } as const;
 
-/** What an open answers where the claim of the conversation's record for the session it opened failed. */
-const UNCLAIMED = {
-  outcome: SESSION_SEND_OUTCOME.FAILED,
-  status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
-} as const;
-
 /** What a cancel of a session no harness minted answers: it ended for good, so no turn of it is under way. */
 const NO_TURN = { outcome: SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN } as const;
 
@@ -215,39 +205,6 @@ function routed<Turn extends SessionTurn>(
       Effect.annotateLogs(agentLogIds({ conversationId })),
     );
 
-  /**
-   * Whether the session a native open answered was put to the conversation's
-   * record. Note that a claim refused is no failure, because the record then
-   * names a session minted after this one, which is the conversation's
-   * current session, as when a Start's open and a message's race on a fresh
-   * agent; it is said in the log and the open stands. A claim that fails
-   * answers false, because every call that reads the record, the runner's
-   * keep-alive and END, the tunnel, the Terminal, and a Stop among them,
-   * would go on aiming at the session before it.
-   */
-  const claimed = (starter: string, message: SessionMessage<Turn>, sessionId: string) =>
-    Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      const recorded = yield* claimRuntimeSession(
-        { userId: starter, conversationId: message.conversationId },
-        sessionId,
-        new Date(now),
-      );
-      if (!recorded) {
-        yield* Effect.logInfo("a native session found its record held by a later session");
-      }
-      return true;
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Effect.as(
-          Effect.logWarning(`a native session did not claim its record: ${causeKind(cause)}`),
-          false,
-        ),
-      ),
-      Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
-      Effect.provideContext(store),
-    );
-
   const sessions: AgentSessions<Turn> = {
     open: (message) =>
       Effect.gen(function* () {
@@ -257,9 +214,7 @@ function routed<Turn extends SessionTurn>(
         if ("ended" in route) return ENDED;
         const reached = harness(route.runtime, route.starter);
         if (Option.isNone(reached)) return NOT_HERE;
-        const opened = yield* (yield* reached.value).open(message);
-        if (opened.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return opened;
-        return (yield* claimed(route.starter, message, opened.sessionId)) ? opened : UNCLAIMED;
+        return yield* (yield* reached.value).open(message);
       }),
 
     send: (sessionId, message) =>
