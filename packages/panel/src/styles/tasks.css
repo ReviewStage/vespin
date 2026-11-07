@@ -180,6 +180,49 @@
   margin-top: 0.25em;
 }
 
+/* A divider ProseMirror holds selected whole, as a click on its line, an
+   arrow onto it, or a Backspace up to it leaves it: drawn in the accent, on a
+   wash outside its box so nothing moves, so the caret does not seem to vanish
+   and a Backspace or Delete is seen to take it. Note that TipTap's own base
+   rules are left out (`description-editor.ts`'s `injectCSS`), so nothing else
+   draws a selected node. */
+.description-document-text hr.ProseMirror-selectednode {
+  border-top-color: var(--accent);
+  border-radius: var(--ui-radius-6);
+  box-shadow: 0 0 0 0.3em var(--ui-color-fill-selected);
+}
+
+/* The caret where no line stands to take one, between two dividers or past
+   one at the text's ends (TipTap's gap cursor), which TipTap's left-out base
+   rules drew: out of the flow, so it moves no block as it stands, and a short
+   accent line blinking where the next block's line would start. */
+.description-document-text .ProseMirror-gapcursor {
+  display: none;
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+}
+
+.description-document-text.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.description-document-text .ProseMirror-gapcursor::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  width: 1.5em;
+  border-top: 1px solid var(--accent);
+  animation: description-gap-caret-blink 1.1s steps(2, start) infinite;
+  animation-play-state: var(--ui-loop-motion);
+}
+
+@keyframes description-gap-caret-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
 /* What the editor keeps byte for byte but does not draw as its own: inline
    HTML, a footnote, a link's definition, a block of HTML. */
 .description-raw-block {
