@@ -46,6 +46,7 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import type { StoredStartedFrom } from "@repo/database/schemas/agent";
@@ -70,7 +71,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer, temporaryDirectory } from "@repo/wire/testing";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   Clock,
   DateTime,
@@ -1780,6 +1781,58 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(relaunch?.exitCode, null, "the newer launch's runner runs on");
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, agent.id));
         assert.equal(routing.runnerTokenHash, runnerTokenDigest(bearer));
+      }),
+  );
+
+  it.effect(
+    "a turn whose line no runner takes fails as untaken at its pickup deadline from its queueing however often its runner crashes and relaunches meanwhile, and a line written past that deadline queues a turn of its own, whose runner the reap leaves running",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        const queuedAt = yield* Clock.currentTimeMillis;
+        const opened = yield* sessions.open(yield* startLine(agent, "Fix the invitations."));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const untaken = Option.getOrThrow(yield* queuedTurnOf(agent.conversationId));
+        /** The newest launch's runner crashes before it takes a line, and the message given relaunches it. */
+        const relaunched = (sent: ReturnType<typeof message>) =>
+          Effect.gen(function* () {
+            const crashed = api.commands.at(-1);
+            assert.ok(crashed !== undefined);
+            crashed.exitCode = 1;
+            const launches = api.commands.length;
+            const answer = yield* sessions.send(opened.sessionId, sent);
+            assert.equal(answer.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+            assert.equal(api.commands.length, launches + 1);
+          });
+        for (const text of ["Are you there?", "Hello?", "Still nothing?"]) {
+          yield* TestClock.adjust(Duration.minutes(2));
+          yield* relaunched(message(agent, text));
+        }
+
+        yield* TestClock.adjust(
+          Duration.millis(
+            queuedAt + TURN_DEADLINE.PICKUP_MS + 1 - (yield* Clock.currentTimeMillis),
+          ),
+        );
+        // A line written past the deadline, before any reap, as one is while another call holds the runner lease.
+        yield* relaunched(yield* startLine(agent, "Try once more."));
+        const relaunch = api.commands.at(-1);
+        const reaped = yield* reconcileAgent(agent).pipe(Effect.provide(api.layer));
+
+        assert.deepEqual(reaped, [untaken]);
+        const [failed] = yield* (yield* Database)
+          .select({ failure: turns.failure })
+          .from(turns)
+          .where(eq(turns.id, untaken));
+        assert.equal(failed?.failure, TURN_FAILURE.LINE_UNTAKEN);
+        const waiting = Option.getOrThrow(yield* queuedTurnOf(agent.conversationId));
+        assert.notEqual(waiting, untaken, "the late line awaits a turn of its own");
+        assert.equal(relaunch?.exitCode, null, "the runner launched for the late line runs on");
       }),
   );
 

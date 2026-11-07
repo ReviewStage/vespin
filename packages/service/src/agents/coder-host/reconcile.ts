@@ -23,10 +23,11 @@
  * otherwise, which a turn past its progress deadline is whatever its
  * runner's state. Every end is a compare-and-set on the turn's status, its
  * attempt, and its standing lapsed at the instant read
- * (`settleLapsedTurns`), and only then is the runner let go, where a turn
- * it settled was that runner's own: one still queued, whose pickup deadline
- * each launch restarts, or one running under the newest launch, which the
- * lease keeps from moving while the reap runs. A runner is let go as far as
+ * (`settleLapsedTurns`), and only then is the runner let go, for a turn of
+ * its own it settled: one it ran under the newest launch, which the lease
+ * keeps from moving while the reap runs, or one it never took, where no turn
+ * stands open for it to take, as one a line written past that turn's deadline
+ * queued for a runner launched since does. A runner is let go as far as
  * it was read: its bearer dropped, so nothing it posts after is taken; its
  * command ended where it may still run; and its record cleared, so the next
  * message relaunches. So a runner that posts in between is fenced out by the
@@ -63,6 +64,7 @@ import {
 import { devicesNamed } from "@repo/database/models/device-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import {
+  hasOpenTurn,
   type LapsedTurn,
   lapsedAgents,
   lapsedTurnsOf,
@@ -239,9 +241,8 @@ const runnerStanding = (machine: MachineLifecycle, agent: ReconciledAgent) =>
 
 /**
  * Whether the lapsed turn was the agent's newest launch's, the one whose
- * runner the reap read: a turn still queued awaits that runner, since each
- * launch restarts its pickup deadline; a running one is its runner's where
- * it started under that launch.
+ * runner the reap read: a turn still queued awaits whatever runner that is;
+ * a running one is its runner's where it started under that launch.
  */
 function ownedByLaunch(turn: LapsedTurn, launch: number): boolean {
   return turn.status === TURN_STATUS.QUEUED || turn.attempt === launch;
@@ -425,8 +426,11 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const settled = new Set(yield* settleLapsedTurns(writer, agent.conversationId, ends, now, now));
     if (settled.size === 0) return [];
-    // A runner is let go only for a turn of its own it settled: one a newer launch replaced leaves that launch's runner be.
-    if (lapsed.some((turn) => settled.has(turn.id) && ownedByLaunch(turn, launch))) {
+    // A runner is let go only for a turn of its own it settled: one a newer launch replaced leaves that launch's
+    // runner be, and one it never took leaves it be where a turn stands open for it to take.
+    const own = lapsed.filter((turn) => settled.has(turn.id) && ownedByLaunch(turn, launch));
+    const ran = own.some((turn) => turn.status === TURN_STATUS.RUNNING);
+    if (ran || (own.length > 0 && !(yield* hasOpenTurn(agent.conversationId)))) {
       yield* letGo(machine, agent, runner);
     }
     const failed = ends.flatMap(({ turn, end }) =>

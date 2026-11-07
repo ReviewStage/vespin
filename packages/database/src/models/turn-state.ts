@@ -11,10 +11,12 @@
  * A coding agent's line awaits a turn from the moment it is written
  * (`messages.awaits_turn_id`): the open turn it joins, where one stands that
  * no Stop was asked of, or a turn queued for it in the same transaction,
- * with a pickup deadline, which each launch of the agent's runner restarts.
- * A runner that takes the line starts that turn under its own launch
- * (`turns.attempt`), and from then every move of the turn
- * names the attempt: a start, its progress pushing its deadline on, and its
+ * with a pickup deadline that runs from its queueing and never moves, however
+ * often the agent's runner is launched. A line written past an open turn's
+ * deadline joins nothing, since that turn is over by its record, and queues a
+ * turn of its own. A runner that takes the line starts that turn under its
+ * own launch (`turns.attempt`), and from then every move of the turn
+ * names the attempt: a start, its progress (and nothing else) pushing its deadline on, and its
  * end, so a runner a newer launch replaced, or whose turn was failed, moves
  * nothing. A turn that ends well with lines it never took queues a turn for
  * them; a turn that fails keeps them, to be resent; and a Stop pulls the
@@ -32,7 +34,7 @@
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin } from "@repo/wire";
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -255,27 +257,6 @@ const pushDeadlines = SqlSchema.findAll({
     ),
 });
 
-const pushPickups = SqlSchema.findAll({
-  Request: Schema.Struct({ conversationId: Schema.String, until: Schema.Date }),
-  Result: IdSchema,
-  execute: (request) =>
-    Database.use((db) =>
-      db
-        .update(turns)
-        .set({ leaseUntil: request.until })
-        .where(
-          and(
-            eq(turns.conversationId, request.conversationId),
-            eq(turns.status, TURN_STATUS.QUEUED),
-            // A Stop's deadline is the Stop's: a launch after it pushes nothing on.
-            isNull(turns.cancelRequestedAt),
-            lt(turns.leaseUntil, request.until),
-          ),
-        )
-        .returning({ id: turns.id }),
-    ),
-});
-
 const stampStop = SqlSchema.findAll({
   Request: Schema.Struct({
     turnId: Schema.String,
@@ -344,11 +325,11 @@ const settleKept = SqlSchema.void({
     ),
 });
 
-/** The newest open turn of the conversation no Stop was asked of: the one a line written now joins. */
+/** The newest open turn of the conversation, still inside its deadline at `at`, no Stop was asked of: the one a line written then joins. */
 const findJoinable = SqlSchema.findOneOption({
-  Request: Schema.Struct({ conversationId: Schema.String }),
+  Request: Schema.Struct({ conversationId: Schema.String, at: Schema.Date }),
   Result: IdSchema,
-  execute: ({ conversationId }) =>
+  execute: ({ conversationId, at }) =>
     Database.use((db) =>
       db
         .select({ id: turns.id })
@@ -358,6 +339,12 @@ const findJoinable = SqlSchema.findOneOption({
             eq(turns.conversationId, conversationId),
             inArray(turns.status, [...OPEN_STATUSES]),
             isNull(turns.cancelRequestedAt),
+            // Not lapsed at `at`, as `lapsedAt` reads it: a turn with no deadline, or not started, is not.
+            or(isNull(turns.leaseUntil), gte(turns.leaseUntil, at)),
+            or(
+              isNull(turns.startedAt),
+              gte(turns.startedAt, new Date(at.getTime() - TURN_DEADLINE.CAP_MS)),
+            ),
           ),
         )
         .orderBy(desc(turns.queuedAt), desc(turns.id))
@@ -366,6 +353,21 @@ const findJoinable = SqlSchema.findOneOption({
 });
 
 /** The conversation's oldest queued turn: the one a runner opening a turn takes. */
+const findOpen = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String }),
+  Result: IdSchema,
+  execute: ({ conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id })
+        .from(turns)
+        .where(
+          and(eq(turns.conversationId, conversationId), inArray(turns.status, [...OPEN_STATUSES])),
+        )
+        .limit(1),
+    ),
+});
+
 const findQueued = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String }),
   Result: IdSchema,
@@ -514,9 +516,10 @@ export interface AwaitedTurn {
  * The turn a coding agent's line written at `now` awaits: the newest open
  * turn no Stop was asked of, which takes it as a steer or as its next line,
  * or a turn queued for it here, its id minted by `mint`, with its pickup
- * deadline. Note that a turn a Stop was asked of is joined by nothing,
- * because the Stop ends what it was doing and a line written after it opens
- * a turn of its own. Its caller writes the line in the same transaction.
+ * deadline. Note that a turn a Stop was asked of, or one past its deadline,
+ * is joined by nothing, because the Stop ends what it was doing and the
+ * deadline says it is over, so a line written after either opens a turn of
+ * its own. Its caller writes the line in the same transaction.
  */
 export function awaitedTurn(
   target: TurnTarget,
@@ -524,7 +527,7 @@ export function awaitedTurn(
   mint: () => string,
 ): TurnStateEffect<AwaitedTurn> {
   return Effect.gen(function* () {
-    const open = yield* findJoinable({ conversationId: target.conversationId });
+    const open = yield* findJoinable({ conversationId: target.conversationId, at: now });
     if (Option.isSome(open)) return { turnId: open.value.id, queued: false };
     const turnId = mint();
     yield* insertQueued({
@@ -742,17 +745,9 @@ export function progressTurns(
   );
 }
 
-/**
- * Restarts the pickup deadline of the conversation's queued turns from a
- * launch at `now`, since the runner it starts is the one to take their
- * lines, and is owed the whole of it; answers how many it wrote. A turn a
- * Stop was asked of keeps the Stop's deadline.
- */
-export function restartPickup(conversationId: string, now: number): TurnStateEffect<number> {
-  return Effect.map(
-    pushPickups({ conversationId, until: new Date(now + TURN_DEADLINE.PICKUP_MS) }),
-    (rows) => rows.length,
-  );
+/** Whether the conversation holds a turn still open, queued for its runner or running. */
+export function hasOpenTurn(conversationId: string): TurnStateEffect<boolean> {
+  return Effect.map(findOpen({ conversationId }), Option.isSome);
 }
 
 /** The conversation's queued turn a runner opening a turn takes, oldest first; none where none is queued. */

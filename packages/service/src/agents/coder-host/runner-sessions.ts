@@ -143,7 +143,6 @@ import {
   withdrawRunnerLine,
 } from "@repo/database/models/runner-line-store";
 import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
-import { restartPickup } from "@repo/database/models/turn-state";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/features/agent-wire";
@@ -979,11 +978,6 @@ export const runnerSessions = <
             // An earlier launch's lines go but its untaken messages in the window, which this launch is handed.
             layout.linesRead ? clearedForLaunch(userId, agent.id) : Effect.void,
             recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer)),
-            // The runner this launch starts is owed the whole of a queued turn's pickup deadline, so
-            // no reap fails that turn, or lets this runner go, before it has had the time to take it.
-            Effect.flatMap(Clock.currentTimeMillis, (now) =>
-              restartPickup(agent.conversationId, now),
-            ),
             // The launch's swaps stand before the runner starts, so its first request carries the
             // real value: the machine starts the runner once every step here is done. Note that a
             // post refused for want of its bearer is refused for good.
