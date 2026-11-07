@@ -199,6 +199,17 @@ export class PanelManager {
     }
   }
 
+  /**
+   * Hands a payload to one living window, for what must happen once however
+   * many stand, a chime: the focused one, else the one an action aimed at
+   * the app lands on. Note that a closed window is only hidden, so its
+   * renderer still hears it.
+   */
+  pushToOne<Name extends EventPushName>(push: Name, payload: PushPayload<Name>): void {
+    const window = this.windows().find((each) => each.isFocused()) ?? this.primaryPanel();
+    if (window !== undefined) windowPushes.push(window.webContents, push, payload);
+  }
+
   /** The window an action aimed at the app lands on. */
   primaryPanel(): BrowserWindow | undefined {
     for (const window of this.#windows.values()) {

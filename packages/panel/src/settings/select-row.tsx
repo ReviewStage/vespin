@@ -30,6 +30,7 @@ export function SelectRow<Value extends string | number>({
   density,
   width,
   error,
+  action,
   write,
   onChange,
 }: RowChange<Value> & {
@@ -63,6 +64,8 @@ export function SelectRow<Value extends string | number>({
   width?: ChipWidth | undefined;
   /** What stops the caller's own save at this row, said where no write of the row's was refused. */
   error?: ShownError | undefined;
+  /** A control of the row's own beside the pop-up, as a Play beside a sound; none where the pop-up stands alone. */
+  action?: React.ReactNode;
 }): React.JSX.Element {
   const run = write === undefined ? onChange : write.run;
   const chosen = options.find((option) => option.value === value);
@@ -76,6 +79,7 @@ export function SelectRow<Value extends string | number>({
       error={refusalShown(write?.refusal, FAILURE_SURFACE.SETTING_WRITE) ?? error}
       density={density}
       width={width}
+      action={action}
       value={String(value)}
       valueLabel={chosen?.label ?? String(value)}
       valueIcon={chosen?.faces}

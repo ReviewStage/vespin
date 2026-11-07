@@ -313,6 +313,7 @@ export function composeDesktop(
             state.update({ notifications: { status } });
           }
         },
+        panels: windows.panels,
         report: config.report,
       });
       const notices = yield* linkClientNotices({

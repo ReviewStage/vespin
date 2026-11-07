@@ -29,6 +29,7 @@ import {
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { cssCustomProperties, RetryOffered, TimeTicks } from "@repo/ui";
+import { playCompletionSound } from "@repo/ui/completion-sound";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
@@ -630,6 +631,8 @@ function AppWindow(): React.JSX.Element {
       appBridge().onShowLink((link) => ("workspace" in link ? openLink(link) : openAccount(link))),
     [openLink, openAccount],
   );
+  // A chime main heard news for plays here, in the one window it was pushed to (`agent-notices.ts`'s `heard`).
+  useEffect(() => appBridge().onChime(playCompletionSound), []);
   // A link place loaded at its own address, or landed on with no step saved, is read by its route and opened as its link is (`places/link-places.ts`).
   useLinkPlaceLandings(openLink);
   // Where the window has stood, for back and forward, from the moment it

@@ -377,7 +377,10 @@ subagent's tab stays in the side panel.
   (`packages/host/src/agent-notices.ts`) and marks an agent that moves from writing
   to completed or failed once, unless the window is focused on that agent's
   tab, with no toast and no notification. The agent's tab reads in semibold
-  until it is shown.
+  until it is shown. A sound plays only where the developer turned one on
+  (Settings › Account › Sounds): once as a turn of an agent they started
+  ends, never on a Stop, in the background only while the window is behind,
+  and once for a burst of ends.
 - **Privacy.** Every word is the agent's, the developer's, or the description's, so
   the tab carries `ph-no-capture`.
 

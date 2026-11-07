@@ -4,6 +4,7 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { Effect, FiberSet, Queue, type Scope, Stream } from "effect";
 import {
   AgentNoticeDoors,
@@ -142,6 +143,13 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     followAccountInbox: () => accountInboxOf(host),
     accounts: Stream.map(state.changes, (document) => accountKey(document.account)),
     onInboxChanged: (inbox) => state.update({ inbox }),
+    sound: () => {
+      const stored = state.snapshot().settings?.stored;
+      return {
+        when: stored?.soundWhen ?? APP_SETTING_DEFAULTS.soundWhen,
+        sound: stored?.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
+      };
+    },
     report,
   });
   // A note that throws is reported rather than left to end the fiber, which would never resume.
@@ -211,7 +219,8 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
   // A command asked while the window is behind would otherwise wait unseen
   // until its timeout denies it, so each new ask is announced once, the one
   // notification the app posts, since Ask every time is the developer's own ask
-  // to be asked; the window in front shows the prompt itself.
+  // to be asked; the window in front shows the prompt itself. Each is news
+  // the notices chime for as well, where the account turned a sound on.
   const told = new Set<string>();
   yield* Effect.forkScoped(
     Stream.runForEach(
@@ -223,10 +232,12 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
           for (const ask of asks) {
             if (told.has(ask.id)) continue;
             told.add(ask.id);
+            const subject = { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: ask.id } as const;
+            notices.heard(subject);
             if (focused) continue;
             doors.post({
               ...MAC_COMMAND_ASK_NOTICE,
-              subject: { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: ask.id },
+              subject,
               onClick: presenter.openMacCommandAsk,
             });
           }

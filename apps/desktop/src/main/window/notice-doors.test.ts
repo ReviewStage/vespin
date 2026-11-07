@@ -52,6 +52,7 @@ function doors() {
   const answers: NotificationsStatus[] = [];
   const surface = electronNoticeDoors({
     onAnswered: (status) => answers.push(status),
+    panels: { pushToOne: ignore },
     report: ignore,
   });
   return { surface, answers };

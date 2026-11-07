@@ -219,6 +219,7 @@ export function PickerRow({
   density,
   indent,
   labelReplayUnmasked = false,
+  action,
   ...picker
 }: Omit<PickerProps, "describedBy" | "invalid"> & {
   /** Whether its name is the app's own words, which a screen recording shows as they read; masked where none is named. */
@@ -235,6 +236,8 @@ export function PickerRow({
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
   indent?: SettingsRowIndent | undefined;
+  /** A control of the row's own beside the picker, as a Play beside a sound; none where the picker stands alone. */
+  action?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <SettingsRow
@@ -246,11 +249,14 @@ export function PickerRow({
       error={replayMaskedError(error)}
     >
       {(control) => (
-        <Picker
-          {...picker}
-          describedBy={control["aria-describedby"]}
-          invalid={control["aria-invalid"]}
-        />
+        <>
+          <Picker
+            {...picker}
+            describedBy={control["aria-describedby"]}
+            invalid={control["aria-invalid"]}
+          />
+          {action}
+        </>
       )}
     </SettingsRow>
   );
