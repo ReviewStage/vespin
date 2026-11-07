@@ -86,8 +86,8 @@ function withSentrySourceMaps(options: BuildOptions): BuildOptions {
     // Sentry's guide asks for "hidden" maps; esbuild spells that `external`, a map named by no comment in the bundle.
     sourcemap: "external",
     plugins: [
-      ...(options.plugins ?? []),
-      // Sentry's plugin goes after all others.
+      // Note that Sentry's plugin goes first, because it gives a bundle its debug ID by wrapping
+      // its entry point, which the dispatcher's plugin would otherwise resolve before it sees it.
       sentryEsbuildPlugin({
         org: "stage-review",
         project: "vespin-web",
@@ -101,6 +101,7 @@ function withSentrySourceMaps(options: BuildOptions): BuildOptions {
           );
         },
       }),
+      ...(options.plugins ?? []),
     ],
   };
 }
