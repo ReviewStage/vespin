@@ -523,7 +523,7 @@ export const REPOSITORY_UNREACHED_NOTE = `${PRODUCT_NAME} cannot reach this task
 /** What a message no answer came back for says, which may have reached the agent all the same. */
 const NOT_HEARD_BACK = "No answer came back.";
 
-/** What a message no answer came back for says while the app does not reach the service, in place of `NOT_HEARD_BACK`: in the composer, beside its Retry, and alone where only the words are drawn, as an Inbox answer's are. */
+/** What a message no answer came back for says while the app does not reach the service, in place of `NOT_HEARD_BACK`: in the composer, whose Retry stands again once the app does (`RetryOffered`), and alone where only the words are drawn, as an Inbox answer's are. */
 export const UNHEARD_OFFLINE = {
   BESIDE_RETRY: "You're offline.",
   ALONE: "You're offline. Try again once you're back online.",
