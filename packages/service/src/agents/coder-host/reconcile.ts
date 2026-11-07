@@ -241,10 +241,9 @@ function endOf(turn: LapsedTurn, runner: RunnerStanding, at: Date): LostTurnEnd 
       failureDetail: PAST_CAP_DETAIL,
     };
   }
-  // Note that a runner that ended cleanly, as a warm one does past its window, lost nothing of a line it never took.
-  const failedExit = runner.kind === RUNNER.EXITED && runner.exit !== RUNNER_EXIT.ENDED;
   if (turn.status === TURN_STATUS.QUEUED) {
-    return runner.kind === RUNNER.EXITED && failedExit
+    // Note that a runner that ended cleanly, as a warm one does past its window, lost nothing of a line it never took.
+    return runner.kind === RUNNER.EXITED && runner.exit !== RUNNER_EXIT.ENDED
       ? {
           status: RUN_STATUS.FAILED,
           failure: TURN_FAILURE.RUNNER_LOST,

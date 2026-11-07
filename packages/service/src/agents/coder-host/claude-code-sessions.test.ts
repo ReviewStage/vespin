@@ -63,6 +63,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -86,7 +87,14 @@ import type { HttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { USER_ROLE } from "../../admin/admin-access.js";
-import { MESSAGE_AUTHOR, TURN_ORIGIN, TURN_STATUS } from "../../core.js";
+import {
+  MESSAGE_AUTHOR,
+  RUN_EVENT,
+  RUN_TURN_ORIGIN,
+  TURN_ORIGIN,
+  TURN_STATUS,
+  TURN_TRIGGER,
+} from "../../core.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
 import { recordingProductAnalytics, SERVER_EVENT } from "../../events/server-events.js";
 import { keptAfterResponse } from "../../http/after-response.js";
@@ -333,15 +341,22 @@ const handedLines = (userId: string, command: Parameters<typeof launchLines>[0])
     return read.map((line) => JSON.parse(line.text) as InputLine);
   });
 
-/** A turn of the agent's under way, as the events route queues one, by the id a Stop names it by. */
+/** A turn of the agent's under way, as the events route queues and starts one, by the id a Stop names it by. */
 const turnUnderWay = (userId: string, agent: Agent) =>
   Effect.gen(function* () {
     const turnId = randomUUID();
+    const target = { userId, conversationId: agent.conversationId };
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-    yield* writer.enqueueTurn(
-      { userId, conversationId: agent.conversationId },
-      { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED },
-    );
+    yield* writer.enqueueTurn(target, { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED });
+    yield* writer.consume(target, {
+      kind: RUN_EVENT.TURN_STARTED,
+      conversationId: sessionKey(agent.conversationId),
+      turnId,
+      sequence: 1,
+      origin: RUN_TURN_ORIGIN.TYPED,
+      trigger: TURN_TRIGGER.ASK,
+      at: yield* Clock.currentTimeMillis,
+    });
     return turnId;
   });
 
@@ -1343,7 +1358,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         yield* across(Fiber.join(forcing), CODER.RUNNER_LEASE.POLL, 5);
 
         assert.equal(canceled.outcome, SESSION_CANCEL_OUTCOME.ACCEPTED);
-        assert.equal(before.status, TURN_STATUS.QUEUED);
+        assert.equal(before.status, TURN_STATUS.RUNNING);
         assert.equal((yield* newestTurn(agent)).status, TURN_STATUS.CANCELED);
         assert.equal(api.commands.length, 1);
         assert.notEqual(api.commands[0]?.exitCode, null, "the runner was ended");

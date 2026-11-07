@@ -148,6 +148,7 @@ import { type ConversationTarget, storeWriter } from "@repo/database/models/writ
 import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
+import { TURN_STATUS } from "@repo/wire";
 import type { UserContent } from "ai";
 import {
   Cause,
@@ -1432,9 +1433,10 @@ export const runnerSessions = <
           deliveryId: sent.line.uuid,
         } as const;
         // Where the agent's turns stand as the message arrives, counted with how it reached the runner.
+        // Note that a turn queued for a runner, as the one this message's own send may have queued, runs nothing yet.
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
-        const turnRunning = turn !== undefined && RUNNING_TURN_STATUSES.has(turn.status);
+        const turnRunning = turn?.status === TURN_STATUS.RUNNING;
         // A session opened on experiments since changed is opened afresh, on the same place, its
         // conversation replayed into it: its harness's session is let go before anything is
         // handed, so every launch past here, the one a hand-on runs past the answer among them,
@@ -1890,7 +1892,7 @@ export const runnerSessions = <
       Effect.gen(function* () {
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
-        if (turn !== undefined && RUNNING_TURN_STATUSES.has(turn.status)) return;
+        if (turn?.status === TURN_STATUS.RUNNING) return;
         const found = yield* firstPlace(machine, userId, sessionId);
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
         const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
