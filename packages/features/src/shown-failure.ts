@@ -587,14 +587,25 @@ function sendableStack(cause: Error, sent: Error): string | undefined {
 /**
  * The error an issue is captured with: the cause's name, or its tag, its
  * message as it may be sent, its own frames, and the causes beneath it
- * likewise, so Sentry's linked errors read no message unredacted.
+ * likewise, so Sentry's linked errors read no message unredacted. Where the
+ * cause names or says nothing, as a bare condition or a lone code does, the
+ * error takes the name and message `unsaid` gives it: for the outermost,
+ * where the failure was shown and its code, because Sentry titles an issue
+ * by that error's name and message alone.
  */
-function sendableError(chain: readonly unknown[], facts: readonly CauseFacts[]): Error {
+function sendableError(
+  chain: readonly unknown[],
+  facts: readonly CauseFacts[],
+  unsaid: { readonly name: string; readonly message: string } = {
+    name: UNNAMED_CODE,
+    message: "",
+  },
+): Error {
   const [cause, ...beneath] = chain;
   const [own, ...beneathFacts] = facts;
   const linked = beneath.length === 0 ? undefined : { cause: sendableError(beneath, beneathFacts) };
-  const sent = new Error(own?.message ?? "", linked);
-  sent.name = own?.tag ?? own?.name ?? UNNAMED_CODE;
+  const sent = new Error(own?.message ?? unsaid.message, linked);
+  sent.name = own?.tag ?? own?.name ?? unsaid.name;
   const stack = cause instanceof Error ? sendableStack(cause, sent) : undefined;
   if (stack !== undefined) sent.stack = stack;
   return sent;
@@ -664,7 +675,8 @@ export function sendShownFailure(
     return { traceId };
   }
   sentry.logger.error(line, attributes);
-  const eventId = sentry.captureException(sendableError(chain, facts), {
+  const unsaid = { name: report.surface, message: code };
+  const eventId = sentry.captureException(sendableError(chain, facts, unsaid), {
     mechanism: { type: SHOWN_FAILURE_MECHANISM, handled: true },
     captureContext: {
       level: ISSUE_LEVEL,
