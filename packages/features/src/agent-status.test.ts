@@ -40,7 +40,7 @@ test("an agent with no turn reads starting through its grace and failed past it,
   assert.equal(statusClockEdge(undefined, standing(STARTING_GRACE_MILLIS + 1)), undefined);
 });
 
-test("a turn reads as its own word ended, a running one with a Stop asked reads canceled, and the clock moves no ended one", () => {
+test("a turn reads as its own word ended, a running one with a Stop asked reads canceled, one in a word this build does not know reads running, and the clock moves no ended one", () => {
   const running = turn(TURN_STATUS.RUNNING);
   assert.equal(agentStatusAt(running, standing(0)), AGENT_STATUS.RUNNING);
   assert.equal(agentStatusAt(turn(TURN_STATUS.QUEUED), standing(0)), AGENT_STATUS.RUNNING);
@@ -52,7 +52,7 @@ test("a turn reads as its own word ended, a running one with a Stop asked reads 
     agentStatusAt(turn(TURN_STATUS.SETTLED, { cancelRequested: true }), standing(0)),
     AGENT_STATUS.COMPLETED,
   );
-  assert.equal(agentStatusAt(turn("paused"), standing(0)), AGENT_STATUS.FAILED);
+  assert.equal(agentStatusAt(turn("waiting"), standing(0)), AGENT_STATUS.RUNNING);
   assert.equal(statusClockEdge(turn(TURN_STATUS.SETTLED), standing(0)), undefined);
 });
 

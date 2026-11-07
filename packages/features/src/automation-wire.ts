@@ -1,6 +1,6 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { AGENT_FAILURE, AGENT_STATUS, disabledServersSchema } from "./agent-wire.js";
+import { AGENT_STATUS, agentFailureSchema, disabledServersSchema } from "./agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
 import { chosenIdSchema, countedNumber, wireUuidSchema } from "./service-wire.js";
@@ -496,7 +496,7 @@ const automationRunSummarySchema = EffectSchema.Struct({
       /** Whether it runs on the reading account's own keys; absent from a service before it. */
       ownKey: EffectSchema.optionalKey(EffectSchema.Boolean),
       /** Why it failed, where it did, as its own end line says; absent otherwise, and from a service before it. */
-      failureReason: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(AGENT_FAILURE))),
+      failureReason: EffectSchema.optionalKey(agentFailureSchema),
     }),
   ),
   firedAt: countedNumber,

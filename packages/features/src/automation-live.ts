@@ -1,6 +1,6 @@
 import { Schema as EffectSchema } from "effect";
 import { agentStatusAt, type StatusTurn, statusClockEdge } from "./agent-status.js";
-import { AGENT_FAILURE, AGENT_STATUS } from "./agent-wire.js";
+import { AGENT_STATUS, agentFailureSchema } from "./agent-wire.js";
 import {
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -56,7 +56,7 @@ const runAgentFields = {
   turnLeaseUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   turnSessionEnded: EffectSchema.NullOr(EffectSchema.Boolean),
   awaitingLineAt: EffectSchema.NullOr(countedNumber),
-  failureWord: EffectSchema.NullOr(EffectSchema.Literals(Object.values(AGENT_FAILURE))),
+  failureWord: EffectSchema.NullOr(agentFailureSchema),
 };
 
 /** One run as its row delivers it. */

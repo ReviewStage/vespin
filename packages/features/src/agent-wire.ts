@@ -469,6 +469,33 @@ export const AGENT_FAILURE = {
 
 export type AgentFailure = (typeof AGENT_FAILURE)[keyof typeof AGENT_FAILURE];
 
+const FAILURE_WORDS: ReadonlySet<string> = new Set(Object.values(AGENT_FAILURE));
+
+function isAgentFailure(word: string): word is AgentFailure {
+  return FAILURE_WORDS.has(word);
+}
+
+/**
+ * A failure word as a reader decodes it: one this build does not know reads
+ * as `other`, a failure it has no words for, rather than refusing the whole
+ * answer, so a service that names one more failure than a desktop knows
+ * still answers that desktop its page. Note that its encoded side is typed
+ * as the vocabulary alone, because a write never names a word outside it,
+ * so an answer's encoded type stays the one its callers hold; its guard lets
+ * any word in only for the decode to read it.
+ */
+export const agentFailureSchema = EffectSchema.declare(
+  (input: unknown): input is AgentFailure => typeof input === "string",
+).pipe(
+  EffectSchema.decodeTo(
+    EffectSchema.Literals(Object.values(AGENT_FAILURE)),
+    SchemaTransformation.transform({
+      decode: (word): AgentFailure => (isAgentFailure(word) ? word : AGENT_FAILURE.OTHER),
+      encode: (failure): AgentFailure => failure,
+    }),
+  ),
+);
+
 /**
  * The files a message may carry, by the media type each travels as: an
  * image or a PDF, which the model reads as a file, or a text file of any
@@ -2694,7 +2721,7 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    */
   subagents: EffectSchema.optionalKey(EffectSchema.Array(agentSubagentStandingSchema)),
   title: EffectSchema.NullOr(EffectSchema.String),
-  failureReason: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(AGENT_FAILURE))),
+  failureReason: EffectSchema.optionalKey(agentFailureSchema),
   /**
    * The host a failed agent's run was lost with, by its name, where the
    * host stopped beating while its turn ran and the run was taken from it.

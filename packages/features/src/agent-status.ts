@@ -80,6 +80,16 @@ function isTurnStatusWord(status: string): status is keyof typeof STATUS_OF_TURN
   return STATUS_WORDS.has(status);
 }
 
+/**
+ * The status a turn row's word reads as. A word outside the vocabulary is a
+ * state a newer service writes of a turn not yet ended, since every ending
+ * is already a word here, so it reads as running, which its lease bounds
+ * like any other.
+ */
+function statusOfTurnWord(status: string): AgentStatus {
+  return isTurnStatusWord(status) ? STATUS_OF_TURN[status] : AGENT_STATUS.RUNNING;
+}
+
 /** What of an agent's newest turn its status is read from, each instant in epoch milliseconds. */
 export interface StatusTurn {
   /** The turn's own status word. */
@@ -124,7 +134,7 @@ interface LineReading {
 
 /** Whether a turn row still runs, or is queued to: what takes a line at its next step, however long the step it is on runs. */
 function turnRuns(turn: StatusTurn): boolean {
-  return isTurnStatusWord(turn.status) && STATUS_OF_TURN[turn.status] === AGENT_STATUS.RUNNING;
+  return statusOfTurnWord(turn.status) === AGENT_STATUS.RUNNING;
 }
 
 /** The instant the turn's lease runs out: the one its row holds, or, for a row with none, a lease's length from its queueing. */
@@ -217,9 +227,7 @@ export function agentStatusAt(
       ? AGENT_STATUS.STARTING
       : AGENT_STATUS.FAILED;
   }
-  // A row outside the vocabulary is a write this build does not know, read as the one status that claims nothing.
-  if (!isTurnStatusWord(turn.status)) return AGENT_STATUS.FAILED;
-  const status = STATUS_OF_TURN[turn.status];
+  const status = statusOfTurnWord(turn.status);
   return status === AGENT_STATUS.RUNNING && turn.cancelRequested ? AGENT_STATUS.CANCELED : status;
 }
 
