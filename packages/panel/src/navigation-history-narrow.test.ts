@@ -14,6 +14,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { useAdminRoute } from "./admin/admin-route.js";
+import { type AgentRoute, useAgentRoute } from "./agent-route.js";
 import { runAppCommand } from "./app-commands.js";
 import { type AutomationsRoute, useAutomationsRoute } from "./automations-route.js";
 import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
@@ -24,6 +25,7 @@ import {
   useWindowHistory,
   type WindowHistoryLists,
 } from "./navigation-history.js";
+import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
@@ -36,12 +38,12 @@ import {
 } from "./tasks/use-tasks-tab.js";
 import { fakeAppBridge, fakeAppBridgeCalls } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
-import { deliveryOf, handState, registryWith, stateWith } from "./testing/app-state.js";
-import { onRegistry } from "./testing/copy-feedback.js";
+import { deliveryOf, handState, stateWith, withExperiments } from "./testing/app-state.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { tasksControl } from "./testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "./testing/window-router.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "./version-history-route.js";
+import { useHomeRoute } from "./workspace-routes.js";
 
 /**
  * navigation-history-narrow.test.ts -- on a stage as narrow as a phone's,
@@ -85,8 +87,6 @@ interface Standing {
     /** Whether the Inbox shows one column by its own width, as one narrower than its split does in a room still wide. */
     readonly single?: boolean;
   };
-  /** The coding agent whose page stands, while one does. */
-  readonly agent: string | undefined;
   /** Whether a page holds unsaved work whose ask refuses every way out, as Cancel would. */
   readonly unsaved?: boolean | undefined;
   /** How many times a door naming a thing opened it in the side panel, as the real one counts them. */
@@ -99,7 +99,6 @@ interface Standing {
 const ON_TASK: Standing = {
   panel: { open: false, tab: undefined },
   inbox: { open: false, chosen: undefined },
-  agent: undefined,
 };
 
 /** The Tasks tab over where the window stands, each press moving it as the real one does, its version history where the router stands it. */
@@ -109,6 +108,7 @@ function tasksTab(
   room: ShellRoom,
   versions: VersionHistoryRoute,
   inbox: InboxRoute,
+  agent: AgentRoute,
 ): TasksControl {
   const base = tasksControl();
   const panel = (next: Standing["panel"]) => patch((held) => ({ ...held, panel: next }));
@@ -173,11 +173,12 @@ function tasksTab(
       return true;
     },
     leaveGuard,
+    // As the real one does, an agent's page opens and leaves by the router.
     agentView: {
       ...base.agentView,
-      agentId: at.agent,
-      onOpen: (agent) => patch((held) => ({ ...held, agent })),
-      onClose: () => patch((held) => ({ ...held, agent: undefined })),
+      agentId: agent.agentId,
+      onOpen: (agentId) => agent.onOpen(agentId, ACME.slug),
+      onClose: agent.onClose,
     },
     // As the real doors do, the Inbox opens by the router, narrowed to the task named or to none.
     onShowInbox: ({ taskId }) => inbox.onOpen(inboxAt(taskId)),
@@ -243,6 +244,7 @@ function mount(
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
+  let agent: AgentRoute | undefined;
   function Probe() {
     const [at, setAt] = useState(start);
     standing = at;
@@ -268,9 +270,16 @@ function mount(
       onClose: () => history?.onLeaveRouted(),
       onStay: () => history?.onStayRouted(),
     });
-    const tab = tasksTab(at, setAt, room, versions, inbox);
+    agent = useAgentRoute({
+      onClose: () => history?.onLeaveRouted(),
+      onStay: () => history?.onStayRouted(),
+    });
+    const tab = tasksTab(at, setAt, room, versions, inbox, agent);
+    // Home stands where the router does, under the workspace listed, as the window's root reads it.
+    const home = useHomeRoute({ listed: () => ACME.slug, onClose: () => history?.onLeaveRouted() });
     const tasks: TasksControl = {
       ...tab,
+      atHome: home.open,
       adminView: admin,
       // As the real one does, opening a page is a way out its guard asks first.
       automationsView: {
@@ -304,8 +313,21 @@ function mount(
       automations,
       versionHistory: versions,
       inbox,
+      home,
       room,
       tasks,
+    });
+    // Home and the task bound follow each other, as the window's root keeps them.
+    usePlaceBinding({
+      known: true,
+      place: routed?.place,
+      task: tasks.taskView.taskId,
+      page: routed?.place.binding === PLACE_BINDING.TASK ? undefined : routed?.address,
+      bound: tasks.boundFor,
+      onUnbind: tasks.onUnbindTask,
+      onSelect: tasks.onArriveTask,
+      onToBound: () => history?.onLeaveRouted(),
+      onToUnbound: home.onOpen,
     });
     // The Tasks tab as the shell is handed it, its ways back to the lists through the history.
     shown = throughHistory(tasks, history.lists);
@@ -317,9 +339,7 @@ function mount(
   roots.push(root);
   act(() =>
     root.render(
-      held.provide(
-        onRegistry(registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)), createElement(Probe)),
-      ),
+      held.provide(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), createElement(Probe))),
     ),
   );
   return {
@@ -333,6 +353,8 @@ function mount(
     }),
     /** The Inbox as the router stands it. */
     inbox: () => inbox ?? assert.fail("the Inbox's route stands"),
+    /** The agent whose page the router stands, while one does. */
+    agent: () => agent?.agentId,
     /** Settings as the router stands it, and the navigation a Settings link makes. */
     settings: () => settings ?? assert.fail("Settings stands"),
     /** Admin as the router stands it. */
@@ -512,20 +534,33 @@ test("on a narrow stage a task opened from a list on its plan is one step, whose
 
 test("on a narrow stage a side panel shut over a page other than its plan's is no step: it neither steps back to the plan behind nor takes the step of the plan opened after it", () => {
   const window = mount(SHELL_ROOM.NARROW, ON_TASK);
-  // A coding agent's page draws the task's side panel, which a narrow room holds full screen over it.
-  window.move((held) => ({ ...held, agent: AGENT, panel: { open: true, tab: PAGE_TAB } }));
+  // An agent's page draws a side panel of its own, which a narrow room holds full screen over it.
+  window.press(() => window.shown().agentView.onOpen(AGENT));
+  window.move((held) => ({ ...held, panel: { open: true, tab: PAGE_TAB } }));
   assert.equal(window.addresses().length, 2);
 
   window.press(() => window.shown().sidePanel.onToggleFullScreen());
   assert.equal(window.at().panel.open, false);
-  assert.equal(window.at().agent, AGENT, "shutting the panel leaves the agent's page standing");
+  assert.equal(window.agent(), AGENT, "shutting the panel leaves the agent's page standing");
   assert.equal(window.addresses().length, 2, "and is no step");
 
-  window.move((held) => ({ ...held, agent: undefined }));
+  window.press(() => window.shown().agentView.onClose());
   assert.equal(window.addresses().length, 3, "the plan opened after it is a step of its own");
   assert.equal(window.standingAddress(), TASK_PATH);
   act(() => window.history().onBack());
-  assert.equal(window.at().agent, AGENT, "Back returns to the agent's page");
+  assert.equal(window.agent(), AGENT, "Back returns to the agent's page");
+});
+
+test("Back to an agent's page stands the side panel beside it on the tab its step held, which the address does not say", () => {
+  const window = mount(SHELL_ROOM.WIDE, ON_TASK);
+  window.press(() => window.shown().agentView.onOpen(AGENT));
+  window.move((held) => ({ ...held, panel: { open: true, tab: PAGE_TAB } }));
+  window.press(() => window.shown().agentView.onClose());
+  window.move((held) => ({ ...held, panel: { open: false, tab: undefined } }));
+
+  act(() => window.history().onBack());
+  assert.equal(window.agent(), AGENT);
+  assert.deepEqual(window.at().panel, { open: true, tab: PAGE_TAB });
 });
 
 test("on a narrow stage an Inbox item opened from its list is a step, and the Inbox's way back steps back to the list", () => {
@@ -651,6 +686,19 @@ test("on a narrow stage a Settings page a link opened has no list behind it, so 
   act(() => window.history().onBack());
   assert.equal(window.settings().standing, false, "Back leaves Settings for the task");
   assert.equal(window.standingAddress(), TASK_PATH);
+});
+
+test("a pairing's link loaded at its own address opens Settings in that entry's place, so Back leaves the tab rather than landing on the link again", () => {
+  const loaded = "/connect/pair-code";
+  const window = mount(
+    SHELL_ROOM.WIDE,
+    { ...ON_TASK, home: true },
+    windowRouter(createMemoryHistory({ initialEntries: [loaded] })),
+  );
+  // The link opens Settings' Hosts page, as the window's own door for it does.
+  window.openSettings({ page: SETTINGS_VIEW.HOSTS });
+  assert.deepEqual(window.addresses(), ["/acme/settings/hosts"]);
+  assert.equal(window.history().canGoBack, false);
 });
 
 test("on the desktop's width none of a narrow room's panes is a step: the side panel opened by its toggle, a Settings page, and a version", () => {

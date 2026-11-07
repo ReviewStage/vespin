@@ -6,16 +6,17 @@ import {
   withAppStateDelivery,
 } from "@repo/host/app-state";
 import {
-  type Experiment,
+  type AccountExperiment,
+  type AccountExperimentChoices,
+  accountExperimentChoices,
   type ExperimentChoices,
   experimentOn,
   type HostCapability,
   NO_EXPERIMENTS,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
-import { type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, queryOptions } from "@tanstack/react-query";
 import { Data, Effect } from "effect";
-import { useEffect } from "react";
 import { appBridge } from "./app-bridge.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
@@ -72,12 +73,12 @@ const firstRead: Effect.Effect<AppStateSnapshot, AppStateUnread> = Effect.flatMa
  * The document as one TanStack Query query, which a surface reads its part of
  * with `useQuery({ ...appStateQuery, select })` and a callback that cannot
  * wait a render with `getQueryData(appStateQuery.queryKey)` on the client
- * `useQueryClient` hands it. Its `queryFn` is the first read alone, and every
- * later reading is written into the cache as it arrives
- * (`useAppStateSubscription`), so it is never stale (`staleTime: Infinity`,
- * as the docs' guide to data pushed over a socket has it) and never read
- * again. A first read the bridge refused is not tried again, since the
- * window shows that failure at once.
+ * `useQueryClient` hands it. Every reading is written into the cache as it
+ * arrives (`followAppState`), the first before anything is drawn, so it is
+ * never stale (`staleTime: Infinity`, as the docs' guide to data pushed over
+ * a socket has it) and never read again; its `queryFn`, a read of its own, stands only for a reader on a
+ * client nothing follows into. A read the bridge refused is not tried
+ * again, since the window shows that failure at once.
  *
  * Note that the read answers the document the client holds where that is as
  * new, because the subscription may have written a later reading while the
@@ -114,16 +115,28 @@ function heard(onDelivered: (delivered: AppStateDelivery) => void): Hearing | un
   }
 }
 
+/** A window's following of `app:state` into its Query client: its first whole read written, and how it stops. */
+export interface AppStateFollowing {
+  /** Settles once the first whole read is written into the client, and fails where the bridge refused it. */
+  readonly written: Promise<void>;
+  readonly stop: () => void;
+}
+
 /**
- * Writes every reading of the document into `client` as it arrives, and
- * answers what stops it. A delivery is what moved since the last `app:state`
- * sent, not the whole document, and names no version it was built on, so it
- * is laid only over a whole read asked after subscribing: one heard before
- * that read answers waits for it and is laid over it then (`adopt`), and
- * none sent between the root's own read and this subscription is lost. A
- * refused read leaves the deliveries waiting, and the next one heard asks
- * for the whole document again, rather than lay them over a document they
- * were not built on, such as the root's older read or another account's.
+ * Writes every reading of the document into `client` with `setQueryData`,
+ * as the docs' guide to data pushed over a socket does, from the moment it
+ * is called until it is stopped. A root calls it once per window, before
+ * anything is drawn, and draws once `written` settles, so the window's
+ * first frame holds what moved while it was being read; a test's tree calls
+ * it beside its own client (`testing/copy-feedback.ts`).
+ *
+ * A delivery is what moved since the last `app:state` sent, not the whole
+ * document, and names no version it was built on, so it is laid only over a
+ * whole read asked after subscribing: one heard before that read answers
+ * waits for it and is laid over it then (`adopt`). A refused read leaves the
+ * deliveries waiting, and the next one heard asks for the whole document
+ * again, rather than lay them over a document they were not built on, such
+ * as an older read or another account's.
  *
  * A fixture run's stage moving on its own (`fixture-moves.ts`) hands the
  * document held on to be staged anew, and its staging waits on the fixture,
@@ -131,16 +144,17 @@ function heard(onDelivered: (delivered: AppStateDelivery) => void): Hearing | un
  * passed over. The client is handed to the fixture while it is written
  * into, whose staged acts read the run from it (`act.ts`).
  */
-function followAppState(client: QueryClient): () => void {
+export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let held: AppStateSnapshot | undefined;
   let early: AppStateDelivery[] = [];
   let reading = false;
   let staging: Promise<void> | undefined;
-  const write = (state: AppStateSnapshot): void => {
+  // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
+  const write = (state: AppStateSnapshot): Promise<void> | undefined => {
     if (!state.run.fixtureMode && staging === undefined) {
       client.setQueryData(appStateQuery.queryKey, state);
-      return;
+      return undefined;
     }
     // Note that a staging that throws is reported and passed over, because the readings queued behind it must still land.
     const next = (staging ?? Promise.resolve())
@@ -157,21 +171,21 @@ function followAppState(client: QueryClient): () => void {
         if (staging === next) staging = undefined;
       });
     staging = next;
+    return next;
   };
-  const readWhole = (): void => {
-    if (hearing === undefined) return;
+  const readWhole = (hearing: Hearing): Promise<void> => {
     reading = true;
-    hearing.read().then(
+    return hearing.read().then(
       (read) => {
         reading = false;
-        if (!following) return;
+        if (!following) return undefined;
         held = early.reduce(adopt, read);
         early = [];
-        write(held);
+        return write(held);
       },
       (cause: unknown) => {
         reading = false;
-        console.error("The window's state could not be read; the next delivery asks again.", cause);
+        throw cause;
       },
     );
   };
@@ -179,7 +193,14 @@ function followAppState(client: QueryClient): () => void {
   const hearing = heard((delivered) => {
     if (held === undefined) {
       early.push(delivered);
-      if (!reading) readWhole();
+      if (!reading && hearing !== undefined) {
+        readWhole(hearing).catch((cause: unknown) => {
+          console.error(
+            "The window's state could not be read; the next delivery asks again.",
+            cause,
+          );
+        });
+      }
       return;
     }
     const next = adopt(held, delivered);
@@ -188,34 +209,19 @@ function followAppState(client: QueryClient): () => void {
     write(next);
   });
   // Note that the read is asked after the subscription stands, so a delivery sent while it is in flight is heard.
-  readWhole();
+  const written = hearing === undefined ? Promise.resolve() : readWhole(hearing);
   const stopMoves = onFixtureMoved(() => {
     if (held !== undefined) write(held);
   });
-  return () => {
-    following = false;
-    hearing?.stop();
-    stopMoves();
-    takeBack();
+  return {
+    written,
+    stop: () => {
+      following = false;
+      hearing?.stop();
+      stopMoves();
+      takeBack();
+    },
   };
-}
-
-/**
- * Writes every reading of the document into the window's Query client with
- * `setQueryData`, as the docs' guide to data pushed over a socket does from
- * a component mounted once, and stops as it unmounts (`followAppState`).
- * `AppStateSubscription` mounts it beside each root's `QueryProvider`, and
- * beside a test's own client (`testing/copy-feedback.ts`).
- */
-export function useAppStateSubscription(): void {
-  const queryClient = useQueryClient();
-  useEffect(() => followAppState(queryClient), [queryClient]);
-}
-
-/** `useAppStateSubscription` as an element, for a root to mount beside the surface it draws. */
-export function AppStateSubscription(): null {
-  useAppStateSubscription();
-  return null;
 }
 
 /**
@@ -281,6 +287,7 @@ export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
 export const selectWindow = (state: AppStateSnapshot) => state.window;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
+export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
@@ -297,9 +304,15 @@ export const selectSettingsHeld = (state: AppStateSnapshot): boolean =>
 export const selectAppSettingsView = (state: AppStateSnapshot): AppSettingsView | undefined =>
   state.settings === undefined ? undefined : appSettingsView(state.settings);
 
-/** Every experiment the account chose; signed out, every one is off. */
-export const selectExperimentChoices = (state: AppStateSnapshot): ExperimentChoices =>
+/** Every experiment the account chose as its store holds them, a workspace experiment's old choice among them; signed out, every one is off. Read only to combine with a workspace's (`workspace-experiments.ts`). */
+export const selectStoredExperimentChoices = (state: AppStateSnapshot): ExperimentChoices =>
   state.settings?.experiments ?? NO_EXPERIMENTS;
+
+/** Every experiment of its own the account chose; signed out, every one is off. A workspace experiment is the workspace's, read through `workspace-experiments.ts`. */
+export const selectExperimentChoices = memoizedSelect(
+  (state: AppStateSnapshot) => [selectStoredExperimentChoices(state)],
+  (choices: ExperimentChoices): AccountExperimentChoices => accountExperimentChoices(choices),
+);
 
 /** Whether the signed-in account is an admin; signed out, or where the host's read of it failed, none is. */
 export const selectAdminAccess = (state: AppStateSnapshot): boolean => state.access.admin === true;
@@ -308,15 +321,19 @@ export const selectAdminAccess = (state: AppStateSnapshot): boolean => state.acc
 export const selectAdminAccessPending = (state: AppStateSnapshot): boolean =>
   state.access.pending === true;
 
-const experimentSelects = new Map<Experiment, (state: AppStateSnapshot) => boolean>();
+const experimentSelects = new Map<AccountExperiment, (state: AppStateSnapshot) => boolean>();
 
 /**
- * Whether the signed-in account has one experiment on: the one way a gated
- * feature's row, command, and place ask. One function per experiment, made
- * once and kept, so the `select` a surface hands Query stands still from
- * render to render. Signed out, every experiment is off.
+ * Whether the signed-in account has one of its own experiments on: the one
+ * way an account experiment's row, command, and place ask. A workspace
+ * experiment is asked of the workspace (`useWorkspaceExperiment`), so this
+ * takes none. One function per experiment, made once and kept, so the
+ * `select` a surface hands Query stands still from render to render. Signed
+ * out, every experiment is off.
  */
-export function selectExperiment(experiment: Experiment): (state: AppStateSnapshot) => boolean {
+export function selectExperiment(
+  experiment: AccountExperiment,
+): (state: AppStateSnapshot) => boolean {
   const held = experimentSelects.get(experiment);
   if (held !== undefined) return held;
   const select = (state: AppStateSnapshot): boolean =>

@@ -17,15 +17,14 @@ import {
   type DescriptionCommentsControl,
   DescriptionCommentsProvider,
 } from "@repo/ui/description-comments";
-import type * as AtomRegistry from "effect/reactivity/AtomRegistry";
-import { act, createElement, Fragment } from "react";
+import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer } from "../testing/app-bridge.js";
-import { registryWith } from "../testing/app-state.js";
+import { writeExperiments } from "../testing/app-state.js";
 import { attachmentChipName } from "../testing/attachment-chip.js";
-import { onRegistry } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { DescriptionBody } from "./description-body.js";
 import { CommentFocusScope } from "./description-comments.js";
@@ -86,6 +85,8 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
+  act(() => windowRoot?.unmount());
+  windowRoot = undefined;
   document.body.innerHTML = "";
   window.localStorage.clear();
 });
@@ -104,11 +105,20 @@ function SignedIn({ account }: { account: Identity }): null {
   return null;
 }
 
+/** The window's root, which stands while its surfaces open and close, and goes with the test. */
+let windowRoot: Root | undefined;
+
+/** Signs `account` in to the window, whose root stands apart from the surfaces it draws. */
+function signIn(account: Identity): void {
+  windowRoot ??= createRoot(document.createElement("div"));
+  const root = windowRoot;
+  act(() => root.render(createElement(SignedIn, { account })));
+}
+
 /** The Comments tab over the one open thread, whose reply the service answers with `landing`, as `account` reads it. */
 function drawn(
   landing: () => Promise<boolean>,
   asked: DescriptionCommentActionRequest[] = [],
-  registry: AtomRegistry.AtomRegistry = registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)),
   account: Identity = DEAN,
 ): HTMLElement {
   const control: DescriptionCommentsControl = {
@@ -136,16 +146,14 @@ function drawn(
       sectionLinks: { workspace: "acme", onOpen: () => undefined, reveal: undefined },
     });
     const tree = createElement(
-      Fragment,
-      null,
-      createElement(SignedIn, { account: reader }),
-      createElement(
-        DescriptionCommentsProvider,
-        { value: control },
-        createElement(CommentFocusScope, { reveal: undefined, children: tab }),
-      ),
+      DescriptionCommentsProvider,
+      { value: control },
+      createElement(CommentFocusScope, { reveal: undefined, children: tab }),
     );
-    act(() => root.render(onRegistry(registry, tree)));
+    // Note that the surface is built before the reader signs in, because building it stands up the test's window, no one signed in.
+    const surface = withQueryClient(tree);
+    signIn(reader);
+    act(() => root.render(surface));
   };
   draw(account);
   act(() => container.querySelector<HTMLButtonElement>(".comments-toggle button")?.click());
@@ -190,6 +198,7 @@ function heldFiles(card: HTMLElement): (string | null)[] {
 
 test("a refused reply goes back above the words typed while it was out, and neither is dropped", async () => {
   const answer = Promise.withResolvers<boolean>();
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const card = drawn(() => answer.promise);
   const field = card.querySelector("textarea") ?? assert.fail("no textarea");
   typeInto(field, "Not for v1.");
@@ -206,6 +215,7 @@ test("a refused reply goes back above the words typed while it was out, and neit
 
 test("a refused reply's files go back before the files pasted while it was out", async () => {
   const answer = Promise.withResolvers<boolean>();
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const card = drawn(() => answer.promise);
   const field = card.querySelector("textarea") ?? assert.fail("no textarea");
   await pastePicture(field, "before.png");
@@ -226,9 +236,9 @@ test("a refused reply's files go back before the files pasted while it was out",
 async function refusedBesideNewer(refused: string, newer: string, account: Identity = DEAN) {
   const answer = Promise.withResolvers<boolean>();
   const asked: DescriptionCommentActionRequest[] = [];
-  const registry = registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const landing = () => (asked.length === 1 ? answer.promise : Promise.resolve(true));
-  const card = drawn(landing, asked, registry, account);
+  const card = drawn(landing, asked, account);
   const field = card.querySelector("textarea") ?? assert.fail("no textarea");
   typeInto(field, refused);
   act(() => {
@@ -240,7 +250,7 @@ async function refusedBesideNewer(refused: string, newer: string, account: Ident
     card,
     field,
     asked,
-    redraw: (account?: Identity) => drawn(landing, asked, registry, account),
+    redraw: (account?: Identity) => drawn(landing, asked, account),
   };
 }
 
@@ -317,7 +327,8 @@ test("a reply refused while only the reader's address was known stands with its 
   const answer = Promise.withResolvers<boolean>();
   const asked: DescriptionCommentActionRequest[] = [];
   const landing = () => (asked.length === 1 ? answer.promise : Promise.resolve(true));
-  const card = drawn(landing, asked, registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)), {
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  const card = drawn(landing, asked, {
     email: DEAN.email,
   });
   const field = card.querySelector("textarea") ?? assert.fail("no textarea");

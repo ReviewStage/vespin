@@ -13,6 +13,7 @@ import {
 import {
   ALL_CLIENT_CAPABILITIES,
   type DuplicateGatewayMethod,
+  type DuplicateHostAct,
   HostAssemblyTag,
   type HostTag,
   hostCapabilities,
@@ -173,7 +174,8 @@ const launchSteps = (services: DesktopServices): Layer.Layer<HostTag, never, Hos
           windows.applyAppearance(),
           Effect.sync(() => {
             windows.publishAppState();
-            // A gated feature's menu items follow the account's experiments and the platform's capabilities as the windows' surfaces do.
+            // A gated feature's menu items follow the account's experiments and the platform's capabilities as the windows' surfaces do;
+            // a workspace experiment's follow the focused window's own workspace, as the commands it offers say (`app-menu.ts`).
             const held = state.snapshot();
             config.showMenuBar({
               experiments: held.settings?.experiments ?? NO_EXPERIMENTS,
@@ -206,7 +208,7 @@ const launchSteps = (services: DesktopServices): Layer.Layer<HostTag, never, Hos
 export function composeDesktop(
   config: DesktopConfig,
   quit: DesktopQuit,
-): Layer.Layer<DesktopTag | HostTag, DuplicateGatewayMethod> {
+): Layer.Layer<DesktopTag | HostTag, DuplicateGatewayMethod | DuplicateHostAct> {
   const keychain = createKeychainService();
   const hostAssembly = hostAssemblyLayerFor({ config, cipher: keychain.cipher });
 

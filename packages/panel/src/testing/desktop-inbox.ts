@@ -59,7 +59,6 @@ import { AGENT_INBOX_ACT_KIND, type PortActResult } from "@repo/host/contract";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import type { TaskMark } from "@repo/ui/tasks-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act, createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, assert, beforeEach, vi } from "vitest";
@@ -94,11 +93,12 @@ import {
   pressInComposer,
   typeInComposer,
 } from "./composer.js";
-import { onRegistry, settleQueries, testQueryClientNow } from "./copy-feedback.js";
+import { settleQueries, testQueryClientNow, withQueryClient } from "./copy-feedback.js";
 import { sidebarProps } from "./desktop-sidebar.js";
 import { holdFrames, settleFrames } from "./frames.js";
 import { heardWords } from "./heard-words.js";
 import { restOn } from "./hint-rest.js";
+import { underWindowRouter } from "./link-router.js";
 import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
@@ -908,7 +908,7 @@ export function mount(
       : createElement(Paneled, { at: room });
   const shown = toasts ? createElement(Fragment, null, inbox, createElement(ToastHost)) : inbox;
   const page = bundles === undefined ? shown : onSideBundles(bundles, shown);
-  act(() => world.root?.render(onRegistry(AtomRegistry.make(), page)));
+  act(() => world.root?.render(withQueryClient(underWindowRouter(page))));
   return { page: container, asked };
 }
 

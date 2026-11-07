@@ -17,13 +17,17 @@
  * runs before each `result`, reports that work (`background_tasks`,
  * `session_crons`), so the agent's turn is over at a `result` only when
  * the last Stop hook reported none, and otherwise the runner posts a WAITING
- * event and keeps the CLI up. Nor is it over while a message the service sent during
+ * event and keeps the CLI up, however long the wait, since the CLI fires a
+ * session's scheduled tasks only while it runs. Nor is it over while a message the service sent during
  * a turn is still unanswered: the CLI runs it as its next turn, and where a
  * `result` that named no prompt left the message, the launch fails once the
  * CLI has said nothing for `RUNNER_UNANSWERED`. A turn that
  * is over ends the launch, or, where the config asks it to stay `warm`,
  * posts IDLE and keeps the CLI up (`RUNNER_WARM`) for the service's next message,
- * until the service retires it or its cap ends it. A `result` after a stop
+ * until the service or its host retires it or its warm window ends it; a
+ * `warm` line re-arms that window, and such a launch is warm from its start
+ * too, so one the service launched with no message waits for its first as
+ * one past an IDLE does. A `result` after a stop
  * ends the launch whatever is pending, and so does one no Stop hook came
  * before, such as an error's. A stop interrupts whichever turn is running, a
  * wakeup's included, and ends a launch with none at once.
@@ -40,7 +44,6 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   Cause,
-  Clock,
   Deferred,
   Duration,
   Effect,
@@ -67,7 +70,6 @@ import {
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
 import { SANDBOX_TOOL_ENV } from "./pins.js";
-import { ProcessTable } from "./processes.js";
 import {
   CLAUDE_CODE_TOOLS,
   CLAUDE_CODE_WORKER,
@@ -83,17 +85,16 @@ import {
   RUNNER_ENV,
   RUNNER_EVENT,
   RUNNER_HARNESS,
-  RUNNER_RELEASE,
   RUNNER_UNANSWERED,
   RUNNER_WARM,
+  type RunnerConfig,
   RunnerConfigSchema,
   type RunnerEnd,
   type RunnerEndEvent,
   type RunnerWaiting,
-  type RunnerWakeup,
 } from "./protocol.js";
+import { type LaunchTrace, launchTrace, RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
-import { oneShotDueAt } from "./wakeups.js";
 
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
@@ -183,6 +184,7 @@ function queryOptions(
   onStop: HookCallback,
   from: ResumePoint,
   bearer: Redacted.Redacted,
+  traceHeaders: LaunchTrace["headers"],
 ): Options {
   const options: Options = {
     cwd: config.cwd,
@@ -216,7 +218,7 @@ function queryOptions(
   if (config.fork === true) options.forkSession = true;
   // The SDK mirrors the transcript to the service as the CLI writes it, and loads it from there to resume.
   if (config.transcriptsUrl !== undefined) {
-    options.sessionStore = transcriptStore(config.transcriptsUrl, bearer);
+    options.sessionStore = transcriptStore(config.transcriptsUrl, bearer, traceHeaders);
   }
   // The member's installed skills load as a local plugin, which leaves the checkout and the
   // settings Claude Code reads (`project` alone) as they stand; we hold its MCP servers.
@@ -251,6 +253,7 @@ interface Launch {
   readonly session: ClaudeCodeSession;
   readonly prompts: Queue.Queue<SDKUserMessage, Cause.Done>;
   readonly sink: EventSink;
+  readonly trace: LaunchTrace;
   readonly inFlight: MutableRef.MutableRef<InFlight | undefined>;
   /** Whether the CLI is in a turn: from a message the service sent, or from the CLI's own output, a wakeup's turn included. */
   readonly turnRunning: Ref.Ref<boolean>;
@@ -259,15 +262,15 @@ interface Launch {
   /** How many messages of turn output the CLI has put out, so a held message's bound sees whether the CLI has said anything since. */
   readonly heard: Ref.Ref<number>;
   readonly stopping: Ref.Ref<boolean>;
-  /** How many waits the launch has posted, so a wait's release is dropped once a newer one began. */
+  /** How many IDLEs the launch has posted, so a warm launch's cap is dropped once a newer one began. */
   readonly waits: Ref.Ref<number>;
   /** Whether the config asked the launch to stay warm once the agent's turn is over. */
   readonly warmable: boolean;
-  /** Whether the launch is warm: its turn over at an IDLE, and nothing taken or begun since. */
+  /** How long the launch stays warm before it ends itself (`RUNNER_WARM`). */
+  readonly warmFor: Duration.Duration;
+  /** Whether the launch is warm: started warm, or its turn over at an IDLE, and nothing taken or begun since. */
   readonly warm: Ref.Ref<boolean>;
-  /** The wakeups a released wait left for the service to deliver; none until it is released. */
-  readonly released: Ref.Ref<readonly RunnerWakeup[] | undefined>;
-  /** Held while a message is taken into the launch and while a wait is released, so no message lands in a launch a release ends. */
+  /** Held while a message is taken into the launch and while a turn's end is decided, so no message lands in a launch that end ends. */
   readonly admission: Semaphore.Semaphore;
   readonly ended: Deferred.Deferred<RunnerEnd>;
   /** Why the launch failed, where it did, for its END to say: the CLI's error, or the runner's own reason for ending it. */
@@ -309,13 +312,7 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       const uuid = (value.uuid as UUID | undefined) ?? randomUUID();
       return yield* launch.admission.withPermit(
         Effect.gen(function* () {
-          // A launch a released wait ended takes nothing more: the line stays unaccepted, for the
-          // launch the service starts on its END, or on its next send, to be handed.
-          if ((yield* Ref.get(launch.released)) !== undefined) {
-            return yield* Effect.logWarning(
-              "agent-runner: skipped a message for a released launch",
-            );
-          }
+          yield* launch.trace.taken;
           const running = yield* Ref.getAndSet(launch.turnRunning, true);
           yield* Ref.set(launch.warm, false);
           yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(uuid));
@@ -354,6 +351,8 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
         }),
       );
     }
+    case INPUT_LINE.WARM:
+      return yield* rearmed(launch);
     case INPUT_LINE.MODEL: {
       const { model, effort, fast } = value;
       if (model !== undefined) yield* control("setModel", () => launch.session.setModel(model));
@@ -417,8 +416,8 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
   launch: Launch,
   message: SDKMessage,
 ) {
-  // Marked before the message is posted, which may yield, and under the admission a release
-  // takes, so a wait is not released once the CLI has begun a turn of its own.
+  // Marked before the message is posted, which may yield, and under the admission a warm
+  // launch's end takes, so a launch is not ended as idle once the CLI has begun a turn of its own.
   if (TURN_OUTPUT.has(message.type)) {
     yield* launch.admission.withPermit(
       Ref.set(launch.turnRunning, true).pipe(
@@ -456,8 +455,6 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
   }
   yield* Ref.set(launch.turnRunning, false);
   yield* launch.sink.emit({ type: RUNNER_EVENT.WAITING, ...inFlight });
-  const wait = yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
-  yield* Effect.forkScoped(watchWait(launch, wait, inFlight));
 });
 
 /** Whether the launch is still warm, with nothing taken, begun, stopped, or ended since its IDLE. Read under the admission. */
@@ -473,8 +470,8 @@ const stillWarm = Effect.fn("agent-runner/stillWarm")(function* (launch: Launch)
 
 /**
  * The agent's turn over, and the launch kept warm rather than ended: its
- * IDLE posted, so the service settles the turn, and a watch armed that ends it at
- * `RUNNER_WARM.IDLE_CAP_MS` where the service never retires it. Decided under the
+ * IDLE posted, so the service settles the turn, and a watch armed that ends it
+ * once its warm window passes (`RUNNER_WARM`) where nothing retired it first. Decided under the
  * admission, so a message taken since the `result` starts the CLI's next
  * turn instead, and posts no IDLE for a turn that is not over.
  */
@@ -485,7 +482,7 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
       yield* Ref.set(launch.turnRunning, false);
       yield* Ref.set(launch.warm, true);
       yield* launch.sink.emit({ type: RUNNER_EVENT.IDLE });
-      // Counted as a wait, so a release a wait before armed is dropped.
+      // Counted, so the cap an earlier IDLE armed is dropped.
       return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
     }),
   );
@@ -493,9 +490,39 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
   yield* Effect.forkScoped(watchWarm(launch, wait));
 });
 
-/** A warm launch's own bound: ended once it stayed warm for `RUNNER_WARM.IDLE_CAP_MS`. */
+/**
+ * A warm launch idle from its start: warm before it takes a line, as one
+ * the service launched with no message waits for its first, so a retire
+ * ends it and its window bounds it, as an IDLE's watch does. Its first
+ * message takes it out of warm as any message does. It posts no IDLE,
+ * since no turn of it ended.
+ */
+const warmAtStart = Effect.fn("agent-runner/warmAtStart")(function* (launch: Launch) {
+  if (!launch.warmable) return;
+  const wait = yield* launch.admission.withPermit(
+    Effect.andThen(
+      Ref.set(launch.warm, true),
+      Ref.updateAndGet(launch.waits, (count) => count + 1),
+    ),
+  );
+  yield* Effect.forkScoped(watchWarm(launch, wait));
+});
+
+/** A warm launch's window armed again from now, on the service's `warm` line, where it is still warm; one at work skips it, since its next IDLE arms a window of its own. */
+const rearmed = Effect.fn("agent-runner/rearmed")(function* (launch: Launch) {
+  const wait = yield* launch.admission.withPermit(
+    Effect.gen(function* () {
+      if (!(yield* stillWarm(launch))) return undefined;
+      return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
+    }),
+  );
+  if (wait === undefined) return;
+  yield* Effect.forkScoped(watchWarm(launch, wait));
+});
+
+/** A warm launch's own bound: ended once it stayed warm for its window (`RUNNER_WARM`). */
 const watchWarm = Effect.fn("agent-runner/watchWarm")(function* (launch: Launch, wait: number) {
-  yield* Effect.sleep(Duration.millis(RUNNER_WARM.IDLE_CAP_MS));
+  yield* Effect.sleep(launch.warmFor);
   yield* launch.admission.withPermit(
     Effect.gen(function* () {
       if ((yield* Ref.get(launch.waits)) !== wait || !(yield* stillWarm(launch))) return;
@@ -542,66 +569,6 @@ const watchUnheard = Effect.fn("agent-runner/watchUnheard")(function* (
   );
 });
 
-/** The wakeups a wait's one-shot tasks come due at, earliest first; none where one's time cannot be told, which holds the wait. */
-function wakeupsOf(inFlight: InFlight, now: Date): RunnerWakeup[] | undefined {
-  const wakeups: RunnerWakeup[] = [];
-  for (const task of inFlight.session_crons) {
-    if (task.recurring) continue;
-    const at = oneShotDueAt(task.schedule, now);
-    if (at === undefined) return undefined;
-    wakeups.push({ at: at.toISOString(), prompt: task.prompt });
-  }
-  return wakeups.sort((one, other) => Date.parse(one.at) - Date.parse(other.at));
-}
-
-/**
- * One wait watched for its release (`RUNNER_RELEASE`): once it has lasted
- * `SETTLE_MS`, it ends the launch where nothing is in flight but scheduled
- * tasks, every one-shot's time can be told and the earliest is still that
- * far off, any recurring task's wait has outlasted `IDLE_CAP_MS`, and no
- * process of the agent's runs (`processes.ts`); and it looks again every
- * `RECHECK_MS` until a turn starts, a newer wait begins, or the earliest
- * wakeup is near enough for the CLI to fire it. A background task is the
- * agent's own process, so a wait with one is never released.
- */
-const watchWait = Effect.fn("agent-runner/watchWait")(function* (
-  launch: Launch,
-  wait: number,
-  inFlight: InFlight,
-) {
-  if (inFlight.background_tasks.length > 0) return;
-  const processes = yield* ProcessTable;
-  const startedAt = yield* Clock.currentTimeMillis;
-  const wakeups = wakeupsOf(inFlight, new Date(startedAt));
-  if (wakeups === undefined) return;
-  const earliest = wakeups[0] === undefined ? undefined : Date.parse(wakeups[0].at);
-  const recurring = inFlight.session_crons.some((task) => task.recurring);
-  yield* Effect.sleep(Duration.millis(RUNNER_RELEASE.SETTLE_MS));
-  for (;;) {
-    const now = yield* Clock.currentTimeMillis;
-    if (earliest !== undefined && earliest - now < RUNNER_RELEASE.SETTLE_MS) return;
-    const held = recurring && now - startedAt < RUNNER_RELEASE.IDLE_CAP_MS;
-    if (!held && !(yield* processes.agentProcessRuns)) {
-      // Decided and ended under the admission, so neither a message nor a turn the CLI began
-      // lands between the check and the end.
-      return yield* launch.admission.withPermit(
-        Effect.gen(function* () {
-          const current =
-            (yield* Ref.get(launch.waits)) === wait &&
-            !(yield* Ref.get(launch.turnRunning)) &&
-            !(yield* Ref.get(launch.stopping)) &&
-            !(yield* Deferred.isDone(launch.ended));
-          if (!current) return;
-          yield* Ref.set(launch.released, wakeups);
-          yield* Deferred.succeed(launch.ended, RUNNER_END.RELEASED);
-        }),
-      );
-    }
-    if ((yield* Ref.get(launch.waits)) !== wait || (yield* Ref.get(launch.turnRunning))) return;
-    yield* Effect.sleep(Duration.millis(RUNNER_RELEASE.RECHECK_MS));
-  }
-});
-
 /**
  * One Claude Code launch, from its config to the moment its CLI is closed.
  * Answers why it ended, and the CLI's failure where it failed.
@@ -610,7 +577,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   context: LaunchContext<ClaudeCodeConfig>,
 ) {
   const claudeCode = yield* ClaudeCode;
-  const { config, lines, sink, bearer } = context;
+  const { config, lines, sink, bearer, trace } = context;
   const inFlight = MutableRef.make<InFlight | undefined>(undefined);
   const onStop: HookCallback = async (hook) => {
     if (hook.hook_event_name === "Stop") {
@@ -621,24 +588,32 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     }
     return { continue: true };
   };
-  const servers: Record<string, McpSdkServerConfigWithInstance> = {
-    [MCP_SERVER]: yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer),
-  };
-  // Each integration the agent is handed is a server of its own, its tools named `mcp__<connection>__<tool>`.
-  for (const integration of config.integrations ?? []) {
-    if (integration.name === MCP_SERVER) continue;
-    servers[integration.name] = yield* openMcpRelay(integration.name, integration.url, bearer);
-  }
+  const servers = yield* trace.step(
+    RUNNER_SPAN.MCP_RELAY,
+    Effect.gen(function* () {
+      const opened: Record<string, McpSdkServerConfigWithInstance> = {
+        [MCP_SERVER]: yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer),
+      };
+      // Each integration the agent is handed is a server of its own, its tools named `mcp__<connection>__<tool>`.
+      for (const integration of config.integrations ?? []) {
+        if (integration.name === MCP_SERVER) continue;
+        opened[integration.name] = yield* openMcpRelay(integration.name, integration.url, bearer);
+      }
+      return opened;
+    }),
+  );
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
   const from = yield* resumePointOf(claudeCode, config);
+  yield* trace.cliStarted;
   const session = claudeCode.query({
     prompt: Stream.toAsyncIterable(Stream.fromQueue(prompts)),
-    options: queryOptions(config, context.env, servers, onStop, from, bearer),
+    options: queryOptions(config, context.env, servers, onStop, from, bearer, trace.headers),
   });
   const launch: Launch = {
     session,
     prompts,
     sink,
+    trace,
     inFlight,
     turnRunning: yield* Ref.make(false),
     unanswered: yield* Ref.make<ReadonlySet<string>>(new Set()),
@@ -646,14 +621,16 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     stopping: yield* Ref.make(false),
     waits: yield* Ref.make(0),
     warmable: config.warm === true,
+    warmFor: Duration.millis(config.warmForMs ?? RUNNER_WARM.IDLE_CAP_MS),
     warm: yield* Ref.make(false),
-    released: yield* Ref.make<readonly RunnerWakeup[] | undefined>(undefined),
     admission: yield* Semaphore.make(1),
     ended: yield* Deferred.make<RunnerEnd>(),
     failure: yield* Ref.make(""),
     firstSequence: config.firstSequence,
   };
 
+  // Warm before the first line is taken, so a message ahead of a retire takes it out of warm.
+  yield* warmAtStart(launch);
   // The service closing stdin ends the prompt stream, and the CLI ends once it has
   // answered what it was given.
   const inputLoop = Effect.gen(function* () {
@@ -691,11 +668,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   yield* Fiber.interruptAll(reading);
   session.close();
   yield* Fiber.interrupt(posting);
-  const wakeups = yield* Ref.get(launch.released);
   const failure = yield* Ref.get(launch.failure);
-  return (
-    wakeups === undefined ? { end, failure } : { end, failure, wakeups }
-  ) satisfies LaunchOutcome;
+  return { end, failure } satisfies LaunchOutcome;
 });
 
 /**
@@ -743,30 +717,54 @@ export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: Run
     Effect.mapError(() => new RunnerFailed({ detail: "the config line is not a runner config" })),
   );
   yield* Deferred.succeed(readsLines, config.linesUrl !== undefined);
+  const trace = yield* launchTrace(config.trace, config.harness ?? RUNNER_HARNESS.CLAUDE_CODE);
+  return yield* runLaunch({ config, lines, bearer, secrets, trace, input }).pipe(trace.traced);
+});
 
-  const sink = yield* makeEventSink({
+/** What a launch runs on once its config is read. */
+interface ReadLaunch {
+  readonly config: RunnerConfig;
+  readonly lines: Queue.Queue<string, Cause.Done>;
+  readonly bearer: Redacted.Redacted;
+  readonly secrets: readonly Redacted.Redacted[];
+  readonly trace: LaunchTrace;
+  readonly input: RunnerInput;
+}
+
+/**
+ * A launch from its config on: its events' sink, the service's lines read
+ * where the config names the read, its harness run, and its last event
+ * posted. Answers why it ended; fails where the service would not take its events.
+ */
+const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunch) {
+  const { config, lines, bearer, secrets, trace, input } = read;
+  const posted = yield* makeEventSink({
     url: config.eventsUrl,
     bearer,
     firstSequence: config.firstSequence,
     secrets,
   });
+  // Each message is watched for the startup's milestones as it is posted (`trace.ts`).
+  const sink: EventSink = {
+    ...posted,
+    emit: (message) => Effect.andThen(trace.observe(message), posted.emit(message)),
+  };
   // A config that names the read has the service's later lines read from it, beside any
   // stdin still carries, into the same queue, so neither harness knows where a line came from.
   if (config.linesUrl !== undefined) {
     const read = { url: config.linesUrl, bearer, launch: config.firstSequence };
     yield* Effect.forkScoped(readLines(read, lines));
   }
-  const context = { lines, env: input.env, bearer, sink, self: input.self };
+  const context = { lines, env: input.env, bearer, sink, trace, self: input.self };
   const outcome: LaunchOutcome =
     config.harness === RUNNER_HARNESS.CODEX
       ? yield* runCodex({ ...context, config })
       : yield* runClaudeCode({ ...context, config });
-  const { end, failure, wakeups } = outcome;
+  const { end, failure } = outcome;
   const last: RunnerEndEvent = {
     type: RUNNER_EVENT.END,
     reason: end,
     ...(failure === "" ? undefined : { detail: failure }),
-    ...(wakeups === undefined ? undefined : { wakeups }),
   };
   yield* sink.emit(last);
   // A stopped launch is our own doing, so it does not wait out an outage for its last events.

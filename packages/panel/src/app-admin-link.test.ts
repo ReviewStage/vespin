@@ -2,7 +2,9 @@
 
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
+import { AGENT_STATUS, type AgentPage } from "@repo/features/agent-wire";
 import { LINK_PLACE, type ReadLink, readLink } from "@repo/features/link-grammar";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -12,7 +14,6 @@ import { PUSH_METHOD } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { createMemoryHistory } from "@tanstack/react-router";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
@@ -26,7 +27,8 @@ import "./desktop/person-route.lazy.js";
 import { fakeActPortAnswering, fakeAppBridge, refusedOnPort } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { deliveryOf, stateWith } from "./testing/app-state.js";
-import { onRegistry, settleQueries } from "./testing/copy-feedback.js";
+import { settleQueries, withQueryClient } from "./testing/copy-feedback.js";
+import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { type TestWindowRouter, windowRouter } from "./testing/window-router.js";
 
 /**
@@ -38,8 +40,9 @@ import { type TestWindowRouter, windowRouter } from "./testing/window-router.js"
  * no admin opens nothing. A person's page loaded under a workspace the
  * reader is not in, as a reload of another's address is, opens the same
  * person under the workspace listed, as a link to them does, and a link
- * to the Automations page, the Board, or the Inbox already standing leaves it
- * standing. A link to an Inbox item, however it was written, opens the item
+ * to the Automations page, the Board, the Inbox, or an agent's page already
+ * standing leaves it standing. An agent's link pressed in an Inbox item lands
+ * in one step from it. A link to an Inbox item, however it was written, opens the item
  * at its own address.
  */
 
@@ -130,7 +133,7 @@ async function drawWindow(at?: string): Promise<TestWindowRouter> {
     at === undefined ? undefined : createMemoryHistory({ initialEntries: [at] }),
   );
   root = createRoot(document.body.appendChild(document.createElement("div")));
-  act(() => root?.render(onRegistry(AtomRegistry.make(), router.drawn())));
+  act(() => root?.render(withQueryClient(router.drawn())));
   await settle();
   return router;
 }
@@ -199,6 +202,7 @@ test.each([
   ["the Board", "/acme/tasks", { kind: LINK_PLACE.BOARD }],
   ["the Inbox", "/acme/inbox", { kind: LINK_PLACE.INBOX }],
   ["an Inbox item", "/acme/inbox/item-1", { kind: LINK_PLACE.INBOX_ITEM, itemId: "item-1" }],
+  ["an agent's page", "/acme/agent/agent-9", { kind: LINK_PLACE.AGENT, agentId: "agent-9" }],
   [
     "a task's version",
     "/acme/task/7/version/3",
@@ -300,3 +304,330 @@ test("a version history loaded on a task number the service finds nothing for gi
     [{ taskId: "9999" }],
   );
 });
+
+/** An agent of Acme's task numbered 7, which no list the window holds names, as the service reads its page. */
+const SEVEN_AGENT: AgentPage = {
+  id: "agent-of-seven",
+  planId: ACME_SEVEN.id,
+  model: "anthropic/claude-opus-5.5",
+  effort: "high",
+  title: "Retry the relay",
+  createdAt: 1,
+  status: AGENT_STATUS.COMPLETED,
+  turnId: null,
+  automationId: null,
+  workspaceId: ACME.id,
+  repository: null,
+};
+
+test("an agent's link pressed in an Inbox item, its task not open, lands on the agent's tab in one step from the item", async () => {
+  fakeActPortAnswering((request) =>
+    request.kind === ACT_KIND.AGENTS_PAGE
+      ? Promise.resolve({ agent: SEVEN_AGENT })
+      : request.kind === ACT_KIND.TASKS_SELECT
+        ? Promise.resolve(true)
+        : Promise.reject(refusedOnPort("Not here.")),
+  );
+  first = WITH_SEVEN;
+  const router = await drawWindow("/acme/inbox/item-1");
+  await settle();
+  const before = router.addresses().slice(0, router.at() + 1);
+
+  act(() =>
+    showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.AGENT, agentId: SEVEN_AGENT.id } }),
+  );
+  await settle();
+
+  const after = router.addresses().slice(0, router.at() + 1);
+  assert.deepEqual(after.slice(0, before.length), before, "the Inbox item stays the step behind");
+  assert.equal(after.length, before.length + 1, `one step, not through Home: ${after.join(" → ")}`);
+});
+
+test("a tab landing on an agent's address, its link opened as it lands, stands the page in the one step it landed on", async () => {
+  const router = await drawWindow("/acme");
+  const steps = router.addresses().length;
+
+  act(() => {
+    router.history.push("/acme/agent/agent-9");
+    showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.AGENT, agentId: "agent-9" } });
+  });
+  await settle();
+
+  assert.equal(router.history.location.pathname, "/acme/agent/agent-9");
+  assert.equal(router.addresses().length, steps + 1, router.addresses().join(" → "));
+});
+
+/** Whether the page saying a workspace is not there for the reader stands. */
+function unknownWorkspaceShown(): boolean {
+  return document.body.textContent?.includes("This workspace doesn't exist") === true;
+}
+
+/** The not-found page's way out, Go home. */
+function goHomeButton(): HTMLButtonElement {
+  const found = [...document.querySelectorAll("button")].find(
+    (button) => button.textContent === "Go home",
+  );
+  return found ?? assert.fail("Go home stands");
+}
+
+test("a Home link to a workspace the reader is not in stands the not-found place at its own address, in the step's place, and Go home leaves it for Home", async () => {
+  const router = await drawWindow("/acme");
+  const steps = router.addresses().length;
+
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  await settle();
+  const standing = [router.history.location.pathname, unknownWorkspaceShown()];
+  const written = router.addresses().length;
+  act(() => goHomeButton().click());
+  await settle();
+
+  assert.deepEqual(standing, ["/ghost", true]);
+  assert.equal(written, steps, "and writes no step");
+  assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/acme", false]);
+});
+
+test("Back from a link to a workspace the reader is not in, pressed over a place, goes to the step before that place, as the link wrote no step", async () => {
+  const router = await drawWindow("/acme");
+  act(() => showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.BOARD } }));
+  await settle();
+  assert.equal(router.history.location.pathname, "/acme/tasks");
+
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.BOARD } }));
+  await settle();
+  act(() => router.history.back());
+  await settle();
+
+  assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/acme", false]);
+});
+
+test.each([
+  ["an agent's page", { kind: LINK_PLACE.AGENT, agentId: "agent-9" }, "/acme/agent/agent-9"],
+  ["the Inbox", { kind: LINK_PLACE.INBOX }, "/acme/inbox"],
+] as const)(
+  "%s opened over a workspace's address the reader is not in takes its place",
+  async (_place, place, address) => {
+    const router = await drawWindow("/ghost/tasks");
+    assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/ghost", true]);
+
+    act(() => showLink?.({ workspace: "acme", place }));
+    await settle();
+
+    assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], [address, false]);
+  },
+);
+
+test("Home standing in a workspace the reader is no longer in stands under the workspace listed now, rather than not found", async () => {
+  const router = await drawWindow("/acme");
+  const PLATFORM = { ...ACME, id: "workspace-platform", name: "Platform", slug: "platform" };
+
+  await deliver(
+    stateWith(
+      {},
+      {
+        tasks: { ...IDLE_TASKS_VIEW, workspaces: [PLATFORM] },
+        access: { admin: false, pending: true },
+      },
+    ),
+  );
+
+  assert.deepEqual(
+    [router.history.location.pathname, unknownWorkspaceShown()],
+    ["/platform", false],
+  );
+});
+
+test("a Home link to a workspace the reader is not in, pressed on an open task, leaves no row of the sidebar current under the not-found page", async () => {
+  const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  first = stateWith(
+    {},
+    {
+      tasks: { ...IDLE_TASKS_VIEW, workspaces: [ACME], tasks: [listed], activeTaskId: listed.id },
+      access: { admin: false, pending: true },
+    },
+  );
+  const router = await drawWindow(`/acme/task/${listed.id}`);
+
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  await settle();
+
+  assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/ghost", true]);
+  const current = document.querySelectorAll('aside.desktop-sidebar [aria-current="page"]');
+  assert.equal(current.length, 0, [...current].map((row) => row.textContent).join(", "));
+});
+
+test("a Home link to a workspace the reader is not in, pressed over an agent's page, stands the not-found place in its place", async () => {
+  const router = await drawWindow("/acme/agent/agent-9");
+
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  await settle();
+
+  assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/ghost", true]);
+});
+
+test("Home standing in a workspace whose slug was renamed stands at the new slug, as Copy link names it", async () => {
+  const router = await drawWindow("/acme");
+
+  await deliver(
+    stateWith(
+      {},
+      {
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          workspaces: [{ ...ACME, slug: "acme-2", formerSlugs: ["acme"] }],
+        },
+        access: { admin: false, pending: true },
+      },
+    ),
+  );
+
+  assert.equal(router.history.location.pathname, "/acme-2");
+});
+
+test("a link to a workspace the reader has since left, opened after a not-found page Home was left for, stands not found", async () => {
+  const PLATFORM = { ...ACME, id: "workspace-platform", name: "Platform", slug: "platform" };
+  first = stateWith(
+    {},
+    {
+      tasks: { ...IDLE_TASKS_VIEW, workspaces: [ACME, PLATFORM] },
+      access: { admin: false, pending: true },
+    },
+  );
+  const router = await drawWindow("/acme");
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  await settle();
+  await deliver(
+    stateWith(
+      {},
+      {
+        tasks: { ...IDLE_TASKS_VIEW, workspaces: [PLATFORM] },
+        access: { admin: false, pending: true },
+      },
+    ),
+  );
+
+  act(() => showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.HOME } }));
+  await settle();
+
+  assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/acme", true]);
+});
+
+test("a move from one open task to another keeps the task's page drawn, never its loading frame", async () => {
+  const { document: _document, ...one } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const other = { ...one, id: "b2000002-0000-4000-8000-0000000000f9", name: "Other", number: 77 };
+  const openOn = (taskId: string): AppStateSnapshot => ({
+    ...stateWith(
+      {},
+      {
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          workspaces: [ACME],
+          tasks: [one, other],
+          activeTaskId: taskId,
+        },
+        access: { admin: false, pending: true },
+      },
+    ),
+    [LIVE_READ.DESCRIPTION_DOCUMENT]: {
+      [one.id]: { rows: { task: { ...DOCUMENT_TASK, workspaceId: ACME.id } } },
+      [other.id]: { rows: { task: { ...DOCUMENT_TASK, ...other } } },
+    },
+  });
+  first = openOn(one.id);
+  const router = await drawWindow(`/acme/task/${one.id}`);
+  // Every frame drawn while reading a task, which a loaded task's page never draws.
+  const reading: string[] = [];
+  const observer = new MutationObserver(() => {
+    if (document.querySelector(".desktop-main")?.textContent?.includes("Reading the task")) {
+      reading.push(router.history.location.pathname);
+    }
+  });
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+
+  await act(async () => {
+    for (const listener of listeners) listener(structuredClone(openOn(other.id)));
+    // Note that the router offers a route's loading frame on a clock of its own, which a real wait lets run.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  await settle();
+  observer.disconnect();
+
+  assert.equal(router.history.location.pathname, "/acme/task/77");
+  assert.deepEqual(reading, [], "no loading frame drawn on the way");
+});
+
+/** The sidebar's row of the task named `name`, as it is pressed. */
+function taskRow(name: string): HTMLElement {
+  const found = [
+    ...document.querySelectorAll<HTMLElement>(
+      "aside.desktop-sidebar button, aside.desktop-sidebar a",
+    ),
+  ].find((row) => row.textContent?.includes(name) === true);
+  return found ?? assert.fail(`the row of ${name} stands`);
+}
+
+/** The words of every sidebar row standing current. */
+function currentRows(): string[] {
+  return [...document.querySelectorAll('aside.desktop-sidebar [aria-current="page"]')].map(
+    (row) => row.textContent ?? "",
+  );
+}
+
+test("a task pressed in the sidebar on Home is its row current while the host opens it, as the address already names it", async () => {
+  const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  first = stateWith(
+    {},
+    {
+      tasks: { ...IDLE_TASKS_VIEW, workspaces: [ACME], tasks: [listed] },
+      access: { admin: false, pending: true },
+    },
+  );
+  // The host takes its time opening the task, answering every other act with a refusal.
+  fakeActPortAnswering((request) =>
+    request.kind === ACT_KIND.TASKS_SELECT
+      ? new Promise(() => undefined)
+      : Promise.reject(refusedOnPort("Not here.")),
+  );
+  const router = await drawWindow("/acme");
+
+  act(() => taskRow(listed.name).click());
+  await settle();
+
+  assert.notEqual(router.history.location.pathname, "/acme");
+  assert.equal(currentRows().length, 1);
+  assert.match(currentRows()[0] ?? "", new RegExp(listed.name, "u"));
+});
+
+test.each([
+  ["Home", "/acme", undefined],
+  ["the Inbox", "/acme/inbox", undefined],
+  ["another open task", "/acme/task/77", "open"],
+] as const)(
+  "a task pressed in the sidebar on %s that the host refuses to open lands back where it was pressed",
+  async (_from, at, other) => {
+    const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+    const open = {
+      ...listed,
+      id: "b2000002-0000-4000-8000-0000000000f9",
+      name: "Other",
+      number: 77,
+    };
+    first = stateWith(
+      {},
+      {
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          workspaces: [ACME],
+          tasks: [listed, open],
+          ...(other === undefined ? {} : { activeTaskId: open.id }),
+        },
+        access: { admin: false, pending: true },
+      },
+    );
+    const router = await drawWindow(at);
+
+    act(() => taskRow(listed.name).click());
+    await settle();
+
+    assert.equal(router.history.location.pathname, at);
+  },
+);

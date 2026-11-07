@@ -22,9 +22,10 @@ import { NO_TASK_SECTIONS } from "@repo/ui/task-sections-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { KEPT } from "../act.js";
+import type { AgentRoute } from "../agent-route.js";
 import type { AutomationsRoute } from "../automations-route.js";
-import type { SummaryPin } from "../desktop/task-summary.js";
 import type { InboxRoute } from "../inbox-route.js";
+import type { TaskRoute } from "../task-route.js";
 import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
 import {
   AGENT_RENAME_SHAPE,
@@ -48,7 +49,12 @@ import {
   type VersionHistoryControl,
 } from "../tasks/use-tasks-tab.js";
 import type { VersionHistoryRoute } from "../version-history-route.js";
-import type { BoardRoute, PersonRoute } from "../workspace-routes.js";
+import type {
+  BoardRoute,
+  HomeRoute,
+  PersonRoute,
+  UnknownWorkspaceRoute,
+} from "../workspace-routes.js";
 import { handHostReads, holdTranscripts, type TranscriptsHeld } from "./app-state.js";
 
 const ignore = () => undefined;
@@ -227,14 +233,6 @@ export function tellingTranscripts(): TranscriptsTelling {
 export function waitingOf(item: InboxItem): AppInboxWaitingItem {
   return { id: item.id, agentId: item.agentId, title: item.title, postedAt: item.postedAt };
 }
-
-/** The task's summary unpinned, its press ignored, so a page drawn over it draws the summary as its narrow rail of glyphs. */
-export const UNPINNED_SUMMARY: SummaryPin = {
-  pinned: false,
-  onToggle: ignore,
-  wide: true,
-  onMeasured: ignore,
-};
 
 /** A task whose version history is shut, its history still being read, no version chosen, every press ignored. */
 function versionHistoryControl(
@@ -456,6 +454,46 @@ export const PERSON_AWAY: PersonRoute = {
   onPreload: ignore,
 };
 
+/** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */
+export const AGENT_AWAY: AgentRoute = {
+  agentId: undefined,
+  workspace: undefined,
+  onOpen: ignore,
+  onClose: ignore,
+};
+
+/** A workspace not there for the reader standing nowhere, for a tasks tab drawn with no router to stand it. */
+export const UNKNOWN_WORKSPACE_AWAY: UnknownWorkspaceRoute = {
+  workspace: undefined,
+  onOpen: ignore,
+  onClose: ignore,
+};
+
+/** Home standing nowhere, for a tasks tab drawn with no router to stand it. */
+export const HOME_AWAY: HomeRoute = {
+  open: false,
+  standingIn: undefined,
+  onOpen: ignore,
+  onClose: ignore,
+  onTurn: ignore,
+};
+
+/** No task's own place standing, for a tab drawn with no router: none opens. */
+export const TASK_AWAY: TaskRoute = {
+  at: undefined,
+  saved: undefined,
+  atNow: () => undefined,
+  savedNow: () => undefined,
+  workspaceNow: () => undefined,
+  onOpen: ignore,
+};
+
+/** No arrival counted, for a tab drawn with no router, whose window never moves. */
+export const NO_ARRIVALS = (): number => 0;
+
+/** A link read that always stands, for a tab drawn with no router, whose window never moves. */
+export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
+
 /**
  * A signed-in Tasks tab on screen on Home with no tasks, every
  * press ignored, bound for whichever task it is given as open; the agents
@@ -583,6 +621,9 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onSelect: ignore,
     onResume: ignore,
     onRestoreTask: ignore,
+    onStandTask: ignore,
+    taskView: { taskId: undefined },
+    onArriveTask: ignore,
     onShowAgent: ignore,
     onShowColumnTab: ignore,
     onShowPanelTab: ignore,
@@ -630,8 +671,9 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     inboxTaskless: [],
     failedRuns: [],
     adminView: ADMIN_AWAY,
+    atHome: false,
+    taskPlaceStands: true,
     boardView: { open: false, onOpen: ignore, onClose: ignore, onPreload: ignore },
-    unknownWorkspace: { open: false, onClose: ignore },
     automationsView: {
       open: false,
       place: { kind: AUTOMATIONS_PAGE.LIST },
@@ -682,6 +724,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     },
     onLeaveTask: ignore,
     onGoHome: ignore,
+    onUnbindTask: ignore,
     renameTask: taskRenameMutation(() => Promise.resolve(true), undefined),
     onDraftName: ignore,
     onMarkTask: ignore,

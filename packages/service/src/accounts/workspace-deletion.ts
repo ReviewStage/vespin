@@ -5,15 +5,14 @@
  * cascading with it, its agents among them. An agent's conversation names
  * the account that ran it rather than the workspace, so it outlasts the
  * agent: before the delete the conversations of every agent of the
- * workspace are read, and after it they are stamped deleted, as a deleted
- * task's are, so the purge takes them seven days on (`soft-delete.ts`),
- * by when their sandboxes' snapshots have expired too. Nothing is stamped
- * before the delete,
+ * workspace are read, and after it they are deleted, as a deleted task's
+ * are (`conversation-delete.ts`), their sandboxes' snapshots left to expire
+ * on Vercel's own schedule. Nothing is deleted before the workspace,
  * because a delete refused after that would leave a standing workspace's
  * agents with their transcripts gone.
  */
 
-import { stampConversationsDeleted } from "@repo/database/models/soft-delete";
+import { deleteConversations } from "@repo/database/models/conversation-delete";
 import { workspaceConversationIds } from "@repo/database/models/workspace-store";
 import { Effect } from "effect";
 
@@ -33,7 +32,7 @@ export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWork
 /** What the deletion settles once Better Auth has deleted the workspace, a failure logged since the workspace is already gone. */
 export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorkspaceDeletion")(
   function* (pending: WorkspaceDeletionPending) {
-    yield* stampConversationsDeleted(pending.conversationIds).pipe(
+    yield* deleteConversations(pending.conversationIds).pipe(
       Effect.catch((failure) =>
         Effect.logError(
           "The workspace's deletion left its agents' conversations standing",

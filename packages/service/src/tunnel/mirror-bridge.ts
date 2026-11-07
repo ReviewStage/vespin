@@ -18,7 +18,9 @@
  * as `node_modules` included, which costs seconds and hundreds of megabytes.
  * A missed watch event costs nothing, since the next listing catches it,
  * and whatever the bridge cannot do, such as a listing git refuses or a
- * base it cannot find, ends it, which the Mac answers by connecting again.
+ * base it cannot find, ends it, which the Mac answers by connecting again;
+ * it says first which step failed (`MIRROR_BRIDGE_STEP`), and never why in
+ * git's words or a path, so the relay can log it.
  * A request is answered only for a path the last listing holds, so the Mac
  * can never read outside it. The bridge writes nothing but
  * frames, and git's own words go nowhere.
@@ -30,6 +32,11 @@ import {
   MIRROR_FRAME,
   MIRROR_HASH,
 } from "@repo/features/sandbox-mirror-wire";
+
+/** The steps whose failure ends the bridge, as its failed word names them. */
+export const MIRROR_BRIDGE_STEP = { LIST: "list", BASE: "base", WATCH: "watch" } as const;
+
+export type MirrorBridgeStep = (typeof MIRROR_BRIDGE_STEP)[keyof typeof MIRROR_BRIDGE_STEP];
 
 /** How long the checkout must be quiet before it is listed again, and the longest a stir waits for that. */
 const SETTLE = { QUIET_MS: 200, LONGEST_MS: 1000 } as const;
@@ -47,6 +54,13 @@ let quiet;
 let longest;
 const watched = new Map();
 const say = (frame) => process.stdout.write(JSON.stringify(frame) + "\\n");
+const fail = (step) => {
+  say({ bridge: "failed", step });
+  process.exit(1);
+};
+const attempt = (step, act) => {
+  try { return act(); } catch { return fail(step); }
+};
 const tell = (message) => {
   if (channel === undefined) return;
   say({ type: "data", channel, data: Buffer.from(JSON.stringify(message)).toString("base64") });
@@ -72,7 +86,8 @@ const hashOf = (name) => createHash("${MIRROR_HASH.ALGORITHM}").update(fs.readFi
 const manifest = () => {
   const files = [];
   for (const [name, stat] of listing) {
-    try { files.push({ path: name, size: stat.size, hash: hashOf(name) }); } catch {}
+    // Note that a file the manifest cannot read leaves the listing too, because the Mac is told it is gone and the next listing must find it new.
+    try { files.push({ path: name, size: stat.size, hash: hashOf(name) }); } catch { listing.delete(name); }
   }
   return { type: "${MIRROR_FRAME.MANIFEST}", files };
 };
@@ -86,6 +101,7 @@ const fileOf = (name, stat) => {
 const send = (name, stat) => {
   const message = fileOf(name, stat);
   if (message !== undefined) tell(message);
+  return message !== undefined;
 };
 const watchFolders = () => {
   const folders = new Set([""]);
@@ -99,14 +115,21 @@ const watchFolders = () => {
   }
   for (const folder of folders) {
     if (watched.has(folder)) continue;
-    watched.set(folder, fs.watch(path.join(root, folder), stir));
+    // Note that a folder gone since the listing is skipped rather than failed, and listed again, because the changes of that listing are still to be told and the folder may be back before its parent's watch.
+    let watcher;
+    try { watcher = fs.watch(path.join(root, folder), stir); } catch (error) {
+      if (error.code === "ENOENT") { stir(); continue; }
+      throw error;
+    }
+    watcher.on("error", () => fail("${MIRROR_BRIDGE_STEP.WATCH}"));
+    watched.set(folder, watcher);
   }
 };
 const open = (opened) => {
   channel = opened;
-  listing = list();
-  watchFolders();
-  tell({ type: "${MIRROR_FRAME.HEADER}", base: base() });
+  listing = attempt("${MIRROR_BRIDGE_STEP.LIST}", list);
+  attempt("${MIRROR_BRIDGE_STEP.WATCH}", watchFolders);
+  tell({ type: "${MIRROR_FRAME.HEADER}", base: attempt("${MIRROR_BRIDGE_STEP.BASE}", base) });
   tell(manifest());
 };
 const settle = () => {
@@ -116,13 +139,14 @@ const settle = () => {
   longest = undefined;
   if (channel === undefined) return;
   const was = listing;
-  listing = list();
+  listing = attempt("${MIRROR_BRIDGE_STEP.LIST}", list);
   // Note that we watch the new listing's folders before telling any change, because the Mac may answer one with the next at once, in a folder new since.
-  watchFolders();
+  attempt("${MIRROR_BRIDGE_STEP.WATCH}", watchFolders);
   for (const [name, stat] of listing) {
     const before = was.get(name);
     const moved = before === undefined || before.size !== stat.size || before.mtimeMs !== stat.mtimeMs;
-    if (moved || (before.mode & 0o111) !== (stat.mode & 0o111)) send(name, stat);
+    // Note that a file it cannot read leaves the listing, as the manifest's does, because only a listing that finds it new sends it once it can be read.
+    if ((moved || (before.mode & 0o111) !== (stat.mode & 0o111)) && !send(name, stat)) listing.delete(name);
   }
   for (const name of was.keys()) {
     if (!listing.has(name)) tell({ type: "${MIRROR_FRAME.DELETE}", path: name });

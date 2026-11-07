@@ -36,12 +36,11 @@ import {
   handCapabilities,
   handHostReads,
   holdPullRequestParts,
-  registryWith,
+  withExperiments,
 } from "../testing/app-state.js";
-import { onRegistry } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { onSideBundles, unlandedBundles } from "../testing/side-bundles.js";
-import { agentsControl, tasksControl, UNPINNED_SUMMARY } from "../testing/tasks-control.js";
+import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 // Note that a Pull request tab is loaded as the side panel loads it, on first use
 // (`pages-on-demand.ts`), so the module is read here first and its load settles
 // within the test's own ticks.
@@ -179,13 +178,11 @@ async function mountEveryTab(
   roots.push(root);
   act(() =>
     root.render(
-      onRegistry(
-        registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)),
-        // Only the tabs' bars are asked about, so no bundle lands under them.
+      withExperiments(
+        experimentsOn(EXPERIMENT.DESCRIPTIONS),
         onSideBundles(
           unlandedBundles(),
           createElement(DesktopTasks, {
-            summary: UNPINNED_SUMMARY,
             looks: NO_LOOKS,
             tasks: control,
           }),

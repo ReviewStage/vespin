@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { MOTION_DELAY_MS } from "@repo/brand";
 import type { AgentAgentAnswer, AgentWorkspaceListParams } from "@repo/features/agent-view";
 import {
   AGENT_STATUS,
@@ -35,14 +36,12 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { ACTOR_KIND, ACTOR_STATE } from "@repo/ui/actor-model";
-import { Clock, Context, Effect } from "effect";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
+import { serveEffectsOn } from "@repo/ui/testing/effect-services";
+import { Clock, Context, Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
-import { rendererRuntime } from "../renderer-runtime.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -57,7 +56,6 @@ import {
   holdIntegrations,
   holdIntegrationTools,
   holdMembers,
-  registryWith,
   stateWith,
 } from "../testing/app-state.js";
 import {
@@ -68,7 +66,7 @@ import {
   QUIET_COMPOSER,
   typeInComposer,
 } from "../testing/composer.js";
-import { onRegistry, settleQueries, writeAppState } from "../testing/copy-feedback.js";
+import { settleQueries, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
@@ -406,12 +404,13 @@ function Box({ sender, skills }: { sender: MessageSender; skills: SkillSource })
   return createElement(AgentComposer, { ...QUIET_COMPOSER, agentId: SELF_ID, composer, skills });
 }
 
-/** The node drawn on a task's page, or off any page where none is given, its atoms held by `registry`; `redraw` draws it on the page given. */
+/** The node drawn on a task's page, or off any page where none is given, the test's Query client holding `state` from the first frame; `redraw` draws it on the page given. */
 function drawing(
   node: ReactNode,
   page: TaskMentionsValue | undefined,
-  registry = registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)),
+  state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS), {}),
 ) {
+  writeAppState(state);
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -419,8 +418,7 @@ function drawing(
   const redraw = (on: TaskMentionsValue | undefined) =>
     act(() =>
       root.render(
-        onRegistry(
-          registry,
+        withQueryClient(
           on === undefined
             ? createElement(Fragment, null, node)
             : createElement(TaskMentions, { value: on, children: node }),
@@ -1014,13 +1012,6 @@ function WorkspacePage({ children }: { children: ReactNode }): ReactNode {
   return createElement(TaskMentions, { value: { ...taskPage(), readAgents }, children });
 }
 
-/** A registry whose atoms wait on this clock, as the window's wait on its own. */
-function registryOn(clock: Clock.Clock): AtomRegistry.AtomRegistry {
-  return AtomRegistry.make({
-    initialValues: [[rendererRuntime, AsyncResult.success(Context.make(Clock.Clock, clock))]],
-  });
-}
-
 /** Longer than the typing rests before the service is searched for the words typed. */
 const PAST_SEARCH_PAUSE = "300 millis";
 
@@ -1030,20 +1021,18 @@ const rest = Effect.gen(function* () {
   yield* Effect.promise(settle);
 });
 
-/** The box on the plan's page that reads its workspace's agents, every message it sends written down, its waits on `registry`'s clock. */
-async function workspaceBox(registry?: AtomRegistry.AtomRegistry) {
+/** The box on the plan's page that reads its workspace's agents, every message it sends written down. */
+async function workspaceBox() {
   const sent: string[] = [];
   const sender: MessageSender = (_agentId, text) => {
     sent.push(text);
     return new Promise<AgentAgentAnswer>(ignore);
   };
-  const on = registry ?? registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   // Note that the test's Query client is handed the bridge's document before the first frame, so the agents' list reads the task list from it rather than racing its read.
-  writeAppState(stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS), { tasks: tasksView() }));
   const { container } = drawing(
     createElement(WorkspacePage, null, createElement(Box, { sender, skills: noSkills })),
     undefined,
-    on,
+    stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS), { tasks: tasksView() }),
   );
   await settle();
   return { container, sent };
@@ -1140,8 +1129,8 @@ it.effect(
   "a word typed after @ finds an agent of another task by its task's name, and an archived one, read then and marked archived",
   () =>
     Effect.gen(function* () {
-      const registry = registryOn(yield* Clock.Clock);
-      const { container } = yield* Effect.promise(() => workspaceBox(registry));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const { container } = yield* Effect.promise(() => workspaceBox());
 
       typeInComposer(container, "See @billing");
       yield* rest;
@@ -1161,8 +1150,8 @@ it.effect(
   "words typed after @ ask the service once the typing rests on them, never letter by letter, while the bare @ asks it nothing",
   () =>
     Effect.gen(function* () {
-      const registry = registryOn(yield* Clock.Clock);
-      const { container } = yield* Effect.promise(() => workspaceBox(registry));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const { container } = yield* Effect.promise(() => workspaceBox());
 
       typeInComposer(container, "See @");
       yield* Effect.promise(settle);
@@ -1192,8 +1181,8 @@ it.effect(
   "words typed after @ again, once they went, wait the pause afresh before the service is asked",
   () =>
     Effect.gen(function* () {
-      const registry = registryOn(yield* Clock.Clock);
-      const { container } = yield* Effect.promise(() => workspaceBox(registry));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const { container } = yield* Effect.promise(() => workspaceBox());
 
       typeInComposer(container, "See @bill");
       yield* rest;
@@ -1216,8 +1205,8 @@ it.effect(
   "an agent of another task and one on no task picked from the @ list are each sent as the agent's own link under the workspace",
   () =>
     Effect.gen(function* () {
-      const registry = registryOn(yield* Clock.Clock);
-      const { container, sent } = yield* Effect.promise(() => workspaceBox(registry));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const { container, sent } = yield* Effect.promise(() => workspaceBox());
 
       typeInComposer(container, "Ask @bill");
       yield* rest;
@@ -1240,8 +1229,8 @@ it.effect(
   "a word typed after @ finds an agent the workspace's newest leave out, as the service searches every agent for it",
   () =>
     Effect.gen(function* () {
-      const registry = registryOn(yield* Clock.Clock);
-      const { container } = yield* Effect.promise(() => workspaceBox(registry));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const { container } = yield* Effect.promise(() => workspaceBox());
 
       typeInComposer(container, "See @");
       yield* Effect.promise(settle);
@@ -1307,8 +1296,8 @@ it.effect(
   "an @ row for an agent hangs the agent's own card while the pointer rests on it, naming its task, with nothing read for it",
   () =>
     Effect.gen(function* () {
-      const registry = registryOn(yield* Clock.Clock);
-      const { container } = yield* Effect.promise(() => workspaceBox(registry));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const { container } = yield* Effect.promise(() => workspaceBox());
 
       typeInComposer(container, "See @bill");
       yield* rest;
@@ -1317,7 +1306,12 @@ it.effect(
           '.mention-menu [aria-label="Agents"] [role="option"]',
         ) ?? assert.fail("the list offers the agent");
       const reads = told.length;
-      restOn(option);
+      // Note that the hint's wait runs on this test's clock, so the pointer rests as the clock moves.
+      act(() => {
+        option.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+      });
+      yield* TestClock.adjust(Duration.millis(MOTION_DELAY_MS.HINT));
+      yield* Effect.promise(settle);
 
       const card =
         document.querySelector(".ui-tooltip-card") ?? assert.fail("the row hangs a card");

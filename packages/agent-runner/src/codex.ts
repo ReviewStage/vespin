@@ -28,7 +28,9 @@
  * Code's background work outlives a `result`. A turn that is over ends the
  * launch as `turn_ended`, or, where the config asks it to stay `warm`, posts
  * IDLE and keeps the launch up (`RUNNER_WARM`) for the service's next message,
- * until the service retires it or its cap ends it as `idled`. One interrupted
+ * until the service or its host retires it or its warm window ends it as
+ * `idled`; a `warm` line runs that window again from now, and such a launch is
+ * warm from its start too. One interrupted
  * after the service's stop ends the launch as `stopped`; a
  * failed turn, or one interrupted without a stop, as `failed`, with the
  * turn's error, so it shows as interrupted and Continue resumes the thread. A
@@ -155,6 +157,7 @@ import {
   RUNNER_WARM,
   type RunnerEnd,
 } from "./protocol.js";
+import { RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
 
 /**
@@ -653,7 +656,7 @@ interface CodexLaunch {
   /** The service tier the next turn names (`turnTierOf`); null for the standard one. */
   tier: ServiceTier | null;
   stopping: boolean;
-  /** Whether the launch is warm: its turn completed with nothing left, an IDLE posted, and no message taken since. */
+  /** Whether the launch is warm: started warm, or its turn completed with nothing left and an IDLE posted, and no message taken since. */
   warm: boolean;
   /** The thread's rollout as the store mirrors it, where the config names the store. */
   readonly mirror: RolloutMirror | undefined;
@@ -783,7 +786,9 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       inRunnerGroup: runsOnHost(env),
     },
     listenerFor(seen, tokens),
-  ).pipe(Scope.provide(serverScope));
+  ).pipe(Scope.provide(serverScope), (spawned) =>
+    launch.context.trace.step(RUNNER_SPAN.CLI, spawned),
+  );
   const opened = Effect.gen(function* () {
     // Note that the sign-in on host-supplied tokens is experimental, which app-server serves only to a client that opted in.
     yield* server.request(METHOD.INITIALIZE, {
@@ -837,6 +842,7 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
     return opened.value.thread;
   });
   const openedThread = yield* opened.pipe(
+    (handshake) => launch.context.trace.step(RUNNER_SPAN.HANDSHAKE, handshake),
     Effect.tapError(() => Scope.close(serverScope, Exit.void)),
   );
   return { server, serverScope, threadId: openedThread.id, path: openedThread.path ?? undefined };
@@ -951,6 +957,7 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
   switch (value.type) {
     case INPUT_LINE.MESSAGE: {
       launch.warm = false;
+      yield* launch.context.trace.taken;
       // Note that our id for the line is the id Codex echoes, so a turn that takes it names it.
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
@@ -1005,6 +1012,9 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
       yield* Effect.logWarning("agent-runner: skipped a retire for a launch at work");
       return undefined;
     }
+    // Note that a warm launch's window is its wait for the next signal, which this one already ran again from now.
+    case INPUT_LINE.WARM:
+      return undefined;
     case INPUT_LINE.MODEL: {
       if (value.model !== undefined) launch.model = value.model;
       // Note that a line naming either speed key says both, the one it leaves out being off.
@@ -1188,7 +1198,10 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   const store =
     config.transcriptsUrl === undefined || codexHome === undefined
       ? undefined
-      : { store: transcriptStore(config.transcriptsUrl, context.bearer), codexHome };
+      : {
+          store: transcriptStore(config.transcriptsUrl, context.bearer, context.trace.headers),
+          codexHome,
+        };
   if (store !== undefined && config.threadId !== undefined) {
     const restored = yield* restoreRollouts(store.store, store.codexHome, config.threadId).pipe(
       Effect.result,
@@ -1233,7 +1246,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     effort: config.effort,
     tier: serviceTierOf(config.fast, config.ultrafast),
     stopping: false,
-    warm: false,
+    // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
+    warm: config.warm === true,
     mirror,
   };
 
@@ -1246,10 +1260,10 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   );
   const outcome = yield* Effect.gen(function* () {
     for (;;) {
-      // A warm launch waits at most its cap for the next signal, and ends where none came.
+      // A warm launch waits at most its window for the next signal, and ends where none came.
       const next = launch.warm
         ? yield* Queue.take(signals).pipe(
-            Effect.timeoutOption(Duration.millis(RUNNER_WARM.IDLE_CAP_MS)),
+            Effect.timeoutOption(Duration.millis(config.warmForMs ?? RUNNER_WARM.IDLE_CAP_MS)),
           )
         : Option.some(yield* Queue.take(signals));
       if (Option.isNone(next)) return ended(RUNNER_END.IDLED);

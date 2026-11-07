@@ -13,7 +13,6 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, onTestFinished, test, vi } from "vitest";
@@ -25,7 +24,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handState } from "../testing/app-state.js";
-import { onRegistry } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { DesktopSettings, type SettingsStep } from "./desktop-settings.js";
 import { SIDEBAR_OVERLAY } from "./sidebar-collapse.js";
@@ -47,7 +46,7 @@ const _accepted = () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED 
 
 /** The sidebar's groups and their rows, in the order the approved layout lists them, where no workspace is listed to head the first and no experiment is on. */
 const PAGE_GROUPS = [
-  { heading: "Workspace", rows: ["Workspace"] },
+  { heading: "Workspace", rows: ["Workspace", "Environment"] },
   {
     heading: "Account",
     rows: ["Account", "Agents", "Integrations", "Vespin MCP", "Vespin CLI", "Experimental"],
@@ -76,10 +75,10 @@ const PERSONAL: Workspace = {
   github: null,
 };
 
-/** The Workspace page's control with `listed` the workspace the tasks' sidebar lists. */
+/** The Workspace page's control with `listed` the workspace the tasks' sidebar lists, as given. */
 function listing(listed: Workspace): WorkspaceSettingsControl {
   return {
-    workspaces: [PERSONAL, ACME],
+    workspaces: [PERSONAL, ACME].map((each) => (each.id === listed.id ? listed : each)),
     workspaceId: listed.id,
     onLeft: ignore,
     listFailed: false,
@@ -207,7 +206,6 @@ function SettingsHarness({
 }
 
 let root: Root | undefined;
-let registry = AtomRegistry.make();
 
 beforeEach(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -232,14 +230,13 @@ function mount(element: React.ReactElement): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  registry = AtomRegistry.make();
-  act(() => root?.render(onRegistry(registry, element)));
+  act(() => root?.render(withQueryClient(element)));
   return container;
 }
 
 /** Draws the mounted root again over `element`, as a new render of the app hands Settings new props. */
 function redraw(element: React.ReactElement): void {
-  act(() => root?.render(onRegistry(registry, element)));
+  act(() => root?.render(withQueryClient(element)));
 }
 
 /** An element's words as a reader hears them, what is hidden from a screen reader left out. */
@@ -325,18 +322,23 @@ test("the sidebar's first group is headed by the listed workspace's name, over i
     pageGroups(page).map((group) => group.heading),
     ["Acme", "Account", "This Mac"],
   );
-  assert.deepEqual(pageGroups(page)[0]?.rows, ["Workspace"]);
+  assert.deepEqual(pageGroups(page)[0]?.rows, ["Workspace", "Environment"]);
 });
 
-test("the sidebar lists Memory under Workspace and its search finds it only while the account has the Memory experiment on", async () => {
-  const off = mount(createElement(SettingsHarness));
-  assert.deepEqual(pageGroups(off)[0]?.rows, ["Workspace"]);
+test("the sidebar lists Memory under Workspace and its search finds it only while the workspace Settings shows has the Memory experiment on", async () => {
+  const off = mount(createElement(SettingsHarness, { workspace: listing(PERSONAL) }));
+  assert.deepEqual(pageGroups(off)[0]?.rows, ["Workspace", "Environment"]);
   // While off, the search finds only the experiment's own switch, where Memory is turned on.
   assert.deepEqual(foundUnder(off, "Memory"), ["Experimental"]);
 
-  handState(experimentsOn(EXPERIMENT.MEMORY));
-  const on = mount(createElement(SettingsHarness));
-  await vi.waitFor(() => expect(pageGroups(on)[0]?.rows).toEqual(["Workspace", "Memory"]));
+  const remembering: Workspace = {
+    ...PERSONAL,
+    experiments: [{ experiment: EXPERIMENT.MEMORY, on: true, changedBy: null, changedAt: 1 }],
+  };
+  const on = mount(createElement(SettingsHarness, { workspace: listing(remembering) }));
+  await vi.waitFor(() =>
+    expect(pageGroups(on)[0]?.rows).toEqual(["Workspace", "Environment", "Memory"]),
+  );
   assert.equal(shownTitle(on), "Account");
   openPage(on, "Memory");
   assert.equal(shownTitle(on), "Memory");

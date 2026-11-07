@@ -22,8 +22,7 @@ import { localTab } from "@repo/ui/tab-strip-model";
 import { STILL_CLOCK, serveEffectsOn } from "@repo/ui/testing/effect-services";
 import type { UnparsedWireValue } from "@repo/wire";
 import { Clock, Context, Effect } from "effect";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -32,7 +31,7 @@ import { SIDE_BUNDLES, type SideBundles } from "../bundle-loader.js";
 import { FindScope } from "../find-in-tab.js";
 import { announcedPolitely, mountAnnouncer } from "../testing/announcer.js";
 import { type AnyAct, fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { onRegistry, settleQueries } from "../testing/copy-feedback.js";
+import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { onPhone } from "../testing/phone-tab.js";
 import {
   bundleLanded,
@@ -47,7 +46,12 @@ import { TERMINAL_KIND } from "./terminal-session.js";
 import { TerminalCount, TerminalTab } from "./terminal-tab.js";
 import { OpenLinkProvider } from "./use-open-link.js";
 import type { SidePanelTab } from "./use-side-panel.js";
-import { useEndTerminalTab, useOpenTerminalTab } from "./use-terminal-session.js";
+import {
+  useEndTerminalTab,
+  useOpenTerminalTab,
+  useTerminalsOwner,
+} from "./use-terminal-session.js";
+import { WindowAccountContext } from "./window-account.js";
 
 /**
  * A cloud agent's Local tab as the developer meets it: one terminal on
@@ -101,7 +105,11 @@ function kept(): readonly HeldShell[] {
 function keep(shells: readonly HeldShell[]): void {
   window.sessionStorage.setItem(
     "vespin.terminals",
-    JSON.stringify({ cloud: {}, local: shells.length === 0 ? {} : { [AGENT.id]: shells } }),
+    JSON.stringify({
+      cloud: {},
+      local: shells.length === 0 ? {} : { [AGENT.id]: shells },
+      accounts: {},
+    }),
   );
 }
 
@@ -140,7 +148,6 @@ interface Main {
 }
 
 const roots: Root[] = [];
-const registries: AtomRegistry.AtomRegistry[] = [];
 
 // The terminal bundle landed before any tab is drawn, as it is once a terminal has been shown in this window.
 let FITTED: SideBundles;
@@ -261,7 +268,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   for (const root of roots.splice(0)) act(() => root.unmount());
-  for (const registry of registries.splice(0)) registry.dispose();
   document.body.innerHTML = "";
   document.head.innerHTML = "";
   document.body.style.removeProperty("--ui-duration-pane");
@@ -288,6 +294,8 @@ async function mount(
   phone = false,
   /** The terminal the tab shows, by the id the window minted it under. */
   shell = FIRST,
+  /** The account signed in, none for no account. */
+  account?: string,
 ) {
   const container = document.createElement("div");
   document.body.append(container);
@@ -297,8 +305,6 @@ async function mount(
   // Note that the working agent's mark never steps here, because it steps on a beat forever, and a
   // test that runs every fake timer out would never finish.
   serveEffectsOn(Context.make(Clock.Clock, STILL_CLOCK));
-  const registry = AtomRegistry.make();
-  registries.push(registry);
   const terminals = windowTerminals();
   const wrapped = (tab: React.ReactElement) =>
     findable
@@ -310,7 +316,13 @@ async function mount(
       : tab;
   let agentOpened = 0;
   let handed = onPhone(null).handed;
-  const render = (on: boolean) => {
+  // The account signed in, as the window's root hands it on.
+  const Owner = ({ of }: { of: string | undefined }) => {
+    useTerminalsOwner(of);
+    return null;
+  };
+  let signedIn = account;
+  const render = (on: boolean, drawn = true) => {
     const tab = createElement(TerminalTab, {
       tab: localTab(AGENT.id, shell, "Local 1"),
       agents,
@@ -320,13 +332,23 @@ async function mount(
       },
       onClose: () => undefined,
     });
-    const drawn = onPhone(tab);
-    handed = drawn.handed;
+    const shown = onPhone(tab);
+    handed = shown.handed;
     act(() =>
       root.render(
-        onRegistry(
-          registry,
-          onTerminals(terminals, onSideBundles(bundles, wrapped(phone ? drawn.element : tab))),
+        withQueryClient(
+          onTerminals(
+            terminals,
+            createElement(
+              WindowAccountContext.Provider,
+              { value: signedIn },
+              createElement(Owner, { of: signedIn }),
+              onSideBundles(
+                bundles,
+                drawn ? wrapped(phone ? shown.element : tab) : createElement(Fragment),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -346,6 +368,12 @@ async function mount(
     agentOpened: () => agentOpened,
     render: async (on: boolean) => {
       render(on);
+      await settle();
+    },
+    /** Another account signs in, the tab no longer drawn unless asked, as the strip draws none of the first's. */
+    signIn: async (next: string, drawn = false) => {
+      signedIn = next;
+      render(true, drawn);
       await settle();
     },
     terminals,
@@ -458,6 +486,50 @@ test("a shell that ended takes any key for a new one in the same tab, and is let
     agentId: AGENT.id,
     terminalId: MADE,
   });
+});
+
+test("another account signing in detaches the tab's shell on this Mac and ends none: its port closes", async () => {
+  const tab = await mount(true, false, FITTED, false, FIRST, "ada");
+  const port = main.post(MADE);
+
+  await tab.signIn("grace");
+
+  assert.equal(port.closed(), true);
+  assert.ok(!tab.kinds().includes(ACT_KIND.MAC_SHELL_CLOSE), "no shell was ended");
+});
+
+test("a port that arrives after another account signed in is let go, its shell on this Mac ended by nothing", async () => {
+  const tab = await mount(true, false, FITTED, false, FIRST, "ada");
+  await tab.signIn("grace");
+
+  const port = main.post(MADE);
+
+  assert.equal(port.closed(), true);
+  assert.ok(!tab.kinds().includes(ACT_KIND.MAC_SHELL_CLOSE), "no shell was ended");
+});
+
+test("a switch away and back before the first attach's port arrives keeps the screen on the latest port, the earlier one closed and no shell ended", async () => {
+  const tab = await mount(true, false, FITTED, false, FIRST, "ada");
+  await tab.signIn("grace");
+  await tab.signIn("ada", true);
+
+  const first = main.post(MADE);
+  const second = main.post(MADE);
+  second.say({ type: "state", state: "attached" });
+  await tab.type("a", 65);
+
+  assert.deepEqual(
+    tab.kinds().filter((kind) => kind === ACT_KIND.MAC_SHELL_ATTACH),
+    ["macShell.attach", "macShell.attach"],
+  );
+  assert.equal(first.closed(), true);
+  assert.equal(second.closed(), false);
+  assert.equal(tab.standing(), "· connected");
+  assert.deepEqual(
+    second.posted.filter((message) => message.type === "input"),
+    [{ type: "input", data: "a" }],
+  );
+  assert.ok(!tab.kinds().includes(ACT_KIND.MAC_SHELL_CLOSE), "no shell was ended");
 });
 
 test("a mirror main could not make shows a bar that says so, whose action asks again", async () => {
@@ -768,7 +840,6 @@ test("the window handing the tab a new link opener keeps the shell's scrollback 
   const root = createRoot(container);
   roots.push(root);
   const agents = agentsControl({ agents: [AGENT], agentIds: [AGENT.id] });
-  const registry = AtomRegistry.make();
   const terminals = windowTerminals();
   const tab = createElement(TerminalTab, {
     tab: localTab(AGENT.id, FIRST, "Local 1"),
@@ -781,8 +852,7 @@ test("the window handing the tab a new link opener keeps the shell's scrollback 
   const draw = () =>
     act(() =>
       root.render(
-        onRegistry(
-          registry,
+        withQueryClient(
           onTerminals(
             terminals,
             onSideBundles(

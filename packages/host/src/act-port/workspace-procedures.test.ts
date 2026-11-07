@@ -64,6 +64,10 @@ const REFUSAL_ROWS: { readonly [Name in keyof typeof WORKSPACE_ACTS]: RefusalRow
     refusal: "Could not rename that workspace on this system.",
     payload: { ...WORKSPACE, name: "Acme Labs" },
   },
+  WORKSPACE_EXPERIMENT_SET: {
+    refusal: "Could not change that experiment on this system.",
+    payload: { ...WORKSPACE, experiment: "pilot", on: true },
+  },
   WORKSPACE_SLUG_SET: {
     refusal: "Could not change that workspace's link on this system.",
     payload: { ...WORKSPACE, slug: "acme-labs" },
@@ -128,6 +132,18 @@ const REFUSAL_ROWS: { readonly [Name in keyof typeof WORKSPACE_ACTS]: RefusalRow
     refusal: "Could not change that workspace's repositories on this system.",
     payload: { ...WORKSPACE, repository: "acme/relay", added: true },
   },
+  WORKSPACE_ENVIRONMENT_LIST: {
+    refusal: "Could not read that workspace's environment on this system.",
+    payload: WORKSPACE,
+  },
+  WORKSPACE_ENVIRONMENT_PUT: {
+    refusal: "Could not save that variable on this system.",
+    payload: { ...WORKSPACE, name: "API_TOKEN", value: "fixture-value" },
+  },
+  WORKSPACE_ENVIRONMENT_DELETE: {
+    refusal: "Could not delete that variable on this system.",
+    payload: { ...WORKSPACE, name: "API_TOKEN" },
+  },
   WORKSPACE_GITHUB_CONNECT: {
     refusal: "Could not connect GitHub to that workspace on this system.",
     payload: WORKSPACE,
@@ -168,8 +184,6 @@ function connectPort(answers: {
 }) {
   const opened: string[] = [];
   const dependencies: WorkspaceProceduresDependencies = {
-    // SAFETY: a connection's procedure reads no follow of the host's, so none is handed.
-    host: {} as WorkspaceProceduresDependencies["host"],
     openExternal: async (url) => {
       opened.push(url);
     },

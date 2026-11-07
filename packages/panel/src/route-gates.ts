@@ -10,23 +10,35 @@
  * routed place's declaration names its gate (`places/routed-places.ts`).
  */
 
+import type { TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { EXPERIMENT, type ExperimentChoices, experimentOn, NO_EXPERIMENTS } from "@repo/settings";
+import {
+  EXPERIMENT,
+  type ExperimentChoices,
+  experimentOn,
+  experimentsIn,
+  NO_EXPERIMENTS,
+} from "@repo/settings";
 import { SETTINGS_PAGE_LIST, type SettingsView } from "@repo/settings/settings-views";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useKeptChoice } from "./desktop/chosen-workspace.js";
-import { settingsPageExperimentStands } from "./settings/settings-rows.js";
+import {
+  settingsPageExperimentStands,
+  settingsPageWaitsOnWorkspaces,
+} from "./settings/settings-rows.js";
+import { loadedTasksFixture } from "./tasks/tasks-fixture-loader.js";
 import {
   appStateIn,
   appStateQuery,
-  selectExperimentChoices,
   selectSettingsHeld,
+  selectStoredExperimentChoices,
 } from "./use-app-state.js";
+import { workspaceExperimentChoices } from "./workspace-experiments.js";
 
-/** What a workspace's gate reads of each of the reader's workspaces: what an address's first step may name it by. */
-type GateWorkspace = Pick<Workspace, "id" | "slug" | "formerSlugs">;
+/** What a workspace's gate reads of each of the reader's workspaces: what an address's first step may name it by, and the experiments it chose. */
+type GateWorkspace = Pick<Workspace, "id" | "slug" | "formerSlugs" | "experiments">;
 
 /** The reader's workspaces before their first read lands. */
 const NO_WORKSPACES: readonly GateWorkspace[] = [];
@@ -34,6 +46,7 @@ const NO_WORKSPACES: readonly GateWorkspace[] = [];
 /** What the gates read: whether the account may reach Admin, its access still being read counting as may, its experiments, and whether they are read yet. */
 export interface RouteAccess {
   readonly admin: boolean;
+  /** The account's choices as its settings hold them, of which only its own experiments are read: a workspace experiment is its workspace's. */
   readonly experiments: ExperimentChoices;
   /** Whether the account's settings, its experiments among them, have been read; a page an experiment holds waits on the read rather than giving way. */
   readonly experimentsRead: boolean;
@@ -56,14 +69,15 @@ export const UNREAD_ROUTE_ACCESS: RouteAccess = {
 export function routeAccessNow(client: QueryClient): RouteAccess {
   const state = appStateIn(client);
   const access = state?.access;
+  const workspaces = state === undefined ? NO_WORKSPACES : selectWorkspaces(state);
   return {
     // A reloaded Admin address waits on an access still being read rather than being refused.
     admin: access === undefined || access.pending === true || access.admin === true,
     experiments: state?.settings?.experiments ?? NO_EXPERIMENTS,
     experimentsRead: state?.settings !== undefined,
-    workspaces: state?.tasks?.workspaces ?? NO_WORKSPACES,
+    workspaces,
     // Note that a reading off the state alone lists the first workspace, as the window does with none kept.
-    listed: stepOf(state?.tasks?.workspaces?.[0]),
+    listed: stepOf(workspaces[0]),
   };
 }
 
@@ -77,9 +91,18 @@ function selectAdminStands(state: AppStateSnapshot): boolean {
   return state.access.pending === true || state.access.admin === true;
 }
 
-/** The reader's workspaces as main's document holds them. */
+/** The task list the window lists from: main's document's, or a fixture run's synthetic one, which main's document holds none of. */
+function listedTasksView(state: AppStateSnapshot): TasksView | undefined {
+  return loadedTasksFixture()?.fixtureTasksView(state.run) ?? state.tasks;
+}
+
+/**
+ * The reader's workspaces as the window lists them: main's document's, or a
+ * fixture run's synthetic ones, so a fixture run's gates read what its
+ * window draws.
+ */
 function selectWorkspaces(state: AppStateSnapshot): readonly GateWorkspace[] {
-  return state.tasks?.workspaces ?? NO_WORKSPACES;
+  return listedTasksView(state)?.workspaces ?? NO_WORKSPACES;
 }
 
 /**
@@ -93,7 +116,7 @@ export function useRouteAccess(): RouteAccess {
   // Note that Admin stands before the document is read, as a reloaded Admin address waits on the access.
   const admin = useQuery({ ...appStateQuery, select: selectAdminStands }).data ?? true;
   const experiments =
-    useQuery({ ...appStateQuery, select: selectExperimentChoices }).data ?? NO_EXPERIMENTS;
+    useQuery({ ...appStateQuery, select: selectStoredExperimentChoices }).data ?? NO_EXPERIMENTS;
   const experimentsRead = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
   const listed = stepOf(useKeptChoice(workspaces));
@@ -126,16 +149,42 @@ export function settingsViewOfPage(page: string): SettingsView | undefined {
   return SETTINGS_PAGE_LIST.find((view) => view === page);
 }
 
-/** Whether a Settings page stands: every page but one an experiment the account has off holds, which waits on the account's settings while they are unread, as a reloaded address's does. */
-export function settingsPageRouteStands(page: string, access: RouteAccess): boolean {
-  const view = settingsViewOfPage(page);
-  if (view === undefined || !access.experimentsRead) return true;
-  return settingsPageExperimentStands(view, access.experiments);
+/** The experiments on in the workspace an address's first step names, else the listed one, beside the account's own. */
+function experimentsAt(workspace: string | undefined, access: RouteAccess): ExperimentChoices {
+  const step = workspace ?? access.listed;
+  const named = step === undefined ? undefined : workspaceOfSlug(access.workspaces, step);
+  return experimentsIn(
+    access.experiments,
+    workspaceExperimentChoices(access.workspaces, named?.id),
+  );
 }
 
-/** Whether a task's version history stands: it is the description's, so only while the account has Descriptions on, which waits on the account's settings while they are unread. */
-export function versionHistoryRouteStands(access: RouteAccess): boolean {
-  return !access.experimentsRead || experimentOn(access.experiments, EXPERIMENT.DESCRIPTIONS);
+/**
+ * Whether a Settings page stands: every page but one an experiment holds
+ * that is off, the account's own or, for a workspace experiment, that of the
+ * workspace Settings stands under (`workspace`), else the listed one. It
+ * waits on the account's settings while they are unread, and a page a
+ * workspace experiment holds on its workspaces too, as a reloaded address's
+ * does.
+ */
+export function settingsPageRouteStands(
+  page: string,
+  access: RouteAccess,
+  workspace?: string,
+): boolean {
+  const view = settingsViewOfPage(page);
+  if (view === undefined || !access.experimentsRead) return true;
+  // Note that only a page a workspace experiment holds waits on the workspaces, since an account's own experiment is read already.
+  if (access.workspaces.length === 0 && settingsPageWaitsOnWorkspaces(view)) return true;
+  return settingsPageExperimentStands(view, experimentsAt(workspace, access));
+}
+
+/** Whether a task's version history stands: it is the description's, so only while the workspace its address names has Descriptions on, which waits on the reader's workspaces while they are unread. */
+export function versionHistoryRouteStands(access: RouteAccess, workspace: string): boolean {
+  return (
+    access.workspaces.length === 0 ||
+    experimentOn(experimentsAt(workspace, access), EXPERIMENT.DESCRIPTIONS)
+  );
 }
 
 /** The same path under the workspace whose address step is `workspace`, in place of the step it names first. */

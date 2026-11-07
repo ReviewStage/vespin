@@ -18,7 +18,9 @@
  *
  * The ports a server listens on are read the same way, from the kernel's
  * socket tables in the running session (`listening-ports.ts`), and never
- * from a sandbox that is not running.
+ * from a sandbox that is not running. One of them may be shared by a public
+ * link (`port-share.ts`), only from a running sandbox; closing the share
+ * closes its route whatever the sandbox stands.
  *
  * The GitHub credential the firewall carries for the agent is set here in
  * the shape its own session and a copy of its work set it
@@ -37,7 +39,7 @@ import {
   type TerminalsAnswer,
 } from "@repo/features/terminal-wire";
 import { Context, Effect, Layer, Result } from "effect";
-import { agentSandboxName, openAgentSandbox } from "../agent-sandbox-open.js";
+import { agentSandboxName, openAgentSandboxPromptly } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import {
   type FirewallSession,
@@ -46,6 +48,7 @@ import {
 } from "../sandbox-firewall.js";
 import {
   deploymentOidcToken,
+  IMAGE_NOT_READY,
   type InteractiveShell,
   type ListedSandbox,
   SANDBOX_STATUS,
@@ -55,6 +58,7 @@ import {
   vercelSandboxApi,
 } from "../vercel-sandbox-api.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
+import { sharedPortOf, sharePort, unsharePort } from "./port-share.js";
 import {
   holdsTerminal,
   killTerminal,
@@ -111,6 +115,17 @@ export interface AgentSandboxService {
   readonly listeningPorts: (
     sessionId: string,
   ) => Effect.Effect<ListeningPortsAnswer, SandboxUnavailable>;
+  /** The port shared by a public link from the agent's running sandbox, answering the link; none where it is not running, which a share never changes. */
+  readonly share: (
+    sessionId: string,
+    port: number,
+  ) => Effect.Effect<string | undefined, SandboxUnavailable>;
+  /** The agent's shared port's link closed; a sandbox never opened has none. */
+  readonly unshare: (sessionId: string) => Effect.Effect<void, SandboxUnavailable>;
+  /** The port the agent's running sandbox shares now and its link; none while it is not running. */
+  readonly shared: (
+    sessionId: string,
+  ) => Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxUnavailable>;
   /** A new shell in the agent's running sandbox, under the id given, named where the developer named it. */
   readonly start: (
     sessionId: string,
@@ -121,7 +136,7 @@ export interface AgentSandboxService {
   readonly rename: (sessionId: string, terminalId: string, title: string) => ShellEffect<void>;
   /** A shell ended, with whatever it ran. */
   readonly kill: (sessionId: string, terminalId: string) => ShellEffect<void>;
-  /** The agent's sandbox opened again, as its next turn opens it, answering where it stands after; one never opened stays starting. */
+  /** The agent's sandbox opened again, as its next turn opens it, answering where it stands after; one never opened stays starting, as does one made again on an image still being prepared, opened after the answer. */
   readonly resume: (sessionId: string) => Effect.Effect<SandboxState, SandboxUnavailable>;
   /** A connection to the running sandbox's PTY, or where the sandbox stands; a stopped sandbox is never woken here. */
   readonly attach: (
@@ -218,6 +233,23 @@ function agentSandboxOver(
         if (ports === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
         return { running: true, ports };
       }),
+    share: (sessionId, port) =>
+      Effect.gen(function* () {
+        const { sandbox, running } = yield* standing(sessionId);
+        if (sandbox === undefined || running === undefined) return undefined;
+        return yield* sharePort(api, sandbox, running, port);
+      }),
+    unshare: (sessionId) =>
+      Effect.gen(function* () {
+        const { sandbox, running } = yield* standing(sessionId);
+        if (sandbox !== undefined) yield* unsharePort(api, sandbox, running);
+      }),
+    shared: (sessionId) =>
+      Effect.gen(function* () {
+        const { sandbox, running } = yield* standing(sessionId);
+        if (sandbox === undefined || running === undefined) return null;
+        return yield* sharedPortOf(api, sandbox, running);
+      }),
     start: (sessionId, terminalId, title) =>
       inRunning(sessionId, (running) =>
         Effect.gen(function* () {
@@ -276,12 +308,19 @@ function agentSandboxOver(
         if (sandbox.name !== agentSandboxName(sessionId)) {
           return stateOf(yield* api.resume(sandbox.name));
         }
-        const opened = yield* openAgentSandbox(api, {
+        // A sandbox made again on an image still being prepared is opened after the answer, which says it is starting.
+        const opened = yield* openAgentSandboxPromptly(api, {
           sessionId,
           tags: { ...sandbox.tags },
           vcpus: sandbox.vcpus,
-        }).pipe(Effect.provideService(AgentImage, image));
-        return stateOf(opened.sandbox);
+        }).pipe(
+          Effect.provideService(AgentImage, image),
+          Effect.catchIf(
+            (failure) => failure.code === IMAGE_NOT_READY,
+            () => Effect.succeed(undefined),
+          ),
+        );
+        return opened === undefined ? SANDBOX_STATE.STARTING : stateOf(opened.sandbox);
       }),
   };
 }

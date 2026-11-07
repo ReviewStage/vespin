@@ -17,6 +17,7 @@ import { AgentsPage } from "./agents-page.js";
 import { AppearanceSection } from "./appearance-page.js";
 import { CliPage } from "./cli-page.js";
 import { CommitsSection } from "./commits-section.js";
+import { EnvironmentPage } from "./environment-page.js";
 import { ExperimentalPage } from "./experimental-page.js";
 import { HostsSection } from "./hosts-section.js";
 import { type IntegrationsFilter, IntegrationsSection } from "./integrations-page.js";
@@ -83,7 +84,9 @@ export function SettingsPanel({
   integrationsFilter?: IntegrationsFilter | undefined;
 }): React.JSX.Element {
   const writes = useSettingsWrites();
-  const panelView = settingsRowsInput({ settings, account, capabilities });
+  const panelView = settingsRowsInput({ settings, account, capabilities, workspace });
+  // The experiments on where Settings shows: the account's own, and the shown workspace's.
+  const experiments = panelView?.settings.experiments ?? NO_EXPERIMENTS;
   const signedIn = account.status === ACCOUNT_STATUS.SIGNED_IN;
   // The shared settings page frames these, spacing them as sections. Note
   // that every page's words show in a screen recording, because they are
@@ -116,6 +119,14 @@ export function SettingsPanel({
       ) : workspace ? (
         <WorkspacePage control={workspace} readerId={account.id} />
       ) : null}
+
+      {view !== SETTINGS_VIEW.ENVIRONMENT ? null : signedIn ? (
+        <EnvironmentPage control={workspace} />
+      ) : (
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {SIGNED_OUT_WORDS}
+        </Text>
+      )}
 
       {view === SETTINGS_VIEW.MEMORY ? (
         <MemorySection
@@ -176,8 +187,10 @@ export function SettingsPanel({
       {view === SETTINGS_VIEW.EXPERIMENTAL ? (
         <ExperimentalPage
           entries={EXPERIMENTS}
-          experiments={settings?.experiments ?? NO_EXPERIMENTS}
+          experiments={experiments}
           signedIn={signedIn}
+          workspace={workspace ? shownWorkspace(workspace) : undefined}
+          readerId={signedIn ? account.id : undefined}
         />
       ) : null}
 
@@ -189,10 +202,7 @@ export function SettingsPanel({
       ) : null}
 
       {view === SETTINGS_VIEW.SHORTCUTS ? (
-        <WindowShortcutSections
-          experiments={settings?.experiments ?? NO_EXPERIMENTS}
-          capabilities={capabilities}
-        />
+        <WindowShortcutSections experiments={experiments} capabilities={capabilities} />
       ) : null}
     </ReplayUnmask>
   );

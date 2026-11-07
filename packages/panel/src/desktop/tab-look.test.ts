@@ -30,13 +30,12 @@ import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "../tasks/use-side-panel.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { fakeAppPlatform } from "../testing/app-platform.js";
-import { DESKTOP_CAPABILITIES, handCapabilities, registryWith } from "../testing/app-state.js";
+import { DESKTOP_CAPABILITIES, handCapabilities, withExperiments } from "../testing/app-state.js";
 import { editorBundleLanded } from "../testing/composer.js";
-import { onRegistry } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl, UNPINNED_SUMMARY } from "../testing/tasks-control.js";
+import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { taskCardOf } from "./task-card.js";
 
@@ -187,12 +186,12 @@ async function mount(
   };
   act(() =>
     root.render(
-      onRegistry(
-        registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)),
+      withExperiments(
+        experimentsOn(EXPERIMENT.DESCRIPTIONS),
         createElement(
           ChipCards,
           { value: chipCards },
-          createElement(DesktopTasks, { summary: UNPINNED_SUMMARY, looks: NO_LOOKS, tasks }),
+          createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
         ),
       ),
     ),

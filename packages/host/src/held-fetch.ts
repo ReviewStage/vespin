@@ -196,10 +196,8 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
 
 /** A fetched read keyed by the account signed in, as the windows hold it: one hold for all of them. */
 export interface AccountHeld {
-  /** The windows' hold, taken under the account signed in now; none while nobody is. */
-  readonly follow: Effect.Effect<void>;
-  /** The windows' hold let go. */
-  readonly unfollow: Effect.Effect<void>;
+  /** One window's hold for the caller's scope: the windows' hold taken with the first and let go with the last, as a live follow's stream stands for it. */
+  readonly hold: Effect.Effect<void, never, Scope.Scope>;
   /** The hold taken anew under the account signed in now, where the windows hold it, as the account gate opening asks. */
   readonly open: Effect.Effect<void>;
 }
@@ -218,21 +216,36 @@ export function accountHeld(
   return Effect.gen(function* () {
     const hold = yield* FiberHandle.make<void>();
     let held = false;
+    /** How many windows' scopes stand on the hold (`hold`). */
+    let holders = 0;
     const take = Effect.suspend(() => {
       const userId = accountId();
       return userId === undefined
         ? FiberHandle.clear(hold)
         : FiberHandle.run(hold, Effect.scoped(Effect.andThen(read.hold(userId), Effect.never)));
     });
+    /** The windows' hold, taken under the account signed in now; none while nobody is. */
+    const follow = Effect.suspend(() => {
+      held = true;
+      return take;
+    });
+    /** The windows' hold let go. */
+    const unfollow = Effect.suspend(() => {
+      held = false;
+      return FiberHandle.clear(hold);
+    });
     return {
-      follow: Effect.suspend(() => {
-        held = true;
-        return take;
-      }),
-      unfollow: Effect.suspend(() => {
-        held = false;
-        return FiberHandle.clear(hold);
-      }),
+      hold: Effect.acquireRelease(
+        Effect.suspend(() => {
+          holders += 1;
+          return holders === 1 ? follow : Effect.void;
+        }),
+        () =>
+          Effect.suspend(() => {
+            holders -= 1;
+            return holders === 0 ? unfollow : Effect.void;
+          }),
+      ),
       open: Effect.suspend(() => (held ? take : Effect.void)),
     };
   });

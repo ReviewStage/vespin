@@ -17,14 +17,15 @@
  * `Outlet` (`desktop-shell.tsx`). Every place but Settings and a version history stands beside the
  * sidebar, under the pathless `places` layout, which stays drawn as the
  * window moves between them, and a task's version history takes the whole
- * window as Settings does. Settings, Admin, a workspace's Board, a
- * person's page, the Automations pages, a task's version history, and the Inbox are routed places: the router alone says the window stands
- * on them, their routes draw them, as lazy routes but for the Inbox kept drawn beside them all, and each gate is a
+ * window as Settings does. Home, Settings, Admin, a workspace's Board, a
+ * person's page, an agent's own page, the Automations pages, a task's version history, the Inbox, and a workspace's address naming none of the reader's, not found, are routed places: the router alone says the window stands
+ * on them, their routes draw them, as lazy routes but for Home and an agent's page, drawn at once, and the Inbox, kept drawn beside them all, and each gate is a
  * `beforeLoad` over a predicate the window's Back and Forward ask too
- * (`route-gates.ts`). Every other place
- * is still the window's state's, which its routes draw through one
- * component (`StatePlace`), so moving a place onto the router swaps its
- * route's component and deletes its place kind from `navigation-history.ts`.
+ * (`route-gates.ts`), but for an agent's page, which stands at any address
+ * as it always has. A task's own place is declared beside them
+ * (`ROUTED_PLACE.TASK`), its step holding what its panes show in typed
+ * history state, though its routes still draw the window's state through
+ * one component (`StatePlace`), as a pairing's link does.
  */
 
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -35,6 +36,7 @@ import {
   createRoute,
   createRouter,
   type ErrorComponentProps,
+  notFound,
   type RouterHistory,
   RouterProvider,
   redirect,
@@ -46,13 +48,16 @@ import { useEffect, useRef } from "react";
 import { App } from "./app.js";
 import {
   AdminRouteLoading,
+  AgentPlace,
   AutomationsRouteLoading,
   BoardRouteLoading,
+  HomePlace,
   InboxPlace,
   PersonRouteLoading,
   SettingsRouteLoading,
   ShellPlaces,
   StatePlace,
+  UnknownWorkspacePlace,
   VersionHistoryRouteLoading,
 } from "./desktop/desktop-shell.js";
 import {
@@ -142,10 +147,15 @@ const placesRoute = createRoute({
   component: ShellPlaces,
 });
 
+/**
+ * Home while the window lists no workspace, the address a fresh window
+ * opens on, which takes the listed workspace's Home in its place once one
+ * is (`ROUTED_PLACE.HOME`).
+ */
 const appRoute = createRoute({
   getParentRoute: () => placesRoute,
   path: "/app",
-  component: StatePlace,
+  component: HomePlace,
 });
 
 const connectRoute = createRoute({
@@ -156,16 +166,28 @@ const connectRoute = createRoute({
 
 const workspaceRoute = createRoute({ getParentRoute: () => placesRoute, path: "/$workspace" });
 
+/**
+ * A workspace's Home, the page of no task bound (`ROUTED_PLACE.HOME`), of
+ * one of the reader's workspaces (`workspaceRouteStands`): an address
+ * naming none of theirs is not found, its page saying the workspace is not
+ * there for them and drawing nothing of it, at its own address
+ * (`ROUTED_PLACE.UNKNOWN_WORKSPACE`).
+ */
 const homeRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "/",
-  component: StatePlace,
+  beforeLoad: ({ context, params }) => {
+    if (workspaceRouteStands(params.workspace, context.access)) return;
+    throw notFound();
+  },
+  component: HomePlace,
+  notFoundComponent: UnknownWorkspacePlace,
 });
 
 /**
  * A workspace's Board, the Tasks page, of one of the reader's workspaces
  * (`workspaceRouteStands`): an address naming none of theirs gives way to
- * that address's Home, which says the workspace is not there for them. Its
+ * that address's Home, which is not found. Its
  * page is a chunk of its own, read ahead as the pointer comes to its row,
  * and once the signed-in window is idle; what stands while it loads is the
  * page's own frame.
@@ -181,6 +203,15 @@ const boardRoute = createRoute({
   ...LAZY_ROUTE,
 }).lazy(() => import("./desktop/board-route.lazy.js").then((loaded) => loaded.boardLazyRoute));
 
+/**
+ * A task's own place (`ROUTED_PLACE.TASK`), which the window's state draws
+ * (`StatePlace`). A link to it is opened once the account's workspaces are
+ * read, its slug read against them (`app.tsx`), the task's loading frame
+ * standing at its address meanwhile as it does for any task on its way.
+ * Note that it waits on no `loader`, because a move from one task to another
+ * is a new match of the route, whose pending frame would stand in for the
+ * task's page and draw it anew on every move.
+ */
 const taskRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "task/$taskId",
@@ -226,10 +257,18 @@ const taskAgentMessageRoute = createRoute({
   path: "message/$messageId",
 });
 
+/**
+ * An agent's own page, the page of an agent on no task or of an archived
+ * one opened on its own, under the workspace its address names, at its own
+ * address (`AgentPlace`). The places under it, a worker, its Changes, a
+ * message, a page, or an Inbox item of it, are what a link to them names,
+ * and what a step on a task's tab is written at, so they draw the place the
+ * window's state says, as every route not yet moved does.
+ */
 const agentRoute = createRoute({
   getParentRoute: () => workspaceRoute,
   path: "agent/$agentId",
-  component: StatePlace,
+  component: AgentPlace,
 });
 
 const agentIndexRoute = createRoute({ getParentRoute: () => agentRoute, path: "/" });
@@ -404,8 +443,8 @@ const adminDayRoute = createRoute({ getParentRoute: () => adminRoute, path: "day
  * Settings, over the whole window rather than beside the sidebar, under the
  * workspace whose Workspace page it shows, or under `/app` while the window
  * lists none. Its list is the index, which a narrow room stands alone, and
- * each page a `$page`. A page an experiment holds stands only while the
- * account has it on (`settingsPageRouteStands`), and gives way to Profile
+ * each page a `$page`. A page an experiment holds stands only while it is
+ * on, the account's own or the workspace's (`settingsPageRouteStands`), and gives way to Profile
  * otherwise. Its pages are a chunk of their own, opened seldom, whose frame
  * stands while it loads.
  */
@@ -424,7 +463,7 @@ const settingsPageRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "$page",
   beforeLoad: ({ context, params }) => {
-    if (settingsPageRouteStands(params.page, context.access)) return;
+    if (settingsPageRouteStands(params.page, context.access, params.workspace)) return;
     throw redirect({
       to: "/$workspace/settings/$page",
       params: { workspace: params.workspace, page: SETTINGS_VIEW.ACCOUNT },
@@ -440,7 +479,7 @@ const settingsPageRoute = createRoute({
  * alone, a version chosen at `/version/<revision>`, its sections listed at
  * `/version/<revision>/sections`, and one of them at
  * `/version/<revision>/section/<heading>`. It is the description's, so it
- * stands only while the account has Descriptions on
+ * stands only while the workspace it names has Descriptions on
  * (`versionHistoryRouteStands`), and gives way to the task otherwise. One
  * layout draws every page of it, so moving between them draws no new
  * history; its chunk is its own, opened seldom, whose frame stands while it
@@ -460,9 +499,9 @@ const versionHistoryRoute = createRoute({
 const taskVersionsRoute = createRoute({
   getParentRoute: () => versionHistoryRoute,
   path: "/$workspace/task/$taskId/versions",
-  // A version history gives way to the task it is of while the account has Descriptions off.
+  // A version history gives way to the task it is of while its workspace has Descriptions off.
   beforeLoad: ({ context, params }) => {
-    if (versionHistoryRouteStands(context.access)) return;
+    if (versionHistoryRouteStands(context.access, params.workspace)) return;
     throw redirect({ to: "/$workspace/task/$taskId", params, replace: true });
   },
 });
@@ -471,7 +510,7 @@ const taskVersionRoute = createRoute({
   getParentRoute: () => versionHistoryRoute,
   path: "/$workspace/task/$taskId/version/$revision",
   beforeLoad: ({ context, params }) => {
-    if (versionHistoryRouteStands(context.access)) return;
+    if (versionHistoryRouteStands(context.access, params.workspace)) return;
     throw redirect({
       to: "/$workspace/task/$taskId",
       params: { workspace: params.workspace, taskId: params.taskId },
@@ -514,6 +553,18 @@ const appSettingsPageRoute = createRoute({
       params: { page: SETTINGS_VIEW.ACCOUNT },
       replace: true,
     });
+  },
+});
+
+/**
+ * An address naming no place of the panel's, as a tab opened at the site's
+ * root, opens Home in its place, as a window resting nowhere always has.
+ */
+const nowhereRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "$",
+  beforeLoad: () => {
+    throw redirect({ to: "/app", replace: true });
   },
 });
 
@@ -576,6 +627,7 @@ const routeTree = rootRoute.addChildren([
   ]),
   settingsRoute.addChildren([settingsIndexRoute, settingsPageRoute]),
   appSettingsRoute.addChildren([appSettingsIndexRoute, appSettingsPageRoute]),
+  nowhereRoute,
 ]);
 
 /**

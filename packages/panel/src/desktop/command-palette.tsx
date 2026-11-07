@@ -86,10 +86,8 @@ import type {
 import {
   EXPERIMENT,
   type ExperimentChoices,
-  experimentOn,
   HOST_CAPABILITY,
   type HostCapability,
-  NO_EXPERIMENTS,
 } from "@repo/settings";
 import { SETTINGS_PAGE_LIST, type SettingsView } from "@repo/settings/settings-views";
 import {
@@ -212,7 +210,9 @@ import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
 import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
 import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
-import { appStateQuery, selectCapability, selectExperimentChoices } from "../use-app-state.js";
+import { useWindowAccount } from "../tasks/window-account.js";
+import { appStateQuery, selectCapability } from "../use-app-state.js";
+import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { type AgentReadMarks, useAgentReadMarks } from "./agent-read-marks.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
@@ -929,14 +929,10 @@ function taskRowPinnedAt(row: TaskRow): number | undefined {
   return row.kind === TASK_ROW.TASK ? row.task.pinnedAt : row.agent.pinnedAt;
 }
 
-/** Shows one of the side panel's tabs, the version history put away first so the tab is not shown behind it. */
-function shownOverHistory(tasks: TasksControl, show: () => void): void {
-  if (tasks.history.open) tasks.history.onClose();
-  show();
-}
-
 /** What the "+" rules read that only a hook can: the door a new shell is asked through where the platform runs terminals. */
 interface PanelOfferDoors {
+  /** The account signed in, whose cloud Browser draft a row starts. */
+  readonly account: string | undefined;
   readonly onNewTerminal: ((agentId: string) => void) | undefined;
   readonly onNewLocal: ((agentId: string) => void) | undefined;
 }
@@ -999,6 +995,7 @@ function agentRows(
         panel: tasks.sidePanel,
         agents: tasks.agents,
         pages,
+        account: doors.account,
         onNewTerminal: doors.onNewTerminal,
         onNewLocal: doors.onNewLocal,
         viewedAgent: undefined,
@@ -1014,7 +1011,14 @@ function agentRows(
       })
         .filter((entry) => entry.row.section !== undefined)
         .flatMap(paletteEntries)
-        .map((entry) => ({ ...entry, onPick: () => shownOverHistory(tasks, entry.onPick) }))
+        // Note that the task's own place stands first, as a version history over it gives way, so the tab is not shown behind it.
+        .map((entry) => ({
+          ...entry,
+          onPick: () => {
+            tasks.onStandTask();
+            entry.onPick();
+          },
+        }))
     : [];
   const entries: readonly AddEntry[] = [...inbox, ...agents, ...places];
   const standing = entries.map(({ row, endMark, card, onPick, agent }) => {
@@ -1398,7 +1402,10 @@ function panelTabRows(
     // Note that the row says the kind, Show plan, while its glyph is the Plan tab's, the task's status.
     const { icon } = tabLook({ kind: TAB_KIND.PANEL, tab, plan });
     const label = `Show ${SIDE_PANEL_TAB_KIND[tab].label.toLowerCase()}`;
-    const pick = () => shownOverHistory(tasks, () => tasks.sidePanel.onChoose(tab));
+    const pick = () => {
+      tasks.onStandTask();
+      tasks.sidePanel.onChoose(tab);
+    };
     return { icon, label, terms: [label], onChoose: () => show(pick) };
   });
 }
@@ -1534,14 +1541,14 @@ function taskCommandRows(
   reads: ReadMarks,
   rename: OpenTaskRename | undefined,
   choose: (run: () => void) => void,
-  experiments: ExperimentChoices,
+  historyOffered: boolean,
 ): readonly PaletteRow[] {
   const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
   if (task === undefined) return [];
   const renamed = rename?.taskId === task.id ? rename.begin : undefined;
   const commands: readonly { item: PanelCommand; run: () => void }[] = [
     ...(renamed === undefined ? [] : [{ item: PANEL_COMMAND.RENAME_TASK, run: renamed }]),
-    ...(experimentOn(experiments, EXPERIMENT.DESCRIPTIONS)
+    ...(historyOffered
       ? [{ item: PANEL_COMMAND.VERSION_HISTORY, run: () => tasks.history.onOpen(task.id) }]
       : []),
     {
@@ -1980,8 +1987,8 @@ export function CommandPalette({
   };
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const experiments =
-    useQuery({ ...appStateQuery, select: selectExperimentChoices }).data ?? NO_EXPERIMENTS;
+  // The experiments on in the workspace the window lists, the account's own beside them.
+  const experiments = useExperimentsIn(tasks.workspace?.id);
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
@@ -2149,6 +2156,11 @@ export function CommandPalette({
     [tasksShown, tasks, members, onTasks, originOf],
   );
   const reads = useReadMarks();
+  // The watched task's history is its description's, which stands by its own workspace's choice.
+  const historyOffered = useWorkspaceExperiment(
+    reads.watched === undefined ? undefined : taskOf(tasks, reads.watched)?.workspaceId,
+    EXPERIMENT.DESCRIPTIONS,
+  );
   const renameOffer = useTaskRenameOffer();
   const agentReads = useAgentReadMarks();
   useOpenThingKeys(tasks, reads, agentReads);
@@ -2169,6 +2181,7 @@ export function CommandPalette({
     useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
   );
   const offerDoors: PanelOfferDoors = {
+    account: useWindowAccount(),
     onNewTerminal:
       useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
       true
@@ -2278,7 +2291,7 @@ export function CommandPalette({
         ...agentReadMarkRows(tasks, agentReads, choose),
         ...taskPinRows(tasks, reads, choose),
         ...agentPinRows(tasks, choose),
-        ...taskCommandRows(tasks, reads, renameOffer, choose, experiments),
+        ...taskCommandRows(tasks, reads, renameOffer, choose, historyOffered),
         ...agentArchiveRows(openAgent, askArchive, choose),
         ...panelTabRows(tasks, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),
@@ -2298,7 +2311,10 @@ export function CommandPalette({
   // Note that a file found opens through the panel's one door for a file
   // named in place: the tab it has, as it stands, or a new one at the strip's end.
   const openFile = (path: string) =>
-    onTasks(() => shownOverHistory(tasks, () => tasks.sidePanel.onOpenFile({ path })));
+    onTasks(() => {
+      tasks.onStandTask();
+      tasks.sidePanel.onOpenFile({ path });
+    });
   const rowsFor = (kind: PaletteKind): readonly PaletteRow[] => {
     if (kind === PALETTE_FILTER.FILES) {
       return (filesOpen ? matchedPaths : []).map((path) => fileRow(path, openFile));

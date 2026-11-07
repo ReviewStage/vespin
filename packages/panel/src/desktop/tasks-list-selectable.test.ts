@@ -10,7 +10,6 @@ import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { RUN_PROFILE } from "@repo/host/app-state";
 import { selectableListBehavior } from "@repo/ui/testing/selectable-list";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
@@ -19,13 +18,19 @@ import { useLeaveGuard, useTasksTab } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
-import { onRegistry } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import {
   ADMIN_AWAY,
+  AGENT_AWAY,
   AUTOMATIONS_AWAY,
   BOARD_AWAY,
+  HOME_AWAY,
   INBOX_AWAY,
+  NO_ARRIVALS,
   PERSON_AWAY,
+  TASK_AWAY,
+  UNKNOWN_WORKSPACE_AWAY,
+  UNMOVED_LINK_READS,
   VERSION_HISTORY_AWAY,
 } from "../testing/tasks-control.js";
 import { TasksPage } from "./tasks-page.js";
@@ -116,9 +121,17 @@ async function mount() {
       adminView: ADMIN_AWAY,
       boardView: BOARD_AWAY,
       personView: PERSON_AWAY,
+      agentView: AGENT_AWAY,
       automationsView: AUTOMATIONS_AWAY,
       versionHistoryView: VERSION_HISTORY_AWAY,
       inboxView: INBOX_AWAY,
+      unknownWorkspaceView: UNKNOWN_WORKSPACE_AWAY,
+      homeView: HOME_AWAY,
+      taskView: TASK_AWAY,
+      place: undefined,
+      arrivals: NO_ARRIVALS,
+      linkReads: UNMOVED_LINK_READS,
+      visitTask: () => false,
     });
     return createElement(TasksPage, {
       tasks: { ...control, onSelect: (taskId: string) => opened.push(taskId) },
@@ -127,7 +140,7 @@ async function mount() {
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root: Root = createRoot(container);
-  act(() => root.render(onRegistry(AtomRegistry.make(), createElement(Page))));
+  act(() => root.render(withQueryClient(createElement(Page))));
   // Note that the members and the list land after the first paint.
   await act(async () => undefined);
   await act(async () => undefined);

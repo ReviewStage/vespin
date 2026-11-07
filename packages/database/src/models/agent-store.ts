@@ -83,6 +83,7 @@ import {
 } from "../storage-vocabulary.js";
 import { agentAutomationNameSql, agentAutomationRunSql } from "./agent-name.js";
 import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
+import { deleteConversations } from "./conversation-delete.js";
 import { reopenAgentInboxItems, settleAgentInboxItems } from "./inbox-settle.js";
 import {
   awaitingLinesOf,
@@ -94,7 +95,6 @@ import {
   type TurnUsageRow,
   turnUsagesOf,
 } from "./message-reads.js";
-import { stampConversationsDeleted } from "./soft-delete.js";
 import { TaskAgentUnstopped } from "./task-store.js";
 import {
   AGENT_WORKSPACE,
@@ -1312,7 +1312,7 @@ const updateAgentNativeSession = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
     agentId: Schema.String,
-    nativeSession: Schema.String,
+    nativeSession: Schema.NullOr(Schema.String),
   }),
   Result: IdRowSchema,
   execute: ({ userId, agentId, nativeSession }) =>
@@ -1333,13 +1333,7 @@ const findNativeHanded = SqlSchema.findOneOption({
       db
         .select({ handed: conversations.nativeHanded })
         .from(conversations)
-        .where(
-          and(
-            eq(conversations.id, conversationId),
-            eq(conversations.userId, userId),
-            isNull(conversations.deletedAt),
-          ),
-        ),
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId))),
     ),
 });
 
@@ -1354,13 +1348,7 @@ const updateNativeHanded = SqlSchema.void({
       db
         .update(conversations)
         .set({ nativeHanded: handed })
-        .where(
-          and(
-            eq(conversations.id, conversationId),
-            eq(conversations.userId, userId),
-            isNull(conversations.deletedAt),
-          ),
-        ),
+        .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId))),
     ),
 });
 
@@ -1390,7 +1378,6 @@ const findRunnerTokenConversation = SqlSchema.findOneOption({
           and(
             eq(agentTable.runnerTokenHash, runnerTokenHash),
             eq(conversations.kind, CONVERSATION_KIND.AGENT),
-            isNull(conversations.deletedAt),
           ),
         )
         .limit(1),
@@ -1401,7 +1388,7 @@ const findRunnerTokenConversation = SqlSchema.findOneOption({
 const NATIVE_RUNTIMES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX] as const;
 
 /** The turn statuses a turn ends in; a queued or running one has not ended. */
-export const ENDED_TURN_STATUSES = [
+const ENDED_TURN_STATUSES = [
   TURN_STATUS.SETTLED,
   TURN_STATUS.CANCELED,
   TURN_STATUS.FAILED,
@@ -1436,7 +1423,6 @@ const findNativeAgentConversations = SqlSchema.findAll({
           and(
             inArray(agentTable.id, [...agentIds]),
             inArray(conversations.runtime, [...NATIVE_RUNTIMES]),
-            isNull(conversations.deletedAt),
           ),
         ),
     ),
@@ -1479,7 +1465,6 @@ const findOpenSandboxes = SqlSchema.findAll({
           and(
             inArray(conversations.id, [...conversationIds]),
             isNotNull(conversations.runtimeSessionId),
-            isNull(conversations.deletedAt),
           ),
         ),
     ),
@@ -1521,6 +1506,38 @@ const updateAgentRunnerToken = SqlSchema.findAll({
         .set({ runnerTokenHash })
         .where(reachableAgent(userId, agentId))
         .returning({ id: agentTable.id }),
+    ),
+});
+
+const updateAgentSeen = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, seenAt: Schema.Date }),
+  Result: IdRowSchema,
+  execute: ({ userId, agentId, seenAt }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ seenAt })
+        .where(
+          and(
+            reachableAgent(userId, agentId),
+            eq(agentTable.machine, AGENT_MACHINE.VERCEL),
+            isNull(agentTable.archivedAt),
+          ),
+        )
+        .returning({ id: agentTable.id }),
+    ),
+});
+
+const findAgentSeenAt = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ seenAt: Schema.NullOr(InstantColumnSchema) }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ seenAt: agentTable.seenAt })
+        .from(agentTable)
+        .where(eq(agentTable.id, agentId))
+        .limit(1),
     ),
 });
 
@@ -2536,7 +2553,7 @@ export interface AgentDeleteGuard<R> {
 /**
  * Deletes the agent for good: its row, which takes its pins and its inbox
  * with it and leaves what else named it naming no one; and its
- * conversation stamped deleted, so the purge takes its transcript seven days on, as a task's delete does
+ * conversation deleted, its transcript with it, as a task's delete does
  * for each of its agents. Answers the transaction its row went in, as a
  * task's delete does; none where the account reaches no such agent.
  *
@@ -2571,7 +2588,7 @@ export function deleteAgent<R = never>(
         yield* guard.beforeDelete([agent.value.conversationId]);
         const [deleted] = yield* deleteAgentRow({ userId, agentId });
         if (deleted === undefined) return Option.none();
-        yield* stampConversationsDeleted([deleted.conversationId]);
+        yield* deleteConversations([deleted.conversationId]);
         return Option.some({ txid: deleted.txid });
       }),
     ),
@@ -3648,11 +3665,11 @@ export function nativeRouteOfReached(
   return findNativeRoute({ conversationId });
 }
 
-/** The harness's own session or thread id recorded on the agent's conversation, over whatever stood; answers whether the account reached the agent. */
+/** The harness's own session or thread id recorded on the agent's conversation, over whatever stood, or none, so its next launch opens a fresh session rather than resuming one; answers whether the account reached the agent. */
 export function recordAgentNativeSession(
   userId: string,
   agentId: string,
-  nativeSession: string,
+  nativeSession: string | null,
 ): AgentStoreEffect<boolean> {
   return Effect.map(
     updateAgentNativeSession({ userId, agentId, nativeSession }),
@@ -3690,6 +3707,24 @@ export function recordAgentRunnerToken(
   return Effect.map(
     updateAgentRunnerToken({ userId, agentId, runnerTokenHash }),
     (rows) => rows.length > 0,
+  );
+}
+
+/**
+ * Now recorded as when a client last had the agent on screen, for an agent
+ * in a sandbox the account reaches and has not archived; answers whether it
+ * was, so a Mac's agent and an archived one record nothing.
+ */
+export function recordAgentSeen(userId: string, agentId: string): AgentStoreEffect<boolean> {
+  return Effect.flatMap(DateTime.nowAsDate, (seenAt) =>
+    Effect.map(updateAgentSeen({ userId, agentId, seenAt }), (rows) => rows.length > 0),
+  );
+}
+
+/** When a client last had the agent under this id on screen; null where none has, or no agent has the id. Read with no account in hand, for an id its runner's place names. */
+export function readAgentSeenAt(agentId: string): AgentStoreEffect<Date | null> {
+  return Effect.map(findAgentSeenAt({ agentId }), (row) =>
+    Option.match(row, { onNone: () => null, onSome: ({ seenAt }) => seenAt }),
   );
 }
 
@@ -3870,7 +3905,6 @@ const findDelegation = SqlSchema.findOneOption({
             eq(agentDelegationTable.childConversationId, childConversationId),
             eq(conversations.userId, userId),
             eq(conversations.parentConversationId, parentConversationId),
-            isNull(conversations.deletedAt),
           ),
         ),
     ),
@@ -3909,7 +3943,6 @@ const findDelegationStarts = SqlSchema.findAll({
             inArray(agentDelegationTable.childConversationId, [...childConversationIds]),
             eq(conversations.userId, userId),
             eq(conversations.parentConversationId, parentConversationId),
-            isNull(conversations.deletedAt),
           ),
         ),
     ),
@@ -4171,7 +4204,6 @@ const findDelegations = SqlSchema.findAll({
             eq(conversations.userId, userId),
             eq(conversations.parentConversationId, parentConversationId),
             isNotNull(agentDelegationTable.callId),
-            isNull(conversations.deletedAt),
           ),
         )
         .orderBy(asc(conversations.createdAt)),
@@ -4200,7 +4232,6 @@ const findDelegationTitles = SqlSchema.findAll({
             eq(conversations.parentConversationId, parentConversationId),
             isNotNull(agentDelegationTable.callId),
             isNotNull(conversations.title),
-            isNull(conversations.deletedAt),
           ),
         )
         .orderBy(asc(conversations.createdAt)),
@@ -4236,7 +4267,6 @@ const findUntitledDelegations = SqlSchema.findAll({
             eq(conversations.parentConversationId, parentConversationId),
             isNull(conversations.title),
             gt(conversations.createdAt, since),
-            isNull(conversations.deletedAt),
           ),
         ),
     ),

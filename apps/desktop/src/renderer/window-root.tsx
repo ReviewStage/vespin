@@ -5,10 +5,9 @@
  * module is the window's startup, and a runtime edge
  * (`tools/anti-slop/effect-edges.json`) where it reads the window's document
  * into its Query client: it is evaluated once per window, so no two windows
- * share a browser registry.
+ * share a Query client.
  */
 
-import { RegistryContext } from "@effect/atom-react/RegistryContext";
 import { ACT_PORT, type PreloadBridge } from "@repo/host/bridge";
 import { actPort, installActPort, installAppBridge, openPushStream } from "@repo/panel/app-bridge";
 import { installAppPlatform } from "@repo/panel/app-platform";
@@ -22,8 +21,8 @@ import {
   PANEL_SPAN,
 } from "@repo/panel/panel-spans";
 import { QueryProvider, queryClient } from "@repo/panel/query-client";
-import { rendererRegistry } from "@repo/panel/renderer-runtime";
-import { AppStateSubscription, appStateQuery } from "@repo/panel/use-app-state";
+import { installSendTracer } from "@repo/panel/send-traces";
+import { followAppState } from "@repo/panel/use-app-state";
 import { RELOAD_ROOM, ReloadState } from "@repo/ui/error-boundary";
 import type { ReactNode } from "react";
 import { DESKTOP_PLATFORM } from "./desktop-platform";
@@ -79,6 +78,7 @@ export function mountWindow(
   // What the panel times, recorded through the same SDK once it stands, and
   // every failure it shows, reported through it.
   installPanelSpanRecorder(sentry.recordSpan);
+  installSendTracer(sentry.traceSend);
   installShownFailureReporter(sentry.reportShownFailure, queryClient);
 
   const rootElement = document.getElementById("root");
@@ -97,15 +97,20 @@ export function mountWindow(
     },
   });
 
+  // What stops the window's following of its document, which stands for the window's life once its first read is written.
+  let stopFollowing = (): void => undefined;
   void (async () => {
     try {
       // Main listens on the push stream before the document is read, so a
       // document pushed while the read is in flight is heard, not lost.
       await pushes.opened;
-      // The document is read into the window's Query client before anything is drawn over it, so
-      // no reader draws a first frame without it.
-      await queryClient.ensureQueryData(appStateQuery);
+      const following = followAppState(queryClient);
+      stopFollowing = following.stop;
+      // The document is followed into the window's Query client, subscribed before it is read,
+      // and drawn over only once that read is written, so the first frame holds what moved meanwhile.
+      await following.written;
     } catch (error) {
+      stopFollowing();
       console.error("The window's state could not be read; its surface is not drawn.", error);
       // A window with no state is a failure, so it is sent as an event through
       // this window's SDK and its filters, not only kept as the console's
@@ -126,13 +131,10 @@ export function mountWindow(
     }
     endWindowSpanOnFirstDraw(rootElement, PANEL_SPAN.WINDOW_FIRST_PAINT);
     draw(
-      <RegistryContext.Provider value={rendererRegistry}>
-        <QueryProvider>
-          <AppStateSubscription />
-          <LiveReadSubscription />
-          {surface}
-        </QueryProvider>
-      </RegistryContext.Provider>,
+      <QueryProvider>
+        <LiveReadSubscription />
+        {surface}
+      </QueryProvider>,
     );
   })();
 }

@@ -19,7 +19,7 @@
  * A table a delta read reads is logged too (`log`), its every write, or,
  * for one rewritten in place more often than any delta read reads it, its
  * rows' arrival and removal alone (`LOG.ROWS`): the task list's tables and
- * the inbox items' (`@repo/service`'s `tasksLive`, `inboxItemsLive`), each
+ * the inbox items' (`@repo/service`'s `tasksRead`, `inboxItemsRead`), each
  * declared logged once for every read that follows it by deltas.
  */
 
@@ -38,6 +38,7 @@ import { deviceAgentLine, deviceAgentRequest } from "../schemas/device-agent.js"
 import { githubInstallation } from "../schemas/github-installation.js";
 import { githubPersonalToken } from "../schemas/github-personal-token.js";
 import { githubRepositoryRead } from "../schemas/github-repository-read.js";
+import { hostPairing } from "../schemas/host-pairing.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { inboxItemRead } from "../schemas/inbox-item-read.js";
 import { inboxMessage } from "../schemas/inbox-message.js";
@@ -59,6 +60,7 @@ import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
 import { agentSectionEntry, taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
@@ -110,7 +112,8 @@ export const taskBlockSync = defineSyncTable(taskBlock, {
  * A coding agent, on its own topic, its task's, and its workspace's. Note
  * that its last step is ignored, because every model step rewrites it, and
  * so is when its pull request was last read, because every read of the pull
- * request rewrites that; no view reads either live.
+ * request rewrites that, and when it was last on screen, because a client
+ * showing it rewrites that every minute; no view reads any of them live.
  */
 export const agentSync = defineSyncTable(agentTable, {
   topics: [
@@ -118,7 +121,7 @@ export const agentSync = defineSyncTable(agentTable, {
     { kind: TOPIC.TASK, column: agentTable.taskId },
     { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
   ],
-  ignore: [agentTable.lastStep, agentTable.publishedRead],
+  ignore: [agentTable.lastStep, agentTable.publishedRead, agentTable.seenAt],
   log: LOG.EVERY,
 });
 
@@ -190,6 +193,31 @@ export const deviceSync = defineSyncTable(device, {
   log: LOG.EVERY,
 });
 
+/**
+ * A box's pairing, on the account that settled it, so a host its approve
+ * made leaves Settings › Hosts (`hostsRead`) when its box collects its
+ * secret, which deletes the pairing, rather than at the instant the read
+ * answered it lapses. A pending pairing names no account and notifies
+ * nothing. Note that every column but the host it names and when it lapses
+ * is ignored, because a box stamps its pairing on every poll and no view
+ * reads the rest.
+ */
+export const hostPairingSync = defineSyncTable(hostPairing, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: hostPairing.userId }],
+  ignore: [
+    hostPairing.pollSecretHash,
+    hostPairing.userCode,
+    hostPairing.name,
+    hostPairing.platform,
+    hostPairing.arch,
+    hostPairing.version,
+    hostPairing.ip,
+    hostPairing.status,
+    hostPairing.createdAt,
+    hostPairing.polledAt,
+  ],
+});
+
 /** An invitation to a workspace, pending or settled, on the workspace's topic. */
 export const invitationSync = defineSyncTable(invitation, {
   topics: [{ kind: TOPIC.WORKSPACE, column: invitation.organizationId }],
@@ -211,6 +239,11 @@ export const personalWorkspaceSync = defineSyncTable(personalWorkspace, {
 /** A slug a workspace stood under before, on the workspace's topic, so its members' list names it. */
 export const workspaceFormerSlugSync = defineSyncTable(workspaceFormerSlug, {
   topics: [{ kind: TOPIC.WORKSPACE, column: workspaceFormerSlug.organizationId }],
+});
+
+/** An experiment a workspace's admin turned on or off, on the workspace's topic, so every member's panel follows the switch. */
+export const workspaceExperimentSync = defineSyncTable(workspaceExperiment, {
+  topics: [{ kind: TOPIC.WORKSPACE, column: workspaceExperiment.organizationId }],
 });
 
 /** A GitHub App installation connected to a workspace, on the workspace's topic. */
@@ -701,10 +734,12 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   memberSync,
   userSync,
   deviceSync,
+  hostPairingSync,
   invitationSync,
   organizationSync,
   personalWorkspaceSync,
   workspaceFormerSlugSync,
+  workspaceExperimentSync,
   githubInstallationSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,

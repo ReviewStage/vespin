@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EXPERIMENT, NO_EXPERIMENTS } from "@repo/settings";
+import { agentTab, changesTab } from "@repo/ui/tab-strip-model";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { test } from "vitest";
@@ -12,7 +13,7 @@ import { type PlaceThere, ROUTED_PLACE, routedPlaceOf, routedStepStands } from "
 
 /**
  * routed-places.test.ts -- each routed place as the window reads it from an
- * address: the place it stands on, what its gate refuses, what Back passes
+ * address and the reader's access: the place it stands on, what its gate refuses, what Back passes
  * over, and what its step is called. Synthetic ids.
  */
 
@@ -30,7 +31,9 @@ const ACCESS: RouteAccess = {
 /** A window where everything a step names is still there, under Acme listed. */
 const THERE: PlaceThere = {
   historyTask: undefined,
+  taskStep: undefined,
   taskStands: () => true,
+  columnStands: () => true,
   automationStands: () => true,
   listed: (workspace) => workspace === "acme",
 };
@@ -59,10 +62,15 @@ test.each([
   ["/acme/automation/automation-1/runs", ROUTED_PLACE.AUTOMATIONS],
   ["/acme/task/7/version/3", ROUTED_PLACE.VERSION_HISTORY],
   ["/acme/inbox/item-1", ROUTED_PLACE.INBOX],
-  ["/acme/task/7", undefined],
-  ["/app", undefined],
+  ["/acme/agent/agent-1", ROUTED_PLACE.AGENT],
+  ["/left", ROUTED_PLACE.UNKNOWN_WORKSPACE],
+  ["/acme", ROUTED_PLACE.HOME],
+  ["/acme/agent/agent-1/changes", undefined],
+  ["/acme/task/7", ROUTED_PLACE.TASK],
+  ["/acme/task/7/agent/agent-1", ROUTED_PLACE.TASK],
+  ["/app", ROUTED_PLACE.HOME],
 ] as const)("%s stands on its routed place, where it is one", (address, place) => {
-  assert.equal(routedPlaceOf(matchesOf(address)), place);
+  assert.equal(routedPlaceOf(matchesOf(address), ACCESS), place);
 });
 
 test.each([
@@ -70,6 +78,8 @@ test.each([
   ["a Settings page an experiment off holds", "/acme/settings/memory", ACCESS],
   ["a version history with Descriptions off", "/acme/task/7/versions", ACCESS],
   ["the Inbox under a workspace the reader is not in", "/left/inbox", ACCESS],
+  ["an agent's page under a workspace the reader is not in", "/left/agent/agent-1", ACCESS],
+  ["a workspace's address the reader is not in, not found", "/left", ACCESS],
 ] as const)("the gate refuses %s, which Back passes over", (_refused, address, access) => {
   assert.equal(stepStands(address, access), false);
 });
@@ -97,8 +107,35 @@ test.each<readonly [string, string, Partial<PlaceThere>]>([
     "/acme/task/7/version/3",
     { historyTask: TASK_ID, taskStands: () => false },
   ],
+  [
+    "a task's step on a task since deleted",
+    "/acme/task/7",
+    { taskStep: { taskId: TASK_ID }, taskStands: () => false },
+  ],
+  [
+    "a narrow room's task step at its side panel's Pull request address, on a task since deleted",
+    "/acme/agent/agent-1/changes",
+    {
+      taskStep: { taskId: TASK_ID, panel: { open: true, tab: changesTab("agent-1") } },
+      taskStands: () => false,
+    },
+  ],
+  [
+    "a task's step on a column tab since closed",
+    "/acme/task/7/agent/agent-1",
+    { taskStep: { taskId: TASK_ID, column: agentTab("agent-1") }, columnStands: () => false },
+  ],
 ])("Back passes over %s", (_skipped, address, gone) => {
-  const descriptionsOn = { ...ACCESS, experiments: { [EXPERIMENT.DESCRIPTIONS]: true } };
+  // Task descriptions is the workspace's choice, which its version history stands on.
+  const descriptionsOn = {
+    ...ACCESS,
+    workspaces: ACCESS.workspaces.map((workspace) => ({
+      ...workspace,
+      experiments: [
+        { experiment: EXPERIMENT.DESCRIPTIONS, on: true, changedBy: null, changedAt: 1 },
+      ],
+    })),
+  };
   assert.equal(stepStands(address, descriptionsOn, THERE), true, "it stands while there");
   assert.equal(stepStands(address, descriptionsOn, { ...THERE, ...gone }), false);
 });
@@ -126,9 +163,16 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     titled({ inboxView: { ...base.inboxView, open: true, narrowed: TASK_ID } }, "INBOX"),
     { label: "Inbox", detail: "Auth refactor" },
   );
+  assert.deepEqual(titled({ agentView: { ...base.agentView, agentId: "agent-1" } }, "AGENT"), {
+    label: "Agent",
+  });
   assert.deepEqual(titled({ boundFor: TASK_ID }, "VERSION_HISTORY"), {
     label: "Auth refactor",
     detail: "Version history",
   });
   assert.deepEqual(titled({}, "ADMIN"), { label: "Home" });
+});
+
+test("Back still reaches an agent's page once another workspace is listed than the one its address names", () => {
+  assert.equal(stepStands("/acme/agent/a", ACCESS, { ...THERE, listed: () => false }), true);
 });

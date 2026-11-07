@@ -30,9 +30,10 @@ import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
+import { besideItem } from "../inbox-item-links.js";
 import { MemberDirectory } from "../member-directory.js";
 import { NOT_FOUND_THING, NotFound } from "../not-found.js";
-import { ADDRESS, type Address, addressOf, HERE, ROUTE, route, THING } from "../route.js";
+import { addressOf, HERE, placeAddress, ROUTE, THING } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
 import type { InboxCodeDoors } from "../tasks/inbox-code-card.js";
@@ -73,7 +74,12 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import { useInboxItemOpenSpan, useInboxOpenSpan } from "../tasks/use-inbox-spans.js";
-import { OpenAddressesHere, type OpenAddressHere, placeOfMention } from "../tasks/use-open-link.js";
+import {
+  OpenAddressesHere,
+  type OpenAddressHere,
+  placeOfMention,
+  useLinkRouter,
+} from "../tasks/use-open-link.js";
 import {
   type FileReads,
   PULL_REQUEST_VIEW,
@@ -314,9 +320,10 @@ export const DesktopInbox = memo(function DesktopInbox({
     openFile(fileRef(path, lines), lines?.commit);
   // The task's agents this Inbox read, an archived one's among them, whose Pull request tabs the panel beside the item draws.
   const { heldIds } = agents;
-  // An address pressed on the item or in the panel beside it, or a place a part there names, opens what it names beside the item where the route table says so (`route.ts`).
+  const router = useLinkRouter();
+  // An address pressed on the item or in the panel beside it, or a place a part there names, opens what it names beside the item where the route table says so (`route.ts`), a place in the app matched on the route tree.
   const openHere: OpenAddressHere = (address) => {
-    const routed = route(address, {
+    const routed = besideItem(address, {
       kind: HERE.INBOX_ITEM,
       taskId,
       agentId: taskId === undefined ? chosenAgentId : undefined,
@@ -424,8 +431,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   };
   // A place a part of the item or the panel beside it names opens as a link to it would (`openHere`), and through the door given where it opens nothing there.
   const openPlaceHere = (at: LinkPlace, elsewhere: () => void) => {
-    const address: Address = { kind: ADDRESS.PLACE, link: { workspace: "", place: at } };
-    if (!openHere(address)) elsewhere();
+    if (!openHere(placeAddress({ workspace: "", place: at }, router))) elsewhere();
   };
   // A task or a section a mention names opens as a link to it would.
   const openMention = (mention: DescriptionMention) =>
@@ -506,7 +512,7 @@ export const DesktopInbox = memo(function DesktopInbox({
           // Note that a skill's file opens in the panel beside the Inbox, as a file the item names does, and on GitHub where the panel cannot open it.
           if (place === undefined) return;
           const url = encodeMention({ kind: MENTION_KIND.FILE, path: skill.path }, place);
-          if (!openHere(addressOf(url))) appPlatform().openGitHub(url);
+          if (!openHere(addressOf(url, router))) appPlatform().openGitHub(url);
         }}
       >
         {/* The item's links are written under its own workspace, which a link may open outside the one listed. */}

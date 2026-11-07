@@ -33,7 +33,9 @@ import { githubPersonalToken } from "../schemas/github-personal-token.js";
 import { githubRepositoryRead } from "../schemas/github-repository-read.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { task } from "../schemas/task.js";
+import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
+import { InstantColumnSchema } from "./columns.js";
 import {
   PERSONAL_WORKSPACE_METADATA,
   type WorkspaceCreation,
@@ -151,6 +153,18 @@ const InstallationRowSchema = Schema.Struct({
 });
 
 type InstallationRow = typeof InstallationRowSchema.Type;
+
+const ExperimentRowSchema = Schema.Struct({
+  organizationId: Schema.String,
+  experiment: Schema.String,
+  on: Schema.Boolean,
+  /** The account that changed it last, and its name now; null where that account is gone. */
+  changedById: Schema.NullOr(Schema.String),
+  changedByName: Schema.NullOr(Schema.String),
+  changedAt: InstantColumnSchema,
+});
+
+type ExperimentRow = typeof ExperimentRowSchema.Type;
 
 const findPersonalWorkspace = SqlSchema.findOneOption({
   Request: Schema.String,
@@ -407,17 +421,73 @@ const findInstallations = SqlSchema.findAll({
     Database.use((db) => installationRows(db, userId, organizationId)),
 });
 
-/** The installation rows by the workspace they stand for, each list in the order read. */
-function installationsByWorkspace(
-  rows: readonly InstallationRow[],
-): ReadonlyMap<string, readonly InstallationRow[]> {
-  const grouped = new Map<string, InstallationRow[]>();
+/**
+ * The experiments chosen for the workspaces the account is a member of, or
+ * for the one named among them, each with who changed it last under the
+ * name the service holds now. A read of its own, as the installations are,
+ * since a workspace holds one row per experiment.
+ */
+function experimentRows(db: DatabaseShape, userId: string, organizationId?: string) {
+  return db
+    .select({
+      organizationId: workspaceExperiment.organizationId,
+      experiment: workspaceExperiment.experiment,
+      on: workspaceExperiment.on,
+      changedById: workspaceExperiment.changedBy,
+      changedByName: user.name,
+      changedAt: workspaceExperiment.changedAt,
+    })
+    .from(workspaceExperiment)
+    .innerJoin(member, eq(member.organizationId, workspaceExperiment.organizationId))
+    .leftJoin(user, eq(user.id, workspaceExperiment.changedBy))
+    .where(
+      and(
+        eq(member.userId, userId),
+        organizationId === undefined
+          ? undefined
+          : eq(workspaceExperiment.organizationId, organizationId),
+      ),
+    )
+    .orderBy(asc(workspaceExperiment.experiment));
+}
+
+const findAllExperiments = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: ExperimentRowSchema,
+  execute: (userId) => Database.use((db) => experimentRows(db, userId)),
+});
+
+const findExperiments = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
+  Result: ExperimentRowSchema,
+  execute: ({ userId, organizationId }) =>
+    Database.use((db) => experimentRows(db, userId, organizationId)),
+});
+
+/** Rows by the workspace they stand for, each list in the order read. */
+function byWorkspace<Row extends { readonly organizationId: string }>(
+  rows: readonly Row[],
+): ReadonlyMap<string, readonly Row[]> {
+  const grouped = new Map<string, Row[]>();
   for (const row of rows) {
     const listed = grouped.get(row.organizationId);
     if (listed === undefined) grouped.set(row.organizationId, [row]);
     else listed.push(row);
   }
   return grouped;
+}
+
+/** An experiment row as the wire carries it, naming its changer only while their account stands. */
+function experimentOfRow(row: ExperimentRow): NonNullable<Workspace["experiments"]>[number] {
+  return {
+    experiment: row.experiment,
+    on: row.on,
+    changedBy:
+      row.changedById === null || row.changedByName === null
+        ? null
+        : { id: row.changedById, name: row.changedByName },
+    changedAt: row.changedAt.getTime(),
+  };
 }
 
 const findWorkspaces = SqlSchema.findAll({
@@ -462,6 +532,7 @@ function faceOfRow(
 function workspaceOfRow(
   row: typeof WorkspaceRowSchema.Type,
   installations: readonly InstallationRow[],
+  experiments: readonly ExperimentRow[],
 ): Workspace {
   const githubInstallations = installations.map((installation) => ({
     installationId: installation.installationId,
@@ -481,6 +552,7 @@ function workspaceOfRow(
     memberCount: row.memberCount,
     ...faceOfRow(row),
     ...formerSlugsOf(row.formerSlugs),
+    ...(experiments.length === 0 ? undefined : { experiments: experiments.map(experimentOfRow) }),
   };
   return row.personal ? { ...workspace, personal: true } : workspace;
 }
@@ -761,8 +833,8 @@ export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonl
 /**
  * The conversations of every agent of the workspace, whoever ran it. A
  * conversation names the account that ran it rather than the workspace, so
- * a workspace's delete reads these while its agents stand and stamps them
- * deleted once they are gone, as a task's delete does its own.
+ * a workspace's delete reads these while its agents stand and deletes them
+ * once they are gone, as a task's delete does its own.
  */
 export function workspaceConversationIds(
   organizationId: string,
@@ -782,11 +854,14 @@ export function workspaceConversationIds(
 export function listWorkspaces(userId: string): WorkspaceStoreEffect<readonly Workspace[]> {
   return Effect.gen(function* () {
     const rows = yield* findWorkspaces(userId);
-    const installations = installationsByWorkspace(yield* findAllInstallations(userId));
+    const installations = byWorkspace(yield* findAllInstallations(userId));
+    const experiments = byWorkspace(yield* findAllExperiments(userId));
     return [
       ...rows.filter((row) => row.personalOf !== null),
       ...rows.filter((row) => row.personalOf === null),
-    ].map((row) => workspaceOfRow(row, installations.get(row.id) ?? []));
+    ].map((row) =>
+      workspaceOfRow(row, installations.get(row.id) ?? [], experiments.get(row.id) ?? []),
+    );
   });
 }
 
@@ -838,7 +913,8 @@ export function workspaceOf(
     const row = yield* findWorkspace({ userId, organizationId });
     if (Option.isNone(row)) return Option.none();
     const installations = yield* findInstallations({ userId, organizationId });
-    return Option.some(workspaceOfRow(row.value, installations));
+    const experiments = yield* findExperiments({ userId, organizationId });
+    return Option.some(workspaceOfRow(row.value, installations, experiments));
   });
 }
 

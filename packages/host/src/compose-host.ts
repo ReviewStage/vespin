@@ -30,6 +30,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import type * as Path from "effect/Path";
 import type { ChildProcessSpawner } from "effect/process";
 import { composeAccount } from "./compose-account.js";
+import { composeAccountAsks } from "./compose-account-asks.js";
 import { composeAgents } from "./compose-agents.js";
 import { composeAutomations } from "./compose-automations.js";
 import { composeInstalledSkills } from "./compose-installed-skills.js";
@@ -41,8 +42,9 @@ import { composeSettings } from "./compose-settings.js";
 import { composeTasks } from "./compose-tasks.js";
 import { composeTerminals, type TerminalsComposer } from "./compose-terminals.js";
 import { composeThisMacHost } from "./compose-this-mac-host.js";
-import type { Composer, DuplicateGatewayMethod } from "./composer.js";
-import { mergedMethods } from "./effect/composer.js";
+import { composeWorkspaces } from "./compose-workspaces.js";
+import type { Composer, DuplicateGatewayMethod, DuplicateHostAct } from "./composer.js";
+import { mergedActs, mergedMethods } from "./effect/composer.js";
 import { type HostAssembly, HostAssemblyTag, hostDrain } from "./effect/host.js";
 import { HostKernelTag, HostService } from "./effect/kernel.js";
 import {
@@ -57,7 +59,7 @@ import {
   type ThisMacHost,
 } from "./effect/seams.js";
 import { type EntityStore, forgetEntityStore, openEntityStore } from "./entity-store.js";
-import { ActRefused } from "./host-acts.js";
+import { ActRefused, type HostActTable } from "./host-acts.js";
 import {
   HOST_CONCERN,
   HOST_PLATFORM_CONCERN,
@@ -83,7 +85,9 @@ const HOST_START_ORDER: readonly HostConcern[] = [
   HOST_CONCERN.SETTINGS,
   HOST_CONCERN.ACCOUNT,
   HOST_CONCERN.TASKS,
+  HOST_CONCERN.WORKSPACES,
   HOST_CONCERN.AGENTS,
+  HOST_CONCERN.ACCOUNT_ASKS,
   HOST_CONCERN.AUTOMATIONS,
   HOST_CONCERN.INTEGRATIONS,
   HOST_CONCERN.INSTALLED_SKILLS,
@@ -120,8 +124,8 @@ interface PlatformConcernRequirements {
 /**
  * Every concern constructed, linked, and merged, with nothing yet begun: the
  * composers in the launch's order, the arming that follows the last of them,
- * and the drain. A method two concerns claim fails this build, so which
- * concern answers a method is checked before anything starts.
+ * and the drain. A method or an act two concerns claim fails this build, so
+ * which concern answers each is checked before anything starts.
  *
  * The platform concerns are the ones `chosen` names. One left out is never
  * started, adds nothing to the layer's requirements, and answers each of its
@@ -131,7 +135,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
   chosen: readonly Chosen[],
 ): Layer.Layer<
   HostAssemblyTag,
-  DuplicateGatewayMethod,
+  DuplicateGatewayMethod | DuplicateHostAct,
   HostAssemblyRequirements | PlatformConcernRequirements[Chosen]
 > {
   const platform = new Set<HostPlatformConcern>(chosen);
@@ -250,25 +254,37 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         pool,
         entities: () => entities?.store,
         offlineRefused,
+        client: new HostedTaskClient({
+          serviceBaseUrl: kernel.hostedServiceBaseUrl,
+          credential: account.credential,
+        }),
+      }),
+    );
+    const workspaces = yield* served(
+      composeWorkspaces({
+        kernel,
+        account,
+        accountId,
+        member,
+        kept,
+        focus,
+        pool,
+        entities: () => entities?.store,
         githubMoved: integrations.githubMoved,
-        client: Object.assign(
-          new HostedTaskClient({
+        recordProductEvent: settings.recordProductEvent,
+        tasks: tasks.workspaces,
+        client: {
+          workspaces: workspaceClient,
+          github: new HostedGitHubConnectionClient({
             serviceBaseUrl: kernel.hostedServiceBaseUrl,
             credential: account.credential,
+            sessionCredential: account.sessionCredential,
           }),
-          {
-            workspaces: workspaceClient,
-            github: new HostedGitHubConnectionClient({
-              serviceBaseUrl: kernel.hostedServiceBaseUrl,
-              credential: account.credential,
-              sessionCredential: account.sessionCredential,
-            }),
-            admin: new HostedAdminClient({
-              serviceBaseUrl: kernel.hostedServiceBaseUrl,
-              sessionCredential: account.sessionCredential,
-            }),
-          },
-        ),
+          admin: new HostedAdminClient({
+            serviceBaseUrl: kernel.hostedServiceBaseUrl,
+            sessionCredential: account.sessionCredential,
+          }),
+        },
       }),
     );
     /** An agent as the task list holds it now, on a plan or with none; none where it lists no such agent. */
@@ -312,6 +328,17 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         pullRequestListings: tasks.pullRequestListings,
         pool,
         agentListed,
+      }),
+    );
+    const accountAsks = yield* served(
+      composeAccountAsks({
+        kernel,
+        account,
+        accountId,
+        focus,
+        client: agentClient,
+        pool,
+        modelsMoved: agents.modelsMoved,
         repositoriesMoved: tasks.repositoriesMoved,
       }),
     );
@@ -428,6 +455,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           platform: yield* MirrorPlatform,
           agentListed,
           listings: tasks.pullRequestListings,
+          recordProductEvent: settings.recordProductEvent,
         })
       : unavailableConcern(HOST_PLATFORM_CONCERN.MIRRORS);
     const portForwards: PortForwardsComposer = platform.has(HOST_PLATFORM_CONCERN.PORT_FORWARDS)
@@ -499,7 +527,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         yield* account.refreshAccess;
         yield* openEntities;
         yield* tasks.open;
+        yield* workspaces.open;
         yield* agents.open;
+        yield* accountAsks.open;
         yield* automations.open;
         yield* integrations.open;
         yield* installedSkills.open;
@@ -511,8 +541,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const closeCapabilities = Effect.gen(function* () {
       yield* account.forgetAccess;
       yield* forgetEntities;
+      // Note that the workspaces are let go before the tasks, so no follow of theirs draws on the view the tasks' reset leaves idle.
+      yield* workspaces.reset;
       yield* tasks.reset;
       yield* agents.reset;
+      yield* accountAsks.reset;
       yield* integrations.reset;
       yield* automations.reset;
       yield* installedSkills.reset;
@@ -530,6 +563,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       readAccountKey: () => account.token.readAccountKey?.() ?? Effect.succeed(undefined),
       confirmAccount: () => account.session.confirmAccount?.() ?? Effect.void,
     });
+    yield* tasks.link({ workspacesRefreshed: workspaces.refreshed });
     yield* account.link({
       startCapabilities: openCapabilities,
       stopCapabilities: closeCapabilities,
@@ -539,7 +573,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       [HOST_CONCERN.SETTINGS]: settings,
       [HOST_CONCERN.ACCOUNT]: account,
       [HOST_CONCERN.TASKS]: tasks,
+      [HOST_CONCERN.WORKSPACES]: workspaces,
       [HOST_CONCERN.AGENTS]: agents,
+      [HOST_CONCERN.ACCOUNT_ASKS]: accountAsks,
       [HOST_CONCERN.AUTOMATIONS]: automations,
       [HOST_CONCERN.INTEGRATIONS]: integrations,
       [HOST_CONCERN.INSTALLED_SKILLS]: installedSkills,
@@ -577,11 +613,27 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
     };
 
-    const methods = yield* mergedMethods(Object.values(concerns));
-    const service = createGatewayService({
-      nodes: kernel.nodes,
-      methods: { ...methods, ...bootstrapMethods },
-    });
+    // Note that the host's own methods are folded with the composers', so a composer claiming one fails the build as two composers claiming one do.
+    const methods = yield* mergedMethods([
+      ...Object.values(concerns).map((concern) => concern.methods),
+      bootstrapMethods,
+    ]);
+    // Note that a platform concern left out stands in its composer's place, so its refusing acts are that composer's one claim, never a second.
+    const acts: HostActTable = yield* mergedActs([
+      account.acts,
+      agents.acts,
+      accountAsks.acts,
+      settings.acts,
+      thisMacHost.acts,
+      automations.acts,
+      installedSkills.acts,
+      integrations.acts,
+      macCommands.acts,
+      portForwards.acts,
+      tasks.acts,
+      workspaces.acts,
+    ]);
+    const service = createGatewayService({ nodes: kernel.nodes, methods });
     yield* hostService.set(service);
 
     /**
@@ -606,19 +658,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     const assembly: HostAssembly = {
       gateway: service.gateway,
-      // Note that each declared act is answered by the one composer whose domain it is, so the table is spread rather than folded.
-      acts: {
-        ...account.acts,
-        ...agents.acts,
-        ...settings.acts,
-        ...thisMacHost.acts,
-        ...automations.acts,
-        ...installedSkills.acts,
-        ...integrations.acts,
-        ...macCommands.acts,
-        ...portForwards.acts,
-        ...tasks.acts,
-      },
+      acts,
       nodes: kernel.nodes,
       concerns: new Set(Object.values(HOST_CONCERN).filter(running)),
       startOrder: HOST_START_ORDER.filter(running).map((name) => concerns[name]),
@@ -638,7 +678,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
   // first, so a requirement a composer gains is never dropped from `R`.
   const checked: Layer.Layer<
     HostAssemblyTag,
-    DuplicateGatewayMethod,
+    DuplicateGatewayMethod | DuplicateHostAct,
     HostAssemblyRequirements | PlatformConcernRequirements[HostPlatformConcern]
   > = Layer.effect(HostAssemblyTag, build);
   // SAFETY: the build asks for a platform concern's own seam only on the
@@ -646,7 +686,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
   // never reads what `PlatformConcernRequirements` would have added for it.
   return checked as Layer.Layer<
     HostAssemblyTag,
-    DuplicateGatewayMethod,
+    DuplicateGatewayMethod | DuplicateHostAct,
     HostAssemblyRequirements | PlatformConcernRequirements[Chosen]
   >;
 }

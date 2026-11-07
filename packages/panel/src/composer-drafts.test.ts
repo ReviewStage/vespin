@@ -16,9 +16,8 @@ import type { Task } from "@repo/features/task-wire";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
+import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { Clock, Context, Effect, Schema } from "effect";
-import * as AsyncResult from "effect/reactivity/AsyncResult";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -27,6 +26,7 @@ import {
   DRAFT_PLACE,
   type DraftControl,
   type DraftWriter,
+  heldLines,
   keptLines,
   useDraft,
   useDraftsOwner,
@@ -36,7 +36,6 @@ import { DesktopSidebar } from "./desktop/desktop-sidebar.js";
 import { DesktopTasks } from "./desktop/desktop-tasks.js";
 import { SidebarTask } from "./desktop/task-actions.js";
 import { DRAFT_WORD } from "./draft-mark.js";
-import { rendererRuntime } from "./renderer-runtime.js";
 import {
   type AgentComposerControl,
   type MessageSender,
@@ -56,15 +55,10 @@ import {
   pressInComposer,
   typeInComposer,
 } from "./testing/composer.js";
-import { onRegistry } from "./testing/copy-feedback.js";
+import { withQueryClient } from "./testing/copy-feedback.js";
 import { sidebarProps } from "./testing/desktop-sidebar.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
-import {
-  agentsControl,
-  listedAgent,
-  tasksControl,
-  UNPINNED_SUMMARY,
-} from "./testing/tasks-control.js";
+import { agentsControl, listedAgent, tasksControl } from "./testing/tasks-control.js";
 
 /**
  * A draft as the developer meets it: words typed in one task's agent's box
@@ -154,6 +148,14 @@ function leaveWindow(): void {
   });
 }
 
+/** Closes the window standing, its document ending (`pagehide`), as a reload or a relaunch does. */
+function closeWindow(): void {
+  act(() => {
+    window.dispatchEvent(new Event("pagehide"));
+  });
+  for (const root of roots.splice(0)) act(() => root.unmount());
+}
+
 const DEAN = { id: "user-dean", email: "dean@example.com" } as const;
 const SAM = { id: "user-sam", email: "sam@example.com" } as const;
 
@@ -161,11 +163,11 @@ const SAM = { id: "user-sam", email: "sam@example.com" } as const;
 const NEVER_ANSWERED: MessageSender = () => new Promise(() => undefined);
 
 /**
- * The window on one registry, as one launch of it holds: the sidebar's row
+ * A window, as one launch of it holds: the sidebar's row
  * of each task beside the plan's column, open on `open`'s agent's tab, or on
  * its plan's own where `onPlan`, its messages sent through `send`.
  */
-function windowOn(registry: AtomRegistry.AtomRegistry) {
+function openWindow() {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -210,15 +212,13 @@ function windowOn(registry: AtomRegistry.AtomRegistry) {
     );
     await act(async () =>
       root.render(
-        onRegistry(
-          registry,
+        withQueryClient(
           createElement(
             Fragment,
             null,
             createElement(SignedIn, { account }),
             createElement("ul", null, rows),
             createElement(DesktopTasks, {
-              summary: UNPINNED_SUMMARY,
               looks: NO_LOOKS,
               tasks: tasks,
             }),
@@ -253,7 +253,7 @@ function windowOn(registry: AtomRegistry.AtomRegistry) {
 }
 
 test("words typed in one task's agent's box wait there while another task is open, its row wearing the Draft pencil only meanwhile", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES);
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -273,7 +273,7 @@ test("words typed in one task's agent's box wait there while another task is ope
 });
 
 test("an agent's tab wears the Draft pencil while another of its task's tabs is chosen, its open task's row none", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES);
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -286,13 +286,6 @@ test("an agent's tab wears the Draft pencil while another of its task's tabs is 
   await app.show(INVITES);
   assert.equal(app.tabDrafted(INVITES.agent.title ?? ""), false);
 });
-
-/** A registry whose atoms wait on this clock, as the window's wait on its own. */
-function registryOn(clock: Clock.Clock): AtomRegistry.AtomRegistry {
-  return AtomRegistry.make({
-    initialValues: [[rendererRuntime, AsyncResult.success(Context.make(Clock.Clock, clock))]],
-  });
-}
 
 /** Longer than the typing rests before the drafts are written to storage. */
 const PAST_STORE_PAUSE = "300 millis";
@@ -325,7 +318,8 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const writes = draftWrites();
-      const app = windowOn(registryOn(yield* Clock.Clock));
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const app = openWindow();
       yield* Effect.promise(() => app.show(INVITES, { account: DEAN }));
 
       for (const keys of ["Expire", " invites", " after", " a week"]) {
@@ -344,7 +338,8 @@ it.effect(
 
 it.effect("words not yet written reach storage at once as the window is closed", () =>
   Effect.gen(function* () {
-    const app = windowOn(registryOn(yield* Clock.Clock));
+    serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+    const app = openWindow();
     yield* Effect.promise(() => app.show(INVITES, { account: DEAN }));
     typeInComposer(app.container, "Expire invites");
     yield* Effect.promise(settle);
@@ -358,20 +353,32 @@ it.effect("words not yet written reach storage at once as the window is closed",
 );
 
 test("a draft outlasts a reload of the window, words and mark alike", async () => {
-  const before = windowOn(AtomRegistry.make());
+  const before = openWindow();
   await before.show(INVITES);
   typeInComposer(before.container, "Expire invites after a week");
   await settle();
-  for (const root of roots.splice(0)) act(() => root.unmount());
+  closeWindow();
 
-  const after = windowOn(AtomRegistry.make());
+  const after = openWindow();
   await after.show(BILLING);
   assert.equal(after.rowDrafted(INVITES.plan.name), true);
   await after.show(INVITES);
   assert.equal(after.box(), "Expire invites after a week");
 });
 
-test("lines a window keeps for its account outlast a reload, but for what storage leaves out, and reach no other account", async () => {
+/** Closes the window standing and opens it afresh, signed in as `account`. */
+function signedIn(account: { readonly id: string; readonly email: string }): void {
+  closeWindow();
+  const Owner = () => {
+    useDraftsOwner(account);
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(Owner))));
+}
+
+test("lines a window keeps for its account outlast a reload, but for what storage leaves out, and reach no other account", () => {
   const lines = keptLines<
     { readonly id: string; readonly words: string; readonly files: readonly string[] },
     { readonly id: string; readonly words: string }
@@ -382,55 +389,80 @@ test("lines a window keeps for its account outlast a reload, but for what storag
     fromKept: (kept) => ({ ...kept, files: [] }),
     idOf: (kept) => kept.id,
   });
-  const signedIn = (account: { readonly id: string; readonly email: string }) => {
-    const registry = AtomRegistry.make();
-    const Owner = () => {
-      useDraftsOwner(account);
-      return null;
-    };
-    const root = createRoot(document.body.appendChild(document.createElement("div")));
-    roots.push(root);
-    act(() => root.render(onRegistry(registry, createElement(Owner))));
-    return registry;
-  };
   const ada = { id: "account-ada", email: "ada@acme.test" };
 
-  signedIn(ada).set(lines, [{ id: "held-1", words: "Say who it goes to.", files: ["invite.png"] }]);
+  signedIn(ada);
+  lines.set(() => [{ id: "held-1", words: "Say who it goes to.", files: ["invite.png"] }]);
 
-  assert.deepEqual(signedIn(ada).get(lines), [
-    { id: "held-1", words: "Say who it goes to.", files: [] },
-  ]);
-  assert.deepEqual(signedIn({ id: "account-grace", email: "grace@acme.test" }).get(lines), []);
+  signedIn(ada);
+  assert.deepEqual(lines.store.state, [{ id: "held-1", words: "Say who it goes to.", files: [] }]);
+  signedIn({ id: "account-grace", email: "grace@acme.test" });
+  assert.deepEqual(lines.store.state, []);
+});
+
+test("lines a window holds for an account are drawn for no other signing in to it, and wait for their writer", () => {
+  const lines = heldLines<{ readonly id: string }>();
+  const ada = { id: "account-ada", email: "ada@acme.test" };
+  const Owner = ({ account }: { readonly account: typeof ada }) => {
+    useDraftsOwner(account);
+    return null;
+  };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  const signIn = (account: typeof ada) =>
+    act(() => root.render(withQueryClient(createElement(Owner, { account }))));
+
+  signIn(ada);
+  lines.set(() => [{ id: "refused-1" }]);
+  signIn({ id: "account-grace", email: "grace@acme.test" });
+  assert.deepEqual(lines.store.state, []);
+
+  signIn(ada);
+  assert.deepEqual(lines.store.state, [{ id: "refused-1" }]);
+});
+
+test("lines a window holds for an account stay once the window draws itself again as the same account", () => {
+  const lines = heldLines<{ readonly id: string }>();
+  const ada = { id: "account-ada", email: "ada@acme.test" };
+  const Owner = () => {
+    useDraftsOwner(ada);
+    return null;
+  };
+  const drawWindow = () => {
+    const root = createRoot(document.body.appendChild(document.createElement("div")));
+    roots.push(root);
+    act(() => root.render(withQueryClient(createElement(Owner))));
+    return root;
+  };
+
+  const first = drawWindow();
+  lines.set(() => [{ id: "refused-1" }]);
+  // The window's root draws itself again in the same document, as a boundary recovering from a throw does.
+  act(() => first.unmount());
+  drawWindow();
+  assert.deepEqual(lines.store.state, [{ id: "refused-1" }]);
 });
 
 test("a window that read kept lines before another let them go never writes them back as it adds its own", () => {
+  const key = "app.testKeptLinesStale";
   const lines = keptLines<{ readonly id: string }, { readonly id: string }>({
-    key: "app.testKeptLinesStale",
+    key,
     kept: Schema.Struct({ id: Schema.String }),
     toKept: (line) => line,
     fromKept: (kept) => kept,
     idOf: (kept) => kept.id,
   });
-  const signedIn = () => {
-    const registry = AtomRegistry.make();
-    const Owner = () => {
-      useDraftsOwner({ id: "account-ada", email: "ada@acme.test" });
-      return null;
-    };
-    const root = createRoot(document.body.appendChild(document.createElement("div")));
-    roots.push(root);
-    act(() => root.render(onRegistry(registry, createElement(Owner))));
-    return registry;
-  };
-  const sending = signedIn();
-  sending.set(lines, [{ id: "sent" }]);
-  const stale = signedIn();
-  assert.deepEqual(stale.get(lines), [{ id: "sent" }]);
+  const ada = { id: "account-ada", email: "ada@acme.test" };
+  signedIn(ada);
+  lines.set(() => [{ id: "sent" }]);
+  assert.deepEqual(lines.store.state, [{ id: "sent" }]);
 
-  sending.set(lines, []);
-  stale.set(lines, [...stale.get(lines), { id: "new" }]);
+  // Another window lets the line go, a write this one has not heard.
+  window.localStorage.setItem(key, "[]");
+  lines.set((now) => [...now, { id: "new" }]);
 
-  assert.deepEqual(signedIn().get(lines), [{ id: "new" }]);
+  signedIn(ada);
+  assert.deepEqual(lines.store.state, [{ id: "new" }]);
 });
 
 test("a message sent takes its words out of the draft, so the box comes back empty and nothing is marked", async () => {
@@ -439,7 +471,7 @@ test("a message sent takes its words out of the draft, so the box comes back emp
     sent.push(text);
     return new Promise(() => undefined);
   };
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { send });
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -456,7 +488,7 @@ test("a message sent takes its words out of the draft, so the box comes back emp
 });
 
 test("a box emptied by hand lets its draft go, and its mark with it", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES);
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -471,7 +503,7 @@ test("a box emptied by hand lets its draft go, and its mark with it", async () =
 });
 
 test("a draft is its account's: another signing in on the same Mac meets none of it, and its writer finds it again", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { account: DEAN });
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -480,9 +512,9 @@ test("a draft is its account's: another signing in on the same Mac meets none of
   assert.equal(app.box(), "");
   await app.show(BILLING, { account: SAM });
   assert.equal(app.rowDrafted(INVITES.plan.name), false);
-  for (const root of roots.splice(0)) act(() => root.unmount());
+  closeWindow();
 
-  const relaunched = windowOn(AtomRegistry.make());
+  const relaunched = openWindow();
   await relaunched.show(INVITES, { account: SAM });
   assert.equal(relaunched.box(), "", "nor after a relaunch");
   await relaunched.show(INVITES, { account: DEAN });
@@ -492,7 +524,7 @@ test("a draft is its account's: another signing in on the same Mac meets none of
 });
 
 test("accounts whose identity holds no id are told apart by their address, so neither reads the other's draft", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { account: { email: DEAN.email } });
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -506,7 +538,7 @@ test("accounts whose identity holds no id are told apart by their address, so ne
 });
 
 test("the drafts an account kept under its address are its own still once its identity learns its id", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { account: { email: DEAN.email } });
   typeInComposer(app.container, "Expire invites after a week");
   await settle();
@@ -535,7 +567,7 @@ test("past the most drafts kept, the oldest written goes, whosever it is, and th
       keptEntry(SAM.id, BILLING.plan.id, BILLING.agent.id, "Also the CSV"),
     ]),
   );
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(BILLING, { account: DEAN });
   assert.equal(app.rowDrafted(INVITES.plan.name), true);
 
@@ -546,7 +578,7 @@ test("past the most drafts kept, the oldest written goes, whosever it is, and th
   assert.equal(app.rowDrafted(INVITES.plan.name), false, "the oldest is let go as it is written");
   for (const root of roots.splice(0)) act(() => root.unmount());
 
-  const sam = windowOn(AtomRegistry.make());
+  const sam = openWindow();
   await sam.show(BILLING, { account: SAM });
   assert.equal(sam.box(), "Also the CSV", "a newer draft of another account's stands");
 });
@@ -559,7 +591,7 @@ test("where an account kept a draft for one place under its id and a later one u
       keptEntry(DEAN.email, INVITES.plan.id, INVITES.agent.id, "Expire invites after a week"),
     ]),
   );
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { account: DEAN });
   assert.equal(app.box(), "Expire invites after a week");
 });
@@ -575,9 +607,8 @@ test("the files attached to a draft while only the account's address was known s
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  const registry = AtomRegistry.make();
   const show = (account: Identity) =>
-    act(async () => root.render(onRegistry(registry, createElement(Box, { account }))));
+    act(async () => root.render(withQueryClient(createElement(Box, { account }))));
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() => box().update((was) => ({ ...was, text: "Like this", attachments: [picture] })));
@@ -607,9 +638,8 @@ test("an inbox answer's picture moves with it as the id lands before its words r
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  const registry = AtomRegistry.make();
   const show = (account: Identity) =>
-    act(async () => root.render(onRegistry(registry, createElement(Box, { account }))));
+    act(async () => root.render(withQueryClient(createElement(Box, { account }))));
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() =>
@@ -641,9 +671,8 @@ test("where the id's own later words win a place its address held a picture at, 
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  const registry = AtomRegistry.make();
   const show = (account: Identity) =>
-    act(async () => root.render(onRegistry(registry, createElement(Box, { account }))));
+    act(async () => root.render(withQueryClient(createElement(Box, { account }))));
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() =>
@@ -672,6 +701,17 @@ function answerMotion(): void {
       removeEventListener: () => undefined,
     }),
   });
+}
+
+/** No one signed in to the window drawing `element`, which reads its drafts as the window's root does. */
+function NoOneSignedIn(): null {
+  useDraftsOwner(undefined);
+  return null;
+}
+
+/** `element` as a window no one is signed in to draws it, its drafts read afresh from storage. */
+function signedOut(element: React.ReactElement): React.ReactElement {
+  return createElement(Fragment, null, createElement(NoOneSignedIn), element);
 }
 
 /**
@@ -707,9 +747,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
   const root = createRoot(container);
   roots.push(root);
   await act(async () =>
-    root.render(
-      onRegistry(AtomRegistry.make(), createElement(DesktopSidebar, sidebarProps(tasks))),
-    ),
+    root.render(withQueryClient(signedOut(createElement(DesktopSidebar, sidebarProps(tasks))))),
   );
   await settle();
   return (name: string) =>
@@ -753,9 +791,7 @@ async function newTaskDrafted(tasks: TasksControl): Promise<boolean> {
   const root = createRoot(container);
   roots.push(root);
   await act(async () =>
-    root.render(
-      onRegistry(AtomRegistry.make(), createElement(DesktopSidebar, sidebarProps(tasks))),
-    ),
+    root.render(withQueryClient(signedOut(createElement(DesktopSidebar, sidebarProps(tasks))))),
   );
   await settle();
   const row =
@@ -784,11 +820,12 @@ test("words left in New task's card mark its sidebar row with the Draft pencil w
     false,
     "the open card shows them",
   );
-  const home = { ...inWorkspace(), page: TASKS_PAGE.HOME, activeTaskId: undefined };
+  const home = { ...inWorkspace(), page: TASKS_PAGE.HOME, activeTaskId: undefined, atHome: true };
   assert.equal(await newTaskDrafted(home), false, "Home's composer shows them");
   assert.equal(
     await newTaskDrafted({
       ...home,
+      atHome: false,
       personView: { ...tasksControl().personView, userId: "user-sam", name: "Sam" },
     }),
     true,
@@ -862,8 +899,7 @@ async function columnOn(
   roots.push(root);
   await act(async () =>
     root.render(
-      onRegistry(
-        AtomRegistry.make(),
+      withQueryClient(
         createElement(
           Fragment,
           null,
@@ -879,7 +915,7 @@ async function columnOn(
               onOpen: () => undefined,
             }),
           ),
-          createElement(DesktopTasks, { summary: UNPINNED_SUMMARY, looks: NO_LOOKS, tasks: tasks }),
+          createElement(DesktopTasks, { looks: NO_LOOKS, tasks: tasks }),
         ),
       ),
     ),
@@ -1009,7 +1045,7 @@ async function tasklessInbox(agentId: string, items: readonly InboxItem[]) {
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(onRegistry(AtomRegistry.make(), createElement(Probe))));
+  await act(async () => root.render(withQueryClient(createElement(Probe))));
   await settle();
   return control ?? assert.fail("the inbox is held");
 }
@@ -1113,7 +1149,7 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(onRegistry(AtomRegistry.make(), createElement(Probe))));
+  await act(async () => root.render(withQueryClient(createElement(Probe))));
   // Note that the feed draws once its rows reach its query.
   await vi.waitFor(() => assert.equal(control?.drawn, true));
   assert.equal(control?.draftOf(older).note, "Reply later", "the feed drawing first drops nothing");
@@ -1143,7 +1179,7 @@ test("another item landing in the inbox leaves the answer being written on one a
 });
 
 test("words another panel's window writes for a box reach this window's box as they are written", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { account: DEAN });
   typeInComposer(app.container, "Fix login");
   await settle();
@@ -1161,7 +1197,7 @@ test("words another panel's window writes for a box reach this window's box as t
 });
 
 test("an account's drafts moved from its address reach a window that read its id's before", async () => {
-  const app = windowOn(AtomRegistry.make());
+  const app = openWindow();
   await app.show(INVITES, { account: DEAN });
   await app.show(INVITES, { account: { email: DEAN.email } });
   typeInComposer(app.container, "Check the export");
@@ -1185,7 +1221,7 @@ test("words another window writes for a box this window let go a moment before s
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(onRegistry(AtomRegistry.make(), createElement(Box))));
+  await act(async () => root.render(withQueryClient(createElement(Box))));
   const box = () => held ?? assert.fail("the box is drawn");
   act(() => box().box.update((was) => ({ ...was, text: "Fix login" })));
   leaveWindow();
@@ -1222,7 +1258,7 @@ test("files attached in this window stay as its draft when another window lets t
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(onRegistry(AtomRegistry.make(), createElement(Box))));
+  await act(async () => root.render(withQueryClient(createElement(Box))));
   const box = () => composer ?? assert.fail("the box is drawn");
   act(() => box().setDraft("Review this"));
   act(() => box().setAttachments((held) => [...held, notes]));

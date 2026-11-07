@@ -154,7 +154,7 @@ const openWorkspaces = (
   });
 
 it.effect(
-  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, stamps the agents' conversations it left, and leaves a workspace others share",
+  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations it left, and leaves a workspace others share",
   () =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
@@ -178,11 +178,13 @@ it.effect(
           yield* db.select({ id: user.id }).from(user).where(eq(user.id, ada.id)),
           [],
         );
-        const [stamped] = yield* db
-          .select({ deletedAt: conversations.deletedAt })
-          .from(conversations)
-          .where(eq(conversations.id, leftBehind));
-        assert.ok(stamped?.deletedAt != null);
+        assert.deepEqual(
+          yield* db
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(eq(conversations.id, leftBehind)),
+          [],
+        );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
 );
@@ -224,11 +226,13 @@ it.effect(
             .where(eq(organizationTable.id, solo))).length,
           1,
         );
-        const [untouched] = yield* db
-          .select({ deletedAt: conversations.deletedAt })
-          .from(conversations)
-          .where(eq(conversations.id, leftBehind));
-        assert.equal(untouched?.deletedAt, null);
+        assert.equal(
+          (yield* db
+            .select({ id: conversations.id })
+            .from(conversations)
+            .where(eq(conversations.id, leftBehind))).length,
+          1,
+        );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
 );

@@ -19,7 +19,6 @@ import {
   EXPERIMENT,
   type Experiment,
   type HostCapability,
-  NO_EXPERIMENTS,
 } from "@repo/settings";
 import {
   agentKeyLink,
@@ -38,6 +37,7 @@ import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState 
 import { actMutation } from "./act-mutations.js";
 import { useAdminRoute } from "./admin/admin-route.js";
 import { adminViewOfLink } from "./admin/routing.js";
+import { useAgentRoute } from "./agent-route.js";
 import { appBridge } from "./app-bridge.js";
 import {
   runAppCommand,
@@ -67,6 +67,7 @@ import { LinkMenu } from "./link-menu.js";
 import { PageWorkspaceProvider, useCopyLink } from "./links-at-hand.js";
 import { MacCommandAskDialog } from "./mac-command-ask.js";
 import {
+  type TaskVisits,
   throughHistory,
   useHistoryMouseButtons,
   useRoutedStanding,
@@ -79,6 +80,9 @@ import { OpenAiKeyProvider } from "./openai-key.js";
 import { PANEL_TAB, type PanelTab } from "./panel-tabs.js";
 import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
+import { useLinkPlaceLandings } from "./places/link-landings.js";
+import { useLinkReads } from "./places/link-reads.js";
+import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
@@ -87,6 +91,7 @@ import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext, useStageRoom } from "./stage-room.js";
 import { useSteadyDoor, useSteadyDoors } from "./steady-door.js";
+import { useTaskRoute } from "./task-route.js";
 import { MessageRevealProvider } from "./tasks/message-links.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./tasks/repository-remedy.js";
 import { loadedTasksFixture, useTasksFixtureLanded } from "./tasks/tasks-fixture-loader.js";
@@ -97,7 +102,9 @@ import {
 } from "./tasks/use-description-editing.js";
 import { ListedPullRequests, OpenLinkProvider } from "./tasks/use-open-link.js";
 import { type LeaveAsk, useLeaveGuard, useTasksTab } from "./tasks/use-tasks-tab.js";
-import { ToastHost } from "./toast.js";
+import { useTerminalsOwner } from "./tasks/use-terminal-session.js";
+import { WindowAccountContext, windowAccountOf } from "./tasks/window-account.js";
+import { ToastHost, useToastsOwner } from "./toast.js";
 import { forgetUndo, redoLast, undoLast, useUndoWaits } from "./undo-stack.js";
 import { useUpdatedToast } from "./update-toast.js";
 import {
@@ -107,7 +114,6 @@ import {
   selectAdminAccessPending,
   selectAppSettingsView,
   selectExperiment,
-  selectExperimentChoices,
   selectInbox,
   selectRun,
   selectSessionReplay,
@@ -121,7 +127,13 @@ import { useVersionHistoryRoute } from "./version-history-route.js";
 import { ViewingAs } from "./viewing-as.js";
 import { useWindowFullScreen } from "./window-full-screen.js";
 import { useWindowZoom } from "./window-zoom.js";
-import { useBoardRoute, usePersonRoute } from "./workspace-routes.js";
+import { useExperimentsIn } from "./workspace-experiments.js";
+import {
+  useBoardRoute,
+  useHomeRoute,
+  usePersonRoute,
+  useUnknownWorkspaceRoute,
+} from "./workspace-routes.js";
 
 /** No agent ended unseen, as the document reads before main has answered. */
 const NO_UNSEEN_AGENTS: readonly string[] = [];
@@ -231,13 +243,16 @@ export function App(): React.JSX.Element {
   const fixtureMode = useQuery({ ...appStateQuery, select: selectFixtureMode }).data === true;
   const landed = useTasksFixtureLanded(fixtureMode);
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
-  const accountKey =
-    account?.status === ACCOUNT_STATUS.SIGNED_IN ? (account.id ?? account.email) : undefined;
-  // Note that the account's key is read above the window, because every message box's Dictate reads it.
+  const accountKey = windowAccountOf(account);
+  // Note that the account's key is read above the window, because every message box's Dictate reads it, and every terminal and cloud Browser tab is held under it.
   // The window's ticks run here, once, for as long as it stands.
   return (
     <TimeTicks>
-      <OpenAiKeyProvider account={accountKey}>{landed ? <AppWindow /> : null}</OpenAiKeyProvider>
+      <OpenAiKeyProvider account={accountKey}>
+        <WindowAccountContext.Provider value={accountKey}>
+          {landed ? <AppWindow /> : null}
+        </WindowAccountContext.Provider>
+      </OpenAiKeyProvider>
     </TimeTicks>
   );
 }
@@ -260,14 +275,17 @@ function AppWindow(): React.JSX.Element {
     useQuery({ ...appStateQuery, select: selectUnseenAgents }).data ?? NO_UNSEEN_AGENTS;
   const settingsHeld = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
   // A picture, and each read keyed by no account, is read as the account signed in, so the window lets go of every one it read once that account changes, and of every write it would undo, which is its presser's own.
-  const accountKey =
-    account?.status === ACCOUNT_STATUS.SIGNED_IN ? (account.id ?? account.email) : undefined;
+  const accountKey = windowAccountOf(account);
   const queryClient = useQueryClient();
   useEffect(() => {
     void forgetPictures(queryClient);
     void forgetAccountReads(queryClient);
     forgetUndo();
   }, [queryClient, accountKey]);
+  // A terminal is its account's: another account signing in detaches the last one's, whose shells run on, and that account finds them again.
+  useTerminalsOwner(accountKey);
+  // So are the toasts: another account signing in empties the stack.
+  useToastsOwner(accountKey);
   // A draft is its account's: the window reads the unsent words of the one signed in alone.
   useDraftsOwner(account?.status === ACCOUNT_STATUS.SIGNED_IN ? account : undefined);
   // So are the description words a task was left with: another account signing in lets go of them.
@@ -313,7 +331,11 @@ function AppWindow(): React.JSX.Element {
     }
     route.open(link);
   }, []);
-  const routedStanding = routedHere !== undefined;
+  // Note that Home and the task's own place are the Tasks tab's own places, of no task bound and of the task bound, so neither is a routed place the tab leaves.
+  const routedStanding =
+    routedHere !== undefined &&
+    routedHere.place !== ROUTED_PLACE.HOME &&
+    routedHere.place !== ROUTED_PLACE.TASK;
   // Arriving at Settings is arriving at its page list and its first page, Profile; the Tasks tab is the place the window's
   // state says, which a routed place standing is left for. Note that `PanelTab` and the counted tab are the same union:
   // both are `APP_PANEL_TAB`'s own set, which `PanelTab` aliases.
@@ -421,6 +443,10 @@ function AppWindow(): React.JSX.Element {
     onClose: () => leaveRouted.current(),
     onStay: () => stayRouted.current(),
   });
+  const agentView = useAgentRoute({
+    onClose: () => leaveRouted.current(),
+    onStay: () => stayRouted.current(),
+  });
   const automationsView = useAutomationsRoute({
     narrow: room === SHELL_ROOM.NARROW,
     onClose: () => leaveRouted.current(),
@@ -431,10 +457,23 @@ function AppWindow(): React.JSX.Element {
     onClose: () => leaveRouted.current(),
     onStay: () => stayRouted.current(),
   });
+  const unknownWorkspaceView = useUnknownWorkspaceRoute({
+    onClose: () => leaveRouted.current(),
+    onStay: () => stayRouted.current(),
+  });
   const inboxView = useInboxRoute({
     onClose: () => leaveRouted.current(),
     onStay: () => stayRouted.current(),
   });
+  const homeView = useHomeRoute({
+    listed: () => listedSlug.current,
+    onClose: () => leaveRouted.current(),
+  });
+  const taskView = useTaskRoute();
+  const arrivals = usePlaceArrivals();
+  const linkReads = useLinkReads();
+  // The history's door for a link's step on a task's own place, made after the tab it is handed to, read as a link opens.
+  const visitTask = useRef<TaskVisits["onVisitTask"]>(() => false);
   const tasks = useTasksTab({
     tasks: planning ?? IDLE_TASKS_VIEW,
     run: run ?? IDLE_RUN,
@@ -456,9 +495,17 @@ function AppWindow(): React.JSX.Element {
     adminView,
     boardView,
     personView,
+    agentView,
     automationsView,
     versionHistoryView,
     inboxView,
+    unknownWorkspaceView,
+    homeView,
+    taskView,
+    place: routedHere?.place,
+    arrivals,
+    linkReads,
+    visitTask: (at, step) => visitTask.current(at, step),
   });
   // Note that a workspace an older service named no slug for is named in its address by its id (`workspace-routes.ts`).
   listedSlug.current =
@@ -492,8 +539,7 @@ function AppWindow(): React.JSX.Element {
   });
   settingsRoute.current = settingsPlace;
   // The page Settings shows, which a link to one the platform does not offer leaves on Profile.
-  const experiments =
-    useQuery({ ...appStateQuery, select: selectExperimentChoices }).data ?? NO_EXPERIMENTS;
+  const experiments = useExperimentsIn(settingsPlace.workspaceId);
   const shownView = shownSettingsView(
     settingsPlace.view,
     run?.capabilities ?? NO_CAPABILITIES,
@@ -544,6 +590,9 @@ function AppWindow(): React.JSX.Element {
   const adminOn = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
   const adminPending =
     useQuery({ ...appStateQuery, select: selectAdminAccessPending }).data ?? true;
+  // The account's workspaces, which a link's slug is read against, are read once some are listed, as every account holds
+  // its own workspace, or once their read failed.
+  const workspacesUnread = tasks.workspaces.length === 0 && !tasks.listFailed;
   // Note that the door stands across draws, so every part that reads it (`useOpenLink`), each section of the open description among them, holds while the window is drawn again.
   const openAppLink = useSteadyDoor((link: ReadLink) => {
     const route = linkRoute(link, {
@@ -558,8 +607,15 @@ function AppWindow(): React.JSX.Element {
       // Admin is the router's place, which its link opens as a navigation from wherever the window stands.
       guardLeave(() => adminView.onOpen(adminViewOfLink(place)))();
     } else {
+      // Note that the Inbox, an agent's page, and a workspace not there are left by the door the link opens, as it stands what the link names,
+      // rather than up front, because an agent's link reads where its agent stands first, and a leave before that read lands would write a
+      // step of the place under it.
+      const leftByDoor =
+        routedHere?.place === ROUTED_PLACE.INBOX ||
+        routedHere?.place === ROUTED_PLACE.AGENT ||
+        routedHere?.place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
       guardLeave(() => {
-        changeTab(PANEL_TAB.TASKS);
+        if (!leftByDoor) changeTab(PANEL_TAB.TASKS);
         tasks.onOpenLink(link);
       })();
     }
@@ -567,7 +623,6 @@ function AppWindow(): React.JSX.Element {
   // An app link the system handed the app opens once sign-in no longer stands in the way, and
   // the account's workspaces are read, since a link's slug is read against them (every account
   // holds its own workspace, so none read means none read yet).
-  const workspacesUnread = tasks.workspaces.length === 0 && !tasks.listFailed;
   const openLink = useLinkOpener(accountGated || workspacesUnread, openAppLink);
   // A link of the account's own names no workspace, so it waits on the sign-in alone.
   const openAccount = useLinkOpener(accountGated, openAccountLink);
@@ -576,10 +631,15 @@ function AppWindow(): React.JSX.Element {
       appBridge().onShowLink((link) => ("workspace" in link ? openLink(link) : openAccount(link))),
     [openLink, openAccount],
   );
+  // A link place loaded at its own address, or landed on with no step saved, is read by its route and opened as its link is (`places/link-places.ts`).
+  useLinkPlaceLandings(openLink);
   // Where the window has stood, for back and forward, from the moment it
-  // knows where it stands.
+  // knows where it stands: past sign-in, with the account's workspaces read,
+  // so a link loaded waits on its own place rather than standing anywhere
+  // first.
+  const known = run !== undefined && !accountGated && !workspacesUnread;
   const history = useWindowHistory({
-    known: run !== undefined && !accountGated,
+    known,
     link: copyLink.placed,
     title: stepTitle(routedHere?.place, tasks),
     routed: routedHere,
@@ -588,11 +648,25 @@ function AppWindow(): React.JSX.Element {
     automations: automationsView,
     versionHistory: versionHistoryView,
     inbox: inboxView,
+    home: homeView,
     room,
     tasks,
   });
   leaveRouted.current = history.onLeaveRouted;
+  visitTask.current = history.onVisitTask;
   stayRouted.current = history.onStayRouted;
+  // The place standing and the task the host binds follow each other, each on the other's edge (`places/place-binding.ts`).
+  usePlaceBinding({
+    known,
+    place: routedHere?.place,
+    task: tasks.taskView.taskId,
+    page: routedHere?.place === ROUTED_PLACE.TASK ? undefined : routedHere?.address,
+    bound: tasks.boundFor,
+    onUnbind: tasks.onUnbindTask,
+    onSelect: tasks.onArriveTask,
+    onToBound: history.onLeaveRouted,
+    onToUnbound: homeView.onOpen,
+  });
   // The narrow screens' ways back to their lists go through the history, so the two never disagree.
   const shellTasks = useSteadyDoors(
     useMemo(() => throughHistory(tasks, history.lists), [tasks, history.lists]),

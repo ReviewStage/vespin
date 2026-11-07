@@ -6,6 +6,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import type { GatewayHost, NodeRegistry } from "@repo/gateway";
 import type { AppSettings } from "@repo/settings/wire";
 import { Effect, Option, type Scope } from "effect";
+import { HOST_ACTS, isLiveFollow } from "../contract/index.js";
 import type { HostActTable } from "../host-acts.js";
 import type { HostBootstrap, HostOperator } from "../host-operator.js";
 import { type AppStateStore, bootstrapPatch } from "./app-state-store.js";
@@ -35,6 +36,11 @@ export interface OperatorClient {
   /** Gives back what `start` began: every subscription this client holds. */
   stop: () => Effect.Effect<void>;
 }
+
+/** Every slice a live follow is told on (`contract/live-follow.ts`), which the host writes into the document whatever read it is. */
+const FOLLOWED_SLICES: ReadonlySet<string> = new Set(
+  Object.values(HOST_ACTS).flatMap((act) => (isLiveFollow(act) ? act.told : [])),
+);
 
 export interface OperatorClientDependencies {
   report: (message: string) => void;
@@ -92,107 +98,29 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       gateway.host.onOfflineRefusedChanged((offlineRefused) => {
         state.update({ network: { ...state.snapshot().network, offlineRefused } });
       }),
+      // Note that a live follow's slice is written whole as it is told, as each read's own was, and only a slice a follow declares.
+      gateway.host.onLiveReadChanged(({ read, held }) => {
+        // SAFETY: a followed slice is told whole as the host holds it (`liveTold`), so `held` is that slice's own.
+        if (FOLLOWED_SLICES.has(read))
+          state.update({ [read]: held } as Parameters<AppStateStore["update"]>[0]);
+      }),
       gateway.host.onAccountPreferencesChanged((held) => {
         state.update({ [LIVE_READ.ACCOUNT_PREFERENCES]: held });
-      }),
-      gateway.host.onAgentOriginsChanged((held) => {
-        state.update({ [LIVE_READ.AGENT_ORIGINS]: held });
       }),
       gateway.host.onInboxItemsChanged((read) => {
         state.update({ [LIVE_READ.INBOX_ITEMS]: read });
       }),
-      gateway.host.onHolderInboxesChanged((held) => {
-        state.update({ [LIVE_READ.HOLDER_INBOX]: held });
-      }),
-      gateway.host.onInstalledSkillsChanged((held) => {
-        state.update({ [LIVE_READ.INSTALLED_SKILLS]: held });
-      }),
-      gateway.host.onIntegrationsChanged((held) => {
-        state.update({ [LIVE_READ.INTEGRATIONS]: held });
-      }),
-      gateway.host.onIntegrationToolsChanged((held) => {
-        state.update({ [LIVE_READ.INTEGRATION_TOOLS]: held });
-      }),
-      gateway.host.onLinkStandingsChanged((held) => {
-        state.update({ [LIVE_READ.LINK_STANDINGS]: held });
-      }),
-      gateway.host.onMemoriesChanged((held) => {
-        state.update({ [LIVE_READ.MEMORIES]: held });
-      }),
-      gateway.host.onModelsChanged((held) => {
-        state.update({ [LIVE_READ.MODELS]: held });
-      }),
-      gateway.host.onPagesChanged((held) => {
-        state.update({ [LIVE_READ.PAGES]: held });
-      }),
-      gateway.host.onProviderKeysChanged((held) => {
-        state.update({ [LIVE_READ.PROVIDER_KEYS]: held });
-      }),
-      gateway.host.onRepositoryListsChanged((held) => {
-        state.update({ [LIVE_READ.REPOSITORY_LISTS]: held });
-      }),
-      gateway.host.onGitHubTokenChanged((held) => {
-        state.update({ [LIVE_READ.GITHUB_TOKEN]: held });
-      }),
-      gateway.host.onChaptersChanged((held) => {
-        state.update({ [LIVE_READ.PULL_REQUEST_CHAPTERS]: held });
-      }),
-      gateway.host.onBrowserTabsChanged((held) => {
-        state.update({ [LIVE_READ.BROWSER_TABS]: held });
-      }),
-      gateway.host.onPullRequestPartsChanged((held) => {
-        state.update(held);
-      }),
-      gateway.host.onDevicePresenceChanged((held) => {
-        state.update({ [LIVE_READ.DEVICE_PRESENCE]: held });
-      }),
-      gateway.host.onHostsChanged((held) => {
-        state.update({ [LIVE_READ.HOSTS]: held });
-      }),
-      gateway.host.onWorkspaceInvitationsChanged((held) => {
-        state.update({ [LIVE_READ.WORKSPACE_INVITATIONS]: held });
-      }),
       gateway.host.onThisMacHostChanged((held) => {
         state.update({ [LIVE_READ.THIS_MAC_HOST]: held });
-      }),
-      gateway.host.onTranscriptsChanged((held) => {
-        state.update({ [LIVE_READ.TRANSCRIPT]: held });
-      }),
-      gateway.host.onWorkspaceMembersChanged((held) => {
-        state.update({ [LIVE_READ.WORKSPACE_MEMBERS]: held });
-      }),
-      gateway.host.onWorkspaceIntegrationsChanged((held) => {
-        state.update({ [LIVE_READ.WORKSPACE_INTEGRATIONS]: held });
-      }),
-      gateway.host.onSlackChannelsChanged((held) => {
-        state.update({ [LIVE_READ.SLACK_CHANNELS]: held });
-      }),
-      gateway.host.onTokenRepositoriesChanged((held) => {
-        state.update({ [LIVE_READ.TOKEN_REPOSITORIES]: held });
       }),
       gateway.host.onWorkspacePhotosChanged((held) => {
         state.update({ [LIVE_READ.WORKSPACE_PHOTOS]: held });
       }),
-      gateway.host.onWorkspaceToolsChanged((held) => {
-        state.update({ [LIVE_READ.WORKSPACE_TOOLS]: held });
-      }),
-      gateway.host.onMcpClientsChanged((held) => {
-        state.update({ [LIVE_READ.MCP_CLIENTS]: held });
-      }),
-      gateway.host.onAutomationsChanged((held) => {
-        state.update(held);
-      }),
-      gateway.host.onDescriptionCommentsChanged((held) => {
-        state.update({ [LIVE_READ.DESCRIPTION_COMMENTS]: held });
-      }),
-      gateway.host.onHistoriesChanged((held) => {
-        state.update({ [LIVE_READ.HISTORY]: held });
-      }),
-      gateway.host.onDescriptionDocumentsChanged((held) => {
-        state.update({ [LIVE_READ.DESCRIPTION_DOCUMENT]: held });
-      }),
       gateway.host.onPortForwardingChanged((portForwarding) => {
         state.update({ portForwarding });
+      }),
+      gateway.host.onMirrorsChanged((mirrors) => {
+        state.update({ mirrors });
       }),
       // The host's own answer about recording stands the halt down: it is the
       // account transition the halt was waiting on.

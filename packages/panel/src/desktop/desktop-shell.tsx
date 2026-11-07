@@ -32,7 +32,7 @@ import {
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { useQuery } from "@tanstack/react-query";
-import { Outlet } from "@tanstack/react-router";
+import { Outlet, useMatch } from "@tanstack/react-router";
 import {
   Activity,
   createContext,
@@ -54,6 +54,7 @@ import { NewWorkspaceSteps } from "../onboarding/new-workspace-steps.js";
 import { SETUP_GATE } from "../onboarding/setup-model.js";
 import { SetupSteps, useSetupGate } from "../onboarding/setup-steps.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
@@ -76,11 +77,11 @@ import {
 } from "./automation-list-frame.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
 import { backPlaceOf } from "./back-place.js";
-import { DesktopAgentPage } from "./desktop-agent-page.js";
+import { AgentRoutePage } from "./desktop-agent-page.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
-import { DesktopTasks } from "./desktop-tasks.js";
+import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
 import { useFloatDismiss } from "./hover-pane.js";
 import { MobileBar, mobileBarShown } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
@@ -95,7 +96,6 @@ import { SidePanelChord, SidePanelToggle, usePanelToggleRoom } from "./side-pane
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
 import { awayBack } from "./task-pane-switcher.js";
-import { useSummaryPin } from "./task-summary.js";
 import { TasksPagesHeld } from "./tasks-page-held.js";
 import { useWindowTitle } from "./window-title.js";
 
@@ -600,6 +600,7 @@ function titleSubject(
   tab: PanelTab,
   tasks: TasksControl,
   shownTask: Task | undefined,
+  unknownWorkspace: boolean,
 ): Parameters<typeof useWindowTitle>[0] {
   const { signedIn } = tasks;
   if (tab === PANEL_TAB.SETTINGS) return { signedIn, subject: "Settings", workspace: undefined };
@@ -619,8 +620,7 @@ function titleSubject(
   }
   if (tasks.boardView.open) return { signedIn, subject: "Tasks", workspace: tasks.workspace };
   // A workspace not there for the reader names none, the listed one least of all.
-  if (tasks.unknownWorkspace.open)
-    return { signedIn, subject: NOT_FOUND_TITLE, workspace: undefined };
+  if (unknownWorkspace) return { signedIn, subject: NOT_FOUND_TITLE, workspace: undefined };
   if (shownTask === undefined) return { signedIn, subject: undefined, workspace: tasks.workspace };
   // Note that a task whose workspace is not read yet is named alone, because the listed one may not be its.
   const workspace = tasks.workspaces.find((each) => each.id === shownTask.workspaceId);
@@ -693,7 +693,6 @@ interface ShellPlacesInput {
   readonly settings: SettingsPanelProps;
   readonly shell: RefObject<HTMLDivElement | null>;
   readonly keepOverlay: ReturnType<typeof useFloatDismiss>;
-  readonly summary: ReturnType<typeof useSummaryPin>;
   readonly looks: ReturnType<typeof useTaskLooks>;
   readonly mentionedAgents: React.ComponentProps<typeof MentionedAgents>["value"];
   readonly chipCards: React.ComponentProps<typeof ChipCards>["value"];
@@ -735,9 +734,8 @@ export function useShellPlaces(): ShellPlacesInput {
  * place beside the sidebar (`desktop-inbox.tsx`); it is still a stay on the task, so
  * what changed since the developer last looked is held here, across it,
  * rather than by the task's page (`use-task-looks.ts`). Folding the sidebar,
- * opening, shutting, or growing the side panel, or the task's summary pinned
- * or folded to its rail, by a press or by its column's room
- * (task-summary.tsx), glides the work beside them (pane-motion.tsx). A
+ * opening, shutting, or growing the side panel glides the work beside them
+ * (pane-motion.tsx). A
  * window too narrow to pin the sidebar folds it, and a folded sidebar floats
  * over the work rather than beside it (`sidebar-collapse.ts`), put away by a
  * press outside it and its toggle. A stage as narrow as a phone's stands the
@@ -797,8 +795,6 @@ export function DesktopShell({
     onOpen: () => sidebar.onOverlay(SIDEBAR_OVERLAY.OPEN),
     onClose: () => sidebar.onOverlay(SIDEBAR_OVERLAY.CLOSED),
   });
-  // A fixture run keeps the summary's pin as it keeps the sidebar's fold: not at all.
-  const summary = useSummaryPin(sidebar.staged);
   // The box the side panel's toggle stands in, which the panel's "+" menu hangs from where the toggle asks for it with nothing to show.
   const setToggleRoom = usePanelToggleRoom();
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
@@ -817,6 +813,8 @@ export function DesktopShell({
   const adminPending =
     useQuery({ ...appStateQuery, select: selectAdminAccessPending }).data ?? true;
   const { region } = tasks;
+  // Whether the router finds the workspace the address names not there for the reader (`panel-router.tsx`).
+  const unknownWorkspace = useWindowPlace().place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
   // The window's title names what stands in it, the plan only while it is on screen, and its workspace;
   // the Inbox, an agent's or a person's page, the Automations page, or the Board standing in its place is not the plan.
   const standingIn =
@@ -826,12 +824,12 @@ export function DesktopShell({
     tasks.automationsView.open ||
     tasks.boardView.open ||
     tasks.adminView.open ||
-    tasks.unknownWorkspace.open;
+    unknownWorkspace;
   const shownTask =
     tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
       ? region.task
       : undefined;
-  useWindowTitle(titleSubject(tab, tasks, shownTask));
+  useWindowTitle(titleSubject(tab, tasks, shownTask, unknownWorkspace));
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries.
   const looks = useTaskLooks(
@@ -968,7 +966,6 @@ export function DesktopShell({
     settings,
     shell,
     keepOverlay,
-    summary,
     looks,
     mentionedAgents,
     chipCards,
@@ -1008,7 +1005,6 @@ export function ShellPlaces(): React.JSX.Element {
     settings,
     shell,
     keepOverlay,
-    summary,
     mentionedAgents,
     chipCards,
     newTaskDialog,
@@ -1140,7 +1136,6 @@ export function ShellPlaces(): React.JSX.Element {
           sidebarCollapsed: sidebar.collapsed,
           panelOpen: tasks.sidePanel.open,
           panelFullScreen: tasks.sidePanel.fullScreen,
-          summaryPinned: summary.pinned && summary.wide,
         }}
       />
     </div>
@@ -1157,26 +1152,27 @@ export function InboxPlace(): null {
 }
 
 /**
- * What a place the window's state says draws in the places' content slot:
- * a task, an agent's page, or a workspace not there for the reader. Every
- * route not yet moved onto the router draws this one component, so moving
- * between them keeps it drawn.
+ * What an agent's addresses draw in the places' content slot: the page of
+ * the agent its address names, at the page's own address, and the place the
+ * window's state says under any address beneath it, a worker's, its
+ * Changes', or a message's, which a step on a task's tab is written at.
  */
-export function StatePlace(): React.JSX.Element {
-  const { tasks, room, sidebar, settings, looks, summary, away } = useShellPlaces();
-  const { account } = settings;
-  const pageAgent = tasks.agentView.agentId;
-  const unknownWorkspace = tasks.unknownWorkspace.open;
-  return pageAgent !== undefined ? (
-    // Keyed by the agent, so another agent's page is a page of its own, holding nothing of the last.
-    <DesktopAgentPage
-      key={pageAgent}
-      tasks={tasks}
-      agentId={pageAgent}
-      away={room === SHELL_ROOM.NARROW ? away : undefined}
-    />
-  ) : unknownWorkspace ? (
-    // A workspace's address naming none of the reader's workspaces says nothing of whose it may be, its way out the reader's own Home.
+export function AgentPlace(): React.JSX.Element {
+  const { tasks, room, away } = useShellPlaces();
+  const ownPage = useMatch({ from: "/places/$workspace/agent/$agentId/", shouldThrow: false });
+  if (ownPage === undefined) return <StatePlace />;
+  return <AgentRoutePage tasks={tasks} away={room === SHELL_ROOM.NARROW ? away : undefined} />;
+}
+
+/**
+ * What a workspace's address naming none of the reader's draws in the
+ * places' content slot, as the router finds it not found
+ * (`panel-router.tsx`): it says nothing of whose it may be, and its way out
+ * leaves it for the place the window's state says, the reader's own Home.
+ */
+export function UnknownWorkspacePlace(): React.JSX.Element {
+  const { room, history } = useShellPlaces();
+  return (
     <ReplayUnmask>
       <NotFound
         replayUnmasked
@@ -1186,14 +1182,41 @@ export function StatePlace(): React.JSX.Element {
             ? phoneBar({ place: UNKNOWN_WORKSPACE_PHONE_PLACE, start: null, end: null })
             : {}
         }
-        action={{ label: GO_HOME, onClick: tasks.unknownWorkspace.onClose }}
+        action={{ label: GO_HOME, onClick: history.onLeaveRouted }}
       />
     </ReplayUnmask>
-  ) : (
-    <DesktopTasks
+  );
+}
+
+/**
+ * What a task's place draws in the places' content slot: the task bound
+ * for, or its page in the shape it lands in while the host opens it, as a
+ * link to it waits on its task. Every route of a task's draws this one
+ * component, so moving between them keeps it drawn.
+ */
+export function StatePlace(): React.JSX.Element {
+  const { tasks, room, looks, away } = useShellPlaces();
+  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+}
+
+/**
+ * What Home's routes draw in the places' content slot: the page of no task
+ * bound, its New task composer, under the workspace listed
+ * (`ROUTED_PLACE.HOME`). Note that a task still bound there draws as it
+ * does on its own place, because the binding moves one or the other next
+ * (`places/place-binding.ts`), and Home drawn for that turn would flash, as
+ * on a window opening at `/app` with a task already bound.
+ */
+export function HomePlace(): React.JSX.Element {
+  const { tasks, room, sidebar, settings, looks, away } = useShellPlaces();
+  const { account } = settings;
+  if (tasks.boundFor !== undefined) {
+    return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+  }
+  return (
+    <DesktopHomePage
       tasks={tasks}
       looks={looks}
-      summary={summary}
       room={room}
       away={away}
       accountName={account.status === ACCOUNT_STATUS.SIGNED_IN ? account.name : undefined}

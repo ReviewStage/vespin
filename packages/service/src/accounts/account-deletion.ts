@@ -15,7 +15,7 @@
  * revoked at Vercel Connect, as a Disconnect revokes one, a revoke that fails
  * logged by its word. A sandbox left behind expires on Vercel's own schedule
  * (`CODER.SANDBOX_SNAPSHOTS`), and a deleted workspace's agents'
- * conversations are stamped by its own delete's hooks
+ * conversations are deleted by its own delete's hooks
  * (`workspace-deletion.ts`).
  */
 

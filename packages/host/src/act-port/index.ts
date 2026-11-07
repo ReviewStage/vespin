@@ -1,5 +1,7 @@
 import { type ContractedRouter, onError, type Router } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/message-port";
+import { SentSendTrace, sendTraceOf } from "@repo/features/sentry-tracing";
+import { Context } from "effect";
 import {
   type actContract,
   HOST_ACTS,
@@ -7,31 +9,11 @@ import {
   type PlatformPortActKind,
 } from "../contract/index.js";
 import type { HostActTable } from "../host-acts.js";
-import {
-  type AccountAskProceduresDependencies,
-  accountAskProcedures,
-} from "./account-ask-procedures.js";
 import { type AccountProceduresDependencies, accountProcedures } from "./account-procedures.js";
-import {
-  type AgentInboxProceduresDependencies,
-  agentInboxProcedures,
-} from "./agent-inbox-procedures.js";
 import { type AgentProceduresDependencies, agentProcedures } from "./agents-procedures.js";
-import {
-  type AutomationProceduresDependencies,
-  automationProcedures,
-} from "./automation-procedures.js";
 import { type ActPortContext, actPortFor, isRefusal, refusedBy } from "./base.js";
-import { type ChaptersProceduresDependencies, chaptersProcedures } from "./chapters-procedures.js";
 import { declaredActProcedures } from "./declared-acts.js";
-import {
-  type InstalledSkillProceduresDependencies,
-  installedSkillProcedures,
-} from "./installed-skill-procedures.js";
-import {
-  type IntegrationProceduresDependencies,
-  integrationProcedures,
-} from "./integration-procedures.js";
+import { liveFollowProcedures } from "./live-follows.js";
 import { pushProcedures, type WindowPushes } from "./push-procedures.js";
 import { type SettingsProceduresDependencies, settingsProcedures } from "./settings-procedures.js";
 import { type TasksProceduresDependencies, tasksProcedures } from "./tasks-procedures.js";
@@ -50,11 +32,9 @@ import {
 
 export type { AccountProceduresDependencies } from "./account-procedures.js";
 export type { AgentProceduresDependencies } from "./agents-procedures.js";
-export type { AutomationProceduresDependencies } from "./automation-procedures.js";
 export { type ActPortContext, type ActSender, actPortFor } from "./base.js";
 export { browserLiveProcedures } from "./browser-live-procedures.js";
 export { declaredActProcedures, declaredAnswer } from "./declared-acts.js";
-export type { IntegrationProceduresDependencies } from "./integration-procedures.js";
 export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
 export { pushProcedures, WindowPushes } from "./push-procedures.js";
 export type {
@@ -102,16 +82,10 @@ export function refusedPlatformProcedures<Sender>(): PlatformActProcedures<Sende
 /** What the act port's procedures are handed, by the domain that uses it, in alphabetical order. */
 export interface ActPortDependencies {
   readonly account: AccountProceduresDependencies;
-  readonly accountAsks: AccountAskProceduresDependencies;
   /** Every declared act's handler, which the port answers directly (`HostAssembly`'s). */
   readonly acts: HostActTable;
-  readonly agentInbox: AgentInboxProceduresDependencies;
-  /** The agents' holds and notices; the acts they note are answered from `acts`. */
+  /** The agents' notices; the acts they note are answered from `acts`. */
   readonly agents: Omit<AgentProceduresDependencies, "acts">;
-  readonly automations: AutomationProceduresDependencies;
-  readonly chapters: ChaptersProceduresDependencies;
-  readonly installedSkills: InstalledSkillProceduresDependencies;
-  readonly integrations: IntegrationProceduresDependencies;
   /** What main pushes each window, which the push stream reads. */
   readonly pushes: WindowPushes;
   readonly settings: SettingsProceduresDependencies;
@@ -128,6 +102,10 @@ export interface ActPortDependencies {
  * does not draw. That failure is logged here, in main, before it is replaced.
  * The host's procedures sit beside the platform's own, and together they
  * answer every kind of the contract.
+ *
+ * A call a window sent for a press carries the press's trace as Sentry's
+ * own headers, which are set as the call's `SentSendTrace`, so a hosted ask
+ * it makes continues that trace (`@repo/features/hosted-link`).
  */
 export function createActPortHandler<Sender>(
   dependencies: ActPortDependencies,
@@ -136,14 +114,9 @@ export function createActPortHandler<Sender>(
   const router = {
     ...platformProcedures,
     ...accountProcedures(dependencies.account),
-    ...accountAskProcedures(dependencies.accountAsks),
     ...declaredActProcedures(HOST_ACTS, dependencies.acts),
-    ...agentInboxProcedures(dependencies.agentInbox),
+    ...liveFollowProcedures(HOST_ACTS, dependencies.acts),
     ...agentProcedures({ ...dependencies.agents, acts: dependencies.acts }),
-    ...automationProcedures(dependencies.automations),
-    ...chaptersProcedures(dependencies.chapters),
-    ...installedSkillProcedures(dependencies.installedSkills),
-    ...integrationProcedures(dependencies.integrations),
     ...settingsProcedures(dependencies.settings),
     ...tasksProcedures(dependencies.tasks),
     ...workspaceProcedures(dependencies.workspaces, dependencies.acts),
@@ -157,6 +130,12 @@ export function actPortHandlerOf<Sender>(
 ): ActPortHandler<Sender> {
   return new RPCHandler<ActPortContext<Sender>>(router, {
     interceptors: [
+      ({ next, request, context, ...options }) => {
+        const trace = sendTraceOf(request.headers);
+        if (trace === undefined) return next();
+        const services = Context.add(context["effect/context"], SentSendTrace, trace);
+        return next({ ...options, request, context: { ...context, "effect/context": services } });
+      },
       async ({ next, procedure }) => {
         try {
           return await next();

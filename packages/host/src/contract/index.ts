@@ -4,16 +4,21 @@ import type {
   InferContractRouterInputs,
   InferContractRouterOutputs,
 } from "@orpc/contract";
+import type { SendTrace } from "@repo/features/sentry-tracing";
 import { ACCOUNT_ACTS, accountActsContract } from "./account.js";
-import { ACCOUNT_ASK_ACTS, accountAskActsContract } from "./account-asks.js";
-import { AGENT_INBOX_ACTS, agentInboxActsContract } from "./agent-inbox.js";
-import { AGENT_ACTS, agentActsContract } from "./agents.js";
-import { AUTOMATION_ACTS, automationActsContract } from "./automations.js";
+import { ACCOUNT_ASK_ACTS, ACCOUNT_ASK_FOLLOWS, accountAskActsContract } from "./account-asks.js";
+import { AGENT_INBOX_ACTS, AGENT_INBOX_FOLLOWS, agentInboxActsContract } from "./agent-inbox.js";
+import { AGENT_ACTS, AGENT_FOLLOWS, agentActsContract } from "./agents.js";
+import { AUTOMATION_ACTS, AUTOMATION_FOLLOWS, automationActsContract } from "./automations.js";
 import { browserLiveActsContract } from "./browser-live.js";
-import { CHAPTERS_ACTS, chaptersActsContract } from "./chapters.js";
+import { CHAPTERS_ACTS, CHAPTERS_FOLLOWS, chaptersActsContract } from "./chapters.js";
 import { cliActsContract } from "./cli.js";
-import { INSTALLED_SKILL_ACTS, installedSkillActsContract } from "./installed-skills.js";
-import { INTEGRATION_ACTS, integrationActsContract } from "./integrations.js";
+import {
+  INSTALLED_SKILL_ACTS,
+  INSTALLED_SKILL_FOLLOWS,
+  installedSkillActsContract,
+} from "./installed-skills.js";
+import { INTEGRATION_ACTS, INTEGRATION_FOLLOWS, integrationActsContract } from "./integrations.js";
 import type { PortActKind } from "./kinds.js";
 import { MAC_COMMAND_ACTS, macCommandActsContract } from "./mac-commands.js";
 import { macShellActsContract } from "./mac-shells.js";
@@ -21,11 +26,11 @@ import { macTerminalActsContract } from "./mac-terminals.js";
 import { PORT_FORWARD_ACTS, portForwardActsContract } from "./port-forwards.js";
 import { pushesContract } from "./pushes.js";
 import { SETTINGS_ACTS, settingsActsContract } from "./settings.js";
-import { TASKS_ACTS, tasksActsContract } from "./tasks.js";
+import { TASKS_ACTS, TASKS_FOLLOWS, tasksActsContract } from "./tasks.js";
 import { terminalActsContract } from "./terminals.js";
 import { updateActsContract } from "./updates.js";
 import { windowSurfaceActsContract } from "./window-surface.js";
-import { WORKSPACE_ACTS, workspaceActsContract } from "./workspaces.js";
+import { WORKSPACE_ACTS, WORKSPACE_FOLLOWS, workspaceActsContract } from "./workspaces.js";
 
 /**
  * index.ts -- the oRPC contract of the acts a window's act port answers, keyed by act kind.
@@ -43,12 +48,12 @@ export {
   type MacCommandDecision,
 } from "../mac-command-ask.js";
 export { ACCOUNT_ACTS } from "./account.js";
-export { ACCOUNT_ASK_ACTS } from "./account-asks.js";
-export { AGENT_INBOX_ACTS } from "./agent-inbox.js";
-export { AGENT_ACTS } from "./agents.js";
-export { AUTOMATION_ACTS } from "./automations.js";
+export { ACCOUNT_ASK_ACTS, ACCOUNT_ASK_FOLLOWS } from "./account-asks.js";
+export { AGENT_INBOX_ACTS, AGENT_INBOX_FOLLOWS } from "./agent-inbox.js";
+export { AGENT_ACTS, AGENT_FOLLOWS } from "./agents.js";
+export { AUTOMATION_ACTS, AUTOMATION_FOLLOWS } from "./automations.js";
 export { ACT_ERROR } from "./base.js";
-export { CHAPTERS_ACTS } from "./chapters.js";
+export { CHAPTERS_ACTS, CHAPTERS_FOLLOWS } from "./chapters.js";
 export { CLI_INSTALL_OUTCOME, type CliInstallAnswer } from "./cli.js";
 export {
   type ActInput,
@@ -59,8 +64,8 @@ export {
   hostAct,
   panelOnlyOf,
 } from "./declared-act.js";
-export { INSTALLED_SKILL_ACTS } from "./installed-skills.js";
-export { INTEGRATION_ACTS } from "./integrations.js";
+export { INSTALLED_SKILL_ACTS, INSTALLED_SKILL_FOLLOWS } from "./installed-skills.js";
+export { INTEGRATION_ACTS, INTEGRATION_FOLLOWS } from "./integrations.js";
 export {
   ACCOUNT_ACT_KIND,
   ACCOUNT_ASK_ACT_KIND,
@@ -84,6 +89,13 @@ export {
   WINDOW_SURFACE_ACT_KIND,
   WORKSPACE_ACT_KIND,
 } from "./kinds.js";
+export {
+  type AnyLiveFollow,
+  type AnyLiveFollowDeclaration,
+  type FollowKey,
+  HOLD,
+  isLiveFollow,
+} from "./live-follow.js";
 export { MAC_COMMAND_ACTS } from "./mac-commands.js";
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
 export {
@@ -97,25 +109,34 @@ export {
   type PushPayload,
 } from "./pushes.js";
 export { SETTINGS_ACTS, type SettingUpdatePayload } from "./settings.js";
-export { TASKS_ACTS } from "./tasks.js";
+export { TASKS_ACTS, TASKS_FOLLOWS } from "./tasks.js";
 export { CONTACT_MAILTO } from "./window-surface.js";
-export { WORKSPACE_ACTS } from "./workspaces.js";
+export { WORKSPACE_ACTS, WORKSPACE_FOLLOWS } from "./workspaces.js";
 
-/** Every act declared once (`declared-act.ts`), one domain's spread each, in alphabetical order: what the host's composers answer directly. */
+/** Every act declared once, plain (`declared-act.ts`) or a live follow (`live-follow.ts`), one domain's spread each, in alphabetical order: what the host's composers answer directly. */
 export const HOST_ACTS = {
   ...ACCOUNT_ACTS,
   ...ACCOUNT_ASK_ACTS,
+  ...ACCOUNT_ASK_FOLLOWS,
   ...AGENT_INBOX_ACTS,
+  ...AGENT_INBOX_FOLLOWS,
   ...AGENT_ACTS,
+  ...AGENT_FOLLOWS,
   ...AUTOMATION_ACTS,
+  ...AUTOMATION_FOLLOWS,
   ...CHAPTERS_ACTS,
+  ...CHAPTERS_FOLLOWS,
   ...INSTALLED_SKILL_ACTS,
+  ...INSTALLED_SKILL_FOLLOWS,
   ...INTEGRATION_ACTS,
+  ...INTEGRATION_FOLLOWS,
   ...MAC_COMMAND_ACTS,
   ...PORT_FORWARD_ACTS,
   ...SETTINGS_ACTS,
   ...TASKS_ACTS,
+  ...TASKS_FOLLOWS,
   ...WORKSPACE_ACTS,
+  ...WORKSPACE_FOLLOWS,
 };
 
 /** Every domain's procedures, one spread each, in alphabetical order. */
@@ -152,8 +173,17 @@ export const actPortContract = {
   ...pushesContract,
 };
 
+/**
+ * What a window may hand one call of its act port beside its input: the
+ * trace of the send it was pressed for, which the port carries to the host
+ * as Sentry's own headers (`@repo/features/sentry-tracing`).
+ */
+export interface ActPortCallContext {
+  readonly trace?: SendTrace | undefined;
+}
+
 /** The window's typed client of the act port. */
-export type ActPortClient = ContractRouterClient<typeof actPortContract>;
+export type ActPortClient = ContractRouterClient<typeof actPortContract, ActPortCallContext>;
 
 /** What one port kind takes. */
 export type PortActPayload<Kind extends PortActKind> = InferContractRouterInputs<

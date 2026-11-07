@@ -9,13 +9,13 @@ import {
   recordAgentStep,
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
-import { replaceAgentWakeups } from "@repo/database/models/agent-wakeups";
 import {
   type NativeProjectionRow,
   withNativeProjection,
 } from "@repo/database/models/native-projection-store";
 import { setPlanStatus } from "@repo/database/models/provider-key-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
+import { renewTurnLease } from "@repo/database/models/turn-lease";
 import {
   type ConversationTarget,
   type SettledAgentTurn,
@@ -115,7 +115,9 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * whose sandbox is stopped instead. A batch with no events is the runner's
  * heartbeat (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`), posted while its
  * harness says nothing, as it may for an hour while a background command
- * runs; it applies nothing but that.
+ * runs; it applies nothing but that and the lease every post short of the
+ * launch's end pushes on, which the turns it runs are read as lost by once
+ * it runs out (`@repo/database/models/turn-lease`).
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -241,13 +243,6 @@ export interface RunnerEventsOptions<R = never> {
     target: ConversationTarget,
     agent: Agent,
   ) => Effect.Effect<void, never, DatabaseServices | R>;
-  /**
-   * Told once a batch that ended a turn has landed, after its transaction,
-   * and run after the answer: the agent's queue handed on, or paused where
-   * the turn was stopped or failed (`../coder-host/agent-queue.ts`). Nothing
-   * where left out.
-   */
-  readonly turnEnded?: (agent: Agent) => Effect.Effect<void, never, DatabaseServices | R>;
 }
 
 /**
@@ -320,10 +315,10 @@ const waitingHandedOn = (ended: RunnerEnded, sessionId: string) =>
  * A launch's IDLE as the device hears it: the warm runner retired at once
  * where its device waits to switch release
  * (`../coder-host/runner-sessions.ts`'s `runnerIdled`); it otherwise stays
- * warm, and the sweep retires it past the window. A sandbox's runner is
- * launched to end at its turn's end, so it posts no IDLE. A retire that
- * fails is said in the log and passed over, because the sweep retires the
- * runner once its grace passes.
+ * warm, and ends itself past the window. A sandbox's runner is launched to
+ * end at its turn's end, so it posts no IDLE. A retire that fails is said in
+ * the log and passed over, because the host retires its own warm runners
+ * while it waits to update.
  */
 export function sandboxAtRunnerIdle(
   idled: RunnerEnded,
@@ -517,11 +512,6 @@ function landWrite(
     case NATIVE_WRITE.FAILED:
       // Said once the batch has landed, so a turn is said failed only once its row is.
       return Effect.void;
-    case NATIVE_WRITE.WAKEUPS:
-      return replaceAgentWakeups(
-        applying.agentId,
-        write.wakeups.map(({ at, prompt }) => ({ at: new Date(at), prompt })),
-      );
     case NATIVE_WRITE.PLAN_STATUS: {
       // Note that the row is the starter's credential that pays: its plan's, or, for an agent its API key
       // pays for, that key's, which a refusal marks invalid; a plan's limit is no key's.
@@ -615,6 +605,9 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     yield* landWrites(applying, writes, now);
     const last = events.at(-1)?.sequence;
     const ends = runnerEndsOf(batch, held.sequence);
+    // Any post short of the launch's end, a heartbeat among them, pushes on the open turns' lease
+    // (`turn-lease.ts`), so a runner gone quiet is read as lost once it runs out.
+    if (ends.length === 0) yield* renewTurnLease(applying.target.conversationId, now);
     // Only the batch's last IDLE is told, and none where the launch ended in the same batch.
     const idle =
       ends.length === 0
@@ -650,8 +643,8 @@ function eventCountOf(parsed: unknown): number | undefined {
 /**
  * A runner's batch refused for good, logged by its status, size, and event
  * count, never its body. Note that it is logged here because the runner
- * ends on such a refusal (`packages/agent-runner/src/events.ts`), and its turn falls
- * to the sweep, which can say only that the runner went.
+ * ends on such a refusal (`packages/agent-runner/src/events.ts`), and its turn's
+ * lease then runs out, whose settle can say only that the runner went.
  */
 const batchRefused = (
   ids: { readonly agentId: string; readonly conversationId: string },
@@ -675,7 +668,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   HostedRefusal,
   HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | R
 > {
-  const { read, ended, idled, alive, title, turnEnded } = options;
+  const { read, ended, idled, alive, title } = options;
   const incoming = yield* HttpServerRequest.HttpServerRequest;
   if (incoming.method !== HTTP_METHOD.POST) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
@@ -768,10 +761,6 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // Note that the title runs after the answer, kept awake past it, because the runner need not wait on a model.
   if (title !== undefined && (applied.value.turns.started || applied.value.turns.ended)) {
     yield* afterResponse("a coding agent's title", title(target, agent.value));
-  }
-  // Note that the queue is handed on after the answer, because the runner's post need not wait on a send that may wake a sandbox.
-  if (turnEnded !== undefined && applied.value.turns.ended) {
-    yield* afterResponse("a coding agent's queue", turnEnded(agent.value));
   }
   if (alive !== undefined && applied.value.keepsAlive) {
     yield* alive({ target, sessionId: admitted.value.runtimeSessionId });
