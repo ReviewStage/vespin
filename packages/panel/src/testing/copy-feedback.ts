@@ -1,5 +1,5 @@
 /**
- * copy-feedback.ts -- what a test of a surface stands on: the renderer's atoms under a registry the test supplies, and a TanStack Query client of the test's own.
+ * copy-feedback.ts -- what a test of a surface stands on: a TanStack Query client of the test's own.
  *
  * The client is made afresh before each test and cleared after it, as the
  * docs' Testing guide makes one per test with `retry: false`, so no test
@@ -8,14 +8,18 @@
  *
  * The window's drafts owner (`useDraftsOwner`) stands, no one signed in, in
  * a root of its own from the first tree a test draws here until the test
- * ends, so what one test typed, attached, or held unsent is let go before
- * the next, as the window's root going lets it go.
+ * ends, when the test's window leaves (`pagehide`), so what one test typed,
+ * attached, or held unsent is let go before the next, as a window's
+ * document ending lets it go.
  */
 
-import { RegistryContext } from "@effect/atom-react/RegistryContext";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type * as AtomRegistry from "effect/reactivity/AtomRegistry";
+import {
+  notifyManager,
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   act,
   createContext,
@@ -23,13 +27,14 @@ import {
   type ReactElement,
   type ReactNode,
   useContext,
+  useEffect,
 } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { LiveReadSubscription } from "../live-reads.js";
-import { AppStateSubscription, appStateQuery } from "../use-app-state.js";
+import { appStateQuery, followAppState } from "../use-app-state.js";
 import { seedLanded } from "./landed-reads.js";
 
 /**
@@ -37,7 +42,7 @@ import { seedLanded } from "./landed-reads.js";
  * sending as the window's does whatever the online mark says.
  * Note that no reader fetches the document's query here, because a case
  * that seeds it with `setQueryData` draws on what it seeded until the test's
- * subscription (`AppStateSubscription`) writes what it reads, and a case
+ * subscription (`followAppState`) writes what it reads, and a case
  * that waits on the window's first read asks for it itself (`readAppState`).
  */
 function freshQueryClient(): QueryClient {
@@ -58,7 +63,7 @@ let heldForFile: AppStateSnapshot | undefined;
 
 let testQueryClient = freshQueryClient();
 
-/** No one signed in to the window, whose drafts it reads and writes. */
+/** No one signed in to the window, whose drafts it reads and writes. Note that it signs out any owner a test mounted before its first `withQueryClient`. */
 function NoOneSignedIn(): null {
   useDraftsOwner(undefined);
   return null;
@@ -82,6 +87,7 @@ beforeEach(() => {
 
 afterEach(() => {
   testQueryClient.clear();
+  if (draftsRoot !== undefined) act(() => window.dispatchEvent(new Event("pagehide")));
   act(() => draftsRoot?.unmount());
   draftsRoot = undefined;
 });
@@ -94,19 +100,27 @@ const OnTestClient = createContext(false);
  * would each write what they read, and the later write would stand over
  * the one the test meant.
  */
-function TestAppStateSubscription(): ReactElement {
+function TestAppStateSubscription(): null {
   if (useContext(OnTestClient)) {
     throw new Error("withQueryClient is nested in another: draw the tree through one.");
   }
-  return createElement(AppStateSubscription);
+  const client = useQueryClient();
+  useEffect(() => {
+    const following = followAppState(client);
+    // A tree draws nothing that waits on the first read, so one refused is told as a window's later one is, and the next delivery asks again.
+    following.written.catch((cause: unknown) => {
+      console.error("The window's state could not be read; the next delivery asks again.", cause);
+    });
+    return following.stop;
+  }, [client]);
+  return null;
 }
 
 /**
  * `element` on the test's Query client, with the document's one subscription
- * (`AppStateSubscription`) writing each reading of the bridge into that
+ * (`followAppState`) writing each reading of the bridge into that
  * client, and the live reads' (`LiveReadSubscription`)
- * keeping them current and followed, as the window's root does: for a test drawing
- * under the registry React provides when none is given.
+ * keeping them current and followed, as the window's root does.
  */
 export function withQueryClient(element: ReactNode): ReactElement {
   standDraftsOwner();
@@ -119,18 +133,10 @@ export function withQueryClient(element: ReactNode): ReactElement {
   );
 }
 
-/** `element` under `registry` and the test's Query client (`withQueryClient`), as the window's root provides its own. */
-export function onRegistry(
-  registry: AtomRegistry.AtomRegistry,
-  element: ReactElement,
-): ReactElement {
-  return createElement(RegistryContext.Provider, { value: registry }, withQueryClient(element));
-}
-
 /**
  * Waits until no write of the test's client is out, and the answers its
  * callers read have landed, as a plan's saves sent while it was left do:
- * for a teardown that disposes the atoms those answers write into.
+ * for a teardown that lets go of what those answers write into.
  */
 export async function settledWrites(): Promise<void> {
   await vi.waitFor(() => {

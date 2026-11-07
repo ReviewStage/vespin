@@ -189,6 +189,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_QUEUE: "agents.queue",
   AGENTS_STOP: "agents.stop",
   AGENTS_REWIND: "agents.rewind",
+  /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
+  AGENTS_WARM: "agents.warm",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
   /** The reader's own read mark of an agent with no task moved, kept on the account (`read-mark.ts`). */
@@ -617,7 +619,8 @@ export const UPDATE_ACT_KIND = {
 /**
  * The account's workspaces: one made under a name, answered as made, which
  * the account owns; one renamed by its owners and admins, answered under
- * its new name; one's photo set as a `data:` URL or removed with null by
+ * its new name; one experiment turned on or off for everyone in one by its
+ * owners and admins, drawn at once and answered with the workspace; one's photo set as a `data:` URL or removed with null by
  * its owners and admins, answered with the photo's new version or none;
  * one's pending invitations held, one made, answered
  * with its accept link, and one canceled, for its owners and admins; a GitHub
@@ -635,6 +638,7 @@ export const UPDATE_ACT_KIND = {
 export const WORKSPACE_ACT_KIND = {
   WORKSPACE_CREATE: "workspace.create",
   WORKSPACE_RENAME: "workspace.rename",
+  WORKSPACE_EXPERIMENT_SET: "workspace.experimentSet",
   WORKSPACE_INVITE: "workspace.invite",
   WORKSPACE_INVITATION_CANCEL: "workspace.invitationCancel",
   WORKSPACE_GITHUB_CONNECT: "workspace.githubConnect",
@@ -863,6 +867,7 @@ export const PORT_ACT_USE = {
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
+  AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
   AGENTS_MARK_READ: ACT_USE.WRITE,
@@ -1026,6 +1031,7 @@ export const PORT_ACT_USE = {
 
   WORKSPACE_CREATE: ACT_USE.WRITE,
   WORKSPACE_RENAME: ACT_USE.WRITE,
+  WORKSPACE_EXPERIMENT_SET: ACT_USE.WRITE,
   WORKSPACE_INVITE: ACT_USE.WRITE,
   WORKSPACE_INVITATION_CANCEL: ACT_USE.WRITE,
   WORKSPACE_GITHUB_CONNECT: ACT_USE.WRITE,

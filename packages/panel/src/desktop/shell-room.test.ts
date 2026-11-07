@@ -23,12 +23,11 @@ import { MAIN_TAB } from "../tasks/use-main-tabs.js";
 import { useSidePanel } from "../tasks/use-side-panel.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { DESKTOP_CAPABILITIES, registryWith } from "../testing/app-state.js";
+import { DESKTOP_CAPABILITIES, withExperiments } from "../testing/app-state.js";
 import { layContainersAt } from "../testing/container-width.js";
-import { onRegistry } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { relayout } from "../testing/resize-observer.js";
-import { shellRouterEachTest } from "../testing/shell-router.js";
+import { SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { useSidebarCollapse } from "./sidebar-collapse.js";
@@ -204,9 +203,10 @@ function mount(width: number, onTask = true): HTMLElement {
   root = createRoot(container);
   act(() =>
     root?.render(
-      onRegistry(
-        registryWith(experimentsOn(EXPERIMENT.DESCRIPTIONS)),
-        underRouter(createElement(Window, { onTask })),
+      withExperiments(
+        experimentsOn(EXPERIMENT.DESCRIPTIONS),
+        // The task stands at its own route, and Home at its.
+        underRouter(createElement(Window, { onTask }), onTask ? SHELL_AT.TASK : SHELL_AT.PLACES),
       ),
     ),
   );
@@ -295,8 +295,9 @@ const ZOOMED_LEAST_WINDOW = [
 ] as const;
 
 for (const { zoom, width } of ZOOMED_LEAST_WINDOW) {
-  test(`the least desktop window at ${zoom}% zoom, ${width} CSS px under a mouse, stands as one pane with a drawer, and unzoomed it is wide again`, () => {
+  test(`the least desktop window at ${zoom}% zoom, ${width} CSS px under a mouse, stands as one pane with a drawer, and unzoomed it is wide again`, async () => {
     const page = mount(width);
+    await act(() => routed().settled());
     assert.equal(roomOf(page), "narrow");
     assert.deepEqual(panelOf(page), {
       fullScreen: true,
@@ -334,8 +335,9 @@ function headBack(page: HTMLElement): HTMLButtonElement {
   return back;
 }
 
-test("an open side panel on a narrow stage fills the window, with no edge to drag and no full-screen button, the task's header standing for its toggle and the sidebar's", () => {
+test("an open side panel on a narrow stage fills the window, with no edge to drag and no full-screen button, the task's header standing for its toggle and the sidebar's", async () => {
   const page = mount(PHONE);
+  await act(() => routed().settled());
   assert.equal(roomOf(page), "narrow");
   // The panel left open, which the narrow stage holds full screen.
   assert.deepEqual(panelOf(page), { fullScreen: true, resizable: false, fullScreenButton: false });

@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import type { HistoryStep, NavigationHistory } from "../navigation-history.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
-import { onRegistry } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { HistoryButtons } from "./desktop-sidebar.js";
 
 /**
@@ -44,12 +43,12 @@ const BACK: readonly HistoryStep[] = [
   {
     at: 2,
     title: { label: "Auth refactor", detail: "Fix token refresh · Code" },
-    page: { kind: "plan", of: "a" },
+    page: { kind: "task", of: "a" },
   },
   {
     at: 1,
     title: { label: "Auth refactor", detail: "Fix token refresh · Plan" },
-    page: { kind: "plan", of: "a" },
+    page: { kind: "task", of: "a" },
   },
   {
     at: 0,
@@ -75,12 +74,7 @@ function mount(steps: readonly HistoryStep[]) {
   const root = createRoot(container);
   roots.push(root);
   act(() =>
-    root.render(
-      onRegistry(
-        AtomRegistry.make(),
-        createElement(HistoryButtons, { history, room: SHELL_ROOM.WIDE }),
-      ),
-    ),
+    root.render(withQueryClient(createElement(HistoryButtons, { history, room: SHELL_ROOM.WIDE }))),
   );
   const back = container.querySelector<HTMLButtonElement>('button[aria-label="Back"]');
   assert.ok(back);
@@ -182,7 +176,7 @@ test("Back held opens its list and its release takes no step, while a quick pres
 });
 
 test("repeated steps named nothing are listed in separate page groups, one for each time the window returned to the page", () => {
-  const home = { kind: "home", of: undefined } as const;
+  const home = { kind: "routed", of: "/acme" } as const;
   const window = mount([
     { at: 3, title: undefined, page: home },
     { at: 2, title: undefined, page: home },

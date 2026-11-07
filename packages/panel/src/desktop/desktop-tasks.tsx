@@ -46,7 +46,7 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -98,7 +98,8 @@ import {
   TASK_RENAME_SHAPE,
   type TasksControl,
 } from "../tasks/use-tasks-tab.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useWindowAccount } from "../tasks/window-account.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { ArchivedAgents } from "./agent-archive.js";
@@ -365,13 +366,18 @@ function AgentColumn({ children }: { children: React.ReactNode }): React.JSX.Ele
  * A focused agent's pane or tab offers its transcript's copy over it
  * (`main-tabs.tsx`, `side-panel.tsx`).
  */
-function CopyChord({ copy }: { copy: TasksControl["copy"] }): null {
-  // While Descriptions is off there is no description to copy, so the chord is an agent's alone.
+function CopyChord({
+  copy,
+  workspaceId,
+}: {
+  copy: TasksControl["copy"];
+  /** The workspace of the task drawn. */
+  workspaceId: string;
+}): null {
+  // While the task's workspace has Descriptions off there is no description to copy, so the chord is an agent's alone.
   useAppCommand(
     APP_COMMAND.COPY_CONTENT,
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.DESCRIPTIONS) }).data === true
-      ? copy.onPress
-      : undefined,
+    useWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS) ? copy.onPress : undefined,
   );
   return null;
 }
@@ -416,6 +422,7 @@ function DescriptionDocument({
   away: TaskHeadBack;
 }): React.JSX.Element {
   const { region } = tasks;
+  const account = useWindowAccount();
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
   const [shownAgentTab, setShownAgentTab] = useState<ShownTab | undefined>(undefined);
@@ -436,9 +443,14 @@ function DescriptionDocument({
     readerId: tasks.me,
     agents: tasks.agents,
   });
-  // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while Descriptions is off.
-  const descriptionsOn =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.DESCRIPTIONS) }).data === true;
+  // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
+  const descriptionsOn = useWorkspaceExperiment(
+    region.kind === DOCUMENT_REGION.READY
+      ? region.task.workspaceId
+      : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
+          tasks.workspace?.id),
+    EXPERIMENT.DESCRIPTIONS,
+  );
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
   const comments = useDescriptionComments(
     useMemo(
@@ -1205,7 +1217,9 @@ function DescriptionDocument({
     const newest = (agentBrowsers ?? [])
       .filter((each) => each.agentId === agentId)
       .toSorted((one, other) => other.createdAt - one.createdAt)[0];
-    openPanelTab(cloudBrowserTab(newest?.id ?? startCloudDraft({ taskId: task.id }, agentId).id));
+    openPanelTab(
+      cloudBrowserTab(newest?.id ?? startCloudDraft(account, { taskId: task.id }, agentId).id),
+    );
   };
   // ⌘T on a phone starts New agent at once, since no "+" stands in sight to drop its menu.
   const newAgentOnPhone = () => {
@@ -1331,7 +1345,7 @@ function DescriptionDocument({
                               {RENAME_FAILED_NOTE}
                             </FailureNote>
                           ) : null}
-                          <CopyChord copy={tasks.copy} />
+                          <CopyChord copy={tasks.copy} workspaceId={task.workspaceId} />
                           {terminalDoors.terminals ? (
                             <TerminalCommands
                               here={terminalHere}
@@ -1506,20 +1520,34 @@ function StartingTaskPage({
 }
 
 /**
- * The Tasks tab's work column: the open task's page, or Home.
- *
- * A memo boundary: the shell drawn again over the same tasks, as a setting
- * that moves draws it, leaves the open plan, its transcripts, and its side
- * panel as they were.
+ * The page of a task the host has not yet opened, as a link's route waiting
+ * on the account's workspaces stands it or a task pressed waits on the host:
+ * the task's page in the shape it lands in, as its document's read draws it.
  */
-export const DesktopTasks = memo(function DesktopTasks({
+function TaskOpening({
   tasks,
-  looks,
   room = SHELL_ROOM.WIDE,
   away,
-  accountName,
-  staged = false,
 }: {
+  tasks: TasksControl;
+  room?: ShellRoom;
+  away?: TaskHeadBack | undefined;
+}): React.JSX.Element {
+  const drawing = useSidePanelDrawing(tasks.sidePanel);
+  const phoneAway =
+    room === SHELL_ROOM.NARROW
+      ? (away ?? { label: HOME_BACK, onPress: tasks.onGoHome })
+      : undefined;
+  return (
+    <TaskPageSkeleton
+      drawing={drawing}
+      head={phoneAway === undefined ? undefined : <TaskWaitHead away={phoneAway} reading />}
+    />
+  );
+}
+
+/** What the work column's two places are handed: the Tasks tab and how the column stands. */
+interface WorkColumnProps {
   tasks: TasksControl;
   /** The signed-in account's name, which Home greets. */
   accountName?: string | undefined;
@@ -1531,50 +1559,84 @@ export const DesktopTasks = memo(function DesktopTasks({
   room?: ShellRoom;
   /** A phone's way back out of the task, to the page it was opened from (`WindowHistory`'s `onLeave`); Home where none is handed. */
   away?: TaskHeadBack | undefined;
-}): React.JSX.Element {
-  // A task New task is starting with its agent stands as its page until the start answers.
-  if (tasks.starting !== undefined) {
-    return (
-      <StartingTaskPage
+}
+
+/** A task New task is starting with its agent, which stands as its page until the start answers, wherever it was started. */
+function startingPage(
+  tasks: TasksControl,
+  room: ShellRoom,
+  away: TaskHeadBack | undefined,
+): React.JSX.Element | undefined {
+  if (tasks.starting === undefined) return undefined;
+  return (
+    <StartingTaskPage
+      tasks={tasks}
+      starting={tasks.starting}
+      phoneAway={
+        room === SHELL_ROOM.NARROW
+          ? (away ?? { label: HOME_BACK, onPress: tasks.onGoHome })
+          : undefined
+      }
+    />
+  );
+}
+
+/**
+ * The Tasks tab's work column on a task's place: the open task's page, or
+ * its page in the shape it lands in while the host opens it.
+ *
+ * A memo boundary: the shell drawn again over the same tasks, as a setting
+ * that moves draws it, leaves the open plan, its transcripts, and its side
+ * panel as they were.
+ */
+export const DesktopTasks = memo(function DesktopTasks({
+  tasks,
+  looks,
+  room = SHELL_ROOM.WIDE,
+  away,
+}: WorkColumnProps): React.JSX.Element {
+  const starting = startingPage(tasks, room, away);
+  if (starting !== undefined) return starting;
+  if (tasks.page === TASKS_PAGE.HOME) return <TaskOpening tasks={tasks} room={room} away={away} />;
+  return (
+    <SkillFiles
+      source={tasks.agents.readSkills}
+      // Note that a skill's file opens as a file the palette finds does, whole,
+      // so its tab stands on this task though the app never showed it.
+      onOpen={(skill) => tasks.sidePanel.onOpenFile({ path: skill.path })}
+    >
+      <DescriptionDocument
         tasks={tasks}
-        starting={tasks.starting}
-        phoneAway={
-          room === SHELL_ROOM.NARROW
-            ? (away ?? { label: HOME_BACK, onPress: tasks.onGoHome })
-            : undefined
-        }
+        looks={looks}
+        room={room}
+        away={away ?? { label: HOME_BACK, onPress: tasks.onGoHome }}
       />
-    );
-  }
-  switch (tasks.page) {
-    case TASKS_PAGE.DOCUMENT:
-      return (
-        <SkillFiles
-          source={tasks.agents.readSkills}
-          // Note that a skill's file opens as a file the palette finds does, whole,
-          // so its tab stands on this task though the app never showed it.
-          onOpen={(skill) => tasks.sidePanel.onOpenFile({ path: skill.path })}
-        >
-          <DescriptionDocument
-            tasks={tasks}
-            looks={looks}
-            room={room}
-            away={away ?? { label: HOME_BACK, onPress: tasks.onGoHome }}
-          />
-        </SkillFiles>
-      );
-    // With no task open the column is Home, whose own composer New task
-    // hands the caret rather than opening its dialog over it.
-    case TASKS_PAGE.HOME:
-      return (
-        <>
-          <div className="desktop-drag-strip" />
-          <PageFind page={FIND_PAGE.HOME} active={tasks.shown}>
-            <Fill as={FILL_ELEMENT.SECTION} className="home" aria-label="Home">
-              <DesktopHome tasks={tasks} room={room} accountName={accountName} staged={staged} />
-            </Fill>
-          </PageFind>
-        </>
-      );
-  }
+    </SkillFiles>
+  );
+});
+
+/**
+ * The Tasks tab's work column on Home, the page of no task bound, whose own
+ * composer New task hands the caret rather than opening its dialog over it;
+ * a task started from it stands as its page until the start answers.
+ */
+export const DesktopHomePage = memo(function DesktopHomePage({
+  tasks,
+  room = SHELL_ROOM.WIDE,
+  away,
+  accountName,
+  staged = false,
+}: WorkColumnProps): React.JSX.Element {
+  const starting = startingPage(tasks, room, away);
+  if (starting !== undefined) return starting;
+  return (
+    <>
+      <div className="desktop-drag-strip" />
+      <PageFind page={FIND_PAGE.HOME} active={tasks.shown}>
+        <Fill as={FILL_ELEMENT.SECTION} className="home" aria-label="Home">
+          <DesktopHome tasks={tasks} room={room} accountName={accountName} staged={staged} />
+        </Fill>
+      </PageFind>
+    </>
+  );
 });

@@ -5,7 +5,7 @@
  * service that launches the runner (P08) and the route that takes its events
  * (P09) import it without the SDK behind it. Every line on stdin is one JSON
  * object: the first is the config, each later one a message, a stop, a model
- * change, or a retire. A config that names `linesUrl` has the runner read
+ * change, a retire, or a warm. A config that names `linesUrl` has the runner read
  * the later lines from the service instead (`RUNNER_LINES`).
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
@@ -99,8 +99,7 @@ export const RUNNER_PLACE = {
    * A machine its member runs our host on, a Linux box or a Mac, with
    * nobody signed in at it, where each launch runs straight on the box as
    * the host's own user, with full access to what that user reaches, beside
-   * the box's other processes, which the runner tells its agent's from by
-   * descent (`host-processes.ts`). No harness runs a sandbox of its own or
+   * the box's other processes. No harness runs a sandbox of its own or
    * asks an approval there, as in the cloud's sandbox: Claude Code under
    * `bypassPermissions`, and Codex in `danger-full-access` with approval
    * `never`.
@@ -158,6 +157,25 @@ export const RUNNER_HARNESS = {
 } as const;
 export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS];
 
+/**
+ * How a message reached its runner, as the launch's trace names it: a place
+ * created from its source agent's snapshot, its repository's base snapshot,
+ * or the agents' image; one resumed from its own snapshot; the runner
+ * launched again in a place still up; a place made anew where the one found
+ * was gone; or a runner already up. The last four are spelled as the
+ * service's hand-off event spells them (`SERVER_HANDOFF_PATH`).
+ */
+export const LAUNCH_PATH = {
+  SOURCE_SNAPSHOT: "source_snapshot",
+  BASE_SNAPSHOT: "base_snapshot",
+  IMAGE: "image",
+  RESUMED: "resumed",
+  RELAUNCHED: "relaunched",
+  FRESH: "fresh",
+  WARM: "warm",
+} as const;
+export type LaunchPath = (typeof LAUNCH_PATH)[keyof typeof LAUNCH_PATH];
+
 /** The reasoning efforts the pinned SDK takes, as its `EffortLevel` spells them. */
 export const EFFORT = {
   LOW: "low",
@@ -190,6 +208,7 @@ export const INPUT_LINE = {
   STOP: "stop",
   MODEL: "model",
   RETIRE: "retire",
+  WARM: "warm",
 } as const;
 
 /**
@@ -342,6 +361,25 @@ const SequenceSchema = Schema.Number.check(
 );
 
 /**
+ * What a launch in the cloud's sandbox is handed to trace its startup in the
+ * launch's own Sentry trace (`trace.ts`): the service's DSN, environment and
+ * release, the launch span's `sentry-trace` and `baggage`, and the launch's
+ * path as `LAUNCH_PATH` spells it. A host's launch is handed none, and its
+ * runner sends Sentry nothing. A DSN is the project's public address for
+ * sending to it, no secret. The path is read as any word, so a path the
+ * service names later never fails an older runner's config.
+ */
+const RunnerTraceSchema = Schema.Struct({
+  dsn: Schema.String,
+  environment: Schema.String,
+  release: Schema.optionalKey(Schema.String),
+  sentryTrace: Schema.String,
+  baggage: Schema.optionalKey(Schema.String),
+  path: Schema.optionalKey(Schema.String),
+});
+export type RunnerTrace = typeof RunnerTraceSchema.Type;
+
+/**
  * The first stdin line of a Claude Code launch: everything one launch of the CLI is started with.
  * `executable` is the `claude` binary the image carries, because the bundled
  * SDK cannot find its own platform package. `firstSequence` is where this
@@ -384,10 +422,13 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
    */
   allowedDomains: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), loaded as a local plugin where the folder holds one. */
-  installedSkills: Schema.optionalKey(
-    Schema.String,
-  ) /** Whether the launch stays warm once the agent's turn is over (`RUNNER_WARM`), posting IDLE rather than ending; it ends there where absent. */,
+  installedSkills: Schema.optionalKey(Schema.String),
+  /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`): from its start until a message comes, and once the agent's turn is over, posting IDLE rather than ending; it ends there where absent. */
   warm: Schema.optionalKey(Schema.Boolean),
+  /** Where the launch's startup is traced in Sentry (`RunnerTrace`); none where it is not, as on a host, and in a config written before it. */
+  trace: Schema.optionalKey(RunnerTraceSchema),
+  /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
+  warmForMs: Schema.optionalKey(Schema.Number),
 });
 export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 
@@ -445,8 +486,12 @@ export const CodexConfigSchema = Schema.Struct({
   tokenUrl: Schema.String,
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), whose `skills/` is set as an extra skills root where it is there. */
   installedSkills: Schema.optionalKey(Schema.String),
-  /** Whether the launch stays warm once the agent's turn is over (`RUNNER_WARM`), posting IDLE rather than ending; it ends there where absent. */
+  /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`): from its start until a message comes, and once the agent's turn is over, posting IDLE rather than ending; it ends there where absent. */
   warm: Schema.optionalKey(Schema.Boolean),
+  /** Where the launch's startup is traced in Sentry (`RunnerTrace`); none where it is not, as on a host, and in a config written before it. */
+  trace: Schema.optionalKey(RunnerTraceSchema),
+  /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
+  warmForMs: Schema.optionalKey(Schema.Number),
 });
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
@@ -512,13 +557,24 @@ const ModelLineSchema = Schema.Struct({
 /**
  * End the launch if it is warm: its turn over, nothing in flight, no
  * message of the service's unanswered, and no turn of the CLI's own begun since.
- * The service writes it once a warm launch has idled past its window
- * (`coder-host/runner-sessions.ts`'s `retireWarmRunner`), and a launch in
- * any other state skips it, so a message the service wrote ahead of it on the same
- * stdin always wins.
+ * The service writes it where a warm launch's host waits to switch release
+ * (`coder-host/runner-sessions.ts`'s `retireWarmRunner`), as a host does to
+ * its own warm launches while it waits (`@repo/host`'s
+ * `compose-local-agents.ts`), and a launch in any other state skips it, so a
+ * message written ahead of it on the same stdin always wins.
  */
 const RetireLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.RETIRE),
+});
+
+/**
+ * Keep the launch warm: a warm launch's window (`RUNNER_WARM`) runs again from
+ * now. The service writes it while a client has the agent on screen
+ * (`coder-host/runner-sessions.ts`'s `warm`), and a launch at work skips it,
+ * since its next IDLE arms a window of its own.
+ */
+const WarmLineSchema = Schema.Struct({
+  type: Schema.Literal(INPUT_LINE.WARM),
 });
 
 export const InputLineSchema = Schema.Union([
@@ -526,6 +582,7 @@ export const InputLineSchema = Schema.Union([
   StopLineSchema,
   ModelLineSchema,
   RetireLineSchema,
+  WarmLineSchema,
 ]);
 export type InputLine = typeof InputLineSchema.Type;
 
@@ -562,25 +619,19 @@ export const RUNNER_END = {
   INPUT_CLOSED: "input_closed",
   /** The CLI or app-server failed, or Codex's turn did; the turn shows as failed, and the next message relaunches with `resume`. */
   FAILED: "failed",
-  /**
-   * A wait released (`RUNNER_RELEASE`): the agent waited on wakeups alone,
-   * with no process of its own still running, so the launch ended for its
-   * sandbox to stop; the END names the wakeups for the service to deliver as they
-   * come due. The turn is over, as a `turn_ended` one is.
-   */
-  RELEASED: "released",
-  /** A warm launch ended with no turn under way: retired by the service past its window, or past `RUNNER_WARM.IDLE_CAP_MS` on its own. Its turn was already over at its IDLE. */
+  /** A warm launch ended with no turn under way: retired by the service or its host, or past its warm window on its own (`RUNNER_WARM`). Its turn was already over at its IDLE, or it never took a message. */
   IDLED: "idled",
 } as const;
 export type RunnerEnd = (typeof RUNNER_END)[keyof typeof RUNNER_END];
 
 /**
- * How long a warm launch waits on its own. The service retires a warm launch once
- * it idled past its window (`CODER.RUNNER_WARM`), under the runner lease, so
- * no message it writes is lost to the end; this cap is the launch's own
- * bound where the service never does, since the heartbeat keeps its sandbox alive
- * for as long as it runs. A message the service writes in the instant the cap ends
- * the launch stays unaccepted, as one a released wait ends on does.
+ * How long a warm launch waits on its own before it ends itself. The service
+ * hands each warm launch its window (`warmForMs`, from `CODER.RUNNER_WARM`),
+ * and a launch past it is ended here rather than by a sweep: a message the
+ * service sends past the window relaunches rather than writing to it
+ * (`coder-host/runner-sessions.ts`'s `sendHolding`). `IDLE_CAP_MS` is the
+ * bound for a config from a service before `warmForMs`, since the heartbeat
+ * keeps a sandbox alive for as long as its launch runs.
  */
 export const RUNNER_WARM = {
   IDLE_CAP_MS: 60 * 60 * 1_000,
@@ -604,50 +655,6 @@ export interface RunnerWaiting {
   readonly session_crons: readonly SessionCronSummary[];
 }
 
-/** A wakeup a released wait left for the service to deliver: the instant it comes due, and the prompt the CLI would have run then. */
-export interface RunnerWakeup {
-  /** An ISO 8601 instant. */
-  readonly at: string;
-  readonly prompt: string;
-}
-
-/**
- * When a waiting launch is released (`RUNNER_END.RELEASED`). Claude Code
- * fires a session's scheduled tasks only while its CLI runs, and a resumed
- * session restores neither a self-paced wakeup nor a one-shot task whose
- * time has passed (https://code.claude.com/docs/en/scheduled-tasks), so a
- * wait on a wakeup held the CLI, and the 8 GB sandbox under it, up until the
- * wakeup came. A launch waiting on one-shot wakeups alone, with no
- * background task and no process of the agent's still running, is ended
- * instead, and the service delivers each wakeup as a message when it comes due,
- * which relaunches the CLI on the session it resumes. Any launch hands the
- * wakeups back: the service drops what it held, the CLI restores on resume the
- * one-shot tasks the agent made itself, and the agent owns them again.
- */
-export const RUNNER_RELEASE = {
-  /**
-   * How long a wait lasts before it is released, and how far off its
-   * earliest wakeup must still be then. Vercel bills a sandbox's memory by
-   * the minute it runs, and a released wait costs a stop, a resume, and a
-   * relaunch of the CLI, so a wait shorter than two billed minutes is held.
-   */
-  SETTLE_MS: 2 * 60 * 1_000,
-  /** How often a wait not yet released is looked at again, for a process of the agent's that has since ended. */
-  RECHECK_MS: 60 * 1_000,
-  /**
-   * How long a wait on a recurring task is held before it is released all the
-   * same. A recurring task's next run is jittered by the CLI and cannot be
-   * told from its schedule here, so it is not delivered; the CLI restores it
-   * when the session is next resumed (the same page). An hour holds a
-   * recurring task that runs at least hourly, since each run starts a new
-   * wait and an evenly spaced task's runs keep their spacing (the same
-   * page), and bounds a loop nobody stopped. A self-paced loop's pending
-   * wakeup is listed as a one-shot task, so it is delivered rather than
-   * held.
-   */
-  IDLE_CAP_MS: 60 * 60 * 1_000,
-} as const;
-
 /**
  * How long a launch waits on the CLI's answer to one control request (a
  * model change, an interrupt). The input loop takes the service's lines one at a
@@ -666,12 +673,11 @@ export const RUNNER_UNANSWERED = {
   SILENCE_MS: 5 * 60 * 1_000,
 } as const;
 
-/** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed, and `wakeups` what a released wait left to deliver. */
+/** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed. */
 export interface RunnerEndEvent {
   readonly type: typeof RUNNER_EVENT.END;
   readonly reason: RunnerEnd;
   readonly detail?: string;
-  readonly wakeups?: readonly RunnerWakeup[];
 }
 
 /**

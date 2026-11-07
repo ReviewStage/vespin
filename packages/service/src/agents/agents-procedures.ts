@@ -21,7 +21,9 @@
  * (`PATCH /api/agents/{id}`) names one of a title, an archive, a pin, a
  * read mark, the MCP servers switched off, or a model and effort, and answers the agent as
  * it then stands. A delete (`DELETE /api/agents/{id}`) takes the agent for
- * good by the task delete's own steps, for any member who reaches it.
+ * good by the task delete's own steps, for any member who reaches it. A
+ * warm call (`POST /api/agents/{id}/warm`) says a cloud agent is on screen
+ * and answers at once, its runner launched past the answer where none runs.
  *
  * The shells (`/api/agents/{id}/terminals`) are the agent's Terminal tab's:
  * listed, started, named, and ended in its sandbox, and the sandbox resumed
@@ -73,6 +75,7 @@ import {
   pullRequestReviewOptions,
   readCommits,
 } from "../github/pull-requests.js";
+import { afterResponse } from "../http/after-response.js";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -83,14 +86,16 @@ import {
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
-import { reachedAgentById } from "./agent-reach.js";
+import { controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
   githubReadRefusal,
   type PullRequestSubject,
   pullRequestNumberOf,
 } from "./asked-pull-request.js";
+import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
+import { settleLapsedRunner } from "./coder-host/lapsed-runner.js";
 import {
   agentPullRequestReach,
   instancePublishedCache,
@@ -98,7 +103,7 @@ import {
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
 import { rewoundAgent } from "./coder-host/rewind.js";
-import { routedSessions } from "./coder-host/runtime-sessions.js";
+import { routedSessions, runnerWarmed } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
   placeOfAgent,
@@ -420,6 +425,16 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent as its own page, an agent with no task as much as one on a task. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+      // An open of the agent settles a turn whose runner stopped posting past its answer, which never
+      // waits on the machine it asks, since every reader already reads that turn lost. Where it settled
+      // none, the queue a hand-off cut off left claimed is handed on once its claim lapsed; a turn it
+      // settled hands on, or pauses, the queue through its own end.
+      yield* afterResponse(
+        "a lapsed runner's settle",
+        Effect.flatMap(settleLapsedRunner(agent), (settled) =>
+          settled.length === 0 ? queueAtTouch(routedSessions, agent) : Effect.void,
+        ),
+      );
       const standing = yield* standingsOf([agent.conversationId]);
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
@@ -546,6 +561,16 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       yield* stoppedAgent(writer, userId, agent);
       return { agent: yield* summaryOf(userId, agent) };
+    }),
+    /**
+     * The agent on screen kept warm (`runnerWarmed`): answered at once, its runner launched past
+     * the answer where none runs. Kept for a member who may message it alone, whose message the
+     * warm runner would take; anyone else is answered the same, and nothing is kept.
+     */
+    warm: signedIn.warm.effect(function* ({ input, context }) {
+      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+      if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
+      return { warm: true as const };
     }),
     /** The agent taken back to just before one of the developer's lines (`rewind.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {

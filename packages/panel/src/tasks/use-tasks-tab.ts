@@ -67,7 +67,7 @@ import type {
   AppInboxTasklessItem,
   AppStateSnapshot,
 } from "@repo/host/app-state";
-import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn, NO_EXPERIMENTS } from "@repo/settings";
+import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn } from "@repo/settings";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
 import {
@@ -118,6 +118,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { absurd } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -152,20 +153,37 @@ import {
   PANEL_SPAN_ATTRIBUTE,
   recordPanelSpan,
 } from "../panel-spans.js";
+import {
+  LINK_ROUTED_PLACE,
+  ON_STANDING_TASK,
+  onTasksTab,
+  type RoutedLink,
+  routedLinkOf,
+} from "../places/link-places.js";
+import type { LinkRead } from "../places/link-reads.js";
+import { PLACE_BINDING, useTaskAsk } from "../places/place-binding.js";
+import type { RoutedPlace } from "../places/routed-places.js";
+import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import type { RenameShape } from "../rename-write.js";
-import { ADDRESS, HERE, type OverviewPlace, ROUTE, route } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
+import type { TaskRoute } from "../task-route.js";
 import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
 import { pressRows, ROW_WRITE, type RowDoors, type TaskRows } from "../undo-stack.js";
 import {
   appStateIn,
   appStateQuery,
   selectAppSettingsView,
-  selectExperimentChoices,
+  selectWorkspaces,
 } from "../use-app-state.js";
 import type { VersionHistoryRoute } from "../version-history-route.js";
-import type { BoardRoute, PersonRoute } from "../workspace-routes.js";
+import { workspaceExperimentChoices } from "../workspace-experiments.js";
+import type {
+  BoardRoute,
+  HomeRoute,
+  PersonRoute,
+  UnknownWorkspaceRoute,
+} from "../workspace-routes.js";
 import {
   startFailureNote as agentStartFailureNote,
   agentStillWriting,
@@ -200,6 +218,7 @@ import {
   stripTabClosesIdle,
   stripTabDrawsAgain,
   stripTabEndsSession,
+  stripTabLink,
   stripTabPin,
   stripTabReopens,
   TAB_PIN,
@@ -238,7 +257,8 @@ import {
   type TaskHolds,
   useSidePanel,
 } from "./use-side-panel.js";
-import { useEndTerminalTab } from "./use-terminal-session.js";
+import { useEndTerminalTab, useHeldTerminalTabs } from "./use-terminal-session.js";
+import { useWarmAgent } from "./use-warm-agent.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
 import { sayRestored } from "./version-view.js";
 
@@ -379,6 +399,25 @@ type AgentPlaceOf<K extends AgentPlaceKind> = Extract<LinkPlace, { readonly kind
 
 type AgentPlace = AgentPlaceOf<AgentPlaceKind>;
 
+const AGENT_PLACE_KINDS: ReadonlySet<LinkPlace["kind"]> = new Set<AgentPlaceKind>([
+  LINK_PLACE.AGENT,
+  LINK_PLACE.MESSAGE,
+  LINK_PLACE.WORKER,
+  LINK_PLACE.CHANGES,
+  LINK_PLACE.PULL_REQUEST_THREAD,
+]);
+
+/** Whether a place is an agent's own. */
+function isAgentPlace(place: LinkPlace): place is AgentPlace {
+  return AGENT_PLACE_KINDS.has(place.kind);
+}
+
+/** A place the task's Overview shows: the task itself, one of its description's sections, or one of its comments. */
+type OverviewPlace = Extract<
+  LinkPlace,
+  { readonly kind: typeof LINK_PLACE.TASK | typeof LINK_PLACE.SECTION | typeof LINK_PLACE.COMMENT }
+>;
+
 /** A place of a task's own that its side panel draws as a tab, named under the task. */
 type TaskTabPlace =
   | (AgentPlaceOf<
@@ -405,12 +444,6 @@ interface BoardViewControl {
   readonly onClose: () => void;
   /** Reads the Board ahead of a press the pointer says is coming. */
   readonly onPreload: () => void;
-}
-
-/** A workspace's address naming none of the reader's workspaces: whether its not-found state stands in the plan's place, and its way out. */
-interface UnknownWorkspaceControl {
-  readonly open: boolean;
-  readonly onClose: () => void;
 }
 
 /** Which Automations page stands: the list, a new automation's editor, or one automation's. */
@@ -671,8 +704,14 @@ export interface TasksControl {
   onSelect: (taskId: string) => void;
   /** Opens a task the developer goes back to work on, from a sidebar row, ⌘K, or Recent, on the agent waiting on them, else one at work, else the one last active, else its description. */
   onResume: (taskId: string) => void;
-  /** Opens a task as the window's history goes back or forward to it, as it stood, since the history stands its panel itself. */
+  /** Opens a task on its own place as it last stood, as ⌃Tab's card asks, the panes its screen held stood by the card itself. */
   onRestoreTask: (taskId: string) => void;
+  /** Stands the own place of the task bound, whatever stands in its place giving way, as a version history over it does. */
+  onStandTask: () => void;
+  /** The task's own place as the router stands it: the task its address names, among the tasks the window holds. */
+  taskView: { readonly taskId: string | undefined };
+  /** Asks the host for the task the window arrived on, by Back, Forward, or the browser's own move, where the door that arrived there did not ask for it already (`places/place-binding.ts`). */
+  onArriveTask: (taskId: string) => void;
   /** Opens a task on one agent's tab: what a row's press or the call card's way back asks. */
   onShowAgent: (taskId: string, agentId: string) => void;
   /** Opens a task on a tab of its column, as it last stood: what ⌃Tab's card asks (`tab-switcher.tsx`). */
@@ -746,9 +785,12 @@ export interface TasksControl {
   /** The window's Automations page: whether it stands in the task's place, and its presses (`automations-page.tsx`). */
   automationsView: AutomationsViewControl;
   /** The window's Board of the listed workspace's tasks by status: whether it stands in the plan's place, and its presses (`tasks-board.tsx`). */
+  /** Whether Home stands, the page of no task bound, which only its own route draws (`ROUTED_PLACE.HOME`), with no task still bound there. */
+  atHome: boolean;
+  /** Whether the task's own place stands, with neither Home nor any routed place, the not-found page among them, standing in its place. */
+  taskPlaceStands: boolean;
   boardView: BoardViewControl;
   /** A Home or Board link whose first step names none of the reader's workspaces, which stands as not found (`desktop-shell.tsx`). */
-  unknownWorkspace: UnknownWorkspaceControl;
   /** Opens a task's file in its side panel at the commit named, or its default branch's head where none is, the reference's lines lit, opening the task first where it is not the open one: what an inbox item's code opens. */
   onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) => void;
   /** Opens a tab-shaped pin of the sidebar's: its holder, the task where it is not the open one or the agent's own page, and the tab in its column, an agent's in the task's own and any other in the side panel. */
@@ -863,8 +905,10 @@ export interface TasksControl {
   };
   /** Leaves the open task for Home (`desktop-home.tsx`); a call on it stands, as opening another task leaves one. */
   onLeaveTask: () => void;
-  /** Goes to Home from wherever the tab stands: the open task left, and whatever page stands in its place put away. */
+  /** Goes to Home from wherever the tab stands, which lets go of the open task as it arrives. */
   onGoHome: () => void;
+  /** Asks the host to bind no task, as arriving on Home does (`places/place-binding.ts`); no door of its own. */
+  onUnbindTask: () => void;
   /** The options a surface renaming a task holds its own mutation over (`taskRenameMutation`). */
   renameTask: TaskRenameMutation;
   /**
@@ -1083,15 +1127,8 @@ interface PinChoice {
   readonly over: string | undefined;
 }
 
-/**
- * A task asked of the host, or the home page as nothing, and the open
- * task it was asked over: the ask stands only while that task is still the
- * open one, so the host's next move, whatever it is, answers it.
- */
-interface TaskAsk {
-  taskId: string | undefined;
-  over: string | undefined;
-}
+/** Takes back nothing, as a fixture run's select, which asks nothing of the host it binds. */
+const NO_TAKE_BACK = (): void => undefined;
 
 /** No repository pinned, as before main's view carries the sidebar. */
 const NO_REPOSITORY_PINS: readonly RepositoryPin[] = [];
@@ -1101,6 +1138,9 @@ const NO_PENDING_TASKS: readonly string[] = [];
 
 /** A task with no page, the same array every render, so the arrivals read no change in it. */
 const NO_PAGES: readonly PageLine[] = [];
+
+/** The account's workspaces before their first read lands, whose experiments are all off. */
+const NO_CHOOSING: readonly Workspace[] = [];
 
 /** What the Inbox's bare panel, and an agent's own page, hold of the plan's panel kinds: nothing, the task's page drawing what they show. */
 const NO_HOLDS: TaskHolds = {};
@@ -1415,6 +1455,20 @@ export function useTasksTab(input: {
   versionHistoryView: VersionHistoryRoute;
   /** The window's Inbox as the router stands it (`inbox-route.ts`). */
   inboxView: InboxRoute;
+  /** A workspace's address naming none of the reader's as the router stands it, not found (`workspace-routes.ts`). */
+  unknownWorkspaceView: UnknownWorkspaceRoute;
+  /** Home as the router stands it (`workspace-routes.ts`). */
+  homeView: HomeRoute;
+  /** A task's own place as the router stands it (`task-route.ts`). */
+  taskView: TaskRoute;
+  /** The routed place standing (`useWindowPlace`); none on an address the window's state draws. */
+  place: RoutedPlace | undefined;
+  /** Reads how many times the developer arrived on another page of the window (`usePlaceArrivals`). */
+  arrivals: () => number;
+  /** Begins a link's read of the service, answering whether it is still the window's to act on (`places/link-reads.ts`). */
+  linkReads: LinkRead;
+  /** Writes the step a link opens on a task's own place before the window stands there, as one move (`navigation-history.ts`'s `onVisitTask`). */
+  visitTask: (at: TaskAt, step: LinkStep) => boolean;
 }): TasksControl {
   const { shown, leaveGuard } = input;
   const { guard } = leaveGuard;
@@ -1459,25 +1513,23 @@ export function useTasksTab(input: {
   >(undefined);
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
-  // New task's agent start under way: what its page draws, and the navigation it was pressed at.
+  // New task's agent start under way: what its page draws, and the arrivals counted once the window stood where it was pressed into.
   const [startingTask, setStartingTask] = useState<
-    (StartingTask & { readonly navigation: number }) | undefined
+    (StartingTask & { readonly arrivals: number }) | undefined
   >(undefined);
   const [repositoryMenu, setRepositoryMenu] = useState<TasksControl["repositoryMenu"]>(undefined);
   const [relationMenu, setRelationMenu] = useState<TasksControl["relationMenu"]>(undefined);
-  const [asked, setAsked] = useState<TaskAsk | undefined>(undefined);
   const [chosen, setChosen] = useState<PinChoice | undefined>(undefined);
   /** The save whose revision a version history opened from a section's "Edited by" seeks, on its task, until it is found, given up on, or the history is left. */
   const [historySeek, setHistorySeek] = useState<HistorySeek | undefined>(undefined);
   const historyRoute = input.versionHistoryView;
-  /** Whether a workspace not there for the reader stands in the task's place. */
-  const [unknownStands, setUnknownWorkspace] = useState(false);
-  // The routed places a door into a place of the window's state leaves, the Inbox and an agent's page, which stand in the task's place.
-  const routedOverPlan = input.inboxView.open || input.agentView.agentId !== undefined;
+  // The routed places a door into a place of the window's state leaves, the Inbox, an agent's page, and a workspace not there, which stand in the task's place.
+  const overPlan =
+    input.inboxView.open ||
+    input.agentView.agentId !== undefined ||
+    input.unknownWorkspaceView.workspace !== undefined;
   // The window's Inbox is the router's, which stands it in the task's place as its address says (`inbox-route.ts`).
   const inboxView = input.inboxView.open ? input.inboxView : undefined;
-  // Whether anything stands in the task's place: the Inbox, an agent's page, or a workspace not there.
-  const overPlan = unknownStands || routedOverPlan;
   // Note that the Inbox already open has no opening to time.
   const timeInboxOpen = () => {
     if (inboxView === undefined) beginPanelSpan(PANEL_SPAN.INBOX_OPEN);
@@ -1485,25 +1537,59 @@ export function useTasksTab(input: {
   // Whether the window's Inbox shows one column, as it measures itself.
   const [inboxSingle, setInboxSingle] = useState(false);
   const agentView = input.agentView.agentId === undefined ? undefined : input.agentView;
-  // Whether a routed place stands as the window was last drawn, an agent's page among them, which an answer landing late reads.
-  const routedNow = useRef(false);
-  routedNow.current =
-    input.agentView.agentId !== undefined ||
-    input.inboxView.open ||
-    input.boardView.open ||
-    input.personView.userId !== undefined ||
-    input.automationsView.open ||
-    input.adminView.open ||
-    historyRoute.open;
-  // A door into a place of the window's state leaves the Inbox or an agent's page standing in the task's place, as the router stands it when pressed.
-  // Note that every routed place is left by the history's one leave (`onLeaveRouted`), which each route's `onClose` is.
-  const overPlanNow = useRef({ over: false, leave: input.agentView.onClose });
-  overPlanNow.current = { over: routedOverPlan, leave: input.agentView.onClose };
-  // Puts away whatever stands in the task's place.
-  const clearStandIn = useCallback(() => {
-    setUnknownWorkspace(false);
-    if (overPlanNow.current.over) overPlanNow.current.leave();
-  }, []);
+  // Every select, start, and workspace switch asked for, counted, so an answer that lands after a newer one was asked for
+  // changes nothing the newer one decided.
+  const navigations = useRef(0);
+  // The window's router, which a link is matched on (`places/link-places.ts`).
+  const router = useRouter();
+  // How many times the developer arrived on another page of the window, as the binding counts them (`places/place-binding.ts`).
+  const { arrivals } = input;
+  // A link's read of the service stands until any later navigation: a select, start, or switch counted here, or any move of the window to another page.
+  const linkRead = () => {
+    const mine = navigations.current;
+    const unmoved = input.linkReads();
+    return () => navigations.current === mine && unmoved();
+  };
+  // What stood where a door was pressed, a workspace not there, an agent's page, the Inbox, and, where `history` says, a
+  // version history, each by where its address stood, which a refusal of the move stands again where the developer went
+  // nowhere since the press, the press's own move, `moved`, aside; the place a refusal leaves standing otherwise is the
+  // binding's (`places/place-binding.ts`).
+  const pressedOverNow = useRef<(history: boolean, moved: boolean) => () => void>(
+    () => () => undefined,
+  );
+  pressedOverNow.current = (history, moved) => {
+    // Note that the press's own arrival is counted once the window is drawn where it went, after the press.
+    const landed = arrivals() + (moved ? 1 : 0);
+    const unknownBefore = input.unknownWorkspaceView.workspace;
+    const agentBefore =
+      agentView?.agentId === undefined || agentView.workspace === undefined
+        ? undefined
+        : { agentId: agentView.agentId, workspace: agentView.workspace };
+    const inboxBefore =
+      inboxView?.standingIn === undefined
+        ? undefined
+        : {
+            at: { workspace: inboxView.standingIn, narrowed: inboxView.narrowed },
+            chosen: inboxView.chosen,
+          };
+    const historyBefore =
+      !history || historyRoute.workspace === undefined || historyRoute.task === undefined
+        ? undefined
+        : { workspace: historyRoute.workspace, task: historyRoute.task, spot: historyRoute.spot };
+    const { unknownWorkspaceView, agentView: agentRoute, inboxView: inboxRoute } = input;
+    return () => {
+      if (arrivals() > landed) return;
+      if (unknownBefore !== undefined) unknownWorkspaceView.onOpen(unknownBefore);
+      if (agentBefore !== undefined) agentRoute.onOpen(agentBefore.agentId, agentBefore.workspace);
+      if (inboxBefore !== undefined) {
+        if (inboxBefore.chosen === undefined) inboxRoute.onOpen(inboxBefore.at);
+        else inboxRoute.onChoose(inboxBefore.chosen, inboxBefore.at);
+      }
+      if (historyBefore !== undefined) {
+        historyRoute.onOpen(historyBefore.workspace, historyBefore.task, historyBefore.spot);
+      }
+    };
+  };
   // The synthetic tasks, which only a fixture run draws: the window is drawn once they have landed (`App`).
   const tasksFixture = loadedTasksFixture();
   /** A file an inbox item opens on a task not yet open, opened once the host has it open. */
@@ -1868,11 +1954,11 @@ export function useTasksTab(input: {
           : { agentId: panelPagesAgent },
     [panelTaskId, panelPagesAgent],
   );
-  // The account's experiments, which hold where a link to the description's parts lands.
-  const experiments =
-    useQuery({ ...appStateQuery, select: selectExperimentChoices }).data ?? NO_EXPERIMENTS;
+  const stagedPanel = tasksFixture?.fixtureSidePanel(input.run);
+  // A fixture run's staged Terminal tab is held under the account signed in, as a real open holds it, so it stands.
+  useHeldTerminalTabs(stagedPanel?.terminals);
   const sidePanel = useSidePanel(
-    tasksFixture?.fixtureSidePanel(input.run),
+    stagedPanel,
     inboxView !== undefined
       ? {
           id: inboxTask ?? inboxAgent,
@@ -2047,13 +2133,51 @@ export function useTasksTab(input: {
     reportedAgent.current = shownAgent;
     tellShown({ agentId: shownAgent });
   }, [shownAgent, tellShown]);
+  // The agent on screen is kept warm for the next message while the page is visible.
+  useWarmAgent((liveAgents ?? agents.agents)?.find((agent) => agent.id === shownAgent));
 
   // The host answers a press a round trip later, so where the tab is bound
   // is said at once, and a select that did not open the task takes its ask
-  // back. A fixture's tasks are opened nowhere, so nothing is asked of them.
+  // back (`places/place-binding.ts`). A fixture's tasks are opened nowhere, so nothing is asked of them.
   const openTaskId = tasks.activeTaskId;
-  const boundFor = asked !== undefined && asked.over === openTaskId ? asked.taskId : openTaskId;
-  const descriptionsOn = experimentOn(experiments, EXPERIMENT.DESCRIPTIONS);
+  const { boundFor, ask, boundNow } = useTaskAsk(openTaskId);
+  // Home is the listed workspace's too, at `/app` while none is listed, so another listed, or the first one read, stands its
+  // Home in the step's place. Note that Home with a task still bound is left as it is, since the binding moves it next
+  // (`places/place-binding.ts`).
+  // Note that it is compared by the address step its link names, so a slug renamed, or a workspace addressed by its id, stands Home at the step Copy link names.
+  const homeElsewhere =
+    input.homeView.open &&
+    boundFor === undefined &&
+    listedStep !== undefined &&
+    input.homeView.standingIn !== listedStep;
+  // Note that Home whose own workspace the reader is no longer in is found not there by its route without moving, and turns
+  // the same way, while an address naming a workspace never the reader's, as a link's, stays not found.
+  const homeWasIn = useRef<string | undefined>(undefined);
+  const unknownIn = input.unknownWorkspaceView.workspace;
+  // Note that it is kept only while the page saying so stands at Home's own workspace, so a not-found page Home was left for keeps none.
+  if (input.homeView.open) homeWasIn.current = input.homeView.standingIn;
+  else if (unknownIn !== homeWasIn.current) homeWasIn.current = undefined;
+  const homeLost = unknownIn !== undefined && unknownIn === homeWasIn.current;
+  const turnHome = input.homeView.onTurn;
+  useEffect(() => {
+    if ((homeElsewhere || homeLost) && listedStep !== undefined) turnHome(listedStep);
+  }, [homeElsewhere, homeLost, listedStep, turnHome]);
+  // Descriptions is each workspace's choice, so a task's description, its sections, comments, and history stand by its own
+  // workspace's: a task the window holds none of by the workspace its link names, else by the open task's, whose words
+  // mention it, else by the listed one. Its choices are read off main's document, as the description's own page reads
+  // them (`useWorkspaceExperiment`), so the two agree.
+  const choosing = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_CHOOSING;
+  const openWorkspace = region.kind === DOCUMENT_REGION.READY ? region.task.workspaceId : undefined;
+  const workspaceOfTask = (taskId: string, step?: string): string | undefined =>
+    tasks.tasks.find((each) => each.id === taskId)?.workspaceId ??
+    (step === undefined ? undefined : workspaceOfSlug(choosing, step)?.id) ??
+    openWorkspace ??
+    workspace.chosen?.id;
+  const descriptionsOnFor = (taskId: string, step?: string): boolean =>
+    experimentOn(
+      workspaceExperimentChoices(choosing, workspaceOfTask(taskId, step)),
+      EXPERIMENT.DESCRIPTIONS,
+    );
   // The version history is the router's (`version-history-route.ts`), of the task its address names by its number in the
   // workspace it names, or by its id, found among the tasks the window holds, else asked of the service as a link's is.
   const routedStep = historyRoute.task;
@@ -2112,7 +2236,7 @@ export function useTasksTab(input: {
   const historyOpen =
     routedHistoryTask !== undefined &&
     routedHistoryTask === boundFor &&
-    descriptionsOn &&
+    descriptionsOnFor(routedHistoryTask, historyRoute.workspace) &&
     region.kind !== DOCUMENT_REGION.MISSING;
   // A plan the service would not hand the reader has no history to show, so its step gives way to the task, whose Not found stands, as a version's link may ask for one.
   const historyMissing =
@@ -2167,24 +2291,100 @@ export function useTasksTab(input: {
       attributes: () => ({ [PANEL_SPAN_ATTRIBUTE.DESCRIPTION_CHARS]: descriptionChars }),
     });
   }, [readyTask]);
-  // Opening a task, or leaving one, is leaving the window's Inbox for it.
+  // The tasks a task's own address may name: those listed, and the one whose description is drawn, which a link may have
+  // opened though no list holds it.
+  const addressed = useMemo(
+    () =>
+      readyTask === undefined || tasksNow.some((task) => task.id === readyTask.id)
+        ? tasksNow
+        : [...tasksNow, readyTask],
+    [tasksNow, readyTask],
+  );
+  // The task the task's own place stands on, by its address (`task-route.ts`).
+  // Note that a step holding a task's step is that task's place whatever address its link gave it, as a narrow room's
+  // side panel names a Pull request tab by its agent alone.
+  const taskRouted =
+    input.taskView.saved ??
+    (input.taskView.at === undefined
+      ? undefined
+      : taskOfAt(input.taskView.at, addressed, workspacesNow));
+  // Whether a door opening a task, or starting one, stands the task's own place: from Home, the task's own place, an
+  // address the window's state draws, and a place standing in the task's place (`PlaceDeclaration.inTaskPlace`); a place
+  // standing beside it, as the Board, keeps standing, the task opening under it.
+  const opensTaskPlace =
+    input.place === undefined ||
+    input.place.binding !== PLACE_BINDING.KEPT ||
+    input.place.inTaskPlace;
+  // Stands the own place of `taskId`, where a door opening it does, answering whether the window moved: not where it
+  // stands already, read as the router stands at the call. Note that a fixture run binds its task for good, so its task's
+  // place stands for any, and Home where it binds none.
+  // What the link opening now opens on its task's own place, which the window's move there holds (`places/link-places.ts`).
+  const linking = useRef<LinkStep | undefined>(undefined);
+  const standTaskPlace = (taskId: string | undefined): boolean => {
+    if (!opensTaskPlace) return false;
+    const toward = fixture === undefined ? taskId : openTaskId;
+    if (toward === undefined) {
+      const moved = !input.homeView.open;
+      input.homeView.onOpen();
+      return moved;
+    }
+    const at = taskAtOf(
+      toward,
+      addressed,
+      workspacesNow,
+      listedWorkspace,
+      input.taskView.workspaceNow(),
+    );
+    if (at === undefined) return false;
+    // Note that a task stands where its address names it, by the window's tasks or as the same step, as a number they hold none for,
+    // and where the step standing holds it whatever its address, as a narrow room's at its side panel's worker or Pull request link.
+    const now = input.taskView.atNow();
+    const standing =
+      input.taskView.savedNow() === toward ||
+      (now !== undefined &&
+        ((now.workspace === at.workspace && now.task === at.task) ||
+          taskOfAt(now, addressed, workspacesNow) === toward));
+    if (standing) return false;
+    // Note that a link's door names what it opens there, so its step is written at once, at its address, with it.
+    const step = linking.current;
+    const visited = step !== undefined && step.taskId === toward && input.visitTask(at, step);
+    if (!visited) input.taskView.onOpen(at);
+    return true;
+  };
+  const standTask = useRef(standTaskPlace);
+  standTask.current = standTaskPlace;
+  // The task whose own place stood as the window was last drawn, which a press reads as where it was pressed.
+  const routedTask = useRef({ taskId: taskRouted, opens: opensTaskPlace });
+  routedTask.current = { taskId: taskRouted, opens: opensTaskPlace };
+  // Opening a task, or leaving one, is going to its own place, whatever stood there giving way, as only one place stands
+  // at a time (`places/routed-places.ts`), unless the door `stays`, as a version history opening over its task.
   // Note that `onOpened` runs only once the task opened, because a task that
   // would not open must not leave the sidebar on another workspace, this
   // launch or the next.
   const openTask = useCallback(
-    (taskId: string, onOpened: () => void, onRefused: () => void = () => undefined) => {
-      clearStandIn();
-      const ask = { taskId, over: openTaskId };
+    (taskId: string, onOpened: () => void, onRefused?: () => void, stays = false) => {
+      // Note that what stood at the press is read before the move, so a refusal stands it again; a version history is left by
+      // the doors that open it, which a refusal never brings back, as its task is what opens.
+      const moved =
+        !stays &&
+        routedTask.current.opens &&
+        (fixture === undefined ? taskId : openTaskId) !== routedTask.current.taskId;
+      const standBack = pressedOverNow.current(false, moved);
+      // Note that the task is asked for before the window moves, so its arrival finds it asked for already.
+      const takeBack = fixture === undefined ? ask(taskId) : NO_TAKE_BACK;
+      if (!stays) standTask.current(taskId);
       // Another task asked for is timed to its document drawn ready; the one
       // open already has nothing to wait on.
       const timed = { taskId, startedAt: Date.now() };
       opening.current = taskId === openTaskId ? undefined : timed;
       const withdraw = () => {
-        setAsked((held) => (held === ask ? undefined : held));
+        takeBack();
         if (opening.current === timed) opening.current = undefined;
-        onRefused();
+        // A refusal with no way of its own stands again what stood where another task's open was pressed; the task already
+        // open, and a fixture run's, which binds nothing asked of it, stand as they are.
+        if (onRefused !== undefined) onRefused();
+        else if (fixture === undefined && taskId !== openTaskId) standBack();
       };
-      if (fixture === undefined) setAsked(ask);
       sendSelect({ taskId }).then((opened) => {
         if (!opened) {
           withdraw();
@@ -2193,20 +2393,29 @@ export function useTasksTab(input: {
         onOpened();
       }, withdraw);
     },
-    [sendSelect, fixture, openTaskId, clearStandIn],
+    [sendSelect, fixture, openTaskId, ask],
   );
-  // A leave is asked rather than told, so a refused one takes its ask back too.
-  const leaveTask = useCallback(() => {
-    clearStandIn();
+  // Binding no task is asked rather than told, so a refused one takes its ask back too. It is what arriving on Home asks of
+  // the host (`places/place-binding.ts`), never a door of its own.
+  const unbindTask = useCallback(() => {
     opening.current = undefined;
     if (fixture !== undefined) return;
-    const ask = { taskId: undefined, over: openTaskId };
-    setAsked(ask);
-    sendClose().catch(() => setAsked((held) => (held === ask ? undefined : held)));
-  }, [fixture, openTaskId, sendClose, clearStandIn]);
-  // Every navigation a press asked for, counted, so an answer that lands
-  // after a newer one was asked for changes nothing the newer one decided.
-  const navigations = useRef(0);
+    const takeBack = ask(undefined);
+    sendClose().catch(takeBack);
+  }, [fixture, ask, sendClose]);
+  // Home is the page of no task bound, so leaving the open task, or going Home from anywhere, is a navigation to Home, whose
+  // arrival asks the host to bind none; on Home already, it only lets go of a task still bound there. Note that it reads
+  // where the window stands as it is called, since a toast's Back calls it long after it was handed.
+  const homeOpen = input.homeView.open;
+  const homeNow = useRef({ home: input.homeView, boundFor });
+  homeNow.current = { home: input.homeView, boundFor };
+  // Note that a fixture run binds its task for good, so leaving it stands that task's own place, as it always has.
+  const leaveTask = useCallback(() => {
+    const now = homeNow.current;
+    if (fixture !== undefined && now.boundFor !== undefined) standTask.current(now.boundFor);
+    else if (!now.home.open) now.home.onOpen();
+    else if (now.boundFor !== undefined) unbindTask();
+  }, [fixture, unbindTask]);
   // A workspace chosen on purpose, from the switcher, a workspace made, or
   // one left, is listed at once, and the task on screen follows: the task
   // last open there opens again, where it is still that workspace's, or
@@ -2246,14 +2455,14 @@ export function useTasksTab(input: {
   // after the developer went somewhere else lists nothing, and Back does
   // nothing once the window has moved on from the switch it reports.
   const select = useCallback(
-    (taskId: string) => {
+    (taskId: string, stays = false) => {
       navigations.current += 1;
       const mine = navigations.current;
       const taskWorkspace = tasksNow.find((task) => task.id === taskId)?.workspaceId;
       const target = workspacesNow.find((each) => each.id === taskWorkspace);
       const from = workspacesNow.find((each) => each.id === listedId);
       const over = openTaskId;
-      openTask(taskId, () => {
+      const opened = () => {
         if (navigations.current !== mine) return;
         if (target === undefined || target.id === listedId) return;
         chooseListed(target.id);
@@ -2280,13 +2489,14 @@ export function useTasksTab(input: {
           tone: STATUS_TONE.COMPLETE,
           action: { label: backNote(from.name), onPress: back },
         });
-      });
+      };
+      openTask(taskId, opened, undefined, stays);
     },
     [tasksNow, workspacesNow, listedId, openTaskId, openTask, chooseListed, toast, leaveTask],
   );
+  // Note that the version history stands over its task, so its task is asked for where the window already stands.
   landHistory.current = (taskId) => {
-    if (taskId !== boundFor) select(taskId);
-    setUnknownWorkspace(false);
+    if (taskId !== boundFor) select(taskId, true);
   };
 
   // A fixture's tasks are deleted nowhere, as they are read from nowhere. A
@@ -2884,7 +3094,7 @@ export function useTasksTab(input: {
   // Change repository's chip does, and comes out from under a page standing
   // in its place, such as the Board whose card asked.
   const addRelation = (taskId: string, kind: TaskRelationKind) => {
-    if (taskId !== tasks.activeTaskId || overPlan) select(taskId);
+    showTask(taskId);
     setRelationMenu((held) => ({ taskId, kind, request: (held?.request ?? 0) + 1 }));
   };
 
@@ -2986,27 +3196,7 @@ export function useTasksTab(input: {
     // the agent's first line, rather than holding the card until the
     // service answers; a refusal opens the card again where it was left.
     const { handed, card } = from;
-    const unknownBefore = unknownStands;
-    // Note that an agent's page standing at the press is where its address stood, which a refusal opens again.
-    const agentBefore =
-      agentView?.agentId === undefined || agentView.workspace === undefined
-        ? undefined
-        : { agentId: agentView.agentId, workspace: agentView.workspace };
-    // Note that the Inbox standing at the press is where its address stood, which a refusal opens again.
-    const inboxBefore =
-      inboxView?.standingIn === undefined
-        ? undefined
-        : {
-            at: { workspace: inboxView.standingIn, narrowed: inboxView.narrowed },
-            chosen: inboxView.chosen,
-          };
-    // Note that a version history standing at the press is where its address stood, which a refusal opens again.
-    const historyBefore =
-      historyRoute.workspace === undefined || historyRoute.task === undefined
-        ? undefined
-        : { workspace: historyRoute.workspace, task: historyRoute.task, spot: historyRoute.spot };
     const stays = !opensNewTask;
-    const pressedAt = navigations.current;
     // Note that the agent's first line is stamped at the press, which its line after the answer keeps.
     const sentAt = Date.now();
     const line =
@@ -3020,13 +3210,16 @@ export function useTasksTab(input: {
           });
     // Note that a start's page is let go only while it is still this start's, because another start may have replaced it.
     const letGoOfPage = () => setStartingTask((now) => (now?.line === line ? undefined : now));
-    // Staying, an agent's start puts the card away at once and opens nothing.
+    // Staying, an agent's start puts the card away at once and opens nothing; an opening one stands the task bound's own
+    // place, or Home, where its page draws, in place of whatever stood in it.
+    // Note that what stood at the press is where its address stood, which a refusal opens again.
+    let standBack = pressedOverNow.current(true, false);
     if (handed !== undefined && stays) setNewTaskAsk(undefined);
     else if (line !== undefined) {
-      setStartingTask({ line, choice: handed?.choice, navigation: pressedAt });
+      const moved = standTask.current(boundFor);
+      standBack = pressedOverNow.current(true, moved);
+      setStartingTask({ line, choice: handed?.choice, arrivals: arrivals() + (moved ? 1 : 0) });
       setNewTaskAsk(undefined);
-      clearStandIn();
-      closeHistory();
     }
     // Note that the host opens a start's task at once, so a bare one pressed on Home's own
     // composer, whose page the task's took the place of, says its refusal in a toast, as no
@@ -3045,20 +3238,7 @@ export function useTasksTab(input: {
       if (handed !== undefined) {
         letGoOfPage();
         // Note that what stood before the press comes back only where the developer went nowhere since.
-        if (navigations.current === pressedAt) {
-          setUnknownWorkspace((now) => now || unknownBefore);
-          // Note that the page comes back only where no routed place stands now, as one opened since stays.
-          if (agentBefore !== undefined && !routedNow.current) {
-            input.agentView.onOpen(agentBefore.agentId, agentBefore.workspace);
-          }
-          if (inboxBefore !== undefined) {
-            if (inboxBefore.chosen === undefined) input.inboxView.onOpen(inboxBefore.at);
-            else input.inboxView.onChoose(inboxBefore.chosen, inboxBefore.at);
-          }
-          if (historyBefore !== undefined) {
-            historyRoute.onOpen(historyBefore.workspace, historyBefore.task, historyBefore.spot);
-          }
-        }
+        standBack();
         setNewTaskAsk({
           preset:
             card === undefined
@@ -3119,8 +3299,7 @@ export function useTasksTab(input: {
         if (handed === undefined) {
           setNewTaskAsk(undefined);
           setStartingTask(undefined);
-          clearStandIn();
-          closeHistory();
+          standTask.current(homeNow.current.boundFor);
           return undefined;
         }
         letGoOfPage();
@@ -3216,8 +3395,8 @@ export function useTasksTab(input: {
   // that the tab need not be shown, because every New task press brings it
   // forward first.
   const newTask = () => {
-    // Note that Home under a routed place is no Home on screen, so its composer is no New task there (`admin-route.ts`).
-    const atHome = page === TASKS_PAGE.HOME && !overPlan && !historyRoute.open && !routedOver;
+    // Note that only Home's own route draws its composer (`ROUTED_PLACE.HOME`), once no task is bound there.
+    const atHome = input.homeView.open && boundFor === undefined;
     if (atHome && signedIn && newTaskAsk === undefined) setHomeNewTasks((n) => n + 1);
     else newTaskWith(undefined);
   };
@@ -3252,70 +3431,57 @@ export function useTasksTab(input: {
       readonly workspace?: string;
     },
   ) => {
-    if (!descriptionsOn) {
+    if (!descriptionsOnFor(taskId, opening.workspace)) {
       showOverview({ kind: LINK_PLACE.TASK, planId: taskId });
       return;
     }
     const address = historyAddressOf(taskId, opening.workspace);
     if (address === undefined) return;
-    if (taskId !== boundFor) select(taskId);
-    setUnknownWorkspace(false);
+    if (taskId !== boundFor) select(taskId, true);
     setHistorySeek(opening.save === undefined ? undefined : { taskId, save: opening.save });
     historyRoute.onOpen(address.workspace, address.task, opening.spot);
   };
-  // A door into a place of the window's state leaves the version history over it.
-  const closeHistory = () => {
-    if (historyRoute.open) historyRoute.onClose();
+  // A task's own place, whatever stands giving way as only one place stands at a time (`places/routed-places.ts`), its
+  // task asked of the host where it is another than the one open.
+  const showTask = (taskId: string) => {
+    if (taskId !== tasks.activeTaskId) select(taskId);
+    else standTaskPlace(taskId);
   };
 
   // A task's own tab, its Inbox, and an agent's are in its column, so a
   // version history over it gives way, and so does a side panel filling the
   // window over it.
   const showColumnTab = (taskId: string, tab: MainTab) => {
-    if (taskId !== tasks.activeTaskId) select(taskId);
-    clearStandIn();
-    closeHistory();
+    showTask(taskId);
     if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
     mainTabs.onShow(taskId, tab);
   };
 
   // A tab of the side panel, on its plan, out from under a version history or whatever stands in the plan's place.
   const showPanelTab = (taskId: string, tab: SidePanelTab) => {
-    if (taskId !== tasks.activeTaskId) select(taskId);
-    clearStandIn();
-    closeHistory();
+    showTask(taskId);
     sidePanel.onShow(taskId, tab);
   };
+  // The task the Tasks tab shows with nothing standing over its plan, whose places a link opens in place (`places/link-places.ts`'s `onTasksTab`).
+  const standingTask = () => (!overPlan && !historyRoute.open ? tasks.activeTaskId : undefined);
   // The task's description shown at the place given: its column's Overview, which
   // holds it, chosen in place on the task standing, and on another task as
   // the window goes there (`route.ts`), a panel filling the window over the
   // column giving way.
   const showOverview = (place: OverviewPlace) => {
-    const standing = !overPlan && !historyRoute.open;
-    const routed = route(
-      { kind: ADDRESS.PLACE, link: { workspace: "", place } },
-      { kind: HERE.TASKS_TAB, taskId: standing ? tasks.activeTaskId : undefined },
-    );
     if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-    if (routed.kind === ROUTE.OVERVIEW) {
+    if (onTasksTab(place, standingTask()) === ON_STANDING_TASK.OVERVIEW) {
       mainTabs.onChoose(MAIN_TAB.OVERVIEW);
       return;
     }
-    if (place.planId !== tasks.activeTaskId) select(place.planId);
-    clearStandIn();
-    closeHistory();
+    showTask(place.planId);
     mainTabs.onShow(place.planId, MAIN_TAB.OVERVIEW);
   };
   // A link to a tab of the task standing opens it in the panel, as any link
   // pressed there does; one to another task's goes there and opens
   // it as a tab of its own (`route.ts`).
   const linkPanelTab = (place: TaskTabPlace, tab: SidePanelTab) => {
-    const standing = !overPlan && !historyRoute.open;
-    const routed = route(
-      { kind: ADDRESS.PLACE, link: { workspace: "", place } },
-      { kind: HERE.TASKS_TAB, taskId: standing ? tasks.activeTaskId : undefined },
-    );
-    if (routed.kind === ROUTE.BESIDE) sidePanel.onOpen(tab);
+    if (onTasksTab(place, standingTask()) === ON_STANDING_TASK.BESIDE) sidePanel.onOpen(tab);
     else showPanelTab(place.planId, tab);
   };
 
@@ -3349,10 +3515,9 @@ export function useTasksTab(input: {
   // Only a place in its description opens the details.
   const showTaskAgents = (taskId: string) => {
     if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-    clearStandIn();
-    closeHistory();
     const returnTab = taskId === tasks.activeTaskId ? mainTabs.returnTab : undefined;
     if (returnTab !== undefined && isOverviewTab(mainTabs.tab)) {
+      standTaskPlace(taskId);
       mainTabs.onChoose(returnTab);
       return;
     }
@@ -3363,7 +3528,9 @@ export function useTasksTab(input: {
   // Note that a section is the description's, so while descriptions are off a mention of one opens its task's agents.
   const showMention = (mention: DescriptionMention) => {
     const anchor =
-      mention.kind === MENTION_KIND.SECTION && descriptionsOn ? mention.anchor : undefined;
+      mention.kind === MENTION_KIND.SECTION && descriptionsOnFor(mention.taskId)
+        ? mention.anchor
+        : undefined;
     if (anchor === undefined) {
       showTaskAgents(mention.taskId);
       return;
@@ -3374,19 +3541,12 @@ export function useTasksTab(input: {
   };
   showMissingTask.current = (taskId) => showMention({ kind: MENTION_KIND.TASK, taskId });
 
-  // A workspace not there for the reader, standing in the plan's place for a link, a version history or a routed place over the plan giving way.
-  const standUnknown = () => {
-    closeHistory();
-    clearStandIn();
-    setUnknownWorkspace(true);
-  };
   // The page of `agentId`, under the workspace it stands under where it stands, else `home`, a link's, else the listed one, whatever stood in the plan's place giving way to it as the router stands one place at a time.
   const openAgentPage = (agentId: string, home?: string) => {
     const standing = input.agentView.agentId === agentId ? input.agentView.workspace : undefined;
     const listed = listedWorkspace === undefined ? undefined : stepOf(listedWorkspace);
     const workspace = standing ?? home ?? listed;
     if (workspace === undefined) return;
-    setUnknownWorkspace(false);
     input.agentView.onOpen(agentId, workspace);
   };
   // The Inbox of the workspace `workspaceId`, the listed one where it names none of the reader's, narrowed to `narrowed`.
@@ -3400,9 +3560,7 @@ export function useTasksTab(input: {
   // The Inbox opened on `chosen`, or on its list where nothing is chosen, at `at`: a version history or an agent's page there giving way, as the Inbox is the router's.
   const standInbox = (at: InboxAt | undefined, chosen: InboxChoice | undefined) => {
     if (at === undefined) return;
-    setUnknownWorkspace(false);
     timeInboxOpen();
-    closeHistory();
     if (chosen === undefined) input.inboxView.onOpen(at);
     else input.inboxView.onChoose(chosen, at);
   };
@@ -3436,30 +3594,41 @@ export function useTasksTab(input: {
    * words, since a link carries none; its own rows name its task once they land.
    */
   const openOnTask = (planId: string, place: AgentPlace) => {
+    const column = agentTab(place.agentId);
+    // A tab of the side panel a link opens, and the link a narrow room's step on it stands at (`places/task-step.ts`).
+    const sideOf = (tab: SidePanelTab) => ({ tab, link: stripTabLink(tab, { taskId: planId }) });
     switch (place.kind) {
-      case LINK_PLACE.WORKER:
-        showColumnTab(planId, agentTab(place.agentId));
-        linkPanelTab(
-          { ...place, planId },
-          subagentTab(place.callId, { agent: place.agentId, task: "" }),
+      case LINK_PLACE.WORKER: {
+        const tab = subagentTab(place.callId, { agent: place.agentId, task: "" });
+        linkingTo({ taskId: planId, column, side: sideOf(tab) }, () => {
+          showColumnTab(planId, column);
+          linkPanelTab({ ...place, planId }, tab);
+        });
+        return;
+      }
+      case LINK_PLACE.CHANGES: {
+        const tab = changesTab(sharedChangesAgent(planId, place.agentId));
+        linkingTo({ taskId: planId, side: sideOf(tab) }, () =>
+          linkPanelTab({ ...place, planId }, tab),
         );
         return;
-      case LINK_PLACE.CHANGES:
-        linkPanelTab({ ...place, planId }, changesTab(sharedChangesAgent(planId, place.agentId)));
-        return;
+      }
       // A review thread opens its agent's Pull request tab on the view the link names.
       case LINK_PLACE.PULL_REQUEST_THREAD: {
         const changes = sharedChangesAgent(planId, place.agentId);
-        sidePanel.onPullRequestView(changesTab(changes), place.view);
-        linkPanelTab({ ...place, planId }, changesTab(changes));
+        const tab = changesTab(changes);
+        sidePanel.onPullRequestView(tab, place.view);
+        linkingTo({ taskId: planId, side: sideOf(tab) }, () =>
+          linkPanelTab({ ...place, planId }, tab),
+        );
         revealThread(changes, place);
         return;
       }
       case LINK_PLACE.AGENT:
-        showColumnTab(planId, agentTab(place.agentId));
+        linkingTo({ taskId: planId, column }, () => showColumnTab(planId, column));
         return;
       case LINK_PLACE.MESSAGE:
-        showColumnTab(planId, agentTab(place.agentId));
+        linkingTo({ taskId: planId, column }, () => showColumnTab(planId, column));
         revealMessage(place);
         return;
     }
@@ -3490,7 +3659,7 @@ export function useTasksTab(input: {
   };
 
   /**
-   * An app link opened as `openPlace` opens its place, once a task it names
+   * An app link opened as its route reads it (`openLinked`) opens its place, once a task it names
    * by its number in the link's workspace is found by its id on the
    * service. One not found, or not answered, opens by the number as an id
    * naming no task does, its read saying it is not there; nothing opens
@@ -3499,7 +3668,7 @@ export function useTasksTab(input: {
   const openLink = (link: ReadLink) => {
     const number = taskNumberOf(link.place);
     if (number === undefined) {
-      openPlace(link);
+      openLinked(link);
       return;
     }
     // Note that a number the account's list holds under the workspace named opens at once, so a link to the place
@@ -3509,14 +3678,14 @@ export function useTasksTab(input: {
       (task) => task.workspaceId === home?.id && taskLinkStep(task) === String(number),
     );
     if (listed !== undefined) {
-      openPlace({ ...link, place: withTaskId(link.place, listed.id) });
+      openLinked({ ...link, place: withTaskId(link.place, listed.id) });
       return;
     }
     navigations.current += 1;
-    const mine = navigations.current;
+    const current = linkRead();
     const opened = (taskId: string | undefined) => {
-      if (navigations.current !== mine) return;
-      openPlace(taskId === undefined ? link : { ...link, place: withTaskId(link.place, taskId) });
+      if (!current()) return;
+      openLinked(taskId === undefined ? link : { ...link, place: withTaskId(link.place, taskId) });
     };
     queryClient.fetchQuery(taskByNumberQueryOptions(link.workspace, number)).then(
       (found) => opened("taskId" in found ? found.taskId : undefined),
@@ -3546,9 +3715,9 @@ export function useTasksTab(input: {
       openOnTask(open, place);
     else if (listed !== undefined) openFoundAgent(listed, place, home);
     else {
-      const mine = navigations.current;
+      const current = linkRead();
       readAgentById(queryClient, place.agentId).then((agent) => {
-        if (navigations.current !== mine) return;
+        if (!current()) return;
         // Note that an agent not read may yet be on a task, so its page stands alone, its own read saying whether it is there, and no tab of a panel it may not hold opens.
         if (agent === undefined) openAgentPage(place.agentId, home);
         else openFoundAgent(agent, place, home);
@@ -3601,9 +3770,9 @@ export function useTasksTab(input: {
       standInbox(at, { ...standing, opened: true });
       if ("taskId" in standing || "agentId" in standing) return;
     }
-    const mine = navigations.current;
+    const current = linkRead();
     readInboxItemHome(queryClient, place.itemId).then((home) => {
-      if (navigations.current !== mine) return;
+      if (!current()) return;
       if (home === undefined) {
         standInbox(inboxIn(listedWorkspace?.id, undefined), { itemId: place.itemId, opened: true });
         return;
@@ -3629,9 +3798,9 @@ export function useTasksTab(input: {
       openInboxItemOn(workspace, place, open);
     else if (listed !== undefined) openInboxItemOn(workspace, place, listed.planId);
     else {
-      const mine = navigations.current;
+      const current = linkRead();
       readAgentById(queryClient, place.agentId).then((agent) => {
-        if (navigations.current !== mine) return;
+        if (!current()) return;
         openInboxItemOn(workspace, place, agent?.planId ?? null);
       });
     }
@@ -3641,7 +3810,6 @@ export function useTasksTab(input: {
   const openBoard = (home: Pick<Workspace, "id" | "slug"> | undefined) => {
     const shown = home ?? listedWorkspace;
     if (shown === undefined) return;
-    setUnknownWorkspace(false);
     input.boardView.onOpen(stepOf(shown));
   };
 
@@ -3658,7 +3826,6 @@ export function useTasksTab(input: {
   ) => {
     const shown = home ?? listedWorkspace;
     if (shown === undefined) return;
-    setUnknownWorkspace(false);
     // Note that the page is a navigation of its own, so a plan's open or a workspace's reopen
     // asked before it, answering late, lists nothing and leaves nothing over it.
     navigations.current += 1;
@@ -3676,111 +3843,133 @@ export function useTasksTab(input: {
     const listedId = workspace === undefined ? listedWorkspace?.id : listLinked(workspace);
     const shown = viewed.workspaces.find((each) => each.id === listedId) ?? listedWorkspace;
     if (shown === undefined) return;
-    setUnknownWorkspace(false);
     input.automationsView.onOpen(to, stepOf(shown));
   };
 
-  // Home is the page with no task open, so where none is, only the page standing in its place is put away, and the host is asked nothing.
-  const goHome = () => {
-    closeHistory();
-    if (boundFor === undefined) clearStandIn();
-    else leaveTask();
+  const goHome = () => leaveTask();
+
+  // Opens `open` as the door of a link naming `step` on its task's own place, which the window's move there holds.
+  const linkingTo = (step: LinkStep, open: () => void) => {
+    linking.current = step;
+    try {
+      open();
+    } finally {
+      linking.current = undefined;
+    }
   };
 
   /**
-   * An app link's place opened through the door each kind already has: the
-   * task's tabs, its side panel, its version history, or what stands in the
-   * plan's place. One of an agent's messages opens the agent's tab and asks
-   * it to bring the message into view. Note
-   * that nothing is checked here: a place the account cannot read is read
-   * all the same, and its read says it is not there.
+   * A link place opened as its route reads it (`places/link-places.ts`): a
+   * comment thread or a section opens its task's Overview, asking its page
+   * to bring the thread or the section into view, and a page opens the side
+   * panel on its tab, on its task or on the page of its agent on no task.
+   * Each is the description's but a page, so while descriptions are off a
+   * link to one opens the task's agents. A routed place's own page opens
+   * through the door that place has: the task's tabs, its version history,
+   * or what stands in the plan's place. Note that nothing is checked here:
+   * a place the account cannot read is read all the same, and its read says
+   * it is not there.
    */
-  const openPlace = ({ workspace, place }: ReadLink) => {
-    // Every link opened is a navigation of its own, so an agent's read asked for by an earlier one, answering late, opens nothing.
-    navigations.current += 1;
-    switch (place.kind) {
+  const openRouted = ({ declared, link }: RoutedLink) => {
+    const { workspace, place } = link;
+    switch (declared) {
+      case LINK_ROUTED_PLACE.COMMENT: {
+        if (place.kind !== LINK_PLACE.COMMENT) return;
+        const { planId } = place;
+        if (!descriptionsOnFor(planId, workspace)) {
+          linkingTo({ taskId: planId }, () => showTaskAgents(planId));
+          return;
+        }
+        linkingTo({ taskId: planId, column: MAIN_TAB.OVERVIEW }, () => showOverview(place));
+        commentAsks.current += 1;
+        setCommentReveal({ planId, thread: place.threadId, ask: commentAsks.current });
+        return;
+      }
+      case LINK_ROUTED_PLACE.SECTION: {
+        if (place.kind !== LINK_PLACE.SECTION) return;
+        const { planId, anchor } = place;
+        const column = descriptionsOnFor(planId) ? MAIN_TAB.OVERVIEW : undefined;
+        linkingTo({ taskId: planId, column }, () =>
+          showMention({ kind: MENTION_KIND.SECTION, taskId: planId, anchor }),
+        );
+        return;
+      }
+      case LINK_ROUTED_PLACE.PAGE: {
+        if (place.kind !== LINK_PLACE.PAGE) return;
+        const tab = pageTab(place.pageId);
+        // A page of an agent on no task opens on that agent's page, in its panel.
+        if ("agentId" in place) {
+          openAgentPage(place.agentId, workspace);
+          sidePanel.onShow(place.agentId, tab);
+          return;
+        }
+        const step = { taskId: place.planId, side: { tab, link: place } };
+        linkingTo(step, () => linkPanelTab(place, tab));
+        return;
+      }
+      // An agent's place opens on its task, found by the agent where the link names none, else on its page.
+      case LINK_ROUTED_PLACE.AGENT:
+      case LINK_ROUTED_PLACE.MESSAGE:
+      case LINK_ROUTED_PLACE.WORKER:
+      case LINK_ROUTED_PLACE.CHANGES:
+      case LINK_ROUTED_PLACE.PULL_REQUEST_THREAD:
+        if (isAgentPlace(place)) openAgentPlace(place, workspace);
+        return;
       // A step naming no workspace of the reader's, by id, slug, or former slug, is not there for them, so it stands as not
       // found rather than opening the listed workspace or where the window rests.
-      case LINK_PLACE.HOME:
-      case LINK_PLACE.BOARD:
+      case LINK_ROUTED_PLACE.HOME:
+      case LINK_ROUTED_PLACE.BOARD:
         if (
           viewed.workspaces.length > 0 &&
           workspaceOfSlug(viewed.workspaces, workspace) === undefined
         ) {
-          standUnknown();
+          // Note that it takes the step's place, as the router finds the workspace not found (`panel-router.tsx`).
+          input.unknownWorkspaceView.onOpen(workspace);
           return;
         }
         listLinked(workspace);
         if (place.kind === LINK_PLACE.HOME) goHome();
         else openBoard(workspaceOfSlug(viewed.workspaces, workspace));
         return;
-      case LINK_PLACE.TASK:
+      case LINK_ROUTED_PLACE.TASK:
+        if (place.kind !== LINK_PLACE.TASK) return;
         showMention({ kind: MENTION_KIND.TASK, taskId: place.planId });
         return;
-      case LINK_PLACE.SECTION:
-        showMention({ kind: MENTION_KIND.SECTION, taskId: place.planId, anchor: place.anchor });
-        return;
-      case LINK_PLACE.COMMENT:
-        // A comment is the description's, so while descriptions are off its link opens the task's agents.
-        if (!descriptionsOn) {
-          showTaskAgents(place.planId);
-          return;
-        }
-        showOverview(place);
-        commentAsks.current += 1;
-        setCommentReveal({
-          planId: place.planId,
-          thread: place.threadId,
-          ask: commentAsks.current,
-        });
-        return;
-      case LINK_PLACE.VERSION:
+      case LINK_ROUTED_PLACE.VERSION:
+        if (place.kind !== LINK_PLACE.VERSION) return;
         openHistory(place.planId, {
           spot: { revision: place.revision, opened: undefined, listed: false },
           workspace,
         });
         return;
-      case LINK_PLACE.PAGE:
-        // A page of an agent on no task opens on that agent's page, in its panel.
-        if ("agentId" in place) {
-          openAgentPage(place.agentId, workspace);
-          sidePanel.onShow(place.agentId, pageTab(place.pageId));
-          return;
-        }
-        linkPanelTab(place, pageTab(place.pageId));
-        return;
-      case LINK_PLACE.WORKER:
-      case LINK_PLACE.CHANGES:
-      case LINK_PLACE.PULL_REQUEST_THREAD:
-      case LINK_PLACE.AGENT:
-      case LINK_PLACE.MESSAGE:
-        openAgentPlace(place, workspace);
-        return;
-      case LINK_PLACE.PERSON: {
+      case LINK_ROUTED_PLACE.PERSON: {
+        if (place.kind !== LINK_PLACE.PERSON) return;
         // A person's page is theirs in the workspace the link names, listed first; one the reader is not in names nobody they can see.
         const home = workspaceOfSlug(viewed.workspaces, workspace);
         listLinked(workspace);
         openPerson(place.userId, undefined, home);
         return;
       }
-      case LINK_PLACE.INBOX: {
-        // Note that a link to the Inbox opens it as its sidebar row does, on nothing chosen, narrowed to the task it names or to none.
+      // Note that a link to the Inbox opens it as its sidebar row does, on nothing chosen, narrowed to the task it names or to none.
+      case LINK_ROUTED_PLACE.INBOX:
+        if (place.kind !== LINK_PLACE.INBOX) return;
         standInbox(inboxIn(listLinked(workspace), place.planId), undefined);
         return;
-      }
-      case LINK_PLACE.INBOX_ITEM:
-        openInboxItem(workspace, place);
+      case LINK_ROUTED_PLACE.INBOX_ITEM:
+        if (place.kind === LINK_PLACE.INBOX_ITEM) openInboxItem(workspace, place);
         return;
-      case LINK_PLACE.AUTOMATIONS:
+      case LINK_ROUTED_PLACE.AUTOMATIONS:
         openAutomations({ kind: AUTOMATIONS_PAGE.LIST }, workspace);
         return;
-      case LINK_PLACE.AUTOMATION:
+      case LINK_ROUTED_PLACE.AUTOMATION:
+        if (place.kind !== LINK_PLACE.AUTOMATION) return;
         openAutomations(
           { kind: AUTOMATIONS_PAGE.EDIT, automationId: place.automationId },
           workspace,
         );
         return;
-      case LINK_PLACE.AUTOMATION_RUN:
+      case LINK_ROUTED_PLACE.AUTOMATION_RUN:
+        if (place.kind !== LINK_PLACE.AUTOMATION_RUN) return;
         openAutomations(
           { kind: AUTOMATIONS_PAGE.EDIT, automationId: place.automationId, runId: place.runId },
           workspace,
@@ -3788,21 +3977,31 @@ export function useTasksTab(input: {
         return;
       // Note that an Admin link's workspace is only the one it was copied in, since the place reads every
       // workspace's accounts, so it lists nothing; one naming the place alone opens on its Overview.
-      case LINK_PLACE.ADMIN:
-        input.adminView.onOpen(adminViewOfLink(place));
-        return;
-      // Settings is the window's, not the Plans tab's, so its link is opened there.
-      case LINK_PLACE.SETTINGS:
+      case LINK_ROUTED_PLACE.ADMIN:
+        if (place.kind === LINK_PLACE.ADMIN) input.adminView.onOpen(adminViewOfLink(place));
         return;
     }
+  };
+
+  /**
+   * A link opened by matching it on the route tree, as its place's
+   * declaration reads it (`places/link-places.ts`). Note that a link to
+   * Settings matches none, since Settings is the window's, not the Tasks
+   * tab's, and the window opens its link before it reaches here (`app.tsx`).
+   */
+  const openLinked = (link: ReadLink) => {
+    // Every link opened is a navigation of its own, so an agent's read asked for by an earlier one, answering late, opens nothing.
+    navigations.current += 1;
+    const listedStep = listedWorkspace === undefined ? undefined : stepOf(listedWorkspace);
+    const routed = routedLinkOf(router, link, input.taskView.workspaceNow() ?? listedStep);
+    if (routed !== undefined) openRouted(routed);
   };
 
   // An inbox item's code opens in its task's File tab; on a task not yet
   // open, once the host has it open, since the panel draws the open task's.
   const showFile = (taskId: string, ref: CodeRef, commit: string | undefined) => {
-    clearStandIn();
-    closeHistory();
     if (taskId === tasks.activeTaskId) {
+      standTaskPlace(taskId);
       sidePanel.onOpenFile(ref, commit);
       return;
     }
@@ -3985,8 +4184,7 @@ export function useTasksTab(input: {
   // One the task no longer draws, read only once a reopen opened its task, opens nothing.
   const reopenHere = (closed: ClosedTab) => {
     if (!drawsAgain(closed)) return;
-    clearStandIn();
-    closeHistory();
+    standTaskPlace(closed.task);
     if (closed.strip === CLOSED_TAB_STRIP.SIDE_PANEL) {
       sidePanel.onReopen(closed.tab, closed.at, closed.file);
       return;
@@ -4075,14 +4273,10 @@ export function useTasksTab(input: {
   }, [leaveTask, page, sidePanel.fullScreen, sidePanel.onToggleFullScreen]);
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
-  // Note that the start's page gives way to a task the developer opened, or a page standing in a task's place, while it is out.
+  // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
+  // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
   const starting =
-    startingTask !== undefined &&
-    startingTask.navigation === navigations.current &&
-    !overPlan &&
-    !historyRoute.open
-      ? startingTask
-      : undefined;
+    startingTask !== undefined && arrivals() <= startingTask.arrivals ? startingTask : undefined;
 
   return useSteadyDoors({
     page,
@@ -4126,8 +4320,7 @@ export function useTasksTab(input: {
       const next = others.find((each) => each.personal === true) ?? others[0];
       navigations.current += 1;
       if (next !== undefined) chooseListed(next.id);
-      if (boundFor === undefined) clearStandIn();
-      else leaveTask();
+      leaveTask();
     },
     github: viewed.github,
     onConnectAccountGitHub: () => accountGitHub(ACT_KIND.GITHUB_CONNECT),
@@ -4160,14 +4353,24 @@ export function useTasksTab(input: {
     // go only once it opens. A task opened from a list lands in the
     // conversation, on its agent rather than on whatever tab it last showed,
     // a narrow room's side panel shut over it; a link names its own place
-    // (`openLink`), and the history opens a task through `onRestoreTask`
-    // instead, standing the pane its step held.
+    // (`openLink`), and a task arrived on by the history is asked for as it arrives (`onArriveTask`), the history standing
+    // the panes its step held.
     onSelect: guard(selectListed),
     onResume: guard(resumeListed),
     onRestoreTask: guard((taskId: string) => {
       setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
       select(taskId);
     }),
+    onStandTask: () => {
+      if (boundFor !== undefined) standTaskPlace(boundFor);
+    },
+    taskView: { taskId: taskRouted },
+    // Note that the move that arrived was let past the leave ask already, so the ask is not asked again.
+    onArriveTask: (taskId: string) => {
+      if (boundNow(taskId)) return;
+      setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
+      select(taskId);
+    },
     onShowAgent: guard((taskId: string, agentId: string) =>
       openOnTask(taskId, { kind: LINK_PLACE.AGENT, planId: taskId, agentId }),
     ),
@@ -4251,10 +4454,6 @@ export function useTasksTab(input: {
         if (listedWorkspace !== undefined) input.boardView.onPreload(stepOf(listedWorkspace));
       },
     },
-    unknownWorkspace: {
-      open: unknownStands,
-      onClose: guard(() => setUnknownWorkspace(false)),
-    },
     onShowFile: showFile,
     // A version's Open lands where its writer wrote it: an agent's tab.
     onShowSource: guard(showSource),
@@ -4289,15 +4488,13 @@ export function useTasksTab(input: {
     onOpenPinnedTab: guard((pin: SidebarPin) => {
       const { tab } = pin;
       setChosen({ pin, over: openTaskId });
-      closeHistory();
       // A tab pinned on an agent's own page opens that page, its panel on the tab.
       if ("agent" in pin) {
         openAgentPage(pin.agent);
         sidePanel.onShow(pin.agent, pin.tab);
         return;
       }
-      if (pin.task !== tasks.activeTaskId) select(pin.task);
-      clearStandIn();
+      showTask(pin.task);
       if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.AGENT) {
         sidePanel.onShow(pin.task, tab);
         return;
@@ -4369,6 +4566,9 @@ export function useTasksTab(input: {
     },
     onLeaveTask: guard(() => leaveTask()),
     onGoHome: guard(goHome),
+    onUnbindTask: unbindTask,
+    atHome: homeOpen && boundFor === undefined,
+    taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     renameTask,
     onDraftName: draftName,
     onMarkTask: (taskId, mark) => markTask(taskId, mark),

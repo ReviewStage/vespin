@@ -15,7 +15,8 @@ import { MIRROR_BRIDGE_SOURCE } from "./mirror-bridge.js";
  * checkout of the test's own: the open sends the files git lists, ignored
  * files and symlinks left out, and answers a request in order; then each
  * change to the checkout, in a folder new since the open as in an old one,
- * crosses as a file, a delete, or a skip.
+ * crosses as a file, a delete, or a skip; a checkout git cannot list ends
+ * the bridge with the step that failed.
  */
 
 const CHANNEL = 3;
@@ -144,5 +145,47 @@ it("a change after the open crosses as a file, a delete, or a skip, in a new fol
     path: "new/c.txt",
     mode: "100755",
     bytes: "again",
+  });
+});
+
+it("a checkout git cannot list ends the bridge, saying the step and no path", async (t) => {
+  const root = await temporaryDirectory(t, "mirror-uncloned-");
+  const { frame, send } = bridge(t, root);
+  assert.deepEqual(await frame(), { bridge: "ready" });
+  send({ type: "open", channel: CHANNEL });
+
+  assert.deepEqual(await frame(), { bridge: "failed", step: "list" });
+});
+
+it("a file the open could not read is sent once it can be, its stats unchanged, though a listing passed it unread", async (t) => {
+  const { root } = await checkout(t);
+  fs.chmodSync(path.join(root, "a.txt"), 0o000);
+  const { frame, next, send } = bridge(t, root);
+  assert.deepEqual(await frame(), { bridge: "ready" });
+  send({ type: "open", channel: CHANNEL });
+  await next();
+  const manifest = await next();
+  assert.equal(
+    manifest.type === "manifest" && manifest.files.some((file) => file.path === "a.txt"),
+    false,
+  );
+
+  // Note that a listing passes a.txt while it is still unreadable, because c.txt changes beside it.
+  fs.writeFileSync(path.join(root, "c.txt"), "beside");
+  assert.deepEqual(shown(await next()), {
+    type: "file",
+    path: "c.txt",
+    mode: "100644",
+    bytes: "beside",
+  });
+
+  // Note that c.txt goes beside it, and a delete is told after every file, so a bridge that never resends a.txt fails here rather than timing out.
+  fs.chmodSync(path.join(root, "a.txt"), 0o644);
+  fs.rmSync(path.join(root, "c.txt"));
+  assert.deepEqual(shown(await next()), {
+    type: "file",
+    path: "a.txt",
+    mode: "100644",
+    bytes: "tracked",
   });
 });

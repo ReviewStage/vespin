@@ -82,6 +82,7 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_REWIND]: "Could not rewind the agent on this system.",
+  [AGENT_ACT_KIND.AGENTS_WARM]: "Could not keep the agent warm on this system.",
   [AGENT_ACT_KIND.AGENTS_ARCHIVE]: "Could not archive the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_PIN]: "Could not pin the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_MARK_READ]: "Could not mark the agent on this system.",
@@ -91,12 +92,15 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_CHANGES]: "Could not read the agent's changes on this system.",
   [AGENT_ACT_KIND.AGENTS_GITHUB_IMAGE]: "Could not read the pull request's image on this system.",
   [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: "Could not change the pull request on this system.",
+  [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]:
+    "Could not read your preferences again on this system.",
 } as const;
 
 /** A payload each declared act's schema takes, so a window refused it was refused for who it is alone. */
 const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput } = {
   AGENTS_DEFAULT_WRITE: { model: "anthropic/claude-opus-5.5", effort: "high" },
   AGENTS_CHAPTERS_PROVIDER_WRITE: { provider: "openai" },
+  AGENTS_PREFERENCES_RETRY: undefined,
   HOSTS_REMOVE: { id: HOST_ID },
   HOSTS_THIS_MAC_SET: { on: true },
   HOSTS_PAIRING_READ: { code: PAIRING_CODE },
@@ -119,6 +123,7 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   },
   AGENTS_STOP: { agentId: AGENT_ID },
   AGENTS_REWIND: { agentId: AGENT_ID, messageId: "m-1" },
+  AGENTS_WARM: { agentId: AGENT_ID },
   AGENTS_ARCHIVE: { agentId: AGENT_ID, archived: true },
   AGENTS_PIN: { agentId: AGENT_ID, pinned: true },
   AGENTS_MARK_READ: { agentId: AGENT_ID, readMark: READ_MARK.READ },
@@ -209,9 +214,7 @@ function windowPort(
       noted.push(`seen:${agentId}`);
     },
   };
-  // SAFETY: no hold is asked here, so the host's holds are never reached.
-  const host = {} as AgentProceduresDependencies["host"];
-  const port = testActPort(agentProcedures({ host, acts, notices }));
+  const port = testActPort(agentProcedures({ acts, notices }));
   ports.push(port);
   /** One kind called as this window, settled to its answer or the sentence of its refusal. */
   const call = (kind: PortActKind, payload: WireBoundaryInput) => port.call(actor, kind, payload);

@@ -13,7 +13,6 @@ import {
   type IntegrationToolsProblemReason,
 } from "@repo/features/integration-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -21,7 +20,7 @@ import type { IntegrationStatuses } from "../integration-statuses.js";
 import type { IntegrationServer } from "../live-reads.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { handHostReads, holdIntegrations, holdIntegrationTools } from "../testing/app-state.js";
-import { onRegistry } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { holdMotion, releaseMotion } from "../testing/motion-held.js";
 import { playListMotions } from "../testing/pane-motion.js";
@@ -89,13 +88,10 @@ async function opened(standing: IntegrationStatuses = statuses) {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  // Note that each draw stands on a registry of its own, so the document the test hands is read afresh.
-  const registry = AtomRegistry.make();
   const render = (statuses: IntegrationStatuses) =>
     act(() =>
       root.render(
-        onRegistry(
-          registry,
+        withQueryClient(
           createElement(AgentServersButton, {
             servers: {
               disabled: [],
@@ -434,6 +430,23 @@ test("Escape from the home fades the popover out, inert and ending, then takes i
   assert.equal(expanded, "false", "its button already says it is closed");
   assert.equal(gone, true, "it goes once its fade has run");
   assert.equal(field().value, "", "opened again it holds no search from before");
+});
+
+test("a popover opened again while it fades out hands its field the focus, so the keys still reach it", async () => {
+  holdPanelExits();
+  const { container, key, field } = await opened();
+  const button = () =>
+    container.querySelector<HTMLButtonElement>('.agent-servers button[aria-haspopup="dialog"]') ??
+    assert.fail("no button");
+
+  key("Escape");
+  act(() => button().click());
+  await act(async () => {
+    for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
+  });
+
+  // Note that the elements are compared as one boolean, because a failed equality prints both whole.
+  assert.equal(document.activeElement === field(), true, "the field holds the focus");
 });
 
 test("Escape from the home takes the popover away at once where motion is held", async () => {

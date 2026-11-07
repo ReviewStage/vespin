@@ -11,12 +11,11 @@
  * here too, by the code its link named, as Settings › Hosts asks. Only a
  * panel draws a task's agents, so every ask is the panel's alone, and a
  * refusal or a defect of the host's is drawn as the ask's unanswered
- * failure, as every one was before it was declared. Each hold, its Try
- * again, and the notes of which agent is shown and seen stay procedures of
- * their own.
+ * failure, as every one was before it was declared. Every hold and its Try
+ * again is a live follow, declared once (`live-follow.ts`); the notes of
+ * which agent is shown and seen stay procedures of their own.
  */
 
-import { eventIterator, type } from "@orpc/contract";
 import {
   AGENT_CALL_FAILURE,
   agentAddRepositoryParamsSchema,
@@ -54,6 +53,7 @@ import {
   agentTranscriptKeySchema,
   agentTranscriptOlderAnswerSchema,
   agentTranscriptOlderParamsSchema,
+  agentWarmAnswerViewSchema,
   agentWorkspaceListParamsSchema,
   chaptersProviderAnswerViewSchema,
   chaptersProviderWriteParamsSchema,
@@ -69,12 +69,14 @@ import {
   hostPairingParamsSchema,
   hostPairingViewSchema,
 } from "@repo/features/host-pairing-view";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
 import { actProcedure, exactInput } from "./base.js";
 import { contractOf, declaredActs, hostAct } from "./declared-act.js";
 import { AGENT_ACT_KIND } from "./kinds.js";
+import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.js";
 
 /**
  * An identifier that has to match the one it names elsewhere, a task or a
@@ -281,6 +283,14 @@ export const AGENT_ACTS = declaredActs({
     unanswered: AGENT_UNANSWERED,
     byHand: true,
   }),
+  AGENTS_WARM: hostAct({
+    input: agentStopParamsSchema,
+    output: agentWarmAnswerViewSchema,
+    refusal: "Could not keep the agent warm on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
   AGENTS_ARCHIVE: hostAct({
     input: agentArchiveParamsSchema,
     output: agentAgentAnswerSchema,
@@ -348,89 +358,105 @@ export const AGENT_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
   }),
+  // The account's preferences, which the host holds for the session, asked again at once, as Try again asks.
+  AGENTS_PREFERENCES_RETRY: hostAct({
+    input: EffectSchema.Undefined,
+    output: EffectSchema.Void,
+    refusal: "Could not read your preferences again on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+});
+
+/** The agents' live reads the host follows for the windows: the account's hosts, the run that started an agent, the models, the devices' beats, a transcript, a pull request's parts, and an agent's own tools. */
+export const AGENT_FOLLOWS = liveFollows({
+  HOSTS_FOLLOW: liveFollow({
+    slice: LIVE_READ.HOSTS,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow your hosts on this system.",
+    panelOnly: true,
+    retry: { name: "HOSTS_RETRY", refusal: "Could not read your hosts again on this system." },
+  }),
+  AGENTS_ORIGIN_FOLLOW: liveFollow({
+    slice: LIVE_READ.AGENT_ORIGINS,
+    hold: HOLD.WINDOW,
+    key: agentPageParamsSchema,
+    refusal: "Could not follow the run that started the agent on this system.",
+    panelOnly: true,
+    retry: {
+      name: "AGENTS_ORIGIN_RETRY",
+      refusal: "Could not read the run that started the agent again on this system.",
+    },
+  }),
+  AGENTS_MODELS_FOLLOW: liveFollow({
+    slice: LIVE_READ.MODELS,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow the models on this system.",
+    panelOnly: true,
+    retry: {
+      name: "AGENTS_MODELS_RETRY",
+      refusal: "Could not read the models again on this system.",
+    },
+  }),
+  HOSTS_PRESENCE_FOLLOW: liveFollow({
+    slice: LIVE_READ.DEVICE_PRESENCE,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow your devices' beats on this system.",
+    panelOnly: true,
+    retry: {
+      name: "HOSTS_PRESENCE_REFRESH",
+      refusal: "Could not read your devices' beats again on this system.",
+    },
+  }),
+  AGENTS_TRANSCRIPT: liveFollow({
+    slice: LIVE_READ.TRANSCRIPT,
+    hold: HOLD.WINDOW,
+    key: agentTranscriptKeySchema,
+    refusal: "Could not follow the agent's transcript on this system.",
+    panelOnly: true,
+    retry: {
+      name: "AGENTS_TRANSCRIPT_RETRY",
+      refusal: "Could not read the agent's transcript again on this system.",
+    },
+  }),
+  AGENTS_PULL_REQUEST_PART_FOLLOW: liveFollow({
+    slice: LIVE_READ.PULL_REQUEST,
+    alsoTold: [
+      LIVE_READ.PULL_REQUEST_CHECKS,
+      LIVE_READ.PULL_REQUEST_CONVERSATION,
+      LIVE_READ.PULL_REQUEST_PUBLISHED,
+      LIVE_READ.REVIEW_OPTIONS,
+      LIVE_READ.PULL_REQUEST_VIEWED,
+    ],
+    hold: HOLD.WINDOW,
+    key: pullRequestPartParamsSchema,
+    refusal: "Could not follow the agent's pull request on this system.",
+    panelOnly: true,
+    retry: {
+      name: "AGENTS_PULL_REQUEST_PART_RETRY",
+      refusal: "Could not read the agent's pull request again on this system.",
+    },
+  }),
+  AGENTS_WORKSPACE_TOOLS_FOLLOW: liveFollow({
+    slice: LIVE_READ.WORKSPACE_TOOLS,
+    hold: HOLD.WINDOW,
+    key: agentPullRequestParamsSchema,
+    refusal: `Could not follow the agent's ${PRODUCT_NAME} tools on this system.`,
+    panelOnly: true,
+    retry: {
+      name: "AGENTS_WORKSPACE_TOOLS_RETRY",
+      refusal: `Could not read the agent's ${PRODUCT_NAME} tools again on this system.`,
+    },
+  }),
 });
 
 export const agentActsContract = {
   ...contractOf(AGENT_ACTS),
-  [AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW]: actProcedure("Could not follow the models on this system.")
-    .input(exactInput(EffectSchema.Undefined))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.AGENTS_MODELS_RETRY]: actProcedure(
-    "Could not read the models again on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(EffectSchema.Void),
-  [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: actProcedure(
-    "Could not read your preferences again on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held hosts reach the panel on app state, and the stream is the window's hold on them.
-  [AGENT_ACT_KIND.HOSTS_FOLLOW]: actProcedure("Could not follow your hosts on this system.")
-    .input(exactInput(EffectSchema.Undefined))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.HOSTS_RETRY]: actProcedure("Could not read your hosts again on this system.")
-    .input(exactInput(EffectSchema.Undefined))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held beats reach the panel on app state, and the stream is the window's hold on them.
-  [AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW]: actProcedure(
-    "Could not follow your devices' beats on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.HOSTS_PRESENCE_REFRESH]: actProcedure(
-    "Could not read your devices' beats again on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held transcript reaches the panel on app state, and the stream is the window's hold on it.
-  [AGENT_ACT_KIND.AGENTS_TRANSCRIPT]: actProcedure(
-    "Could not follow the agent's transcript on this system.",
-  )
-    .input(exactInput(agentTranscriptKeySchema))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: actProcedure(
-    "Could not read the agent's transcript again on this system.",
-  )
-    .input(exactInput(agentTranscriptKeySchema))
-    .output(EffectSchema.Void),
+  ...followsContractOf(AGENT_FOLLOWS),
   [AGENT_ACT_KIND.AGENTS_SHOWN]: actProcedure("Could not note which agent is shown on this system.")
     .input(exactInput(shownParamsSchema))
     .output(EffectSchema.Void),
   [AGENT_ACT_KIND.AGENTS_SEEN]: actProcedure("Could not mark the agent as read on this system.")
     .input(exactInput(EffectSchema.Struct({ agentId: exactId })))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held origin reaches the panel on app state, and the stream is the window's hold on it.
-  [AGENT_ACT_KIND.AGENTS_ORIGIN_FOLLOW]: actProcedure(
-    "Could not follow the run that started the agent on this system.",
-  )
-    .input(exactInput(agentPageParamsSchema))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.AGENTS_ORIGIN_RETRY]: actProcedure(
-    "Could not read the run that started the agent again on this system.",
-  )
-    .input(exactInput(agentPageParamsSchema))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held part reaches the panel on app state, and the stream is the window's hold on it.
-  [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: actProcedure(
-    "Could not follow the agent's pull request on this system.",
-  )
-    .input(exactInput(pullRequestPartParamsSchema))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: actProcedure(
-    "Could not read the agent's pull request again on this system.",
-  )
-    .input(exactInput(pullRequestPartParamsSchema))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held tools reach the panel on app state, and the stream is the window's hold on them.
-  [AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: actProcedure(
-    `Could not follow the agent's ${PRODUCT_NAME} tools on this system.`,
-  )
-    .input(exactInput(agentPullRequestParamsSchema))
-    .output(eventIterator(type<never>())),
-  [AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: actProcedure(
-    `Could not read the agent's ${PRODUCT_NAME} tools again on this system.`,
-  )
-    .input(exactInput(agentPullRequestParamsSchema))
     .output(EffectSchema.Void),
 };

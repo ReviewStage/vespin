@@ -54,6 +54,7 @@ import { NewWorkspaceSteps } from "../onboarding/new-workspace-steps.js";
 import { SETUP_GATE } from "../onboarding/setup-model.js";
 import { SetupSteps, useSetupGate } from "../onboarding/setup-steps.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
@@ -80,7 +81,7 @@ import { AgentRoutePage } from "./desktop-agent-page.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
-import { DesktopTasks } from "./desktop-tasks.js";
+import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
 import { useFloatDismiss } from "./hover-pane.js";
 import { MobileBar, mobileBarShown } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
@@ -599,6 +600,7 @@ function titleSubject(
   tab: PanelTab,
   tasks: TasksControl,
   shownTask: Task | undefined,
+  unknownWorkspace: boolean,
 ): Parameters<typeof useWindowTitle>[0] {
   const { signedIn } = tasks;
   if (tab === PANEL_TAB.SETTINGS) return { signedIn, subject: "Settings", workspace: undefined };
@@ -618,8 +620,7 @@ function titleSubject(
   }
   if (tasks.boardView.open) return { signedIn, subject: "Tasks", workspace: tasks.workspace };
   // A workspace not there for the reader names none, the listed one least of all.
-  if (tasks.unknownWorkspace.open)
-    return { signedIn, subject: NOT_FOUND_TITLE, workspace: undefined };
+  if (unknownWorkspace) return { signedIn, subject: NOT_FOUND_TITLE, workspace: undefined };
   if (shownTask === undefined) return { signedIn, subject: undefined, workspace: tasks.workspace };
   // Note that a task whose workspace is not read yet is named alone, because the listed one may not be its.
   const workspace = tasks.workspaces.find((each) => each.id === shownTask.workspaceId);
@@ -812,6 +813,8 @@ export function DesktopShell({
   const adminPending =
     useQuery({ ...appStateQuery, select: selectAdminAccessPending }).data ?? true;
   const { region } = tasks;
+  // Whether the router finds the workspace the address names not there for the reader (`panel-router.tsx`).
+  const unknownWorkspace = useWindowPlace().place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
   // The window's title names what stands in it, the plan only while it is on screen, and its workspace;
   // the Inbox, an agent's or a person's page, the Automations page, or the Board standing in its place is not the plan.
   const standingIn =
@@ -821,12 +824,12 @@ export function DesktopShell({
     tasks.automationsView.open ||
     tasks.boardView.open ||
     tasks.adminView.open ||
-    tasks.unknownWorkspace.open;
+    unknownWorkspace;
   const shownTask =
     tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
       ? region.task
       : undefined;
-  useWindowTitle(titleSubject(tab, tasks, shownTask));
+  useWindowTitle(titleSubject(tab, tasks, shownTask, unknownWorkspace));
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries.
   const looks = useTaskLooks(
@@ -1162,17 +1165,14 @@ export function AgentPlace(): React.JSX.Element {
 }
 
 /**
- * What a place the window's state says draws in the places' content slot:
- * a task, or a workspace not there for the reader. Every route not yet
- * moved onto the router draws this one component, so moving between them
- * keeps it drawn.
+ * What a workspace's address naming none of the reader's draws in the
+ * places' content slot, as the router finds it not found
+ * (`panel-router.tsx`): it says nothing of whose it may be, and its way out
+ * leaves it for the place the window's state says, the reader's own Home.
  */
-export function StatePlace(): React.JSX.Element {
-  const { tasks, room, sidebar, settings, looks, away } = useShellPlaces();
-  const { account } = settings;
-  const unknownWorkspace = tasks.unknownWorkspace.open;
-  return unknownWorkspace ? (
-    // A workspace's address naming none of the reader's workspaces says nothing of whose it may be, its way out the reader's own Home.
+export function UnknownWorkspacePlace(): React.JSX.Element {
+  const { room, history } = useShellPlaces();
+  return (
     <ReplayUnmask>
       <NotFound
         replayUnmasked
@@ -1182,11 +1182,39 @@ export function StatePlace(): React.JSX.Element {
             ? phoneBar({ place: UNKNOWN_WORKSPACE_PHONE_PLACE, start: null, end: null })
             : {}
         }
-        action={{ label: GO_HOME, onClick: tasks.unknownWorkspace.onClose }}
+        action={{ label: GO_HOME, onClick: history.onLeaveRouted }}
       />
     </ReplayUnmask>
-  ) : (
-    <DesktopTasks
+  );
+}
+
+/**
+ * What a task's place draws in the places' content slot: the task bound
+ * for, or its page in the shape it lands in while the host opens it, as a
+ * link to it waits on its task. Every route of a task's draws this one
+ * component, so moving between them keeps it drawn.
+ */
+export function StatePlace(): React.JSX.Element {
+  const { tasks, room, looks, away } = useShellPlaces();
+  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+}
+
+/**
+ * What Home's routes draw in the places' content slot: the page of no task
+ * bound, its New task composer, under the workspace listed
+ * (`ROUTED_PLACE.HOME`). Note that a task still bound there draws as it
+ * does on its own place, because the binding moves one or the other next
+ * (`places/place-binding.ts`), and Home drawn for that turn would flash, as
+ * on a window opening at `/app` with a task already bound.
+ */
+export function HomePlace(): React.JSX.Element {
+  const { tasks, room, sidebar, settings, looks, away } = useShellPlaces();
+  const { account } = settings;
+  if (tasks.boundFor !== undefined) {
+    return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+  }
+  return (
+    <DesktopHomePage
       tasks={tasks}
       looks={looks}
       room={room}

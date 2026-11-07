@@ -1,4 +1,3 @@
-import { eventIterator, type } from "@orpc/contract";
 import {
   AGENT_CALL_FAILURE,
   chatGptDeviceLoginParamsSchema,
@@ -17,14 +16,14 @@ import {
   providerKeySaveParamsSchema,
   providerKeysAnswerViewSchema,
 } from "@repo/features/agent-view";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
-import { actProcedure, exactInput } from "./base.js";
 import { contractOf, declaredActs, hostAct } from "./declared-act.js";
-import { ACCOUNT_ASK_ACT_KIND } from "./kinds.js";
+import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.js";
 
 /**
- * account-asks.ts -- the account's own asks of the host from Settings and a dictating box, declared, and the procedures of the holds beside them.
+ * account-asks.ts -- the account's own asks of the host from Settings and a dictating box, declared, and the live follows beside them.
  *
  * Only a panel draws Settings or records a clip, so every ask is the
  * panel's alone. A kind that carries nothing takes `undefined` alone, so a
@@ -32,8 +31,8 @@ import { ACCOUNT_ASK_ACT_KIND } from "./kinds.js";
  * key and a dictated clip each pass through to the host once and are noted
  * nowhere, and a refusal or a defect of the host's is drawn as the
  * coding-agent calls' unanswered failure, as every one was before it was
- * declared. Each hold, and its Try again, stays a procedure of its own
- * (`act-port/account-ask-procedures.ts`): a live read, not a plain act.
+ * declared. A workspace's memories, the account's provider keys, and its
+ * GitHub token are live follows, each declared once (`live-follow.ts`).
  */
 
 /** What the window draws for an ask the host could not answer. */
@@ -123,39 +122,42 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
   }),
 });
 
+/** A workspace's memories, followed for Settings › Memory while it holds them, and the account's provider keys and GitHub token, each held once for the account signed in while Settings draws them. */
+export const ACCOUNT_ASK_FOLLOWS = liveFollows({
+  MEMORIES_FOLLOW: liveFollow({
+    slice: LIVE_READ.MEMORIES,
+    hold: HOLD.WINDOW,
+    key: memoriesFollowParamsSchema,
+    refusal: "Could not follow the workspace's memory on this system.",
+    panelOnly: true,
+    retry: {
+      name: "MEMORIES_RETRY",
+      refusal: "Could not read the workspace's memory again on this system.",
+    },
+  }),
+  PROVIDER_KEYS_FOLLOW: liveFollow({
+    slice: LIVE_READ.PROVIDER_KEYS,
+    hold: HOLD.ACCOUNT,
+    refusal: "Couldn't follow your API keys on this system.",
+    panelOnly: true,
+    retry: {
+      name: "PROVIDER_KEYS_RETRY",
+      refusal: "Couldn't read your API keys again on this system.",
+    },
+  }),
+  GITHUB_TOKEN_FOLLOW: liveFollow({
+    slice: LIVE_READ.GITHUB_TOKEN,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow your GitHub token on this system.",
+    panelOnly: true,
+    retry: {
+      name: "GITHUB_TOKEN_RETRY",
+      refusal: "Could not read your GitHub token again on this system.",
+    },
+  }),
+});
+
 export const accountAskActsContract = {
   ...contractOf(ACCOUNT_ASK_ACTS),
-  // Note that the hold's stream carries nothing: the held keys reach the panel on app state, and the stream is the window's hold on them.
-  [ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_FOLLOW]: actProcedure(
-    "Couldn't follow your API keys on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(eventIterator(type<never>())),
-  [ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_RETRY]: actProcedure(
-    "Couldn't read your API keys again on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held token reaches the panel on app state, and the stream is the window's hold on it.
-  [ACCOUNT_ASK_ACT_KIND.GITHUB_TOKEN_FOLLOW]: actProcedure(
-    "Could not follow your GitHub token on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(eventIterator(type<never>())),
-  [ACCOUNT_ASK_ACT_KIND.GITHUB_TOKEN_RETRY]: actProcedure(
-    "Could not read your GitHub token again on this system.",
-  )
-    .input(exactInput(EffectSchema.Undefined))
-    .output(EffectSchema.Void),
-  // Note that the hold's stream carries nothing: the held memories reach the panel on app state, and the stream is the window's hold on them.
-  [ACCOUNT_ASK_ACT_KIND.MEMORIES_FOLLOW]: actProcedure(
-    "Could not follow the workspace's memory on this system.",
-  )
-    .input(exactInput(memoriesFollowParamsSchema))
-    .output(eventIterator(type<never>())),
-  [ACCOUNT_ASK_ACT_KIND.MEMORIES_RETRY]: actProcedure(
-    "Could not read the workspace's memory again on this system.",
-  )
-    .input(exactInput(memoriesFollowParamsSchema))
-    .output(EffectSchema.Void),
+  ...followsContractOf(ACCOUNT_ASK_FOLLOWS),
 };

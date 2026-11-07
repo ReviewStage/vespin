@@ -7,12 +7,12 @@ import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, fileTab, STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { holdExits } from "@repo/ui/testing/held-exits";
-import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { PANEL_TAB } from "../panel-tabs.js";
+import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -20,7 +20,7 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES, handCapabilities } from "../testing/app-state.js";
-import { onRegistry } from "../testing/copy-feedback.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { holdMotion, releaseMotion } from "../testing/motion-held.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
@@ -125,19 +125,17 @@ async function mounted(room: ShellRoom = SHELL_ROOM.WIDE) {
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
-  const registry = AtomRegistry.make();
-  const draw = async (tasks: TasksControl) => {
+  const draw = async (tasks: TasksControl, place: RoutedPlace | undefined = undefined) => {
     act(() =>
       root.render(
-        onRegistry(
-          registry,
+        withQueryClient(
           createElement(
             ShellRoomContext.Provider,
             { value: room },
             createElement(TabSwitcher, {
               available: true,
               tab: PANEL_TAB.TASKS,
-              place: undefined,
+              place,
               onTabChange: () => undefined,
               tasks,
             }),
@@ -552,7 +550,7 @@ test("a tab closed on its task's page stays let go once the Inbox stands in the 
   handCapabilities(DESKTOP_CAPABILITIES);
   const told = asked();
   const window = await mounted();
-  await window.draw(onTask(NOTES, told, { boundFor: undefined }));
+  await window.draw(onTask(NOTES, told, { boundFor: undefined }), ROUTED_PLACE.HOME);
   press();
   await window.draw(onTask(README, told));
   press();

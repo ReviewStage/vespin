@@ -42,7 +42,7 @@ import {
   useAnnounce,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { Clock, Duration, Effect, Stream } from "effect";
 import {
@@ -52,15 +52,7 @@ import {
   MousePointerClickIcon,
   RotateCwIcon,
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
 import { useCopyToast } from "../copy-feedback.js";
@@ -68,6 +60,8 @@ import { useTabActions } from "../desktop/strip-tabs.js";
 import { failureShown } from "../failure-report.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
+import { appStateIn } from "../use-app-state.js";
+import { usePageVisible } from "../use-page-visible.js";
 import { CloudBrowserCursor, cursorPlacement } from "./cloud-browser-cursor.js";
 import {
   CLOUD_BROWSER_PHASE,
@@ -82,10 +76,12 @@ import {
 import {
   CLOUD_BROWSER_AGENT_RECENT,
   type CloudBrowserDraft,
+  discardCloudDraft,
   noteOpenedCloudTab,
 } from "./cloud-browser-tabs.js";
 import { FILE_VIEW_HISTORY_CLASS } from "./file-view.js";
 import { useSandboxOpen } from "./use-workspace-agents.js";
+import { useWindowAccount, windowAccountOf } from "./window-account.js";
 
 /**
  * cloud-browser-pane.tsx -- one Browser tab in an agent's cloud browser, in the side panel: a bar with back, forward, reload, and the address, then Take over and Hand back, and the page drawn live on a canvas; or a draft of one, which opens nothing until its bar opens an address.
@@ -167,17 +163,6 @@ function modifiersOf(held: RemoteModifiers): number {
     (held.meta ? BROWSER_LIVE_MODIFIER.META : 0) |
     (held.shift ? BROWSER_LIVE_MODIFIER.SHIFT : 0)
   );
-}
-
-/** Hears the window's page shown or hidden. */
-function onVisibilityChange(changed: () => void): () => void {
-  document.addEventListener("visibilitychange", changed);
-  return () => document.removeEventListener("visibilitychange", changed);
-}
-
-/** Whether the window's page is visible: not while the window is hidden or minimized, or its browser tab is in the background. */
-function usePageVisible(): boolean {
-  return useSyncExternalStore(onVisibilityChange, () => document.visibilityState !== "hidden");
 }
 
 /** The largest box of the page's shape that fits the body, or the body itself before the shape is known. */
@@ -813,12 +798,20 @@ export function CloudBrowserDraftPane({
   onOpened: (tab: AgentBrowserTab) => void;
   onDiscard: () => void;
 }): React.JSX.Element {
+  // A draft is drawn for the account that holds it alone, so the tab it opens is noted as that account's.
+  const account = useWindowAccount();
+  const client = useQueryClient();
   // Note that the draft stays opening once a tab answers, because `onOpened` replaces it with that tab.
   const opened = useMutation({
     ...actMutation(ACT_KIND.TASKS_BROWSER_TAB_OPEN),
     onSuccess: (answer) => {
       if (!("tab" in answer)) return;
-      noteOpenedCloudTab(place, answer.tab);
+      noteOpenedCloudTab(account, place, answer.tab);
+      // An answer that lands once another account signed in chooses nothing on its panel, the draft let go for the tab it opened.
+      if (windowAccountOf(appStateIn(client)?.account) !== account) {
+        discardCloudDraft(account, place, draft.id);
+        return;
+      }
       onOpened(answer.tab);
     },
   });

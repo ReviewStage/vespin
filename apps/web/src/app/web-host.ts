@@ -58,6 +58,7 @@ import {
   type CookieSessionDoor,
   cookieAccountSourceLayer,
   type DuplicateGatewayMethod,
+  type DuplicateHostAct,
   Environment,
   HOST_PLATFORM_CONCERN,
   HostAssemblyTag,
@@ -347,14 +348,8 @@ function portDependencies(
       haltSessionReplay: operator.haltSessionReplay,
       resumeSessionReplay: operator.resumeSessionReplay,
     },
-    accountAsks: { host },
     acts: operator.acts,
-    agentInbox: { host },
-    agents: { host, notices },
-    automations: { host },
-    chapters: { host },
-    installedSkills: { host },
-    integrations: { host },
+    agents: { notices },
     // Note that nothing is pushed on the tab's port: the tab hears the host
     // through the in-process bridge's own listeners, so its push stream is
     // never opened and this table stays empty.
@@ -371,13 +366,12 @@ function portDependencies(
       },
     },
     tasks: {
-      host,
       acts: operator.acts,
       colorCode: highlightSnippet,
       openExternal: async (url) => tabs.open(url),
       serviceBaseUrl: location.origin,
     },
-    workspaces: { host, openExternal: async (url) => tabs.open(url) },
+    workspaces: { openExternal: async (url) => tabs.open(url) },
   };
 }
 
@@ -522,7 +516,7 @@ const composedWeb = (
  */
 export function composeWeb(
   options: WebHostOptions,
-): Layer.Layer<WebHostTag | HostTag, DuplicateGatewayMethod> {
+): Layer.Layer<WebHostTag | HostTag, DuplicateGatewayMethod | DuplicateHostAct> {
   const { httpClient, fork, linkPlatform } = options;
   // The tab's one way out past the panel's leave guard, which the sign-in, a connect, and the platform share.
   const tab = tabLeave();

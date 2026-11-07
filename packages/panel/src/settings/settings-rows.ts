@@ -6,8 +6,10 @@ import {
   type Experiment,
   type ExperimentChoices,
   experimentOn,
+  experimentsIn,
   HOST_CAPABILITY,
   type HostCapability,
+  isWorkspaceExperiment,
 } from "@repo/settings";
 import {
   SETTINGS_PAGE_LIST,
@@ -16,6 +18,7 @@ import {
 } from "@repo/settings/settings-views";
 import type { AppSettingsView } from "@repo/settings/wire";
 import type { SettingsSearchInput } from "../settings-search.js";
+import { workspaceExperimentChoices } from "../workspace-experiments.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
@@ -54,7 +57,8 @@ const PAGE_CAPABILITY = {
 
 /**
  * The experiment a page stands on, for each page that is one experiment's:
- * while the account has it off, the page is not listed, found, or drawn.
+ * while it is off, the account's own or, for Memory, the workspace's
+ * Settings shows, the page is not listed, found, or drawn.
  */
 const PAGE_EXPERIMENT: Partial<Record<SettingsView, Experiment>> = {
   [SETTINGS_VIEW.HOSTS]: EXPERIMENT.BRING_YOUR_OWN_HOST,
@@ -62,13 +66,19 @@ const PAGE_EXPERIMENT: Partial<Record<SettingsView, Experiment>> = {
   [SETTINGS_VIEW.MEMORY]: EXPERIMENT.MEMORY,
 };
 
-/** Whether a page stands for the account's experiments: every page but one an experiment the account has off holds. */
+/** Whether a page stands for the experiments on where Settings shows: every page but one an experiment that is off holds. */
 export function settingsPageExperimentStands(
   view: SettingsView,
   experiments: ExperimentChoices,
 ): boolean {
   const experiment = PAGE_EXPERIMENT[view];
   return experiment === undefined || experimentOn(experiments, experiment);
+}
+
+/** Whether a page is held by a workspace's experiment, which stands only once the reader's workspaces are read. */
+export function settingsPageWaitsOnWorkspaces(view: SettingsView): boolean {
+  const experiment = PAGE_EXPERIMENT[view];
+  return experiment !== undefined && isWorkspaceExperiment(experiment);
 }
 
 /** The pages an experiment holds, whose names find its row in the search while those pages stand nowhere. */
@@ -113,10 +123,22 @@ export function shownWorkspace(
   );
 }
 
+/** The experiments on where Settings shows a workspace: the account's own, and that workspace's of the workspace's; none of the workspace's while it shows none. */
+export function experimentsShown(
+  experiments: ExperimentChoices,
+  workspace: Pick<Workspace, "id" | "experiments"> | undefined,
+): ExperimentChoices {
+  return experimentsIn(
+    experiments,
+    workspaceExperimentChoices(workspace === undefined ? [] : [workspace], workspace?.id),
+  );
+}
+
 /**
  * What the pages currently offer, read afresh each render: every row's own
  * condition is judged from this one record, by the rows the pages draw and by
  * the search corpus alike, so a result never leads to a page without its row.
+ * Its settings hold the experiments on where Settings shows (`experimentsShown`).
  * Absent until the settings have arrived.
  */
 export function settingsRowsInput({
@@ -132,10 +154,11 @@ export function settingsRowsInput({
 }): SettingsSearchInput | undefined {
   if (!settings) return undefined;
   const accountDrawn = account.status === ACCOUNT_STATUS.SIGNED_IN;
+  const shown = accountDrawn && workspace ? shownWorkspace(workspace) : undefined;
   return {
-    settings,
+    settings: { ...settings, experiments: experimentsShown(settings.experiments, shown) },
     accountDrawn,
     capabilities,
-    workspace: accountDrawn && workspace ? shownWorkspace(workspace) : undefined,
+    workspace: shown,
   };
 }

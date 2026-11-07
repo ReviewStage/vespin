@@ -12,11 +12,16 @@
  *
  * Only one place stands at a time, because exactly one leaf route matches
  * an address, so the place standing is read from the router's matches
- * (`useWindowPlace`) and never cleared by another place's door.
+ * (`useWindowPlace`) and never cleared by another place's door. A place
+ * sharing its route with a place the window's state says claims only the
+ * addresses its route's gate finds for it, as a workspace not there for
+ * the reader claims Home's route under that workspace's address, so the
+ * place standing is read with the reader's access.
  */
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_PLACE, type LinkPlace, taskLinkStep } from "@repo/features/link-grammar";
+import type { StripTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import {
   type HistoryLocation,
@@ -27,6 +32,7 @@ import {
 import { useMemo, useSyncExternalStore } from "react";
 import { adminLinkFields } from "../admin/routing.js";
 import {
+  HOME_WORDS,
   INBOX_WORDS,
   NAMED_STEP,
   type NamedStep,
@@ -48,30 +54,45 @@ import {
   adminRouteStands,
   type RouteAccess,
   settingsPageRouteStands,
+  useRouteAccess,
   versionHistoryRouteStands,
   workspaceRouteStands,
 } from "../route-gates.js";
+import { stripTabSurface } from "../tasks/strip-tab-kinds.js";
+import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";
+import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
+import { type PlaceParams, placeParamsOf } from "./place-params.js";
+import { openPanelTab, type TaskStep } from "./task-step.js";
 
 /** A route of the panel's tree, by its id. */
 type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
-/** The params an address's routes read, every match's together. */
-export type PlaceParams = Readonly<Record<string, string | undefined>>;
-
-/** What a declaration reads to name a step later: the task a version history's address names, and the task an Inbox item is of, by the item's id. */
+/** What a declaration reads to name a step later: the task a version history's address names, the task an Inbox item is of, by the item's id, and what a task's step holds. */
 interface PlaceNaming {
   readonly historyTask: string | undefined;
   readonly itemTask: (itemId: string) => string | undefined;
+  readonly taskStep: TaskStep | undefined;
 }
 
-/** What the window reads to say whether a step of a routed place is still there: the task a version history's address names, whether a task or an automation still is, and whether a workspace's address step names the workspace listed. */
+/** What the window reads to say whether a step of a routed place is still there: the task a version history's address names, what a task's step holds, whether a task or an automation still is, whether a task's column still holds the tab its step showed, and whether a workspace's address step names the workspace listed. */
 export interface PlaceThere {
   readonly historyTask: string | undefined;
+  readonly taskStep: TaskStep | undefined;
   readonly taskStands: (taskId: string) => boolean;
+  /** Whether `column` still stands on the strip of `taskId`'s column, as far as the window last saw it; a task not seen since, or no tab, stands. */
+  readonly columnStands: (taskId: string, column: StripTab | undefined) => boolean;
   readonly automationStands: (automationId: string) => boolean;
   readonly listed: (workspace: string) => boolean;
+}
+
+/** What a declaration reads to count the surfaces a place shows: the task a version history's address names, what a task's step holds, and whether the task's column is known yet. */
+interface PlaceShown {
+  readonly historyTask: string | undefined;
+  readonly taskStep: TaskStep | undefined;
+  readonly columnKnown: boolean;
 }
 
 /** What a declaration reads to offer its links: the Tasks tab, where the window stands, the workspace listed's address step, and the links of the place the window's state says under it. */
@@ -91,12 +112,23 @@ interface PlaceLinks {
 export interface PlaceDeclaration {
   /** The routes it stands on, by id, under whichever parent each stands. */
   readonly routes: readonly PanelRouteId[];
+  /** Whether an address its routes match is this place, by its params and the reader's access: every one of them but where it shares a route with a place the window's state says. */
+  readonly claims: (params: PlaceParams, access: RouteAccess) => boolean;
   /** Whether the window may stand on it with these params: the one predicate its routes' `beforeLoad` and Back and Forward's `reachable` both ask. */
   readonly gate: (params: PlaceParams, access: RouteAccess) => boolean;
   /** Whether what a step of it names is still there, so Back and Forward may go to it: a step naming a task or an automation deleted since is passed over. */
   readonly stillThere: (params: PlaceParams, search: URLSearchParams, there: PlaceThere) => boolean;
+  /** What it holds of the task the host binds while it stands (`PLACE_BINDING`). */
+  readonly binding: PlaceBinding;
   /** Whether it stands over the plan's place beside the sidebar, the window's state staying as it was under it, its workspace its address's. */
   readonly overThePlan: boolean;
+  /**
+   * Whether it stands in the task's own place, as the Inbox does, so a door
+   * opening a task, or starting one, stands the task's place in its stead; a
+   * place standing beside it, as the Board, keeps standing, the task opening
+   * under it, and Home and the task's own place are the task's place already.
+   */
+  readonly inTaskPlace: boolean;
   /** Whether Back and Forward pass over a step of it once another workspace is listed than the one its address names, as a place over the plan that the listed workspace's work fills. */
   readonly listedOnly: boolean;
   /** What its step is called as the window stands on it. */
@@ -114,16 +146,18 @@ export interface PlaceDeclaration {
   readonly links: (held: PlaceLinks) => readonly LinkAtHand[];
   /** The way back to the list a narrow room stands it after, where it has one. */
   readonly narrowList: keyof ListBacks | undefined;
-  /** The product surfaces it counts as opened, a version history by the task its address names. */
-  readonly surfaces: (
-    params: PlaceParams,
-    historyTask: string | undefined,
-  ) => readonly OpenSurface[];
+  /** The product surfaces it counts as opened, a version history by the task its address names, a task by what its step holds. */
+  readonly surfaces: (params: PlaceParams, shown: PlaceShown) => readonly OpenSurface[];
 }
 
 /** A place a workspace's address step names stands only where that workspace is one of the reader's. */
 function workspaceGate(params: PlaceParams, access: RouteAccess): boolean {
   return params.workspace === undefined || workspaceRouteStands(params.workspace, access);
+}
+
+/** A place that is every address its routes match. */
+function everyAddress(): boolean {
+  return true;
 }
 
 /** A link that names the step the window stands on. */
@@ -159,6 +193,33 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   ];
 }
 
+/** The surface a tab of a task's column or side panel shows, which a task's own fixed tabs name by the task; `side` marks one of the side panel's, which stands beside the column's of the same kind. */
+export function tabSurface(
+  taskId: string,
+  tab: SidePanelTab | MainTab,
+  side: boolean,
+): OpenSurface {
+  return { ...stripTabSurface(tab, taskId), side };
+}
+
+/**
+ * The surfaces a task's step shows, as the window counts them opened: each
+ * pane drawn on screen shows one. Its column and its side panel each show
+ * one, the column's held back while the task's agents are unread
+ * (`columnKnown`), since the plan it would name may be an agent's tab still
+ * on its way, and a narrow room's side panel, open, covers the column whole.
+ */
+function taskSurfaces(step: TaskStep | undefined, columnKnown: boolean): readonly OpenSurface[] {
+  if (step === undefined) return [];
+  const side = step.side ?? openPanelTab(step.panel);
+  const sideSurface = side === undefined ? [] : [tabSurface(step.taskId, side, true)];
+  if (step.panel?.open === true) return sideSurface;
+  const column = columnKnown
+    ? [tabSurface(step.taskId, step.column ?? MAIN_TAB.OVERVIEW, false)]
+    : [];
+  return [...column, ...sideSurface];
+}
+
 /**
  * Every routed place's declaration. A place moved onto the router is a new
  * entry here beside its route; whatever the window asks of it is answered
@@ -167,10 +228,13 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
 export const ROUTED_PLACE = {
   SETTINGS: {
     routes: ["/$workspace/settings", "/app/settings"],
+    claims: everyAddress,
     gate: (params, access) =>
-      params.page === undefined || settingsPageRouteStands(params.page, access),
+      params.page === undefined || settingsPageRouteStands(params.page, access, params.workspace),
     stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
     overThePlan: false,
+    inTaskPlace: false,
     listedOnly: false,
     title: () => ({ label: "Settings" }),
     named: () => undefined,
@@ -190,9 +254,12 @@ export const ROUTED_PLACE = {
   },
   ADMIN: {
     routes: ["/places/$workspace/admin"],
+    claims: everyAddress,
     gate: (_params, access) => adminRouteStands(access),
     stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
     overThePlan: false,
+    inTaskPlace: false,
     listedOnly: false,
     // Note that Admin's step is named as the place the window's state holds under it, as it was while Admin stood in for that place.
     title: (_tasks, under) => under(),
@@ -213,9 +280,12 @@ export const ROUTED_PLACE = {
   },
   BOARD: {
     routes: ["/places/$workspace/tasks"],
+    claims: everyAddress,
     gate: workspaceGate,
     stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
     overThePlan: true,
+    inTaskPlace: false,
     listedOnly: true,
     title: (tasks, under) => (tasks.boardView.open ? { label: "Tasks" } : under()),
     named: () => undefined,
@@ -228,9 +298,12 @@ export const ROUTED_PLACE = {
   },
   PERSON: {
     routes: ["/places/$workspace/person/$userId"],
+    claims: everyAddress,
     gate: workspaceGate,
     stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
     overThePlan: true,
+    inTaskPlace: false,
     listedOnly: true,
     title: (tasks, under) =>
       tasks.personView.userId === undefined
@@ -251,11 +324,14 @@ export const ROUTED_PLACE = {
   },
   AUTOMATIONS: {
     routes: ["/places/$workspace/automation-pages"],
+    claims: everyAddress,
     gate: workspaceGate,
     // An automation's page stands no more once it is deleted.
     stillThere: (params, _search, there) =>
       params.automationId === undefined || there.automationStands(params.automationId),
+    binding: PLACE_BINDING.KEPT,
     overThePlan: true,
+    inTaskPlace: false,
     listedOnly: true,
     title: (tasks, under) => (tasks.automationsView.open ? { label: "Automations" } : under()),
     named: () => undefined,
@@ -284,11 +360,15 @@ export const ROUTED_PLACE = {
   },
   VERSION_HISTORY: {
     routes: ["/version-history"],
-    gate: (_params, access) => versionHistoryRouteStands(access),
+    claims: everyAddress,
+    gate: (params, access) =>
+      params.workspace === undefined || versionHistoryRouteStands(access, params.workspace),
     // Note that a version history is passed over once its task is deleted, as the task's own step is.
     stillThere: (_params, _search, there) =>
       there.historyTask === undefined || there.taskStands(there.historyTask),
+    binding: PLACE_BINDING.KEPT,
     overThePlan: false,
+    inTaskPlace: true,
     listedOnly: false,
     // Note that a history whose task is not yet bound for is named as the place under it, as it stands until its task opens.
     title: (tasks, under) => {
@@ -304,7 +384,7 @@ export const ROUTED_PLACE = {
     // Note that a history whose task is not yet bound for offers the place under it, as it stands until its task opens.
     links: (held) => (held.tasks.boundFor === undefined ? held.under() : versionLinks(held)),
     narrowList: "versions",
-    surfaces: (_params, historyTask) =>
+    surfaces: (_params, { historyTask }) =>
       historyTask === undefined
         ? []
         : [{ surface: PRODUCT_SURFACE.VERSION_HISTORY, of: historyTask }],
@@ -312,10 +392,13 @@ export const ROUTED_PLACE = {
   AGENT: {
     // Note that only the page's own address is its place: a worker's, its Changes', or a message's beneath it is a task's tab's, as the window's state says.
     routes: ["/places/$workspace/agent/$agentId/"],
+    claims: everyAddress,
     // Note that its route draws the page under any address, as it always has, so this gate is Back and Forward's alone.
     gate: workspaceGate,
     stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
     overThePlan: true,
+    inTaskPlace: true,
     // Note that an agent's page is reached under whichever workspace it opened in, as it always was.
     listedOnly: false,
     title: (tasks, under) => (tasks.agentView.agentId === undefined ? under() : { label: "Agent" }),
@@ -327,15 +410,82 @@ export const ROUTED_PLACE = {
     narrowList: undefined,
     surfaces: (params) => [{ surface: PRODUCT_SURFACE.AGENT, of: params.agentId }],
   },
+  TASK: {
+    // Note that every address under the task's own is its place too, an agent's tab or a page of its panel among them, as the step's link names what it shows.
+    routes: ["/places/$workspace/task/$taskId"],
+    claims: everyAddress,
+    // Note that its route draws the task under any address, as it always has, so this gate is Back and Forward's alone.
+    gate: everyAddress,
+    // A task's step stands no more once its task is deleted, nor once the column's tab it showed is closed.
+    stillThere: (_params, _search, { taskStep, taskStands, columnStands }) =>
+      taskStep === undefined ||
+      (taskStands(taskStep.taskId) && columnStands(taskStep.taskId, taskStep.column)),
+    binding: PLACE_BINDING.TASK,
+    overThePlan: false,
+    inTaskPlace: false,
+    listedOnly: false,
+    // Note that the task's own place is the place the window's state says, the task bound for, so it is named and linked as that place.
+    title: (_tasks, under) => under(),
+    // A task's step is listed by its task's name now, with the tabs its panes showed.
+    named: (_params, _search, { taskStep }) => {
+      if (taskStep === undefined) return undefined;
+      // A narrow room keeps the side panel's tab in its pane of its own, named as a wide room's side is.
+      const side = taskStep.side ?? openPanelTab(taskStep.panel);
+      return { kind: NAMED_STEP.TASK, taskId: taskStep.taskId, column: taskStep.column, side };
+    },
+    links: ({ under }) => under(),
+    narrowList: "task",
+    surfaces: (_params, { taskStep, columnKnown }) => taskSurfaces(taskStep, columnKnown),
+  },
+  HOME: {
+    // Note that it shares its workspace's route with the not-found place, which claims an address naming none of the reader's workspaces.
+    routes: ["/places/$workspace/", "/places/app"],
+    claims: workspaceGate,
+    gate: workspaceGate,
+    stillThere: () => true,
+    binding: PLACE_BINDING.NONE,
+    overThePlan: false,
+    inTaskPlace: false,
+    // Note that Back reaches Home under whichever workspace it stood in, as it always has, and stands it under the one listed (`home-route.ts`).
+    listedOnly: false,
+    title: () => ({ label: HOME_WORDS }),
+    named: () => undefined,
+    links: ({ listed }) => [stepLink({ kind: LINK_PLACE.HOME }, LINK_THING.HOME, listed)],
+    narrowList: undefined,
+    surfaces: () => [{ surface: PRODUCT_SURFACE.HOME }],
+  },
+  UNKNOWN_WORKSPACE: {
+    // Note that it shares Home's route, whose `beforeLoad` throws `notFound()` where it claims the address (`panel-router.tsx`).
+    routes: ["/places/$workspace/"],
+    claims: (params, access) =>
+      params.workspace !== undefined && !workspaceRouteStands(params.workspace, access),
+    // A workspace's address naming none of the reader's is no place of theirs to come back to, so Back and Forward pass over it.
+    gate: () => false,
+    stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
+    overThePlan: true,
+    inTaskPlace: true,
+    listedOnly: false,
+    // Note that it is no step, so it has no name of its own.
+    title: () => undefined,
+    named: () => undefined,
+    // It has no link of the reader's to offer, so the tab keeps the address it was opened at.
+    links: () => [],
+    narrowList: undefined,
+    surfaces: () => [],
+  },
   INBOX: {
     routes: ["/places/$workspace/inbox"],
+    claims: everyAddress,
     gate: workspaceGate,
     // Note that an Inbox narrowed to a task is passed over once the task is deleted, as the task's own step is.
     stillThere: (params, search, there) => {
       const narrowed = params.taskId ?? search.get("task") ?? undefined;
       return narrowed === undefined || there.taskStands(narrowed);
     },
+    binding: PLACE_BINDING.KEPT,
     overThePlan: true,
+    inTaskPlace: true,
     listedOnly: true,
     title: (tasks, under) => {
       if (!tasks.inboxView.open) return under();
@@ -386,18 +536,33 @@ interface RouteMatchSeen {
   readonly params: PlaceParams;
 }
 
-/** The routed place `matches` stand on; none where they stand on a place the window's state says. */
-export function routedPlaceOf(matches: readonly RouteMatchSeen[]): RoutedPlace | undefined {
+/** The routed place `matches` stand on for a reader with `access`; none where they stand on a place the window's state says. */
+export function routedPlaceOf(
+  matches: readonly RouteMatchSeen[],
+  access: RouteAccess,
+): RoutedPlace | undefined {
+  const params = placeParamsOf(matches);
   for (const match of matches) {
-    const place = PLACES.find((each) => each.routes.some((id) => id === match.routeId));
+    const place = PLACES.find(
+      (each) => each.routes.some((id) => id === match.routeId) && each.claims(params, access),
+    );
     if (place !== undefined) return place;
   }
   return undefined;
 }
 
-/** The params every match of an address reads, together. */
-export function placeParamsOf(matches: readonly RouteMatchSeen[]): PlaceParams {
-  return Object.assign({}, ...matches.map((match) => match.params));
+/**
+ * The routed place a step at what `matches` name stands on: a task's own place
+ * wherever the step holds a task's step, whatever address its link gave it, as
+ * a narrow room's side panel names a Pull request tab by its agent alone; else
+ * the routed place there, where one is.
+ */
+export function stepPlaceOf(
+  matches: readonly RouteMatchSeen[],
+  access: RouteAccess,
+  taskStep: TaskStep | undefined,
+): RoutedPlace | undefined {
+  return taskStep === undefined ? routedPlaceOf(matches, access) : ROUTED_PLACE.TASK;
 }
 
 /**
@@ -413,7 +578,7 @@ export function routedStepStands(
   access: RouteAccess,
   there: PlaceThere,
 ): boolean {
-  const place = routedPlaceOf(matches);
+  const place = stepPlaceOf(matches, access, there.taskStep);
   if (place === undefined) return true;
   const params = placeParamsOf(matches);
   if (!place.gate(params, access) || !place.stillThere(params, search, there)) return false;
@@ -447,16 +612,17 @@ export interface WindowPlace {
  */
 export function useWindowPlace(): WindowPlace {
   const router = useRouter();
+  const access = useRouteAccess();
   const { pathname, href, search } = useHistoryLocation();
   const matches = useMemo(() => router.matchRoutes(pathname), [router, pathname]);
   return useMemo(
     () => ({
-      place: routedPlaceOf(matches),
+      place: routedPlaceOf(matches, access),
       href,
       leaf: matches.at(-1)?.routeId,
       params: matches.at(-1)?.params ?? {},
       search: Object.fromEntries(new URLSearchParams(search)),
     }),
-    [matches, href, search],
+    [matches, access, href, search],
   );
 }
