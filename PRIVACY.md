@@ -320,6 +320,9 @@ made before default-branch drives expires thirty days after its last use. When y
   description text you left in them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it
   cannot be reached, your account is deleted anyway and PostHog keeps them.
+- **Onboarding emails:** we ask Resend to delete the contact it keeps under
+  your email address, which stops them; if it cannot be reached, your account
+  is deleted anyway and Resend keeps it.
 - **Error reports** already sent to Sentry are kept until Sentry's retention
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your

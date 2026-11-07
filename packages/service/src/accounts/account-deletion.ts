@@ -15,11 +15,12 @@
  * workspace, since the automations cascade with the user row while their
  * schedules at Vercel would go on firing. After the delete, every grant is
  * revoked at Vercel Connect, as a Disconnect revokes one, a revoke that fails
- * logged by its word, and each schedule is deleted at Vercel, a failure
- * logged. A sandbox left behind expires with its snapshot
- * (`@repo/sandbox`'s retention), and a deleted workspace's agents'
- * conversations and sandboxes, and its automations' schedules, are deleted
- * by its own delete's hooks (`workspace-deletion.ts`).
+ * logged by its word, each schedule is deleted at Vercel, a failure
+ * logged, and the onboarding contact Resend keeps under the account's
+ * address is deleted (`onboarding-events.ts`). A sandbox left behind expires
+ * with its snapshot (`@repo/sandbox`'s retention), and a deleted workspace's
+ * agents' conversations and sandboxes, and its automations' schedules, are
+ * deleted by its own delete's hooks (`workspace-deletion.ts`).
  */
 
 import { accountScheduledAutomations } from "@repo/database/models/automation-store";
@@ -35,6 +36,8 @@ import {
   readIntegrationConnections,
 } from "../integrations/integration-store.js";
 import { forgetPosthogPersonEffect } from "../providers/posthog.js";
+import { readAccountPerson } from "./account-person.js";
+import { onboardingForgotten } from "./onboarding-events.js";
 
 /**
  * Without both halves of the analytics configuration there is no person to
@@ -66,6 +69,8 @@ export interface AccountDeletionPending {
   readonly grants: readonly IntegrationConnectionRow[];
   /** The account's scheduled automations in every workspace, named as their schedules are kept at Vercel. */
   readonly schedules: readonly { readonly id: string; readonly organizationId: string }[];
+  /** The account's address, which its onboarding contact is deleted by; none where the row had none. */
+  readonly email: string | undefined;
 }
 
 /** What the deletion does before Better Auth deletes the account, answering what it settles after; a store that cannot be read refuses the delete. */
@@ -76,7 +81,8 @@ export const beforeAccountDeletion = /* @__PURE__ */ Effect.fn("web/beforeAccoun
     yield* forgetAnalytics(userId);
     const grants = yield* readIntegrationConnections(userId);
     const schedules = yield* accountScheduledAutomations(userId);
-    return { grants, schedules } satisfies AccountDeletionPending;
+    const email = (yield* readAccountPerson(userId))?.email;
+    return { grants, schedules, email } satisfies AccountDeletionPending;
   },
 );
 
@@ -85,5 +91,6 @@ export const afterAccountDeletion = /* @__PURE__ */ Effect.fn("web/afterAccountD
   function* (userId: string, pending: AccountDeletionPending) {
     yield* revokeIntegrationGrants(userId, pending.grants);
     yield* schedulesForgotten(pending.schedules);
+    if (pending.email !== undefined) yield* onboardingForgotten(pending.email);
   },
 );
