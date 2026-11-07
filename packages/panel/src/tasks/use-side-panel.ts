@@ -1531,8 +1531,11 @@ function agentOwnerOf(tab: SidePanelTab, drawn: DrawnTabs): string | undefined {
       return tab.delegation?.agent;
     case STRIP_TAB_KIND.CLOUD_BROWSER:
       return drawn.cloudBrowserAgents?.get(tab.cloudBrowser);
-    default:
+    case STRIP_TAB_KIND.FILE:
+    case STRIP_TAB_KIND.PAGE:
       return undefined;
+    default:
+      return absurd(tab);
   }
 }
 
