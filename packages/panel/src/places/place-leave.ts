@@ -112,7 +112,11 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         standing.current = ask;
         setHeld(true);
         heard.current?.((leave) => ask(leave, NOTHING));
-        return () => release(ask);
+        // Note that an ask taken down while it stands was never answered, so the moves it held never land.
+        return () => {
+          if (standing.current === ask) landings.current = [];
+          release(ask);
+        };
       },
       pass,
       arrive: (move, landed) => {
