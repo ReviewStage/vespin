@@ -9,14 +9,9 @@
  * occurrence's `executionId`, which every delivery of it carries. Every
  * firing is recorded under its dedupe key, so a delivery sent again finds
  * it recorded, and a run still queued is acted on (`automation-runs.ts`).
- * A handler that throws leaves the delivery unacknowledged, and the queue
- * delivers it again.
- *
- * The queue's SDK awaits a promise handler, so the consumer's effect is run
- * here, on the services the function's runtime handed over, never on a
- * runtime of this file's own: this is the consumer's one promise door,
- * listed as a permanent adaptor in `tools/anti-slop/effect-edges.json` and
- * root AGENTS.md; what would end it is an Effect consumer in the queue's SDK.
+ * A delivery that fails is left unacknowledged, and the queue delivers it
+ * again; its effect is run through the queues' one promise door
+ * (`../queues/queue-consumer.ts`).
  */
 
 import {
@@ -30,10 +25,10 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { failureKind } from "@repo/runtime/effect";
-import { handleCallback } from "@vercel/queue";
-import { Cause, Clock, type Context, Effect, Exit, Option, Schema } from "effect";
+import { Clock, type Context, Effect, Option, Schema } from "effect";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import type { StartServices } from "../agents/coder-host/start.js";
+import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import {
   type AutomationFiringMessage,
   automationFiringMessageSchema,
@@ -102,19 +97,18 @@ export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
 
 /**
  * The consumer's route handler over the services the function's runtime
- * handed it: each delivery's effect run there, a failure logged and thrown
- * so the queue's SDK leaves the delivery unacknowledged.
+ * handed it: each delivery acknowledged once acted on, and a failure logged
+ * and left for the queue to deliver again.
  */
 export function automationRunsHandler(
   services: Context.Context<StartServices>,
 ): (request: Request) => Promise<Response> {
-  return handleCallback(async (message) => {
-    const consumed = consumeAutomationRunMessage(routedSessions, message).pipe(
+  return queueConsumer(services, (message) =>
+    consumeAutomationRunMessage(routedSessions, message).pipe(
+      Effect.as(QUEUE_ACKNOWLEDGED),
       Effect.tapCause((cause) =>
         Effect.logWarning(`an automation run's delivery will come again: ${failureKind(cause)}`),
       ),
-    );
-    const exit = await Effect.runPromiseExitWith(services)(consumed);
-    if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
-  });
+    ),
+  );
 }

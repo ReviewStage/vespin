@@ -21,6 +21,7 @@ import {
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   type RunnerCheckout,
+  TURN_HANDOVER,
 } from "../agents/coder-host/runtime-sessions.js";
 import {
   type AgentSessions,
@@ -47,7 +48,7 @@ export function scriptedHarness(
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
           checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),
-          deliverWaiting: () => Effect.succeed(false),
+          deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,
         }),
       ),

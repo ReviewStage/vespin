@@ -27,6 +27,7 @@ interface Recorded {
   syncLog: number[];
   portShares: number[];
   turns: number[];
+  republished: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
@@ -34,6 +35,7 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     syncLog: [],
     portShares: [],
     turns: [],
+    republished: [],
   };
   const options: MaintenanceSweepOptions = {
     request: sweepRequest(),
@@ -52,6 +54,11 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     reconcileAgents: (now) =>
       Effect.sync(() => {
         recorded.turns.push(now);
+        return 0;
+      }),
+    republishTurns: (now) =>
+      Effect.sync(() => {
+        recorded.republished.push(now);
         return 0;
       }),
     ...overrides,
@@ -77,6 +84,7 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       syncLog: [],
       portShares: [],
       turns: [],
+      republished: [],
     });
   }),
 );
@@ -95,11 +103,13 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       syncLog: [],
       portShares: [],
       turns: [],
+      republished: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
       portShares: [],
       turns: [],
+      republished: [],
     });
   }),
 );
@@ -119,6 +129,7 @@ it.effect(
         syncLog: [instant],
         portShares: [instant],
         turns: [instant],
+        republished: [instant],
       });
     }),
 );

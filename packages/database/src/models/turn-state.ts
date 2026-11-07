@@ -33,7 +33,7 @@
 
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
-import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin } from "@repo/wire";
+import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin, type TurnStatus } from "@repo/wire";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -379,6 +379,50 @@ const findQueued = SqlSchema.findOneOption({
         .where(and(eq(turns.conversationId, conversationId), eq(turns.status, TURN_STATUS.QUEUED)))
         .orderBy(asc(turns.queuedAt), asc(turns.id))
         .limit(1),
+    ),
+});
+
+const findStatus = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
+  Result: Schema.Struct({ status: TurnStatusSchema }),
+  execute: ({ conversationId, turnId }) =>
+    Database.use((db) =>
+      db
+        .select({ status: turns.status })
+        .from(turns)
+        .where(and(eq(turns.conversationId, conversationId), eq(turns.id, turnId))),
+    ),
+});
+
+const AwaitingRunnerSchema = Schema.Struct({
+  userId: Schema.String,
+  conversationId: Schema.String,
+  turnId: Schema.String,
+});
+
+/** A coding agent's turns still queued that were queued before the instant given and stand inside their pickup deadline at the other, oldest first. */
+const findAwaitingRunner = SqlSchema.findAll({
+  Request: Schema.Struct({ before: Schema.Date, at: Schema.Date, limit: Schema.Int }),
+  Result: AwaitingRunnerSchema,
+  execute: ({ before, at, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          userId: turns.userId,
+          conversationId: turns.conversationId,
+          turnId: turns.id,
+        })
+        .from(turns)
+        .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
+        .where(
+          and(
+            eq(turns.status, TURN_STATUS.QUEUED),
+            lt(turns.queuedAt, before),
+            gte(turns.leaseUntil, at),
+          ),
+        )
+        .orderBy(asc(turns.queuedAt), asc(turns.id))
+        .limit(limit),
     ),
 });
 
@@ -756,6 +800,33 @@ export function queuedTurnOf(conversationId: string): TurnStateEffect<Option.Opt
     findQueued({ conversationId }),
     Option.map((row) => row.id),
   );
+}
+
+/** Where the conversation's turn named stands; none where no such turn does. */
+export function turnStatusOf(
+  conversationId: string,
+  turnId: string,
+): TurnStateEffect<Option.Option<TurnStatus>> {
+  return Effect.map(
+    findStatus({ conversationId, turnId }),
+    Option.map((row) => row.status),
+  );
+}
+
+/** A coding agent's turn still awaiting a runner: the account, the conversation, and the turn. */
+export type AwaitingRunner = typeof AwaitingRunnerSchema.Type;
+
+/**
+ * The coding agents' turns, among every account's, still queued for a
+ * runner that were queued before `before` and stand inside their pickup
+ * deadline at `at`, oldest first, at most `limit` of them.
+ */
+export function turnsAwaitingRunner(
+  before: Date,
+  at: Date,
+  limit: number,
+): TurnStateEffect<readonly AwaitingRunner[]> {
+  return findAwaitingRunner({ before, at, limit });
 }
 
 /**

@@ -226,6 +226,26 @@ export class SettledTurnListener extends Context.Service<
   { readonly heard: (turn: SettledAgentTurn) => Effect.Effect<void, never, DatabaseServices> }
 >()("SettledTurnListener") {}
 
+/** A coding agent's turn a write left queued for a runner, as the writer tells `QueuedTurnListener`. */
+export interface QueuedAgentTurn {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly turnId: string;
+}
+
+/**
+ * What hears of each coding agent turn the writer left queued for a runner
+ * to take, once the write is done: the delivery that hands it to one
+ * (`@repo/service`'s `turn-delivery.ts`). A turn a line's hand-over queued
+ * is heard only once the hand-over's answer is recorded taken, so a send
+ * refused hands nothing on. Read optionally, as `SettledTurnListener` is,
+ * and on the same terms for a write inside a caller's transaction.
+ */
+export class QueuedTurnListener extends Context.Service<
+  QueuedTurnListener,
+  { readonly heard: (turn: QueuedAgentTurn) => Effect.Effect<void, never, DatabaseServices> }
+>()("QueuedTurnListener") {}
+
 /** What one write did: landed, found its row already standing, or had nothing to do for this kind. */
 export const STORE_WRITE_EFFECT = {
   WRITTEN: "written",
@@ -1012,10 +1032,16 @@ interface WriterContext {
    * (`settledAfterCommit`).
    */
   readonly settled: SettledAgentTurn[];
+  /**
+   * The coding agent turns this write left queued for a runner, each told
+   * the runtime's `QueuedTurnListener` once the write's transaction is done
+   * (`queuedAfterCommit`).
+   */
+  readonly queued: QueuedAgentTurn[];
 }
 
 /** What a locked write leaves for once its transaction is done. */
-type AfterCommit = Pick<WriterContext, "settled">;
+type AfterCommit = Pick<WriterContext, "settled" | "queued">;
 
 /** What one of this writer's statements answers: an effect over the transaction it runs in. */
 type Write<Result> = Effect.Effect<Result, StoreFailure, DatabaseServices>;
@@ -1336,7 +1362,8 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
     status === TURN_STATUS.SETTLED &&
     standing.value.cancelRequestedAt === null
   ) {
-    yield* requeueUntaken(context.target, event.turnId, settledAt, randomUUID);
+    const requeued = yield* requeueUntaken(context.target, event.turnId, settledAt, randomUUID);
+    if (Option.isSome(requeued)) context.queued.push({ ...context.target, turnId: requeued.value });
   }
   // A coding agent's own turn that settled is told the runtime's listener, once the write is done.
   if (context.kind === CONVERSATION_KIND.AGENT) {
@@ -2332,6 +2359,7 @@ const requeueLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (Option.isNone(found)) return Result.succeed(false);
   const awaited = yield* awaitedTurn(context.target, context.now, randomUUID);
   yield* awaitTurn(context.target.conversationId, [lineId], awaited.turnId);
+  if (awaited.queued) context.queued.push({ ...context.target, turnId: awaited.turnId });
   return Result.succeed(true);
 });
 
@@ -2407,6 +2435,23 @@ function settledAfterCommit(
 }
 
 /**
+ * The coding agent turns a write left queued for a runner, told the
+ * runtime's listener once the write's transaction is done, as
+ * `settledAfterCommit` tells its settles; a runtime with no listener tells no
+ * one.
+ */
+function queuedAfterCommit(
+  queued: readonly QueuedAgentTurn[],
+): Effect.Effect<void, never, DatabaseServices> {
+  if (queued.length === 0) return Effect.void;
+  return Effect.flatMap(Effect.serviceOption(QueuedTurnListener), (listener) =>
+    Option.isNone(listener)
+      ? Effect.void
+      : Effect.forEach(queued, listener.value.heard, { discard: true }),
+  );
+}
+
+/**
  * Composes the writer over one catalog, which is where the catalog is held to
  * the unknown outcome's envelope: a tool whose declared output schema refuses
  * it would leave a dispatched call's row unreadable, so the writer refuses to
@@ -2447,7 +2492,7 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     absent: () => A,
   ): Effect.Effect<A, StoreFailure | E, DatabaseServices> {
     return Effect.flatMap(SqlClient.SqlClient, (client) => {
-      const after: AfterCommit = { settled: [] };
+      const after: AfterCommit = { settled: [], queued: [] };
       return client
         .withTransaction(
           Effect.gen(function* () {
@@ -2455,7 +2500,11 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
             return yield* lockedWrite(target, row, after, write, absent);
           }),
         )
-        .pipe(Effect.tap(() => settledAfterCommit(after.settled)));
+        .pipe(
+          Effect.tap(() =>
+            Effect.andThen(settledAfterCommit(after.settled), queuedAfterCommit(after.queued)),
+          ),
+        );
     });
   }
 
@@ -2501,6 +2550,10 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
       );
       yield* recordedLine(target, written, taken);
       if (!taken) return Result.succeed(Option.none());
+      // The turn its line queued is handed on only now, the hand-over's answer recorded taken.
+      if (written.queuedTurnId !== undefined) {
+        yield* queuedAfterCommit([{ ...target, turnId: written.queuedTurnId }]);
+      }
       return Result.succeed(
         Option.some({ id: written.id, effect: STORE_WRITE_EFFECT.WRITTEN, txid: written.txid }),
       );
@@ -2543,6 +2596,9 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
         );
         yield* recordedResend(target, line.id, held, went);
         if (!went) return Result.succeed({ taken, stopped: true });
+        if (held.queuedTurnId !== undefined) {
+          yield* queuedAfterCommit([{ ...target, turnId: held.queuedTurnId }]);
+        }
         taken.push(line.id);
       }
       return Result.succeed({ taken, stopped: false });

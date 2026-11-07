@@ -17,6 +17,6 @@ export default routeFromHttpRouter(
     alive: sandboxKeptAlive,
     title: titleNativeAgent,
   }),
-  // A launch's waiting lines are handed to a launch of their own from here.
+  // Off Vercel, a turn the batch queues, or a launch's end publishes again, is delivered in this process, by these harnesses.
   nativeAgents,
 );

@@ -19,6 +19,7 @@ import {
   setProviderKeyForAgents,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
+import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { keepRunsOnPick, readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { createTask } from "@repo/database/models/task-store";
@@ -58,6 +59,7 @@ import {
   localAgentRefused,
 } from "../../http/http-effect.js";
 import { type ModelChoiceRefused, modelCatalogOf } from "../../providers/model-catalog.js";
+import { QUEUE_ACKNOWLEDGED } from "../../queues/queue-consumer.js";
 import {
   connectWorkspaceGitHub,
   githubReaching,
@@ -89,11 +91,15 @@ import {
   routedSessions,
   runnerChoiceApplied,
   sessionsRouter,
+  TURN_HANDOVER,
+  type TurnHandover,
 } from "./runtime-sessions.js";
 import { accountModelChoices, startAgent } from "./start.js";
 import { STEER_OUTCOME, steerAgent } from "./steer.js";
 import { stoppedTurn } from "./stop.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+import { consumeTurnDelivery } from "./turn-delivery.js";
+import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 
 /**
  * runtime-sessions.test.ts -- every way the service reaches a coding agent's session answers it by the runtime its conversation runs on.
@@ -128,10 +134,12 @@ function recording(sessionPrefix: string) {
     planResetsAt?: number;
     halts: boolean;
     keyRefusal?: KeyRefusal;
+    handover: TurnHandover;
   } = {
     open: SESSION_SEND_OUTCOME.ACCEPTED,
     status: 0,
     halts: true,
+    handover: TURN_HANDOVER.HANDED,
   };
   const sessions: NativeSessions = {
     retune: (sessionId, conversationId) =>
@@ -144,7 +152,11 @@ function recording(sessionPrefix: string) {
         calls.push(`halt:${sessionId}:${conversationId}`);
         return answers.halts;
       }),
-    deliverWaiting: () => Effect.succeed(false),
+    deliverTurn: (sessionId, conversationId) =>
+      Effect.sync(() => {
+        calls.push(`deliver:${sessionId}:${conversationId}`);
+        return answers.handover;
+      }),
     warm: () => Effect.void,
     checkOut: () => Effect.succeed(RUNNER_CHECKOUT.NOT_LIVE),
     open: (message) =>
@@ -341,6 +353,54 @@ it.layer(Layer.merge(getTestDB(), GITHUB))(
             `retune:${nativeOpened.sessionId}:${onClaudeCode.conversationId}`,
           ]);
           assert.deepEqual(actingFor, [owner]);
+        }),
+    );
+
+    it.effect(
+      "a queued turn's delivery reaches its Claude Code agent's harness acting for its starter, comes again shortly while the runner lease is held, and is acknowledged untouched once the turn no longer stands queued",
+      () =>
+        Effect.gen(function* () {
+          const { owner, teammate, taskId } = yield* openTeam;
+          const agent = yield* agentOn(owner, taskId, "claude_code");
+          const { claudeCode, actingFor, native } = runtimes();
+          const sessions = yield* routedSessions(teammate).pipe(Effect.provide(native));
+          const opened = yield* sessions.open(messageTo(agent));
+          assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+          const target = { userId: owner, conversationId: agent.conversationId };
+          // The harness claims the record as it opens (`runner-sessions.ts`), which this fake stands in for.
+          yield* claimRuntimeSession(target, opened.sessionId, new Date(0));
+          const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+          yield* writer.writeAwaitingLine(
+            target,
+            {
+              text: "Fix the invitations.",
+              clientKey: randomUUID(),
+              sender: { kind: MESSAGE_SENDER.APP },
+            },
+            Effect.succeed(true),
+          );
+          const turn = {
+            ...target,
+            turnId: Option.getOrThrow(yield* queuedTurnOf(agent.conversationId)),
+          };
+          actingFor.length = 0;
+
+          claudeCode.answers.handover = TURN_HANDOVER.BUSY;
+          const busy = yield* consumeTurnDelivery(turn).pipe(Effect.provide(native));
+          claudeCode.answers.handover = TURN_HANDOVER.HANDED;
+          const handed = yield* consumeTurnDelivery(turn).pipe(Effect.provide(native));
+          yield* settleRunnerLostTurns(
+            writer,
+            agent.conversationId,
+            yield* Clock.currentTimeMillis,
+          );
+          const failed = yield* consumeTurnDelivery(turn).pipe(Effect.provide(native));
+
+          assert.deepEqual(busy, { acknowledged: false, again: TURN_DELIVERY.BUSY_AGAIN });
+          assert.deepEqual([handed, failed], [QUEUE_ACKNOWLEDGED, QUEUE_ACKNOWLEDGED]);
+          const delivered = `deliver:${opened.sessionId}:${agent.conversationId}`;
+          assert.deepEqual(claudeCode.calls.slice(1), [delivered, delivered]);
+          assert.deepEqual(actingFor, [owner, owner]);
         }),
     );
 

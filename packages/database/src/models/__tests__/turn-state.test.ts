@@ -16,7 +16,7 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.j
 import { getTestDB, startTask } from "../../testing/index.js";
 import { settleLapsedTurns } from "../abandoned-turns.js";
 import { createAgent } from "../agent-store.js";
-import { lapsedAgents, lapsedTurnsOf, progressTurns } from "../turn-state.js";
+import { lapsedAgents, lapsedTurnsOf, progressTurns, turnsAwaitingRunner } from "../turn-state.js";
 import { type ConversationTarget, STORE_WRITE_REFUSAL, storeWriter } from "../writer.js";
 
 /**
@@ -261,6 +261,38 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           0,
           "a Stop's deadline is not progress's to push",
         );
+      }),
+  );
+
+  it.effect(
+    "a turn reads as awaiting a runner once queued before the instant asked, until its pickup deadline, and one a runner started does not",
+    () =>
+      Effect.gen(function* () {
+        // Note that the clock runs on from the cases before, so every instant is read from where it stands.
+        const at = yield* Clock.currentTimeMillis;
+        const queuedAgent = yield* openAgent;
+        yield* sent(queuedAgent.target, "never taken");
+        const runningAgent = yield* openAgent;
+        yield* sent(runningAgent.target, "taken");
+        const [running] = yield* turnsOf(runningAgent.target);
+        assert.ok(running !== undefined);
+        yield* started(runningAgent.target, running.id, 1);
+        const ours = new Set([
+          queuedAgent.target.conversationId,
+          runningAgent.target.conversationId,
+        ]);
+        const awaiting = (before: number, now: number) =>
+          Effect.map(turnsAwaitingRunner(new Date(before), new Date(now), 1000), (rows) =>
+            rows.filter((row) => ours.has(row.conversationId)).map((row) => row.conversationId),
+          );
+
+        const queuedSince = yield* awaiting(at, at);
+        const queuedBefore = yield* awaiting(at + 1, at + 1);
+        const pastPickup = yield* awaiting(at + 1, at + TURN_DEADLINE.PICKUP_MS + 1);
+
+        assert.deepEqual(queuedSince, []);
+        assert.deepEqual(queuedBefore, [queuedAgent.target.conversationId]);
+        assert.deepEqual(pastPickup, []);
       }),
   );
 

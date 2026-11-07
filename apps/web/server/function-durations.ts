@@ -2,6 +2,7 @@ import { BROWSER_LIVE } from "@repo/features/browser-live-wire";
 import { LIVE_SOCKET } from "@repo/features/live-wire";
 import { SANDBOX_TUNNEL } from "@repo/features/sandbox-tunnel-wire";
 import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
+import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
 import {
@@ -123,8 +124,9 @@ const STANDALONE_ROUTES: readonly string[] = [
 
 /**
  * The queue consumers, each a function of its own, since a function the
- * queue invokes is reached by nothing else: the automation-runs consumer,
- * under the Fluid default a Start's function runs under.
+ * queue invokes is reached by nothing else: the automation-runs consumer and
+ * the agent-turns consumer, each under the Fluid default a Start's function
+ * runs under.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -133,6 +135,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(AUTOMATION_RUNS.PATH)],
     dispatches: false,
     queueTopic: AUTOMATION_RUNS.TOPIC,
+  },
+  {
+    file: routeKeyOf(TURN_DELIVERY.PATH),
+    maxDuration: TURN_DELIVERY.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(TURN_DELIVERY.PATH)],
+    dispatches: false,
+    queueTopic: TURN_DELIVERY.TOPIC,
   },
 ];
 

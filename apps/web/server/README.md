@@ -354,7 +354,8 @@ bundle as `index.mjs` beside a `.vc-config.json` that names it as `handler`
 under the Node launcher with `shouldAddHelpers`, the fields Vercel's own Node
 builder writes (`packages/node/src/build.ts`), and the plan's `maxDuration`.
 A queue's consumer, the automation-runs consumer
-(`routes/automations/runs.ts`) alone today, is a function of its own whose
+(`routes/automations/runs.ts`) or the agent-turns consumer
+(`routes/agents/turns.ts`), is a function of its own whose
 `.vc-config.json` also carries the `queue/v2beta` trigger Vercel's builder
 writes for one (its topic, and its consumer group named from its path as
 the builder names one), since a tree deployed as it stands

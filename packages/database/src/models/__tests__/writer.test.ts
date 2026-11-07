@@ -17,7 +17,7 @@ import { MESSAGE_CHANNEL, MESSAGE_ROLE, TURN_ORIGIN, UNKNOWN_ACTION_STATUS } fro
 import { sentLineId } from "@repo/wire/host-ids";
 import { TOOL_PART_STATE } from "@repo/wire/ui-messages";
 import { eq } from "drizzle-orm";
-import { Duration, Effect, Metric, Option, Ref, Result, Schema } from "effect";
+import { Duration, Effect, Layer, Metric, Option, Ref, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -27,7 +27,12 @@ import { getTestDB } from "../../testing/index.js";
 import { LOST_TURNS, settleRunnerLostTurns } from "../abandoned-turns.js";
 import { lineSendersOf } from "../agent-store.js";
 import { latestTurnsOf, listMessagesPast, readMessageByClientId } from "../message-reads.js";
-import { STORE_WRITE_EFFECT, storeWriter } from "../writer.js";
+import {
+  type QueuedAgentTurn,
+  QueuedTurnListener,
+  STORE_WRITE_EFFECT,
+  storeWriter,
+} from "../writer.js";
 
 /**
  * The store writer's journal over a real dialect: as the retired runtime ran a step again,
@@ -401,17 +406,25 @@ it.layer(getTestDB())("the store writer's batches", (it) => {
 
 it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
   it.effect(
-    "a send the runtime refused writes no row, so a retry under its key is handed to the runtime again, and a send repeated after it landed is answered as repeated without the runtime hearing it twice",
+    "a send the runtime refused writes no row and hands no turn on, so a retry under its key is handed to the runtime again and its turn handed on once that hand-over answered, and a send repeated after it landed is answered as repeated without the runtime hearing it twice",
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation(CONVERSATION_KIND.AGENT);
+        const queued: QueuedAgentTurn[] = [];
         const writer = yield* storeWriter({ tools: TOOLS });
         const handed = yield* Ref.make(0);
+        const heardWhileHanded = yield* Ref.make<number[]>([]);
         const dispatch = (taken: boolean) =>
           Effect.as(
-            Ref.update(handed, (n) => n + 1),
+            Effect.andThen(
+              Ref.update(handed, (n) => n + 1),
+              Ref.update(heardWhileHanded, (counts) => [...counts, queued.length]),
+            ),
             taken,
           );
+        const listening = Layer.succeed(QueuedTurnListener, {
+          heard: (turn) => Effect.sync(() => void queued.push(turn)),
+        });
         const line = {
           text: "Fix the tile.",
           clientKey: "fix",
@@ -422,11 +435,22 @@ it.layer(getTestDB())("the store writer's awaiting lines", (it) => {
           (read) => (read.ok ? read.value.length : -1),
         );
 
-        const refused = yield* writer.writeAwaitingLine(target, line, dispatch(false));
+        const refused = yield* writer
+          .writeAwaitingLine(target, line, dispatch(false))
+          .pipe(Effect.provide(listening));
         const rowsAfterRefusal = yield* rowOf;
-        const sent = yield* writer.writeAwaitingLine(target, line, dispatch(true));
-        const repeated = yield* writer.writeAwaitingLine(target, line, dispatch(true));
+        const sent = yield* writer
+          .writeAwaitingLine(target, line, dispatch(true))
+          .pipe(Effect.provide(listening));
+        const repeated = yield* writer
+          .writeAwaitingLine(target, line, dispatch(true))
+          .pipe(Effect.provide(listening));
 
+        const turn = (yield* latestTurnsOf(target.userId, [target.conversationId])).get(
+          target.conversationId,
+        );
+        assert.deepEqual(queued, [{ ...target, turnId: turn?.id }]);
+        assert.deepEqual(yield* Ref.get(heardWhileHanded), [0, 0]);
         assert.deepEqual(refused, Result.succeed(Option.none()));
         assert.equal(rowsAfterRefusal, 0);
         assert.ok(Result.isSuccess(sent) && Option.isSome(sent.success));

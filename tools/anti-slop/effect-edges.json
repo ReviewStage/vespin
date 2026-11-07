@@ -31,8 +31,8 @@
     "packages/features/src/hosted-link.ts",
     "packages/host/src/client/app-state-store.ts",
     "packages/host/src/update-service.ts",
-    "packages/service/src/automations/automation-run-consumer.ts",
-    "packages/service/src/member-mcp/server.ts"
+    "packages/service/src/member-mcp/server.ts",
+    "packages/service/src/queues/queue-consumer.ts"
   ],
   "rawAsyncPrimitives": [
     "apps/desktop/src/main/ipc/register-desktop-ipc.ts",
