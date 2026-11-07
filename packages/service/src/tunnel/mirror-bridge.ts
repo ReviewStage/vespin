@@ -101,6 +101,7 @@ const fileOf = (name, stat) => {
 const send = (name, stat) => {
   const message = fileOf(name, stat);
   if (message !== undefined) tell(message);
+  return message !== undefined;
 };
 const watchFolders = () => {
   const folders = new Set([""]);
@@ -144,7 +145,8 @@ const settle = () => {
   for (const [name, stat] of listing) {
     const before = was.get(name);
     const moved = before === undefined || before.size !== stat.size || before.mtimeMs !== stat.mtimeMs;
-    if (moved || (before.mode & 0o111) !== (stat.mode & 0o111)) send(name, stat);
+    // Note that a file it cannot read leaves the listing, as the manifest's does, because only a listing that finds it new sends it once it can be read.
+    if ((moved || (before.mode & 0o111) !== (stat.mode & 0o111)) && !send(name, stat)) listing.delete(name);
   }
   for (const name of was.keys()) {
     if (!listing.has(name)) tell({ type: "${MIRROR_FRAME.DELETE}", path: name });
