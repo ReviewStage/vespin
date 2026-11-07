@@ -810,13 +810,17 @@ const AGAIN_STATUS = { TOO_MANY_REQUESTS: 429, SERVER_ERROR: 500 } as const;
 
 /**
  * Whether a turn's hand-over that failed may succeed if the turn is
- * delivered again: the store unreached or refusing a statement, or Vercel
- * Sandbox answering that it is busy or at fault. Any other failure (a
- * refusal, a checkout refused, a snapshot missing, a sandbox that could not
- * be readied, a row that does not decode) is the turn's, as every launch's
- * failure past a Start's answer is.
+ * delivered again: the store unreached or refusing a statement, a checkout
+ * that could not read the store or GitHub (`CODER_REFUSAL.GITHUB_UNAVAILABLE`),
+ * or Vercel Sandbox answering that it is busy or at fault. Any other failure
+ * (a refusal, a repository no longer reached, a snapshot missing, a sandbox
+ * that could not be readied, a row that does not decode) is the turn's, as
+ * every launch's failure past a Start's answer is.
  */
 function mayTakeAgain(failure: { readonly _tag: string }): boolean {
+  if (failure instanceof CheckoutRefused) {
+    return failure.reason === CODER_REFUSAL.GITHUB_UNAVAILABLE;
+  }
   if (failure instanceof SandboxUnavailable) {
     return (
       failure.status === AGAIN_STATUS.TOO_MANY_REQUESTS ||
@@ -2319,7 +2323,14 @@ export const runnerSessions = <
       // the turn again.
       deliverTurn: (sessionId, conversationId) =>
         Effect.gen(function* () {
-          const agent = yield* Effect.option(agentOf(conversationId));
+          // Note that only an agent gone is unreached; a store that could not be read fails, for the queue to deliver the turn again.
+          const agent = yield* agentOf(conversationId).pipe(
+            Effect.map(Option.some),
+            Effect.catchIf(
+              (failure) => failure instanceof LaunchRefused,
+              () => Effect.succeed(Option.none<Agent>()),
+            ),
+          );
           if (Option.isNone(agent)) return TURN_HANDOVER.UNREACHED;
           return yield* holdingRunnerIfFree(
             agent.value.id,
