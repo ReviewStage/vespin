@@ -5,7 +5,12 @@ import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords, readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
+import {
+  ACT_UNREACHED_WORDS,
+  readFailedWords,
+  readingWords,
+  SIGNED_OUT_WORDS,
+} from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
@@ -140,10 +145,20 @@ const HOSTS_SKELETON: readonly SettingsRowSkeletonShape[] = [
 ];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
-/** A remove the service did not take, said in the dialog that asked. */
-const REFUSED: ActionResult = {
+/** A call that got no answer, said in the dialog that asked. */
+const UNREACHED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "Could not connect. Check your internet connection and try again.",
+  reason: ACT_UNREACHED_WORDS,
+};
+/** A remove the service answered with a refusal, said in the dialog that asked. */
+const REMOVE_REFUSED: ActionResult = {
+  status: ACTION_RESULT_STATUS.REJECTED,
+  reason: "Could not remove this host. Try again.",
+};
+/** Turning This Mac off, refused by the service, said in the dialog that asked. */
+const TURN_OFF_REFUSED: ActionResult = {
+  status: ACTION_RESULT_STATUS.REJECTED,
+  reason: "Could not turn off this Mac. Try again.",
 };
 
 /** A host as the list of machines names it (`machineName`). */
@@ -458,9 +473,9 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const [asked, setAsked] = useState<RemoveAsked | undefined>(undefined);
   const removingAct = useConfirmAct(hostRemoving, {
     send: () => (asked === undefined ? Promise.resolve() : sendHostsRemove({ id: asked.host.id })),
-    answered: (answer) => ("failure" in answer ? REFUSED : ACCEPTED),
-    failed: () => REFUSED,
-    refusedFirst: () => (asked === undefined ? REFUSED : undefined),
+    answered: (answer) => ("failure" in answer ? REMOVE_REFUSED : ACCEPTED),
+    failed: () => UNREACHED,
+    refusedFirst: () => (asked === undefined ? REMOVE_REFUSED : undefined),
   });
   const removing = useConfirmDialog(
     { subject: asked !== undefined && asked.accountId === accountId, surfaceOpen: true },
@@ -503,8 +518,8 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         on: false,
         deleteFolders: deleteFolders || agentFolders === 0,
       }),
-    answered: (answer) => ("failure" in answer ? REFUSED : ACCEPTED),
-    failed: () => REFUSED,
+    answered: (answer) => ("failure" in answer ? TURN_OFF_REFUSED : ACCEPTED),
+    failed: () => UNREACHED,
   });
   const turningOff = useConfirmDialog(
     { subject: thisMac?.enrolled === true, surfaceOpen: true },
