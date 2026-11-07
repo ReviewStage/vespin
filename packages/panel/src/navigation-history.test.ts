@@ -30,6 +30,7 @@ import {
   type WindowHistoryLists,
 } from "./navigation-history.js";
 import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
+import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-leave.js";
 import type { RoutedPlace } from "./places/routed-places.js";
 import { taskOfAt } from "./places/task-step.js";
 import { SHELL_ROOM } from "./shell-room.js";
@@ -40,7 +41,6 @@ import {
   type AdminViewControl,
   AUTOMATIONS_PAGE,
   type AutomationsPlace,
-  type LeaveAsk,
   type TasksControl,
 } from "./tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
@@ -81,28 +81,6 @@ beforeEach(() => fakeAppPlatform(QUIET_PANEL));
 
 afterEach(unmountAll);
 
-/** The leave ask a test stands while a page holds unsaved work, or nothing. */
-interface LeaveAskHolder {
-  current: LeaveAsk | undefined;
-}
-
-/** The Tasks tab whose leave guard asks through whatever `ask` holds as a door is taken, and passes while it holds nothing. */
-function askingThrough(ask: LeaveAskHolder, base: TasksControl): TasksControl {
-  return {
-    ...base,
-    leaveGuard: {
-      stand: () => () => undefined,
-      pass: (leave) => leave(),
-      guard:
-        (leave) =>
-        (...args) => {
-          if (ask.current === undefined) leave(...args);
-          else ask.current(() => leave(...args));
-        },
-    },
-  };
-}
-
 /** The window's history over the Tasks tab as `plans` stands, restood by the returned setter, kept in a memory history of its own under the window's router as a window's root mounts one, and its addresses written from the window's own Copy link, as the root wires it. */
 function mount(
   initial: TasksControl,
@@ -118,8 +96,11 @@ function mount(
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
+  let placeLeave: PlaceLeave | undefined;
   function Probe() {
     const [standing, setTasks] = useState(initial);
+    // The window's leave guard, which a test stands a page's ask through.
+    placeLeave = usePlaceLeave();
     restand = setTasks;
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
     board = useBoardRoute({
@@ -167,6 +148,7 @@ function mount(
     const taskAt = useTaskRoute().at;
     const tasks: TasksControl = {
       ...standing,
+      placeLeave,
       atHome: home.open,
       taskView: {
         taskId:
@@ -297,6 +279,12 @@ function mount(
       }),
     /** The Inbox as the router stands it. */
     inbox: () => inbox ?? assert.fail("the Inbox's route stands"),
+    /** Stands a page's ask, as a page holding unsaved work does, recording each way out it asks about. */
+    standAsk: (asked: (() => void)[]) =>
+      act(() => {
+        const ask: LeaveAsk = (leave) => void asked.push(leave);
+        (placeLeave ?? assert.fail("the leave guard is made")).stand(ask);
+      }),
     /** Opens the Board of the workspace at `workspace` by the router, as the Board's own doors do. */
     openBoard: (workspace: string) => act(() => board?.onOpen(workspace)),
     /** Opens a person's page by the router, as a press on their name does. */
@@ -366,23 +354,9 @@ test("a press of the mouse's Back or Forward button takes one step and cancels t
 
 test("a step back canceled at the leave ask leaves the trail where the window stands, so the next step is the same step", () => {
   const asked: (() => void)[] = [];
-  const ask: LeaveAsk = (leave) => asked.push(leave);
-  let standing: LeaveAsk | undefined;
-  const asking = (base: TasksControl): TasksControl => ({
-    ...base,
-    leaveGuard: {
-      stand: () => () => undefined,
-      pass: (leave) => leave(),
-      guard:
-        (leave) =>
-        (...args) => {
-          if (standing === undefined) leave(...args);
-          else standing(() => leave(...args));
-        },
-    },
-  });
   const homes: string[] = [];
-  const atTask = asking(
+  const window = mount(listedTab());
+  window.stand(
     listedTab({
       page: TASKS_PAGE.DOCUMENT,
       activeTaskId: TASK_ID,
@@ -390,11 +364,9 @@ test("a step back canceled at the leave ask leaves the trail where the window st
       onUnbindTask: () => homes.push("home"),
     }),
   );
-  const window = mount(asking(listedTab()));
-  window.stand(atTask);
   assert.equal(window.history().canGoBack, true);
 
-  standing = ask;
+  window.standAsk(asked);
   act(() => window.history().onBack());
   assert.deepEqual(homes, [], "the step waits on the ask");
   assert.equal(window.history().canGoBack, true, "and the trail has not moved");
@@ -402,73 +374,6 @@ test("a step back canceled at the leave ask leaves the trail where the window st
 
   act(() => asked[0]?.());
   assert.deepEqual(homes, ["home"], "Leave takes the step it asked about");
-});
-
-test("a move the history makes by itself while a page holds unsaved work stands the history back on the window's step and asks, and Leave makes the move again", () => {
-  const asked: (() => void)[] = [];
-  const ask: LeaveAskHolder = { current: undefined };
-  const homes: string[] = [];
-  const window = mount(askingThrough(ask, listedTab()));
-  window.stand(
-    askingThrough(
-      ask,
-      listedTab({
-        page: TASKS_PAGE.DOCUMENT,
-        activeTaskId: TASK_ID,
-        boundFor: TASK_ID,
-        onUnbindTask: () => homes.push("home"),
-      }),
-    ),
-  );
-
-  ask.current = (leave) => asked.push(leave);
-  window.moveHistory(-1);
-  assert.deepEqual(homes, [], "the move waits on the ask");
-  assert.equal(window.history().canGoBack, true, "and the history stands back on the plan");
-  assert.equal(window.history().canGoForward, false);
-
-  act(() => asked[0]?.());
-  assert.deepEqual(homes, ["home"], "Leave takes the move it asked about");
-  assert.equal(window.history().canGoBack, false);
-  assert.equal(window.history().canGoForward, true);
-});
-
-test("a move landing where the history no longer holds the window's step, while a page holds unsaved work, writes that step again after it and asks, and Leave goes back to where it landed", () => {
-  const asked: (() => void)[] = [];
-  const ask: LeaveAskHolder = { current: undefined };
-  const homes: string[] = [];
-  const held = windowRouter();
-  const window = mount(askingThrough(ask, listedTab()), held);
-  const home = held.history.location.state.step;
-  assert.ok(home !== undefined);
-  window.stand(
-    askingThrough(
-      ask,
-      listedTab({
-        page: TASKS_PAGE.DOCUMENT,
-        activeTaskId: TASK_ID,
-        boundFor: TASK_ID,
-        onUnbindTask: () => homes.push("home"),
-      }),
-    ),
-  );
-  const [, task] = held.addresses();
-  assert.ok(task !== undefined);
-
-  ask.current = (leave) => asked.push(leave);
-  // The home page's entry from a visit the trail no longer holds, as a browser lands on one long behind.
-  act(() => held.history.push("/acme", { step: { ...home, index: home.index + 10 } }));
-  assert.deepEqual(homes, [], "the move waits on the ask");
-  assert.deepEqual(
-    window.addresses(),
-    ["/acme", task, "/acme", task],
-    "the plan's step is written again",
-  );
-  assert.equal(held.at(), 3);
-
-  act(() => asked[0]?.());
-  assert.deepEqual(homes, ["home"], "Leave goes home");
-  assert.equal(held.at(), 2);
 });
 
 test("a move landing on an entry holding no step at /app stands Home, which lets go of the task and writes its step there", () => {
@@ -494,22 +399,15 @@ test("a move landing on an entry holding no step at /app stands Home, which lets
 });
 
 /** The window on Acme's Inbox, which the router stands, or on the task `onTask` stands, each task left recorded in `left`. */
-function inboxOrTask(
-  onTask: boolean,
-  left: string[],
-  ask: LeaveAskHolder = { current: undefined },
-): TasksControl {
+function inboxOrTask(onTask: boolean, left: string[]): TasksControl {
   const base = listedTab();
-  return askingThrough(
-    ask,
-    listedTab({
-      ...(onTask ? { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID } : {}),
-      workspaces: [ACME],
-      workspace: ACME,
-      onLeaveTask: () => left.push(TASK_ID),
-      inboxView: { ...base.inboxView, open: !onTask },
-    }),
-  );
+  return listedTab({
+    ...(onTask ? { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID } : {}),
+    workspaces: [ACME],
+    workspace: ACME,
+    onLeaveTask: () => left.push(TASK_ID),
+    inboxView: { ...base.inboxView, open: !onTask },
+  });
 }
 
 test("Escape on a task opened from the Inbox returns to the Inbox, as Back does, rather than leaving the task for the home page", () => {
@@ -565,12 +463,11 @@ test("Escape on a task with no step behind it, as a launch or a link opens one o
 
 test("Escape on a task whose step back is canceled at the leave ask moves nothing, and Leave takes that step", () => {
   const asked: (() => void)[] = [];
-  const ask: LeaveAskHolder = { current: undefined };
   const left: string[] = [];
-  const window = mount(inboxOrTask(false, left, ask));
-  window.stand(inboxOrTask(true, left, ask));
+  const window = mount(inboxOrTask(false, left));
+  window.stand(inboxOrTask(true, left));
 
-  ask.current = (leave) => asked.push(leave);
+  window.standAsk(asked);
   window.escape();
   assert.notEqual(window.at(), "/acme/inbox", "the step waits on the ask");
   assert.deepEqual(left, [], "and the task is not left in its place");

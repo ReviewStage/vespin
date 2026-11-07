@@ -45,13 +45,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { OpenFeedbackProvider } from "../open-feedback.js";
+import { type ShellLeaveAsk, usePlaceLeave } from "../places/place-leave.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import {
-  AUTOMATIONS_PAGE,
-  type AutomationsPlace,
-  type LeaveAsk,
-  useLeaveGuard,
-} from "../tasks/use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/use-tasks-tab.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -70,6 +66,7 @@ import { playMotions } from "../testing/pane-motion.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { appStateIn } from "../use-app-state.js";
 import { AutomationsPage } from "./automations-page.js";
@@ -898,7 +895,7 @@ let openBoard: () => void = () => undefined;
 let places: AutomationsPlace[] = [];
 
 /** The ask the window's guard last told the shell of, as a browser tab's ways out hear it; nothing while no page holds unsaved work. */
-let shellAsk: LeaveAsk | undefined;
+let shellAsk: ShellLeaveAsk | undefined;
 
 /** Sends the window to a place among the automations, as a link opened there does. */
 let sendTo: (place: AutomationsPlace) => void = () => undefined;
@@ -920,20 +917,21 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
     sendTo = setPlace;
     const [listed, setListed] = useState(workspace);
     moveTo = setListed;
-    // The window's own guard, over doors guarded as the Plans tab guards its own.
-    const leaveGuard = useLeaveGuard((ask) => {
+    // The window's own guard, over doors that still ask up front as the Plans tab's own do.
+    const placeLeave = usePlaceLeave((ask) => {
       shellAsk = ask;
     });
+    const leaveFirst = placeLeave.transitionalLeaveFirst;
     const tasks = tasksControl({
-      leaveGuard,
+      placeLeave,
       agentView: {
         agentId: undefined,
-        onOpen: leaveGuard.guard((agentId: string) => agentsOpened.push(agentId)),
+        onOpen: leaveFirst((agentId: string) => agentsOpened.push(agentId)),
         onClose: () => undefined,
       },
       boardView: {
         open: false,
-        onOpen: leaveGuard.guard(() => boardOpens.push(1)),
+        onOpen: leaveFirst(() => boardOpens.push(1)),
         onClose: () => undefined,
         onPreload: () => undefined,
       },
@@ -943,7 +941,7 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
         ...tasksControl().automationsView,
         open: true,
         place,
-        onOpen: leaveGuard.guard((next: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) => {
+        onOpen: leaveFirst((next: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) => {
           places.push(next);
           setPlace(next);
         }),
@@ -976,11 +974,13 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
   root = createRoot(container);
   act(() =>
     root?.render(
-      withQueryClient(
-        createElement(
-          OpenFeedbackProvider,
-          { value: (about: Experiment) => feedbackAbout.push(about) },
-          createElement(Fragment, null, createElement(Pages), createElement(ToastHost)),
+      windowRouter().provide(
+        withQueryClient(
+          createElement(
+            OpenFeedbackProvider,
+            { value: (about: Experiment) => feedbackAbout.push(about) },
+            createElement(Fragment, null, createElement(Pages), createElement(ToastHost)),
+          ),
         ),
       ),
     ),

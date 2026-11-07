@@ -577,7 +577,7 @@ test("a sidebar press over a page holding unsaved work asks once, and Leave both
   // As the window's guard does, the page holds one question, which a later ask takes the place of.
   let asked: (() => void) | undefined;
   let passing = false;
-  const guard: TasksControl["leaveGuard"]["guard"] =
+  const guard: TasksControl["placeLeave"]["transitionalLeaveFirst"] =
     (leave) =>
     (...args) => {
       if (passing) {
@@ -598,7 +598,7 @@ test("a sidebar press over a page holding unsaved work asks once, and Leave both
   mount(
     false,
     {
-      leaveGuard: { ...control.leaveGuard, guard },
+      placeLeave: { ...control.placeLeave, transitionalLeaveFirst: guard },
       onGoHome: guard(() => went.push("home")),
     },
     PANEL_TAB.TASKS,

@@ -628,15 +628,15 @@ test("a screen picked past unsaved work is restored only once the leave is confi
   const guarded = {
     stand: () => () => undefined,
     pass: (leave: () => void) => leave(),
-    guard:
+    transitionalLeaveFirst:
       <Args extends readonly unknown[]>(leave: (...args: Args) => void) =>
       (...args: Args) =>
         asks.push(() => leave(...args)),
   };
   const window = await mounted();
-  await window.draw(onTask(README, told, { leaveGuard: guarded }, agentTab("x")));
+  await window.draw(onTask(README, told, { placeLeave: guarded }, agentTab("x")));
   press();
-  await window.draw(onTask(README, told, { inboxView: inboxOpen(), leaveGuard: guarded }));
+  await window.draw(onTask(README, told, { inboxView: inboxOpen(), placeLeave: guarded }));
 
   tab();
   letGo();

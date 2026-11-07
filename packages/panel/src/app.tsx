@@ -83,6 +83,7 @@ import { forgetPictures } from "./picture-query.js";
 import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
+import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
@@ -101,7 +102,7 @@ import {
   useDescriptionWordsUnsaved,
 } from "./tasks/use-description-editing.js";
 import { ListedPullRequests, OpenLinkProvider } from "./tasks/use-open-link.js";
-import { type LeaveAsk, useLeaveGuard, useTasksTab } from "./tasks/use-tasks-tab.js";
+import { useTasksTab } from "./tasks/use-tasks-tab.js";
 import { useTerminalsOwner } from "./tasks/use-terminal-session.js";
 import { WindowAccountContext, windowAccountOf } from "./tasks/window-account.js";
 import { ToastHost, useToastsOwner } from "./toast.js";
@@ -169,7 +170,7 @@ const selectFullScreen = (state: AppStateSnapshot): boolean => state.window.full
 const selectZoom = (state: AppStateSnapshot) => selectAppSettingsView(state)?.zoom;
 
 /** Tells the shell the ask standing while a page holds unsaved work, or nothing once none does. */
-const tellShellUnsavedWork = (ask: LeaveAsk | undefined): void => {
+const tellShellUnsavedWork = (ask: ShellLeaveAsk | undefined): void => {
   appPlatform().unsavedWork?.(ask);
 };
 
@@ -320,12 +321,12 @@ function AppWindow(): React.JSX.Element {
   // Note that the tab switch asks first while a page holds unsaved work, because Settings takes the window and the page with it.
   // The shell hears the ask too, and whether a description holds words not saved, which no page's ask
   // covers, so its own ways out of the page and the app ask first.
-  const leaveGuard = useLeaveGuard(tellShellUnsavedWork);
+  const placeLeave = usePlaceLeave(tellShellUnsavedWork);
   const descriptionWordsUnsaved = useDescriptionWordsUnsaved();
   useEffect(() => {
     appPlatform().unsavedDescriptionWords?.(descriptionWordsUnsaved);
   }, [descriptionWordsUnsaved]);
-  const { guard: guardLeave } = leaveGuard;
+  const { transitionalLeaveFirst: leaveFirst } = placeLeave;
   // Opens Settings at the place a link names (`settings-link.ts`), counted as the tab changed where it was not standing.
   const goSettings = useCallback((link: SettingsLink) => {
     const route = settingsRoute.current;
@@ -348,18 +349,18 @@ function AppWindow(): React.JSX.Element {
   const changeTab = useCallback(
     (next: PanelTab) => {
       if (next === PANEL_TAB.SETTINGS) {
-        guardLeave(() => goSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true }))();
+        leaveFirst(() => goSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true }))();
         return;
       }
       if (!routedStanding) return;
-      guardLeave(() => {
+      leaveFirst(() => {
         leaveRouted.current();
         appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
           panel_tab: PANEL_TAB.TASKS,
         });
       })();
     },
-    [guardLeave, goSettings, routedStanding],
+    [leaveFirst, goSettings, routedStanding],
   );
   /**
    * Opens Settings at the place a link names: the workspace it names, which
@@ -368,8 +369,8 @@ function AppWindow(): React.JSX.Element {
    */
   // Note that the link asks once, as a whole, so its page, workspace, and section all wait on the ask.
   const openSettings = useCallback(
-    (link: SettingsLink) => guardLeave(() => goSettings(link))(),
-    [guardLeave, goSettings],
+    (link: SettingsLink) => leaveFirst(() => goSettings(link))(),
+    [leaveFirst, goSettings],
   );
   // A pairing's link opens Settings › Hosts with its code, for the page to ask over itself; while
   // Bring your own host is off, which stands nowhere then, it lands on that experiment's row alone.
@@ -384,7 +385,7 @@ function AppWindow(): React.JSX.Element {
       return;
     }
     // Note that the code is handed only once the leave is let go, so a page kept for a draft is not asked over later.
-    guardLeave(() => {
+    leaveFirst(() => {
       openHostConnect(place.code);
       goSettings({ page: SETTINGS_VIEW.HOSTS });
     })();
@@ -496,7 +497,7 @@ function AppWindow(): React.JSX.Element {
     onOpenSettings: openSettings,
     onOpenIntegrations: openIntegrations,
     onOpenApiKeys: openApiKeys,
-    leaveGuard,
+    placeLeave,
     room,
     adminView,
     boardView,
@@ -520,17 +521,17 @@ function AppWindow(): React.JSX.Element {
   // next account lands on Home rather than on the Settings page the last one left from. Note that
   // the leave passes the guard, because the unsaved work it would ask about was the account's that left.
   const placeOwner = useRef(accountKey);
-  const { pass: passLeave } = leaveGuard;
+  const { pass: leavePast } = placeLeave;
   const { onGoHome } = tasks;
   useEffect(() => {
     const owner = placeOwner.current;
     placeOwner.current = accountKey;
     if (owner === undefined || owner === accountKey) return;
-    passLeave(() => {
+    leavePast(() => {
       leaveRouted.current();
       onGoHome();
     });
-  }, [accountKey, passLeave, onGoHome]);
+  }, [accountKey, leavePast, onGoHome]);
   // Session replay starts once the renderer is idle, filed under the workspace the sidebar lists.
   useSessionReplay(
     run,
@@ -554,7 +555,7 @@ function AppWindow(): React.JSX.Element {
   // A page chosen from outside Settings, as ⌘K chooses one, asks first while a page holds unsaved work, as entering Settings does; one turned within Settings asks nothing.
   const chooseSettingsView = useSteadyDoor((view: SettingsView) => {
     if (settingsPlace.standing) goSettings({ page: view });
-    else guardLeave(() => goSettings({ page: view }))();
+    else leaveFirst(() => goSettings({ page: view }))();
   });
   // The links the window can copy now: ⌥⌘C copies the first, and ⌘K offers each (`links-at-hand.ts`).
   const copyLink = useCopyLink(
@@ -611,7 +612,7 @@ function AppWindow(): React.JSX.Element {
       openSettings(route.settings);
     } else if (place.kind === LINK_PLACE.ADMIN) {
       // Admin is the router's place, which its link opens as a navigation from wherever the window stands.
-      guardLeave(() => adminView.onOpen(adminViewOfLink(place)))();
+      leaveFirst(() => adminView.onOpen(adminViewOfLink(place)))();
     } else {
       // Note that the Inbox, an agent's page, and a workspace not there are left by the door the link opens, as it stands what the link names,
       // rather than up front, because an agent's link reads where its agent stands first, and a leave before that read lands would write a
@@ -620,7 +621,7 @@ function AppWindow(): React.JSX.Element {
         routedHere?.place === ROUTED_PLACE.INBOX ||
         routedHere?.place === ROUTED_PLACE.AGENT ||
         routedHere?.place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
-      guardLeave(() => {
+      leaveFirst(() => {
         if (!leftByDoor) changeTab(PANEL_TAB.TASKS);
         tasks.onOpenLink(link);
       })();

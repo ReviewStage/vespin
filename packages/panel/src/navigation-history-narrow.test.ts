@@ -10,7 +10,7 @@ import { experimentsOn } from "@repo/settings/testing";
 import { pageTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { createMemoryHistory } from "@tanstack/react-router";
-import { act, createElement, useState } from "react";
+import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { useAdminRoute } from "./admin/admin-route.js";
@@ -26,6 +26,7 @@ import {
   type WindowHistoryLists,
 } from "./navigation-history.js";
 import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
+import { usePlaceLeave } from "./places/place-leave.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
@@ -87,7 +88,7 @@ interface Standing {
     /** Whether the Inbox shows one column by its own width, as one narrower than its split does in a room still wide. */
     readonly single?: boolean;
   };
-  /** Whether a page holds unsaved work whose ask refuses every way out, as Cancel would. */
+  /** Whether a page holds unsaved work whose ask answers every way out with Stay, as Cancel would. */
   readonly unsaved?: boolean | undefined;
   /** How many times a door naming a thing opened it in the side panel, as the real one counts them. */
   readonly opened?: number | undefined;
@@ -118,28 +119,6 @@ function tasksTab(
   const shut = () => setOpen(false);
   // A narrow room holds the panel full screen alone, so leaving full screen there shuts it.
   const narrow = room === SHELL_ROOM.NARROW;
-  // As the window's own guard does while a page holds unsaved work, every way out guarded asks, and here is
-  // refused, but for a way out the page passes it by.
-  let passing = false;
-  const leaveGuard: TasksControl["leaveGuard"] =
-    at.unsaved === true
-      ? {
-          ...base.leaveGuard,
-          pass: (leave) => {
-            passing = true;
-            try {
-              leave();
-            } finally {
-              passing = false;
-            }
-          },
-          guard:
-            (leave) =>
-            (...args) => {
-              if (passing) leave(...args);
-            },
-        }
-      : base.leaveGuard;
   const onTask = at.home !== true;
   return tasksControl({
     page: onTask ? TASKS_PAGE.DOCUMENT : TASKS_PAGE.HOME,
@@ -172,7 +151,6 @@ function tasksTab(
       if (at.panel.open) shut();
       return true;
     },
-    leaveGuard,
     // As the real one does, an agent's page opens and leaves by the router.
     agentView: {
       ...base.agentView,
@@ -275,10 +253,18 @@ function mount(
       onStay: () => history?.onStayRouted(),
     });
     const tab = tasksTab(at, setAt, room, versions, inbox, agent);
+    // The window's leave guard, whose page holding unsaved work answers every ask with Stay, as Cancel would.
+    const placeLeave = usePlaceLeave();
+    const unsaved = at.unsaved === true;
+    useEffect(
+      () => (unsaved ? placeLeave.stand((_leave, stay) => stay()) : undefined),
+      [unsaved, placeLeave],
+    );
     // Home stands where the router does, under the workspace listed, as the window's root reads it.
     const home = useHomeRoute({ listed: () => ACME.slug, onClose: () => history?.onLeaveRouted() });
     const tasks: TasksControl = {
       ...tab,
+      placeLeave,
       atHome: home.open,
       adminView: admin,
       // As the real one does, opening a page is a way out its guard asks first.
@@ -286,7 +272,7 @@ function mount(
         open: automations.open,
         place: automations.place,
         runs: automations.runs,
-        onOpen: tab.leaveGuard.guard((to = { kind: AUTOMATIONS_PAGE.LIST }) =>
+        onOpen: placeLeave.transitionalLeaveFirst((to = { kind: AUTOMATIONS_PAGE.LIST }) =>
           automations?.onOpen(to, ACME.slug),
         ),
         onRuns: automations.onRuns,
@@ -829,13 +815,14 @@ test("a reloaded window whose saved step is the Admin place opens it once the ac
 const AUTOMATION_PAGE: AutomationsPlace = { kind: AUTOMATIONS_PAGE.EDIT, automationId: AUTOMATION };
 const LINKED_RUN: AutomationsPlace = { ...AUTOMATION_PAGE, runId: "run-1" };
 
-/** The window on the task, a page holding unsaved work, as an automation's editor holds a draft. */
-const UNSAVED: Standing = { ...ON_TASK, unsaved: true };
+/** The page standing taking up unsaved work, as an automation's editor does once its draft is written in. */
+const UNSAVED = (held: Standing): Standing => ({ ...held, unsaved: true });
 
 test("on a narrow stage an automation's runs chosen from its setup are a step, whose way back steps back to the setup without asking to leave its unsaved work", async () => {
-  const window = mount(SHELL_ROOM.NARROW, UNSAVED);
+  const window = mount(SHELL_ROOM.NARROW, ON_TASK);
   window.openAutomation(AUTOMATION_PAGE);
   await settle();
+  window.move(UNSAVED);
   window.press(() => window.shown().automationsView.onRuns(true));
   await settle();
   assert.equal(window.automations().runs, true);
@@ -866,11 +853,12 @@ test("on a narrow stage an automation opened on its runs, as a run's link opens 
 });
 
 test("on a narrow stage Back and Forward between an automation's setup and a run a link opened move the window there without asking to leave its unsaved work", async () => {
-  const window = mount(SHELL_ROOM.NARROW, UNSAVED);
+  const window = mount(SHELL_ROOM.NARROW, ON_TASK);
   window.openAutomation(AUTOMATION_PAGE);
   await settle();
   window.openAutomation(LINKED_RUN);
   await settle();
+  window.move(UNSAVED);
 
   act(() => window.history().onBack());
   await settle();
@@ -881,11 +869,12 @@ test("on a narrow stage Back and Forward between an automation's setup and a run
 });
 
 test("on a narrow stage Back from an automation with unsaved work to another automation still asks, and stays where it is refused", async () => {
-  const window = mount(SHELL_ROOM.NARROW, UNSAVED);
+  const window = mount(SHELL_ROOM.NARROW, ON_TASK);
   window.openAutomation({ kind: AUTOMATIONS_PAGE.EDIT, automationId: "automation-2" });
   await settle();
   window.openAutomation(AUTOMATION_PAGE);
   await settle();
+  window.move(UNSAVED);
 
   act(() => window.history().onBack());
   await settle();

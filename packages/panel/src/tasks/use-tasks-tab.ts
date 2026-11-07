@@ -162,6 +162,7 @@ import {
 } from "../places/link-places.js";
 import type { LinkRead } from "../places/link-reads.js";
 import { PLACE_BINDING, useTaskAsk } from "../places/place-binding.js";
+import type { PlaceLeave } from "../places/place-leave.js";
 import type { RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import type { RenameShape } from "../rename-write.js";
@@ -975,79 +976,8 @@ export interface TasksControl {
    * to the page it was opened from.
    */
   back: () => boolean;
-  /** The window's one ask before leaving a page whose unsaved work would be lost. */
-  leaveGuard: LeaveGuard;
-}
-
-/** Asks before the window leaves a page whose unsaved work would be lost; `leave` goes, past the ask, once the developer says to. */
-export type LeaveAsk = (leave: () => void) => void;
-
-/**
- * The window's ask before leaving a page that holds unsaved work. A page
- * stands its ask for as long as it holds that work; every way the window
- * moves its place, a sidebar row, ⌘K, history, a tab, is a door this
- * guards, so each asks first, and a page's own way out once its work is
- * saved, or the developer said to leave, passes.
- */
-export interface LeaveGuard {
-  /** Stands `ask` until the returned function takes it down. */
-  readonly stand: (ask: LeaveAsk) => () => void;
-  /** Takes a way out past the ask, as the page holding the work takes its own. */
-  readonly pass: (leave: () => void) => void;
-  /** A way out that asks first while an ask stands. */
-  readonly guard: <Args extends readonly unknown[]>(
-    leave: (...args: Args) => void,
-  ) => (...args: Args) => void;
-}
-
-/**
- * The window's one leave guard, made where the window's tabs are, so the
- * tab switch is guarded as the plans tab's own doors are. Note that the ask
- * standing is read through a ref, because a door is called from a closure a
- * render handed out earlier.
- *
- * `onStanding` hears the ask each time one is stood, and nothing each time
- * the standing one is taken down, so a shell that can leave the page by
- * ways of its own (a browser tab closed, reloaded, or sent elsewhere) asks
- * first only while a page holds unsaved work.
- */
-export function useLeaveGuard(onStanding?: (ask: LeaveAsk | undefined) => void): LeaveGuard {
-  const standing = useRef<LeaveAsk | undefined>(undefined);
-  const passing = useRef(false);
-  const heard = useRef(onStanding);
-  heard.current = onStanding;
-  return useMemo<LeaveGuard>(() => {
-    const pass = (leave: () => void) => {
-      passing.current = true;
-      try {
-        leave();
-      } finally {
-        passing.current = false;
-      }
-    };
-    return {
-      stand: (ask) => {
-        standing.current = ask;
-        heard.current?.(ask);
-        return () => {
-          if (standing.current !== ask) return;
-          standing.current = undefined;
-          heard.current?.(undefined);
-        };
-      },
-      pass,
-      guard:
-        (leave) =>
-        (...args) => {
-          const ask = standing.current;
-          if (ask === undefined || passing.current) {
-            leave(...args);
-            return;
-          }
-          ask(() => pass(() => leave(...args)));
-        },
-    };
-  }, []);
+  /** The window's one ask before leaving a page whose unsaved work would be lost (`places/place-leave.ts`). */
+  placeLeave: PlaceLeave;
 }
 
 /** The open description's history as the window opens and draws it, over what is read of it. */
@@ -1442,8 +1372,8 @@ export function useTasksTab(input: {
   onOpenApiKeys: AgentsControl["onOpenApiKeys"];
   /** Opens Settings at the place the link names. */
   onOpenSettings: (link: SettingsLink) => void;
-  /** The window's ask before leaving unsaved work, which guards every door here that moves the place. */
-  leaveGuard: LeaveGuard;
+  /** The window's ask before leaving unsaved work, which every door here that changes the window's state before it navigates still asks through up front. */
+  placeLeave: PlaceLeave;
   /** The room the panel's stage gives, which holds the side panel only full screen while it is narrow (`shell-room.ts`). */
   room: ShellRoom;
   /** Admin as the router stands it, which a link to it opens (`admin-route.ts`). */
@@ -1475,8 +1405,8 @@ export function useTasksTab(input: {
   /** Writes the step a link opens on a task's own place before the window stands there, as one move (`navigation-history.ts`'s `onVisitTask`). */
   visitTask: (at: TaskAt, step: LinkStep) => boolean;
 }): TasksControl {
-  const { shown, leaveGuard } = input;
-  const { guard } = leaveGuard;
+  const { shown, placeLeave } = input;
+  const leaveFirst = placeLeave.transitionalLeaveFirst;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation, and
   // none invalidates a query, since what each changes comes back through app state.
   const queryClient = useQueryClient();
@@ -3346,8 +3276,8 @@ export function useTasksTab(input: {
   // so a narrow room does not lay the plan over it as a list's press does.
   // Note that Open asks first while a page stands unsaved work, as the
   // sidebar's press does, and reads the opener of the render it is pressed in.
-  const selectNow = useRef(guard(openUnpinned));
-  selectNow.current = guard(openUnpinned);
+  const selectNow = useRef(leaveFirst(openUnpinned));
+  selectNow.current = leaveFirst(openUnpinned);
   const sayStarted = (planId: string, agentRan: boolean) =>
     toast({
       replayUnmasked: true,
@@ -4334,11 +4264,11 @@ export function useTasksTab(input: {
     // A failed read is taken as stale, so the refresh reads the workspaces again at once.
     onRetryWorkspaces: () => refreshTasks(),
     workspace: listedWorkspace,
-    onChooseWorkspace: guard(switchWorkspace),
+    onChooseWorkspace: leaveFirst(switchWorkspace),
     newWorkspace: {
       open: signedIn && founding !== undefined && founding.accountId === input.accountId,
       // Note that the cards take the window in the page's place, so a page holding unsaved work asks first, as leaving it does.
-      onOpen: guard(() => setFounding({ accountId: input.accountId })),
+      onOpen: leaveFirst(() => setFounding({ accountId: input.accountId })),
       onClose: () => setFounding(undefined),
     },
     onOpenWorkspaceSettings: () =>
@@ -4377,7 +4307,7 @@ export function useTasksTab(input: {
       ...history,
       open: historyOpen,
       // The history takes the window from whatever stood, so a page holding unsaved work asks first.
-      onOpen: guard((taskId: string, save?: number) => openHistory(taskId, { save })),
+      onOpen: leaveFirst((taskId: string, save?: number) => openHistory(taskId, { save })),
       onPreload: (taskId) => {
         const address = historyAddressOf(taskId, undefined);
         if (address !== undefined) historyRoute.onPreload(address.workspace, address.task);
@@ -4391,9 +4321,9 @@ export function useTasksTab(input: {
     // a narrow room's side panel shut over it; a link names its own place
     // (`openLink`), and a task arrived on by the history is asked for as it arrives (`onArriveTask`), the history standing
     // the panes its step held.
-    onSelect: guard(selectListed),
-    onResume: guard(resumeListed),
-    onRestoreTask: guard((taskId: string) => {
+    onSelect: leaveFirst(selectListed),
+    onResume: leaveFirst(resumeListed),
+    onRestoreTask: leaveFirst((taskId: string) => {
       setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
       select(taskId);
     }),
@@ -4407,11 +4337,11 @@ export function useTasksTab(input: {
       setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
       select(taskId);
     },
-    onShowAgent: guard((taskId: string, agentId: string) =>
+    onShowAgent: leaveFirst((taskId: string, agentId: string) =>
       openOnTask(taskId, { kind: LINK_PLACE.AGENT, planId: taskId, agentId }),
     ),
-    onShowColumnTab: guard(showColumnTab),
-    onShowPanelTab: guard(showPanelTab),
+    onShowColumnTab: leaveFirst(showColumnTab),
+    onShowPanelTab: leaveFirst(showPanelTab),
     inbox: input.inboxWaiting,
     inboxShown: shownInbox,
     inboxTasks: input.inboxTasks,
@@ -4425,10 +4355,10 @@ export function useTasksTab(input: {
       chosen: inboxChosen,
       // Note that it opens on nothing chosen, so one column shows the list and two an empty pane beside it (`inbox-columns.ts`).
       // It leaves any task it was narrowed to, so the Inbox lists every item.
-      onOpen: guard(() => standInbox(inboxIn(listedWorkspace?.id, undefined), undefined)),
-      onClose: guard(input.inboxView.onClose),
+      onOpen: leaveFirst(() => standInbox(inboxIn(listedWorkspace?.id, undefined), undefined)),
+      onClose: leaveFirst(input.inboxView.onClose),
       onChoose: (chosen) => input.inboxView.onChoose(chosen),
-      onOpenItem: guard((chosen: InboxChoice) => {
+      onOpenItem: leaveFirst((chosen: InboxChoice) => {
         // Note that the Inbox standing keeps its narrowing for an item of the task it is narrowed to, as a row's choice does.
         const narrowed = inboxView === undefined ? undefined : inboxView.narrowed;
         standInbox(inboxIn(listedWorkspace?.id, narrowed), chosen);
@@ -4445,15 +4375,15 @@ export function useTasksTab(input: {
     agentView: {
       agentId: agentView?.agentId,
       pages: agentPages,
-      onOpen: guard((agentId: string) => openAgentPage(agentId)),
-      onClose: guard(input.agentView.onClose),
+      onOpen: leaveFirst((agentId: string) => openAgentPage(agentId)),
+      onClose: leaveFirst(input.agentView.onClose),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
     personView: {
       userId: input.personView.userId,
       name: input.personView.name,
       workspaceId: personWorkspace,
-      onOpen: guard((userId: string, name?: string, workspaceId?: string) => {
+      onOpen: leaveFirst((userId: string, name?: string, workspaceId?: string) => {
         openPerson(
           userId,
           name,
@@ -4462,42 +4392,42 @@ export function useTasksTab(input: {
             : viewed.workspaces.find((each) => each.id === workspaceId),
         );
       }),
-      onClose: guard(input.personView.onClose),
+      onClose: leaveFirst(input.personView.onClose),
       onPreload: (userId: string, workspaceId?: string) => {
         const home = viewed.workspaces.find((each) => each.id === workspaceId) ?? listedWorkspace;
         if (home !== undefined) input.personView.onPreload(userId, stepOf(home));
       },
     },
     // The Admin place is the router's, which draws it in the task's place (`admin-route.ts`).
-    adminView: { ...input.adminView, onOpen: guard(input.adminView.onOpen) },
+    adminView: { ...input.adminView, onOpen: leaveFirst(input.adminView.onOpen) },
     // The Automations pages are the router's, which draw them in the plan's place (`automations-route.ts`); a version history there gives way.
     automationsView: {
       open: input.automationsView.open,
       place: input.automationsView.place,
       runs: input.automationsView.runs,
-      onOpen: guard((place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
+      onOpen: leaveFirst((place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
         openAutomations(place),
       ),
       onRuns: input.automationsView.onRuns,
-      onClose: guard(input.automationsView.onClose),
+      onClose: leaveFirst(input.automationsView.onClose),
     },
     // The Board is the router's, which draws it in the plan's place (`workspace-routes.ts`).
     boardView: {
       open: input.boardView.open,
-      onOpen: guard(() => openBoard(listedWorkspace)),
-      onClose: guard(input.boardView.onClose),
+      onOpen: leaveFirst(() => openBoard(listedWorkspace)),
+      onClose: leaveFirst(input.boardView.onClose),
       onPreload: () => {
         if (listedWorkspace !== undefined) input.boardView.onPreload(stepOf(listedWorkspace));
       },
     },
     onShowFile: showFile,
     // A version's Open lands where its writer wrote it: an agent's tab.
-    onShowSource: guard(showSource),
+    onShowSource: leaveFirst(showSource),
     // A task named by an Inbox item or a call's row opens on its agents.
-    onShowTask: guard(showTaskAgents),
+    onShowTask: leaveFirst(showTaskAgents),
     // Each ask is its own, so the same section asked twice scrolls twice.
-    onShowMention: guard(showMention),
-    onOpenLink: guard((link: ReadLink) => openLink(link)),
+    onShowMention: leaveFirst(showMention),
+    onOpenLink: leaveFirst((link: ReadLink) => openLink(link)),
     messageReveal,
     // Only the ask answered is let go; a newer one stands until its agent's tab answers it.
     onMessageRevealed: (ask) => setMessageReveal((last) => (last?.ask === ask ? undefined : last)),
@@ -4513,7 +4443,7 @@ export function useTasksTab(input: {
     // Only the ask shown is let go; a newer one stands until its own task shows it.
     onSectionRevealed: (ask) =>
       setSectionReveal((last) => (last?.reveal.ask === ask ? undefined : last)),
-    onShowInbox: guard(
+    onShowInbox: leaveFirst(
       ({ taskId, itemId }: { readonly taskId: string; readonly itemId?: string }) => {
         const chosen = itemId === undefined ? undefined : { taskId, itemId, opened: true as const };
         const home = viewed.tasks.find((task) => task.id === taskId)?.workspaceId;
@@ -4521,7 +4451,7 @@ export function useTasksTab(input: {
       },
     ),
     // A pinned tab is in one of the task's columns, so a version history over it gives way as well.
-    onOpenPinnedTab: guard((pin: SidebarPin) => {
+    onOpenPinnedTab: leaveFirst((pin: SidebarPin) => {
       const { tab } = pin;
       setChosen({ pin, over: openTaskId });
       // A tab pinned on an agent's own page opens that page, its panel on the tab.
@@ -4598,10 +4528,10 @@ export function useTasksTab(input: {
       readModels: agents.readModels,
       onClose: () => setNewTaskAsk(undefined),
       tasks: sidebar,
-      onShowMention: guard(showMention),
+      onShowMention: leaveFirst(showMention),
     },
-    onLeaveTask: guard(() => leaveTask()),
-    onGoHome: guard(goHome),
+    onLeaveTask: leaveFirst(() => leaveTask()),
+    onGoHome: leaveFirst(goHome),
     onUnbindTask: unbindTask,
     atHome: homeOpen && boundFor === undefined,
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
@@ -4622,6 +4552,6 @@ export function useTasksTab(input: {
     deleteTask: deleteTaskOptions,
     deleteTasks: tasksDeleteMutation(sendDeleteTask),
     back,
-    leaveGuard,
+    placeLeave,
   });
 }

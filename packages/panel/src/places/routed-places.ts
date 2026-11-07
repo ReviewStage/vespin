@@ -148,11 +148,18 @@ export interface PlaceDeclaration {
   readonly narrowList: keyof ListBacks | undefined;
   /** The product surfaces it counts as opened, a version history by the task its address names, a task by what its step holds. */
   readonly surfaces: (params: PlaceParams, shown: PlaceShown) => readonly OpenSurface[];
+  /** The draft its step edits, by the id its address names, which every step of it naming that id shares, so a move between them leaves no page and asks nothing (`place-leave.ts`); none where each step is a page of its own. */
+  readonly draft: (params: PlaceParams) => string | undefined;
 }
 
 /** A place a workspace's address step names stands only where that workspace is one of the reader's. */
 function workspaceGate(params: PlaceParams, access: RouteAccess): boolean {
   return params.workspace === undefined || workspaceRouteStands(params.workspace, access);
+}
+
+/** A place each of whose steps is a page of its own. */
+function noDraft(): undefined {
+  return undefined;
 }
 
 /** A place that is every address its routes match. */
@@ -251,6 +258,7 @@ export const ROUTED_PLACE = {
     },
     narrowList: "settings",
     surfaces: () => [{ surface: PRODUCT_SURFACE.SETTINGS }],
+    draft: noDraft,
   },
   ADMIN: {
     routes: ["/places/$workspace/admin"],
@@ -277,6 +285,7 @@ export const ROUTED_PLACE = {
     },
     narrowList: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.ADMIN }],
+    draft: noDraft,
   },
   BOARD: {
     routes: ["/places/$workspace/tasks"],
@@ -295,6 +304,7 @@ export const ROUTED_PLACE = {
         : under(),
     narrowList: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.BOARD }],
+    draft: noDraft,
   },
   PERSON: {
     routes: ["/places/$workspace/person/$userId"],
@@ -321,6 +331,7 @@ export const ROUTED_PLACE = {
     },
     narrowList: undefined,
     surfaces: (params) => [{ surface: PRODUCT_SURFACE.PERSON, of: params.userId }],
+    draft: noDraft,
   },
   AUTOMATIONS: {
     routes: ["/places/$workspace/automation-pages"],
@@ -357,6 +368,8 @@ export const ROUTED_PLACE = {
     },
     narrowList: "runs",
     surfaces: () => [{ surface: PRODUCT_SURFACE.AUTOMATIONS }],
+    // An automation's setup, its runs, and a run share its editor and what is written in it.
+    draft: (params) => params.automationId,
   },
   VERSION_HISTORY: {
     routes: ["/version-history"],
@@ -388,6 +401,8 @@ export const ROUTED_PLACE = {
       historyTask === undefined
         ? []
         : [{ surface: PRODUCT_SURFACE.VERSION_HISTORY, of: historyTask }],
+    // A version history is one however its versions are chosen.
+    draft: (params) => params.taskId,
   },
   AGENT: {
     // Note that only the page's own address is its place: a worker's, its Changes', or a message's beneath it is a task's tab's, as the window's state says.
@@ -409,6 +424,7 @@ export const ROUTED_PLACE = {
     },
     narrowList: undefined,
     surfaces: (params) => [{ surface: PRODUCT_SURFACE.AGENT, of: params.agentId }],
+    draft: noDraft,
   },
   TASK: {
     // Note that every address under the task's own is its place too, an agent's tab or a page of its panel among them, as the step's link names what it shows.
@@ -436,6 +452,7 @@ export const ROUTED_PLACE = {
     links: ({ under }) => under(),
     narrowList: "task",
     surfaces: (_params, { taskStep, columnKnown }) => taskSurfaces(taskStep, columnKnown),
+    draft: noDraft,
   },
   HOME: {
     // Note that it shares its workspace's route with the not-found place, which claims an address naming none of the reader's workspaces.
@@ -453,6 +470,7 @@ export const ROUTED_PLACE = {
     links: ({ listed }) => [stepLink({ kind: LINK_PLACE.HOME }, LINK_THING.HOME, listed)],
     narrowList: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.HOME }],
+    draft: noDraft,
   },
   UNKNOWN_WORKSPACE: {
     // Note that it shares Home's route, whose `beforeLoad` throws `notFound()` where it claims the address (`panel-router.tsx`).
@@ -473,6 +491,7 @@ export const ROUTED_PLACE = {
     links: () => [],
     narrowList: undefined,
     surfaces: () => [],
+    draft: noDraft,
   },
   INBOX: {
     routes: ["/places/$workspace/inbox"],
@@ -523,6 +542,7 @@ export const ROUTED_PLACE = {
     },
     narrowList: "inbox",
     surfaces: () => [{ surface: PRODUCT_SURFACE.INBOX }],
+    draft: noDraft,
   },
 } as const satisfies { readonly [Name in string]: PlaceDeclaration };
 
@@ -549,6 +569,21 @@ export function routedPlaceOf(
     if (place !== undefined) return place;
   }
   return undefined;
+}
+
+/**
+ * Whether a move from what `from` names to what `to` names stays within one
+ * draft: both on one routed place, whose declaration names one draft for both.
+ */
+export function sameDraftAt(
+  from: readonly RouteMatchSeen[],
+  to: readonly RouteMatchSeen[],
+  access: RouteAccess,
+): boolean {
+  const place = routedPlaceOf(from, access);
+  if (place === undefined || routedPlaceOf(to, access) !== place) return false;
+  const draft = place.draft(placeParamsOf(from));
+  return draft !== undefined && draft === place.draft(placeParamsOf(to));
 }
 
 /**

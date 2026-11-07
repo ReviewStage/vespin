@@ -1881,7 +1881,7 @@ function SidebarColumn({
   // A press for a place of the window's state leaves a routed place standing for it, Settings or Admin (`panel-router.tsx`).
   // Note that the leave and the door are one way out, asked once, because a page holding unsaved work holds one question, which a second ask would take the place of.
   const leaveFor = (door: () => void) =>
-    tasks.leaveGuard.guard(() => {
+    tasks.placeLeave.transitionalLeaveFirst(() => {
       onTabChange(PANEL_TAB.TASKS);
       door();
     })();

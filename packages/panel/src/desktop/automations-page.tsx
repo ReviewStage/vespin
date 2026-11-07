@@ -1057,7 +1057,7 @@ function AutomationsPages({
       onBack={back}
       onOpenAgent={(agentId) => tasks.agentView.onOpen(agentId)}
       linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
-      leaveGuard={tasks.leaveGuard}
+      placeLeave={tasks.placeLeave}
       room={room}
       runsShown={view.runs}
       onRuns={view.onRuns}

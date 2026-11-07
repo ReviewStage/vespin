@@ -461,7 +461,7 @@ export function TabSwitcher({
   // Goes to a stop through the window's own doors, as any move there would, all of it past one ask of the leave guard, so a leave canceled moves nothing, the stops' order included.
   const go = (stop: Stop) => {
     const { tasks: control, onTabChange: changeTab } = doors.current;
-    control.leaveGuard.guard(() => {
+    control.placeLeave.transitionalLeaveFirst(() => {
       // A routed place standing, Settings or Admin, is left for the stop.
       changeTab(PANEL_TAB.TASKS);
       switch (stop.kind) {

@@ -86,6 +86,7 @@ import {
 import { useLinkPlaceLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
+import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
 import { useWindowPlace } from "../places/routed-places.js";
 import { ADDRESS, addressOf } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -132,13 +133,7 @@ import { loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
 import { MAIN_TAB } from "./use-main-tabs.js";
 import { PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./use-side-panel.js";
-import {
-  AUTOMATIONS_PAGE,
-  type LeaveAsk,
-  type TasksControl,
-  useLeaveGuard,
-  useTasksTab,
-} from "./use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
 beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
@@ -411,7 +406,7 @@ function mount(
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: (link) => links.push(link),
-      leaveGuard: useLeaveGuard(),
+      placeLeave: usePlaceLeave(),
       room: held.room,
       adminView: {
         ...ADMIN_AWAY,
@@ -794,7 +789,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
   };
   const asked: (() => void)[] = [];
   act(() => {
-    tab.control().leaveGuard.stand((leave) => asked.push(leave));
+    tab.control().placeLeave.stand((leave) => asked.push(leave));
   });
   act(() => (newestToastAction() ?? assert.fail("the toast offers Open")).click());
   await settle();
@@ -3482,14 +3477,14 @@ function listRead(tasks: TasksView["tasks"]): TasksView {
   return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, tasks };
 }
 
-test("while a page stands its ask, a way out asks instead of going, Leave goes where was asked, and once the ask is down the doors go at once", () => {
+test("while a page stands its ask, a way out asks instead of going, Leave goes where was asked, and once the ask is down the doors go at once", async () => {
   const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
   act(() => tab.control().inboxView.onOpen());
   const asked: (() => void)[] = [];
-  const ask: LeaveAsk = (leave) => asked.push(leave);
+  const ask: LeaveAsk = (leave) => void asked.push(leave);
   let down: () => void = () => undefined;
   act(() => {
-    down = tab.control().leaveGuard.stand(ask);
+    down = tab.control().placeLeave.stand(ask);
   });
 
   act(() => tab.control().boardView.onOpen());
@@ -3499,6 +3494,8 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
   assert.equal(asked.length, 3, "the workspace switcher asks as the other doors do");
 
   act(() => asked[0]?.());
+  // Note that the router's move waits a turn on its blocker, which stands while the page holds its ask.
+  await settle();
   assert.equal(tab.control().boardView.open, true, "Leave goes where the first way out went");
 
   act(() => down());
@@ -4700,7 +4697,7 @@ test("a pinned tab of one agent's opened while the column shows another shows it
 test("Admin opened while a page holds unsaved work waits on the leave question, and opens once it is answered", () => {
   const tab = mount({ shown: true });
   const asked: (() => void)[] = [];
-  act(() => void tab.control().leaveGuard.stand((leave) => asked.push(leave)));
+  act(() => void tab.control().placeLeave.stand((leave) => asked.push(leave)));
   act(() => tab.control().adminView.onOpen());
   assert.deepEqual(tab.adminOpens, [], "Admin waits on the question");
 

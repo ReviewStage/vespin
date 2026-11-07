@@ -135,6 +135,7 @@ import type { AutomationsRoute } from "./automations-route.js";
 import { liveStepTitle, type NamedStep } from "./history-titles.js";
 import type { InboxRoute } from "./inbox-route.js";
 import { workspaceMembersQuery } from "./live-reads.js";
+import type { PlaceLeave } from "./places/place-leave.js";
 import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import {
   type PlaceThere,
@@ -142,6 +143,7 @@ import {
   type RoutedPlace,
   routedPlaceOf,
   routedStepStands,
+  sameDraftAt,
   stepPlaceOf,
   tabSurface,
   useWindowPlace,
@@ -163,7 +165,7 @@ import { useRouteAccess } from "./route-gates.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
 import { useSteadyDoorSet, useSteadyDoors } from "./steady-door.js";
 import type { SidePanelTab } from "./tasks/use-side-panel.js";
-import type { InboxChoice, LeaveGuard, TasksControl } from "./tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "./use-surface-open.js";
 import type { VersionHistoryRoute } from "./version-history-route.js";
 import type { HomeRoute } from "./workspace-routes.js";
@@ -367,38 +369,6 @@ function pathOf(address: string): string {
   return new URL(address, "https://panel.invalid").pathname;
 }
 
-/** The step of an automation's address (`panel-router.tsx`), after its workspace's. */
-const AUTOMATION_STEP = "automation";
-
-/** The step of a task's address, after its workspace's, which its version history's stands under. */
-const TASK_STEP = "task";
-
-/** The steps of a task's version history's addresses, after its task's (`version-history-route.ts`). */
-const VERSION_STEPS: ReadonlySet<string | undefined> = new Set(["versions", "version"]);
-
-/**
- * Whether two places hold one draft: one page, or two routed steps of one
- * automation's, its setup, its runs, or a run, which share its editor and
- * what is written in it, since the path names the automation by its id
- * after the step of its own; or two of one task's version history, one
- * history however its versions are chosen.
- */
-function sameDraft(one: Place, other: Place): boolean {
-  if (samePage(one, other)) return true;
-  if (one.task !== undefined || other.task !== undefined) return false;
-  const mine = pathOf(one.address).split("/");
-  const theirs = pathOf(other.address).split("/");
-  const sameStart = (steps: number) =>
-    mine.slice(0, steps).every((step, at) => step === theirs[at]);
-  if (mine[2] === AUTOMATION_STEP) return mine[3] !== undefined && sameStart(4);
-  return (
-    mine[2] === TASK_STEP &&
-    VERSION_STEPS.has(mine[4]) &&
-    VERSION_STEPS.has(theirs[4]) &&
-    sameStart(4)
-  );
-}
-
 /**
  * The address the window is handed while it stands on no place, at which no
  * step is written: Home's while no workspace is listed (`ROUTED_PLACE.HOME`).
@@ -521,19 +491,24 @@ function awayFrom(trail: Trail, reachable: (place: Place) => boolean): number | 
 }
 
 /**
- * How a step to `to` asks: as the window's guard asks, unless it moves only
- * within the draft standing, between a narrow room's sub-steps or within one
- * automation, between its setup, its runs, and a run (`sameDraft`), which
- * leaves no page and so loses nothing written on it; that way out is taken as it is.
+ * How a step to `to` asks: as the window's leave guard asks up front, unless
+ * it moves only within the draft standing, between a narrow room's sub-steps
+ * or within one automation, between its setup, its runs, and a run
+ * (`sameDraft`), which leaves no page and so loses nothing written on it;
+ * that way out is taken as it is.
  */
 function asking(
-  latest: { readonly place: Place | undefined; readonly guard: LeaveGuard["guard"] },
+  latest: {
+    readonly place: Place | undefined;
+    readonly leaveFirst: PlaceLeave["transitionalLeaveFirst"];
+    readonly sameDraft: (one: Place, other: Place) => boolean;
+  },
   to: Place | undefined,
-): LeaveGuard["guard"] {
+): PlaceLeave["transitionalLeaveFirst"] {
   const { place } = latest;
-  return place !== undefined && to !== undefined && sameDraft(place, to)
+  return place !== undefined && to !== undefined && latest.sameDraft(place, to)
     ? (leave) => leave
-    : latest.guard;
+    : latest.leaveFirst;
 }
 
 /** Which kind of page a step stood on: a task's own, told by its task, or another routed place, told by its address. */
@@ -869,6 +844,14 @@ function standTrail(held: WindowTrail, next: Trail): void {
   for (const listener of [...held.listeners]) listener();
 }
 
+/**
+ * How the trail writes and moves the router's history: past the leave's
+ * blocker (`places/place-leave.ts`), because each write records a move the
+ * window already made, or one its ask already let go, so a blocker asking
+ * there would ask after the fact.
+ */
+const PAST_BLOCKER = { ignoreBlocker: true } as const;
+
 /** Runs what waits on the router's history, in order, until a move travels. */
 function drainTrail(held: WindowTrail): void {
   while (held.traveling === undefined) {
@@ -896,8 +879,8 @@ function writeThrough(
   inTurn(held, () => {
     held.writing = true;
     try {
-      if (kind === TRAIL_WRITE.PUSH) held.history.push(entry.address, { step });
-      else held.history.replace(entry.address, { step });
+      if (kind === TRAIL_WRITE.PUSH) held.history.push(entry.address, { step }, PAST_BLOCKER);
+      else held.history.replace(entry.address, { step }, PAST_BLOCKER);
     } finally {
       held.writing = false;
     }
@@ -1052,7 +1035,7 @@ function goAlong(held: WindowTrail, delta: number): void {
   inTurn(held, () => {
     held.traveling = target;
     held.history.flush();
-    held.history.go(delta);
+    held.history.go(delta, PAST_BLOCKER);
   });
   standTrail(held, { entries: held.trail.entries, at });
 }
@@ -1075,12 +1058,9 @@ function standingOf(trail: Trail): TrailEntry | undefined {
  * arrival records nothing and the steps ahead are kept. A step it cannot
  * reach is passed over the way the move went, as the window's own step
  * passes over one, and an entry holding no step at all is a page loaded
- * there, which opens on Home. Note that such a move has already happened
- * when the window hears it and cannot be refused, so while a page holds
- * unsaved work the trail is stood back on the window's step first, along
- * the trail or, where the trail no longer holds it, written again after
- * where the trail stands, and the move is made again only once the
- * developer says to leave. A window whose trail
+ * there, which opens on Home. Note that such a move has already asked
+ * before the window hears it, while a page holds unsaved work, because the
+ * leave's blocker holds the router's history (`places/place-leave.ts`). A window whose trail
  * already stands on a step when it first knows where it is, as a reloaded
  * tab's does, goes there rather than recording where it first stood.
  */
@@ -1095,7 +1075,9 @@ function useHistory(input: {
   named: (place: Place) => StepTitle | undefined;
   go: (place: Place) => void;
   /** Asks first, while a page holds unsaved work, before a step moves the trail at all. */
-  guard: LeaveGuard["guard"];
+  leaveFirst: PlaceLeave["transitionalLeaveFirst"];
+  /** Whether two places hold one draft, which a step between asks nothing for. */
+  sameDraft: (one: Place, other: Place) => boolean;
   /** How many times a door naming a thing opened it in the side panel (`SidePanelControl.opened`). */
   opened: number;
   /** Whether an address is on a task's own place. */
@@ -1112,14 +1094,31 @@ function useHistory(input: {
   /** Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`), answering whether the window held a step to write it after; it writes none where it holds none yet. */
   visit: (to: Place) => boolean;
 } {
-  const { held, place, address, reachable, named, guard, opened, onTaskRoute } = input;
+  const { held, place, address, reachable, named, leaveFirst, sameDraft, opened, onTaskRoute } =
+    input;
   // Note that the presses read the trail as they land, because a
   // key can land between a move and the render that shows it, and the latest
-  // `place`, `reachable`, `go`, and `guard` through a ref, so a press stays the same
+  // `place`, `reachable`, `go`, and the leave's ask through a ref, so a press stays the same
   // function across renders.
-  const latest = useRef({ place, reachable, go: input.go, guard, opened, onTaskRoute });
+  const latest = useRef({
+    place,
+    reachable,
+    go: input.go,
+    leaveFirst,
+    sameDraft,
+    opened,
+    onTaskRoute,
+  });
   useLayoutEffect(() => {
-    latest.current = { place, reachable, go: input.go, guard, opened, onTaskRoute };
+    latest.current = {
+      place,
+      reachable,
+      go: input.go,
+      leaveFirst,
+      sameDraft,
+      opened,
+      onTaskRoute,
+    };
   });
   // The list a narrow screen went up to with no step behind, which the next visit takes in place.
   const wentUp = useRef<Place | undefined>(undefined);
@@ -1222,7 +1221,7 @@ function useHistory(input: {
       if (was.address !== held.history.location.href) return;
       own(() => recordTrail(held, { kind: TRAIL_WRITE.PUSH, entry: was }));
     };
-    // The window following the trail where the router's history moved it, asking first, or standing it back on the window's step where it may not go.
+    // The window following the trail where the router's history moved it, or standing it back on the window's step where it may not go.
     const follow = (moved: Trail, was: TrailEntry) => {
       const from = moved.entries.indexOf(was);
       const arrived = standingOf(moved);
@@ -1242,23 +1241,16 @@ function useHistory(input: {
         back();
         return;
       }
-      let followed = false;
-      asking(
-        latest.current,
-        target?.state,
-      )(() => {
-        followed = true;
-        if (target === undefined) {
-          arriveNowhere(was);
-          return;
-        }
-        const now = held.trail;
-        const to = now.entries.indexOf(target);
-        if (to >= 0 && to !== now.at) own(() => goAlong(held, to - now.at));
-        else standing.current = target;
-        latest.current.go(target.state);
-      })();
-      if (!followed) back();
+      // Note that the router's own move asked already, as its blocker holds every move of its history while a page holds unsaved work.
+      if (target === undefined) {
+        arriveNowhere(was);
+        return;
+      }
+      const now = held.trail;
+      const to = now.entries.indexOf(target);
+      if (to >= 0 && to !== now.at) own(() => goAlong(held, to - now.at));
+      else standing.current = target;
+      latest.current.go(target.state);
     };
     return listenTo(held, () => {
       const moved = held.trail;
@@ -1421,7 +1413,7 @@ export function useWindowHistory(input: {
     | "workspace"
     | "automationsView"
     | "boardView"
-    | "leaveGuard"
+    | "placeLeave"
     | "sidePanel"
     | "mainTabs"
     | "activeTaskId"
@@ -1725,6 +1717,19 @@ export function useWindowHistory(input: {
     );
   };
   const named = (to: Place) => liveStepTitle(routedNamed(to), titleOf(to), tasks, members);
+  // Whether two places hold one draft: one page, or two steps of one routed place's draft, as its declaration says (`sameDraftAt`).
+  const sameDraft = useCallback(
+    (one: Place, other: Place) =>
+      samePage(one, other) ||
+      (!isTaskPlace(one) &&
+        !isTaskPlace(other) &&
+        sameDraftAt(
+          router.matchRoutes(pathOf(one.address)),
+          router.matchRoutes(pathOf(other.address)),
+          access,
+        )),
+    [router, access],
+  );
   // Whether an address is on a task's own place, whose entry the router wrote before the window wrote the task's step in it.
   const onTaskRoute = useCallback(
     (address: string) =>
@@ -1738,7 +1743,8 @@ export function useWindowHistory(input: {
     reachable,
     named,
     go,
-    guard: tasks.leaveGuard.guard,
+    leaveFirst: tasks.placeLeave.transitionalLeaveFirst,
+    sameDraft,
     opened: tasks.sidePanel.opened,
     onTaskRoute,
   });

@@ -25,6 +25,7 @@ import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
 import type { AutomationsRoute } from "../automations-route.js";
 import type { InboxRoute } from "../inbox-route.js";
+import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
 import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
 import {
@@ -381,6 +382,13 @@ export function agentHoldingsOf(
   }
   return [...held.values()];
 }
+
+/** A leave guard no page asks through, so every way out goes at once. */
+export const NO_LEAVE_ASK: PlaceLeave = {
+  stand: () => () => undefined,
+  pass: (leave) => leave(),
+  transitionalLeaveFirst: (leave) => leave,
+};
 
 /** Admin as a window not standing on it holds it, every door ignored. */
 export const ADMIN_AWAY: AdminViewControl = {
@@ -745,12 +753,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     deleteTask: taskDeleteMutation((taskId) => onDeleteTask(taskId)),
     deleteTasks: tasksDeleteMutation((taskId) => onDeleteTask(taskId)),
     back: () => false,
-    // No page asks before it is left, so every way out goes at once.
-    leaveGuard: {
-      stand: () => ignore,
-      pass: (leave) => leave(),
-      guard: (leave) => leave,
-    },
+    placeLeave: NO_LEAVE_ASK,
     ...overrides,
     inboxAgents: overrides.inboxAgents ?? agentHoldingsOf(overrides.inboxTaskless ?? []),
   };

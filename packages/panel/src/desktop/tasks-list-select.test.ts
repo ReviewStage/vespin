@@ -19,7 +19,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM } from "../shell-room.js";
-import { useLeaveGuard, useTasksTab } from "../tasks/use-tasks-tab.js";
+import { useTasksTab } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
@@ -33,6 +33,7 @@ import {
   HOME_AWAY,
   INBOX_AWAY,
   NO_ARRIVALS,
+  NO_LEAVE_ASK,
   PERSON_AWAY,
   TASK_AWAY,
   UNKNOWN_WORKSPACE_AWAY,
@@ -225,7 +226,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: () => undefined,
-      leaveGuard: useLeaveGuard(),
+      placeLeave: NO_LEAVE_ASK,
       room: SHELL_ROOM.WIDE,
       adminView: ADMIN_AWAY,
       boardView: BOARD_AWAY,
