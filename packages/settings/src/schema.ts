@@ -1,7 +1,13 @@
 import { isLinkOpen, LINK_OPEN, LINK_OPEN_LABEL, LINK_OPEN_LIST } from "@repo/features/link-open";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
-import { APP_SETTING_ID, isAppSettingId } from "@repo/wire/app-settings";
+import {
+  APP_SETTING_ID,
+  COMPLETION_SOUND,
+  COMPLETION_SOUND_LABEL,
+  COMPLETION_SOUNDS,
+  isAppSettingId,
+} from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
   AGENT_ENTER,
@@ -55,6 +61,7 @@ import {
   type SettingsVisibility,
 } from "./schema-types.js";
 import { isSetupPlaceJson } from "./setup-place.js";
+import { isSoundWhen, SOUND_WHEN, SOUND_WHEN_LABEL, SOUND_WHEN_LIST } from "./sound-when.js";
 import { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
 import { isZoomPercent, ZOOM_ACTUAL_SIZE, ZOOM_PERCENTS } from "./zoom.js";
 
@@ -340,6 +347,44 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: an agent reads the choice as its first session starts.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
+  }),
+  /*
+   * When a sound plays as an agent finishes, and which one. Account
+   * preferences, as Enter's choice is, each riding a part of the snapshot
+   * of its own. Note that neither row is drawn yet, since nothing plays a
+   * sound until the trigger that reads them lands.
+   */
+  soundWhen: choiceSetting({
+    field: "soundWhen",
+    id: APP_SETTING_ID.SOUND_WHEN,
+    label: "Play a sound",
+    values: SOUND_WHEN_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => SOUND_WHEN_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isSoundWhen),
+    default: SOUND_WHEN.OFF,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.SOUNDS,
+    order: 500,
+    // Nothing to run per write: an agent's finish reads the choice as it lands.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: () => false,
+  }),
+  completionSound: choiceSetting({
+    field: "completionSound",
+    id: APP_SETTING_ID.COMPLETION_SOUND,
+    label: "Sound",
+    values: COMPLETION_SOUNDS,
+    token: (sound) => sound,
+    optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    default: COMPLETION_SOUND.CHIME,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.SOUNDS,
+    order: 510,
+    // Nothing to run per write: an agent's finish reads the choice as it plays.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: () => false,
   }),
   /*
    * Whether the account finished its setup after sign-in, so setup stands

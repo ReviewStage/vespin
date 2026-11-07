@@ -14,7 +14,7 @@ import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, SOUND_WHEN } from "@repo/settings";
 import {
   HTTP_METHOD,
   isRecord,
@@ -22,6 +22,7 @@ import {
   unparsedWire,
   type WireBoundaryInput,
 } from "@repo/wire";
+import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -46,7 +47,9 @@ import { accountProcedures } from "./account-procedures.js";
  * shared part a build that predates it writes back whole, and refused where
  * it names no choice. The chapters model: Haiku until the account chooses,
  * written on its own and read back, and refused where it names no model the
- * set offers. The agent default: GPT-6.1 Sol at high effort for an account
+ * set offers. When and which sound plays as an agent finishes: none until
+ * the account chooses, each written on its own and read back, and refused
+ * where it names no choice. The agent default: GPT-6.1 Sol at high effort for an account
  * only an OpenAI key pays for until it stores one, an Effort kept on a model
  * no credential of the account's pays for, and a move to another such model
  * refused, keeping what stood. The bearer names the account and nothing else does.
@@ -252,6 +255,42 @@ it.layer(getTestDB())("the preferences snapshot's link part", (it) => {
         body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
       });
       assert.equal(partOf(yield* ask(request(owner)), "linkOpen"), LINK_OPEN.MAC_APP);
+    }),
+  );
+});
+
+it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
+  it.effect("are absent until the account chooses, and a choice written is the one read back", () =>
+    Effect.gen(function* () {
+      const { owner, other, ask } = yield* openAccounts;
+      assert.equal(partOf(yield* ask(request(owner)), "soundWhen"), undefined);
+      assert.equal(partOf(yield* ask(request(owner)), "completionSound"), undefined);
+
+      yield* ask(request(owner, { soundWhen: SOUND_WHEN.BACKGROUND }));
+      const chosen = yield* ask(request(owner, { completionSound: COMPLETION_SOUND.QUACK }));
+      assert.equal(partOf(chosen, "soundWhen"), SOUND_WHEN.BACKGROUND);
+      assert.equal(partOf(chosen, "completionSound"), COMPLETION_SOUND.QUACK);
+      assert.equal(partOf(chosen, "updatedAt"), undefined);
+      assert.equal(partOf(yield* ask(request(other)), "soundWhen"), undefined);
+      assert.equal(partOf(yield* ask(request(other)), "completionSound"), undefined);
+    }),
+  );
+
+  it.effect("refuses a part naming no choice, and keeps what stood", () =>
+    Effect.gen(function* () {
+      const { owner, ask } = yield* openAccounts;
+      yield* ask(
+        request(owner, { soundWhen: SOUND_WHEN.ALWAYS, completionSound: COMPLETION_SOUND.BELL }),
+      );
+      for (const refused of [{ soundWhen: "sometimes" }, { completionSound: "kazoo" }]) {
+        assert.deepEqual(yield* ask(request(owner, refused)), {
+          status: HOSTED_HTTP_STATUS.BAD_REQUEST,
+          body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
+        });
+      }
+      const kept = yield* ask(request(owner));
+      assert.equal(partOf(kept, "soundWhen"), SOUND_WHEN.ALWAYS);
+      assert.equal(partOf(kept, "completionSound"), COMPLETION_SOUND.BELL);
     }),
   );
 });

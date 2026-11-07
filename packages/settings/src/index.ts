@@ -105,6 +105,13 @@ export {
   setupPlaceFrom,
   setupPlaceStored,
 } from "./setup-place.js";
+export {
+  isSoundWhen,
+  SOUND_WHEN,
+  SOUND_WHEN_LABEL,
+  SOUND_WHEN_LIST,
+  type SoundWhen,
+} from "./sound-when.js";
 export { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
 export {
   isZoomPercent,

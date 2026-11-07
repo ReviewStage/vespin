@@ -21,6 +21,7 @@ import {
   type ExperimentChoices,
   MAC_COMMAND_MODE,
   SETTINGS_RESET_SCOPE,
+  SOUND_WHEN,
   snapshotAccountPreferences,
   THEME,
 } from "@repo/settings";
@@ -38,6 +39,7 @@ import {
   type SettingsUpdateResult,
 } from "@repo/settings/wire";
 import { isRecord, unparsedWire } from "@repo/wire";
+import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { Context, Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
@@ -198,6 +200,10 @@ const SAMPLE_VALUE = {
   setupFinished: true,
   // Not yet started is the default, so a place midway through a team's setup is the state that has to survive a reopen.
   setupPlace: '{"audience":"team","at":2,"team":"workspace-ada"}',
+  // Off is the default, so playing in the background is the choice that has to survive a reopen.
+  soundWhen: SOUND_WHEN.BACKGROUND,
+  // The chime is the default, so another sound is the choice that has to survive a reopen.
+  completionSound: COMPLETION_SOUND.QUACK,
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,

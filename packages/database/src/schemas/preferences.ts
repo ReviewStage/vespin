@@ -1,7 +1,8 @@
 import type { AgentMachineKind, ContextWindow } from "@repo/features/agent-wire";
 import type { ChaptersPick } from "@repo/features/chapters-model-choice";
 import type { LinkOpen } from "@repo/features/link-open";
-import type { AgentEnter, CommitAuthor, ExperimentChoices } from "@repo/settings";
+import type { AgentEnter, CommitAuthor, ExperimentChoices, SoundWhen } from "@repo/settings";
+import type { CompletionSound } from "@repo/wire/app-settings";
 import { boolean, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
@@ -53,6 +54,19 @@ export const accountPreference = pgTable("account_preference", {
    * the link choice is.
    */
   setupPlace: text("setup_place"),
+  /**
+   * When a sound plays as an agent finishes (`@repo/settings`'s
+   * `SOUND_WHEN`): never, while the app is in the background, or always;
+   * null until the account chooses, which reads as never. A part of the
+   * snapshot of its own, as the link choice is, for the same reason.
+   */
+  soundWhen: text("sound_when").$type<SoundWhen>(),
+  /**
+   * Which sound plays as an agent finishes (`@repo/wire/app-settings`'s
+   * `COMPLETION_SOUND`); null until the account chooses, which reads as the
+   * chime. A part of the snapshot of its own, as the link choice is.
+   */
+  completionSound: text("completion_sound").$type<CompletionSound>(),
   /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both

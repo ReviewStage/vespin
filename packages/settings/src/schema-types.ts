@@ -70,6 +70,8 @@ export const SETTING_SECTION = {
   COMPOSER: "composer",
   /** Who authors an agent's commits, a group of its own on Account, under the message box. */
   COMMITS: "commits",
+  /** Whether and which sound plays as an agent finishes, a group of its own on Account, under Commits. */
+  SOUNDS: "sounds",
 } as const;
 
 export type SettingSection = (typeof SETTING_SECTION)[keyof typeof SETTING_SECTION];
