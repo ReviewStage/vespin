@@ -3530,7 +3530,7 @@ async function onInbox(
   return tab;
 }
 
-/** What a press leaves the window on: its address and steps, the task bound and asked for, the place standing, and the tab shown. */
+/** What a press leaves the window on: its address and steps, the task bound and asked for, the place standing, the tab shown, and the section asked into view. */
 function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
   const control = tab.control();
   return {
@@ -3543,6 +3543,10 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
     automations: control.automationsView.open,
     tab: control.mainTabs.tab,
     side: control.sidePanel.open ? control.sidePanel.tab : undefined,
+    section:
+      control.sectionReveal === undefined
+        ? undefined
+        : { taskId: control.sectionReveal.taskId, anchor: control.sectionReveal.reveal.anchor },
     pin: control.chosenPin,
   };
 }
@@ -3597,6 +3601,25 @@ test.each(TAB_DOORS)(
   "%s over an automation holding unsaved work, which the task opens under, asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
   async (_door, press) => askedOver(press, (control) => control.automationsView.onOpen()),
 );
+
+test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
+  const tab = await onInbox();
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  await settle();
+  act(() =>
+    tab
+      .control()
+      .onShowMention({ kind: MENTION_KIND.SECTION, taskId: BILLING.id, anchor: "rollout" }),
+  );
+  await settle();
+  const asked = windowOf(tab).section;
+  act(() => asks[0]?.());
+  await settle();
+
+  assert.equal(asked, undefined, "nothing is asked into view while the leave is asked");
+  assert.deepEqual(windowOf(tab).section, { taskId: BILLING.id, anchor: "rollout" });
+});
 
 /** A press made with no ask standing over `away`'s place, and again with one standing, kept with Cancel and let go with Leave. */
 async function askedOver(
