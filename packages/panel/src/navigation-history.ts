@@ -95,18 +95,22 @@
  * to the other takes the step standing in place. Going to a step stands its
  * sub-step from the step alone, so a move the history makes by itself, as a
  * browser's Back does, lands on the screen the step was. The screens' own
- * ways back to their lists step back where the list is the step behind, and
- * otherwise take the step standing in place, as a link opened on an item
- * leaves no list behind it to go back to. The side panel's ways out do the
- * same, so shutting a panel opened over the plan steps back to the plan
- * rather than adding a step that Back would open the panel again from. A
+ * ways back to their lists, the side panel's ways out among them, are each
+ * place's own (`places/narrow-backs.ts`), which read this history through
+ * `behind`: a step back where the list is the step behind, and otherwise
+ * the list taking the step standing in place, which a list a narrow screen
+ * went up to takes (`upTo`), so shutting a panel opened over the plan steps
+ * back to the plan rather than adding a step that Back would open the panel
+ * again from. A
  * step between two such panes of one page leaves no page, so it never asks
  * first, as leaving an automation with unsaved changes does. A phone's way
  * out of a task goes back past all of the task's own steps at once, to the
  * nearest step on another page, the list it was opened from, and is named
- * as that step is (`WindowHistory`'s `away` and `onLeave`). A phone has no
- * Home: where the window would stand on it, the Inbox's list takes its step
- * in place, so a phone opens on the Inbox and Back never lands on Home.
+ * as that step is (`WindowHistory`'s `away` and `onLeave`). A place a
+ * narrow room stands another in the place of stands it as its declaration
+ * says (`narrowInstead`): a phone has no Home, so where the window would
+ * stand on it, the Inbox's list takes its step in place, so a phone opens on
+ * the Inbox and Back never lands on Home.
  */
 
 import {
@@ -117,8 +121,7 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
-import { type StripTab, sameTab, tabKey, taggedStripTab } from "@repo/ui/tab-strip-model";
-import { TASKS_PAGE } from "@repo/ui/tasks-model";
+import { type StripTab, tabKey, taggedStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { type HistoryLocation, type RouterHistory, useRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
@@ -135,6 +138,7 @@ import type { AutomationsRoute } from "./automations-route.js";
 import { liveStepTitle, type NamedStep } from "./history-titles.js";
 import type { InboxRoute } from "./inbox-route.js";
 import { workspaceMembersQuery } from "./live-reads.js";
+import type { BackStep, StepsBehind } from "./places/narrow-backs.js";
 import type { PlaceLeave } from "./places/place-leave.js";
 import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import {
@@ -163,8 +167,7 @@ import {
 } from "./places/task-step.js";
 import { useRouteAccess } from "./route-gates.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
-import { useSteadyDoorSet, useSteadyDoors } from "./steady-door.js";
-import type { SidePanelTab } from "./tasks/use-side-panel.js";
+import { useSteadyDoors } from "./steady-door.js";
 import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "./use-surface-open.js";
 import type { VersionHistoryRoute } from "./version-history-route.js";
@@ -585,25 +588,6 @@ function listedSteps(
   return listed;
 }
 
-/**
- * The ways back from a narrow screen's item to its list, through the
- * history: a step back where the list is the step behind, else the list
- * taking the item's step in place. A wide room holds no such step, so there
- * each only stands the list.
- */
-export interface ListBacks {
-  readonly settings: () => void;
-  readonly versions: () => void;
-  /** Stands an automation's setup again from its runs. */
-  readonly runs: () => void;
-  /** Chooses no item in the Inbox, which stands its list alone where it shows one column. */
-  readonly inbox: () => void;
-  /** Shuts the side panel standing over the plan, the whole pane. */
-  readonly panel: () => void;
-  /** Leaves the open task for the step behind it, or, where none stands behind it, for Home. */
-  readonly task: () => void;
-}
-
 /** The step a page's way out goes back to, the nearest behind it on another page, as Back's list names it. */
 export interface AwayStep {
   readonly title: StepTitle | undefined;
@@ -689,6 +673,11 @@ export interface WindowHistory extends NavigationHistory {
   onLeave: () => void;
 }
 
+/** The history as the narrow rooms' ways back read it (`places/narrow-backs.ts`), which the root hands the window's routed exits. */
+export interface HistoryBehind {
+  behind: StepsBehind;
+}
+
 /** The window's door for a link's step on a task's own place, which the root hands the Tasks tab. */
 export interface TaskVisits {
   /**
@@ -700,49 +689,6 @@ export interface TaskVisits {
    * writes none, and the door goes to the task as any other door does.
    */
   onVisitTask: (at: TaskAt, step: LinkStep) => boolean;
-}
-
-/** The window's history with the narrow screens' ways back to their lists, which the root hands the screens. */
-export interface WindowHistoryLists extends WindowHistory {
-  readonly lists: ListBacks;
-}
-
-/**
- * The Tasks tab with its screens' ways back to their lists through the
- * history, as the shell draws them. A side panel standing only full screen,
- * a narrow room's, is shut the same way by each of its ways out: its
- * toggle, which reads Close panel, leaving full screen, the window's Escape,
- * and closing the last tab its strip draws, which closes the tab as ever and
- * then shuts the panel through the history rather than as a step of its own.
- * The window's Escape on an open task, past a panel filling the window, is
- * the toolbar's Back: one step back, to the page the task was opened from,
- * and the task is left as ever only where no step stands behind it.
- */
-export function throughHistory(tasks: TasksControl, lists: ListBacks): TasksControl {
-  const { sidePanel } = tasks;
-  const shutsWhole = sidePanel.fullScreenOnly;
-  const onClose = (tab: SidePanelTab) => {
-    const last = sidePanel.strip.length === 1 && sidePanel.strip.some((one) => sameTab(one, tab));
-    sidePanel.onClose(tab);
-    if (last) lists.panel();
-  };
-  return {
-    ...tasks,
-    sidePanel: shutsWhole
-      ? { ...sidePanel, onToggle: lists.panel, onToggleFullScreen: lists.panel, onClose }
-      : sidePanel,
-    back: () => {
-      if (tasks.page !== TASKS_PAGE.DOCUMENT || (!shutsWhole && sidePanel.fullScreen)) {
-        return tasks.back();
-      }
-      if (shutsWhole) lists.panel();
-      else lists.task();
-      return true;
-    },
-    history: { ...tasks.history, onList: lists.versions },
-    inboxView: { ...tasks.inboxView, onClear: lists.inbox },
-    onAutomationRuns: (shown) => (shown ? tasks.onAutomationRuns(true) : lists.runs()),
-  };
 }
 
 /**
@@ -1380,16 +1326,12 @@ export function useWindowHistory(input: {
   title?: StepTitle | undefined;
   /** The routed place the router stands the window on, Settings or Admin; none while the window's state says where it stands. */
   routed: RoutedStanding | undefined;
-  /** The address of Settings' page list, while Settings stands. */
-  settingsList: string | undefined;
-  /** Stands Settings on its page list, in the page's place. */
-  onSettingsList: () => void;
-  /** What the history reads of the Automations pages beyond where they stand: the automations deleted, and an automation's setup under its runs (`automations-route.ts`). */
-  automations: Pick<AutomationsRoute, "deletedNow" | "setupAddress">;
-  /** What the history reads of a version history beyond where it stands, the list under a narrow room's version, and its way out to its task (`version-history-route.ts`). */
-  versionHistory: Pick<VersionHistoryRoute, "listAddress" | "onClose">;
-  /** What the history reads of the Inbox beyond where it stands: the list under its item, the item chosen, and the doors that stand its list (`inbox-route.ts`). */
-  inbox: Pick<InboxRoute, "open" | "listAddress" | "chosen" | "choiceOf" | "onOpen" | "onClear">;
+  /** What the history reads of the Automations pages beyond where they stand: the automations deleted (`automations-route.ts`). */
+  automations: Pick<AutomationsRoute, "deletedNow">;
+  /** What the history reads of a version history beyond where it stands: its way out to its task (`version-history-route.ts`). */
+  versionHistory: Pick<VersionHistoryRoute, "onClose">;
+  /** What the history reads of the Inbox beyond where it stands: the item chosen, and the door that stands its list (`inbox-route.ts`). */
+  inbox: Pick<InboxRoute, "open" | "chosen" | "choiceOf" | "onOpen">;
   /** Home as the router stands it, which a routed place left with no task bound opens (`workspace-routes.ts`). */
   home: Pick<HomeRoute, "onOpen">;
   /** The room the panel's stage gives, narrow where it shows one pane at a time. */
@@ -1406,7 +1348,6 @@ export function useWindowHistory(input: {
     | "signedIn"
     | "agentView"
     | "workspace"
-    | "onAutomationRuns"
     | "placeLeave"
     | "sidePanel"
     | "mainTabs"
@@ -1416,7 +1357,7 @@ export function useWindowHistory(input: {
     | "pages"
     | "workspaces"
   >;
-}): WindowHistoryLists & TaskVisits {
+}): WindowHistory & TaskVisits & HistoryBehind {
   const { tasks } = input;
   // The routed place standing over the task's own place, none on the task's own place itself, which the window stands as the task bound for.
   const routed = input.routed?.place === ROUTED_PLACE.TASK ? undefined : input.routed;
@@ -1742,72 +1683,25 @@ export function useWindowHistory(input: {
     opened: tasks.sidePanel.opened,
     onTaskRoute,
   });
-  // A phone has no Home: wherever the window would stand on it, it stands on
-  // the Inbox's list (`mobile-bar.tsx`), which takes Home's step in place, so
-  // Back never lands on a Home that would only leave again.
-  const homeOnPhone =
-    narrow &&
-    tasks.signedIn &&
-    untitled !== undefined &&
-    !isTaskPlace(untitled) &&
-    routed?.place === ROUTED_PLACE.HOME;
+  // A place a narrow room stands another in the place of, as a phone has no Home, stands that one as its declaration says.
+  const instead =
+    narrow && tasks.signedIn && untitled !== undefined && !isTaskPlace(untitled)
+      ? routed?.place.narrowInstead
+      : undefined;
   const phoneWorkspace = tasks.workspace;
   const openInbox = inbox.onOpen;
   useEffect(() => {
-    if (!homeOnPhone || phoneWorkspace === undefined) return;
-    const workspace = phoneWorkspace.slug ?? phoneWorkspace.id;
-    openInbox({ workspace, narrowed: undefined }, true);
-  }, [homeOnPhone, phoneWorkspace, openInbox]);
-  // Note that only a narrow room holds a list as a step of its own, so a wide one only stands it.
-  const up = (to: Place, stand: () => void) => (narrow ? upTo(to, stand) : stand());
-  // Note that the history is handed back steady, its ways back among it, so the screens it is handed hold while nothing they read moves.
-  const { settingsList, onSettingsList, versionHistory } = input;
-  const lists = useSteadyDoorSet<ListBacks>({
-    // Note that a narrow room's page of Settings is a step after its list, which a wide room's turns in place.
-    settings: () => {
-      const list = settingsList === undefined ? undefined : routedPlace(settingsList);
-      if (!narrow || list === undefined || !backTo(list)) onSettingsList();
-    },
-    // Note that a narrow room's version is a step after the versions, as a page of Settings is after its list.
-    versions: () => {
-      const { listAddress } = versionHistory;
-      const list = listAddress === undefined ? undefined : routedPlace(listAddress);
-      if (!narrow || list === undefined || !backTo(list)) tasks.history.onList();
-    },
-    // Note that an automation's runs alone are a narrow room's step after its setup, as a page of Settings is after its list.
-    runs: () => {
-      const setup =
-        automations.setupAddress === undefined ? undefined : routedPlace(automations.setupAddress);
-      if (!narrow || setup === undefined || !backTo(setup)) tasks.onAutomationRuns(false);
-    },
-    // Note that an Inbox item is a step after the list it was chosen in, in every room, as its address is its own.
-    inbox: () => {
-      const list = inbox.listAddress === undefined ? undefined : routedPlace(inbox.listAddress);
-      if (list === undefined || !backTo(list)) inbox.onClear();
-    },
-    panel: () => {
-      const shut = () => tasks.sidePanel.onSetOpen(false);
-      // Note that a phone's panel a link opened over an Inbox item or an agent's page steps back to it shut, where that is the step behind.
-      if (
-        untitled !== undefined &&
-        !isTaskPlace(untitled) &&
-        (inboxOpen || pageAgent !== undefined)
-      ) {
-        if (!narrow || !backTo({ ...untitled, side: null })) shut();
-        return;
-      }
-      if (boundFor === undefined) {
-        shut();
-        return;
-      }
-      const plan = { taskId: boundFor, panel: { open: false, tab: undefined } };
-      up(taskPlace(taskAddress ?? NO_LINK_ADDRESS, plan), shut);
-    },
-    // Note that a task with no step behind it, as one a reloaded tab or a link loaded, is left as ever.
-    task: () => {
-      if (!stepBack()) tasks.onLeaveTask();
-    },
-  });
+    if (instead === undefined || phoneWorkspace === undefined) return;
+    instead({ workspace: phoneWorkspace.slug ?? phoneWorkspace.id, openInbox });
+  }, [instead, phoneWorkspace, openInbox]);
+  // A step a way back names, as the history holds it: a task's at the address its own place stands at, since its step is told by its task.
+  const placeOf = (to: BackStep): Place => {
+    if ("task" in to) return taskPlace(taskAddress ?? NO_LINK_ADDRESS, to.task);
+    return to.side === undefined
+      ? routedPlace(to.address)
+      : { ...routedPlace(to.address), side: to.side };
+  };
+  const { versionHistory } = input;
   return useSteadyDoors({
     ...history,
     onLeaveRouted: () => {
@@ -1843,7 +1737,11 @@ export function useWindowHistory(input: {
       if (wrote) setLinked({ taskId: step.taskId, address });
       return wrote;
     },
-    lists,
+    behind: {
+      backTo: (to) => backTo(placeOf(to)),
+      upTo: (to, stand) => upTo(placeOf(to), stand),
+      stepBack,
+    },
   });
 }
 

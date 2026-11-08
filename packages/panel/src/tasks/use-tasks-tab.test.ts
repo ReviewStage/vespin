@@ -74,10 +74,11 @@ import { type AutomationsRoute, useAutomationsRoute } from "../automations-route
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import {
+  type HistoryBehind,
   type TaskVisits,
   useRoutedStanding,
   useWindowHistory,
-  type WindowHistoryLists,
+  type WindowHistory,
 } from "../navigation-history.js";
 import {
   installPanelSpanRecorder,
@@ -345,7 +346,7 @@ function mount(
     ...initial,
   };
   handDescriptions(standing.descriptions);
-  let windowHistory: (WindowHistoryLists & TaskVisits) | undefined;
+  let windowHistory: (WindowHistory & TaskVisits & HistoryBehind) | undefined;
   if (standing.history) {
     fakeAppPlatform(QUIET_PANEL);
   }
@@ -373,8 +374,6 @@ function mount(
       known: true,
       link: placed,
       routed,
-      settingsList: undefined,
-      onSettingsList: () => undefined,
       automations,
       versionHistory,
       inbox,
@@ -382,6 +381,8 @@ function mount(
       room,
       tasks,
     });
+    // The ways back read the history, as the window's root hands it its routed exits.
+    useRoutedExits().behind = windowHistory.behind;
     return null;
   }
   /** An act-port kind's answer as the test gives it, recorded, or a rejection where it gives none. */

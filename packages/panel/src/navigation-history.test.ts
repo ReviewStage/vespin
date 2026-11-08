@@ -19,16 +19,17 @@ import { stepTitle } from "./history-titles.js";
 import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
 import { useCopyLink } from "./links-at-hand.js";
 import {
+  type HistoryBehind,
   MOUSE_BUTTON,
   type StepTitle,
   sameHistoryPage,
   savesStep,
-  throughHistory,
   useHistoryMouseButtons,
   useRoutedStanding,
   useWindowHistory,
-  type WindowHistoryLists,
+  type WindowHistory,
 } from "./navigation-history.js";
+import { type NarrowBacks, useNarrowBacks } from "./places/narrow-backs.js";
 import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-leave.js";
 import { useRoutedExits } from "./places/routed-exits.js";
@@ -99,8 +100,9 @@ function mount(
     views: RoutedViews,
   ) => StepTitle | undefined,
 ) {
-  let history: WindowHistoryLists | undefined;
-  let shown: TasksControl | undefined;
+  let history: (WindowHistory & HistoryBehind) | undefined;
+  let open: TasksControl | undefined;
+  let backs: NarrowBacks | undefined;
   let restand: ((tasks: TasksControl) => void) | undefined;
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
@@ -189,8 +191,6 @@ function mount(
       known: true,
       link: copyLink.placed,
       routed,
-      settingsList: undefined,
-      onSettingsList: () => undefined,
       automations,
       versionHistory: versions,
       inbox,
@@ -211,9 +211,11 @@ function mount(
       onToBound: () => history?.onLeaveRouted(),
       onToUnbound: home.onOpen,
     });
+    // The ways back read the window's history, as the window's root hands it its routed exits.
+    exits.behind = history.behind;
     useHistoryMouseButtons(history, true);
-    // The Tasks tab as the shell hands it on, its Escape through the history.
-    shown = throughHistory(tasks, history.lists);
+    open = tasks;
+    backs = useNarrowBacks(false);
     return null;
   }
   // The Inbox `tasks` says stands, open or not and on the item it names, stood by the router as its own doors stand it.
@@ -271,7 +273,7 @@ function mount(
     /** Opens the version history of the task named `task` under `workspace` by the router, as its doors do. */
     openVersions: (workspace: string, task: string) => act(() => versions?.onOpen(workspace, task)),
     /** Stands the automation's runs alone, or its setup again, as its Runs and its way back do. */
-    automationRuns: (runs: boolean) => act(() => shown?.onAutomationRuns(runs)),
+    automationRuns: (runs: boolean) => act(() => automations?.onRuns(runs)),
     /** The name the person's page standing was opened with. */
     personName: () => person?.name,
     /** Leaves the routed place standing for `tasks`, the place a door into the window's state opens, in one move as the door makes it. */
@@ -284,8 +286,11 @@ function mount(
     at: () => held.history.location.pathname,
     /** Opens an Admin view by the router, as Admin's own doors do. */
     openAdmin: (view: AdminView) => act(() => admin?.onOpen(view)),
-    /** Presses Escape where it reaches the Tasks tab, as the window's own listener hands it on. */
-    escape: () => act(() => void shown?.back()),
+    /** Presses Escape on the open task, which takes the task's way out (`places/narrow-backs.ts`). */
+    escape: () =>
+      act(() => {
+        if (open !== undefined) backs?.task(open.onLeaveTask);
+      }),
     /** The address of every entry the router's history holds, oldest first. */
     addresses: () => held.addresses(),
     /** Moves the history by itself, as a browser's Back and Forward do, never through the window. */

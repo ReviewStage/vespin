@@ -162,10 +162,11 @@ import {
   routedLinkOf,
 } from "../places/link-places.js";
 import type { LinkRead } from "../places/link-reads.js";
+import { useNarrowBacks } from "../places/narrow-backs.js";
 import { PLACE_BINDING, useTaskAsk } from "../places/place-binding.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import { versionHistoryAddressOf } from "../places/routed-doors.js";
-import type { RoutedPlace } from "../places/routed-places.js";
+import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import type { RenameShape } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -318,9 +319,9 @@ export type InboxChoice =
  */
 interface InboxViewControl {
   /**
-   * Chooses no item, which stands the list alone where the Inbox shows one column. Its route's own move, unasked
-   * (`inbox-route.ts`); this is the tab's so the window's history can take the way back to the list
-   * (`navigation-history.ts`'s `throughHistory`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
+   * Goes back from the item chosen to its list, which stands the list alone where the Inbox shows one column: a step
+   * back where the list is the step behind, else its route's own move, unasked (`inbox-route.ts`), standing the list in
+   * the item's step (`places/narrow-backs.ts`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
    * and where it stands, what is chosen in it, and its narrowing are read through `useInboxView`.
    */
   readonly onClear: () => void;
@@ -691,9 +692,9 @@ export interface TasksControl {
    */
   onOpenPerson: (userId: string, name?: string, workspaceId?: string) => void;
   /**
-   * Stands an automation's page's runs alone, or its setup again; it leaves no page, so it asks nothing. Its pages stand,
-   * open, and are left through their route (`places/routed-doors.ts`); this is the tab's so the window's history can take
-   * the way back from the runs (`navigation-history.ts`'s `throughHistory`).
+   * Stands an automation's page's runs alone, or its setup again, a narrow room's by a step back where the setup is the
+   * step behind (`places/narrow-backs.ts`); it leaves no page, so it asks nothing. Its pages stand, open, and are left
+   * through their route (`places/routed-doors.ts`).
    */
   onAutomationRuns: (shown: boolean) => void;
   /** Whether Home stands, the page of no task bound, which only its own route draws (`ROUTED_PLACE.HOME`), with no task still bound there. */
@@ -878,11 +879,11 @@ export interface TasksControl {
   /** Several deletes at once, as a selection's question holds its own mutation over them. */
   deleteTasks: TasksDeleteMutation;
   /**
-   * Steps back one layer, answering whether there was one to step back from:
-   * a side panel filling the window back beside the document, else an open
-   * task left for the page the window rests on. The window's Escape takes an open task back
-   * through its history instead (`navigation-history.ts`'s `throughHistory`),
-   * to the page it was opened from.
+   * Steps back one layer, the window's Escape, answering whether there was one
+   * to step back from: a side panel filling the window back beside the
+   * document, or a narrow room's shut by its way back, else an open task
+   * left by a step back to the page it was opened from, or where none stands
+   * behind it for the page the window rests on (`places/narrow-backs.ts`).
    */
   back: () => boolean;
   /** The window's one ask before leaving a page whose unsaved work would be lost (`places/place-leave.ts`). */
@@ -1353,6 +1354,8 @@ export function useTasksTab(input: {
   const narrowRoom = input.room === SHELL_ROOM.NARROW;
   const historyRoute = useVersionHistoryRoute({ narrow: narrowRoom });
   const routedInbox = useInboxRoute();
+  // Each place's way back from a pane a narrow room stands over another, as its declaration says.
+  const backs = useNarrowBacks(narrowRoom);
   const routedBoard = useBoardRoute();
   const routedPerson = usePersonRoute();
   const routedAutomations = useAutomationsRoute({ narrow: narrowRoom });
@@ -4269,6 +4272,29 @@ export function useTasksTab(input: {
     return true;
   }, [leaveTask, page, sidePanel.fullScreen, sidePanel.onToggleFullScreen]);
 
+  // A side panel standing only full screen, a narrow room's, is a pane over the page it stands on, so each of its ways
+  // out takes the pane's way back (`places/narrow-backs.ts`): its toggle, which reads Close panel, leaving full screen,
+  // and closing the last tab its strip draws, which closes the tab as ever and then shuts the panel by the way back.
+  const shutsWhole = sidePanel.fullScreenOnly;
+  const paneOver = { routed: routedInbox.open || agentView !== undefined, taskId: boundFor };
+  const paneBack = () => backs.pane(paneOver, () => sidePanel.onSetOpen(false));
+  const closePane = (tab: SidePanelTab) => {
+    const last = sidePanel.strip.length === 1 && sidePanel.strip.some((one) => sameTab(one, tab));
+    closeSidePanelTab(tab);
+    if (last) paneBack();
+  };
+  const panelWays = shutsWhole
+    ? { onToggle: paneBack, onToggleFullScreen: paneBack, onClose: closePane }
+    : { onToggle: toggleSidePanel, onClose: closeSidePanelTab };
+  // The window's Escape on an open task, past a panel filling the window, is the toolbar's Back: one step back, to the
+  // page the task was opened from, and the task is left as ever only where no step stands behind it.
+  const escapeTask = (): boolean => {
+    if (page !== TASKS_PAGE.DOCUMENT || (!shutsWhole && sidePanel.fullScreen)) return back();
+    if (shutsWhole) paneBack();
+    else backs.task(leaveTask);
+    return true;
+  };
+
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
   // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
@@ -4331,11 +4357,17 @@ export function useTasksTab(input: {
     copy: { onPress: pressCopy },
     descriptionEdit,
     mainTabs: { ...mainTabs, onClose: closeColumnTab },
-    sidePanel: { ...sidePanel, onClose: closeSidePanelTab, onToggle: toggleSidePanel },
+    sidePanel: { ...sidePanel, ...panelWays },
     unreadTabs,
     pages: taskPages,
     agents,
-    history: { ...history, open: historyOpen },
+    // A narrow room's version is a step after the versions, which its way back steps back to (`places/narrow-backs.ts`).
+    history: {
+      ...history,
+      open: historyOpen,
+      onList: () =>
+        backs.list(ROUTED_PLACE.VERSION_HISTORY, historyRoute.listAddress, history.onList),
+    },
     // The history takes the window from whatever stood, its move asking first while a page holds unsaved work; with
     // descriptions off, its task's Overview stands in its place, as a tab of the task does.
     onOpenHistory: (taskId: string, save?: number) => {
@@ -4382,7 +4414,8 @@ export function useTasksTab(input: {
     onThreadsShown: setThreadsShown,
     // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {
-      onClear: routedInbox.onClear,
+      // Note that an item is a step after the list it was chosen in, which its way back steps back to (`places/narrow-backs.ts`).
+      onClear: () => backs.list(ROUTED_PLACE.INBOX, routedInbox.listAddress, routedInbox.onClear),
       single: inboxView !== undefined && inboxSingle,
       onSingle: setInboxSingle,
       pages: inboxPages,
@@ -4406,7 +4439,14 @@ export function useTasksTab(input: {
           : viewed.workspaces.find((each) => each.id === workspaceId),
       );
     },
-    onAutomationRuns: routedAutomations.onRuns,
+    // Note that a narrow room's runs alone are a step after the setup, which their way back steps back to (`places/narrow-backs.ts`).
+    onAutomationRuns: (shown: boolean) => {
+      if (shown) routedAutomations.onRuns(true);
+      else {
+        const setup = () => routedAutomations.onRuns(false);
+        backs.list(ROUTED_PLACE.AUTOMATIONS, routedAutomations.setupAddress, setup);
+      }
+    },
     onShowFile: showFile,
     // A version's Open lands where its writer wrote it: an agent's tab.
     onShowSource: (taskId, source) => arriveAt(taskId, () => showSource(taskId, source)),
@@ -4544,7 +4584,7 @@ export function useTasksTab(input: {
     onDeleteTask: deleteTask,
     deleteTask: deleteTaskOptions,
     deleteTasks: tasksDeleteMutation(sendDeleteTask),
-    back,
+    back: escapeTask,
     placeLeave,
   });
 }

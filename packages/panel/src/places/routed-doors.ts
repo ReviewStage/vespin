@@ -13,8 +13,8 @@
  * Admin's close and read ahead are its route's own, unasked, as they have
  * always been, and so are the moves within the Inbox standing: choosing a
  * row's item and widening its list. Going back to the Inbox's list from its
- * item is the tab's (`TasksControl.inboxView.onClear`), so the window's
- * history can take that way back (`navigation-history.ts`'s `throughHistory`).
+ * item is the tab's (`TasksControl.inboxView.onClear`), which takes the
+ * Inbox's way back through the window's history (`narrow-backs.ts`).
  * A version history's close and read ahead are its route's own, unasked, as
  * they have always been; opening one opens its task under it and seeks the
  * version a save made, which only the Tasks tab can, so that door is the

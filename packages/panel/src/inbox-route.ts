@@ -9,7 +9,7 @@
  * way back to that list finds it narrowed again. Opening it, narrowing or
  * widening it, and choosing an item are each a visit; going back to the
  * list from an item, which the window's history steps back to where it
- * stands behind (`navigation-history.ts`'s `lists.inbox`), and another
+ * stands behind (`places/narrow-backs.ts`), and another
  * workspace listed under it, take the step in place.
  *
  * An address names an item by its id alone. Where it stands, on a task or

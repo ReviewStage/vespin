@@ -5,8 +5,8 @@
  * (`panel-router.tsx`), but the window asks more of it than the router
  * does: whether Back and Forward may reach it, whether it stands over the
  * plan's place, what its step is called, which links Copy link offers on it,
- * which narrow list it steps back to, and which product surface it counts
- * as opened. Each of those is an answer of its declaration here, so a place
+ * which of its panes a narrow room steps back from and what it stands in its
+ * place, and which product surface it counts as opened. Each of those is an answer of its declaration here, so a place
  * moved onto the router joins with its route and one declaration, and a
  * declaration missing an answer does not build.
  *
@@ -41,7 +41,7 @@ import {
   taskName,
   VERSION_HISTORY_WORDS,
 } from "../history-titles.js";
-import { listedInboxChoice } from "../inbox-route.js";
+import { type InboxAt, listedInboxChoice } from "../inbox-route.js";
 import {
   agentPageLinks,
   inboxItemPlace,
@@ -51,7 +51,7 @@ import {
   slugOf,
   type WindowAt,
 } from "../links-at-hand.js";
-import type { ListBacks, StepTitle } from "../navigation-history.js";
+import type { StepTitle } from "../navigation-history.js";
 import {
   adminRouteStands,
   type RouteAccess,
@@ -71,6 +71,28 @@ import type { RoutedViews } from "../workspace-routes.js";
 import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 import { openPanelTab, type TaskStep } from "./task-step.js";
+
+/**
+ * Which of a place's panes a room stands over another as a step of its own,
+ * whose way back steps back to what it stands over (`narrow-backs.ts`): a
+ * page over its list in a narrow room alone, as a Settings page, a version,
+ * or an automation's runs over its setup; an item over its list in every
+ * room, as an Inbox item, whose address is its own; or the side panel over
+ * the page it is opened on, which a narrow room alone holds as a pane.
+ */
+export const NARROW_BACK = {
+  NARROW_ROOM: "narrow-room",
+  EVERY_ROOM: "every-room",
+  PANE: "pane",
+} as const;
+
+export type NarrowBack = (typeof NARROW_BACK)[keyof typeof NARROW_BACK];
+
+/** What a place a narrow room stands another in the place of opens it with: the listed workspace's address step, and the Inbox's door, which stands it in the step's place where told to. */
+export interface NarrowInsteadDoors {
+  readonly workspace: string;
+  readonly openInbox: (at: InboxAt, replace?: boolean) => void;
+}
 
 /** A route of the panel's tree, by its id. */
 type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
@@ -152,8 +174,10 @@ export interface PlaceDeclaration {
   ) => NamedStep | undefined;
   /** The links Copy link offers on it, the most specific first, one of them the step's own. */
   readonly links: (held: PlaceLinks) => readonly LinkAtHand[];
-  /** The way back to the list a narrow room stands it after, where it has one. */
-  readonly narrowList: keyof ListBacks | undefined;
+  /** Which of its panes stands over another as a step of its own, and in which rooms, which its way back steps back from (`narrow-backs.ts`); none where none does. */
+  readonly narrowBack: NarrowBack | undefined;
+  /** What a narrow room stands in its place where the window would stand on it, the doors it opens with handed over; none where it stands there as in any room. */
+  readonly narrowInstead: ((doors: NarrowInsteadDoors) => void) | undefined;
   /** The product surfaces it counts as opened, a version history by the task its address names, a task by what its step holds. */
   readonly surfaces: (params: PlaceParams, shown: PlaceShown) => readonly OpenSurface[];
   /** The draft its step edits, by the id its address names, which every step of it naming that id shares, so a move between them leaves no page and asks nothing (`place-leave.ts`); none where each step is a page of its own. */
@@ -264,7 +288,8 @@ export const ROUTED_PLACE = {
           : { kind: LINK_PLACE.SETTINGS, page: view };
       return [stepLink(place, LINK_THING.SETTINGS, slug)];
     },
-    narrowList: "settings",
+    narrowBack: NARROW_BACK.NARROW_ROOM,
+    narrowInstead: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.SETTINGS }],
     draft: noDraft,
   },
@@ -291,7 +316,8 @@ export const ROUTED_PLACE = {
         withinLink(root, LINK_THING.ADMIN, listed),
       ];
     },
-    narrowList: undefined,
+    narrowBack: undefined,
+    narrowInstead: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.ADMIN }],
     draft: noDraft,
   },
@@ -308,7 +334,8 @@ export const ROUTED_PLACE = {
     named: () => undefined,
     links: ({ views, listed, under }) =>
       views.board ? [stepLink({ kind: LINK_PLACE.BOARD }, LINK_THING.BOARD, listed)] : under(),
-    narrowList: undefined,
+    narrowBack: undefined,
+    narrowInstead: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.BOARD }],
     draft: noDraft,
   },
@@ -340,7 +367,8 @@ export const ROUTED_PLACE = {
         ),
       ];
     },
-    narrowList: undefined,
+    narrowBack: undefined,
+    narrowInstead: undefined,
     surfaces: (params) => [{ surface: PRODUCT_SURFACE.PERSON, of: params.userId }],
     draft: noDraft,
   },
@@ -378,7 +406,8 @@ export const ROUTED_PLACE = {
       }
       return [stepLink(list, LINK_THING.AUTOMATIONS, listed)];
     },
-    narrowList: "runs",
+    narrowBack: NARROW_BACK.NARROW_ROOM,
+    narrowInstead: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.AUTOMATIONS }],
     // An automation's setup, its runs, and a run share its editor and what is written in it.
     draft: (params) => params.automationId,
@@ -408,7 +437,8 @@ export const ROUTED_PLACE = {
         : { kind: NAMED_STEP.VERSION_HISTORY, taskId: historyTask },
     // Note that a history whose task is not yet bound for offers the place under it, as it stands until its task opens.
     links: (held) => (held.tasks.boundFor === undefined ? held.under() : versionLinks(held)),
-    narrowList: "versions",
+    narrowBack: NARROW_BACK.NARROW_ROOM,
+    narrowInstead: undefined,
     surfaces: (_params, { historyTask }) =>
       historyTask === undefined
         ? []
@@ -434,7 +464,8 @@ export const ROUTED_PLACE = {
       const { agentId } = tasks.agentView;
       return agentId === undefined ? under() : agentPageLinks(tasks, at, listed, agentId);
     },
-    narrowList: undefined,
+    narrowBack: undefined,
+    narrowInstead: undefined,
     surfaces: (params) => [{ surface: PRODUCT_SURFACE.AGENT, of: params.agentId }],
     draft: noDraft,
   },
@@ -462,7 +493,8 @@ export const ROUTED_PLACE = {
       return { kind: NAMED_STEP.TASK, taskId: taskStep.taskId, column: taskStep.column, side };
     },
     links: ({ under }) => under(),
-    narrowList: "task",
+    narrowBack: NARROW_BACK.PANE,
+    narrowInstead: undefined,
     surfaces: (_params, { taskStep, columnKnown }) => taskSurfaces(taskStep, columnKnown),
     draft: noDraft,
   },
@@ -480,7 +512,10 @@ export const ROUTED_PLACE = {
     title: () => ({ label: HOME_WORDS }),
     named: () => undefined,
     links: ({ listed }) => [stepLink({ kind: LINK_PLACE.HOME }, LINK_THING.HOME, listed)],
-    narrowList: undefined,
+    narrowBack: undefined,
+    // A phone has no Home: wherever the window would stand on it, the Inbox's list takes its step in place (`mobile-bar.tsx`), so Back never lands on a Home that would only leave again.
+    narrowInstead: ({ workspace, openInbox }) =>
+      openInbox({ workspace, narrowed: undefined }, true),
     surfaces: () => [{ surface: PRODUCT_SURFACE.HOME }],
     draft: noDraft,
   },
@@ -501,7 +536,8 @@ export const ROUTED_PLACE = {
     named: () => undefined,
     // It has no link of the reader's to offer, so the tab keeps the address it was opened at.
     links: () => [],
-    narrowList: undefined,
+    narrowBack: undefined,
+    narrowInstead: undefined,
     surfaces: () => [],
     draft: noDraft,
   },
@@ -552,7 +588,8 @@ export const ROUTED_PLACE = {
       }
       return [withinLink(item, LINK_THING.INBOX_ITEM, listed), inbox];
     },
-    narrowList: "inbox",
+    narrowBack: NARROW_BACK.EVERY_ROOM,
+    narrowInstead: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.INBOX }],
     draft: noDraft,
   },

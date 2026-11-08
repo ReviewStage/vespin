@@ -68,7 +68,6 @@ import { PageWorkspaceProvider, useCopyLink } from "./links-at-hand.js";
 import { MacCommandAskDialog } from "./mac-command-ask.js";
 import {
   type TaskVisits,
-  throughHistory,
   useHistoryMouseButtons,
   useRoutedStanding,
   useWindowHistory,
@@ -82,6 +81,7 @@ import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
 import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
+import { useNarrowBacks } from "./places/narrow-backs.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
 import { useAdminDoor, useAutomationsDoor, usePersonDoor } from "./places/routed-doors.js";
@@ -94,7 +94,7 @@ import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { landOnSettingsRow } from "./settings-search.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext, useStageRoom } from "./stage-room.js";
-import { useSteadyDoor, useSteadyDoors } from "./steady-door.js";
+import { useSteadyDoor } from "./steady-door.js";
 import { useTaskRoute } from "./task-route.js";
 import { MessageRevealProvider } from "./tasks/message-links.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./tasks/repository-remedy.js";
@@ -624,13 +624,12 @@ function AppWindow(): React.JSX.Element {
   // first.
   const known = run !== undefined && !accountGated && !workspacesUnread;
   const routedViews = useRoutedViews();
+  const backs = useNarrowBacks(room === SHELL_ROOM.NARROW);
   const history = useWindowHistory({
     known,
     link: copyLink.placed,
     title: stepTitle(routedHere?.place, tasks, routedViews),
     routed: routedHere,
-    settingsList: settingsPlace.listAddress,
-    onSettingsList: settingsPlace.list,
     automations: automationsView,
     versionHistory: versionHistoryView,
     inbox: inboxView,
@@ -639,6 +638,8 @@ function AppWindow(): React.JSX.Element {
     tasks,
   });
   routedExits.leave = history.onLeaveRouted;
+  // The narrow rooms' ways back read the history as they are pressed (`places/narrow-backs.ts`).
+  routedExits.behind = history.behind;
   // Note that a door asking for the place already standing tells the leave guard its move stays, so a Leave of it keeps the page's ask.
   routedExits.stay = () => {
     history.onStayRouted();
@@ -657,13 +658,9 @@ function AppWindow(): React.JSX.Element {
     onToBound: history.onLeaveRouted,
     onToUnbound: homeView.onOpen,
   });
-  // The narrow screens' ways back to their lists go through the history, so the two never disagree.
-  const shellTasks = useSteadyDoors(
-    useMemo(() => throughHistory(tasks, history.lists), [tasks, history.lists]),
-  );
-  // Escape reads the latest of them as it lands, so its listener stays the same across renders.
-  const shellDoors = useRef(shellTasks);
-  shellDoors.current = shellTasks;
+  // Escape reads the latest of the tab's doors as it lands, so its listener stays the same across renders.
+  const shellDoors = useRef(tasks);
+  shellDoors.current = tasks;
   // The sidebar folds only where it is drawn: Settings keeps its page list,
   // and the sign-in gate draws no sidebar at all. It folds by the room the
   // stage has, which on the desktop is the window's.
@@ -842,9 +839,13 @@ function AppWindow(): React.JSX.Element {
     ],
   );
   const connected = useConnected();
+  // A narrow room's page of Settings is a step after its list, which its way back steps back to (`places/narrow-backs.ts`).
+  const settingsBack = useSteadyDoor(() =>
+    backs.list(ROUTED_PLACE.SETTINGS, settingsPlace.listAddress, settingsPlace.list),
+  );
   const settingsStep = useMemo(
-    () => ({ listed: settingsPlace.listed, onList: history.lists.settings }),
-    [settingsPlace.listed, history.lists.settings],
+    () => ({ listed: settingsPlace.listed, onList: settingsBack }),
+    [settingsPlace.listed, settingsBack],
   );
 
   // Nothing is drawn over a state the window has not been told, nor over a
@@ -885,7 +886,7 @@ function AppWindow(): React.JSX.Element {
                                       gates={gates}
                                       tab={tab}
                                       onTabChange={changeTab}
-                                      tasks={shellTasks}
+                                      tasks={tasks}
                                       history={history}
                                       sidebar={sidebar}
                                       room={room}

@@ -11,7 +11,7 @@
  * which takes that page's step, an automation's runs outside a narrow room,
  * which take its setup's, and its setup stood again from its runs,
  * which the window's history steps back to or takes in place
- * (`navigation-history.ts`'s `lists.runs`). An automation deleted is held
+ * (`places/narrow-backs.ts`). An automation deleted is held
  * for as long as the window lives, so Back passes over its steps for good.
  */
 
