@@ -103,7 +103,7 @@ import {
  * (`workspace-store.ts`), so a task of a workspace the account is not in
  * reads, saves, changes, and deletes exactly as an id that names nothing: as
  * no plan. A pin is the reading member's
- * own (`plan-pin.ts`), so a plan of a shared workspace one member pinned
+ * own (`task-pin.ts`), so a plan of a shared workspace one member pinned
  * reads pinned for them alone, on every Mac they sign in on. A plan's repository is kept here as
  * handed and confirmed nowhere here: whether the account reaches it through
  * our GitHub App is the route's to settle before it calls, on the
@@ -232,7 +232,7 @@ export interface StoredTask {
 /**
  * A plan to start: the workspace it starts in, its name where one is given,
  * and the repository it is about where one is chosen. A plan started with no
- * name, or a blank one, stands as `UNTITLED_DESCRIPTION_NAME` until it is renamed. A brief is the developer's own words about the task, kept as
+ * name, or a blank one, stands as `UNTITLED_TASK_NAME` until it is renamed. A brief is the developer's own words about the task, kept as
  * written; a blank one is none.
  */
 export interface NewTask {
@@ -1242,7 +1242,7 @@ const nameUntitled = SqlSchema.findOneOption({
  * Starts a task under the account, in the workspace it was handed, as one
  * empty document, with the repository it was handed; it stands first in
  * the list. A plan handed no name, or a blank one, starts as
- * `UNTITLED_DESCRIPTION_NAME`.
+ * `UNTITLED_TASK_NAME`.
  */
 /** A started task's row as it is inserted: its name, or Untitled, its description's text, empty where none is named, and its brief, or none for a blank one. */
 const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =>

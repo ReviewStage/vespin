@@ -52,8 +52,7 @@ import type { TaskStoreEffect } from "./task-store.js";
  * forgotten when the bot leaves it.
  *
  * Settings holds the installation and the channels' repositories as a live
- * read (`slackInstallationLiveStatement`,
- * `slackChannelRepositoriesLiveStatement`), so each write Settings makes
+ * read (the service's `workspaceIntegrationsRead`), so each write Settings makes
  * answers the transaction it committed in, which a reader holding them
  * waits for before it confirms the write.
  */
