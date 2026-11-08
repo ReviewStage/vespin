@@ -12,6 +12,7 @@ import {
   recordAgentPublished,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
+import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
 import {
   listProviderKeyRows,
   type ProviderKeyRow,
@@ -510,6 +511,40 @@ it.layer(getTestDB())("the runner events route", (it) => {
       assert.deepEqual(overlapping.body, { applied: 0, sequence: 11 });
       assert.deepEqual(twice, once);
     }),
+  );
+
+  it.effect(
+    "a Claude Code session the store held from its first entry is held no longer once the SDK says it dropped a batch of its transcript",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const { userId, conversationId } = agent.target;
+        const transcript = { projectKey: "-workspace-repository", sessionId: SESSION };
+        yield* appendSessionEntries(userId, conversationId, transcript, [
+          { type: "user", uuid: randomUUID(), parentUuid: null },
+        ]);
+        // The line taken and the CLI's init, which names the session.
+        yield* post(agent.bearer, workflowTurn(agent.lineId).slice(0, 2));
+        const before = yield* holdsSession(userId, conversationId, SESSION);
+
+        yield* post(agent.bearer, [
+          {
+            sequence: 2,
+            message: {
+              type: "system",
+              subtype: "mirror_error",
+              error: "The transcript store answered 503",
+              key: transcript,
+              uuid: randomUUID(),
+              session_id: SESSION,
+            },
+          },
+        ]);
+
+        assert.equal(before, true);
+        assert.equal(yield* holdsSession(userId, conversationId, SESSION), false);
+      }),
   );
 
   it.effect(

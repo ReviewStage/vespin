@@ -184,6 +184,8 @@ export const NATIVE_WRITE = {
   TAKE_LINE: "take_line",
   /** Record the harness's session id on the conversation. */
   SESSION: "session",
+  /** Record that the store's copy of the session's transcript holds a gap, so it is never resumed. */
+  TRANSCRIPT_BROKEN: "transcript_broken",
   /** Record that the harness folded its context. */
   COMPACTED: "compacted",
   /** Record how a turn found the plan that pays for the agent, on its row. */
@@ -203,6 +205,7 @@ export type NativeWrite =
       readonly clientId: string;
     }
   | { readonly kind: typeof NATIVE_WRITE.SESSION; readonly sessionId: string }
+  | { readonly kind: typeof NATIVE_WRITE.TRANSCRIPT_BROKEN; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_WRITE.COMPACTED }
   | { readonly kind: typeof NATIVE_WRITE.CONTEXT; readonly usage: NativeContextUsage }
   | {
@@ -575,6 +578,9 @@ class Fold {
         if (this.state.session === moment.sessionId) return;
         this.state = { ...this.state, session: moment.sessionId };
         this.writes.push({ kind: NATIVE_WRITE.SESSION, sessionId: moment.sessionId });
+        return;
+      case NATIVE_MOMENT.TRANSCRIPT_BROKEN:
+        this.writes.push({ kind: NATIVE_WRITE.TRANSCRIPT_BROKEN, sessionId: moment.sessionId });
         return;
       case NATIVE_MOMENT.ACTIVE:
         this.turn();

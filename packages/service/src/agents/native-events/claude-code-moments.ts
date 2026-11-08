@@ -86,6 +86,11 @@ const readEnvelope = Schema.decodeUnknownOption(
 
 const readInit = Schema.decodeUnknownOption(Schema.Struct({ session_id: Schema.String }));
 
+/** The transcript a dropped mirror batch was of, as `SDKMirrorErrorMessage` keys it. */
+const readMirrorError = Schema.decodeUnknownOption(
+  Schema.Struct({ key: Schema.Struct({ sessionId: Schema.String }) }),
+);
+
 const COUNT = Schema.optionalKey(Schema.NullOr(Schema.Number));
 
 /** A model call's usage as the Messages API counts it: the input apart from what the prefix cache read and wrote. */
@@ -186,6 +191,7 @@ const SYSTEM_SUBTYPE = {
   INIT: "init",
   COMPACT_BOUNDARY: "compact_boundary",
   TASK_NOTIFICATION: "task_notification",
+  MIRROR_ERROR: "mirror_error",
 } as const;
 
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
@@ -512,6 +518,14 @@ function systemMoments(subtype: string | undefined, message: WireValue): readonl
       return [{ kind: NATIVE_MOMENT.COMPACTED }];
     case SYSTEM_SUBTYPE.TASK_NOTIFICATION:
       return taskNotificationMoments(message);
+    case SYSTEM_SUBTYPE.MIRROR_ERROR:
+      // The SDK gave up on a batch of the transcript it mirrors to the store, which then holds a gap.
+      return Option.match(readMirrorError(message), {
+        onSome: ({ key }): readonly NativeMoment[] => [
+          { kind: NATIVE_MOMENT.TRANSCRIPT_BROKEN, sessionId: key.sessionId },
+        ],
+        onNone: () => [],
+      });
     default:
       return [];
   }

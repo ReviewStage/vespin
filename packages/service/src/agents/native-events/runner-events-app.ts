@@ -10,6 +10,7 @@ import {
   recordAgentStep,
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
+import { markSessionBroken } from "@repo/database/models/claude-session-entries";
 import {
   type NativeProjectionRow,
   withNativeProjection,
@@ -503,6 +504,9 @@ function landWrite(
       return Effect.asVoid(
         recordAgentNativeSession(target.userId, applying.agentId, write.sessionId),
       );
+    case NATIVE_WRITE.TRANSCRIPT_BROKEN:
+      // A session whose stored transcript holds a gap is let go at the next launch, which replays the agent's steps.
+      return markSessionBroken(target.userId, target.conversationId, write.sessionId);
     case NATIVE_WRITE.COMPACTED:
       // The summary may have dropped what the turns' messages handed, so the next message hands it again.
       return Effect.andThen(
