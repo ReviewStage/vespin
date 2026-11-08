@@ -28,7 +28,10 @@ can't undo something.
 ## 1. Stand up the stack
 
 ```bash
-./scripts/bootstrap.sh    # with PNPM_HOME and XDG_DATA_HOME under $TMPDIR, as below, if pnpm can't write its home
+export TMPDIR=${TMPDIR:-/tmp/first-day}    # a Vespin sandbox may leave it unset
+export PNPM_HOME=$TMPDIR/pnpm-home NPM_CONFIG_PREFIX=$TMPDIR/npm-prefix XDG_DATA_HOME=$TMPDIR/xdg-data XDG_CACHE_HOME=$TMPDIR/xdg-cache
+mkdir -p $PNPM_HOME $NPM_CONFIG_PREFIX $XDG_DATA_HOME $XDG_CACHE_HOME
+CI=true HUSKY=0 ./scripts/bootstrap.sh
 RUN=$TMPDIR/first-day-user
 bash .agents/skills/first-day-user/scripts/stack.sh "$RUN"
 ```
@@ -38,9 +41,10 @@ end. It starts the demo Postgres, seeds it, deletes the demo member's
 memberships and personal workspace so the account looks new, serves the app
 at `http://127.0.0.1:5173`, and starts a headless Chromium that takes steps
 from a file queue. Wait for `[stack] ready` in its output (about 30 seconds
-after a bootstrap). If pnpm itself fails on `/home/vercel-sandbox`, export
-`PNPM_HOME=$TMPDIR/pnpm-home XDG_DATA_HOME=$TMPDIR/xdg-data` before the
-bootstrap; `stack.sh` sets its own.
+after a bootstrap). The bootstrap's variables are the sandbox's: pnpm cannot
+write its own home there, `CI=true` lets it replace `node_modules` without a
+TTY, and `HUSKY=0` skips husky's hooks, whose copy into `.husky/_/` the
+sandbox refuses. `stack.sh` sets its own pnpm folders.
 
 Each Bash command in the sandbox has its own network, so nothing outside
 that process tree reaches the server: not `curl` from a later command, not
@@ -99,14 +103,22 @@ await context.route(/\/api\/github\/repositories(\?|$)/, (route) => route.fulfil
 ```
 
 `installed: false` shows the Connect GitHub card a new account sees; one
-repository with `installed: true` (`{ owner, name, fullName, defaultBranch,
-private, updatedAt, access: "app" }`) lets Start be pressed.
+repository with `installed: true` lets Start be pressed:
+
+```js
+{ owner: "acme", name: "api", fullName: "acme/api", defaultBranch: "main", private: true, updatedAt: 1793000000000, access: "app" }
+```
+
+`updatedAt` is epoch milliseconds; an answer the panel cannot decode reads
+"Could not connect. Check your internet connection." in the picker, as the
+local server's own does.
 
 ## What the local stack cannot do
 
 Leave these out of the findings; they are the stack's, not the product's.
 
-- No GitHub App: the repository picker reads "The service did not answer",
+- No GitHub App: the repository picker reads "Could not connect. Check your
+  internet connection.",
   GitHub Connect reads "Could not connect GitHub to that workspace on this
   system", and Start with a faked repository is refused with "Vespin cannot
   see that repository on GitHub". A run ends there: no task is created, so no
@@ -115,9 +127,25 @@ Leave these out of the findings; they are the stack's, not the product's.
   new account's window would wait on it, blank, forever. `driver.cjs` answers
   it with a canned catalog in which no model is paid for, as a new account's
   server would, so the window stands the setup steps (Welcome, Connect an
-  agent, GitHub, Tools). Setup's "Connect an agent" cannot be passed without
-  an agent; to reach Home, register a newer route in a step answering the same
-  catalog with `credentialMissing: false`, then reload.
+  agent, GitHub, Tools). Setup's "Connect an agent" goes on only once the
+  account holds a credential, which it reads from `/api/account/provider-keys`
+  rather than the catalog, and no token can be checked locally. To reach Home,
+  answer that read with a connected Claude plan, then reload and walk the rest
+  of setup (Continue, Skip GitHub, Finish):
+
+  ```js
+  const now = Date.now();
+  await context.route(/\/api\/account\/provider-keys(\?|$)/, (route) => route.request().method() === "GET"
+    ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ keys: [], subscriptions: [
+        { provider: "anthropic", kind: "claude_setup_token", hint: "sk-ant-oat01-…abcd", addedAt: now, status: "unverified", statusAt: now, forAgents: true },
+      ] }) })
+    : route.continue());
+  ```
+
+  The server still holds no credential, so a start on Home is refused with
+  "Connect Claude in Settings to start an agent"; leave that out too.
+- No integrations offered: setup's Connect your tools step lists none, and
+  Settings › Integrations reads "No integrations available".
 - No live socket (`/api/live/socket` answers 404 by design): the bottom-left
   offline mark and "You're offline." stay up. `driver.cjs` answers the long
   polls from Node so pages still load.

@@ -132,8 +132,9 @@ async function main() {
   // Note that the local server cannot reach the model catalog, so `/api/models`
   // answers 503 on every try and a new account's window waits on it, blank,
   // forever. It is answered here as a new account's would be, which stands
-  // setup before the app; a step that registers a newer route with
-  // `credentialMissing: false` stands for an account with an agent connected.
+  // setup before the app. Setup's agent step reads the account's credentials
+  // rather than this, so a step reaches Home by answering
+  // `/api/account/provider-keys` with one (SKILL.md).
   await context.route(/\/api\/models(\?|$)/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(NEW_ACCOUNT_MODELS) }),
   );
