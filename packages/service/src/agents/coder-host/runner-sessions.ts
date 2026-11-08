@@ -2107,13 +2107,16 @@ export const runnerSessions = <
       Effect.gen(function* () {
         const layout = yield* machine.layout(agent);
         const sent = messageLine(message, layout);
-        const queues = layout.linesRead;
-        const handed = yield* queues
-          ? holdingRunnerIfFree(agent.id, sendHolding(sessionId, message, layout, sent, true))
+        const handsOn = layout.linesRead;
+        // Note that a message naming files waits on the lease, which orders its files and its line
+        // after any launch under way: a launch writes the waiting lines' files only as it starts,
+        // so a line queued past it would reach its runner without them.
+        const handed = yield* handsOn && sent.files.length === 0
+          ? holdingRunnerIfFree(agent.id, sendHolding(sessionId, message, layout, sent, handsOn))
           : Effect.map(
               holdingRunner(
                 agent.id,
-                sendHolding(sessionId, message, layout, sent, false),
+                sendHolding(sessionId, message, layout, sent, handsOn),
                 CODER.RUNNER_LEASE.SEND_WAIT,
               ),
               Option.some,
@@ -2135,14 +2138,9 @@ export const runnerSessions = <
         // up reads it, and where none is, the turn's delivery launches one (`deliverTurn`).
         const ahead = yield* harness.ahead(agent);
         const recorded = Option.isSome(found) ? found.value.runner : undefined;
-        // The files it names go into a place that runs before its line does, so a runner up reads
-        // the line with them; a place not up has them written by the launch its line carries them to.
-        const running = Option.isSome(found) ? found.value.running : undefined;
-        if (running !== undefined) yield* filesWritten(running, sent);
-        const carried = { files: sent.files, handed: Option.none() };
         yield* recorded === undefined
-          ? queued(agent, ANY_LAUNCH, [sent.line], carried)
-          : queued(agent, recorded.mark.firstSequence, [...ahead.lines, sent.line], carried);
+          ? queued(agent, ANY_LAUNCH, [sent.line])
+          : queued(agent, recorded.mark.firstSequence, [...ahead.lines, sent.line]);
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
@@ -2236,8 +2234,8 @@ export const runnerSessions = <
       // turn's delivery holds it while its sandbox comes up: it is queued at once, read by the runner
       // that call leaves running. One that finds no runner up is queued too, for the launch the
       // turn it awaits is delivered to (`deliverTurn`), so the send answers once its line is
-      // written. The files it names are written into a place that runs before its line, and carried
-      // on its line for a launch to write where none runs.
+      // written. One naming files waits on the lease, so its files are written into a place that
+      // runs before its line, or carried on its line for the launch that writes them as it starts.
       send: (sessionId, message) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);

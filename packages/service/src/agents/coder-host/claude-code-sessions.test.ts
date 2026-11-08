@@ -2790,7 +2790,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a message naming files sent while another call holds the lease is answered at once, its files written into the place that runs before its line is queued",
+    "a message naming files waiting behind another call's lease is answered unavailable before the store's dispatch deadline, its line queued for no launch to read without its files",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -2804,31 +2804,38 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           yield* writtenLine(agent, "Fix the invitations."),
         );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
         // Another instance's call holds the lease, as a launch elsewhere does.
         const now = new Date(yield* Clock.currentTimeMillis);
         const until = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
         assert.equal(yield* claimAgentRunnerLease(agent.id, randomUUID(), now, until), true);
 
-        const sent = yield* sessions.send(opened.sessionId, {
-          ...(yield* writtenLine(agent, "Again.")),
-          message: [
-            { type: "text" as const, text: "Again." },
-            {
-              type: "file" as const,
-              data: `data:application/pdf;base64,${Buffer.from("%PDF-1.7").toString("base64")}`,
-              mediaType: "application/pdf",
-              filename: "spec.pdf",
-            },
-          ],
-        });
-
-        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.ok(
-          api.uploads.some((upload) =>
-            [...upload.keys()].some((path) => path.endsWith("spec.pdf")),
-          ),
+        // The store interrupts a hand-over at thirty seconds, so the send must answer by then.
+        const waiting = yield* Effect.forkChild(
+          sessions.send(opened.sessionId, {
+            ...(yield* writtenLine(agent, "Again.")),
+            message: [
+              { type: "text" as const, text: "Again." },
+              {
+                type: "file" as const,
+                data: `data:application/pdf;base64,${Buffer.from("%PDF-1.7").toString("base64")}`,
+                mediaType: "application/pdf",
+                filename: "spec.pdf",
+              },
+            ],
+          }),
         );
-        assert.equal(api.commands.length, 1);
+        for (let second = 0; second < 29; second += 1) {
+          yield* turnsPass;
+          yield* TestClock.adjust("1 second");
+        }
+        yield* turnsPass;
+        const answered = waiting.pollUnsafe();
+        yield* Fiber.interrupt(waiting);
+
+        assert.ok(answered !== undefined && Exit.isSuccess(answered));
+        assert.deepEqual(answered.value, { outcome: SESSION_SEND_OUTCOME.FAILED, status: 503 });
+        assert.deepEqual(yield* handedLines(userId, api.commands[0]), []);
       }),
   );
 
