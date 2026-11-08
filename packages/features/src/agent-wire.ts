@@ -365,7 +365,7 @@ export const MAC_PRESENCE = {
  * device that went quiet, and a window that cannot ask must not say a device
  * is away.
  */
-export const PRESENCE_READ_STANDS_MS = MAC_PRESENCE.POLL_MS + MAC_PRESENCE.READ_TIMEOUT_MS;
+const PRESENCE_READ_STANDS_MS = MAC_PRESENCE.POLL_MS + MAC_PRESENCE.READ_TIMEOUT_MS;
 
 /**
  * A device's lease on the runs it holds: its beat is the lease, renewed every
@@ -537,7 +537,7 @@ export function turnStatusOfWord(word: string): TurnStatus {
  * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
  * failed where it did, in the wire's word.
  */
-export const agentTurnSchema = EffectSchema.Struct({
+const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   queuedAt: countedNumber,
   status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
@@ -653,7 +653,7 @@ export const agentAttachmentsSchema = EffectSchema.Array(agentAttachmentSchema).
 );
 
 /** A message's words, trimmed and bounded, and empty where the files carry the message alone. */
-export const messageWordsSchema = EffectSchema.Trim.check(
+const messageWordsSchema = EffectSchema.Trim.check(
   EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_MESSAGE_CHARS),
 );
 
@@ -742,7 +742,7 @@ export const startBranchSchema = EffectSchema.String.check(
 );
 
 /** A repository a Start names beside the agent's own: `owner/name`, and the branch its checkout is cloned at, none for its default branch. */
-export const agentAlsoRepositorySchema = EffectSchema.Struct({
+const agentAlsoRepositorySchema = EffectSchema.Struct({
   repository: githubRepositoryFullNameSchema,
   branch: EffectSchema.optionalKey(startBranchSchema),
 });
@@ -750,7 +750,7 @@ export const agentAlsoRepositorySchema = EffectSchema.Struct({
 export type AgentAlsoRepository = typeof agentAlsoRepositorySchema.Type;
 
 /** The repositories a Start names beside the agent's own: at least one where the list is named, at most the bound, and each once, in any case. */
-export const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
+const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ALSO_REPOSITORIES),
   EffectSchema.makeFilter(
@@ -1053,7 +1053,7 @@ export const ADDED_REPOSITORY_CHECKOUT = {
 export type AddedRepositoryCheckout =
   (typeof ADDED_REPOSITORY_CHECKOUT)[keyof typeof ADDED_REPOSITORY_CHECKOUT];
 
-export const addedRepositoryCheckoutSchema = EffectSchema.Literals(
+const addedRepositoryCheckoutSchema = EffectSchema.Literals(
   Object.values(ADDED_REPOSITORY_CHECKOUT),
 );
 
@@ -1148,7 +1148,7 @@ export const AGENT_OWNER = {
  * neither, or whose owner is gone, carries none: the run of a deleted
  * automation goes with it, and no case stands for that.
  */
-export const agentOwnerSchema = EffectSchema.Union([
+const agentOwnerSchema = EffectSchema.Union([
   EffectSchema.Struct({ kind: EffectSchema.Literal(AGENT_OWNER.TASK), taskId: wireUuidSchema }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(AGENT_OWNER.RUN),

@@ -873,18 +873,12 @@ export const tasksWorkspaceParamsSchema = workspaceGithubRequestSchema;
 export type TasksWorkspaceParams = typeof tasksWorkspaceParamsSchema.Type;
 
 /** A workspace made, renamed, or given a photo, or its GitHub organization disconnected, as the window hears it: the workspace as it then stands, or why it does not. */
-export const tasksWorkspaceAnswerSchema = EffectSchema.Union([
+const tasksWorkspaceAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ workspace: workspaceSchema }),
   workspaceCallFailureSchema,
 ]);
 
 export type TasksWorkspaceAnswer = typeof tasksWorkspaceAnswerSchema.Type;
-
-/** A GitHub organization's connection begun, as the window's process hears it: our GitHub App's install address to open, or why there is none. */
-export const tasksWorkspaceGitHubConnectAnswerSchema = EffectSchema.Union([
-  EffectSchema.Struct({ url: EffectSchema.String }),
-  workspaceCallFailureSchema,
-]);
 
 /** One of a workspace's Sentry installations disconnected, as the window asks it: the workspace and Sentry's id for the installation. */
 export const tasksWorkspaceSentryDisconnectParamsSchema = workspaceSentryDisconnectRequestSchema;
@@ -893,7 +887,7 @@ export type TasksWorkspaceSentryDisconnectParams =
   typeof tasksWorkspaceSentryDisconnectParamsSchema.Type;
 
 /** A workspace's Sentry as the window hears it after a read or a disconnect: whether the deployment holds the integration and the workspace's installations, or why there is no answer. */
-export const tasksWorkspaceSentryAnswerSchema = EffectSchema.Union([
+const tasksWorkspaceSentryAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ sentry: workspaceSentryAnswerSchema }),
   workspaceCallFailureSchema,
 ]);
@@ -901,7 +895,7 @@ export const tasksWorkspaceSentryAnswerSchema = EffectSchema.Union([
 export type TasksWorkspaceSentryAnswer = typeof tasksWorkspaceSentryAnswerSchema.Type;
 
 /** A workspace's Slack bot as the window hears it after a read, a connect, or a disconnect: whether the deployment holds the bot and the team it is connected to, or why there is no answer. */
-export const tasksWorkspaceSlackBotAnswerSchema = EffectSchema.Union([
+const tasksWorkspaceSlackBotAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ slackBot: workspaceSlackBotAnswerSchema }),
   workspaceCallFailureSchema,
 ]);
@@ -942,7 +936,7 @@ export type TasksWorkspaceMemberRoleParams = typeof tasksWorkspaceMemberRolePara
 export const tasksWorkspaceTransferParamsSchema = workspaceTransferSchema;
 
 /** A workspace's members, as the window hears them after a read, a removal, a role changed, or a handover: the members as they then stand, or why there are none. */
-export const tasksWorkspaceMembersAnswerSchema = EffectSchema.Union([
+const tasksWorkspaceMembersAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
     members: EffectSchema.Array(workspaceMemberSchema),
     /** Who the workspace's work names but left, on a read; absent after a change, and from a service before it. */
@@ -966,7 +960,7 @@ export type TasksWorkspaceTokenRepositorySetParams =
   typeof tasksWorkspaceTokenRepositorySetParamsSchema.Type;
 
 /** A workspace's token repositories, as the window hears them after a read, an add, or a removal: as they then stand, or why there are none. */
-export const tasksWorkspaceTokenRepositoriesAnswerSchema = EffectSchema.Union([
+const tasksWorkspaceTokenRepositoriesAnswerSchema = EffectSchema.Union([
   workspaceTokenRepositoriesAnswerSchema,
   workspaceCallFailureSchema,
 ]);
@@ -977,20 +971,8 @@ export type TasksWorkspaceTokenRepositoriesAnswer =
 /** Leaving a workspace, as the window asks it: the workspace. */
 export const tasksWorkspaceLeaveParamsSchema = workspaceLeaveRequestSchema;
 
-/** A leave, as the window hears it: left, the view's list then without it, or why not. */
-export const tasksWorkspaceLeaveAnswerSchema = EffectSchema.Union([
-  EffectSchema.Struct({ left: EffectSchema.Literal(true) }),
-  workspaceCallFailureSchema,
-]);
-
 /** An invitation, as the window asks for it: the workspace, the address, and the role. */
 export const tasksWorkspaceInviteParamsSchema = workspaceInviteRequestSchema;
-
-/** An invitation made, as the window hears it: the invitation with its accept link, or why none was. */
-export const tasksWorkspaceInvitationAnswerSchema = EffectSchema.Union([
-  EffectSchema.Struct({ invitation: workspaceInvitationSchema }),
-  workspaceCallFailureSchema,
-]);
 
 /** A pending invitation canceled, as the window asks it: the workspace and the invitation. */
 export const tasksWorkspaceInvitationCancelParamsSchema = workspaceInvitationCancelSchema;
@@ -999,7 +981,7 @@ export type TasksWorkspaceInvitationCancelParams =
   typeof tasksWorkspaceInvitationCancelParamsSchema.Type;
 
 /** A workspace's pending invitations, as the window hears them after a read or a cancel, or why there are none. */
-export const tasksWorkspaceInvitationsAnswerSchema = EffectSchema.Union([
+const tasksWorkspaceInvitationsAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ invitations: EffectSchema.Array(workspaceInvitationSchema) }),
   workspaceCallFailureSchema,
 ]);
@@ -1013,16 +995,6 @@ export type TasksGitHubPageAnswer = typeof tasksGitHubPageAnswerSchema.Type;
 
 /** Why the account's GitHub was not disconnected: no answer, or GitHub is its only way to sign in. */
 export const GITHUB_DISCONNECT_FAILURE = failureSetOf(githubContract.disconnect);
-
-/**
- * A disconnect of the account's GitHub, as the window's process hears it:
- * the connection as it then stands, under `connection` as it shipped, or
- * how the disconnect failed, as its procedure's answer spells it.
- */
-export const tasksGitHubDisconnectAnswerSchema = EffectSchema.Union([
-  EffectSchema.Struct({ connection: githubConnectionSchema }),
-  answerView(githubContract.disconnect).members[1],
-]);
 
 /** Why a call about a description's comments answered nothing to draw: no answer, or the plan is not the account's to read or write. */
 export const DESCRIPTION_COMMENT_CALL_FAILURE = failureSetOf(descriptionCommentsContract);

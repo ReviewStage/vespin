@@ -1196,7 +1196,7 @@ export function inboxThreadMessage(item: Pick<InboxItem, "key" | "title">, text:
 }
 
 /** How a member's thread line opens, by what they did on the thread, as the agent reads it and the transcript heads it. */
-export const THREAD_LINE_LEAD = {
+const THREAD_LINE_LEAD = {
   [THREAD_LINE_EVENT.MESSAGE]: INBOX_MESSAGE_LEAD,
   [THREAD_LINE_EVENT.ANSWER]: INBOX_ANSWER_LEAD,
   [THREAD_LINE_EVENT.CLOSE]: INBOX_CLOSE_LEAD,

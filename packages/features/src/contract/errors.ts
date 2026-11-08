@@ -51,7 +51,7 @@ const upstreamErrorDataSchema = EffectSchema.Struct({
  * epoch milliseconds, where the provider said, which the refusal's words
  * name.
  */
-export const planLimitReachedDataSchema = EffectSchema.Struct({
+const planLimitReachedDataSchema = EffectSchema.Struct({
   resetsAt: EffectSchema.optionalKey(EffectSchema.Number),
 });
 
@@ -59,18 +59,18 @@ export const planLimitReachedDataSchema = EffectSchema.Struct({
  * What a missing credential carries beside its slug: the provider whose
  * subscription or API key would pay, which the refusal's words name.
  */
-export const credentialMissingDataSchema = EffectSchema.Struct({
+const credentialMissingDataSchema = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(modelProviderSchema),
 });
 
 /** What a refused local agent carries beside its slug: why, which the refusal's words name, and the device and its owner where it is another member's. */
-export const localAgentRefusedDataSchema = EffectSchema.Struct({
+const localAgentRefusedDataSchema = EffectSchema.Struct({
   localAgentRefusal: EffectSchema.optionalKey(localAgentRefusalSchema),
   refusedDevice: EffectSchema.optionalKey(refusedDeviceSchema),
 });
 
 /** What a refused Start naming repositories beside its agent's own carries beside its slug: why, and the repository where one is why. */
-export const extraRepositoryRefusedDataSchema = EffectSchema.Struct({
+const extraRepositoryRefusedDataSchema = EffectSchema.Struct({
   extraRepositoryRefusal: EffectSchema.optionalKey(extraRepositoryRefusalSchema),
   refusedRepository: EffectSchema.optionalKey(EffectSchema.String),
 });

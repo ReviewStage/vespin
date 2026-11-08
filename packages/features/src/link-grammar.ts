@@ -263,7 +263,7 @@ export const GITHUB_ORIGIN = `https://${GITHUB_HOST}`;
 export const GITHUB_DEFAULT_BRANCH = "HEAD";
 
 /** GitHub's own bounds on a repository's `owner/name`. */
-export const GITHUB_REPOSITORY_BOUNDS = {
+const GITHUB_REPOSITORY_BOUNDS = {
   /** GitHub's own bound on an owner's login. */
   MAX_OWNER_CHARS: 39,
   /** GitHub's own bound on a repository's name. */
@@ -339,7 +339,7 @@ const LINEAR_HOST = "linear.app";
 const LINEAR_ISSUE_STEP = "issue";
 
 /** A Linear issue's identifier, its team's key and its number, `ENG-123`, as Linear spells it. */
-export const LINEAR_IDENTIFIER = /^[A-Z][A-Z0-9_]{0,9}-[1-9]\d{0,8}$/u;
+const LINEAR_IDENTIFIER = /^[A-Z][A-Z0-9_]{0,9}-[1-9]\d{0,8}$/u;
 
 /** The scheme the app's own forms are written in, for what has no page of its own on the web. */
 const MENTION_PROTOCOL = "mention:";
@@ -858,7 +858,7 @@ const accountPlaceSchema = EffectSchema.Struct({
 });
 
 /** A place of the account's own, by what finds it: a pairing's code as its eight letters. */
-export type AccountPlace = typeof accountPlaceSchema.Type;
+type AccountPlace = typeof accountPlaceSchema.Type;
 
 /** The kind of place of the account's own a link sends someone to. */
 export type AccountPlaceKind = AccountPlace["kind"];
@@ -1117,7 +1117,7 @@ export function schemeLinkOf(host: SchemeLinkHost, path: string): string {
 }
 
 /** Words as a markdown link's label holds them: each control character, a line break among them, a space, and each bracket and backslash escaped. */
-export function escapedLabel(words: string): string {
+function escapedLabel(words: string): string {
   const oneLine = [...words]
     .map((character) => {
       const code = character.codePointAt(0) ?? 0;

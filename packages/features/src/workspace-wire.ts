@@ -203,7 +203,7 @@ export type WorkspaceGithubInstallation = typeof workspaceGithubInstallationSche
  * here, below `@repo/settings`, which names the experiments and reads a key
  * it does not know as no choice at all.
  */
-export const workspaceExperimentSchema = EffectSchema.Struct({
+const workspaceExperimentSchema = EffectSchema.Struct({
   experiment: EffectSchema.String,
   on: EffectSchema.Boolean,
   changedBy: EffectSchema.NullOr(

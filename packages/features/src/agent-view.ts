@@ -344,7 +344,7 @@ function factsUnheard<
 }
 
 /** The models the service offers, as the window hears them: the list and the Mac a Start may run on where it offers one (`modelsAnswerSchema`), or why there is none. */
-export const agentModelsAnswerSchema = answerView(modelsContract.list);
+const agentModelsAnswerSchema = answerView(modelsContract.list);
 
 export type AgentModelsAnswer = typeof agentModelsAnswerSchema.Type;
 
@@ -371,12 +371,12 @@ export const chaptersProviderAnswerViewSchema = EffectSchema.Union([
 export type ChaptersProviderAnswer = typeof chaptersProviderAnswerViewSchema.Type;
 
 /** The account's hosts, as the window hears them read (`host-wire.ts`): the list and the install script's address, or why there is none. */
-export const hostsAnswerViewSchema = answerView(hostsContract.list);
+const hostsAnswerViewSchema = answerView(hostsContract.list);
 
 export type HostsAnswerView = typeof hostsAnswerViewSchema.Type;
 
 /** How long ago the reader's devices last beat, as the window hears it read, or why not. */
-export const devicePresenceAnswerViewSchema = answerView(hostsContract.presence);
+const devicePresenceAnswerViewSchema = answerView(hostsContract.presence);
 
 export type DevicePresenceAnswerView = typeof devicePresenceAnswerViewSchema.Type;
 
@@ -770,7 +770,7 @@ export const pullRequestPartParamsSchema = EffectSchema.Struct({
 export type PullRequestPartParams = typeof pullRequestPartParamsSchema.Type;
 
 /** What the agent published, as the window hears it: its branch and pull request as GitHub holds them, or why there is no answer. */
-export const agentPullRequestAnswerViewSchema = answerView(agentPullRequestsContract.pullRequest, {
+const agentPullRequestAnswerViewSchema = answerView(agentPullRequestsContract.pullRequest, {
   as: AGENT_NOT_FOUND_RENAMES,
 });
 
@@ -784,7 +784,7 @@ export const agentChangesAnswerViewSchema = answerView(agentsContract.changes, {
 export type AgentChangesAnswerView = typeof agentChangesAnswerViewSchema.Type;
 
 /** One agent's pull request itself as its overview draws it, as the window hears it: the pull request, why there is none yet, or why there is no answer. */
-export const agentOverviewPullRequestAnswerViewSchema = answerView(
+const agentOverviewPullRequestAnswerViewSchema = answerView(
   agentPullRequestsContract.overviewPullRequest,
   {
     as: AGENT_NOT_FOUND_RENAMES,
@@ -795,17 +795,14 @@ export type AgentOverviewPullRequestAnswerView =
   typeof agentOverviewPullRequestAnswerViewSchema.Type;
 
 /** The checks on one agent's pull request's head, as the window hears them: the checks, why there are none yet, or why there is no answer. */
-export const agentOverviewChecksAnswerViewSchema = answerView(
-  agentPullRequestsContract.overviewChecks,
-  {
-    as: AGENT_NOT_FOUND_RENAMES,
-  },
-);
+const agentOverviewChecksAnswerViewSchema = answerView(agentPullRequestsContract.overviewChecks, {
+  as: AGENT_NOT_FOUND_RENAMES,
+});
 
 export type AgentOverviewChecksAnswerView = typeof agentOverviewChecksAnswerViewSchema.Type;
 
 /** One agent's pull request's conversation, as the window hears it: the conversation, why there is none yet, or why there is no answer. */
-export const agentOverviewConversationAnswerViewSchema = answerView(
+const agentOverviewConversationAnswerViewSchema = answerView(
   agentPullRequestsContract.overviewConversation,
   {
     as: AGENT_NOT_FOUND_RENAMES,
@@ -816,12 +813,12 @@ export type AgentOverviewConversationAnswerView =
   typeof agentOverviewConversationAnswerViewSchema.Type;
 
 /** Which of our own tools an agent is offered and where its `run_on_mac` stands, as the window hears it: the answer, or why there is none. */
-export const agentWorkspaceToolsAnswerViewSchema = answerView(agentsContract.workspaceTools);
+const agentWorkspaceToolsAnswerViewSchema = answerView(agentsContract.workspaceTools);
 
 export type AgentWorkspaceToolsAnswerView = typeof agentWorkspaceToolsAnswerViewSchema.Type;
 
 /** What the reviewer and label pickers of an agent's Pull request tab offer, as the window hears it: the labels, users, and teams, or why there is no answer. */
-export const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {
+const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {
   as: AGENT_NOT_FOUND_RENAMES,
 });
 
@@ -842,7 +839,7 @@ export const agentPullRequestWriteAnswerViewSchema = answerView(agentPullRequest
 export type AgentPullRequestWriteAnswerView = typeof agentPullRequestWriteAnswerViewSchema.Type;
 
 /** Which of an agent's pull request's files the member marked viewed on GitHub, as the window hears it: each file's mark, the member to sign in with GitHub again, GitHub's refusal in its words, or why there is no answer. */
-export const agentPullRequestViewedAnswerViewSchema = answerView(agentPullRequestsContract.viewed, {
+const agentPullRequestViewedAnswerViewSchema = answerView(agentPullRequestsContract.viewed, {
   as: PULL_REQUEST_WRITE_VIEW_RENAMES,
 });
 

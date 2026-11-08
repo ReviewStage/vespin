@@ -61,7 +61,7 @@ export const integrationStatusViewSchema = answerView(integrationsContract.disco
 export type IntegrationStatusView = typeof integrationStatusViewSchema.Type;
 
 /** One provider's tools as the window hears them, or why there are none to draw. */
-export const integrationToolsViewSchema = answerView(integrationsContract.tools, {
+const integrationToolsViewSchema = answerView(integrationsContract.tools, {
   as: INTEGRATION_RENAMES,
 });
 

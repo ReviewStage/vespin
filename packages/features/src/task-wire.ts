@@ -775,7 +775,7 @@ const taskAgentLineSchema = EffectSchema.Struct({
 export type TaskAgentLine = typeof taskAgentLineSchema.Type;
 
 /** A pull request one of a task's agents opened, as GitHub last answered the service: where it stands and its size. */
-export const taskPullRequestLineSchema = EffectSchema.Struct({
+const taskPullRequestLineSchema = EffectSchema.Struct({
   number: countedNumber,
   title: EffectSchema.String,
   state: EffectSchema.Literals(Object.values(PULL_REQUEST_STATE)),
@@ -915,7 +915,7 @@ const agentEditLineSchema = EffectSchema.Struct({
  * name it holds now, a member who has since left the workspace among them.
  * The window calls the member You only where the id is its own account's.
  */
-export const descriptionEditorSchema = memberRefSchema;
+const descriptionEditorSchema = memberRefSchema;
 
 export type DescriptionEditor = typeof descriptionEditorSchema.Type;
 
@@ -989,7 +989,7 @@ export type Task = typeof taskSchema.Type;
  * first, each with its agents counted, and beside them every agent with no
  * plan in the account's workspaces, newest started first.
  */
-export const taskListAnswerSchema = EffectSchema.Struct({
+const taskListAnswerSchema = EffectSchema.Struct({
   plans: EffectSchema.Array(taskSummarySchema),
   planlessAgents: EffectSchema.optionalKey(EffectSchema.Array(tasklessAgentSchema)),
 });
@@ -1172,7 +1172,7 @@ function codeRangeIsReadable(ref: { startLine?: number; endLine?: number }): boo
  * A place in the task's repository: a file, named relative to the checkout
  * root, and the lines pointed at, or the file whole with none.
  */
-export const codeRefSchema = EffectSchema.Struct({
+const codeRefSchema = EffectSchema.Struct({
   path: EffectSchema.String.check(
     EffectSchema.isNonEmpty(),
     EffectSchema.isMaxLength(CODE_PATH_MAX_CHARS),

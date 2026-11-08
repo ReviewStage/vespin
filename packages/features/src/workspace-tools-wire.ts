@@ -35,7 +35,7 @@ const runOnMacOffSchema = EffectSchema.Struct({
 });
 
 /** Whose Mac `run_on_mac` runs on, whether it would run there now, and why not where it would not. */
-export const runOnMacStandingSchema = EffectSchema.Union([runOnMacOnSchema, runOnMacOffSchema]);
+const runOnMacStandingSchema = EffectSchema.Union([runOnMacOnSchema, runOnMacOffSchema]);
 
 export type RunOnMacStanding = typeof runOnMacStandingSchema.Type;
 

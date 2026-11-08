@@ -124,7 +124,7 @@ const contextWindowsSchema = EffectSchema.Struct({
 export type ContextWindows = typeof contextWindowsSchema.Type;
 
 /** One model the service offers: its catalog id, its name, its provider, the efforts it lists, its two windows where it offers them, and why its fast version is withheld where it is. */
-export const catalogModelSchema = EffectSchema.Struct({
+const catalogModelSchema = EffectSchema.Struct({
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   id: choiceText,
   name: EffectSchema.String,
@@ -168,7 +168,7 @@ export type CatalogModel = typeof catalogModelSchema.Type;
  * last reported them (`deviceMachineFields`); each is absent where it never
  * did, and from a service older than them.
  */
-export const macOfferSchema = EffectSchema.Struct({
+const macOfferSchema = EffectSchema.Struct({
   deviceId: wireUuidSchema,
   name: EffectSchema.String,
   providers: EffectSchema.Array(modelProviderSchema),
