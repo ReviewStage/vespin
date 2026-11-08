@@ -122,9 +122,11 @@ transcript says to sign in with `gh auth login` or set up SSH.
 The Mac app and the web app send counts of which features you use, from a
 fixed list of event names and values, under your account's name and email.
 They never include anything you type or say, titles, branches, file paths,
-prompts, or error text. The Service counts work done through it (such as
-tasks created and agents started) the same way. Counts are grouped by
-workspace, with each workspace's name and creation date.
+prompts, or error text. If you answer the optional questions in setup (how
+you heard about Vespin, your role, and what you hope it helps with), your
+picks are sent the same way, each from a fixed list. The Service counts work
+done through it (such as tasks created and agents started) the same way.
+Counts are grouped by workspace, with each workspace's name and creation date.
 
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your

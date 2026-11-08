@@ -11,6 +11,7 @@ import { SETUP_AUDIENCE, type SetupAudience } from "@repo/settings";
 /** Setup's steps, each a card of its own. */
 export const SETUP_STEP = {
   WELCOME: "welcome",
+  SURVEY: "survey",
   TEAM: "team",
   AGENT: "agent",
   GITHUB: "github",
@@ -22,13 +23,15 @@ export type SetupStep = (typeof SETUP_STEP)[keyof typeof SETUP_STEP];
 /**
  * The steps an account set up for `audience` walks, in order. Note that a
  * team's workspace is made before GitHub, because the App is installed on
- * the workspace the agents will work in.
+ * the workspace the agents will work in, and that an account a team invited
+ * is not asked the survey, since its step stands only for want of an agent.
  */
 export function setupSteps(audience: SetupAudience): readonly SetupStep[] {
   switch (audience) {
     case SETUP_AUDIENCE.TEAM:
       return [
         SETUP_STEP.WELCOME,
+        SETUP_STEP.SURVEY,
         SETUP_STEP.TEAM,
         SETUP_STEP.AGENT,
         SETUP_STEP.GITHUB,
@@ -37,7 +40,13 @@ export function setupSteps(audience: SetupAudience): readonly SetupStep[] {
     case SETUP_AUDIENCE.INVITED:
       return [SETUP_STEP.AGENT];
     case SETUP_AUDIENCE.ME:
-      return [SETUP_STEP.WELCOME, SETUP_STEP.AGENT, SETUP_STEP.GITHUB, SETUP_STEP.TOOLS];
+      return [
+        SETUP_STEP.WELCOME,
+        SETUP_STEP.SURVEY,
+        SETUP_STEP.AGENT,
+        SETUP_STEP.GITHUB,
+        SETUP_STEP.TOOLS,
+      ];
   }
 }
 

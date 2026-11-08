@@ -169,7 +169,7 @@ test("signed out from Settings, a fresh account that finishes setup lands on Hom
   // Grace has walked setup to its last step, Connect your tools, and her account carries the place.
   const graceMidway: AppStateSnapshot = {
     ...GRACE,
-    settings: appSettingsWire(settingsView({ setupPlace: '{"audience":"me","at":3}' })),
+    settings: appSettingsWire(settingsView({ setupPlace: '{"audience":"me","at":4}' })),
   };
   // Note that the document is in the client before the window draws, as the root's `ensureQueryData` leaves it.
   await writeHandedAppState();

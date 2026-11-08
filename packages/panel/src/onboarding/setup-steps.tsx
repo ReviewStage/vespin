@@ -22,11 +22,12 @@ import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
 import { SETUP_GATE, SETUP_STEP, type SetupGate, setupGate, setupSteps } from "./setup-model.js";
+import { SurveyQuestions, useSurvey } from "./setup-survey.js";
 import { TeamForm, useTeamForm } from "./setup-team.js";
 import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
 
 /**
- * setup-steps.tsx -- a new account's setup, alone in the window after sign-in: who it is for, a team's workspace where there is one, an agent, GitHub, and the tools, one card each.
+ * setup-steps.tsx -- a new account's setup, alone in the window after sign-in: who it is for, a few questions about the person, a team's workspace where there is one, an agent, GitHub, and the tools, one card each.
  *
  * Each card is the sign-in's own, so setup reads as the sign-in going on,
  * and each offers a quiet Sign out, since setup stands with no sidebar.
@@ -35,7 +36,7 @@ import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
  * is connected. A team's workspace is required too, once With my team is
  * chosen, since Back leads to Just me for anyone who changed their mind;
  * once made, its step coming back holds it to change rather than make again.
- * GitHub may be skipped, and the tools need nothing done. Where setup
+ * The survey and GitHub may be skipped, and the tools need nothing done. Where setup
  * stands is kept on the account (`APP_SETTING_SCHEMA.setupPlace`), so setup
  * left partway resumes at the same step on another machine or on the web,
  * and a team's workspace made is not offered to be made again. Finish lets
@@ -175,6 +176,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const [reached, setReached] = useState(false);
   const onConnected = useCallback((connected: boolean) => setAgent(connected), []);
   const onReached = useCallback((now: boolean) => setReached(now), []);
+  const survey = useSurvey();
   const steps = setupSteps(audience);
   // A place kept by another window or an earlier build may stand past the last step, which is held to it.
   const at = Math.min(Math.max(place.at, 0), steps.length - 1);
@@ -240,6 +242,36 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
             if (chosen !== undefined) setAudience(chosen);
           }}
         />
+      </AuthPage>
+    );
+  }
+  if (step === SETUP_STEP.SURVEY) {
+    return (
+      <AuthPage
+        mark={<ProductMark />}
+        exit={exit}
+        title="Tell us about yourself"
+        foot={
+          <AuthStepFoot
+            at={at + 1}
+            total={steps.length}
+            onBack={back}
+            onSkip={survey.answered ? undefined : forward}
+            next={
+              survey.answered
+                ? {
+                    label: "Continue",
+                    onPress: () => {
+                      survey.count();
+                      forward();
+                    },
+                  }
+                : undefined
+            }
+          />
+        }
+      >
+        <SurveyQuestions survey={survey} />
       </AuthPage>
     );
   }
