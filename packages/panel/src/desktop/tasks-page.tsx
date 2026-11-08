@@ -29,6 +29,7 @@ import { Schema, SchemaTransformation } from "effect";
 import { KanbanIcon, ListFilterIcon, ListIcon, SlidersHorizontalIcon } from "lucide-react";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
@@ -178,6 +179,7 @@ export function TasksPage({
   /** What the page holds across its visits, where something outlives it to hold it (`tasks-page-held.ts`). */
   held?: TasksPageHeld | undefined;
 }): React.JSX.Element {
+  const pictures = useRepositoryPictures();
   const [view, keepView] = useKept(KEPT.VIEW, TASKS_VIEW.LIST);
   const [listDisplay, onListDisplay] = useKept(
     KEPT.DISPLAY[TASKS_VIEW.LIST],
@@ -267,7 +269,7 @@ export function TasksPage({
         filter={filter}
         onFilter={onFilter}
         shared={shared}
-        pictures={tasks.repositories.pictures}
+        pictures={pictures}
         asked={{ ask: filterAsk.ask }}
       />
       <TasksViewOptions
@@ -296,7 +298,7 @@ export function TasksPage({
             filter={filter}
             onFilter={onFilter}
             shared={shared}
-            pictures={tasks.repositories.pictures}
+            pictures={pictures}
           />
           <TasksViewOptions
             shown={tasks.shown}

@@ -126,10 +126,12 @@ import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useBoardDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
@@ -414,6 +416,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
 }): React.JSX.Element {
   const maker = useTaskMaker(task);
   const unread = useMarkedUnread(task.id);
+  const pictures = useRepositoryPictures();
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
@@ -557,8 +560,8 @@ const TaskBoardCard = memo(function TaskBoardCard({
             <TaskBoardRepository
               repository={task.repository}
               label={repositoryName}
-              openGitHub={tasks.onOpenGitHub}
-              pictures={tasks.pictures}
+              openGitHub={openRepositoryOnGitHub}
+              pictures={pictures}
             />
           )}
           {subTasksTotal === 0 ? null : (

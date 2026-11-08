@@ -35,7 +35,8 @@ import {
  * the log here draws its lines through `ConversationRows`, TanStack
  * Virtual's run (`@repo/ui/virtual-rows`), which keeps to the newest line
  * as the library's chat guide does: it opens at the end, a line appended
- * follows on to it while the reader stands near the end, a line growing at
+ * follows on to it while the reader stands near the end, as does a line put
+ * before a last line that stands still, a reply box's, a line growing at
  * the end keeps them there, and lines put before the first leave the
  * reader's place where it was. The context the children read is the
  * registry's: whether the log is at its bottom (`isAtEnd()`), and a way to
@@ -218,9 +219,18 @@ export function ConversationRows({
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, hold, askOlder, atBottom } = useConversation();
+  const { list, hold, askOlder, isAtBottom, atBottom } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
+  // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an inbox thread's end, is followed here while the reader stood at the end.
+  const drawn = useRef(keys);
+  useLayoutEffect(() => {
+    const was = drawn.current;
+    drawn.current = keys;
+    if (isAtBottom && keys.length > was.length && keys.at(-1) === was.at(-1)) {
+      run.current?.scrollToEnd();
+    }
+  }, [keys, isAtBottom]);
   useImperativeHandle(handle, () => {
     const now = () => run.current;
     return {

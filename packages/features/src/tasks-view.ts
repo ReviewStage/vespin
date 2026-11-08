@@ -91,6 +91,7 @@ import {
   formerMemberSchema,
   workspaceCreateRequestSchema,
   workspaceExperimentSetRequestSchema,
+  workspaceDeleteRequestSchema,
   workspaceGithubRequestSchema,
   workspaceLeaveRequestSchema,
   workspaceMemberRemovalSchema,
@@ -970,6 +971,9 @@ export type TasksWorkspaceTokenRepositoriesAnswer =
 
 /** Leaving a workspace, as the window asks it: the workspace. */
 export const tasksWorkspaceLeaveParamsSchema = workspaceLeaveRequestSchema;
+
+/** Its owner deleting a workspace, as the window asks it: the workspace. */
+export const tasksWorkspaceDeleteParamsSchema = workspaceDeleteRequestSchema;
 
 /** An invitation, as the window asks for it: the workspace, the address, and the role. */
 export const tasksWorkspaceInviteParamsSchema = workspaceInviteRequestSchema;

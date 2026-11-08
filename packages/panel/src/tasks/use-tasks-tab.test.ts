@@ -46,7 +46,7 @@ import {
 import type { PortActKind, PortActResult } from "@repo/host/contract";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { EXPERIMENT } from "@repo/settings";
-import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import type { SettingsLink } from "@repo/settings/settings-views";
 import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
 import {
   agentTab,
@@ -3107,87 +3107,6 @@ test("a workspace chosen from the home page lists it and opens nothing", async (
   );
 });
 
-test("the new-plan page's recent repositories are the chosen workspace's own, and the chip names its workspace", () => {
-  const tab = mount({
-    shown: true,
-    tasks: {
-      ...TWO_WORKSPACES,
-      workspaces: [
-        { ...PERSONAL, github: { login: "alice", active: true } },
-        { ...ACME, github: { login: "acme", active: true } },
-      ],
-      tasks: [
-        { ...row("notes", 4), repository: "alice/private" },
-        { ...row("alerts", 3), workspaceId: ACME.id, repository: "acme/relay" },
-      ],
-    },
-  });
-
-  const personal = tab.control().repositories;
-  act(() => tab.control().onChooseWorkspace(ACME.id));
-  const acme = tab.control().repositories;
-
-  assert.deepEqual([personal.recent, personal.scope], [["alice/private"], PERSONAL.id]);
-  assert.deepEqual([acme.recent, acme.scope], [["acme/relay"], ACME.id]);
-});
-
-test("a workspace's recent repositories are only those its GitHub reaches, so a plan stranded there by #2524 offers its repository to none", () => {
-  const tab = mount({
-    shown: true,
-    tasks: {
-      ...TWO_WORKSPACES,
-      workspaces: [PERSONAL, { ...ACME, github: { login: "ReviewStage", active: true } }],
-      tasks: [
-        { ...row("stranded", 5), repository: "ReviewStage/luke" },
-        { ...row("alerts", 4), workspaceId: ACME.id, repository: "reviewstage/luke" },
-        { ...row("elsewhere", 3), workspaceId: ACME.id, repository: "octo/site" },
-      ],
-    },
-  });
-
-  const personal = tab.control().repositories.recent;
-  act(() => tab.control().onChooseWorkspace(ACME.id));
-
-  assert.deepEqual(personal, [], "a workspace with no GitHub connected reaches none");
-  assert.deepEqual(tab.control().repositories.recent, ["reviewstage/luke"]);
-});
-
-test("newer plans on repositories a workspace does not reach crowd out none it does, and a suspended GitHub reaches nothing", () => {
-  const stranded = [5, 6, 7, 8, 9].map((at) => ({
-    ...row(`stranded-${at}`, at),
-    workspaceId: ACME.id,
-    repository: `octo/site-${at}`,
-  }));
-  const tasks = [
-    ...stranded,
-    { ...row("relay", 1), workspaceId: ACME.id, repository: "acme/relay" },
-  ];
-  const active = mount({
-    shown: true,
-    tasks: {
-      ...TWO_WORKSPACES,
-      workspaces: [PERSONAL, { ...ACME, github: { login: "acme", active: true } }],
-      tasks,
-    },
-  });
-  act(() => active.control().onChooseWorkspace(ACME.id));
-  const reached = active.control().repositories.recent;
-  closeWindow();
-
-  const suspended = mount({
-    shown: true,
-    tasks: {
-      ...TWO_WORKSPACES,
-      workspaces: [PERSONAL, { ...ACME, github: { login: "acme", active: false } }],
-      tasks,
-    },
-  });
-  act(() => suspended.control().onChooseWorkspace(ACME.id));
-
-  assert.deepEqual(reached, ["acme/relay"]);
-  assert.deepEqual(suspended.control().repositories.recent, []);
-});
-
 test("a workspace chosen is chosen again on the next launch, and one the account is no longer in gives way to the first one", () => {
   const first = mount({ shown: true, tasks: TWO_WORKSPACES });
   act(() => first.control().onChooseWorkspace(ACME.id));
@@ -3216,29 +3135,6 @@ test("before the workspaces are read every plan is listed and New plan names no 
     ["notes", "alerts", "billing"],
   );
   assert.deepEqual(startedIn(tab.payloads), [undefined]);
-});
-
-test("the repository chooser says the account manages the workspace it owns, and not one it is a member of", () => {
-  const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, UNSTARTED);
-
-  const personal = tab.control().repositories.manages;
-  act(() => tab.control().onChooseWorkspace(ACME.id));
-
-  assert.equal(personal, true);
-  assert.equal(tab.control().repositories.manages, false);
-});
-
-test("the repository chip holds the chosen workspace's repositories on the new-plan page, and the open plan's on its page", async () => {
-  const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-  await settle();
-
-  const scopes = [tab.control().repositories.scope];
-  act(() => tab.control().onChooseWorkspace(ACME.id));
-  scopes.push(tab.control().repositories.scope);
-  tab.stand({ tasks: { ...OPEN, workspaces: [PERSONAL, ACME] } });
-  scopes.push(tab.control().repositories.scope);
-
-  assert.deepEqual(scopes, [PERSONAL.id, ACME.id, TASK.workspaceId]);
 });
 
 test("the repository chip's list for a workspace with GitHub connected is its repositories alone, under no heading", async () => {
@@ -3307,25 +3203,6 @@ test("the repository chip's list for a workspace with GitHub connected is its re
       [["acme/relay"], []],
     ),
   );
-});
-
-test("Connect GitHub under a plan opens Settings on the plan's workspace's GitHub, read off the open document where the list did not land", async () => {
-  const tab = mount({
-    shown: true,
-    tasks: { ...OPEN, listStatus: TASKS_READ.FAILED, workspaces: [PERSONAL, ACME] },
-    descriptions: { [TASK.id]: { rows: { task: { ...TASK, workspaceId: ACME.id } } } },
-  });
-  await settle();
-
-  act(() => tab.control().onOpenWorkspaceGitHub(TASK.id));
-
-  assert.deepEqual(tab.links, [
-    {
-      page: SETTINGS_VIEW.WORKSPACE,
-      section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
-      workspaceId: ACME.id,
-    },
-  ]);
 });
 
 test("a plan moved lists the workspace it moved to while it is still open, and a move answered after another plan opened leaves the sidebar where it is", async () => {

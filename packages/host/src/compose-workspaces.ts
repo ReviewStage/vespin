@@ -199,6 +199,7 @@ export interface WorkspacesClient {
     | "changeRole"
     | "transfer"
     | "leave"
+    | "delete"
     | "invite"
     | "cancelInvitation"
   >;
@@ -460,8 +461,12 @@ function workspacesAnswered(
         .map((each) => each.id),
     );
     const listed = new Set(workspaces.map((each) => each.id));
+    const gone = new Set([...drawn].filter((id) => !listed.has(id)));
     // Note that a workspace leaving the list lets go of all content kept, since what was read in it is no longer the account's to read.
-    if ([...drawn].some((id) => !listed.has(id))) yield* kept.clear;
+    if (gone.size > 0) yield* kept.clear;
+    // A workspace another member deleted, or left the account out of, closes its task open here, as the act that leaves it does.
+    const open = tasks.openTaskLeaving();
+    if (open.workspaceId !== undefined && gone.has(open.workspaceId)) yield* open.close;
     yield* rows.answer(workspaces);
     if (tasks.view().workspacesStatus !== TASKS_READ.READY) {
       tasks.draw({ workspacesStatus: TASKS_READ.READY });
@@ -963,6 +968,7 @@ function workspaceRowActs(
   | "WORKSPACE_PHOTO_SET"
   | "WORKSPACE_TRANSFER"
   | "WORKSPACE_LEAVE"
+  | "WORKSPACE_DELETE"
 > {
   const { dependencies, served, gate } = reach;
   const { client } = dependencies;
@@ -1109,6 +1115,20 @@ function workspaceRowActs(
         if (readerId !== undefined) {
           yield* people.membersReads.moved(workspaceId, [{ userId: readerId, gone: true }]);
         }
+      }),
+    // Note that a delete closes the open task where it is that workspace's,
+    // as a leave does, because the task is deleted with it; a refused delete
+    // closes nothing. The workspace and its tasks leave the view over the
+    // follow, as every other member's window hears it.
+    WORKSPACE_DELETE: ({ workspaceId }) =>
+      Effect.gen(function* () {
+        if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
+        const open = dependencies.tasks.openTaskLeaving();
+        const remove = Effect.tap(client.workspaces.delete(workspaceId), (answer) =>
+          answer.ok && open.workspaceId === workspaceId ? open.close : Effect.void,
+        );
+        const deleted = yield* served(remove);
+        if (!deleted.ok) return yield* workspaceRefused(deleted.failure);
       }),
   };
 }

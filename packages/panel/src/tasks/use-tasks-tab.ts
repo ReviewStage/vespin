@@ -22,48 +22,31 @@ import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-li
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import type { PageLine } from "@repo/features/page-wire";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
-import {
-  FAILURE_CONDITION,
-  FAILURE_SURFACE,
-  type FailureSurface,
-} from "@repo/features/shown-failure";
+import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentMovedAt, agentsOfTask } from "@repo/features/task-agents-model";
-import {
-  type CodeRef,
-  type ListedPullRequest,
-  TASK_BLOCK_CHANGE,
-  TASK_BLOCK_RELATION,
-  type TaskAgentPin,
-  type TaskBlockRelation,
-  type TaskBlockRequest,
-  type TaskCreateRelation,
-  type TaskCreateRelationKind,
-  type TaskRelationChangeRequest,
-  type TaskRelationKind,
-  type TaskRunsOnRequest,
-  type TaskStanding,
-  type TaskStatus,
-  type TaskSummary,
+import type {
+  CodeRef,
+  ListedPullRequest,
+  TaskAgentPin,
+  TaskCreateRelation,
+  TaskCreateRelationKind,
+  TaskRelationKind,
+  TaskRunsOnRequest,
+  TaskStanding,
+  TaskStatus,
+  TaskSummary,
 } from "@repo/features/task-wire";
 import {
-  type ParentCallFailure,
-  type RelationCallFailure,
   summaryOfTaskless,
-  TASK_BLOCK_FAILURE,
   TASK_CALL_FAILURE,
-  TASK_PARENT_FAILURE,
   TASKS_READ,
-  type TasksBlockAnswer,
-  type TasksChangeRelationAnswer,
-  type TasksSetParentAnswer,
   type TasksView,
 } from "@repo/features/tasks-view";
-import { managesWorkspace } from "@repo/features/workspace-role";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask, AppStateSnapshot } from "@repo/host/app-state";
 import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn } from "@repo/settings";
-import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import type { SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
 import {
   agentTab,
@@ -80,10 +63,8 @@ import {
   DOCUMENT_REGION,
   type DocumentRegion,
   documentRegion,
-  recentRepositories,
   renamedRegion,
   renamedView,
-  repositoryChangeFailureNote,
   type StatusChange,
   settleChanges,
   settledNote,
@@ -96,7 +77,6 @@ import {
   type TaskNames,
   type TasksPage,
   tasksPage,
-  workspaceReaches,
 } from "@repo/ui/tasks-model";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import {
@@ -109,21 +89,11 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { absurd } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  askAct,
-  askKept,
-  firstRefusal,
-  type Kept,
-  notKept,
-  sendAct,
-  type Unreached,
-  unreachedAs,
-} from "../act.js";
+import { askAct, askKept, firstRefusal, type Kept, notKept, sendAct, unreachedAs } from "../act.js";
 import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
 import { useAdminRoute } from "../admin/admin-route.js";
 import { adminViewOfLink } from "../admin/routing.js";
 import type { AgentRoute } from "../agent-route.js";
-import { appPlatform } from "../app-platform.js";
 import { useAutomationsRoute } from "../automations-route.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
@@ -158,15 +128,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import {
-  heldTask,
-  pressRows,
-  pressWrite,
-  ROW_WRITE,
-  type TaskRows,
-  taskRow,
-  type UndoWrite,
-} from "../undo-stack.js";
+import { pressRows, ROW_WRITE } from "../undo-stack.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspaces } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import { workspaceExperimentChoices } from "../workspace-experiments.js";
@@ -219,6 +181,12 @@ import {
   TAB_PRESS,
   useColumnKeys,
 } from "./tab-press.js";
+import {
+  type RelationMenuAsk,
+  type RepositoryMenuAsk,
+  useRepositoriesIn,
+  useTaskMenus,
+} from "./task-repository-menus.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture } from "./tasks-fixture-loader.js";
@@ -683,36 +651,20 @@ export interface TasksControl {
   onReopenClosedTab: (() => void) | undefined;
   /** The pin the open task was last opened from, which the sidebar marks in the task's place for as long as the task stays open; none once a task is opened otherwise. */
   chosenPin: SidebarPin | undefined;
-  /** What the repository chip offers, in the composer and on the open task alike. */
-  repositories: RepositoryChooser;
   /** The ask standing for the open task's chip to open its menu: which task it is about, and how many asks so far. */
-  repositoryMenu: { taskId: string; request: number } | undefined;
+  repositoryMenu: RepositoryMenuAsk | undefined;
   /** Opens a task's repository chip menu, opening the task first where it is not the open one. */
   onChangeRepository: (taskId: string) => void;
   /** The ask standing for the open task's head to open the add menu on a kind: which task it is about, the kind, and how many asks so far. */
-  relationMenu: { taskId: string; kind: TaskRelationKind; request: number } | undefined;
+  relationMenu: RelationMenuAsk | undefined;
   /** Opens a task's add menu on a kind (`task-relation-menu.tsx`), opening the task first where it is not the open one. */
   onAddRelation: (taskId: string, kind: TaskRelationKind) => void;
-  /** Gives a task its repository, or takes it away with null; answers why the service refused, or nothing once it is kept. */
-  onSetRepository: (taskId: string, repository: string | null) => Promise<string | undefined>;
   /** Sets where a task stands, how much it matters, or who it is assigned to, drawn at once by the assignee's name where the caller knows it; answers whether the service kept it, with what refused it where it did not. */
   onSetTaskStanding: (
     taskId: string,
     standing: TaskStanding,
     assigneeName?: string,
   ) => Promise<Kept>;
-  /** Adds one block of a task or takes it away, which the open document draws as the service answers it; a refusal says why in a toast. */
-  onSetTaskBlock: (taskId: string, block: TaskBlockRequest) => void;
-  /** Sets a task's parent, or clears it with null, which the sidebar and the open document draw as the service answers it; a refusal says why in a toast. */
-  onSetTaskParent: (taskId: string, parentTaskId: string | null) => void;
-  /** Takes a task out from under its parent, said in a toast whose Undo sets the parent back; nothing for a task with none. */
-  onRemoveTaskParent: (taskId: string) => void;
-  /** Takes one block of a task away, said in a toast whose Undo adds it back; a refusal says why in a toast. */
-  onRemoveTaskBlock: (taskId: string, relation: TaskBlockRelation, otherId: string) => void;
-  /** Moves one relation of a task to another kind in one call, drawn as the service answers it; a refusal says why in a toast. */
-  onChangeTaskRelation: (taskId: string, relation: TaskRelationChangeRequest) => void;
-  /** Opens Settings › Workspace at its GitHub, for the workspace the task belongs to. */
-  onOpenWorkspaceGitHub: (taskId: string) => void;
   /**
    * Moves a task to another of the account's workspaces, whose GitHub
    * reaches its repository, and lists that workspace so the task stays in
@@ -953,26 +905,6 @@ const OPEN_STARTED_TASK = "Open";
 /** What the toast says when the service did not move a task, which stays where it was. */
 const MOVE_REFUSED_NOTE = "The task could not be moved. Try again.";
 
-/** What the toast says when the service kept no change to a task's blocks, which stand as they were. */
-const BLOCK_REFUSED_NOTE = "That relation could not be changed. Try again.";
-
-/** What the toast says when a block would close a cycle, the other task already waiting on this one. */
-const BLOCK_CYCLE_NOTE = "That task already waits on this one, so it can't block it too.";
-
-/** What the toast says when a parent would put the task under itself, the other task already a sub-task of it. */
-const PARENT_CYCLE_NOTE =
-  "That task is already a sub-task of this one, so it can't be its parent too.";
-
-/** What the toast says when a parent works in another repository, which a sub-task always shares. */
-const PARENT_REPOSITORY_NOTE =
-  "A sub-task works in its parent's repository, so the two must share one.";
-
-/** What the toast says once a task's parent is removed, offering Undo. */
-const PARENT_REMOVED_NOTE = "Parent removed";
-
-/** What the toast says once a block is removed, offering Undo. */
-const BLOCK_REMOVED_NOTE = "Relation removed";
-
 /** A task moved to another workspace, and whether a refusal goes unsaid, as the Move dialog says it under its list. */
 interface TaskMoveAsk {
   readonly taskId: string;
@@ -1005,119 +937,6 @@ function standingNote(standing: TaskStanding): string {
     ? ASSIGNEE_CHANGED_NOTES.UNASSIGNED
     : ASSIGNEE_CHANGED_NOTES.ASSIGNED;
 }
-
-/** What a relation's refusal says: its own reason where the service named one, and a plain refusal otherwise. */
-function relationRefusedNote(failure: RelationCallFailure | ParentCallFailure): string {
-  switch (failure) {
-    case TASK_BLOCK_FAILURE.CYCLE:
-      return BLOCK_CYCLE_NOTE;
-    case TASK_PARENT_FAILURE.CYCLE:
-      return PARENT_CYCLE_NOTE;
-    case TASK_PARENT_FAILURE.REPOSITORY_DIFFERS:
-      return PARENT_REPOSITORY_NOTE;
-    default:
-      return BLOCK_REFUSED_NOTE;
-  }
-}
-
-/** A relation write's answer as the window hears it: the service's, or one that never arrived. */
-type RelationAnswer =
-  | TasksBlockAnswer
-  | TasksSetParentAnswer
-  | TasksChangeRelationAnswer
-  | Unreached<typeof TASK_CALL_FAILURE.UNANSWERED>;
-
-/** A relation write's act, settled as unanswered where it never answered, so it never rejects. */
-function relationAsked<Answer extends RelationAnswer>(
-  asked: Promise<Answer>,
-): Promise<Answer | Unreached<typeof TASK_CALL_FAILURE.UNANSWERED>> {
-  return asked.catch(taskUnreached);
-}
-
-/** What a relation write's refusal says; nothing where the service kept it. */
-function relationRefused(answer: RelationAnswer): string | undefined {
-  return "failure" in answer ? relationRefusedNote(answer.failure) : undefined;
-}
-
-/** A block a press took away: the task it was taken from, the other task, and the side the other stood on. */
-interface BlockRemoved {
-  readonly taskId: string;
-  readonly relation: TaskBlockRelation;
-  readonly otherId: string;
-}
-
-/** A parent a press cleared: the task, and the parent it had. */
-interface ParentRemoved {
-  readonly taskId: string;
-  readonly parentTaskId: string;
-}
-
-/** Whether the task's plan, as the host holds it, lists the block; none where it holds no plan of it, as the list carries no blocks. */
-function blockStands(rows: TaskRows, { taskId, relation, otherId }: BlockRemoved) {
-  const task = heldTask(rows, taskId);
-  if (task === undefined) return undefined;
-  const side = relation === TASK_BLOCK_RELATION.BLOCKED_BY ? task.blockedBy : task.blocks;
-  return side?.includes(otherId) ?? false;
-}
-
-/**
- * The relation writes ⌘Z takes back, which ask nothing first since each can
- * be added back: a block taken away, added again only while the task still
- * stands without it, and a parent cleared, set again only while the task
- * still stands at the top. A refusal says why in the relation's own words.
- */
-const RELATION_WRITE = {
-  BLOCK_REMOVAL: {
-    words: BLOCK_REMOVED_NOTE,
-    kind: ACT_KIND.TASKS_BLOCK,
-    read: (_rows, removed) => removed,
-    act: (send, { taskId, relation, otherId }) =>
-      relationAsked(
-        send({ taskId, block: { change: TASK_BLOCK_CHANGE.REMOVE, relation, taskId: otherId } }),
-      ),
-    undo: (send, { taskId, relation, otherId }) =>
-      relationAsked(
-        send({ taskId, block: { change: TASK_BLOCK_CHANGE.ADD, relation, taskId: otherId } }),
-      ),
-    holds: (rows, removed) => blockStands(rows, removed) === false,
-    undone: (rows, removed) => blockStands(rows, removed) === true,
-    refused: relationRefused,
-    surface: FAILURE_SURFACE.TASK_BLOCK,
-    about: ({ taskId }) => ({ taskId }),
-  } satisfies UndoWrite<
-    TaskRows,
-    BlockRemoved,
-    BlockRemoved,
-    typeof ACT_KIND.TASKS_BLOCK,
-    RelationAnswer
-  >,
-  PARENT_REMOVAL: {
-    words: PARENT_REMOVED_NOTE,
-    kind: ACT_KIND.TASKS_SET_PARENT,
-    read: (rows, { taskId }) => {
-      const parentTaskId =
-        taskRow(rows, taskId)?.parentTaskId ?? heldTask(rows, taskId)?.parentTaskId;
-      return parentTaskId === undefined ? undefined : { taskId, parentTaskId };
-    },
-    act: (send, { taskId }) => relationAsked(send({ taskId, parentTaskId: null })),
-    undo: (send, { taskId, parentTaskId }) => relationAsked(send({ taskId, parentTaskId })),
-    holds: (rows, { taskId }) => {
-      const task = taskRow(rows, taskId);
-      return task !== undefined && task.parentTaskId === undefined;
-    },
-    undone: (rows, { taskId, parentTaskId }) =>
-      taskRow(rows, taskId)?.parentTaskId === parentTaskId,
-    refused: relationRefused,
-    surface: FAILURE_SURFACE.TASK_PARENT,
-    about: ({ taskId }) => ({ taskId }),
-  } satisfies UndoWrite<
-    TaskRows,
-    { readonly taskId: string },
-    ParentRemoved,
-    typeof ACT_KIND.TASKS_SET_PARENT,
-    RelationAnswer
-  >,
-} as const;
 
 /** What the toast says when opening a task listed the workspace it is in. */
 function switchedNote(workspace: string): string {
@@ -1228,12 +1047,6 @@ export function useTasksTab(input: {
   const queryClient = useQueryClient();
   const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
   const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
-  const { mutateAsync: sendTaskRepository } = useMutation(
-    actMutation(ACT_KIND.TASKS_SET_REPOSITORY),
-  );
-  const { mutateAsync: sendBlock } = useMutation(actMutation(ACT_KIND.TASKS_BLOCK));
-  const { mutateAsync: sendParent } = useMutation(actMutation(ACT_KIND.TASKS_SET_PARENT));
-  const { mutateAsync: sendRelation } = useMutation(actMutation(ACT_KIND.TASKS_CHANGE_RELATION));
   const { mutateAsync: sendRestore } = useMutation(actMutation(ACT_KIND.TASKS_RESTORE));
   // Note that a task started with its agent is traced as a send; one started with none is not.
   const { mutateAsync: sendTaskStart } = useMutation(
@@ -1260,8 +1073,6 @@ export function useTasksTab(input: {
   const [startingTask, setStartingTask] = useState<
     (StartingTask & { readonly arrivals: number }) | undefined
   >(undefined);
-  const [repositoryMenu, setRepositoryMenu] = useState<TasksControl["repositoryMenu"]>(undefined);
-  const [relationMenu, setRelationMenu] = useState<TasksControl["relationMenu"]>(undefined);
   const [chosen, setChosen] = useState<PinChoice | undefined>(undefined);
   /** The save whose revision a version history opened from a section's "Edited by" seeks, on its task, until it is found, given up on, or the history is left. */
   const [historySeek, setHistorySeek] = useState<HistorySeek | undefined>(undefined);
@@ -2326,8 +2137,6 @@ export function useTasksTab(input: {
   drawnTasks.current = tasks;
   const drawnNow = useCallback(() => drawnTasks.current, []);
   const standingDoors = useTaskRowDoors(ROW_WRITE.TASK_STANDING.kind, drawnNow);
-  const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK, drawnNow);
-  const parentDoors = useTaskRowDoors(ACT_KIND.TASKS_SET_PARENT, drawnNow);
   const sendStandingRow = standingDoors.send;
 
   // The open task as it stands when a move is answered, which may be
@@ -2415,68 +2224,7 @@ export function useTasksTab(input: {
   // tab is shown.
   const unreadTabs: readonly StripTab[] = input.unseenAgents.map((agent) => agentTab(agent));
 
-  // A fixture's repositories are read from nowhere, as its tasks are. The
-  // chip lists the repositories of the workspace its task is in: the open
-  // task's, else the one New task starts in.
-  const repositoriesOf =
-    region.kind === DOCUMENT_REGION.READY ? region.task.workspaceId : listedWorkspace?.id;
-  const openGitHub = useCallback((url: string) => appPlatform().openGitHub(url), []);
-  /**
-   * The repository chip's list for one workspace: the repositories its tasks
-   * were about lately that its GitHub reaches, newest first, so a task never
-   * starts on another workspace's nor on one a task stranded there by #2524
-   * still names; a read of every repository its GitHub reaches; whether the
-   * account manages it, so can connect its GitHub; and whether it has a
-   * GitHub connected, so a read finding none installed says GitHub removed
-   * or suspended it. A workspace not yet read is taken as managed, so the
-   * chip still points somewhere, and its recent repositories are left to the
-   * service's read to judge; and whether the tasks are still being read, so
-   * the chip asks for no pick before its default could be known.
-   */
-  const repositoriesIn = useCallback(
-    (workspaceId: string | undefined): RepositoryChooser => {
-      const workspace = viewed.workspaces.find((each) => each.id === workspaceId);
-      const own =
-        workspaceId === undefined
-          ? tasks.tasks
-          : tasks.tasks.filter((task) => task.workspaceId === workspaceId);
-      // Note that the tasks are filtered before the recent ones are counted,
-      // because a few newer stranded tasks would otherwise crowd out an older
-      // repository the workspace does reach.
-      const offered =
-        workspace === undefined
-          ? own
-          : own.filter(
-              (task) => task.repository !== null && workspaceReaches(workspace, task.repository),
-            );
-      return {
-        recent: recentRepositories(offered),
-        reading: tasks.listStatus !== TASKS_READ.READY && tasks.listStatus !== TASKS_READ.FAILED,
-        openGitHub,
-        pictures: fixture === undefined,
-        scope: workspaceId,
-        manages: workspace === undefined || managesWorkspace(workspace),
-        ...(workspace?.github == null ? undefined : { connected: true }),
-      };
-    },
-    [viewed.workspaces, tasks.tasks, tasks.listStatus, fixture, openGitHub],
-  );
-  // The open task's chip, or New task's, made again only as what it lists from moves.
-  const repositories = useMemo(
-    () => repositoriesIn(repositoriesOf),
-    [repositoriesIn, repositoriesOf],
-  );
-  // A fixture's tasks are given no repository, as they are read from nowhere.
-  const setRepository = (
-    taskId: string,
-    repository: string | null,
-  ): Promise<string | undefined> => {
-    if (fixture !== undefined) return Promise.resolve(undefined);
-    return sendTaskRepository({ taskId, repository }).then(
-      (answer) => ("failure" in answer ? repositoryChangeFailureNote(answer.failure) : undefined),
-      (refused: Error) => refused.message,
-    );
-  };
+  const repositoriesIn = useRepositoriesIn();
 
   // A fixture's tasks are read from nowhere, so nothing keeps where they
   // stand. A change the service kept is ⌘Z's to take back.
@@ -2500,49 +2248,6 @@ export function useTasksTab(input: {
       if (kept.kept) pressed.keep(standingNote(standing));
       return kept;
     });
-  };
-
-  // The relation writes' one recipe. A fixture's tasks are read from
-  // nowhere, so no relation of one is kept. The sidebar and the open
-  // document take the task the service answers, so a refusal is all there is
-  // to say, in a toast in the relation's own words, since the menu that
-  // asked has closed.
-  const askRelation = (
-    surface: FailureSurface,
-    taskId: string,
-    asked: () => Promise<RelationAnswer>,
-  ) => {
-    if (fixture !== undefined) return;
-    void relationAsked(asked()).then((answer) => {
-      const words = relationRefused(answer);
-      if (words === undefined) return;
-      toast({
-        replayUnmasked: true,
-        words,
-        tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
-        failure: { surface, cause: answer, about: { taskId } },
-      });
-    });
-  };
-  const setTaskBlock = (taskId: string, block: TaskBlockRequest) =>
-    askRelation(FAILURE_SURFACE.TASK_BLOCK, taskId, () => sendBlock({ taskId, block }));
-  const setTaskParent = (taskId: string, parentTaskId: string | null) =>
-    askRelation(FAILURE_SURFACE.TASK_PARENT, taskId, () => sendParent({ taskId, parentTaskId }));
-  // A relation's kind moves in one call, so a refusal leaves it as it stood.
-  const changeTaskRelation = (taskId: string, relation: TaskRelationChangeRequest) =>
-    askRelation(FAILURE_SURFACE.TASK_RELATION, taskId, () => sendRelation({ taskId, relation }));
-
-  // Remove relation and Remove parent ask nothing, since either can be added
-  // back: once the service keeps it, ⌘Z and its toast's Undo add it again,
-  // while the task still stands as the removal left it (`undo-stack.ts`).
-  const removeTaskBlock = (taskId: string, relation: TaskBlockRelation, otherId: string) => {
-    if (fixture !== undefined) return;
-    void pressWrite(RELATION_WRITE.BLOCK_REMOVAL, blockDoors, { taskId, relation, otherId });
-  };
-  const removeTaskParent = (taskId: string) => {
-    if (fixture !== undefined) return;
-    void pressWrite(RELATION_WRITE.PARENT_REMOVAL, parentDoors, { taskId });
   };
 
   // A fixture's tasks move nowhere, as they are read from nowhere. Note that
@@ -2585,21 +2290,6 @@ export function useTasksTab(input: {
     workspaceId: string,
     told?: { readonly quiet: boolean },
   ): Promise<boolean> => sendTaskMove({ taskId, workspaceId, quiet: told?.quiet === true });
-
-  // The chip's menu stands on the open task's toolbar, so another task's is
-  // opened first; the ask is counted so each press opens it again.
-  const changeRepository = (taskId: string) => {
-    if (taskId !== tasks.activeTaskId) select(taskId);
-    setRepositoryMenu((held) => ({ taskId, request: (held?.request ?? 0) + 1 }));
-  };
-
-  // The add menu hangs from the task's head, so the task opens first, as
-  // Change repository's chip does, and comes out from under a page standing
-  // in its place, such as the Board whose card asked.
-  const addRelation = (taskId: string, kind: TaskRelationKind) => {
-    showTask(taskId);
-    setRelationMenu((held) => ({ taskId, kind, request: (held?.request ?? 0) + 1 }));
-  };
 
   // A fixture's task reads its staged history through the same acts, and holds it on its staged document (`tasks-fixture.ts`).
   const historySource = useMemo(
@@ -3016,6 +2706,8 @@ export function useTasksTab(input: {
     if (taskId !== tasks.activeTaskId) select(taskId);
     else standTaskPlace(taskId);
   };
+  // The repository chip's and the add menu's asks, each opening its task first through these doors.
+  const menus = useTaskMenus({ activeTaskId: tasks.activeTaskId, select, showTask });
 
   // A task's own tab, its Inbox, and an agent's are in its column, so a
   // version history over it gives way, and so does a side panel filling the
@@ -4181,33 +3873,10 @@ export function useTasksTab(input: {
       ),
     chosenPin: chosenPinOf(chosen, boundFor, agentView?.agentId),
     onReopenClosedTab: reopenable.length === 0 ? undefined : reopenClosedTab,
-    repositories,
-    repositoryMenu,
-    relationMenu,
-    onAddRelation: addRelation,
-    onChangeRepository: changeRepository,
-    onSetRepository: setRepository,
+    ...menus,
     onSetTaskStanding: setTaskStanding,
-    onSetTaskBlock: (taskId, block) => setTaskBlock(taskId, block),
-    onRemoveTaskBlock: removeTaskBlock,
-    onSetTaskParent: (taskId, parentTaskId) => setTaskParent(taskId, parentTaskId),
-    onRemoveTaskParent: removeTaskParent,
-    onChangeTaskRelation: changeTaskRelation,
     onMoveTask: moveTask,
     moveTask: moveTaskOptions,
-    onOpenWorkspaceGitHub: (taskId) => {
-      // The open document names its workspace where the list read did not land.
-      const workspaceId =
-        tasks.tasks.find((task) => task.id === taskId)?.workspaceId ??
-        (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId
-          ? region.task.workspaceId
-          : undefined);
-      input.onOpenSettings({
-        page: SETTINGS_VIEW.WORKSPACE,
-        section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
-        ...(workspaceId === undefined ? undefined : { workspaceId }),
-      });
-    },
     onRetryList: () => refreshTasks(),
     onNewTask: newTask,
     onNewTaskIn: (repository) => newTaskWith({ repository }),

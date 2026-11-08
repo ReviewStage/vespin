@@ -499,7 +499,7 @@ function footPadding(scroller: HTMLElement): number {
  * foot, and no further than the message's head. A message another wrote,
  * or another item opened, scrolls nothing. Note that a reader already near
  * the thread's end is followed there by the log itself
- * (`ConversationRows`' `followOnAppend`), so this is what brings the
+ * (`ConversationRows`), so this is what brings the
  * message in for a reader scrolled up, whom the log leaves where they are.
  */
 function useScrollToOwnMessage(

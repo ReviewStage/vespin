@@ -115,6 +115,10 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { useReadMark, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
+import {
+  type TaskRelationWrites,
+  useTaskRelationWrites,
+} from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -230,10 +234,7 @@ export interface TaskRowTab
     | "drawnTasks"
     | "onSettleTasks"
     | "onSetTaskStanding"
-    | "onSetTaskBlock"
-    | "onSetTaskParent"
     | "onNewRelatedTask"
-    | "onRemoveTaskParent"
     | "onChangeRepository"
     | "onMoveTask"
     | "moveTask"
@@ -243,10 +244,6 @@ export interface TaskRowTab
   /** Copies the open description, as Copy description does. */
   readonly onCopyDescription: () => void;
   readonly onOpenHistory: TasksControl["onOpenHistory"];
-  /** Opens a repository's page on GitHub. */
-  readonly onOpenGitHub: TasksControl["repositories"]["openGitHub"];
-  /** Whether a repository is drawn by its owner's picture. */
-  readonly pictures: boolean;
 }
 
 /** What a task's row reads of `tasks`, its tasks read through `tasksNow`: as `tasks` holds them unless said. */
@@ -262,18 +259,13 @@ export function taskRowTab(
     drawnTasks: tasks.drawnTasks,
     onSettleTasks: tasks.onSettleTasks,
     onSetTaskStanding: tasks.onSetTaskStanding,
-    onSetTaskBlock: tasks.onSetTaskBlock,
-    onSetTaskParent: tasks.onSetTaskParent,
     onNewRelatedTask: tasks.onNewRelatedTask,
-    onRemoveTaskParent: tasks.onRemoveTaskParent,
     onChangeRepository: tasks.onChangeRepository,
     onMoveTask: tasks.onMoveTask,
     moveTask: tasks.moveTask,
     tasksNow,
     onCopyDescription: tasks.copy.onPress,
     onOpenHistory: tasks.onOpenHistory,
-    onOpenGitHub: tasks.repositories.openGitHub,
-    pictures: tasks.repositories.pictures,
   };
 }
 
@@ -545,12 +537,16 @@ function standingSubmenus(
  * its own workspace's name and tasks, and the task list's doors, which act
  * on the task by its id whether or not it is the one open.
  */
-function relationDoor(tasks: TaskRowTab, task: TaskSummary): TaskRelationDoor {
+function relationDoor(
+  tasks: TaskRowTab,
+  writes: TaskRelationWrites,
+  task: TaskSummary,
+): TaskRelationDoor {
   return {
     workspaceName: tasks.workspaces.find((each) => each.id === task.workspaceId)?.name ?? "",
     tasks: tasks.tasksNow().filter((each) => each.workspaceId === task.workspaceId),
-    onChange: (change) => tasks.onSetTaskBlock(task.id, change),
-    onSetParent: tasks.onSetTaskParent,
+    onChange: (change) => writes.onSetTaskBlock(task.id, change),
+    onSetParent: writes.onSetTaskParent,
     onNewTask: (kind) => tasks.onNewRelatedTask(task.id, kind),
   };
 }
@@ -600,6 +596,7 @@ function moveToEntries(
  */
 function taskActionGroups(
   tasks: TaskRowTab,
+  writes: TaskRelationWrites,
   task: TaskSummary | undefined,
   taskId: string,
   doors: {
@@ -645,11 +642,21 @@ function taskActionGroups(
   const relate: MenuEntry[] =
     subject === undefined
       ? []
-      : [taskRelationMenuPanel(doors.relationId, subject, () => relationDoor(tasks, subject))];
+      : [
+          taskRelationMenuPanel(doors.relationId, subject, () =>
+            relationDoor(tasks, writes, subject),
+          ),
+        ];
   const unparent: MenuAction[] =
     task?.parentTaskId === undefined
       ? []
-      : [commandAction(PANEL_COMMAND.REMOVE_PARENT, () => tasks.onRemoveTaskParent(taskId), drawn)];
+      : [
+          commandAction(
+            PANEL_COMMAND.REMOVE_PARENT,
+            () => writes.onRemoveTaskParent(taskId),
+            drawn,
+          ),
+        ];
   const versions: MenuAction[] = descriptions
     ? [versionHistoryItem(() => tasks.onOpenHistory(taskId), drawn)]
     : [];
@@ -841,6 +848,7 @@ export function useTaskMenuItems(
   const setStanding = useStandingDoor(tasks);
   const pins = usePinWrites(tasks.drawnTasks);
   const relationId = useId();
+  const writes = useTaskRelationWrites();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
   const standing =
@@ -849,7 +857,7 @@ export function useTaskMenuItems(
       : [];
   const groups = (): readonly (readonly MenuEntry[])[] => [
     ...withRowMoves(
-      taskActionGroups(tasks, task, taskId, {
+      taskActionGroups(tasks, writes, task, taskId, {
         rename: doors.rename,
         askDelete: deletion.ask,
         askMove: moving.ask,

@@ -925,6 +925,24 @@ export const runnerSessions = <
       );
 
     /**
+     * A failed launch's place thrown away where its agent is gone, deleted
+     * while the place opened (its workspace's delete among them), so no
+     * sandbox stands that nothing could reach or retire; a place whose agent
+     * stands is left for the next message. A failure here is logged by its
+     * kind alone, and the launch's own failure answered all the same.
+     */
+    const discardedWhereAgentGone = (agent: Agent, sessionId: string) =>
+      Effect.gen(function* () {
+        if (Option.isSome(yield* readAgent(userId, agent.id))) return;
+        const found = yield* machine.findPlace(userId, sessionId);
+        if (Option.isSome(found)) yield* machine.discard(found.value);
+      }).pipe(
+        Effect.catch((failure) =>
+          Effect.logWarning(`a deleted agent's place was not discarded: ${failureKind(failure)}`),
+        ),
+      );
+
+    /**
      * What one launch of the runner reads and records with no place, run
      * beside the place's opening or resume rather than after it, since none
      * of it waits on the place: the credentials its machine delivers
@@ -971,6 +989,10 @@ export const runnerSessions = <
             ],
             { concurrency: "unbounded" },
           );
+          // An agent deleted while its launch prepared, its workspace's delete among them, takes no
+          // bearer, and the launch is refused rather than start a runner nothing could reach or retire.
+          if (Option.isNone(recordedLaunch))
+            return yield* new LaunchRefused({ reason: "no agent" });
           const named = (url: string) =>
             Option.match(recordedLaunch, {
               onNone: () => url,
@@ -1572,6 +1594,9 @@ export const runnerSessions = <
                   }),
                   path ?? opened.path,
                 ),
+              ).pipe(
+                // Note that a launch failing for its agent's delete, prepared or launched, leaves no place behind.
+                Effect.tapError(() => discardedWhereAgentGone(agent, sessionId)),
               ),
             ).pipe(Effect.annotateLogs(runningLogId(opened.place.running))),
         );
@@ -1628,18 +1653,23 @@ export const runnerSessions = <
           { concurrency: "unbounded" },
         );
         const running = place.place;
-        yield* launch(
-          agent,
-          { name: running.name, running, session: sessionId },
-          layout,
-          sent,
-          yield* made,
-          place.created
-            ? Effect.flatMap(nativeSkills(target, agent, harness.skillRoots), (skills) =>
-                writeInstalledSkills(running, nativeSkillFiles(skills, layout.skillsUpload)),
-              )
-            : Effect.void,
-          resumedPath(place.created, wasUp),
+        yield* Effect.flatMap(made, (ready) =>
+          launch(
+            agent,
+            { name: running.name, running, session: sessionId },
+            layout,
+            sent,
+            ready,
+            place.created
+              ? Effect.flatMap(nativeSkills(target, agent, harness.skillRoots), (skills) =>
+                  writeInstalledSkills(running, nativeSkillFiles(skills, layout.skillsUpload)),
+                )
+              : Effect.void,
+            resumedPath(place.created, wasUp),
+          ),
+        ).pipe(
+          // Note that a launch failing for its agent's delete, prepared or launched, leaves no place behind.
+          Effect.tapError(() => discardedWhereAgentGone(agent, sessionId)),
         );
         return place;
       });

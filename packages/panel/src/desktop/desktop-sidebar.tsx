@@ -140,10 +140,12 @@ import {
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
 import { useFailedRuns, useInboxTaskless, useListedInbox } from "../tasks/use-inbox-slices.js";
@@ -1104,7 +1106,7 @@ function repositoryActionGroups(group: RepositoryGroup, tasks: SidebarTasks): Me
   const github: MenuAction = {
     label: "Open on GitHub",
     icon: <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />,
-    onSelect: () => tasks.repositories.openGitHub(repositoryPageUrl(repository)),
+    onSelect: () => openRepositoryOnGitHub(repositoryPageUrl(repository)),
   };
   return [[pin, github]];
 }
@@ -1149,6 +1151,7 @@ function RepositorySection({
   onNewTaskIn: (repository: string) => void;
   context: RowContext;
 }): React.JSX.Element {
+  const pictures = useRepositoryPictures();
   const { repository } = group;
   const folded = folds.folded(repository);
   const named = repository === null ? NO_REPOSITORY : label;
@@ -1168,7 +1171,7 @@ function RepositorySection({
           ) : (
             <RepositoryPicture
               repository={repository}
-              pictures={context.tasks.repositories.pictures}
+              pictures={pictures}
               size={AVATAR_SIZE.GLYPH}
             />
           )
@@ -1806,6 +1809,7 @@ function SidebarColumn({
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
   const tasks: SidebarTasks = { ...control, ...usePins(control.drawnTasks) };
+  const pictures = useRepositoryPictures();
   const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
@@ -2166,7 +2170,7 @@ function SidebarColumn({
         <RepositoryName
           repository={repository}
           label={repository === null ? undefined : repositoryLabel(repository, named)}
-          pictures={tasks.repositories.pictures}
+          pictures={pictures}
         />
       </ReplayMask>
     );

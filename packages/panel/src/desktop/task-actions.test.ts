@@ -914,11 +914,18 @@ test("a sidebar row's Task relation asks for the relation beside the menu, then 
     id: "5d1c9b7a-3e2f-4a6b-8c9d-0e1f2a3b4c5d",
     name: "Ship signup",
   };
-  const tasks = tasksControl({
-    tasks: [OTHER, other],
-    onSetTaskParent: (taskId, parentTaskId) => parented.push([taskId, parentTaskId]),
-    onSetTaskBlock: (taskId, block) => blocked.push([taskId, block]),
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_PARENT]: ({ taskId, parentTaskId }) => {
+      parented.push([taskId, parentTaskId]);
+      return Promise.resolve({ parentTaskId });
+    },
+    [ACT_KIND.TASKS_BLOCK]: ({ taskId, block }) => {
+      blocked.push([taskId, block]);
+      return Promise.resolve({ blockedBy: [], blocks: [] });
+    },
   });
+  const tasks = tasksControl({ tasks: [OTHER, other] });
   const asked: Asked = { opened: [], changed: [], deleted: [], renamed: [] };
   const row = mountSidebarTask(tasks, OTHER, asked);
   const pick = (words: string) => {
@@ -941,6 +948,7 @@ test("a sidebar row's Task relation asks for the relation beside the menu, then 
   await act(async () => undefined);
   pick("Mark as blocked by");
   pick("Ship signup");
+  await act(async () => undefined);
 
   assert.deepEqual(
     parented,

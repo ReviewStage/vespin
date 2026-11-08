@@ -9,10 +9,11 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -83,13 +84,22 @@ function draw(
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_CHANGE_RELATION]: ({ relation }) => {
+      sent.changes.push(relation);
+      return Promise.resolve({ blockedBy: [], blocks: [], parentTaskId: null });
+    },
+    [ACT_KIND.TASKS_BLOCK]: ({ block }) => {
+      sent.removed.push([block.relation, block.taskId]);
+      return Promise.resolve({ blockedBy: [], blocks: [] });
+    },
+  });
   const tasks = tasksControl({
     tasks: [...listed],
     workspace: ACME,
     workspaces: [ACME],
     listRead: true,
-    onChangeTaskRelation: (_taskId, change) => sent.changes.push(change),
-    onRemoveTaskBlock: (_taskId, relation, otherId) => sent.removed.push([relation, otherId]),
   });
   const task = { ...DOCUMENT_TASK, ...blocks };
   act(() =>
@@ -132,7 +142,7 @@ test("a sub-task's own stand under it once its fold opens, and a task with no re
   assert.deepEqual(rowIds(container, "Sub-tasks"), ["t-2", "t-3"]);
 });
 
-test("a relation stands while the list does not hold its task, and picking another kind on its pill moves it in one call, and Remove relation takes the block away", () => {
+test("a relation stands while the list does not hold its task, and picking another kind on its pill moves it in one call, and Remove relation takes the block away", async () => {
   const sent: { changes: TaskRelationChangeRequest[]; removed: [TaskBlockRelation, string][] } = {
     changes: [],
     removed: [],
@@ -155,7 +165,7 @@ test("a relation stands while the list does not hold its task, and picking anoth
     (option) => option.textContent?.includes("Blocks") && !option.textContent.includes("Blocked"),
   );
   assert.ok(blocks, "the menu offers Blocks");
-  act(() => blocks.click());
+  await act(async () => blocks.click());
   assert.deepEqual(sent.changes, [{ taskId: "t-5", from: "blocked-by", to: "blocks" }]);
   assert.deepEqual(sent.removed, []);
 
@@ -164,6 +174,6 @@ test("a relation stands while the list does not hold its task, and picking anoth
     (each) => each.textContent?.trim() === "Remove relation",
   );
   assert.ok(remove, "the menu offers Remove relation");
-  act(() => remove.click());
+  await act(async () => remove.click());
   assert.deepEqual(sent.removed, [["blocked-by", "t-5"]]);
 });

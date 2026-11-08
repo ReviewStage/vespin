@@ -1014,6 +1014,13 @@ export function fakeService(tasks: Task[]): FakeService {
           service.memberships = service.memberships.filter((each) => each.id !== workspaceId);
           return { ok: true, answer: workspaceId } as const;
         }),
+      delete: (workspaceId) =>
+        Effect.sync(() => {
+          service.reads.push(`delete:${workspaceId}`);
+          if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
+          service.memberships = service.memberships.filter((each) => each.id !== workspaceId);
+          return { ok: true, answer: workspaceId } as const;
+        }),
     },
     // The service keeps a pin's first instant, newest pinned first, and answers the pins as they then stand.
     pinRepository: (repository, pinned) =>

@@ -12,7 +12,7 @@ import { handState } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, typeInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 
@@ -57,7 +57,7 @@ async function mount(listSide: MentionMenuSide = MENTION_MENU_SIDE.BELOW): Promi
           newTask: {
             ...control.newTask,
             workspaceId: "workspace-acme",
-            repositoriesIn: () => ({ ...control.repositories, recent: ["acme/web"] }),
+            repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
           },
           workspaceId: "workspace-acme",
           onLeave: () => undefined,

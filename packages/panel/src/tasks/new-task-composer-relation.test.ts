@@ -13,7 +13,7 @@ import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../te
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 import type { NewTaskStart } from "./use-tasks-tab.js";
@@ -109,7 +109,7 @@ async function mount() {
             workspaceId: ACME.id,
             preset: { repository: "acme/web" },
             tasks: [LOGIN, LIMIT, SIGNUP],
-            repositoriesIn: () => ({ ...control.repositories, scope: ACME.id }),
+            repositoriesIn: () => ({ ...NO_REPOSITORIES, scope: ACME.id }),
             start: (
               _name: string,
               repository: string | null,

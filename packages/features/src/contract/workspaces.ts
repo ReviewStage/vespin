@@ -1,5 +1,5 @@
 /**
- * workspaces.ts -- the account's workspaces (`workspace-wire.ts`): the list, a workspace created, renamed, given a photo, or handed over, and its members read, removed, given a role, or left.
+ * workspaces.ts -- the account's workspaces (`workspace-wire.ts`): the list, a workspace created, renamed, given a photo, handed over, or deleted, and its members read, removed, given a role, or left.
  *
  * Every output is the wire schema flipped, so oRPC's output check encodes
  * the handler's value into the bytes the wire carries
@@ -11,9 +11,10 @@
  * (`packages/service/src/accounts/workspaces-procedures.ts`): a workspace
  * the caller is not in (`not-found`), a role that does not allow the write
  * (`not-permitted`), and a slug the service will not give
- * (`workspace-slug-*`). Every write through Better Auth's plugin also
- * declares the plugin's already-invited refusal, which its error codes may
- * answer on any of them (`workspace-access.ts`'s `pluginCallOrRefused`).
+ * (`workspace-slug-*`). Every member write through Better Auth's plugin
+ * also declares the plugin's already-invited refusal, which its error codes
+ * may answer on any of them (`workspace-access.ts`'s `pluginCallOrRefused`);
+ * the delete, which no such code answers, does not.
  */
 
 import { openapi } from "@orpc/openapi";
@@ -27,6 +28,8 @@ import {
   WORKSPACE_PHOTO_BOUNDS,
   workspaceAnswerSchema,
   workspaceCreateRequestSchema,
+  workspaceDeleteAnswerSchema,
+  workspaceDeleteRequestSchema,
   workspaceExperimentSetRequestSchema,
   workspaceLeaveAnswerSchema,
   workspaceLeaveRequestSchema,
@@ -177,4 +180,10 @@ export const workspacesContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_LEAVE }))
     .input(exactInput(workspaceLeaveRequestSchema))
     .output(EffectSchema.flip(workspaceLeaveAnswerSchema)),
+  delete: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(bodyCap(BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_DELETE }))
+    .input(exactInput(workspaceDeleteRequestSchema))
+    .output(EffectSchema.flip(workspaceDeleteAnswerSchema)),
 };

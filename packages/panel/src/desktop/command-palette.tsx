@@ -214,6 +214,10 @@ import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
+import {
+  type TaskRelationWrites,
+  useTaskRelationWrites,
+} from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
@@ -1553,6 +1557,7 @@ function agentPinRows(
  */
 function taskCommandRows(
   tasks: TasksControl,
+  writes: Pick<TaskRelationWrites, "onRemoveTaskParent">,
   reads: ReadMarks,
   rename: OpenTaskRename | undefined,
   choose: (run: () => void) => void,
@@ -1577,7 +1582,7 @@ function taskCommandRows(
     },
     ...(task.parentTaskId === undefined
       ? []
-      : [{ item: PANEL_COMMAND.REMOVE_PARENT, run: () => tasks.onRemoveTaskParent(task.id) }]),
+      : [{ item: PANEL_COMMAND.REMOVE_PARENT, run: () => writes.onRemoveTaskParent(task.id) }]),
     ...(settleOffered(task, SETTLED_STATUS.CANCELED)
       ? [
           {
@@ -2188,6 +2193,7 @@ export function CommandPalette({
     EXPERIMENT.DESCRIPTIONS,
   );
   const renameOffer = useTaskRenameOffer();
+  const relationWrites = useTaskRelationWrites();
   const agentReads = useAgentReadMarks();
   const pins = usePinWrites(tasks.drawnTasks);
   useOpenThingKeys(tasks, pins, inboxStanding, reads, agentReads);
@@ -2319,7 +2325,7 @@ export function CommandPalette({
         ...agentReadMarkRows(tasks, agentReads, choose),
         ...taskPinRows(tasks, pins, reads, choose),
         ...agentPinRows(tasks, pins, choose),
-        ...taskCommandRows(tasks, reads, renameOffer, choose, historyOffered),
+        ...taskCommandRows(tasks, relationWrites, reads, renameOffer, choose, historyOffered),
         ...agentArchiveRows(openAgent, askArchive, choose),
         ...panelTabRows(tasks, inboxStanding, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),

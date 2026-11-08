@@ -59,7 +59,7 @@ import {
   setRepositorySetup,
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { storeWriter } from "@repo/database/models/writer";
-import type { StoredStartedFrom } from "@repo/database/schemas/agent";
+import { agentTable, type StoredStartedFrom } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -135,6 +135,7 @@ import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
 import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
 import { BASE_DRIVE } from "../base-drive.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
+import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { type SandboxRunner, sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
@@ -871,6 +872,39 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         for (const secret of [PLAN_TOKEN, bearer])
           assert.equal(environments.includes(secret), false);
+      }),
+  );
+
+  it.effect(
+    "a launch whose agent is deleted while its sandbox opens, as a workspace's delete takes it, starts no runner and throws the sandbox away",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const db = yield* Database;
+        const deleted = Effect.orDie(db.delete(agentTable).where(eq(agentTable.id, agent.id)));
+        // The agent's row goes once its sandbox has opened, before the launch in it records its bearer.
+        const deletedOnceOpened = Layer.effect(
+          AgentMachine,
+          Effect.gen(function* () {
+            const machine = yield* AgentMachine;
+            return {
+              ...machine,
+              open: (ask, use) =>
+                machine.open(ask, (opened, beside) => Effect.andThen(deleted, use(opened, beside))),
+            } satisfies AgentMachineService;
+          }),
+        ).pipe(Layer.provide(machineOver(api.layer)));
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(Layer.merge(services(api), deletedOnceOpened)),
+        );
+
+        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the invitations."));
+
+        assert.equal(api.sandboxes.length, 1);
+        assert.deepEqual(api.commands, []);
+        assert.equal(api.sandboxes[0]?.deleted, true);
       }),
   );
 

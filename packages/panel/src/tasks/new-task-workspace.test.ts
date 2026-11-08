@@ -11,7 +11,7 @@ import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../te
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { NewTaskDialog } from "./new-task-dialog.js";
 import type { RepositoryChooser } from "./repository-chip.js";
 
@@ -87,7 +87,7 @@ function listOf(workspace: string): RepositoriesRead {
 
 /** The chooser each workspace's repository chip is handed, the host holding Acme's installation's repositories and Personal's none. */
 function chooserFor(workspaceId: string | undefined): RepositoryChooser {
-  const base = tasksControl().repositories;
+  const base = NO_REPOSITORIES;
   if (workspaceId !== ACME.id) {
     return { ...base, scope: workspaceId };
   }
