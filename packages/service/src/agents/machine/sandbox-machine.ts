@@ -116,7 +116,6 @@ import {
   Layer,
   Option,
   Redacted,
-  Ref,
   Result,
   Tracer,
 } from "effect";
@@ -1260,9 +1259,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             })),
           );
         }).pipe(Effect.withSpan("web/uploadRunner"));
-        // Note that a launch interrupted while its steps run ends the runner it already started,
-        // which would otherwise wait out its config.
-        const startedCommand = yield* Ref.make<string | undefined>(undefined);
         const started = Effect.gen(function* () {
           yield* Effect.all([launch.started ?? Effect.void, uploaded], {
             concurrency: "unbounded",
@@ -1290,20 +1286,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
                 ...launch.env,
               },
             })
-            .pipe(
-              Effect.withSpan("web/startRunner"),
-              Effect.tap((id) => Ref.set(startedCommand, id)),
-            );
+            .pipe(Effect.withSpan("web/startRunner"));
         });
         const [readyExit, commandId] = yield* Effect.all([Effect.exit(launch.ready), started], {
           concurrency: "unbounded",
-        }).pipe(
-          Effect.onInterrupt(() =>
-            Effect.flatMap(Ref.get(startedCommand), (id) =>
-              id === undefined ? Effect.void : Effect.ignore(api.kill(place, id)),
-            ),
-          ),
-        );
+        });
         if (Exit.isFailure(readyExit)) {
           yield* Effect.ignore(api.kill(place, commandId));
           return yield* Effect.failCause(readyExit.cause);
