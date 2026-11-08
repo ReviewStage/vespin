@@ -691,13 +691,16 @@ export const inboxWithdrawInputSchema = EffectSchema.Struct({
 
 /**
  * Where an ask stands as a read carries it, and, on a withdrawn one, why its
- * agent withdrew it and when it was withdrawn; the when is absent from an
- * ask withdrawn before it was kept.
+ * agent withdrew it, when it was withdrawn, and, on one a member's close
+ * withdrew, which member by their id; the when is absent from an ask
+ * withdrawn before it was kept, and the member from one withdrawn before
+ * closers were kept on the ask.
  */
 const ASK_STANDING_FIELDS = {
   status: EffectSchema.Literals(Object.values(INBOX_ASK_STATUS)),
   withdrawnReason: EffectSchema.optionalKey(EffectSchema.String),
   withdrawnAt: EffectSchema.optionalKey(countedNumber),
+  withdrawnBy: EffectSchema.optionalKey(EffectSchema.String),
 };
 
 /**
@@ -1591,7 +1594,13 @@ export function inboxAnswersReply(answers: InboxAnswers, words: string): InboxRe
 
 /** An ask as a message keeps it without where it stands, where this build knows its type; nothing for a type a newer deployment wrote. */
 export function knownAsk(ask: InboxReadAsk): InboxAsk | undefined {
-  const { status: _status, withdrawnReason: _reason, withdrawnAt: _at, ...kept } = ask;
+  const {
+    status: _status,
+    withdrawnReason: _reason,
+    withdrawnAt: _at,
+    withdrawnBy: _by,
+    ...kept
+  } = ask;
   return EffectSchema.is(inboxAskSchema)(kept) ? kept : undefined;
 }
 
@@ -1609,9 +1618,9 @@ export interface InboxAskStanding {
  * with the item's reason where the item closed on it, answered where the
  * item was answered on it, and replaced where the item holds another.
  * Note that an ask withdrawn with no reason is a member's close without an
- * answer, the item's `closedBy` naming the member while the close stands,
- * because an agent's close always says why: a reader tells the two closes
- * apart by the reason alone, as it tells a closed item's.
+ * answer, the ask's `withdrawnBy` naming the member for good, because an
+ * agent's close always says why: a reader tells the two closes apart by the
+ * reason alone, as it tells a closed item's.
  */
 export function standingAsk(
   ask: InboxReadAsk,

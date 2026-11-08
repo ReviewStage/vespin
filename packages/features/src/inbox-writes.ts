@@ -36,7 +36,11 @@ export function asksOpen(item: InboxItem, askId: string): boolean {
 /** How a settled ask stands: answered, or withdrawn at a moment. */
 type SettledStanding =
   | { readonly status: typeof INBOX_ASK_STATUS.ANSWERED }
-  | { readonly status: typeof INBOX_ASK_STATUS.WITHDRAWN; readonly withdrawnAt: number };
+  | {
+      readonly status: typeof INBOX_ASK_STATUS.WITHDRAWN;
+      readonly withdrawnAt: number;
+      readonly withdrawnBy?: string;
+    };
 
 /** The thread with the ask on the message given settled as `standing` says, and the messages given after it. */
 function settledThread(
@@ -103,7 +107,7 @@ export function answeredNow(
   return { ...acknowledgedNow(item, reader, now), thread };
 }
 
-/** The item as the reader closed it without an answer, before the service says how it stands: closed by the reader, now, and read, its thread's open ask withdrawn now with no reason. */
+/** The item as the reader closed it without an answer, before the service says how it stands: closed by the reader, now, and read, its thread's open ask withdrawn now by the reader with no reason. */
 export function closedNow(
   item: InboxItem,
   reader: InboxReader | undefined,
@@ -116,7 +120,11 @@ export function closedNow(
       : settledThread(
           item.thread,
           askId,
-          { status: INBOX_ASK_STATUS.WITHDRAWN, withdrawnAt: now },
+          {
+            status: INBOX_ASK_STATUS.WITHDRAWN,
+            withdrawnAt: now,
+            ...(reader === undefined ? undefined : { withdrawnBy: reader.userId }),
+          },
           [],
         );
   return {

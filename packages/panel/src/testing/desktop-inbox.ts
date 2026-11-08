@@ -1585,12 +1585,14 @@ export function askingMessage(
     status = INBOX_ASK_STATUS.OPEN,
     withdrawnReason,
     withdrawnAt,
+    withdrawnBy,
     createdAt = 1_000,
   }: {
     id?: string;
     status?: InboxReadAsk["status"];
     withdrawnReason?: string;
     withdrawnAt?: number;
+    withdrawnBy?: string;
     createdAt?: number;
   } = {},
 ): InboxMessage {
@@ -1603,6 +1605,7 @@ export function askingMessage(
       status,
       ...(withdrawnReason === undefined ? undefined : { withdrawnReason }),
       ...(withdrawnAt === undefined ? undefined : { withdrawnAt }),
+      ...(withdrawnBy === undefined ? undefined : { withdrawnBy }),
     },
     createdAt,
   };
