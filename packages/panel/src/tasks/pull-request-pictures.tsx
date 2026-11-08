@@ -13,7 +13,11 @@ import { pictureUnread } from "../failure-report.js";
 import { PictureBlock } from "../picture-block.js";
 import { type PictureReader, pictureQuery } from "../picture-query.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
-import { type GitHubPictureDrawer, GitHubPictureLink } from "./transcript-blocks.js";
+import {
+  type GitHubPictureDrawer,
+  GitHubPictureLink,
+  type GitHubPictureSize,
+} from "./transcript-blocks.js";
 import { useOpenLink } from "./use-open-link.js";
 
 /**
@@ -187,19 +191,21 @@ export function EntryPictures({
  * One picture GitHub's rendering names, read through the service, drawn
  * from its `data:` URL once read: standing alone, as a description's picture is,
  * its press opening the entry's viewer; in a line of words or inside a
- * link, inline as GitHub drew it. Its link where GitHub answered none the
- * window draws.
+ * link, inline as GitHub drew it, at the size its author wrote on it. Its
+ * link where GitHub answered none the window draws.
  */
 function GitHubPicture({
   agentId,
   src,
   alt,
   inline,
+  size,
 }: {
   agentId: string;
   src: string;
   alt: string;
   inline: boolean;
+  size: GitHubPictureSize;
 }): React.JSX.Element {
   const state = usePicture(pictureQuery(agentId, src, useGitHubImageRead()), pictureUnread);
   const door = useContext(EntryViewerContext);
@@ -211,21 +217,36 @@ function GitHubPicture({
     const open = door === undefined ? undefined : () => door.open(agentId, src);
     return <PictureBlock state={state} alt={alt} caption={undefined} onOpen={open} />;
   }
+  // Note that a height written alone sets the picture's height, its width following, as GitHub draws it; any other follows its width.
+  const heightOnly = size.height !== undefined && size.width === undefined;
   return state.kind === PICTURE_STATE.READY ? (
     <img
-      className="inline-block h-auto max-w-full rounded-ui-6 align-middle"
+      className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
       src={state.url}
       alt={alt}
+      width={size.width}
+      height={size.height}
     />
   ) : (
-    <PictureSkeleton alt={alt} />
+    <PictureSkeleton alt={alt} size={size} />
   );
 }
 
-/** An inline picture while it is read: a block the size a picture stands at, named by its alternative words. */
-function PictureSkeleton({ alt }: { alt: string }): React.JSX.Element {
+/** An inline picture while it is read: a block the size its author wrote on it, or the size a picture stands at, named by its alternative words. */
+function PictureSkeleton({
+  alt,
+  size,
+}: {
+  alt: string;
+  size: GitHubPictureSize;
+}): React.JSX.Element {
   return (
-    <span className="pull-request-picture-skeleton" role="img" aria-label={alt}>
+    <span
+      className="pull-request-picture-skeleton"
+      role="img"
+      aria-label={alt}
+      style={{ width: size.width, height: size.height }}
+    >
       <Skeleton shape={SKELETON_SHAPE.BLOCK} />
     </span>
   );
@@ -234,9 +255,9 @@ function PictureSkeleton({ alt }: { alt: string }): React.JSX.Element {
 /** How the tab draws a picture GitHub's rendering names: one it may read through the service as the agent's, and none else. */
 export function usePictureDrawer(agentId: string): GitHubPictureDrawer {
   return useCallback(
-    (src, alt, inline) =>
+    (src, alt, inline, size) =>
       githubImageOf(src) === undefined ? undefined : (
-        <GitHubPicture agentId={agentId} src={src} alt={alt} inline={inline} />
+        <GitHubPicture agentId={agentId} src={src} alt={alt} inline={inline} size={size} />
       ),
     [agentId],
   );
