@@ -7,15 +7,15 @@ import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/i
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import type { PortActKind } from "@repo/host/contract";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
-import { unreachedAs } from "../act.js";
+import { useCallback, useRef } from "react";
+import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { type HeldWrite, pressHeld } from "../undo-stack.js";
 import { messageFailureWords } from "./agent-model.js";
 import { cardTitle } from "./tool-call-model.js";
 
@@ -24,7 +24,8 @@ import { cardTitle } from "./tool-call-model.js";
  *
  * Resolve is one act wherever it is pressed: it asks nothing, the items
  * read resolved at once in every read the window draws, and one toast
- * offers Undo for its hold (`packages/panel/AGENTS.md`'s Confirms). Its
+ * offers Undo for its hold (`packages/panel/AGENTS.md`'s Confirms), as ⌘Z does
+ * (`undo-stack.ts`'s held entries). Its
  * agent must not hear of a resolve the reader takes back, so each close
  * goes to the host held (`AGENTS_INBOX_CLOSE`'s `held`): the host draws it
  * and keeps it from the service until the toast is gone, when it is let
@@ -102,137 +103,123 @@ function refusalWords(
 /** Resolves the open items given without an answer, at once, with Undo; one already on its way, or no longer open, is passed over. */
 export type InboxResolver = (items: readonly InboxItem[]) => void;
 
-/** Lets each resolve this window still holds for its Undo go as sent; each lets itself out of the set as it goes. */
-const heldHere = new Set<() => void>();
+/** How an act of `Kind` is sent: the `mutateAsync` of its kind's mutation (`act-mutations.ts`). */
+type Send<Kind extends PortActKind> = (variables: ActVariables<Kind>) => Promise<ActResult<Kind>>;
 
-/** Whether the window's leaving is heard yet, which is heard once for the window's life. */
-let leavingHeard = false;
+/** The mutations a resolve is sent on: the close, held, and the release that lets its hold go. */
+interface ResolveDoors {
+  readonly close: Send<typeof ACT_KIND.AGENTS_INBOX_CLOSE>;
+  readonly release: Send<typeof ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE>;
+}
+
+/** One press's resolve: the open items it closes, and the key each close goes under, by the item's place. */
+interface Resolving {
+  readonly items: readonly InboxItem[];
+  readonly keys: readonly string[];
+}
+
+/** What one close answered: the item as the service answered it, or why the service was not reached. */
+type CloseAnswer = AgentInboxAnsweredView | { readonly failure: AgentCallFailure };
+
+/** How each of `keys`' holds answered being let go, as sent where `send`, else as taken back. */
+function released(
+  release: ResolveDoors["release"],
+  keys: readonly string[],
+  send: boolean,
+): Promise<readonly Released[]> {
+  return Promise.all(
+    keys.map((clientKey) =>
+      release({ clientKey, send }).then(
+        (found): Released => (found.held ? RELEASED.HELD : RELEASED.LATE),
+        (): Released => RELEASED.UNREACHED,
+      ),
+    ),
+  );
+}
 
 /**
- * Lets every resolve the window holds go as sent once it leaves, heard once
- * for the window's life rather than the Inbox's, since an Undo toast outlives
- * the Inbox it was pressed in. Note that a page kept in the back-forward
- * cache has not left, because it may come back with its toast and its Undo
- * still standing.
+ * A resolve as the undo stack holds it (`undo-stack.ts`'s `HeldWrite`): each
+ * close sent held, let go as sent once its toast is gone, and taken back by
+ * letting it go unsent. Note that an Undo the host did not hear may still be
+ * held there, so its toast asks again for those alone; one the host had sent
+ * on already says so.
  */
-function hearLeaving(): void {
-  if (leavingHeard) return;
-  leavingHeard = true;
-  window.addEventListener("pagehide", (event) => {
-    if (event.persisted) return;
-    for (const letGo of [...heldHere]) letGo();
-  });
-}
+const RESOLVE_WRITE = {
+  words: ({ items }) => resolvedNote(items),
+  glyph: () => <GLYPH.RESOLVED />,
+  // Note that one item's toast quotes its title, which a screen recording masks.
+  unmasked: ({ items }) => items.length > 1,
+  act: ({ close }, { items, keys }) =>
+    Promise.all(
+      items.map((item, at) =>
+        close({
+          itemId: item.id,
+          revision: item.revision,
+          clientKey: keys[at] ?? "",
+          held: true,
+        }).catch(unreached),
+      ),
+    ),
+  letGo: ({ release }, { keys }) => void released(release, keys, true),
+  undo: ({ release }, { keys }) => released(release, keys, false),
+  refused: ({ items }, answers) => {
+    const refused = answers.flatMap((answer, at) => {
+      const words = refusalWords(answer);
+      const item = items[at];
+      return words === undefined || item === undefined ? [] : [{ words, answer, item }];
+    });
+    const [first] = refused;
+    if (first === undefined) return undefined;
+    return {
+      words:
+        items.length === 1
+          ? first.words
+          : closedNote(items.length - refused.length, refused.length),
+      failure: {
+        surface: FAILURE_SURFACE.INBOX_CLOSE,
+        cause: first.answer,
+        about: { inboxItemId: first.item.id, agentId: first.item.agentId },
+      },
+    };
+  },
+  unheld: ({ items, keys }, answers) => {
+    const missed = (_: unknown, at: number) => answers[at] === RELEASED.UNREACHED;
+    if (answers.some((answer) => answer === RELEASED.UNREACHED)) {
+      return {
+        words: UNDO_UNREACHED.WORDS,
+        failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: UNDO_UNREACHED.WORDS },
+        retry: {
+          label: UNDO_UNREACHED.RETRY,
+          change: { items: items.filter(missed), keys: keys.filter(missed) },
+        },
+      };
+    }
+    if (!answers.includes(RELEASED.LATE)) return undefined;
+    return {
+      words: TOO_LATE,
+      failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: TOO_LATE, refused: true },
+    };
+  },
+} satisfies HeldWrite<ResolveDoors, Resolving, readonly CloseAnswer[], readonly Released[]>;
 
 /** The Inbox's resolves, each held by the host until its Undo toast is gone. */
 export function useInboxResolver(): InboxResolver {
-  const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
+  const { mutateAsync: close } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
   const { mutateAsync: release } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE));
-  const toast = useToast();
   const out = useRef(new Set<string>());
-  // Note that a window leaving takes its toasts with it, so whatever they still held goes as sent rather than standing open again.
-  useEffect(hearLeaving, []);
   return useCallback(
     (items: readonly InboxItem[]) => {
       const open = items.filter(
         (item) => item.status === INBOX_STATUS.OPEN && !out.current.has(item.id),
       );
       if (open.length === 0) return;
-      const keys = open.map(() => crypto.randomUUID());
       for (const item of open) out.current.add(item.id);
-      const answered = Promise.all(
-        open.map((item, at) =>
-          sendClose({
-            itemId: item.id,
-            revision: item.revision,
-            clientKey: keys[at] ?? "",
-            held: true,
-          }).catch(unreached),
-        ),
-      );
-      const releaseAll = (send: boolean, among: readonly string[] = keys) =>
-        Promise.all(
-          among.map((clientKey) =>
-            release({ clientKey, send }).then(
-              (found): Released => (found.held ? RELEASED.HELD : RELEASED.LATE),
-              (): Released => RELEASED.UNREACHED,
-            ),
-          ),
-        );
-      let undone = false;
-      const letGo = () => {
-        if (!heldHere.delete(letGo)) return;
-        void releaseAll(true);
-      };
-      heldHere.add(letGo);
-      // Note that an Undo the host did not hear may still be held there, so its toast asks again for those alone; one the host had sent on already says so.
-      const takeBack = (among: readonly string[]) =>
-        void releaseAll(false, among).then((released) => {
-          const unreached = among.filter((_, at) => released[at] === RELEASED.UNREACHED);
-          if (unreached.length > 0) {
-            toast({
-              replayUnmasked: true,
-              words: UNDO_UNREACHED.WORDS,
-              tone: STATUS_TONE.DANGER,
-              failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: UNDO_UNREACHED.WORDS },
-              action: {
-                label: UNDO_UNREACHED.RETRY,
-                replayUnmasked: true,
-                onPress: () => takeBack(unreached),
-              },
-              hold: TOAST_HOLD.FAILED,
-            });
-            return;
-          }
-          if (!released.includes(RELEASED.LATE)) return;
-          toast({
-            replayUnmasked: true,
-            words: TOO_LATE,
-            tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
-            failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: TOO_LATE, refused: true },
-          });
-        });
-      const undo = () => {
-        if (!heldHere.delete(letGo)) return;
-        undone = true;
-        takeBack(keys);
-      };
-      toast({
-        ...undoToast(resolvedNote(open), undo),
-        glyph: () => <GLYPH.RESOLVED />,
-        // Note that one item's toast quotes its title, which a screen recording masks.
-        replayUnmasked: open.length > 1,
-        onGone: letGo,
-      });
-      void answered.then((answers) => {
+      const resolving = { items: open, keys: open.map(() => crypto.randomUUID()) };
+      void pressHeld(RESOLVE_WRITE, { close, release }, resolving).then(() => {
         for (const item of open) out.current.delete(item.id);
-        // Note that a resolve taken back answers nothing worth saying, since the reader undid it.
-        if (undone) return;
-        const refused = answers.flatMap((answer, at) => {
-          const words = refusalWords(answer);
-          const item = open[at];
-          return words === undefined || item === undefined ? [] : [{ words, answer, item }];
-        });
-        const [first] = refused;
-        if (first === undefined) return;
-        toast({
-          replayUnmasked: true,
-          words:
-            open.length === 1
-              ? first.words
-              : closedNote(open.length - refused.length, refused.length),
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: {
-            surface: FAILURE_SURFACE.INBOX_CLOSE,
-            cause: first.answer,
-            about: { inboxItemId: first.item.id, agentId: first.item.agentId },
-          },
-        });
       });
     },
-    [sendClose, release, toast],
+    [close, release],
   );
 }
 
