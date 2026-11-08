@@ -1592,10 +1592,12 @@
 
 /* A picture GitHub's rendering names, read through the service: as wide as
    the words around it at most, at its own shape, and a quiet box of a
-   screenshot's shape while it is read. */
+   screenshot's shape while it is read, or of the size its author wrote on
+   it, held to the words' width all the same. */
 .pull-request-picture-skeleton {
   display: inline-block;
   width: min(100%, 240px);
+  max-width: 100%;
   aspect-ratio: 16 / 10;
   vertical-align: middle;
 }

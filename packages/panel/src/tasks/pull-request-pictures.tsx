@@ -217,11 +217,10 @@ function GitHubPicture({
     const open = door === undefined ? undefined : () => door.open(agentId, src);
     return <PictureBlock state={state} alt={alt} caption={undefined} onOpen={open} />;
   }
-  // Note that a height written alone sets the picture's height, its width following, as GitHub draws it; any other follows its width.
-  const heightOnly = size.height !== undefined && size.width === undefined;
+  // Note that a written height stands as written, as GitHub draws it; with none, the height follows the width.
   return state.kind === PICTURE_STATE.READY ? (
     <img
-      className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
+      className={`inline-block max-w-full rounded-ui-6 align-middle${size.height === undefined ? " h-auto" : ""}`}
       src={state.url}
       alt={alt}
       width={size.width}
