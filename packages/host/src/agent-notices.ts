@@ -745,7 +745,8 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           kind: NOTICE_KIND.ITEM_ASKED,
           title: item.agentTitle ?? item.automationName ?? UNNAMED_AGENT,
           body: item.title,
-          place: { kind: LINK_PLACE.INBOX_ITEM, agentId: item.agentId, itemId: item.id },
+          // Note that it is named by its id alone, because the panel then asks the service which workspace holds it, where a link under its agent opens in the workspace the window stands in.
+          place: { kind: LINK_PLACE.INBOX_ITEM, itemId: item.id },
         });
       }
       asking = new Set(now.keys());
