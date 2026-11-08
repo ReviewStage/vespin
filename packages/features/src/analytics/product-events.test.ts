@@ -90,8 +90,8 @@ test("an experiment's switch is counted by its key, on or off, and whose choice 
 
 test("a mirror's failure travels its wait on a rung, never as the raw time", () => {
   const failed = {
-    [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: "worktree",
-    [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: "exited",
+    [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: "header",
+    [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: "not_running",
     [PRODUCT_EVENT_PROPERTY.ATTEMPT]: 2,
     [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: 120,
   };

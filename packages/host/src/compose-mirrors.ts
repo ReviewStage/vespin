@@ -38,9 +38,7 @@ import {
   Duration,
   Effect,
   Exit,
-  Fiber,
   FiberMap,
-  Option,
   Path,
   Result,
   Schedule,
@@ -50,7 +48,6 @@ import {
 } from "effect";
 import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
-import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 import type { AccountComposer } from "./compose-account.js";
 import type { OpenTerminalSocket, TerminalSocket } from "./compose-terminals.js";
 import type { Composer } from "./composer.js";
@@ -65,23 +62,24 @@ import type { RunMode } from "./run-mode.js";
  * compose-mirrors.ts -- cloud agents' mirrors on this Mac: a local copy of each agent's checkout, kept in step over the agent's mirror tunnel, that a dev server can hot-reload from.
  *
  * `MIRRORS_ENSURE` answers an agent's mirror folder,
- * `~/.vespin/mirrors/<agentId>/repository`. The first ensure makes it a
- * worktree of this Mac's shared clone of the repository, detached at the
- * header's `base` (`MirrorPlatform`'s scripts), and answers as soon as the
- * worktree stands. Note that the default branch is had from GitHub beside
- * the worktree's place while the tunnel opens, because the header waits on
- * the sandbox running, and from it the worktree fetches only what its base
- * changes. The mirror never wakes, opens, or keeps alive a sandbox: it
- * follows one something else keeps running (a turn, the agent on screen, a
- * Terminal), so a stopped sandbox stays stopped and the mirror waits for
- * it, its worktree built the next time it finds the sandbox running. From
- * then on the mirror holds one tunnel of the
+ * `~/.vespin/mirrors/<agentId>/repository`, a plain folder of the agent's
+ * files copied straight from its sandbox: nothing is cloned and this Mac's
+ * Git and its access to GitHub play no part. The first ensure makes the
+ * folder empty as the bridge's header arrives and answers at once, the
+ * files arriving in it as the manifest asks for them. The mirror never
+ * wakes, opens, or keeps alive a sandbox: it follows one something else
+ * keeps running (a turn, the agent on screen, a Terminal, a Local tab's
+ * resume), so a stopped sandbox stays stopped and the mirror waits for it.
+ * From then on the mirror holds one tunnel of the
  * `MIRROR` kind open (`@repo/features/sandbox-tunnel-wire`) with one channel on it,
  * whose messages are the mirror's own (`@repo/features/sandbox-mirror-wire`):
- * each manifest is matched against the mirror's own files, every file whose
- * hash differs asked for and every file the manifest lacks deleted, and each
- * `file` and `delete` written as it arrives (`mirror-disk.ts`). A local edit
- * is simply overwritten.
+ * each manifest is matched against the mirror's copy of the files it names,
+ * every one missing or whose hash differs asked for, and each `file` and
+ * `delete` written as it arrives (`mirror-disk.ts`). Note that a match
+ * deletes nothing, because the folder also holds what this Mac made there
+ * itself, such as installed dependencies, which no manifest names; a file
+ * the agent deletes is deleted by its `delete`. A local edit is simply
+ * overwritten.
  *
  * There is one recovery path, which is to reconnect and match: no cursor,
  * no change log, nothing stored between connections. Any socket that drops,
@@ -89,8 +87,7 @@ import type { RunMode } from "./run-mode.js";
  * step, is opened again on `RECONNECT`, backing off to every 30 seconds,
  * for as long as the mirror stands; the next manifest
  * brings the mirror back in step. Every mirror on disk is kept so from the
- * host's start. A mirror is taken away, its worktree removed from the shared
- * clone and its folder deleted, when the task list shows its agent archived,
+ * host's start. A mirror is taken away, its folder deleted, when the task list shows its agent archived,
  * or when the tunnel closes as gone: the agent archived, or no agent this
  * account reaches, which is how the first try after the host's start finds
  * a mirror whose agent is gone. Only a cloud agent has a mirror, and only the
@@ -99,16 +96,15 @@ import type { RunMode } from "./run-mode.js";
  *
  * Each attempt is a span of the tracer the platform hands (main's Sentry on
  * the desktop), the root of a trace of its own, and each step a span beneath
- * it, as is the prefetch: named by the agent, and where a step failed, by
- * the step, why (`@repo/features/mirror-steps`), and the HTTP status, close
- * code, or exit code, never by what Git printed. Only a mirror's first
+ * it: named by the agent, and where a step failed, by
+ * the step, why (`@repo/features/mirror-steps`), and the HTTP status or close
+ * code. Only a mirror's first
  * `TRACED_ATTEMPTS` attempts in a run are traced, so one whose sandbox
  * stays stopped does not trace every 30 seconds for the app's life. A
  * failure is counted (`PRODUCT_EVENT.MIRROR_FAIL`) each time what failed
  * changes, and the first header heard in a run is counted
- * (`PRODUCT_EVENT.MIRROR_READY`). Until its worktree stands, how each
- * mirror stands, waiting on the sandbox, cloning, preparing its files, or
- * failed and trying again, is told to the windows as `MIRRORS_CHANGED`,
+ * (`PRODUCT_EVENT.MIRROR_READY`). Until its folder stands, how each
+ * mirror stands, waiting on the sandbox or failed and trying again, is told to the windows as `MIRRORS_CHANGED`,
  * which the client lays in app state (`mirrors`) for the Local tab to say.
  */
 
@@ -118,12 +114,6 @@ const MIRROR_RECONNECT = {
   LONGEST: Duration.seconds(30),
 } as const;
 
-/** How long a script may run: making a worktree may clone a large repository first, as a local agent's does. */
-const SCRIPT_WITHIN = {
-  WORKTREE: Duration.minutes(25),
-  LIST: Duration.minutes(2),
-} as const;
-
 /** How many attempts of a mirror's in one run are traced; the rest run untraced. */
 const TRACED_ATTEMPTS = 20;
 
@@ -131,9 +121,6 @@ const TRACED_ATTEMPTS = 20;
 const STEP_SPAN = {
   [MIRROR_STEP.TUNNEL]: SENTRY_MIRROR_SPAN.TUNNEL,
   [MIRROR_STEP.HEADER]: SENTRY_MIRROR_SPAN.HEADER,
-  [MIRROR_STEP.PREFETCH]: SENTRY_MIRROR_SPAN.PREFETCH,
-  [MIRROR_STEP.WORKTREE]: SENTRY_MIRROR_SPAN.WORKTREE,
-  [MIRROR_STEP.LIST]: SENTRY_MIRROR_SPAN.LIST,
   [MIRROR_STEP.MATCH]: SENTRY_MIRROR_SPAN.MATCH,
 } as const satisfies Record<MirrorStep, string>;
 
@@ -145,18 +132,15 @@ const SPAN_ATTRIBUTE = {
   FAILURE: "mirror.failure",
 } as const;
 
-/** Which attribute a failed step's code is set under: the upgrade's HTTP status, the tunnel's close code, or a script's exit code. */
+/** Which attribute a failed step's code is set under: the upgrade's HTTP status or the tunnel's close code. */
 const CODE_ATTRIBUTE = {
   [MIRROR_STEP.TUNNEL]: "mirror.http_status",
   [MIRROR_STEP.HEADER]: "mirror.close_code",
-  [MIRROR_STEP.PREFETCH]: "mirror.exit_code",
-  [MIRROR_STEP.WORKTREE]: "mirror.exit_code",
-  [MIRROR_STEP.LIST]: "mirror.exit_code",
-  [MIRROR_STEP.MATCH]: "mirror.exit_code",
+  [MIRROR_STEP.MATCH]: "mirror.close_code",
 } as const satisfies Record<MirrorStep, string>;
 
-/** The folder under a mirror's own that holds its worktree. */
-const WORKTREE_FOLDER = "repository";
+/** The folder under a mirror's own that holds its copy of the agent's files. */
+const FILES_FOLDER = "repository";
 
 /** The one channel a mirror opens on its tunnel. */
 const CHANNEL = 0;
@@ -180,7 +164,7 @@ class MirrorDropped extends Data.TaggedError("MirrorDropped")<{
   readonly code?: number | undefined;
 }> {}
 
-/** The mirror was taken away before its worktree stood. */
+/** The mirror was taken away before its folder stood. */
 class MirrorGone extends Data.TaggedError("MirrorGone") {}
 
 const mirrorEnsureParamsSchema = Schema.Struct({ agentId: wireUuidSchema });
@@ -198,7 +182,6 @@ const decoder = new TextDecoder();
 
 /** The agent as the task list carries it, as far as a mirror reads it. */
 interface MirroredAgent {
-  readonly repository: string | null;
   readonly archivedAt?: number | undefined;
   /** Set only for a local agent on its starter's device, which has no mirror. */
   readonly machine?: string | undefined;
@@ -220,20 +203,17 @@ export interface MirrorsDependencies {
 
 type MirrorMethods = PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MIRRORS>;
 
-/** One mirror kept on this Mac: the folder its worktree stands in, once it does, whether its prefetch has ended, and how its attempts stand. */
+/** One mirror kept on this Mac: its folder, once it stands, and how its attempts stand. */
 interface Mirror {
   readonly made: Deferred.Deferred<string, MirrorGone>;
-  readonly prefetched: Deferred.Deferred<boolean>;
   /** When the host began keeping it, on the host's clock, in milliseconds. */
   readonly startedAt: number;
   /** How many tunnels it has tried to open in this run, this one among them. */
   attempts: number;
-  /** Whether its worktree stands, after which the windows are told nothing of it. */
+  /** Whether its folder stands, after which the windows are told nothing of it. */
   stands: boolean;
   /** Whether it has heard a header in this run. */
   heard: boolean;
-  prefetching: boolean;
-  making: boolean;
   /** The last attempt's failure, until a tunnel opens again. */
   failed: MirrorDropped | undefined;
   /** The last failure counted, so one that repeats is counted once. */
@@ -242,8 +222,6 @@ interface Mirror {
 
 /** How a mirror stands, as the Local tab says it. */
 function standingOf(mirror: Mirror): MirrorStanding {
-  if (mirror.making) return { kind: MIRROR_STANDING.PREPARING };
-  if (mirror.prefetching) return { kind: MIRROR_STANDING.CLONING };
   if (mirror.failed === undefined) return { kind: MIRROR_STANDING.WAITING };
   const { failure, code } = mirror.failed;
   return { kind: MIRROR_STANDING.FAILED, failure, ...(code === undefined ? {} : { code }) };
@@ -306,55 +284,16 @@ function requestFrame(request: MirrorRequest): string {
   });
 }
 
-/** How a script ran: what it printed where it exited 0, or why not, with its exit code where it had one. */
-type ScriptRun =
-  | { readonly printed: string }
-  | { readonly failure: MirrorFailure; readonly code?: number | undefined };
-
-/** A script run once with `/bin/sh` within the bound. Note that what it writes to stderr is never read, because it is Git's own output. */
-const ran = (
-  script: string,
-  within: Duration.Duration,
-): Effect.Effect<ScriptRun, never, ChildProcessSpawner.ChildProcessSpawner> =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const handle = yield* ChildProcess.make("/bin/sh", ["-c", script], {
-        stdin: "ignore",
-        stderr: "ignore",
-      });
-      const [printed, exited] = yield* Effect.all(
-        [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
-        { concurrency: "unbounded" },
-      );
-      const code = Number(exited);
-      return code === 0 ? { printed } : { failure: MIRROR_FAILURE.EXITED, code };
-    }),
-  ).pipe(
-    Effect.timeoutOption(within),
-    Effect.map(Option.getOrElse((): ScriptRun => ({ failure: MIRROR_FAILURE.TIMED_OUT }))),
-    Effect.orElseSucceed((): ScriptRun => ({ failure: MIRROR_FAILURE.EXITED })),
-  );
-
-/** A script run as a step: what it printed, or the step failed with why. */
-const scripted = (step: MirrorStep, script: string, within: Duration.Duration) =>
-  Effect.flatMap(ran(script, within), (run) =>
-    "printed" in run
-      ? Effect.succeed(run.printed)
-      : Effect.fail(new MirrorDropped({ step, failure: run.failure, code: run.code })),
-  );
-
 export function composeMirrors(
   dependencies: MirrorsDependencies,
 ): Effect.Effect<
   Composer & { readonly methods: MirrorMethods },
   never,
-  Scope.Scope | FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
+  Scope.Scope | FileSystem.FileSystem | Path.Path
 > {
   return Effect.gen(function* () {
     const { kernel, account, openSocket, platform, agentListed, recordProductEvent } = dependencies;
-    const context = yield* Effect.context<
-      FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
-    >();
+    const context = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const fibers = yield* FiberMap.make<string>();
@@ -362,11 +301,11 @@ export function composeMirrors(
     const socketOrigin = webSocketOrigin(kernel.hostedServiceBaseUrl);
 
     const folderOf = (agentId: string) => path.join(platform.folder, agentId);
-    const worktreeOf = (agentId: string) => path.join(folderOf(agentId), WORKTREE_FOLDER);
-    const worktreeStands = (agentId: string) =>
-      Effect.orElseSucceed(fileSystem.exists(path.join(worktreeOf(agentId), ".git")), () => false);
+    const filesOf = (agentId: string) => path.join(folderOf(agentId), FILES_FOLDER);
+    const filesStand = (agentId: string) =>
+      Effect.orElseSucceed(fileSystem.exists(filesOf(agentId)), () => false);
 
-    /** Every mirror whose worktree does not stand yet, as it stands, told to the windows. */
+    /** Every mirror whose folder does not stand yet, as it stands, told to the windows. */
     const told = Effect.sync(() => {
       const standings: Record<string, MirrorStanding> = {};
       for (const [agentId, mirror] of mirrors) {
@@ -374,26 +313,6 @@ export function composeMirrors(
       }
       kernel.emit(GATEWAY_EVENT.MIRRORS_CHANGED, standings);
     });
-
-    /** An effect run with one of the mirror's flags up, the windows told as it goes up and down. */
-    const flagged = <A, E, R>(
-      effect: Effect.Effect<A, E, R>,
-      flag: (up: boolean) => void,
-    ): Effect.Effect<A, E, R> =>
-      Effect.andThen(
-        Effect.andThen(
-          Effect.sync(() => flag(true)),
-          told,
-        ),
-        effect,
-      ).pipe(
-        Effect.ensuring(
-          Effect.andThen(
-            Effect.sync(() => flag(false)),
-            told,
-          ),
-        ),
-      );
 
     /** A failure counted, where it is not the one counted last. */
     const counted = (mirror: Mirror, dropped: MirrorDropped) =>
@@ -422,57 +341,33 @@ export function composeMirrors(
         });
       });
 
-    /** The worktree made where none stands, detached at the header's `base`; the folder once it stands. */
-    const made = (agentId: string, mirror: Mirror, base: string) =>
+    /** The mirror's folder made where none stands; the folder once it does. */
+    const made = (agentId: string) =>
       Effect.gen(function* () {
-        const worktree = worktreeOf(agentId);
-        if (yield* worktreeStands(agentId)) return worktree;
-        const prefetched = yield* Deferred.await(mirror.prefetched);
-        const making = Effect.gen(function* () {
-          const repository = agentListed(agentId)?.repository;
-          if (repository === undefined || repository === null) {
-            return yield* Effect.fail(
-              new MirrorDropped({
-                step: MIRROR_STEP.WORKTREE,
-                failure: MIRROR_FAILURE.NO_REPOSITORY,
-              }),
-            );
-          }
-          const script = platform.worktreeScript({ repository, worktree, base, prefetched });
-          yield* scripted(MIRROR_STEP.WORKTREE, script, SCRIPT_WITHIN.WORKTREE);
-        });
-        yield* flagged(stepped(agentId, MIRROR_STEP.WORKTREE, making), (up) => {
-          mirror.making = up;
-        });
-        return worktree;
+        const files = filesOf(agentId);
+        yield* Effect.orDie(fileSystem.makeDirectory(files, { recursive: true }));
+        return files;
       });
 
     /** A manifest matched against the mirror, what differs asked for in requests of at most `REQUEST_PATHS`. */
     const matched = (
       agentId: string,
       socket: TerminalSocket,
-      files: Extract<MirrorFrame, { readonly type: "manifest" }>["files"],
+      manifest: Extract<MirrorFrame, { readonly type: "manifest" }>["files"],
     ) =>
-      Effect.gen(function* () {
-        const worktree = worktreeOf(agentId);
-        const listing = yield* stepped(
-          agentId,
-          MIRROR_STEP.LIST,
-          scripted(MIRROR_STEP.LIST, platform.listScript(worktree), SCRIPT_WITHIN.LIST),
-        );
-        const listed = listing.split("\0").filter((file) => file !== "");
-        yield* stepped(
-          agentId,
-          MIRROR_STEP.MATCH,
-          Effect.gen(function* () {
-            const asked = yield* mirrorMatched(worktree, listed, files);
-            for (let at = 0; at < asked.length; at += MIRROR_BOUNDS.REQUEST_PATHS) {
-              const paths = asked.slice(at, at + MIRROR_BOUNDS.REQUEST_PATHS);
-              yield* socket.send({ text: requestFrame({ type: MIRROR_FRAME.REQUEST, paths }) });
-            }
-          }),
-        );
-      });
+      stepped(
+        agentId,
+        MIRROR_STEP.MATCH,
+        Effect.gen(function* () {
+          // Note that the mirror's own files are matched only where the manifest names them, so nothing this Mac made there is deleted.
+          const named = manifest.map((file) => file.path);
+          const asked = yield* mirrorMatched(filesOf(agentId), named, manifest);
+          for (let at = 0; at < asked.length; at += MIRROR_BOUNDS.REQUEST_PATHS) {
+            const paths = asked.slice(at, at + MIRROR_BOUNDS.REQUEST_PATHS);
+            yield* socket.send({ text: requestFrame({ type: MIRROR_FRAME.REQUEST, paths }) });
+          }
+        }),
+      );
 
     /** One mirror message applied, in the order the bridge sent it. */
     const applied = (
@@ -484,7 +379,7 @@ export function composeMirrors(
       Effect.gen(function* () {
         switch (message.type) {
           case MIRROR_FRAME.HEADER: {
-            const folder = yield* made(agentId, mirror, message.base);
+            const folder = yield* made(agentId);
             mirror.stands = true;
             yield* Deferred.succeed(mirror.made, folder);
             yield* told;
@@ -494,10 +389,10 @@ export function composeMirrors(
           case MIRROR_FRAME.MANIFEST:
             return yield* matched(agentId, socket, message.files);
           case MIRROR_FRAME.FILE:
-            yield* mirrorWritten(worktreeOf(agentId), message);
+            yield* mirrorWritten(filesOf(agentId), message);
             return;
           case MIRROR_FRAME.DELETE:
-            yield* mirrorDeleted(worktreeOf(agentId), message.path);
+            yield* mirrorDeleted(filesOf(agentId), message.path);
             return;
           case MIRROR_FRAME.SKIPPED:
             return;
@@ -613,76 +508,46 @@ export function composeMirrors(
         );
       });
 
-    /** The mirror taken away: its worktree removed from the shared clone, and its folder deleted. */
+    /** The mirror taken away: its folder deleted. */
     const removed = (agentId: string) =>
       Effect.gen(function* () {
         const mirror = mirrors.get(agentId);
         mirrors.delete(agentId);
         if (mirror !== undefined) yield* Deferred.fail(mirror.made, new MirrorGone());
         yield* told;
-        yield* ran(platform.removeScript(worktreeOf(agentId)), SCRIPT_WITHIN.LIST);
         yield* Effect.ignore(
           fileSystem.remove(folderOf(agentId), { recursive: true, force: true }),
         );
       });
 
-    /** The default branch checked out beside the worktree's place where none stands, and whether that ended well, false however else it ends. */
-    const prefetched = (agentId: string, mirror: Mirror) =>
-      Effect.gen(function* () {
-        const repository = agentListed(agentId)?.repository;
-        if (repository === undefined || repository === null) return false;
-        if (yield* worktreeStands(agentId)) return false;
-        const script = platform.prefetchScript({ repository, worktree: worktreeOf(agentId) });
-        const prefetch = stepped(
-          agentId,
-          MIRROR_STEP.PREFETCH,
-          scripted(MIRROR_STEP.PREFETCH, script, SCRIPT_WITHIN.WORKTREE),
-        );
-        return yield* flagged(prefetch, (up) => {
-          mirror.prefetching = up;
-        }).pipe(
-          Effect.as(true),
-          Effect.catchTag("MirrorDropped", (dropped) => Effect.as(counted(mirror, dropped), false)),
-        );
-      }).pipe(
-        Effect.onExit((exit) =>
-          Deferred.succeed(mirror.prefetched, Exit.isSuccess(exit) && exit.value),
-        ),
-      );
-
-    /** The mirror kept in step, its prefetch run beside its first tunnel, its tunnel opened again on `RECONNECT`, and `FIRST` after one that was in step, until its agent is gone. */
+    /** The mirror kept in step, its tunnel opened again on `RECONNECT`, and `FIRST` after one that was in step, until its agent is gone. */
     const kept = (agentId: string, mirror: Mirror) =>
       Effect.gen(function* () {
-        const prefetch = yield* Effect.forkChild(prefetched(agentId, mirror));
         yield* Effect.retry(attempt(agentId, mirror), RECONNECT).pipe(
           Effect.repeat({
             schedule: Schedule.spaced(MIRROR_RECONNECT.FIRST),
             until: (ended: TunnelEnding) => ended === TUNNEL_ENDING.GONE,
           }),
         );
-        yield* Fiber.interrupt(prefetch);
         yield* removed(agentId);
       });
 
-    /** The mirror kept for an agent, its tunnel's fiber started where none runs; made at once where its worktree already stands, whether or not the sandbox runs. */
+    /** The mirror kept for an agent, its tunnel's fiber started where none runs; made at once where its folder already stands, whether or not the sandbox runs. */
     const started = (agentId: string) =>
       Effect.gen(function* () {
         const standing = mirrors.get(agentId);
         if (standing !== undefined) return standing;
         const mirror: Mirror = {
           made: yield* Deferred.make<string, MirrorGone>(),
-          prefetched: yield* Deferred.make<boolean>(),
           startedAt: yield* Clock.currentTimeMillis,
           attempts: 0,
-          stands: yield* worktreeStands(agentId),
+          stands: yield* filesStand(agentId),
           heard: false,
-          prefetching: false,
-          making: false,
           failed: undefined,
           counted: undefined,
         };
         mirrors.set(agentId, mirror);
-        if (mirror.stands) yield* Deferred.succeed(mirror.made, worktreeOf(agentId));
+        if (mirror.stands) yield* Deferred.succeed(mirror.made, filesOf(agentId));
         else yield* told;
         const keeping = kept(agentId, mirror);
         // Note that only the mirror's own fibers run on the platform's tracer, so the host's other spans stay where they were.

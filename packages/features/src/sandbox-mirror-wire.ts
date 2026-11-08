@@ -39,7 +39,7 @@ export type MirrorFileMode = (typeof MIRROR_FILE_MODE)[keyof typeof MIRROR_FILE_
 
 /** A mirror message's type. */
 export const MIRROR_FRAME = {
-  /** The bridge's first message on a channel: the commit the mirror's tree starts from. */
+  /** The bridge's first message on a channel: the sandbox is running and its manifest follows. */
   HEADER: "header",
   /** Every file the checkout holds, with its size and hash, right after the header. */
   MANIFEST: "manifest",
@@ -53,9 +53,6 @@ export const MIRROR_FRAME = {
   REQUEST: "request",
 } as const;
 
-/** A full commit id: 40 lowercase hex characters. */
-const COMMIT_ID_PATTERN = /^[0-9a-f]{40}$/u;
-
 /** A file's path, relative to the checkout's root with `/` between its folders, as git lists it. */
 const path = EffectSchema.NonEmptyString;
 
@@ -63,14 +60,8 @@ const size = EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0));
 
 /** One message the bridge sends the Mac. */
 export const mirrorFrameSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    type: EffectSchema.Literal(MIRROR_FRAME.HEADER),
-    /**
-     * The merge base of the checkout's `HEAD` and the branch it was cloned from, a commit GitHub holds.
-     * A full commit id and nothing else, since the sandbox is the agent's and the Mac hands this to git as an argument.
-     */
-    base: EffectSchema.String.check(EffectSchema.isPattern(COMMIT_ID_PATTERN)),
-  }),
+  // Note that a bridge still sends the header a commit id as `base`, which this build reads past, because desktops released before the mirror copied its files need it.
+  EffectSchema.Struct({ type: EffectSchema.Literal(MIRROR_FRAME.HEADER) }),
   EffectSchema.Struct({
     type: EffectSchema.Literal(MIRROR_FRAME.MANIFEST),
     files: EffectSchema.Array(EffectSchema.Struct({ path, size, hash: EffectSchema.String })),

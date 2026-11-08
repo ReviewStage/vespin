@@ -72,24 +72,20 @@ export const SENTRY_TRACE_HEADER = {
 
 /**
  * The spans of a cloud agent's mirror on this Mac, which main traces
- * (`@repo/host`'s `compose-mirrors.ts`): each attempt at its tunnel and the
- * prefetch beside the first are the roots, and each step a span beneath.
+ * (`@repo/host`'s `compose-mirrors.ts`): each attempt at its tunnel is a
+ * root, and each step a span beneath.
  */
 export const SENTRY_MIRROR_SPAN = {
   ATTEMPT: "mirror.attempt",
-  PREFETCH: "mirror.prefetch",
   TUNNEL: "mirror.tunnel",
   HEADER: "mirror.header",
-  WORKTREE: "mirror.worktree",
-  LIST: "mirror.list",
   MATCH: "mirror.match",
 } as const;
 
-/** The roots kept every time: a send's, and a mirror's, which is rare and is read when one is slow. */
+/** The roots kept every time: a send's, and a mirror attempt's, which is rare and is read when one is slow. */
 const KEPT_SPAN_NAMES: ReadonlySet<string> = new Set([
   ...Object.values(SENTRY_SEND_SPAN),
   SENTRY_MIRROR_SPAN.ATTEMPT,
-  SENTRY_MIRROR_SPAN.PREFETCH,
 ]);
 
 /**

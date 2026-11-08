@@ -9,18 +9,12 @@ import { Schema } from "effect";
  * file's name, a path, a byte, a hash, or what Git printed.
  */
 
-/** A step of one attempt at the mirror, in the order an attempt runs them; the prefetch runs beside the first. */
+/** A step of one attempt at the mirror, in the order an attempt runs them. */
 export const MIRROR_STEP = {
   /** The mirror's tunnel opened under the account's credential. */
   TUNNEL: "tunnel",
   /** The wait on the tunnel for the bridge's header, which waits on the sandbox waking. */
   HEADER: "header",
-  /** The default branch had from GitHub beside the worktree's place while the tunnel opens. */
-  PREFETCH: "prefetch",
-  /** The worktree made of this Mac's shared clone, detached at the header's base. */
-  WORKTREE: "worktree",
-  /** The mirror's own files listed by Git's rules. */
-  LIST: "list",
   /** A manifest matched against the mirror, what differs asked for. */
   MATCH: "match",
 } as const;
@@ -39,36 +33,24 @@ export const MIRROR_FAILURE = {
   UNAVAILABLE: "unavailable",
   /** The tunnel closed, by any other code, before the header was heard. */
   CLOSED: "closed",
-  /** The task list carries no repository for the agent. */
-  NO_REPOSITORY: "no_repository",
-  /** A script exited other than 0, with its code where it had one. */
-  EXITED: "exited",
-  /** A script ran past its bound. */
-  TIMED_OUT: "timed_out",
 } as const;
 
 export type MirrorFailure = (typeof MIRROR_FAILURE)[keyof typeof MIRROR_FAILURE];
 
-/** What a mirror whose worktree does not stand yet is waiting on. */
+/** What a mirror whose folder does not stand yet is waiting on. */
 export const MIRROR_STANDING = {
   WAITING: "waiting",
-  CLONING: "cloning",
-  PREPARING: "preparing",
   FAILED: "failed",
 } as const;
 
 const mirrorStandingSchema = Schema.Union([
   Schema.Struct({
-    kind: Schema.Literals([
-      MIRROR_STANDING.WAITING,
-      MIRROR_STANDING.CLONING,
-      MIRROR_STANDING.PREPARING,
-    ]),
+    kind: Schema.Literal(MIRROR_STANDING.WAITING),
   }),
   Schema.Struct({
     kind: Schema.Literal(MIRROR_STANDING.FAILED),
     failure: Schema.Literals(Object.values(MIRROR_FAILURE)),
-    /** The script's exit code, or the tunnel's HTTP status or close code, where there was one. */
+    /** The tunnel's HTTP status or close code, where there was one. */
     code: Schema.optionalKey(Schema.Int),
   }),
 ]);

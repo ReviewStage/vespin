@@ -39,7 +39,7 @@ async function checkout(t: TestContext) {
   fs.writeFileSync(path.join(root, "b.sh"), "#!/bin/sh\n", { mode: 0o755 });
   fs.writeFileSync(path.join(root, "out.log"), "ignored");
   fs.symlinkSync("a.txt", path.join(root, "link"));
-  return { root, head: git(root, "rev-parse", "HEAD").toString().trim() };
+  return { root };
 }
 
 /** The bridge at the root given, its channel open, each mirror message it sends read in turn. */
@@ -75,12 +75,12 @@ function shown(message: Awaited<ReturnType<ReturnType<typeof bridge>["next"]>>) 
 const pathOf = (message: object) => ("path" in message ? String(message.path) : "");
 
 it("the open sends git's files without ignored ones or symlinks, and a request is answered in order", async (t) => {
-  const { root, head } = await checkout(t);
+  const { root } = await checkout(t);
   const { frame, next, send, ask } = bridge(t, root);
   assert.deepEqual(await frame(), { bridge: "ready" });
   send({ type: "open", channel: CHANNEL });
 
-  assert.deepEqual(await next(), { type: "header", base: head });
+  assert.deepEqual(await next(), { type: "header" });
   const manifest = await next();
   assert.equal(manifest.type, "manifest");
   assert.deepEqual(

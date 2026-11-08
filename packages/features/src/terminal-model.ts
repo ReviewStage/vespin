@@ -130,9 +130,6 @@ const MIRROR_FAILURE_WORDS = {
   [MIRROR_FAILURE.NOT_RUNNING]: "The agent’s sandbox is not running",
   [MIRROR_FAILURE.UNAVAILABLE]: "The agent’s sandbox did not answer",
   [MIRROR_FAILURE.CLOSED]: "The connection to the agent’s sandbox closed",
-  [MIRROR_FAILURE.NO_REPOSITORY]: "The agent has no repository",
-  [MIRROR_FAILURE.EXITED]: "Git failed",
-  [MIRROR_FAILURE.TIMED_OUT]: "Git took too long",
 } as const satisfies Record<MirrorFailure, string>;
 
 /** A Local tab's connecting look, saying which step of its mirror it waits on. */
@@ -144,10 +141,6 @@ function mirrorLook(standing: MirrorStanding): TerminalLook {
   switch (standing.kind) {
     case MIRROR_STANDING.WAITING:
       return look("waiting for sandbox", "Waiting for the agent’s sandbox…");
-    case MIRROR_STANDING.CLONING:
-      return look("cloning repository", "Cloning the repository on this Mac…");
-    case MIRROR_STANDING.PREPARING:
-      return look("preparing files", "Preparing the agent’s files on this Mac…");
     case MIRROR_STANDING.FAILED: {
       const code = standing.code === undefined ? "" : ` (code ${standing.code})`;
       return look("retrying", `${MIRROR_FAILURE_WORDS[standing.failure]}${code}. Trying again…`);

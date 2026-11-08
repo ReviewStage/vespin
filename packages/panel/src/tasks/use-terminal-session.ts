@@ -255,13 +255,15 @@ function cloudLink(
   };
 }
 
-/** How a Local tab reaches its shell on this Mac, its open a span from its ask for the mirror to its shell open. */
+/** How a Local tab reaches its shell on this Mac, its open a span from its wake of the sandbox to its shell open. */
 function localLink(agentId: string): ShellLink {
   const close = (terminalId: string) => tellAct(ACT_KIND.MAC_SHELL_CLOSE, { agentId, terminalId });
   return {
     agentId,
     open: (size) =>
       tracedSend(SENTRY_SEND_SPAN.LOCAL_TERMINAL_OPEN, async () => {
+        // Note that the tab wakes a stopped sandbox once as it opens, because the mirror never wakes one itself; a refusal leaves the mirror's own wait to say why.
+        await askAct(ACT_KIND.TERMINAL_RESUME, { agentId }).catch(() => undefined);
         const mirrored = await askAct(ACT_KIND.MAC_SHELL_MIRROR, { agentId }).catch(
           () => undefined,
         );

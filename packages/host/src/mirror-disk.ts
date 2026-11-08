@@ -12,15 +12,13 @@ import * as FileSystem from "effect/FileSystem";
  * mirror-disk.ts -- a mirror's files on the Mac: where a path the bridge names lands, a file written in or deleted, and what a manifest asks of the copy as it stands.
  *
  * A path is the bridge's word and is trusted no further than the mirror's
- * own files: one that is absolute, holds `..`, names git's own folder (the
- * worktree's link to the shared clone, whose config git runs commands
- * from), or resolves outside the mirror through a link the checkout holds,
+ * own files: one that is absolute, holds `..`, names git's own folder, or
+ * resolves outside the mirror through a link the agent's files hold,
  * is refused and nothing is written or deleted. A file is written in a
  * fresh folder beside its place and renamed in, so a dev server watching
- * the mirror never reads half of one. The match compares the mirror's own
- * set by git's rules, symlinks left out as the bridge leaves them out of
- * its manifest, so a link the worktree checked out stays as it is. A file's name, bytes, and
- * hash are the agent's and are never logged.
+ * the mirror never reads half of one. The match compares the files it is
+ * handed, symlinks left out as the bridge leaves them out of its manifest.
+ * A file's name, bytes, and hash are the agent's and are never logged.
  */
 
 /** A file's permission bits on disk, by its mode as git keeps it. */
@@ -110,7 +108,7 @@ export const mirrorDeleted = (root: string, file: string) =>
 
 /**
  * A manifest matched against the mirror at `root`, whose own files are
- * `listed` as git lists them: each file the manifest lacks is deleted, and
+ * `listed`: each listed file the manifest lacks is deleted, and
  * the paths whose size or hash differ from the manifest's, or that the
  * mirror lacks, are answered in the manifest's order for the caller to ask
  * for. A file is hashed only where its size agrees.
