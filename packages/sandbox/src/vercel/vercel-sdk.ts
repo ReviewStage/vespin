@@ -895,10 +895,11 @@ function vercelSandbox(
                 stands();
                 return await idleTimed(opened, signal);
               } catch (failure) {
-                // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw.
+                // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw; a drive still attached comes with the same status, and is the create's own refusal.
                 if (
                   !(failure instanceof APIError) ||
-                  failure.response.status !== NAME_TAKEN_STATUS
+                  failure.response.status !== NAME_TAKEN_STATUS ||
+                  errorCode(failure.text ?? "") === DRIVE_CODE.ATTACHED
                 ) {
                   throw failure;
                 }

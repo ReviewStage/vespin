@@ -156,18 +156,18 @@ it.effect("a token that could not be read names the call and why", () =>
 );
 
 it.effect(
-  "a get-or-create resumes the sandbox standing, hands one it created to onCreate before it answers, and meets its name taken on its create with the sandbox holding it, handed to onCreate too; a create refuses that name as taken",
+  "a get-or-create resumes the sandbox standing, hands one it created to onCreate before it answers, and meets its name taken on its create with the sandbox holding it, handed to onCreate too, but never a drive still attached; a create refuses that name as taken",
   () =>
     Effect.gen(function* () {
       const gets: (string | null)[] = [];
       let standing = true;
-      let taken = false;
+      let taken: string | undefined;
       const api = yield* apiOver((url, init) => {
         if (init.method === "POST") {
-          if (taken) {
+          if (taken !== undefined) {
             standing = true;
             return Response.json(
-              { error: { code: "sandbox_already_exists", message: "the name is taken" } },
+              { error: { code: taken, message: "the name is taken" } },
               { status: 409 },
             );
           }
@@ -185,7 +185,7 @@ it.effect(
       const setUpOnFound = setUp.length;
       standing = false;
       const created = yield* api.getOrCreate(CREATE_ASK, onCreate);
-      taken = true;
+      taken = "sandbox_already_exists";
       const joined = yield* api.getOrCreate(CREATE_ASK, onCreate);
       const refused = yield* Effect.flip(api.create(CREATE_ASK));
 
@@ -198,6 +198,13 @@ it.effect(
       assert.deepEqual(gets, ["true", "true", "true", "true"]);
       assert.equal(refused._tag, "SandboxNameTaken");
       assert.equal(refused.call, SANDBOX_CALL.CREATE);
+
+      // A drive still attached is the create's refusal, joined to no sandbox and set up nowhere.
+      standing = false;
+      taken = "drive_attached";
+      const attached = yield* Effect.flip(api.getOrCreate(CREATE_ASK, onCreate));
+      assert.equal(attached._tag, "SandboxUnavailable");
+      assert.equal(setUp.length, 2);
     }),
 );
 

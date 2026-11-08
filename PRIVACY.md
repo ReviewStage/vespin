@@ -265,18 +265,21 @@ affected users and relevant authorities as required by applicable law.
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Deleting or archiving an agent deletes
-its sandbox and the drive holding its checkout; a sandbox's snapshots
-otherwise expire and are removed seven days after they were last used. A
+agent deletes its transcript at once. Deleting or archiving an agent asks
+Vercel to delete its sandbox and the drive holding its checkout; where that
+fails or does not finish in time, the delete or archive goes ahead anyway, and
+the drive may remain. A sandbox's snapshots otherwise expire and are removed
+seven days after they were last used. A
 repository's default-branch drive is kept for the workspace's agents until we
 remove it. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, and integration records) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
-  your agents' sandboxes and the drives holding their checkouts are deleted,
-  and their snapshots otherwise expire and are removed seven days after they
-  were last used.
+  and we ask Vercel to delete your agents' sandboxes and the drives holding
+  their checkouts; where that fails or does not finish in time, your account is
+  deleted anyway and a drive may remain. Their snapshots otherwise expire and
+  are removed seven days after they were last used.
 - **Workspaces you own**, and the memories, comments, and description text you left in
   them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it
