@@ -13,7 +13,6 @@ import {
   AGENT_STATUS,
   type AgentContext,
   type AgentFailure,
-  type AgentLaunch,
   type AgentPayer,
   type AgentStatus,
   type AgentSubagentStanding,
@@ -121,8 +120,6 @@ export interface AgentTranscriptControl {
   subagents: ReadonlyMap<string, AgentSubagentStanding>;
   /** The messages queued behind the agent's turn and the queue's pause, as the last page said; none while none is queued, and on a worker's. */
   queue: AgentQueue | undefined;
-  /** Where the launch a local agent waits on stands, as the last page said while it still wrote; none for one in the cloud, once the launch's turn opened, once it ended, and on a worker's. */
-  launch: AgentLaunch | undefined;
   /** Where the launch of a failed local agent its host settled unstarted stopped, as the last page said; nothing for any other failure. */
   launchStopped: DeviceLaunchStep | undefined;
   /** Why that launch never started, where its host said a reason beyond the step, as the last page said; nothing for any other launch. */
@@ -320,8 +317,7 @@ export function useAgentTranscript(input: {
     delegations,
     subagents,
     queue: word?.queue,
-    // Note that the page's one launch word is where a start stands while the agent writes and where it stopped once it failed, so a line sent after a failure never reads as the failed step.
-    launch: writing ? word?.launch : undefined,
+    // Note that the page's one launch word is read only once the agent failed, as where its start stopped, so a launch's steps never reach the working line.
     launchStopped:
       word?.status === AGENT_STATUS.FAILED && word.launch !== AGENT_LAUNCH.WAITING
         ? word.launch
