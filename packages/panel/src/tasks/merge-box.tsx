@@ -252,7 +252,7 @@ interface ChipFace {
 
 /** Each chip's glyph, saying its state again beside its word. */
 const CHIP_GLYPHS = {
-  CHECKING: <SpinnerRing size={SPINNER_SIZE.SMALL} />,
+  CHECKING: <SpinnerRing size={SPINNER_SIZE.INLINE} />,
   HELD: <CircleXIcon aria-hidden="true" />,
   BEHIND: <TriangleAlertIcon aria-hidden="true" />,
   REVIEW: <UserRoundIcon aria-hidden="true" />,

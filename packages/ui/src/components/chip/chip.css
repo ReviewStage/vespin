@@ -75,9 +75,12 @@
   }
 
   /* Note that the dot is drawn only where nothing but the chevron is a
-     glyph, because a leading mark already says the state in its color. */
+     glyph, because a leading mark already says the state in its color; a
+     spinner leading it is such a mark, the wait it says. */
   .ui-chip[data-tone]
-  .ui-chip-face:not(:has(> svg:not(.settings-chevron))):not(:has(> img))::before {
+  .ui-chip-face:not(:has(> svg:not(.settings-chevron))):not(:has(> img)):not(
+    :has(> .ui-spinner)
+  )::before {
     content: "";
     flex: none;
     width: 7px; /* off-scale: a status dot */
