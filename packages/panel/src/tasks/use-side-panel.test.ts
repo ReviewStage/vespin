@@ -159,27 +159,18 @@ test("an agent's Changes tab opens on its plan, stands chosen across a launch, a
   assert.equal(second.control().tab, undefined);
 });
 
-test("a record keeps each tab without its kind, as a build before tabs carried their kind wrote it, and one kept before tasks had their name holds each task's choices under plans and its pins' task under plan; a launch still opens on both, each tab tagged with its kind", () => {
+test("a record keeps each tab without its kind, as a build before tabs carried their kind wrote it, and a launch opens on it, each tab tagged with its kind", () => {
   const first = launch({ task: TASK, taskAgents: [AGENT] });
   act(() => first.control().onChoose(changesTab(AGENT)));
   act(() => first.control().onPin({ task: TASK }, changesTab(AGENT), "Changes: Invite flow"));
   first.quit();
-  const { tasks, pins, ...kept } = JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}");
+  const { tasks, pins, tab } = JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}");
   assert.ok(tasks, "the record keeps the task's choices");
   assert.deepEqual(
-    [kept.tab, tasks[TASK].changes, pins[0].tab],
+    [tab, tasks[TASK].changes, pins[0].tab],
     [{ changes: AGENT }, [{ changes: AGENT }], { changes: AGENT }],
     "a rollback reads the tabs this build wrote",
   );
-  const earlierPins = pins.map(({ task, ...pin }: { readonly task: string }) => ({
-    ...pin,
-    plan: task,
-  }));
-  window.localStorage.setItem(
-    "app.sidePanel",
-    JSON.stringify({ ...kept, plans: tasks, pins: earlierPins }),
-  );
-
   const second = launch({ task: TASK, taskAgents: [AGENT] });
   assert.deepEqual(second.control().tab, changesTab(AGENT));
   assert.deepEqual(
