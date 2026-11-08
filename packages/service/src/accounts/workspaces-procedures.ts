@@ -23,11 +23,12 @@
  * trigger).
  * `POST /api/workspaces/delete` lets the owner alone delete a workspace,
  * though never the account's own first workspace, which goes only with the
- * account. Every agent of the workspace not archived, any member's, one
- * the owner cannot see among them, is let go of first under the account
- * that started it: a turn under way stopped, and a session still starting
- * retired (`everyLetGoByStarter`); the plugin then deletes the workspace and every row of it, and its hooks
- * delete the agents' conversations (`workspace-deletion.ts`).
+ * account. Every turn under way among the workspace's agents not archived,
+ * any member's, one the owner cannot see among them, is stopped first under
+ * the account that started it (`everyTurnStoppedByStarter`), which nothing
+ * past a Stop's own loses should the delete then be refused; the plugin
+ * then deletes the workspace and every row of it, and its hooks delete the
+ * agents' conversations and sandboxes (`workspace-deletion.ts`).
  * `POST /api/workspaces/rename` lets an owner or admin rename a workspace,
  * answering it under its new name and its old slug; an account's first
  * workspace is refused, since it is named by its owner's account name.
@@ -84,7 +85,7 @@ import {
 } from "@repo/features/workspace-wire";
 import { isExperiment, isWorkspaceExperiment } from "@repo/settings";
 import { type Cause, Effect, Option } from "effect";
-import { everyLetGoByStarter } from "../agents/coder-host/stop.js";
+import { everyTurnStoppedByStarter } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
   recordServerEvent,
@@ -344,7 +345,7 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
       const { workspaceId } = input;
       const workspace = yield* ownedWorkspace(userId, workspaceId);
       if (workspace.personal === true) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-      yield* everyLetGoByStarter(STOPPER, yield* workspaceAgentsToStop(workspace.id));
+      yield* everyTurnStoppedByStarter(STOPPER, yield* workspaceAgentsToStop(workspace.id));
       yield* pluginCallOrRefused(seams.deleteWorkspace({ headers, organizationId: workspace.id }));
       yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.DELETE);
       return { workspaceId: workspace.id };

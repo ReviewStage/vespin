@@ -30,7 +30,6 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationScope,
 } from "@repo/features/automation-wire";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import {
   workspaceInvitationAnswerSchema,
@@ -1652,7 +1651,7 @@ it.effect(
 );
 
 it.effect(
-  "the owner's delete retires the session of every agent still starting, one on a member's own GitHub the owner cannot see among them, under the member who started it",
+  "a delete the plugin refuses once the turns are stopped leaves an agent still starting with its session as it was, and the workspace standing",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -1661,29 +1660,37 @@ it.effect(
         const grace = yield* openGithubAccount("Grace Hopper");
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
         const agentId = yield* openTaskAgent(grace, acme, null);
-        // Grace's own token reaches its repository and Ada's reads none, so Ada cannot see it; started with a prompt and no turn yet, it is still starting.
+        // Started with a prompt and no turn yet, Grace's agent is still starting, its session already recorded.
         const [agent] = yield* Database.use((db) =>
           db
             .update(agentTable)
-            .set({ githubAccess: GITHUB_ACCESS.TOKEN, prompt: "Fix the flaky test" })
+            .set({ prompt: "Fix the flaky test" })
             .where(eq(agentTable.id, agentId))
             .returning({ conversationId: agentTable.conversationId }),
         );
-        const sessionId = `${NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CLAUDE_CODE]}hidden`;
+        const sessionId = `${NATIVE_SESSION_PREFIX[CONVERSATION_RUNTIME.CLAUDE_CODE]}starting`;
         yield* Database.use((db) =>
           db
             .update(conversations)
             .set({ runtimeSessionId: sessionId })
             .where(eq(conversations.id, (agent ?? assert.fail("no agent")).conversationId)),
         );
+        const refusing = {
+          ...plugin,
+          deleteWorkspace: () => Effect.fail(new OrganizationRefused({ status: 403 })),
+        };
 
-        const deleted = yield* deleting(plugin, ada, acme);
+        const refused = yield* deleting(refusing, ada, acme);
 
-        assert.deepEqual(deleted, { status: HOSTED_HTTP_STATUS.OK, body: { workspaceId: acme } });
+        assert.deepEqual(
+          refused,
+          refusedAs(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        );
         assert.deepEqual(
           RESETS.filter((reset) => reset.sessionId === sessionId),
-          [{ account: grace, sessionId }],
+          [],
         );
+        assert.equal((yield* membersOf(acme)).length, 2);
       }).pipe(Effect.provide(plugin.database));
     }),
 );

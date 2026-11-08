@@ -33,7 +33,6 @@ import {
   type AgentSessions,
   describeUnreachable,
   SESSION_CANCEL_OUTCOME,
-  SESSION_RESET_OUTCOME,
 } from "../sessions/agent-sessions.js";
 import { reconciledBeforeWrite } from "./reconcile.js";
 import { failedCallRefusal, routedSessions, sessionsRouter } from "./runtime-sessions.js";
@@ -283,81 +282,35 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * Every agent of a workspace being deleted let go of as its own starter
- * would, a few at once (`everySettled`): one with a turn to stop is stopped
- * (`canceledTurn`); one still starting, running with no turn yet to name, or
- * whose Stop failed has its session retired (`reset`), its runner's bearer
- * revoked and its place thrown away, which needs no turn; one at rest is
- * left, since nothing of it runs. No agent fails the delete: what could not
- * be done for one is logged and the rest go on, since the workspace goes
- * whatever its agents' runners did. A launch still opening its place when the agent goes throws
- * that place away itself (`runner-sessions.ts`). Note that each is reached
- * through its starter's account (`sessionsRouter`) rather than the owner's,
- * because the owner deletes every agent of the workspace, one on a member's
- * own GitHub it cannot see among them, and that no plan's writers are asked
+ * Every turn under way among a workspace's agents stopped before the
+ * workspace's delete, as each agent's own starter would stop it, a few at
+ * once (`everySettled`); an agent with no turn to stop is left as it stands.
+ * Nothing here cannot be undone, so a delete refused after it leaves the
+ * workspace's agents as usable as a Stop leaves one: what is lost goes after
+ * the delete has committed, where its hooks delete every agent's sandbox
+ * (`workspace-deletion.ts`), and a launch still opening its place when the
+ * agent goes throws that place away itself (`runner-sessions.ts`). No agent
+ * fails the delete: a Stop that fails, a Mac away or a sandbox out of reach,
+ * is logged and the rest go on. Note that each is reached through its
+ * starter's account (`sessionsRouter`) rather than the owner's, because the
+ * owner deletes every agent of the workspace, one on a member's own GitHub
+ * it cannot see among them, and that no plan's writers are asked
  * (`admitsPlanWriter`), because the agent goes with the workspace whoever
  * pays for it.
  */
-export const everyLetGoByStarter = /* @__PURE__ */ Effect.fnUntraced(function* (
+export const everyTurnStoppedByStarter = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   agents: readonly Agent[],
 ): Effect.fn.Return<void, never, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const sessionsOf = yield* sessionsRouter;
   yield* everySettled(agents, (agent) =>
-    letGo(writer, sessionsOf(agent.userId), agent).pipe(
+    canceledTurn(Effect.succeed(sessionsOf(agent.userId)), writer, agent).pipe(
+      Effect.asVoid,
       Effect.catch((refusal) =>
-        Effect.logWarning(`a deleted workspace's agent was not let go of: ${refusal.error}`),
+        Effect.logWarning(`a deleted workspace's agent was not stopped: ${refusal.error}`),
       ),
     ),
   );
-});
-
-/** One agent let go of as `everyLetGoByStarter` lets each go, over its starter's sessions. */
-const letGo = /* @__PURE__ */ Effect.fnUntraced(function* (
-  writer: Effect.Effect<StoreWriter>,
-  sessions: Pick<AgentSessions, "cancel" | "reset">,
-  agent: Agent,
-) {
-  const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
-  // Note that a Stop that fails, a Mac away or a sandbox out of reach, is logged and the agent's
-  // session retired instead, because the workspace goes whether or not its turn could be stopped.
-  if (stoppable(turn)) {
-    const stopped = yield* canceledTurn(Effect.succeed(sessions), writer, agent).pipe(
-      Effect.as(true),
-      Effect.catch((refusal) =>
-        Effect.as(
-          Effect.logWarning(`a deleted workspace's agent was not stopped: ${refusal.error}`),
-          false,
-        ),
-      ),
-    );
-    if (stopped) return;
-  }
-  const status = yield* statusOf(agent);
-  if (status !== AGENT_STATUS.STARTING && status !== AGENT_STATUS.RUNNING) return;
-  const sessionId = yield* hostedStoreOrUnavailable(
-    recordedRuntimeSession({ userId: agent.userId, conversationId: agent.conversationId }),
-  );
-  if (sessionId === undefined) return;
-  // Note that a retire that fails is logged and the delete goes on, because the agent is going all
-  // the same and a launch still under way throws its own place away.
-  const reset = yield* sessions
-    .reset(sessionId)
-    .pipe(
-      Effect.catchTag("SessionUnreachable", (failure) =>
-        Effect.as(
-          Effect.logWarning(
-            `a deleted workspace's agent session could not be reached: ${describeUnreachable(failure)}`,
-          ),
-          { outcome: SESSION_RESET_OUTCOME.NO_ACTIVE_SESSION } as const,
-        ),
-      ),
-    );
-  if (reset.outcome === SESSION_RESET_OUTCOME.FAILED) {
-    yield* Effect.logWarning(
-      `a deleted workspace's agent session was not retired: ${reset.status}`,
-    );
-  }
 });
 
 /**
