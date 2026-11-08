@@ -1,5 +1,5 @@
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import type { DescriptionAgentEdit } from "@repo/features/description-notes";
+import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import {
   DESCRIPTION_ACTOR,
   TASK_MODE,
@@ -132,13 +132,6 @@ export const task = pgTable(
      * with none. Kept as written, like the document.
      */
     brief: text("brief"),
-    /**
-     * @deprecated A pin is its reader's own now, in `plan_pin`
-     * (`plan-pin.ts`), and nothing writes or reads this. It was the
-     * workspace's, so a pin one member made stood for every member. It stands
-     * until no running build reads it, then a later migration drops it.
-     */
-    pinnedAt: timestamptz("pinned_at"),
     /**
      * When the task was finished: the instant its status last moved to Done
      * or Canceled, which the Tasks page windows its finished work by; null
