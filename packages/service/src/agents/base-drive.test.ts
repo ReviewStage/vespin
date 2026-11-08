@@ -1,5 +1,5 @@
 /**
- * base-drive.test.ts -- a workspace's repository's base drive, against `Sandbox` kept in memory: filled once from the image with the repository cloned onto it and its dependencies installed and no credential left behind, filled by one of several launches at once, refilled over its checkout where a launch asks, and read unfinished after a fill that failed until a later fill replaces it.
+ * base-drive.test.ts -- a workspace's repository's base drive, against `Sandbox` kept in memory: filled once from the image with the repository cloned onto it and its dependencies installed and no credential left behind, filled by one of several launches at once, refilled over its checkout where a launch asks, installing again only where that moved a lockfile or the base was not merely stale, read unfinished after a fill that failed until a later fill replaces it, and asked filled again by a fast-forward past it that moved a lockfile or found it stale.
  */
 
 import assert from "node:assert/strict";
@@ -7,13 +7,15 @@ import { it } from "@effect/vitest";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { OPEN_INTERNET, SANDBOX_STATUS, Sandbox, type SandboxService } from "@repo/sandbox";
 import { type MemoryCommand, type MemorySandboxRecord, memorySandbox } from "@repo/sandbox/testing";
-import { Effect, Fiber, Redacted } from "effect";
+import { Duration, Effect, Fiber, Redacted } from "effect";
+import { TestClock } from "effect/testing";
 import {
   BASE_STATE,
   BASE_WANTED,
   type BaseDriveOf,
   type BaseRefill,
   baseDriveName,
+  baseRefillPast,
   fillBaseDrive,
   readBaseDrive,
 } from "./base-drive.js";
@@ -137,20 +139,23 @@ it.effect("launches that fill at once leave one base drive and fail none", () =>
   }),
 );
 
-it.effect(
-  "a refill for a lockfile a launch moved brings the checkout standing up to the default branch and installs again, cloning nothing",
-  () =>
+it.effect.each([
+  { refill: BASE_WANTED.LOCKFILE_MOVED, installs: true },
+  { refill: BASE_WANTED.STALE, installs: false },
+])(
+  "a refill for $refill brings the checkout standing up to the default branch, cloning nothing, and installs again only where it is not stale alone with no lockfile moved",
+  ({ refill, installs }) =>
     Effect.gen(function* () {
       const { memory, state } = fixture();
       yield* filled(memory, BASE_WANTED.MISSING);
       const before = state.commands.length;
 
-      yield* filled(memory, BASE_WANTED.LOCKFILE_MOVED);
+      yield* filled(memory, refill);
 
-      const refill = state.commands.slice(before);
+      const ran = state.commands.slice(before);
       assert.deepEqual(
-        [refill.some(isRefresh), refill.some(isClone), refill.some(isInstall)],
-        [true, false, true],
+        [ran.some(isRefresh), ran.some(isClone), ran.some(isInstall)],
+        [true, false, installs],
       );
       assert.deepEqual([...state.drives.keys()], [baseDriveName(RELAY)]);
     }),
@@ -178,5 +183,48 @@ it.effect(
 
       assert.deepEqual(state.deleted, [name, name]);
       assert.equal((yield* readOn(memory)).state, BASE_STATE.READY);
+    }),
+);
+
+/** A checkout whose read past the base answers as given: the first commit past it landed `landedAgo` before now, where any did, and the lockfiles moved where `moved`. */
+function checkoutPast(now: number, landedAgo: Duration.Duration | undefined, moved: boolean) {
+  const landed =
+    landedAgo === undefined ? "" : `${Math.floor((now - Duration.toMillis(landedAgo)) / 1000)}\n`;
+  return {
+    run: () => Promise.resolve({ exitCode: moved ? 1 : 0, stdout: landed, stderr: "" }),
+  } satisfies RepositorySandbox;
+}
+
+it.effect.each([
+  {
+    past: "a moved lockfile",
+    landedAgo: Duration.minutes(5),
+    moved: true,
+    wants: BASE_WANTED.LOCKFILE_MOVED,
+  },
+  {
+    past: "a commit landed over an hour ago",
+    landedAgo: Duration.minutes(61),
+    moved: false,
+    wants: BASE_WANTED.STALE,
+  },
+  {
+    past: "a commit landed within the hour",
+    landedAgo: Duration.minutes(59),
+    moved: false,
+    wants: undefined,
+  },
+  { past: "no commit", landedAgo: undefined, moved: false, wants: undefined },
+])(
+  "a fast-forward past a base's fork that took $past asks the base filled for $wants",
+  ({ landedAgo, moved, wants }) =>
+    Effect.gen(function* () {
+      const now = Duration.toMillis(Duration.days(400));
+      yield* TestClock.setTime(now);
+
+      assert.equal(
+        yield* baseRefillPast(checkoutPast(now, landedAgo, moved), "base-commit"),
+        wants,
+      );
     }),
 );
