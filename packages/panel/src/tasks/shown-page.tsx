@@ -23,7 +23,7 @@ import { pagesQuery } from "../live-reads.js";
 
 import { PAGE_SANDBOX, useFrameLinks } from "./page-pane.js";
 import { PAGE_ROOM, usePageTheme } from "./page-theme.js";
-import { pressPlace, ReplyPress, useReplyDoor } from "./reply-to-selection.js";
+import { pressPlace, ReplyPress, roomAround, useReplyDoor } from "./reply-to-selection.js";
 
 /**
  * shown-page.tsx -- a page an agent showed, drawn where it is told of: under the transcript row of the call that showed it, and under an Inbox thread's line naming it.
@@ -166,12 +166,15 @@ function FrameReply({
   const { box } = selected;
   return (
     <ReplyPress
-      place={pressPlace({
-        left: at.left + box.left,
-        top: at.top + box.top,
-        right: at.left + box.right,
-        bottom: at.top + box.bottom,
-      })}
+      place={pressPlace(
+        {
+          left: at.left + box.left,
+          top: at.top + box.top,
+          right: at.left + box.right,
+          bottom: at.top + box.bottom,
+        },
+        roomAround(framed),
+      )}
       onReply={() => {
         letGo();
         onReply(replyOf(selected.quote));
