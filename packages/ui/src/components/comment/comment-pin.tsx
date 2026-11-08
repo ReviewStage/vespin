@@ -17,9 +17,9 @@ import type { CommentAuthor } from "./comment.js";
  * beside it, inside that corner, its upper start corner the point. It hears
  * the pointer over it, which the owner answers by
  * marking what the pin is on. Over it, the pointer is told the first
- * comment by its writer and its first line, in a hint's card; a finger has
- * no pointer over it, so its press opens the comments at once, which say
- * the same and more. The count is a picture of the number its name says, so
+ * comment, in a hint's card, while its comments are not open, which say
+ * the same and more; a finger has no pointer over it, so its press opens
+ * the comments at once. The count is a picture of the number its name says, so
  * it is hidden from a reader. A pin of comments held in the reader's review,
  * which no one else sees until it is sent, is drawn dashed in the accent.
  */
@@ -79,7 +79,7 @@ export function CommentPin({
   count: number;
   /** The pin's name, which says how many comments it opens. */
   label: string;
-  /** The first comment as the pointer over the pin is told it: its writer and its first line. */
+  /** The first comment as the pointer over the pin is told it while its comments are not open. */
   preview: ReactNode;
   /** Whether its comments are open. */
   open: boolean;
@@ -94,7 +94,8 @@ export function CommentPin({
   // Note that a glyph drawn conditionally may arrive as nothing to draw, which is no glyph, so the letter still stands.
   const glyph = drawsSomething(author.glyph) ? author.glyph : undefined;
   return (
-    <Tooltip label={label} card={preview}>
+    // Note that its comments open tell the pointer nothing more, so no card stands over them.
+    <Tooltip label={open ? undefined : label} card={open ? undefined : preview}>
       <button
         type="button"
         className={`ui-comment-pin inline-flex cursor-press items-center gap-ui-2 rounded-ui-full ${POINT[stands]} border ${EDGE[look]} bg-popover p-ui-4 text-caption text-foreground shadow-menu aria-expanded:shadow-menu-open-edge pointer-coarse:relative pointer-coarse:before:absolute pointer-coarse:before:top-1/2 pointer-coarse:before:left-1/2 pointer-coarse:before:w-[max(100%,var(--ui-touch-target))] pointer-coarse:before:h-touch pointer-coarse:before:[transform:translate(-50%,-50%)] pointer-coarse:before:content-['']`}

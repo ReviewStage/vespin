@@ -58,6 +58,7 @@ import {
   FailureNote,
   Fill,
   HoverCard,
+  HoverCardScroll,
   IconButton,
   LINE_BUTTON_LOOK,
   LineButton,
@@ -3386,6 +3387,19 @@ function pinStands(box: FrameBox): CommentPinStands {
   return box.left < PIN_ROOM ? COMMENT_PIN_STANDS.INSIDE : COMMENT_PIN_STANDS.BESIDE;
 }
 
+/** Where the pin drawn for `path` stands in the window, which its card opens under; none where it is not drawn. */
+function pinBox(pins: ReadonlyMap<string, HTMLElement>, path: string): FrameBox | undefined {
+  return pins.get(path)?.getBoundingClientRect();
+}
+
+/** Keeps the pin drawn for `path` in `pins` while it stands, by its element's path. */
+function keptPin(pins: Map<string, HTMLElement>, path: string) {
+  return (node: HTMLElement | null) => {
+    if (node === null) pins.delete(path);
+    else pins.set(path, node);
+  };
+}
+
 /** Where a thread on the whole page is started: the frame's top edge. */
 const PAGE_TOP: FrameBox = { left: 0, top: 0, right: 0, bottom: 0 };
 
@@ -3402,15 +3416,7 @@ export function threadsByElement(
   return by;
 }
 
-/** A comment's first line, as a pin's preview says it. */
-function firstLine(words: string): string {
-  const said = messageBlocks(words).find((block) => block.kind === MESSAGE_BLOCK.WORDS);
-  const line =
-    said?.kind === MESSAGE_BLOCK.WORDS ? said.lines.find((each) => each.trim() !== "") : undefined;
-  return line ?? words;
-}
-
-/** What the pointer over a pin is told: the first comment's head, as every comment draws it, over its first line. */
+/** What the pointer over a pin is told: the first comment whole, as its thread draws it, scrolling in the card where it is long. */
 function PinPreview({
   head,
   words,
@@ -3421,7 +3427,9 @@ function PinPreview({
   return (
     <HoverCard>
       <Comment {...head}>
-        <div className="comment-clamp line-clamp-2">{firstLine(words)}</div>
+        <HoverCardScroll>
+          <CommentWords words={words} />
+        </HoverCardScroll>
       </Comment>
     </HoverCard>
   );
@@ -3429,8 +3437,8 @@ function PinPreview({
 
 /**
  * The pin of the threads on one element: the bubble wearing the face of
- * whoever started the first, told over it by that comment's writer and
- * first line, as the description's comments draw a comment.
+ * whoever started the first, told over it that comment whole, as its
+ * thread draws it.
  */
 function PagePin({
   threads,
@@ -3448,9 +3456,8 @@ function PagePin({
   stands: CommentPinStands;
 }): React.JSX.Element | null {
   const now = useMinute();
-  const first = threads[0]?.entries.find(
-    (entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT,
-  );
+  const thread = threads[0];
+  const first = thread?.entries.find((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
   const fallback: DescriptionCommentWriter = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER };
   const { author, nameRef } = useWriter(first?.writer ?? fallback, doors.agents);
   const comments = threads.length;
@@ -3464,8 +3471,11 @@ function PagePin({
       onPress={onOpen}
       onHover={onHint}
       preview={
-        first === undefined ? null : (
-          <PinPreview head={{ author, nameRef, at: first.at, now }} words={first.words ?? ""} />
+        thread === undefined || first === undefined ? null : (
+          <PinPreview
+            head={{ author, nameRef, at: first.at, now }}
+            words={ownWordsOf(thread, first.words ?? "")}
+          />
         )
       }
     />
@@ -3603,9 +3613,9 @@ const HELD_PIN_STEP = 28;
 
 /**
  * The pin of the comments the reader holds on one element in their review,
- * dashed, wearing their own face, told over it as a posted pin is, its
- * writer and the first's first line, Pending where the time would stand; a
- * press opens them by the element, as a posted pin opens its threads.
+ * dashed, wearing their own face, told over it as a posted pin is, the
+ * first whole, Pending where the time would stand; a press opens them under
+ * the pin, as a posted pin opens its threads.
  */
 function HeldPin({
   held,
@@ -3658,15 +3668,16 @@ function heldByElement(held: readonly HeldComment[]): ReadonlyMap<string, readon
  * A page's comments over the page itself, as the description's folded margin draws
  * its own: each element holding open threads pinned with the face of who
  * started them, the pointer over a pin outlining its element faintly and
- * told the first comment, and a press opening its threads in a card by the
- * element, where the column beside the page does not stand to open them in;
+ * told the first comment whole, and a press opening its threads in a card
+ * under the pin, or closing them, where the column beside the page does not
+ * stand to open them in;
  * the thread being started, in a card by the element it was started from;
  * while the page is picking an element, a line saying so, with Whole page
  * and Cancel; and Reply by words selected in the page, which quotes them
  * into the comment being written, or starts one on the element holding
  * them. A comment being started may be held in the reader's review
  * instead, pinned dashed to its element until the review is sent, its pin
- * opening the comments held there in a card by the element, as a posted
+ * opening the comments held there in a card under it, as a posted
  * pin opens its threads, column or no column, since the column lists
  * posted threads alone. A card
  * closes on a press away, a press in the page among them, as a
@@ -3726,6 +3737,9 @@ export function PageCommentLayer({
   const opened = control.threads.filter((thread) => open?.includes(thread.id) === true);
   const at = opened[0]?.page?.element;
   const starting = useRef<HTMLDivElement>(null);
+  // The pins drawn, by their element's path, which a card opened from one stands under.
+  const postedPins = useRef(new Map<string, HTMLElement>());
+  const heldPins = useRef(new Map<string, HTMLElement>());
   // The element whose held comments stand open by it, by its path; none open.
   const [heldOpen, setHeldOpen] = useState<string | undefined>(undefined);
   const heldThere =
@@ -3740,7 +3754,7 @@ export function PageCommentLayer({
     if (box === undefined || box === null || box.bottom < 0) return [];
     return [{ path, threads, box }];
   });
-  const heldPins = [...heldByElement(review?.held ?? [])].flatMap(([path, held]) => {
+  const heldMarks = [...heldByElement(review?.held ?? [])].flatMap(([path, held]) => {
     const box = marks.get(path);
     if (box === undefined || box === null || box.bottom < 0) return [];
     return [{ path, held, box, step: byElement.has(path) ? HELD_PIN_STEP : 0 }];
@@ -3749,9 +3763,10 @@ export function PageCommentLayer({
     <div className="page-comment-layer">
       {review === undefined
         ? null
-        : heldPins.map(({ path, held, box, step }) => (
+        : heldMarks.map(({ path, held, box, step }) => (
             <span
               key={path}
+              ref={keptPin(heldPins.current, path)}
               className="page-comment-pin"
               data-stands={pinStands(box)}
               style={{ left: Math.max(box.left - step, 0), top: Math.max(box.top, 0) }}
@@ -3774,6 +3789,7 @@ export function PageCommentLayer({
         // Note that the bubble's pointed corner touches its element's top start corner, beside it, or inside it where the room has none beside it.
         <span
           key={path}
+          ref={keptPin(postedPins.current, path)}
           className="page-comment-pin"
           data-stands={pinStands(box)}
           style={{ left: Math.max(box.left, 0), top: Math.max(box.top, 0) }}
@@ -3798,8 +3814,11 @@ export function PageCommentLayer({
       ))}
       <RectFloat
         open={floats && opened.length > 0}
+        // Note that a thread opens under its pin, or by its element where its pin is not yet drawn, as one just started is.
         anchor={() =>
-          inWindow(room.current, at === undefined ? PAGE_TOP : (marks.get(at) ?? undefined))
+          at === undefined
+            ? inWindow(room.current, PAGE_TOP)
+            : (pinBox(postedPins.current, at) ?? inWindow(room.current, marks.get(at) ?? undefined))
         }
         side={POPOVER_SIDE.BELOW}
         // Note that a held reply's edit standing open in a thread holds the card, so a stray press never drops its words.
@@ -3827,12 +3846,7 @@ export function PageCommentLayer({
       </RectFloat>
       <RectFloat
         open={review !== undefined && heldThere.length > 0}
-        anchor={() =>
-          inWindow(
-            room.current,
-            heldOpen === undefined ? undefined : (marks.get(heldOpen) ?? undefined),
-          )
-        }
+        anchor={() => (heldOpen === undefined ? undefined : pinBox(heldPins.current, heldOpen))}
         side={POPOVER_SIDE.BELOW}
         // Note that an edit standing open in the card holds it, so its words are never lost to a stray press.
         onPressAway={() => {
