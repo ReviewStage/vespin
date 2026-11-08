@@ -7,7 +7,7 @@
  * link it is handed, and said once through the bridge's `onShowLink`, which
  * the panel already opens (`app.tsx`). A page reloaded on an entry the
  * panel saved a step in through the router's history
- * (`@repo/panel/navigation-history`'s `savesStep`) reopens that step
+ * (`@repo/panel/places/window-steps`'s `savesStep`) reopens that step
  * instead, and says nothing here. `/app`, the panel's own path, names no
  * place, so the panel opens where it rests there; so does `/app.html`, the build's
  * file name, which only the dev server answers, the site sending it to
@@ -32,8 +32,8 @@ import {
 } from "@repo/features/link-grammar";
 import { LINK_ORIGIN, PANEL_PATH } from "@repo/features/link-home";
 import type { AppBridge } from "@repo/host/bridge";
-import { savesStep } from "@repo/panel/navigation-history";
 import { opensAtItsRoute } from "@repo/panel/places/link-places";
+import { savesStep } from "@repo/panel/places/window-steps";
 import type { HistoryLocation, RouterHistory } from "@tanstack/react-router";
 
 /** The paths the panel itself is served at, which name no place. */

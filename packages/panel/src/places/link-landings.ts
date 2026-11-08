@@ -5,8 +5,8 @@
 import type { ReadLink } from "@repo/features/link-grammar";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { savesStep } from "../navigation-history.js";
 import { landedLinkOf } from "./link-places.js";
+import { savesStep } from "./window-steps.js";
 
 /**
  * Opens the link place the router's history lands on, through `open`, as a

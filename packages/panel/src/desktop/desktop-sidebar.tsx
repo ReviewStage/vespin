@@ -126,12 +126,7 @@ import { DraftMark } from "../draft-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
-import {
-  type HistoryPage,
-  type HistoryStep,
-  type NavigationHistory,
-  sameHistoryPage,
-} from "../navigation-history.js";
+import type { NavigationHistory } from "../navigation-history.js";
 import {
   endWindowSpan,
   leaveWindowSpan,
@@ -146,6 +141,7 @@ import {
   useInboxDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
+import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";

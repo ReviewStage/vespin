@@ -58,7 +58,6 @@ import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
 import { liveStepTitle, memberName, NAMED_STEP, stepTitle } from "../history-titles.js";
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
-import type { StepTitle } from "../navigation-history.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import {
   type AutomationsDoor,
@@ -69,6 +68,7 @@ import {
   useInboxDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
+import type { StepTitle } from "../places/window-steps.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";

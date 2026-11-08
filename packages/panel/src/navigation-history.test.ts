@@ -20,10 +20,6 @@ import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
 import { useCopyLink } from "./links-at-hand.js";
 import {
   type HistoryBehind,
-  MOUSE_BUTTON,
-  type StepTitle,
-  sameHistoryPage,
-  savesStep,
   useHistoryMouseButtons,
   useRoutedStanding,
   useWindowHistory,
@@ -35,6 +31,7 @@ import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-le
 import { useRoutedExits } from "./places/routed-exits.js";
 import type { RoutedPlace } from "./places/routed-places.js";
 import { taskAtOf, taskOfAt } from "./places/task-step.js";
+import { MOUSE_BUTTON, type StepTitle, sameHistoryPage, savesStep } from "./places/window-steps.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { useTaskRoute } from "./task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";

@@ -13,10 +13,10 @@
  */
 
 import { useRouter } from "@tanstack/react-router";
-import { savedTaskOf, savesStep } from "./navigation-history.js";
 import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import type { TaskAt } from "./places/task-step.js";
+import { savedTaskOf, savesStep } from "./places/window-steps.js";
 import { useRouteAccess } from "./route-gates.js";
 
 /** A task's own place as the router stands it. */

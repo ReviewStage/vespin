@@ -11,7 +11,7 @@ import {
   Text,
   type ToolbarPickUp,
 } from "@repo/ui";
-import type { AwayStep } from "../navigation-history.js";
+import type { AwayStep } from "../places/window-steps.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import { PhoneHead } from "./phone-head.js";
 

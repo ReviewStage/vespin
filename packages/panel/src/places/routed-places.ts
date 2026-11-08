@@ -51,7 +51,6 @@ import {
   slugOf,
   type WindowAt,
 } from "../links-at-hand.js";
-import type { StepTitle } from "../navigation-history.js";
 import {
   adminRouteStands,
   type RouteAccess,
@@ -71,6 +70,7 @@ import type { RoutedViews } from "../workspace-routes.js";
 import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 import { openPanelTab, type TaskStep } from "./task-step.js";
+import type { StepTitle } from "./window-steps.js";
 
 /**
  * Which of a place's panes a room stands over another as a step of its own,
