@@ -23,10 +23,9 @@ import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
-import type { AutomationsRoute } from "../automations-route.js";
-import type { InboxRoute } from "../inbox-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
 import {
   AGENT_RENAME_SHAPE,
@@ -41,7 +40,6 @@ import { MAIN_TAB } from "../tasks/use-main-tabs.js";
 import { DRAWN_KINDS, SIDE_PANEL_WIDTH } from "../tasks/use-side-panel.js";
 import {
   type AdminViewControl,
-  AUTOMATIONS_PAGE,
   type TasksControl,
   taskDeleteMutation,
   taskMoveMutation,
@@ -49,13 +47,7 @@ import {
   tasksDeleteMutation,
   type VersionHistoryControl,
 } from "../tasks/use-tasks-tab.js";
-import type { VersionHistoryRoute } from "../version-history-route.js";
-import type {
-  BoardRoute,
-  HomeRoute,
-  PersonRoute,
-  UnknownWorkspaceRoute,
-} from "../workspace-routes.js";
+import type { HomeRoute, UnknownWorkspaceRoute } from "../workspace-routes.js";
 import { handHostReads, holdTranscripts, type TranscriptsHeld } from "./app-state.js";
 
 const ignore = () => undefined;
@@ -398,72 +390,6 @@ export const NO_LEAVE_ASK: PlaceLeave = {
 export const ADMIN_AWAY: AdminViewControl = {
   open: false,
   view: { kind: "dashboard" },
-  onOpen: ignore,
-  onClose: ignore,
-  onPreload: ignore,
-};
-
-/** The Board's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const BOARD_AWAY: BoardRoute = {
-  open: false,
-  standingIn: undefined,
-  onOpen: ignore,
-  onClose: ignore,
-  onTurn: ignore,
-  onPreload: ignore,
-};
-
-/** The Automations route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const AUTOMATIONS_AWAY: AutomationsRoute = {
-  open: false,
-  place: { kind: AUTOMATIONS_PAGE.LIST },
-  runs: false,
-  standingIn: undefined,
-  deleted: new Set(),
-  setupAddress: undefined,
-  onOpen: ignore,
-  onRuns: ignore,
-  onClose: ignore,
-  onTurn: ignore,
-};
-
-/** A version history's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const VERSION_HISTORY_AWAY: VersionHistoryRoute = {
-  open: false,
-  workspace: undefined,
-  task: undefined,
-  spot: undefined,
-  listAddress: undefined,
-  onOpen: ignore,
-  onMove: ignore,
-  onClose: ignore,
-  onGiveWay: ignore,
-  onPreload: ignore,
-};
-
-/** The Inbox's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const INBOX_AWAY: InboxRoute = {
-  open: false,
-  standingIn: undefined,
-  narrowed: undefined,
-  chosen: undefined,
-  listAddress: undefined,
-  onOpen: ignore,
-  choiceOf: () => undefined,
-  onChoose: ignore,
-  onGoTo: ignore,
-  onHold: ignore,
-  onClear: ignore,
-  onWiden: ignore,
-  onClose: ignore,
-  onTurn: ignore,
-};
-
-/** A person's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const PERSON_AWAY: PersonRoute = {
-  userId: undefined,
-  name: undefined,
-  workspace: undefined,
   onOpen: ignore,
   onClose: ignore,
   onPreload: ignore,

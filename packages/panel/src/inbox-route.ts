@@ -22,8 +22,8 @@
 import type { InboxItemHome } from "@repo/features/inbox-wire";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
-import { Store, useSelector } from "@tanstack/react-store";
-import { useState } from "react";
+import { useSelector } from "@tanstack/react-store";
+import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 import { inboxItemHomeQueryOptions } from "./tasks/agent-reads.js";
 import type { InboxChoice } from "./tasks/use-tasks-tab.js";
@@ -34,9 +34,6 @@ const INBOX_LEAF = {
   TASK: "/places/$workspace/inbox/task/$taskId",
   ITEM: "/places/$workspace/inbox/$itemId",
 } as const;
-
-/** Each item a door chose in the window's Inbox, by its id: where it stands, which its address leaves out. */
-type ChoicesHeld = Store<ReadonlyMap<string, InboxChoice>>;
 
 /** Where an item opens: the workspace whose Inbox it is chosen in, by its address step, and the task that Inbox's list is narrowed to, none for every task's. */
 export interface InboxAt {
@@ -121,14 +118,15 @@ function useFoundChoice(itemId: string | undefined, held: boolean): InboxChoice 
   return found === undefined ? { itemId, opened: true } : choiceAt(itemId, found);
 }
 
-/** The Inbox as the router stands it, left by `onClose`, and kept standing by `onStay` where a leave was asked of it before a door asked for the place standing. */
-export function useInboxRoute(input: { onClose: () => void; onStay: () => void }): InboxRoute {
+/** The Inbox as the router stands it, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for the place standing (`places/routed-exits.ts`). */
+export function useInboxRoute(): InboxRoute {
   const router = useRouter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const here = useWindowPlace();
+  const exits = useRoutedExits();
   // Only grows: each item a door chose, by its id, for as long as the window lives.
-  const [choices] = useState<ChoicesHeld>(() => new Store(new Map()));
+  const choices = useRoutedMemory().inboxChoices;
   const open = here.place === ROUTED_PLACE.INBOX;
   const standingIn = open ? here.params.workspace : undefined;
   const itemId = open && here.leaf === INBOX_LEAF.ITEM ? here.params.itemId : undefined;
@@ -145,7 +143,7 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
   // Note that a door asked for the place standing moves nothing, and keeps it standing where it left the routed place first, as a link's and ⌘K's do.
   const visit = (options: NavigateOptions, replace = false) => {
     if (router.buildLocation(options).href === router.history.location.href) {
-      input.onStay();
+      exits.stay();
       return;
     }
     void navigate({ ...options, replace });
@@ -192,7 +190,7 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
         visit(listAt({ workspace: standingIn, narrowed: undefined }));
       }
     },
-    onClose: input.onClose,
+    onClose: () => exits.leave(),
     onTurn: (workspace) => {
       if (standingIn === undefined || standingIn === workspace) return;
       // Note that the same Inbox under another workspace lists that workspace's items alone, so it stands on its list.

@@ -34,10 +34,11 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { type PlaceLeave, usePlaceLeave } from "../places/place-leave.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
 import { MAIN_TAB } from "../tasks/use-main-tabs.js";
 import { SIDE_PANEL_TAB } from "../tasks/use-side-panel.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
   type AnyAct,
   FAKE_ANSWER,

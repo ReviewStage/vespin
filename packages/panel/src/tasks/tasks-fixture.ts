@@ -53,6 +53,7 @@ import {
   FIXTURE_AGENT_ID,
 } from "./agent-fixture.js";
 import { automationsAppState, automationsLaunchPlace } from "./automations-fixture.js";
+import type { AutomationsPlace } from "./automations-place.js";
 import {
   FIXTURE_PERSON,
   settingsActAnswer,
@@ -67,7 +68,6 @@ import {
   type SidePanelState,
   type StagedSidePanel,
 } from "./use-side-panel.js";
-import type { AutomationsPlace } from "./use-tasks-tab.js";
 
 /**
  * tasks-fixture.ts -- the synthetic tasks a fixture run's Tasks tab draws in place of the service's.

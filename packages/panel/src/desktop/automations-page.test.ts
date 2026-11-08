@@ -48,7 +48,7 @@ import { runAppCommand } from "../app-commands.js";
 import { OpenFeedbackProvider } from "../open-feedback.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "../places/place-leave.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {

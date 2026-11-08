@@ -70,8 +70,9 @@ import { DesktopInbox } from "../desktop/desktop-inbox.js";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { DRAFT_WORD } from "../draft-mark.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
-import { AUTOMATIONS_PAGE, type InboxChoice } from "../tasks/use-tasks-tab.js";
+import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { ToastHost } from "../toast.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
 import {

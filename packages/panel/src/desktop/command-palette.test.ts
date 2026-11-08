@@ -54,15 +54,11 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { fileLook } from "../tasks/file-ref.js";
 import { SIDE_PANEL_TAB, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { NO_LOOKS, useTaskLooks } from "../tasks/use-task-looks.js";
-import {
-  AUTOMATIONS_PAGE,
-  type AutomationsPlace,
-  type InboxChoice,
-  type TasksControl,
-} from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {

@@ -12,6 +12,7 @@
 
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { placeParamsOf } from "./places/place-params.js";
+import { useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
 
@@ -27,14 +28,15 @@ export interface AgentRoute {
 }
 
 /**
- * An agent's page as the router stands it, left by `onClose`, and kept
- * standing by `onStay` where a leave was asked of it before a door asked for
+ * An agent's page as the router stands it, left by the window's routed exit,
+ * and kept standing by its stay where a leave was asked of it before a door asked for
  * the page standing. Note that the page standing is read from where the
  * router's history stands at the call rather than as the window was last
  * drawn, because a tab landing on the page's address opens its link in the
  * same turn, before the window draws it standing (`load-link.ts`).
  */
-export function useAgentRoute(input: { onClose: () => void; onStay: () => void }): AgentRoute {
+export function useAgentRoute(): AgentRoute {
+  const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
@@ -48,7 +50,7 @@ export function useAgentRoute(input: { onClose: () => void; onStay: () => void }
     const standing = routedPlaceOf(matches, access) === ROUTED_PLACE.AGENT;
     // Opening the page standing moves nothing, and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
     if (standing && params.agentId === to && params.workspace === toWorkspace) {
-      input.onStay();
+      exits.stay();
       return;
     }
     void navigate({
@@ -56,5 +58,5 @@ export function useAgentRoute(input: { onClose: () => void; onStay: () => void }
       params: { workspace: toWorkspace, agentId: to },
     });
   };
-  return { agentId, workspace, onOpen, onClose: input.onClose };
+  return { agentId, workspace, onOpen, onClose: () => exits.leave() };
 }

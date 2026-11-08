@@ -27,16 +27,12 @@ import {
 } from "./navigation-history.js";
 import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { usePlaceLeave } from "./places/place-leave.js";
+import { useRoutedExits } from "./places/routed-exits.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
-import {
-  type AdminViewControl,
-  AUTOMATIONS_PAGE,
-  type AutomationsPlace,
-  type InboxChoice,
-  type TasksControl,
-} from "./tasks/use-tasks-tab.js";
+import type { AdminViewControl, InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeAppBridge, fakeAppBridgeCalls } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { deliveryOf, handState, stateWith, withExperiments } from "./testing/app-state.js";
@@ -226,6 +222,10 @@ function mount(
   function Probe() {
     const [at, setAt] = useState(start);
     standing = at;
+    // The window's routed exits leave and stay through its history, as the window's root fills them in.
+    const exits = useRoutedExits();
+    exits.leave = () => history?.onLeaveRouted();
+    exits.stay = () => history?.onStayRouted();
     restand = setAt;
     // Settings and Admin stand where the router does, as the window's root reads them.
     settings = useSettingsRoute({
@@ -233,25 +233,15 @@ function mount(
       listedId: ACME.id,
       narrow: room === SHELL_ROOM.NARROW,
     });
-    admin = useAdminRoute({ listedSlug: () => ACME.slug, onClose: () => undefined });
+    admin = useAdminRoute({ listedSlug: () => ACME.slug });
     automations = useAutomationsRoute({
       narrow: room === SHELL_ROOM.NARROW,
-      onClose: () => undefined,
-      onStay: () => undefined,
     });
     versions = useVersionHistoryRoute({
       narrow: room === SHELL_ROOM.NARROW,
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
     });
-    inbox = useInboxRoute({
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
-    });
-    agent = useAgentRoute({
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
-    });
+    inbox = useInboxRoute();
+    agent = useAgentRoute();
     const tab = tasksTab(at, setAt, room, versions, inbox, agent);
     // The window's leave guard, whose page holding unsaved work answers every ask with Stay, as Cancel would.
     const placeLeave = usePlaceLeave();
@@ -261,7 +251,7 @@ function mount(
       [unsaved, placeLeave],
     );
     // Home stands where the router does, under the workspace listed, as the window's root reads it.
-    const home = useHomeRoute({ listed: () => ACME.slug, onClose: () => history?.onLeaveRouted() });
+    const home = useHomeRoute({ listed: () => ACME.slug });
     const tasks: TasksControl = {
       ...tab,
       placeLeave,

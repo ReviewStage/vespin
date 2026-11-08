@@ -6,6 +6,7 @@ import { searchTokens } from "@repo/ui/search-tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
+import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import {
   EVERYONES,
@@ -30,7 +31,7 @@ import {
 } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
-import { AUTOMATIONS_PAGE, type InboxChoice, type TasksControl } from "./use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
 /**
  * use-inbox-listing.ts -- the window's Inbox read once: every item of every

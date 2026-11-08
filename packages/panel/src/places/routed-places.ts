@@ -58,10 +58,11 @@ import {
   versionHistoryRouteStands,
   workspaceRouteStands,
 } from "../route-gates.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { stripTabSurface } from "../tasks/strip-tab-kinds.js";
 import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";
 import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";

@@ -11,6 +11,7 @@
 
 import { ADMIN_LINK_SECTION, type AdminLinkSection } from "@repo/features/link-grammar";
 import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import type { AdminViewControl } from "../tasks/use-tasks-tab.js";
 import {
@@ -29,11 +30,9 @@ function sectionOf(segment: string | undefined): AdminLinkSection | undefined {
   return Object.values(ADMIN_LINK_SECTION).find((section) => section === segment);
 }
 
-/** Admin as the router stands it, opened under the workspace `listedSlug` names as it is pressed, and left by `onClose`. */
-export function useAdminRoute(input: {
-  listedSlug: () => string | undefined;
-  onClose: () => void;
-}): AdminViewControl {
+/** Admin as the router stands it, opened under the workspace `listedSlug` names as it is pressed, and left by the window's routed exit (`places/routed-exits.ts`). */
+export function useAdminRoute(input: { listedSlug: () => string | undefined }): AdminViewControl {
+  const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
@@ -86,5 +85,5 @@ export function useAdminRoute(input: {
     if (workspace !== undefined)
       void router.preloadRoute({ to: "/$workspace/admin", params: { workspace } });
   };
-  return { open, view, onOpen, onClose: input.onClose, onPreload };
+  return { open, view, onOpen, onClose: () => exits.leave(), onPreload };
 }

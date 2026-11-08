@@ -141,6 +141,7 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
 import {
   type AgentPin,
@@ -152,7 +153,7 @@ import {
 } from "../tasks/use-side-panel.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";

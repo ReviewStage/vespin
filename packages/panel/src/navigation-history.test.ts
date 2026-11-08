@@ -31,18 +31,15 @@ import {
 } from "./navigation-history.js";
 import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-leave.js";
+import { useRoutedExits } from "./places/routed-exits.js";
 import type { RoutedPlace } from "./places/routed-places.js";
 import { taskOfAt } from "./places/task-step.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { useTaskRoute } from "./task-route.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 import { isOverviewTab } from "./tasks/use-main-tabs.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
-import {
-  type AdminViewControl,
-  AUTOMATIONS_PAGE,
-  type AutomationsPlace,
-  type TasksControl,
-} from "./tasks/use-tasks-tab.js";
+import type { AdminViewControl, TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads } from "./testing/app-state.js";
@@ -101,30 +98,21 @@ function mount(
     const [standing, setTasks] = useState(initial);
     // The window's leave guard, which a test stands a page's ask through.
     placeLeave = usePlaceLeave();
+    // The window's routed exits leave and stay through its history, as the window's root fills them in.
+    const exits = useRoutedExits();
+    exits.leave = () => history?.onLeaveRouted();
+    exits.stay = () => history?.onStayRouted();
     restand = setTasks;
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
-    board = useBoardRoute({
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
-    });
-    person = usePersonRoute({
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
-    });
+    board = useBoardRoute();
+    person = usePersonRoute();
     automations = useAutomationsRoute({
       narrow: false,
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
     });
     versions = useVersionHistoryRoute({
       narrow: false,
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
     });
-    inbox = useInboxRoute({
-      onClose: () => history?.onLeaveRouted(),
-      onStay: () => history?.onStayRouted(),
-    });
+    inbox = useInboxRoute();
     const listedStep = standing.workspaces.find((each) => each.id === standing.workspace?.id)?.slug;
     const inboxAt = (narrowed: string | undefined) =>
       listedStep === undefined ? undefined : { workspace: listedStep, narrowed };
@@ -135,7 +123,6 @@ function mount(
     // Home stands where the router does, under the workspace listed, as the window's root reads it.
     const home = useHomeRoute({
       listed: () => listedStep,
-      onClose: () => history?.onLeaveRouted(),
     });
     // Home stands under the workspace listed, as the Tasks tab turns it.
     useEffect(() => {
@@ -198,7 +185,6 @@ function mount(
     // Admin stands where the router does, as the window's root reads it.
     admin = useAdminRoute({
       listedSlug: () => tasks.workspaces.find((each) => each.id === tasks.workspace?.id)?.slug,
-      onClose: () => undefined,
     });
     const routed = useRoutedStanding();
     const copyLink = useCopyLink(

@@ -1388,7 +1388,7 @@ export function useWindowHistory(input: {
   /** Stands Settings on its page list, in the page's place. */
   onSettingsList: () => void;
   /** What the history reads of the Automations pages beyond where they stand: the automations deleted, and an automation's setup under its runs (`automations-route.ts`). */
-  automations: Pick<AutomationsRoute, "deleted" | "setupAddress">;
+  automations: Pick<AutomationsRoute, "deletedNow" | "setupAddress">;
   /** What the history reads of a version history beyond where it stands: the list under a narrow room's version (`version-history-route.ts`). */
   versionHistory: Pick<VersionHistoryRoute, "listAddress">;
   /** What the history reads of the Inbox beyond where it stands: the list under its item, the item chosen, and the doors that stand its list (`inbox-route.ts`). */
@@ -1632,7 +1632,7 @@ export function useWindowHistory(input: {
     taskStep,
     taskStands,
     columnStands,
-    automationStands: (automationId: string) => !automations.deleted.has(automationId),
+    automationStands: (automationId: string) => !automations.deletedNow(automationId),
     listed: (workspace: string) =>
       workspaceOfSlug(tasks.workspaces, workspace)?.id === listedWorkspace,
   });

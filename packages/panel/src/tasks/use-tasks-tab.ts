@@ -133,13 +133,14 @@ import {
   unreachedAs,
 } from "../act.js";
 import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
+import { useAdminRoute } from "../admin/admin-route.js";
 import { type AdminView, adminViewOfLink } from "../admin/routing.js";
 import type { AgentRoute } from "../agent-route.js";
 import { appPlatform } from "../app-platform.js";
-import type { AutomationsRoute } from "../automations-route.js";
+import { useAutomationsRoute } from "../automations-route.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
-import type { InboxAt, InboxRoute } from "../inbox-route.js";
+import { type InboxAt, useInboxRoute } from "../inbox-route.js";
 import {
   descriptionDocumentQuery,
   descriptionDocumentRetryMutation,
@@ -177,13 +178,13 @@ import {
   selectAppSettingsView,
   selectWorkspaces,
 } from "../use-app-state.js";
-import type { VersionHistoryRoute } from "../version-history-route.js";
+import { useVersionHistoryRoute } from "../version-history-route.js";
 import { workspaceExperimentChoices } from "../workspace-experiments.js";
-import type {
-  BoardRoute,
-  HomeRoute,
-  PersonRoute,
-  UnknownWorkspaceRoute,
+import {
+  type HomeRoute,
+  type UnknownWorkspaceRoute,
+  useBoardRoute,
+  usePersonRoute,
 } from "../workspace-routes.js";
 import {
   startFailureNote as agentStartFailureNote,
@@ -195,6 +196,7 @@ import {
   startsOwnAgents,
 } from "./agent-model.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 import {
   CLOSED_TAB_STRIP,
   type ClosedTab,
@@ -445,37 +447,6 @@ interface BoardViewControl {
   readonly onClose: () => void;
   /** Reads the Board ahead of a press the pointer says is coming. */
   readonly onPreload: () => void;
-}
-
-/** Which Automations page stands: the list, a new automation's editor, or one automation's. */
-export const AUTOMATIONS_PAGE = {
-  LIST: "list",
-  /** Every run of the listed workspace's automations, beside the list as its other tab. */
-  RUNS: "runs",
-  NEW: "new",
-  EDIT: "edit",
-} as const;
-
-export type AutomationsPlace =
-  | {
-      readonly kind: typeof AUTOMATIONS_PAGE.LIST;
-      /** The automation whose page was left for the list by deleting it, which the window's history passes over from then on; an opening's alone, which no address holds. */
-      readonly deleted?: string;
-    }
-  | { readonly kind: typeof AUTOMATIONS_PAGE.RUNS }
-  | { readonly kind: typeof AUTOMATIONS_PAGE.NEW }
-  | {
-      readonly kind: typeof AUTOMATIONS_PAGE.EDIT;
-      readonly automationId: string;
-      /** The run a link named, which its runs mark and bring into view. */
-      readonly runId?: string;
-      /** Opened by the new automation's page that made it, as its Create landed, so it takes that page's step in the window's history; an opening's alone, which no address holds. */
-      readonly created?: true;
-    };
-
-/** Whether a place is one of the Automations page's two tabs, the list or the runs, rather than one automation's page. */
-export function automationsTab(place: AutomationsPlace): boolean {
-  return place.kind === AUTOMATIONS_PAGE.LIST || place.kind === AUTOMATIONS_PAGE.RUNS;
 }
 
 /** The step a workspace's address names it by: its slug, or its id where an older service answered none, as `linkOf` writes it. */
@@ -1382,20 +1353,8 @@ export function useTasksTab(input: {
   placeLeave: PlaceLeave;
   /** The room the panel's stage gives, which holds the side panel only full screen while it is narrow (`shell-room.ts`). */
   room: ShellRoom;
-  /** Admin as the router stands it, which a link to it opens (`admin-route.ts`). */
-  adminView: AdminViewControl;
-  /** The listed workspace's Board as the router stands it (`workspace-routes.ts`). */
-  boardView: BoardRoute;
-  /** A person's page as the router stands it (`workspace-routes.ts`). */
-  personView: PersonRoute;
   /** An agent's own page as the router stands it (`agent-route.ts`). */
   agentView: AgentRoute;
-  /** The listed workspace's Automations pages as the router stands them (`automations-route.ts`). */
-  automationsView: AutomationsRoute;
-  /** A task's version history as the router stands it (`version-history-route.ts`). */
-  versionHistoryView: VersionHistoryRoute;
-  /** The window's Inbox as the router stands it (`inbox-route.ts`). */
-  inboxView: InboxRoute;
   /** A workspace's address naming none of the reader's as the router stands it, not found (`workspace-routes.ts`). */
   unknownWorkspaceView: UnknownWorkspaceRoute;
   /** Home as the router stands it (`workspace-routes.ts`). */
@@ -1463,14 +1422,20 @@ export function useTasksTab(input: {
   const [chosen, setChosen] = useState<PinChoice | undefined>(undefined);
   /** The save whose revision a version history opened from a section's "Edited by" seeks, on its task, until it is found, given up on, or the history is left. */
   const [historySeek, setHistorySeek] = useState<HistorySeek | undefined>(undefined);
-  const historyRoute = input.versionHistoryView;
+  // The routed places a door here opens, leaves, or reads, each as the router stands it (`places/routed-exits.ts`).
+  const narrowRoom = input.room === SHELL_ROOM.NARROW;
+  const historyRoute = useVersionHistoryRoute({ narrow: narrowRoom });
+  const routedInbox = useInboxRoute();
+  const routedBoard = useBoardRoute();
+  const routedPerson = usePersonRoute();
+  const routedAutomations = useAutomationsRoute({ narrow: narrowRoom });
   // The routed places a door into a place of the window's state leaves, the Inbox, an agent's page, and a workspace not there, which stand in the task's place.
   const overPlan =
-    input.inboxView.open ||
+    routedInbox.open ||
     input.agentView.agentId !== undefined ||
     input.unknownWorkspaceView.workspace !== undefined;
   // The window's Inbox is the router's, which stands it in the task's place as its address says (`inbox-route.ts`).
-  const inboxView = input.inboxView.open ? input.inboxView : undefined;
+  const inboxView = routedInbox.open ? routedInbox : undefined;
   // Note that the Inbox already open has no opening to time.
   const timeInboxOpen = () => {
     if (inboxView === undefined) beginPanelSpan(PANEL_SPAN.INBOX_OPEN);
@@ -1517,7 +1482,8 @@ export function useTasksTab(input: {
       !history || historyRoute.workspace === undefined || historyRoute.task === undefined
         ? undefined
         : { workspace: historyRoute.workspace, task: historyRoute.task, spot: historyRoute.spot };
-    const { unknownWorkspaceView, agentView: agentRoute, inboxView: inboxRoute } = input;
+    const { unknownWorkspaceView, agentView: agentRoute } = input;
+    const inboxRoute = routedInbox;
     return () => {
       if (arrivals() > landed) return;
       if (unknownBefore !== undefined) unknownWorkspaceView.onOpen(unknownBefore);
@@ -1604,60 +1570,64 @@ export function useTasksTab(input: {
     [listWorkspace],
   );
   const listedWorkspace = workspace.chosen;
+  // Admin opens under the listed workspace as it is pressed.
+  const routedAdmin = useAdminRoute({
+    listedSlug: () => (listedWorkspace === undefined ? undefined : stepOf(listedWorkspace)),
+  });
   // A person's page is theirs in the workspace it opened in, so another listed in its
   // place, chosen or fallen back to as the account's workspaces change, closes it.
   const personWorkspace =
-    input.personView.workspace === undefined
+    routedPerson.workspace === undefined
       ? undefined
-      : workspaceOfSlug(viewed.workspaces, input.personView.workspace)?.id;
+      : workspaceOfSlug(viewed.workspaces, routedPerson.workspace)?.id;
   // Note that an address naming none of the reader's workspaces is its route's gate's to answer (`route-gates.ts`).
   const personElsewhere =
-    input.personView.userId !== undefined &&
+    routedPerson.userId !== undefined &&
     listedWorkspace !== undefined &&
     personWorkspace !== undefined &&
     personWorkspace !== listedWorkspace.id;
-  const closePerson = input.personView.onClose;
+  const closePerson = routedPerson.onClose;
   useEffect(() => {
     if (personElsewhere) closePerson();
   }, [personElsewhere, closePerson]);
   // The Board is the listed workspace's, so another listed in its place stands its Board in the step's place.
   const boardWorkspace =
-    input.boardView.standingIn === undefined
+    routedBoard.standingIn === undefined
       ? undefined
-      : workspaceOfSlug(viewed.workspaces, input.boardView.standingIn)?.id;
+      : workspaceOfSlug(viewed.workspaces, routedBoard.standingIn)?.id;
   const boardElsewhere =
-    input.boardView.open &&
+    routedBoard.open &&
     listedWorkspace !== undefined &&
     boardWorkspace !== undefined &&
     boardWorkspace !== listedWorkspace.id;
   const listedStep = listedWorkspace === undefined ? undefined : stepOf(listedWorkspace);
-  const turnBoard = input.boardView.onTurn;
+  const turnBoard = routedBoard.onTurn;
   useEffect(() => {
     if (boardElsewhere && listedStep !== undefined) turnBoard(listedStep);
   }, [boardElsewhere, listedStep, turnBoard]);
   // The Automations pages are the listed workspace's too, so another listed in its place stands the same page under it in the step's place.
   const automationsWorkspace =
-    input.automationsView.standingIn === undefined
+    routedAutomations.standingIn === undefined
       ? undefined
-      : workspaceOfSlug(viewed.workspaces, input.automationsView.standingIn)?.id;
+      : workspaceOfSlug(viewed.workspaces, routedAutomations.standingIn)?.id;
   const automationsElsewhere =
     listedWorkspace !== undefined &&
     automationsWorkspace !== undefined &&
     automationsWorkspace !== listedWorkspace.id;
-  const turnAutomations = input.automationsView.onTurn;
+  const turnAutomations = routedAutomations.onTurn;
   useEffect(() => {
     if (automationsElsewhere && listedStep !== undefined) turnAutomations(listedStep);
   }, [automationsElsewhere, listedStep, turnAutomations]);
   // The Inbox lists the listed workspace's items alone, so another listed in its place stands that one's Inbox, on its list, in the step's place.
   const inboxWorkspace =
-    input.inboxView.standingIn === undefined
+    routedInbox.standingIn === undefined
       ? undefined
-      : workspaceOfSlug(viewed.workspaces, input.inboxView.standingIn)?.id;
+      : workspaceOfSlug(viewed.workspaces, routedInbox.standingIn)?.id;
   const inboxElsewhere =
     listedWorkspace !== undefined &&
     inboxWorkspace !== undefined &&
     inboxWorkspace !== listedWorkspace.id;
-  const turnInbox = input.inboxView.onTurn;
+  const turnInbox = routedInbox.onTurn;
   useEffect(() => {
     if (inboxElsewhere && listedStep !== undefined) turnInbox(listedStep);
   }, [inboxElsewhere, listedStep, turnInbox]);
@@ -2021,10 +1991,10 @@ export function useTasksTab(input: {
   // Note that a routed place beside the sidebar, Admin, the Board, a person's page, or the Automations pages, stands over the window's state, which stays
   // as it was under it (`admin-route.ts`, `workspace-routes.ts`), so none of it is on screen then.
   const routedOver =
-    input.adminView.open ||
-    input.boardView.open ||
-    input.personView.userId !== undefined ||
-    input.automationsView.open;
+    routedAdmin.open ||
+    routedBoard.open ||
+    routedPerson.userId !== undefined ||
+    routedAutomations.open;
   const stateShown = shown && !routedOver;
   const columnInView = stateShown && !historyRoute.open && !overPlan && !sidePanel.fullScreen;
   const columnShown = columnInView && fixture === undefined;
@@ -3555,12 +3525,12 @@ export function useTasksTab(input: {
     if (at === undefined) return;
     placeLeave.arrive(
       () => {
-        if (chosen === undefined) input.inboxView.onOpen(at);
-        else input.inboxView.onGoTo(chosen, at);
+        if (chosen === undefined) routedInbox.onOpen(at);
+        else routedInbox.onGoTo(chosen, at);
       },
       () => {
         timeInboxOpen();
-        if (chosen !== undefined) input.inboxView.onHold(chosen);
+        if (chosen !== undefined) routedInbox.onHold(chosen);
       },
     );
   };
@@ -3810,7 +3780,7 @@ export function useTasksTab(input: {
   const openBoard = (home: Pick<Workspace, "id" | "slug"> | undefined) => {
     const shown = home ?? listedWorkspace;
     if (shown === undefined) return;
-    input.boardView.onOpen(stepOf(shown));
+    routedBoard.onOpen(stepOf(shown));
   };
 
   /**
@@ -3830,7 +3800,7 @@ export function useTasksTab(input: {
     // asked before it, answering late, lists nothing and leaves nothing over it; both follow the move, so a move kept at a
     // page's leave ask lets that answer land and lists nothing.
     placeLeave.arrive(
-      () => input.personView.onOpen(userId, name, stepOf(shown)),
+      () => routedPerson.onOpen(userId, name, stepOf(shown)),
       () => {
         navigations.current += 1;
         if (shown.id !== listedWorkspace?.id) chooseListed(shown.id);
@@ -3848,7 +3818,7 @@ export function useTasksTab(input: {
     const listedId = workspace === undefined ? listedWorkspace?.id : listLinked(workspace);
     const shown = viewed.workspaces.find((each) => each.id === listedId) ?? listedWorkspace;
     if (shown === undefined) return;
-    input.automationsView.onOpen(to, stepOf(shown));
+    routedAutomations.onOpen(to, stepOf(shown));
   };
 
   const goHome = () => leaveTask();
@@ -3986,7 +3956,7 @@ export function useTasksTab(input: {
       // Note that an Admin link's workspace is only the one it was copied in, since the place reads every
       // workspace's accounts, so it lists nothing; one naming the place alone opens on its Overview.
       case LINK_ROUTED_PLACE.ADMIN:
-        if (place.kind === LINK_PLACE.ADMIN) input.adminView.onOpen(adminViewOfLink(place));
+        if (place.kind === LINK_PLACE.ADMIN) routedAdmin.onOpen(adminViewOfLink(place));
         return;
     }
   };
@@ -4405,16 +4375,16 @@ export function useTasksTab(input: {
       // Note that it opens on nothing chosen, so one column shows the list and two an empty pane beside it (`inbox-columns.ts`).
       // It leaves any task it was narrowed to, so the Inbox lists every item.
       onOpen: () => standInbox(inboxIn(listedWorkspace?.id, undefined), undefined),
-      onClose: closeFirst(input.inboxView.onClose),
-      onChoose: (chosen) => input.inboxView.onChoose(chosen),
+      onClose: closeFirst(routedInbox.onClose),
+      onChoose: (chosen) => routedInbox.onChoose(chosen),
       onOpenItem: (chosen: InboxChoice) => {
         // Note that the Inbox standing keeps its narrowing for an item of the task it is narrowed to, as a row's choice does.
         const narrowed = inboxView === undefined ? undefined : inboxView.narrowed;
         standInbox(inboxIn(listedWorkspace?.id, narrowed), chosen);
       },
-      onClear: input.inboxView.onClear,
+      onClear: routedInbox.onClear,
       narrowed: inboxView?.narrowed,
-      onWiden: input.inboxView.onWiden,
+      onWiden: routedInbox.onWiden,
       single: inboxView !== undefined && inboxSingle,
       onSingle: setInboxSingle,
       pages: inboxPages,
@@ -4430,8 +4400,8 @@ export function useTasksTab(input: {
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
     personView: {
-      userId: input.personView.userId,
-      name: input.personView.name,
+      userId: routedPerson.userId,
+      name: routedPerson.name,
       workspaceId: personWorkspace,
       onOpen: (userId: string, name?: string, workspaceId?: string) => {
         openPerson(
@@ -4442,37 +4412,37 @@ export function useTasksTab(input: {
             : viewed.workspaces.find((each) => each.id === workspaceId),
         );
       },
-      onClose: closeFirst(input.personView.onClose),
+      onClose: closeFirst(routedPerson.onClose),
       onPreload: (userId: string, workspaceId?: string) => {
         const home = viewed.workspaces.find((each) => each.id === workspaceId) ?? listedWorkspace;
-        if (home !== undefined) input.personView.onPreload(userId, stepOf(home));
+        if (home !== undefined) routedPerson.onPreload(userId, stepOf(home));
       },
     },
     // The Admin place is the router's, which draws it in the task's place (`admin-route.ts`); opening it is only the
     // router's move, which asks as it goes while a page holds unsaved work.
     adminView: {
-      ...input.adminView,
-      onOpen: (view?: AdminView) => moveFirst(() => input.adminView.onOpen(view)),
+      ...routedAdmin,
+      onOpen: (view?: AdminView) => moveFirst(() => routedAdmin.onOpen(view)),
     },
     // The Automations pages are the router's, which draw them in the plan's place (`automations-route.ts`); a version history there gives way.
     automationsView: {
-      open: input.automationsView.open,
-      place: input.automationsView.place,
-      runs: input.automationsView.runs,
+      open: routedAutomations.open,
+      place: routedAutomations.place,
+      runs: routedAutomations.runs,
       // Note that opening a page is only the router's move, which asks as it goes while a page holds unsaved work.
       onOpen: (place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
         moveFirst(() => openAutomations(place)),
-      onRuns: input.automationsView.onRuns,
-      onClose: closeFirst(input.automationsView.onClose),
+      onRuns: routedAutomations.onRuns,
+      onClose: closeFirst(routedAutomations.onClose),
     },
     // The Board is the router's, which draws it in the plan's place (`workspace-routes.ts`); opening it is only the
     // router's move, which asks as it goes while a page holds unsaved work.
     boardView: {
-      open: input.boardView.open,
+      open: routedBoard.open,
       onOpen: () => moveFirst(() => openBoard(listedWorkspace)),
-      onClose: closeFirst(input.boardView.onClose),
+      onClose: closeFirst(routedBoard.onClose),
       onPreload: () => {
-        if (listedWorkspace !== undefined) input.boardView.onPreload(stepOf(listedWorkspace));
+        if (listedWorkspace !== undefined) routedBoard.onPreload(stepOf(listedWorkspace));
       },
     },
     onShowFile: showFile,

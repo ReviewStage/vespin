@@ -6,8 +6,9 @@ import { InboxIcon, ListTodoIcon } from "lucide-react";
 import { adminSection } from "../admin/routing.js";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { automationsTab } from "../tasks/automations-place.js";
 import { NEEDS_YOU } from "../tasks/inbox-model.js";
-import { automationsTab, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useInboxWaiting } from "./places-waiting.js";
 import { groupCount } from "./sidebar-fold.js";
 

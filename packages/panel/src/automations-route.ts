@@ -16,10 +16,10 @@
  */
 
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 import { pathUnder } from "./route-gates.js";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 
 /** The list, where the pages open with none asked for and stand while none does. */
 const AUTOMATIONS_LIST: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST };
@@ -58,8 +58,8 @@ export interface AutomationsRoute {
   readonly runs: boolean;
   /** The address step of the workspace whose pages stand, while one does. */
   readonly standingIn: string | undefined;
-  /** Every automation the window has seen deleted. */
-  readonly deleted: ReadonlySet<string>;
+  /** Whether the window has seen the automation `automationId` deleted, as it is asked. */
+  readonly deletedNow: (automationId: string) => boolean;
   /** The address of the automation's setup while its runs stand alone over it, which a way back from them steps back to. */
   readonly setupAddress: string | undefined;
   /** Opens `to` under the workspace whose address step is `workspace`. */
@@ -110,27 +110,25 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
   }
 }
 
-/** The Automations pages as the router stands them, in a room `narrow` or not, left by `onClose`, and kept standing by `onStay` where a leave was asked of them before a door asked for the page standing. */
-export function useAutomationsRoute(input: {
-  narrow: boolean;
-  onClose: () => void;
-  onStay: () => void;
-}): AutomationsRoute {
+/** The Automations pages as the router stands them, in a room `narrow` or not, left by the window's routed exit, and kept standing by its stay where a leave was asked of them before a door asked for the page standing. */
+export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRoute {
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
+  const exits = useRoutedExits();
   // Only grows: every automation the window has seen deleted.
-  const deleted = useRef(new Set<string>()).current;
+  const deleted = useRoutedMemory().deletedAutomations;
   const standing =
     here.place === ROUTED_PLACE.AUTOMATIONS ? placeOf(here.leaf, here.params) : undefined;
   const standingIn = standing === undefined ? undefined : here.params.workspace;
   const onOpen = (to: AutomationsPlace, workspace: string) => {
-    if (to.kind === AUTOMATIONS_PAGE.LIST && to.deleted !== undefined) deleted.add(to.deleted);
+    const gone = to.kind === AUTOMATIONS_PAGE.LIST ? to.deleted : undefined;
+    if (gone !== undefined) deleted.setState((held) => new Map(held).set(gone, true));
     const options = navigationTo(to, workspace);
     // Opening the page already standing moves nothing, as pressing the place standing always has,
     // and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
     if (router.buildLocation(options).href === router.history.location.href) {
-      input.onStay();
+      exits.stay();
       return;
     }
     // The automation a new page made takes that page's step.
@@ -166,12 +164,12 @@ export function useAutomationsRoute(input: {
     place: standing?.place ?? AUTOMATIONS_LIST,
     runs: standing?.runs ?? false,
     standingIn,
-    deleted,
+    deletedNow: (automationId) => deleted.state.has(automationId),
     setupAddress:
       setup === undefined || standing?.runs !== true ? undefined : router.buildLocation(setup).href,
     onOpen,
     onRuns,
-    onClose: input.onClose,
+    onClose: () => exits.leave(),
     onTurn,
   };
 }

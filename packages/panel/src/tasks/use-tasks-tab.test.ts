@@ -67,8 +67,7 @@ import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { KEPT, type Kept } from "../act.js";
-import { useAdminRoute } from "../admin/admin-route.js";
-import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
+import { ADMIN_PAGE, ADMIN_TAB } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
 import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
@@ -89,6 +88,7 @@ import { useLinkPlaceLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
+import { useRoutedExits } from "../places/routed-exits.js";
 import { useWindowPlace } from "../places/routed-places.js";
 import { ADDRESS, addressOf } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -115,19 +115,14 @@ import {
 } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { ADMIN_AWAY, listedAgent } from "../testing/tasks-control.js";
+import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
-import {
-  type HomeRoute,
-  useBoardRoute,
-  useHomeRoute,
-  usePersonRoute,
-  useUnknownWorkspaceRoute,
-} from "../workspace-routes.js";
+import { type HomeRoute, useHomeRoute, useUnknownWorkspaceRoute } from "../workspace-routes.js";
 import { FIXTURE_AGENT_ID } from "./agent-fixture.js";
+import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { REVISION_SOURCE } from "./description-history-model.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import { ofPullRequestTab } from "./pull-request-number.js";
@@ -136,7 +131,7 @@ import { loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
 import { MAIN_TAB } from "./use-main-tabs.js";
 import { PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./use-side-panel.js";
-import { AUTOMATIONS_PAGE, type TasksControl, useTasksTab } from "./use-tasks-tab.js";
+import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
 beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
@@ -213,8 +208,6 @@ interface Standing {
   descriptions: AppDescriptionDocuments;
   /** Whether Admin stands over the tab, as the router stands it (`admin-route.ts`). */
   admin?: boolean;
-  /** Whether Admin is the router's own route, opened by its navigation, rather than a door that records its opens. */
-  adminRouted?: boolean;
   /** The address the window's page was loaded at, holding no step; `/app` where none is named. */
   loadedAt?: string;
 }
@@ -282,7 +275,6 @@ function mount(
   /** Which agent's tab main was told is shown, each time it was told. */
   const shownAgents: (string | null)[] = [];
   /** Each time the tab opened Admin through its own door, by the view it named, none for its Overview. */
-  const adminOpens: (AdminView | undefined)[] = [];
   /** Each asked act's payload, unread until a test reads it as the act's schema would. */
   const payloads: { readonly kind: PortActKind; readonly payload: unknown }[] = [];
   const links: SettingsLink[] = [];
@@ -383,26 +375,14 @@ function mount(
       if (windowHistory !== undefined) windowHistory.onLeaveRouted();
       else router.history.push("/app");
     };
-    const automationsView = useAutomationsRoute({
-      narrow: held.room === SHELL_ROOM.NARROW,
-      onClose: leaveRouted,
-      onStay: () => undefined,
-    });
-    const versionHistoryView = useVersionHistoryRoute({
-      narrow: held.room === SHELL_ROOM.NARROW,
-      onClose: leaveRouted,
-      onStay: () => undefined,
-    });
-    const inboxView = useInboxRoute({ onClose: leaveRouted, onStay: () => undefined });
+    // The window's routed exits leave as the window's root's do, through its history where one stands.
+    useRoutedExits().leave = leaveRouted;
+    const automationsView = useAutomationsRoute({ narrow: held.room === SHELL_ROOM.NARROW });
+    const versionHistoryView = useVersionHistoryRoute({ narrow: held.room === SHELL_ROOM.NARROW });
+    const inboxView = useInboxRoute();
     // Home is the listed workspace's, as the window's root opens it.
     const homeView = useHomeRoute({
       listed: () => control?.workspace?.slug ?? control?.workspace?.id,
-      onClose: leaveRouted,
-    });
-    // Note that Admin opens under the workspace listed, as the window's root opens it.
-    const adminRoute = useAdminRoute({
-      listedSlug: () => control?.workspace?.slug,
-      onClose: leaveRouted,
     });
     restand = setHeld;
     const here = useWindowPlace();
@@ -424,20 +404,8 @@ function mount(
       onOpenSettings: (link) => links.push(link),
       placeLeave: usePlaceLeave(),
       room: held.room,
-      adminView: held.adminRouted
-        ? adminRoute
-        : { ...ADMIN_AWAY, open: held.admin === true, onOpen: (view) => adminOpens.push(view) },
-      // The Board and a person's page are the router's, which the test's window router stands, each left for a place with no link.
-      boardView: useBoardRoute({ onClose: leaveRouted, onStay: () => undefined }),
-      personView: usePersonRoute({ onClose: leaveRouted, onStay: () => undefined }),
-      agentView: useAgentRoute({ onClose: leaveRouted, onStay: () => undefined }),
-      automationsView,
-      versionHistoryView,
-      inboxView,
-      unknownWorkspaceView: useUnknownWorkspaceRoute({
-        onClose: leaveRouted,
-        onStay: () => undefined,
-      }),
+      agentView: useAgentRoute(),
+      unknownWorkspaceView: useUnknownWorkspaceRoute(),
       homeView,
       taskView,
       place: here.place,
@@ -503,7 +471,6 @@ function mount(
     told,
     agentActs,
     shownAgents,
-    adminOpens,
     payloads,
     /** Every Settings link the tab followed, in order. */
     links,
@@ -1816,7 +1783,7 @@ async function placeOpenedBy(href: string) {
       ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
       : undefined,
     automations: control.automationsView.open ? control.automationsView.place : undefined,
-    admin: tab.adminOpens,
+    admin: control.adminView.open ? control.adminView.view : undefined,
   };
 }
 
@@ -1903,27 +1870,27 @@ test.each([
     `${ACME_AT}/automation/a1/run/r1`,
     { automations: { ...EDIT, runId: "r1" } },
   ],
-  ["Admin's link", `${ACME_AT}/admin`, { admin: [undefined] }],
-  ["an Admin section's link", `${ACME_AT}/admin/cost`, { admin: [{ kind: ADMIN_TAB.COST }] }],
+  ["Admin's link", `${ACME_AT}/admin`, { admin: { kind: ADMIN_TAB.DASHBOARD } }],
+  ["an Admin section's link", `${ACME_AT}/admin/cost`, { admin: { kind: ADMIN_TAB.COST } }],
   [
     "an Admin account's link",
     `${ACME_AT}/admin/user/user-charles`,
-    { admin: [{ kind: ADMIN_PAGE.ACCOUNT, id: "user-charles" }] },
+    { admin: { kind: ADMIN_PAGE.ACCOUNT, id: "user-charles" } },
   ],
   [
     "an Admin workspace's link",
     `${ACME_AT}/admin/workspace/w1`,
-    { admin: [{ kind: ADMIN_PAGE.WORKSPACE, id: "w1" }] },
+    { admin: { kind: ADMIN_PAGE.WORKSPACE, id: "w1" } },
   ],
   [
     "an Admin day's link",
     `${ACME_AT}/admin/day/2026-11-06`,
-    { admin: [{ kind: ADMIN_PAGE.DAY, day: "2026-11-06" }] },
+    { admin: { kind: ADMIN_PAGE.DAY, day: "2026-11-06" } },
   ],
   [
     "Settings' link, which the window opens rather than the tab",
     `${ACME_AT}/settings`,
-    { task: undefined, inbox: undefined, admin: [] },
+    { task: undefined, inbox: undefined, admin: undefined },
   ],
 ] as const)(
   "%s opens what it names, matched on the route tree",
@@ -3531,7 +3498,6 @@ async function onInbox(
       shown: true,
       // Note that the window's history stands beside the tab, since a door's step is written through it.
       history: true,
-      adminRouted: true,
       tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
     },
     {

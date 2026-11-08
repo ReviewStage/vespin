@@ -20,20 +20,15 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import {
-  ADMIN_AWAY,
   AGENT_AWAY,
-  AUTOMATIONS_AWAY,
-  BOARD_AWAY,
   HOME_AWAY,
-  INBOX_AWAY,
   NO_ARRIVALS,
   NO_LEAVE_ASK,
-  PERSON_AWAY,
   TASK_AWAY,
   UNKNOWN_WORKSPACE_AWAY,
   UNMOVED_LINK_READS,
-  VERSION_HISTORY_AWAY,
 } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { TasksPage } from "./tasks-page.js";
 
 /**
@@ -119,13 +114,7 @@ async function mount() {
       onOpenSettings: () => undefined,
       placeLeave: NO_LEAVE_ASK,
       room: SHELL_ROOM.WIDE,
-      adminView: ADMIN_AWAY,
-      boardView: BOARD_AWAY,
-      personView: PERSON_AWAY,
       agentView: AGENT_AWAY,
-      automationsView: AUTOMATIONS_AWAY,
-      versionHistoryView: VERSION_HISTORY_AWAY,
-      inboxView: INBOX_AWAY,
       unknownWorkspaceView: UNKNOWN_WORKSPACE_AWAY,
       homeView: HOME_AWAY,
       taskView: TASK_AWAY,
@@ -141,7 +130,7 @@ async function mount() {
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root: Root = createRoot(container);
-  act(() => root.render(withQueryClient(createElement(Page))));
+  act(() => root.render(windowRouter().provide(withQueryClient(createElement(Page)))));
   // Note that the members and the list land after the first paint.
   await act(async () => undefined);
   await act(async () => undefined);

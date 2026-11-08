@@ -27,7 +27,8 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 
 /**

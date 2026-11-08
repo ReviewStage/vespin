@@ -60,6 +60,7 @@ import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
@@ -83,7 +84,7 @@ import {
   useReadLinkOpener,
 } from "../tasks/use-open-link.js";
 import { type PinHolder, PULL_REQUEST_VIEW } from "../tasks/use-side-panel.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 import {

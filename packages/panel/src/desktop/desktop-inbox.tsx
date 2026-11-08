@@ -36,6 +36,7 @@ import { NOT_FOUND_THING, NotFound } from "../not-found.js";
 import { addressOf, HERE, placeAddress, ROUTE, THING } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { InboxCodeDoors } from "../tasks/inbox-code-card.js";
 import {
   INBOX_COLUMNS,
@@ -86,7 +87,7 @@ import {
   type SidePanelControl,
 } from "../tasks/use-side-panel.js";
 import { type HeldTaskInboxControl, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
-import { AUTOMATIONS_PAGE, type InboxChoice, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";

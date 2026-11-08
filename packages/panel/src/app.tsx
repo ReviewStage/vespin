@@ -84,6 +84,7 @@ import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
+import { RoutedExitsProvider, useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
@@ -129,12 +130,7 @@ import { ViewingAs } from "./viewing-as.js";
 import { useWindowFullScreen } from "./window-full-screen.js";
 import { useWindowZoom } from "./window-zoom.js";
 import { useExperimentsIn } from "./workspace-experiments.js";
-import {
-  useBoardRoute,
-  useHomeRoute,
-  usePersonRoute,
-  useUnknownWorkspaceRoute,
-} from "./workspace-routes.js";
+import { useHomeRoute, useUnknownWorkspaceRoute } from "./workspace-routes.js";
 
 /** No agent ended unseen, as the document reads before main has answered. */
 const NO_UNSEEN_AGENTS: readonly string[] = [];
@@ -257,7 +253,11 @@ export function App(): React.JSX.Element {
     <TimeTicks>
       <OpenAiKeyProvider account={accountKey}>
         <WindowAccountContext.Provider value={accountKey}>
-          {landed ? <AppWindow /> : null}
+          {landed ? (
+            <RoutedExitsProvider>
+              <AppWindow />
+            </RoutedExitsProvider>
+          ) : null}
         </WindowAccountContext.Provider>
       </OpenAiKeyProvider>
     </TimeTicks>
@@ -305,8 +305,7 @@ function AppWindow(): React.JSX.Element {
   const routedHere = useRoutedStanding();
   const tab = routedHere?.place === ROUTED_PLACE.SETTINGS ? PANEL_TAB.SETTINGS : PANEL_TAB.TASKS;
   // Leaves the routed place standing for the place the window's state says, or keeps it standing after all, once the history is read below.
-  const leaveRouted = useRef<() => void>(() => undefined);
-  const stayRouted = useRef<() => void>(() => undefined);
+  const routedExits = useRoutedExits();
   /** The note being written to the people who make the app, while its dialog stands. */
   const [feedbackKind, setFeedbackKind] = useState<FeedbackKind>();
   /** The experiment that note is about, where an experiment's row opened it. */
@@ -354,7 +353,7 @@ function AppWindow(): React.JSX.Element {
       }
       if (!routedStanding) return;
       leaveFirst(() => {
-        leaveRouted.current();
+        routedExits.leave();
         appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
           panel_tab: PANEL_TAB.TASKS,
         });
@@ -438,44 +437,13 @@ function AppWindow(): React.JSX.Element {
   const room = stage.room;
   // The workspace the sidebar lists, by its address's slug, which Admin opens under; read as it is pressed, since the tasks are built below.
   const listedSlug = useRef<string | undefined>(undefined);
-  const adminView = useAdminRoute({
-    listedSlug: () => listedSlug.current,
-    onClose: () => leaveRouted.current(),
-  });
-  const boardView = useBoardRoute({
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const personView = usePersonRoute({
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const agentView = useAgentRoute({
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const automationsView = useAutomationsRoute({
-    narrow: room === SHELL_ROOM.NARROW,
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const versionHistoryView = useVersionHistoryRoute({
-    narrow: room === SHELL_ROOM.NARROW,
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const unknownWorkspaceView = useUnknownWorkspaceRoute({
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const inboxView = useInboxRoute({
-    onClose: () => leaveRouted.current(),
-    onStay: () => stayRouted.current(),
-  });
-  const homeView = useHomeRoute({
-    listed: () => listedSlug.current,
-    onClose: () => leaveRouted.current(),
-  });
+  const adminView = useAdminRoute({ listedSlug: () => listedSlug.current });
+  const agentView = useAgentRoute();
+  const automationsView = useAutomationsRoute({ narrow: room === SHELL_ROOM.NARROW });
+  const versionHistoryView = useVersionHistoryRoute({ narrow: room === SHELL_ROOM.NARROW });
+  const unknownWorkspaceView = useUnknownWorkspaceRoute();
+  const inboxView = useInboxRoute();
+  const homeView = useHomeRoute({ listed: () => listedSlug.current });
   const taskView = useTaskRoute();
   const arrivals = usePlaceArrivals();
   const linkReads = useLinkReads();
@@ -499,13 +467,7 @@ function AppWindow(): React.JSX.Element {
     onOpenApiKeys: openApiKeys,
     placeLeave,
     room,
-    adminView,
-    boardView,
-    personView,
     agentView,
-    automationsView,
-    versionHistoryView,
-    inboxView,
     unknownWorkspaceView,
     homeView,
     taskView,
@@ -528,7 +490,7 @@ function AppWindow(): React.JSX.Element {
     placeOwner.current = accountKey;
     if (owner === undefined || owner === accountKey) return;
     leavePast(() => {
-      leaveRouted.current();
+      routedExits.leave();
       onGoHome();
     });
   }, [accountKey, leavePast, onGoHome]);
@@ -659,9 +621,9 @@ function AppWindow(): React.JSX.Element {
     room,
     tasks,
   });
-  leaveRouted.current = history.onLeaveRouted;
+  routedExits.leave = history.onLeaveRouted;
+  routedExits.stay = history.onStayRouted;
   visitTask.current = history.onVisitTask;
-  stayRouted.current = history.onStayRouted;
   // The place standing and the task the host binds follow each other, each on the other's edge (`places/place-binding.ts`).
   usePlaceBinding({
     known,

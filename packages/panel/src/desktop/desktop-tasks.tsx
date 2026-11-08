@@ -62,6 +62,7 @@ import { type SentLine, startsOwnAgents } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { StartingAgentTab } from "../tasks/agent-tab.js";
 import { AgentTabSkeleton, type ComposerModel } from "../tasks/agent-tab-skeleton.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { startCloudDraft, useCloudBrowserTabs } from "../tasks/cloud-browser-tabs.js";
 import {
@@ -92,12 +93,7 @@ import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/
 import { PULL_REQUEST_VIEW, type SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
-import {
-  AUTOMATIONS_PAGE,
-  type StartingTask,
-  TASK_RENAME_SHAPE,
-  type TasksControl,
-} from "../tasks/use-tasks-tab.js";
+import { type StartingTask, TASK_RENAME_SHAPE, type TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";

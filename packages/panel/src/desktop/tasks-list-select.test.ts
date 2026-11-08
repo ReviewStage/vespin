@@ -26,21 +26,16 @@ import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import {
-  ADMIN_AWAY,
   AGENT_AWAY,
-  AUTOMATIONS_AWAY,
-  BOARD_AWAY,
   HOME_AWAY,
-  INBOX_AWAY,
   NO_ARRIVALS,
   NO_LEAVE_ASK,
-  PERSON_AWAY,
   TASK_AWAY,
   UNKNOWN_WORKSPACE_AWAY,
   UNMOVED_LINK_READS,
-  VERSION_HISTORY_AWAY,
 } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksPage } from "./tasks-page.js";
 import { TasksPageHeld } from "./tasks-page-held.js";
@@ -228,13 +223,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       onOpenSettings: () => undefined,
       placeLeave: NO_LEAVE_ASK,
       room: SHELL_ROOM.WIDE,
-      adminView: ADMIN_AWAY,
-      boardView: BOARD_AWAY,
-      personView: PERSON_AWAY,
       agentView: AGENT_AWAY,
-      automationsView: AUTOMATIONS_AWAY,
-      versionHistoryView: VERSION_HISTORY_AWAY,
-      inboxView: INBOX_AWAY,
       unknownWorkspaceView: UNKNOWN_WORKSPACE_AWAY,
       homeView: HOME_AWAY,
       taskView: TASK_AWAY,
@@ -251,7 +240,11 @@ async function mountPage(held?: TasksPageHeld): Promise<{
   roots.push(root);
   act(() =>
     root.render(
-      withQueryClient(createElement(Fragment, null, createElement(Page), createElement(ToastHost))),
+      windowRouter().provide(
+        withQueryClient(
+          createElement(Fragment, null, createElement(Page), createElement(ToastHost)),
+        ),
+      ),
     ),
   );
   await settle();

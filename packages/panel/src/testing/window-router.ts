@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-router";
 import { createElement, type ReactElement } from "react";
 import { createPanelRouter, PanelRouterProvider } from "../panel-router.js";
+import { RoutedExitsProvider } from "../places/routed-exits.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 
 /** The router a test's window stands under. */
@@ -23,7 +24,7 @@ export interface TestWindowRouter {
   readonly addresses: () => readonly string[];
   /** Where among them the history stands. */
   readonly at: () => number;
-  /** `element` under the router, as the window's root draws the panel under it. */
+  /** `element` under the router, with a window's routed exits and memory, as the window's root draws the panel under it. */
   readonly provide: (element: ReactElement) => ReactElement;
   /** The router drawn as the window's root draws it, `App` its root route's, and whatever route stands drawn in its places. */
   readonly drawn: () => ReactElement;
@@ -65,7 +66,11 @@ export function windowRouter(
     history,
     addresses: () => entries,
     at: () => at,
-    provide: (element) => createElement(RouterContextProvider, { router, children: element }),
+    provide: (element) =>
+      createElement(RouterContextProvider, {
+        router,
+        children: createElement(RoutedExitsProvider, null, element),
+      }),
     drawn: () => createElement(PanelRouterProvider, { router }),
   };
 }

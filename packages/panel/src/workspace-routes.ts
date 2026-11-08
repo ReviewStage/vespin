@@ -18,8 +18,9 @@
  */
 
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useSelector } from "@tanstack/react-store";
 import { placeParamsOf } from "./places/place-params.js";
+import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
 
@@ -36,11 +37,9 @@ export interface HomeRoute {
   readonly onTurn: (workspace: string) => void;
 }
 
-/** Home as the router stands it, opened under the workspace `listed` names as it is pressed, and left by `onClose`. */
-export function useHomeRoute(input: {
-  listed: () => string | undefined;
-  onClose: () => void;
-}): HomeRoute {
+/** Home as the router stands it, opened under the workspace `listed` names as it is pressed, and left by the window's routed exit. */
+export function useHomeRoute(input: { listed: () => string | undefined }): HomeRoute {
+  const exits = useRoutedExits();
   const navigate = useNavigate();
   const here = useWindowPlace();
   const open = here.place === ROUTED_PLACE.HOME;
@@ -55,7 +54,7 @@ export function useHomeRoute(input: {
     if (standingIn === workspace) return;
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
-  return { open, standingIn, onOpen, onClose: input.onClose, onTurn };
+  return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn };
 }
 
 /** A workspace's Board as the router stands it. */
@@ -86,8 +85,9 @@ export interface PersonRoute {
   readonly onPreload: (userId: string, workspace: string) => void;
 }
 
-/** The Board as the router stands it, left by `onClose`, and kept standing by `onStay` where a leave was asked of it before a door asked for the Board standing. */
-export function useBoardRoute(input: { onClose: () => void; onStay: () => void }): BoardRoute {
+/** The Board as the router stands it, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for the Board standing (`places/routed-exits.ts`). */
+export function useBoardRoute(): BoardRoute {
+  const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
@@ -96,7 +96,7 @@ export function useBoardRoute(input: { onClose: () => void; onStay: () => void }
   const onOpen = (workspace: string) => {
     // Opening the Board standing moves nothing, and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
     if (standingIn === workspace) {
-      input.onStay();
+      exits.stay();
       return;
     }
     void navigate({ to: "/$workspace/tasks", params: { workspace } });
@@ -108,23 +108,25 @@ export function useBoardRoute(input: { onClose: () => void; onStay: () => void }
   const onPreload = (workspace: string) => {
     void router.preloadRoute({ to: "/$workspace/tasks", params: { workspace } });
   };
-  return { open, standingIn, onOpen, onClose: input.onClose, onTurn, onPreload };
+  return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn, onPreload };
 }
 
-/** A person's page as the router stands it, left by `onClose`, and kept standing by `onStay` as the Board is. */
-export function usePersonRoute(input: { onClose: () => void; onStay: () => void }): PersonRoute {
+/** A person's page as the router stands it, left and kept standing by the window's routed exits as the Board is. */
+export function usePersonRoute(): PersonRoute {
+  const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
   // Only grows: each name a page was opened with, by the person, which the address leaves out.
-  const names = useRef(new Map<string, string>()).current;
+  const names = useRoutedMemory().personNames;
   const open = here.place === ROUTED_PLACE.PERSON;
   const userId = open ? here.params.userId : undefined;
+  const name = useSelector(names, (held) => (userId === undefined ? undefined : held.get(userId)));
   const workspace = open ? here.params.workspace : undefined;
-  const onOpen = (to: string, name: string | undefined, toWorkspace: string) => {
-    if (name !== undefined) names.set(to, name);
+  const onOpen = (to: string, named: string | undefined, toWorkspace: string) => {
+    if (named !== undefined) names.setState((held) => new Map(held).set(to, named));
     if (to === userId && toWorkspace === workspace) {
-      input.onStay();
+      exits.stay();
       return;
     }
     void navigate({
@@ -140,10 +142,10 @@ export function usePersonRoute(input: { onClose: () => void; onStay: () => void 
   };
   return {
     userId,
-    name: userId === undefined ? undefined : names.get(userId),
+    name,
     workspace,
     onOpen,
-    onClose: input.onClose,
+    onClose: () => exits.leave(),
     onPreload,
   };
 }
@@ -157,11 +159,9 @@ export interface UnknownWorkspaceRoute {
   readonly onClose: () => void;
 }
 
-/** A workspace not there for the reader as the router stands it, left by `onClose`, and kept standing by `onStay` as the Board is. */
-export function useUnknownWorkspaceRoute(input: {
-  onClose: () => void;
-  onStay: () => void;
-}): UnknownWorkspaceRoute {
+/** A workspace not there for the reader as the router stands it, left and kept standing by the window's routed exits as the Board is. */
+export function useUnknownWorkspaceRoute(): UnknownWorkspaceRoute {
+  const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
@@ -174,11 +174,11 @@ export function useUnknownWorkspaceRoute(input: {
     const matches = router.matchRoutes(router.history.location.pathname);
     const standing = routedPlaceOf(matches, access) === ROUTED_PLACE.UNKNOWN_WORKSPACE;
     if (standing && placeParamsOf(matches).workspace === workspace) {
-      input.onStay();
+      exits.stay();
       return;
     }
     // Note that it takes the step's place, because a workspace not there for the reader is no place of theirs to come back to.
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
-  return { workspace: standingIn, onOpen, onClose: input.onClose };
+  return { workspace: standingIn, onOpen, onClose: () => exits.leave() };
 }

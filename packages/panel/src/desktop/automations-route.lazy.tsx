@@ -4,7 +4,7 @@
 
 import { createLazyRoute } from "@tanstack/react-router";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { AutomationsPage } from "./automations-page.js";
 import { useShellPlaces } from "./desktop-shell.js";
 
