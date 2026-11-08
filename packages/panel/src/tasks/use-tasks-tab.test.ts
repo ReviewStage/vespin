@@ -3813,6 +3813,15 @@ test("a version's link from the Board, with Descriptions off, stands its task's 
   assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
 });
 
+test("a task pressed on the Board leaves the Board for its task's own place", async () => {
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onSelect(BILLING.id));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();
   const asks: (() => void)[] = [];

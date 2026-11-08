@@ -4389,9 +4389,10 @@ export function useTasksTab(input: {
     // a narrow room's side panel shut over it; a link names its own place
     // (`openLink`), and a task arrived on by the history is asked for as it arrives (`onArriveTask`), the history standing
     // the panes its step held.
-    // Each goes to the task's own place first and opens the task once it lands there; one gone back to from the sidebar,
-    // ⌘K, or Home's Recent leaves whatever place stands for it.
-    onSelect: (taskId) => arriveAt(taskId, () => selectListed(taskId)),
+    // Each goes to the task's own place first and opens the task once it lands there. A task pressed on a page that lists
+    // it, the Board, a person's page, or the Tasks list, and one gone back to from the sidebar, ⌘K, or Home's Recent,
+    // leaves whatever place stands for it, since a press that opens a task under the page reads as no press at all.
+    onSelect: (taskId) => arriveAt(taskId, () => selectListed(taskId), true),
     onResume: (taskId) => arriveAt(taskId, () => resumeListed(taskId), true),
     onRestoreTask: (taskId, over) => arriveAt(taskId, () => openUnpinned(taskId), over),
     onStandTask: () => {
