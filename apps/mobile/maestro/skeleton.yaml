@@ -8,9 +8,17 @@ appId: dev.vespin.ios
     clearState: true
 - assertVisible: "Inbox"
 - takeScreenshot: inbox
+# A row's detail: pushed over the list in a compact window, and beside it in
+# a regular one. The next tab's tap leaves it either way, so no step goes back.
+- tapOn: "Review the invite flow"
+- assertVisible: "A pull request waits for your go."
+- takeScreenshot: inbox-thread
 - tapOn: "Tasks"
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
+- tapOn: "Brand the iOS app"
+- assertVisible: "Todo"
+- takeScreenshot: task
 - tapOn: "Search"
 - assertVisible: "Find a task, a thread, or an agent."
 - takeScreenshot: search
