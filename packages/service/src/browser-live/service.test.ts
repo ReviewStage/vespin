@@ -16,10 +16,10 @@ import {
 /**
  * Which upgrades the live view takes, before any socket stands: only its
  * own path naming an agent and a tab, or, from a desktop built before the
- * agent was named, a task and a tab; from the desktop, which names no
- * origin, only under a bearer; from a page, only from one of the
- * deployment's own, under its session cookie; and only for an account that
- * resolves and reaches the tab. Anything else is refused with a status and
+ * agent was named, a task and a tab; under a bearer, whatever origin the
+ * handshake names or none, as the desktop and the iPhone send theirs; from
+ * a page, only from one of the deployment's own, under its session cookie;
+ * and only for an account that resolves and reaches the tab. Anything else is refused with a status and
  * never upgraded.
  */
 
@@ -37,11 +37,16 @@ function address(query: Record<string, string>, path: string = BROWSER_LIVE.PATH
 
 const ASKED = { agent: AGENT, tab: TAB };
 
-test("the desktop's bearer with no origin, and a page of the deployment's own with its cookie, are each taken", () => {
+test("a bearer with or without an origin, and a page of the deployment's own with its cookie, are each taken", () => {
   assert.deepEqual(admitBrowserLiveUpgrade(address(ASKED), BEARER, OWN), {
     credential: { bearer: "Bearer token-1" },
     ask: { place: { agentId: AGENT }, tabId: TAB },
   });
+  assert.deepEqual(
+    admitBrowserLiveUpgrade(address(ASKED), { ...BEARER, origin: "http://localhost" }, OWN),
+    { credential: { bearer: "Bearer token-1" }, ask: { place: { agentId: AGENT }, tabId: TAB } },
+    "the iPhone's bearer, under the origin its runtime names",
+  );
   assert.deepEqual(
     admitBrowserLiveUpgrade(address({ task: TASK, tab: TAB }), BEARER, OWN),
     { credential: { bearer: "Bearer token-1" }, ask: { place: { taskId: TASK }, tabId: TAB } },
@@ -53,7 +58,7 @@ test("the desktop's bearer with no origin, and a page of the deployment's own wi
   assert.deepEqual(page.ask, { place: { agentId: AGENT }, tabId: TAB });
 });
 
-test("no credential, another site's origin, and a page's bearer without a cookie are refused before any socket stands", () => {
+test("no credential, another site's origin carrying only a cookie, and a cookie with no origin are refused before any socket stands", () => {
   const refused = (headers: Record<string, string>) =>
     admitBrowserLiveUpgrade(address(ASKED), headers, OWN);
   assert.deepEqual(refused({}), { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED });
@@ -69,12 +74,6 @@ test("no credential, another site's origin, and a page's bearer without a cookie
   );
   assert.deepEqual(refused({ ...COOKIE, origin: "https://evil.test" }), {
     status: RELAY_UPGRADE_STATUS.FORBIDDEN,
-  });
-  assert.deepEqual(refused({ ...BEARER, origin: "https://evil.test" }), {
-    status: RELAY_UPGRADE_STATUS.FORBIDDEN,
-  });
-  assert.deepEqual(refused({ ...BEARER, origin: OWN_ORIGIN }), {
-    status: RELAY_UPGRADE_STATUS.UNAUTHORIZED,
   });
   assert.deepEqual(
     admitBrowserLiveUpgrade(address(ASKED), COOKIE, new Set()),

@@ -509,9 +509,12 @@ whether a bearer or a cookie named it (`src/agents/coder-host/runtime-sessions.t
 conversation runs on, and one that ran on eve is refused as ended. What acts for
 one device rather than the account takes the bearer alone: the Mac's
 commands (`resolveHostedBearerUserId`). The terminal relay and the Browser
-tab's live view resolve with `resolveRelayUserId`, which takes the desktop's
-bearer where the upgrade carries no `Origin`, and the page's session cookie
-where it carries one of the deployment's own (`src/http/relay-upgrade.ts`). Because a tab opened on a byte route now
+tab's live view, and the live socket beside them, resolve with
+`resolveRelayUserId`, which takes a bearer, the desktop's or the iPhone's,
+whatever `Origin` the upgrade names, since no page can set an `Authorization`
+on a WebSocket, and the page's session cookie only where the upgrade carries
+no `Authorization` and names one of the deployment's own origins
+(`src/http/relay-upgrade.ts`). Because a tab opened on a byte route now
 carries the cookie, every byte a member, an agent, or GitHub wrote is served
 under `HOSTED_BYTES_HEADERS` (`src/http/http-effect.ts`), whose sandboxed
 policy keeps an SVG's script from running as this origin.

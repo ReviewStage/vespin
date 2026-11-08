@@ -17,8 +17,9 @@ import { standTerminalRelay, terminalRelayServer } from "./service.js";
  * credential names, so a page of the deployment's own whose cookie names an
  * account the agent is not reached by, Grace of another workspace, is
  * closed as gone; another site's page carrying Ada's cookie is refused
- * before any account is read; and the desktop's bearer, with no origin,
- * reaches Ada's agent as it always did. The agent has not opened its
+ * before any account is read; a bearer beside any origin is read alone, as
+ * the iPhone sends one; and the desktop's bearer, with no origin, reaches
+ * Ada's agent as it always did. The agent has not opened its
  * sandbox, so a socket that reaches it is closed as starting, and nothing
  * past the reach stands. Synthetic ids, cookies, and bearers throughout.
  */
@@ -175,7 +176,7 @@ it.effect(
 );
 
 it.effect(
-  "another site's page carrying the member's cookie is refused before any account is read",
+  "another site's page carrying the member's cookie is refused before any account is read, and a bearer beside any origin is read alone",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -183,16 +184,28 @@ it.effect(
         const { reached, dependencies } = agents();
         const url = yield* standing(resolveUserId, dependencies);
 
-        for (const headers of [
-          { origin: "https://evil.test", cookie: ADA_COOKIE },
-          { origin: "https://evil.test", cookie: ADA_COOKIE, authorization: ADA_BEARER },
-        ]) {
-          assert.deepEqual(yield* upgraded(url, headers), {
-            refused: RELAY_UPGRADE_STATUS.FORBIDDEN,
-          });
-        }
-        assert.deepEqual(read, [], "no cookie or bearer of another site's page is read");
+        assert.deepEqual(
+          yield* upgraded(url, { origin: "https://evil.test", cookie: ADA_COOKIE }),
+          { refused: RELAY_UPGRADE_STATUS.FORBIDDEN },
+        );
+        assert.deepEqual(read, [], "no cookie of another site's page is read");
         assert.deepEqual(reached, []);
+
+        // No page can set an Authorization on a socket, so one is no page's whatever origin stands beside it.
+        assert.deepEqual(
+          yield* upgraded(url, {
+            origin: "https://evil.test",
+            cookie: ADA_COOKIE,
+            authorization: ADA_BEARER,
+          }),
+          { closed: TERMINAL_RELAY_CLOSE.STARTING },
+        );
+        assert.deepEqual(
+          read,
+          [{ bearer: ADA_BEARER }],
+          "the bearer is read, and the cookie never",
+        );
+        assert.deepEqual(reached, [{ userId: ADA, agentId: ADA_AGENT }]);
       }),
     ),
 );
