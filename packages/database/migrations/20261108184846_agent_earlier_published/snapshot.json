@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "eec19528-1e22-4be1-8dde-92d7865453c4",
-  "prevIds": ["5ee913fe-27c1-4031-847e-9d3d45ee37c6", "8a600a8b-ce49-4c16-871c-6a9d0ed2a61e"],
+  "id": "4a88499f-96d7-4ce8-a66b-feea24f22436",
+  "prevIds": ["2a25bae0-1c38-4853-a312-dbbb2e029402"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -8594,6 +8594,19 @@
       "generated": null,
       "identity": null,
       "name": "turn_notifications",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_preference"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "onboarding_survey",
       "entityType": "columns",
       "schema": "public",
       "table": "account_preference"
