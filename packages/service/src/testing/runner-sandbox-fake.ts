@@ -88,8 +88,8 @@ export interface FakeCommand {
   readonly cwd: string | undefined;
   readonly env: Readonly<Record<string, string>>;
   readonly sudo: boolean;
-  /** How many network policies the API had taken as it started, which `policyAtStart` reads its session's from. */
-  readonly policiesBefore: number;
+  /** How many network policies the API had taken as its first stdin was written, its config line, which `policyAtConfig` reads its session's from; none before that write. */
+  policiesBeforeConfig?: number;
   stdin: string;
   exitCode: number | null;
   /** What the command printed on stderr, which its logs answer. */
@@ -490,7 +490,6 @@ export function runnerSandboxApi() {
         cwd: asUser?.cwd ?? asked.cwd,
         env: asUser?.env ?? asked.env,
         sudo: asked.sudo,
-        policiesBefore: policies.length,
         stdin: "",
         exitCode: null,
       };
@@ -526,6 +525,7 @@ export function runnerSandboxApi() {
         );
       }
       if (asked.data !== undefined) {
+        command.policiesBeforeConfig ??= policies.length;
         const bytes = Buffer.from(command.stdin, "utf8");
         const data = Buffer.from(asked.data, "base64");
         command.stdin = Buffer.concat([bytes.subarray(0, asked.offset), data]).toString("utf8");
@@ -547,17 +547,21 @@ export function runnerSandboxApi() {
     }
     return commandRead(command, parsed, init, waits.hold, exits);
   };
-  /** The network policy a command's session stood at as it started: the last one set for that session by then, none where none was. */
-  const policyAtStart = (command: FakeCommand | undefined) =>
-    command === undefined
+  /**
+   * The network policy a command's session stood at as its config line was
+   * written, before which a runner reaches nothing: the last one set for that
+   * session by then, none where none was or nothing was written.
+   */
+  const policyAtConfig = (command: FakeCommand | undefined) =>
+    command?.policiesBeforeConfig === undefined
       ? undefined
       : policies
-          .slice(0, command.policiesBefore)
+          .slice(0, command.policiesBeforeConfig)
           .findLast((each) => each.session === command.sandboxSessionId)?.policy;
   return {
     layer: Layer.provideMerge(vercelSandboxOver(respond), fakeHttpClientLayer(respond)),
     respond,
-    policyAtStart,
+    policyAtConfig,
     sandboxes,
     drives: drives.drives,
     mountedAt: (sandbox: FakeSandbox | undefined, at: string) =>
@@ -679,11 +683,11 @@ function swappedBearer(
   return set?.startsWith("Bearer ") ? set.slice("Bearer ".length) : undefined;
 }
 
-/** The bearer a launch's runner reaches the host given with: what the policy standing as its command started swaps in for the placeholder its environment holds. */
+/** The bearer a launch's runner reaches the host given with: what the policy standing as its config line was written swaps in for the placeholder its environment holds. */
 export function launchBearer(
   api: ReturnType<typeof runnerSandboxApi>,
   command: FakeCommand | undefined,
   host: string,
 ): string | undefined {
-  return swappedBearer(api.policyAtStart(command), host, command?.env[RUNNER_ENV.BEARER]);
+  return swappedBearer(api.policyAtConfig(command), host, command?.env[RUNNER_ENV.BEARER]);
 }

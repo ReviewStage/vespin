@@ -1873,12 +1873,18 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const { userId, agent, sessions, opened } = yield* flippedSession(api);
         // The relaunch's policy write is refused, so its runner never takes the line.
         api.failPolicy.remaining = 10;
+        const commandsBefore = api.commands.length;
         const sent = yield* sessions.send(
           opened.sessionId,
           yield* writtenLine(agent, "Now the emails."),
         );
         const failed = yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
         api.failPolicy.remaining = 0;
+        // A runner the refused relaunch started is ended rather than left waiting for its config.
+        const refusedRunners = api.commands
+          .slice(commandsBefore)
+          .filter((each) => each.command === "node");
+        assert.ok(refusedRunners.every((each) => each.exitCode !== null));
 
         const next = yield* sentAndDelivered(
           sessions,

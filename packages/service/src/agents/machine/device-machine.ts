@@ -154,13 +154,13 @@ export interface DeviceMachineService extends AgentMachineService {
     ask: MachineOpen<B, EB, RB>,
     use: (opened: OpenedPlace, beside: B) => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E | EB | LaunchRefused | { readonly _tag: string }, R | RB>;
-  readonly launchRunner: <A, E, R, EL, RL>(
+  readonly launchRunner: <A, E, R, EL, RL, ES = never, RS = never>(
     place: MachinePlace,
-    launch: RunnerLaunch<A, E, R, EL, RL>,
+    launch: RunnerLaunch<A, E, R, EL, RL, ES, RS>,
   ) => Effect.Effect<
     { readonly handle: RunnerHandle; readonly ready: A },
-    E | EL | SandboxError | { readonly _tag: string },
-    R | RL | CheckoutServices
+    E | EL | ES | SandboxError | { readonly _tag: string },
+    R | RL | RS | CheckoutServices
   >;
 }
 
@@ -548,8 +548,9 @@ function deviceMachineOver(
           const target = { userId: pin.userId, conversationId: agent.value.conversationId };
           return { agent, identity: yield* Effect.exit(agentCommitIdentity(target, agent.value)) };
         });
-        const [ready, { agent, identity }, ring] = yield* Effect.all(
-          [launch.ready, read, keyRing],
+        // Note that a Mac's runner takes its config with its launch, so it starts on none of the caller's steps sooner.
+        const [, ready, { agent, identity }, ring] = yield* Effect.all(
+          [launch.started ?? Effect.void, launch.ready, read, keyRing],
           { concurrency: "unbounded" },
         );
         if (Option.isNone(agent)) return yield* new LaunchRefused({ reason: "no agent" });

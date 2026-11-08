@@ -105,7 +105,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { Duration, Effect, Exit, Option, Queue, Schema, Scope, Stream } from "effect";
+import { Data, Duration, Effect, Exit, Fiber, Option, Queue, Schema, Scope, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import {
@@ -746,17 +746,28 @@ function listenerFor(
   };
 }
 
+/** What a launch whose resumed thread's rollout the service's store did not hand back ends with. */
+const ROLLOUT_UNREAD = "the thread's rollout could not be read from the service";
+
+/** The resumed thread's rollout not written back from the service's store, which fails the launch before its thread opens. */
+class RolloutUnread extends Data.TaggedError("RolloutUnread")<{}> {}
+
 /**
  * Starts app-server in a scope of its own and opens the thread on it:
  * `thread/fork` where the thread is another agent's, `thread/resume` where
  * there is a thread to continue, `thread/start` otherwise. Answers the
  * server, its scope, the thread's id, and its rollout's path where
- * app-server named one.
+ * app-server named one. App-server is spawned, initialized and signed in
+ * while the thread's rollout is written back (`rollouts`), which only the
+ * thread's open waits on, because app-server reads a thread's rollout as
+ * the thread opens rather than as it starts.
  */
 const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
   launch: Pick<CodexLaunch, "context" | "signals" | "model" | "auth">,
   threadId: string | undefined,
   fork: boolean,
+  /** Whether the thread's rollout stands on the sandbox's disk, written back where it had to be. */
+  rollouts: Effect.Effect<boolean>,
 ) {
   const { config, env, bearer } = launch.context;
   const { auth } = launch;
@@ -817,6 +828,7 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
     if (skills !== undefined) {
       yield* server.request(METHOD.SKILLS_EXTRA_ROOTS_SET, { extraRoots: [skills] });
     }
+    if (!(yield* rollouts)) return yield* new RolloutUnread();
     const thread = {
       cwd: config.cwd,
       model: launch.model,
@@ -1196,7 +1208,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.flatMap((why) => Queue.offer(signals, { kind: SIGNAL.CUT_OFF, why })),
     Effect.forkScoped,
   );
-  // A thread resumed or forked has its rollout written back where the sandbox no longer holds it.
+  // A thread resumed or forked has its rollout written back where the sandbox no longer holds it,
+  // beside app-server's start.
   const codexHome = context.env.CODEX_HOME;
   const store =
     config.transcriptsUrl === undefined || codexHome === undefined
@@ -1205,21 +1218,27 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
           store: transcriptStore(config.transcriptsUrl, context.bearer, context.trace.headers),
           codexHome,
         };
-  if (store !== undefined && config.threadId !== undefined) {
-    const restored = yield* restoreRollouts(store.store, store.codexHome, config.threadId).pipe(
-      Effect.result,
-    );
-    if (restored._tag === "Failure") {
-      return ended(RUNNER_END.FAILED, "the thread's rollout could not be read from the service");
-    }
-  }
+  const restoring = yield* (
+    store === undefined || config.threadId === undefined
+      ? Effect.void
+      : restoreRollouts(store.store, store.codexHome, config.threadId)
+  ).pipe(
+    Effect.as(true),
+    Effect.orElseSucceed(() => false),
+    Effect.forkScoped,
+  );
   const opened = yield* openAppServer(
     { context, signals, model: config.model, auth },
     config.threadId,
     config.fork === true,
+    Fiber.join(restoring),
   ).pipe(Effect.result);
   if (opened._tag === "Failure") {
-    return ended(RUNNER_END.FAILED, `${opened.failure.method}: ${opened.failure.detail}`);
+    const failure = opened.failure;
+    return ended(
+      RUNNER_END.FAILED,
+      failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
+    );
   }
   const { path, ...server } = opened.success;
   const mirror =

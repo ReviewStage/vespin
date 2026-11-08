@@ -7,12 +7,12 @@
  * captures no error, instruments no module, and sends only what this file
  * makes: a startup span continuing that trace, from the process's start to
  * the harness's first request to the model, and beneath it the config's
- * read, the harness's start (Claude Code's MCP relays and its CLI's first
- * word, Codex's app-server spawned and its thread opened), and the time from
- * the runner taking the turn's message to that request, each named by its
- * harness and the launch's path. Note that the startup ends as the request
- * leaves, because what follows is the model's own latency, not the
- * launch's. Every post the runner makes carries the trace as well, so the
+ * read, the harness's start (Claude Code's MCP relays and its CLI spawned
+ * and initialized, Codex's app-server spawned and its thread opened), and
+ * the time from the runner taking the turn's message to that request, each
+ * named by its harness and the launch's path. Note that the startup ends as
+ * the request leaves, because what follows is the model's own latency, not
+ * the launch's. Every post the runner makes carries the trace as well, so the
  * service's spans for them join it and follow its sampling. A span keeps
  * only the attributes set here and Sentry's own `sentry.*` bookkeeping, so
  * nothing leaves but ids, names, kinds and durations.
@@ -37,12 +37,7 @@ import * as Sentry from "@sentry/node";
 import { Effect, type Scope } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import {
-  RUNNER_EVENT,
-  type RunnerHarness,
-  type RunnerMessage,
-  type RunnerTrace,
-} from "./protocol.js";
+import type { RunnerHarness, RunnerMessage, RunnerTrace } from "./protocol.js";
 
 /** The spans of a launch's startup. */
 export const RUNNER_SPAN = {
@@ -91,11 +86,9 @@ export interface LaunchTrace {
     name: RunnerSpan,
     effect: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
-  /** Claude Code's CLI started, its span ended by the first message it puts out. */
-  readonly cliStarted: Effect.Effect<void>;
   /** The turn's message taken, from which its first model request is timed; the launch's first alone counts. */
   readonly taken: Effect.Effect<void>;
-  /** A message the launch posts, watched for the CLI's first word and the turn's first model request. */
+  /** A message the launch posts, watched for the turn's first model request. */
   readonly observe: (message: RunnerMessage) => Effect.Effect<void>;
 }
 
@@ -104,7 +97,6 @@ const UNTRACED: LaunchTrace = {
   traced: (effect) => effect,
   headers: {},
   step: (_name, effect) => effect,
-  cliStarted: Effect.void,
   taken: Effect.void,
   observe: () => Effect.void,
 };
@@ -170,13 +162,6 @@ const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.tryPromi
   ),
 );
 
-const RUNNER_EVENTS: ReadonlySet<string> = new Set(Object.values(RUNNER_EVENT));
-
-/** Whether a message is the harness's own, rather than one of the runner's events. */
-function isHarnessMessage(message: RunnerMessage): boolean {
-  return "method" in message || !RUNNER_EVENTS.has(message.type);
-}
-
 /** Whether a message is the harness beginning a request to the model. */
 function isModelRequest(message: RunnerMessage): boolean {
   if ("method" in message) return message.method === CODEX_TURN_STARTED;
@@ -192,7 +177,6 @@ function isModelRequest(message: RunnerMessage): boolean {
 interface Startup {
   readonly span: Sentry.Span;
   readonly attributes: Readonly<Record<string, string>>;
-  cli: Sentry.Span | undefined;
   /** The span from the turn's message taken to its first model request. */
   firstRequest: Sentry.Span | undefined;
   requested: boolean;
@@ -215,20 +199,12 @@ function childSpan(
 
 /** Ends every span of the startup's still open, its own last. */
 function endStartup(startup: Startup): void {
-  startup.cli?.end();
   startup.firstRequest?.end();
   startup.span.end();
 }
 
-/**
- * Watches one message for the CLI's first word and the turn's first model
- * request; answers whether it was that request, which ended the startup.
- */
+/** Watches one message for the turn's first model request; answers whether it was that request, which ended the startup. */
 function observed(startup: Startup, message: RunnerMessage): boolean {
-  if (startup.cli !== undefined && isHarnessMessage(message)) {
-    startup.cli.end();
-    startup.cli = undefined;
-  }
   if (startup.firstRequest === undefined || startup.requested || !isModelRequest(message))
     return false;
   startup.requested = true;
@@ -263,7 +239,6 @@ function begunStartup(
   const startup: Startup = {
     span,
     attributes,
-    cli: undefined,
     firstRequest: undefined,
     requested: false,
   };
@@ -300,9 +275,6 @@ function tracedLaunch(startup: Startup): LaunchTrace {
           Effect.sync(() => span.end()),
         );
       }),
-    cliStarted: Effect.sync(() => {
-      startup.cli = childSpan(startup, RUNNER_SPAN.CLI);
-    }),
     taken: Effect.sync(() => {
       if (startup.firstRequest !== undefined) return;
       startup.firstRequest = childSpan(startup, RUNNER_SPAN.FIRST_REQUEST);

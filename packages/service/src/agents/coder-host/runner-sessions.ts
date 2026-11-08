@@ -1023,12 +1023,13 @@ export const runnerSessions = <
      * One launch of the runner in the running place, on what it prepared
      * beside the place (`prepared`): its swaps kept at the place's firewall
      * where its machine holds them there, ahead of every write that composes
-     * the place's policy; then the launch's record written, the caller's own
-     * steps (`alongside`) run, and the place's whole policy written, all at
-     * once beside the machine's own, since none waits on another and the
-     * runner waits on them all; then the runner started, recorded by the
-     * machine before it reads anything, and its config line and first
-     * message handed to it as its first lines. On a machine whose runner
+     * the place's policy; then the launch's record written and the caller's
+     * own steps (`alongside`) run, which the runner's start waits on
+     * (`started`), and beside them and the runner's start the place's whole
+     * policy written, the files its lines name, and an earlier launch's
+     * lines cleared, which only its config line waits on (`ready`); then
+     * the runner, recorded by the machine before it reads anything, handed
+     * its config line and first message as its first lines. On a machine whose runner
      * reads its lines (`MachineLayout`'s `linesRead`), the config names the
      * read and is its only line, the first message is queued for the launch,
      * and the launch is handed beside it every message an earlier launch
@@ -1084,23 +1085,31 @@ export const runnerSessions = <
             kind: RUNNER_RECORD.LAUNCHED,
             mark: { firstSequence },
           });
-        const ready = Effect.all(
+        const started = Effect.all(
           [
             // The launch's record is written before its command starts, so an END the launch it
             // replaces posts late is told apart from this one's and stops nothing.
             launching(made.firstSequence),
+            // The caller's own steps finish the checkout the runner starts in and upload what its
+            // machine readies for it.
+            alongside,
+          ],
+          { concurrency: "unbounded", discard: true },
+        ).pipe(Effect.withSpan("web/runnerStartReady"));
+        // Note that none of these waits on the runner's start, nor it on them, because a runner
+        // reads, posts, and asks for nothing before its config line, which waits on them all.
+        const ready = Effect.all(
+          [
             // The files the lines it is handed name go before its runner reads them: its first
             // message's, and those of the messages waiting for a launch, which their lines carry.
             first === undefined ? Effect.void : filesWritten(place.running, first),
             layout.linesRead ? waitingFilesWritten(agent, place.running) : Effect.void,
             // An earlier launch's lines go but its untaken messages in the window, which this launch is handed.
             layout.linesRead ? clearRunnerLines(userId, agent.id) : Effect.void,
-            // The machine starts the runner once every step here is done. Note that a post refused
-            // for want of its bearer is refused for good.
+            // Note that a post refused for want of its bearer is refused for good.
             made.sources === undefined
               ? Effect.void
               : machine.firewall.write(place.running, agent.userId, made.sources),
-            alongside,
           ],
           { concurrency: "unbounded", discard: true },
         ).pipe(Effect.withSpan("web/runnerLaunchReady"));
@@ -1110,6 +1119,7 @@ export const runnerSessions = <
           agentId: agent.id,
           extraCheckouts: made.extraCheckouts,
           name: place.name,
+          started,
           ready,
           firstLines: () =>
             Effect.gen(function* () {

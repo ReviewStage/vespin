@@ -111,6 +111,7 @@ import {
   Context,
   Duration,
   Effect,
+  Exit,
   Fiber,
   Layer,
   Option,
@@ -1212,11 +1213,16 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         };
       }),
 
-    // The sandbox is readied as root once the caller's steps are done, since the readying shares
-    // the checkout they finish, and the runner is started as `agent` after it. The runner is recorded
-    // in our store before it reads anything, so a later call finds it. A runner started but
-    // never configured is ended, and the caller undoes what it recorded of it, so the next message
-    // relaunches whole rather than writing to a runner that waits for its config.
+    // The runner's unit is uploaded beside the caller's steps, and the sandbox is readied as root
+    // once the steps its start waits on are done (`started`), since the readying shares the
+    // checkout they finish and installs the skills they upload; the runner is then started as
+    // `agent`, beside the caller's other steps (`ready`), which only its config line waits on, as a
+    // runner reads nothing before that line. Note that the steps are let finish while the runner
+    // starts, so one that failed ends a runner that started rather than leaving it to wait out
+    // its config. The runner is recorded in our store before it reads anything, so a later call
+    // finds it. A runner started but never configured is ended, and the caller undoes what it
+    // recorded of it, so the next message relaunches whole rather than writing to a runner that
+    // waits for its config.
     // Note that a clone run again finds the folder of a checkout already standing and clones nothing,
     // so only a repository added since the place opened is cloned here. A runner already running
     // keeps its repository credential through the clone, minted afresh, since each write is whole.
@@ -1242,41 +1248,54 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
     launchRunner: (place, launch) =>
       Effect.gen(function* () {
-        const ready = yield* launch.ready;
-        const runner = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.runner);
-        yield* api
-          .writeFiles(
+        const uploaded = Effect.gen(function* () {
+          const runner = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.runner);
+          yield* api.writeFiles(
             place,
             runner.map((file) => ({
               path: `${RUNNER_UPLOAD}/${file.name}`,
               contents: file.contents,
               mode: RUNNER_UPLOAD_MODE,
             })),
-          )
-          .pipe(Effect.withSpan("web/uploadRunner"));
-        const readied = yield* api
-          .run(place, {
-            command: "sudo",
-            args: ["-n", "bash", "-c", readyScript(launch.extraCheckouts ?? [])],
-          })
-          .pipe(Effect.withSpan("web/readyRunnerSandbox"));
-        if (readied.exitCode !== 0) return yield* new SandboxUnavailable({ detail: NOT_READIED });
-        // Note that the runner starts on the sandbox by its name, as the user, as it always has.
-        const commandId = yield* api
-          .start(launch.name, {
-            user: AGENT_USER,
-            command: "node",
-            args: [RUNNER_SCRIPT],
-            cwd: CODER.CHECKOUT_PATH,
-            env: {
-              ...SANDBOX_ENV,
-              HOME: `/home/${AGENT_USER}`,
-              USER: AGENT_USER,
-              LOGNAME: AGENT_USER,
-              ...launch.env,
-            },
-          })
-          .pipe(Effect.withSpan("web/startRunner"));
+          );
+        }).pipe(Effect.withSpan("web/uploadRunner"));
+        const started = Effect.gen(function* () {
+          yield* Effect.all([launch.started ?? Effect.void, uploaded], {
+            concurrency: "unbounded",
+            discard: true,
+          });
+          const readied = yield* api
+            .run(place, {
+              command: "sudo",
+              args: ["-n", "bash", "-c", readyScript(launch.extraCheckouts ?? [])],
+            })
+            .pipe(Effect.withSpan("web/readyRunnerSandbox"));
+          if (readied.exitCode !== 0) return yield* new SandboxUnavailable({ detail: NOT_READIED });
+          // Note that the runner starts on the sandbox by its name, as the user, as it always has.
+          return yield* api
+            .start(launch.name, {
+              user: AGENT_USER,
+              command: "node",
+              args: [RUNNER_SCRIPT],
+              cwd: CODER.CHECKOUT_PATH,
+              env: {
+                ...SANDBOX_ENV,
+                HOME: `/home/${AGENT_USER}`,
+                USER: AGENT_USER,
+                LOGNAME: AGENT_USER,
+                ...launch.env,
+              },
+            })
+            .pipe(Effect.withSpan("web/startRunner"));
+        });
+        const [readyExit, commandId] = yield* Effect.all([Effect.exit(launch.ready), started], {
+          concurrency: "unbounded",
+        });
+        if (Exit.isFailure(readyExit)) {
+          yield* Effect.ignore(api.kill(place, commandId));
+          return yield* Effect.failCause(readyExit.cause);
+        }
+        const ready = readyExit.value;
         const handle: RunnerHandle = { ...place, command: commandId };
         yield* Effect.gen(function* () {
           const { lines, mark } = yield* launch.firstLines(ready, handle);

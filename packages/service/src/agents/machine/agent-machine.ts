@@ -261,7 +261,7 @@ export interface OpenedPlace {
 }
 
 /** What a launch starts the runner with, and what it waits on before it does. */
-export interface RunnerLaunch<A, E, R, EL, RL> {
+export interface RunnerLaunch<A, E, R, EL, RL, ES = never, RS = never> {
   /**
    * The runner's environment beside the machine's own: every value is
    * secret, the harness's credential and the runner's bearer among them, and
@@ -277,7 +277,15 @@ export interface RunnerLaunch<A, E, R, EL, RL> {
   readonly extraCheckouts?: readonly string[] | undefined;
   /** The place's lifecycle name, which the runner is recorded under. */
   readonly name: MachineName;
-  /** The caller's steps the runner waits on, run beside the machine's own; their result is handed back. */
+  /**
+   * The caller's steps the runner's start itself waits on, such as its
+   * record and the checkout it works in; none where its start waits on
+   * nothing of the caller's. A machine that can start the runner before
+   * handing it its first lines starts it once these are done, beside
+   * `ready`.
+   */
+  readonly started?: Effect.Effect<void, ES, RS>;
+  /** The caller's steps the runner waits on for its first lines, run beside the machine's own; their result is handed back. */
   readonly ready: Effect.Effect<A, E, R>;
   /**
    * The runner's first lines and its launch's mark, read once it started
@@ -380,14 +388,14 @@ export interface AgentMachineService {
     agent: Agent,
     shared: boolean,
   ) => Effect.Effect<void, CheckoutRefused | SandboxError, CheckoutServices>;
-  /** The runner launched in the place once `ready` is done, recorded, and handed its first lines; ended again where they were not taken. */
-  readonly launchRunner: <A, E, R, EL, RL>(
+  /** The runner launched in the place once `started` is done, recorded, and handed its first lines once `ready` is; ended again where they were not taken, or where `ready` failed. */
+  readonly launchRunner: <A, E, R, EL, RL, ES = never, RS = never>(
     place: MachinePlace,
-    launch: RunnerLaunch<A, E, R, EL, RL>,
+    launch: RunnerLaunch<A, E, R, EL, RL, ES, RS>,
   ) => Effect.Effect<
     { readonly handle: RunnerHandle; readonly ready: A },
-    E | EL | SandboxError | { readonly _tag: string },
-    R | RL | MachineServices
+    E | EL | ES | SandboxError | { readonly _tag: string },
+    R | RL | RS | MachineServices
   >;
   /**
    * Text appended to the runner's stdin after whatever it already took;

@@ -1255,7 +1255,7 @@ it.effect("answers the CLI's MCP request with a JSON-RPC error where Vespin refu
 );
 
 it.effect(
-  "starts the claude process with no bearer or MCP address in its argv, and listens on no port",
+  "starts the claude process with no bearer or MCP address in its argv, listens on no port, and ends failed where it exits before it initializes",
   () =>
     Effect.gen(function* () {
       const directory = mkdtempSync(join(tmpdir(), "agent-runner-argv-"));
@@ -1273,7 +1273,7 @@ it.effect(
         Effect.forkScoped,
       );
       yield* Queue.offer(stdin, JSON.stringify({ ...CONFIG, executable, cwd: directory }));
-      yield* Fiber.await(run);
+      const ended = yield* Fiber.join(run);
       const listened = listen.mock.calls.length;
       vi.restoreAllMocks();
 
@@ -1285,6 +1285,10 @@ it.effect(
       assert.ok(argv.every((argument) => !argument.includes(LINEAR_SERVER.url)));
       assert.ok(!argv.includes("--mcp-config"));
       assert.equal(listened, 0, "the launch opened no listening socket");
+      assert.equal(ended, RUNNER_END.FAILED);
+      const last = service.applied.at(-1)?.message;
+      assert.ok(last !== undefined && "reason" in last);
+      assert.equal(last.reason, RUNNER_END.FAILED);
     }),
 );
 

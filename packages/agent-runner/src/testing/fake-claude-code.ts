@@ -11,7 +11,7 @@
 
 import type { Options, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { Deferred, Effect, Exit, Layer, Queue, Stream } from "effect";
-import { ClaudeCode, type ClaudeCodeSession } from "../claude-code.js";
+import { ClaudeCode, type ClaudeCodeSession, type StartedClaudeCode } from "../claude-code.js";
 import type { Step, StopReport } from "./recorded-stream.js";
 
 /** An effort the CLI was set to, as `applyFlagSettings` takes it. */
@@ -69,7 +69,6 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
     readonly prompt: AsyncIterable<SDKUserMessage>;
     readonly options: Options;
   }): ClaudeCodeSession => {
-    record.options = params.options;
     // The prompts the running turn has taken, which its `result` names.
     const taken: string[] = [];
 
@@ -162,11 +161,17 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
     };
   };
 
+  // Started as the SDK starts the CLI: on its options, then handed its prompts once.
+  const startup = async (options: Options): Promise<StartedClaudeCode> => {
+    record.options = options;
+    return { query: (prompt) => query({ prompt, options }) };
+  };
+
   /** Lets a script held at `untilReleased` go on. */
   const release = Deferred.succeed(released, undefined);
   const sessionChain = async () => chain;
   return {
-    layer: Layer.succeed(ClaudeCode, { query, sessionChain }),
+    layer: Layer.succeed(ClaudeCode, { startup, sessionChain }),
     record,
     prompted,
     release,

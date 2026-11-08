@@ -1,5 +1,5 @@
 /**
- * runner.ts -- one launch of an agent: the bearer and the config line read, the harness the config names run (Claude Code here, Codex in `codex.ts`), and the launch's last event posted; for Claude Code, `query()` started in streaming input mode, the service's lines fed to it, its messages posted out, and the launch ended when the agent's turn is.
+ * runner.ts -- one launch of an agent: the bearer and the config line read, the harness the config names run (Claude Code here, Codex in `codex.ts`), and the launch's last event posted; for Claude Code, the CLI spawned and initialized by `startup()` and then run in streaming input mode, the service's lines fed to it, its messages posted out, and the launch ended when the agent's turn is.
  *
  * Two loops run side by side. The input loop reads the service's lines, from stdin
  * or, where the config names the read, from the service (`lines.ts`), and acts on
@@ -53,6 +53,7 @@ import {
   Queue,
   Redacted,
   Ref,
+  Result,
   Schema,
   Semaphore,
   Stream,
@@ -617,11 +618,22 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   );
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
   const from = yield* resumePointOf(claudeCode, config);
-  yield* trace.cliStarted;
-  const session = claudeCode.query({
-    prompt: Stream.toAsyncIterable(Stream.fromQueue(prompts)),
-    options: queryOptions(config, context.env, servers, onStop, from, bearer, trace.headers),
-  });
+  // The CLI is spawned and initialized before the service's lines are taken, which wait in
+  // their queue meanwhile, so its first message goes to a CLI ready for it.
+  const options = queryOptions(config, context.env, servers, onStop, from, bearer, trace.headers);
+  const started = yield* trace
+    .step(
+      RUNNER_SPAN.CLI,
+      Effect.tryPromise({
+        try: () => claudeCode.startup(options),
+        catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+      }),
+    )
+    .pipe(Effect.result);
+  if (Result.isFailure(started)) {
+    return { end: RUNNER_END.FAILED, failure: started.failure } satisfies LaunchOutcome;
+  }
+  const session = started.success.query(Stream.toAsyncIterable(Stream.fromQueue(prompts)));
   const launch: Launch = {
     session,
     prompts,
