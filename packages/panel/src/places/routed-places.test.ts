@@ -11,7 +11,13 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { tasksControl, VIEWS_AWAY } from "../testing/tasks-control.js";
 import type { RoutedViews } from "../workspace-routes.js";
-import { type PlaceThere, ROUTED_PLACE, routedPlaceOf, routedStepStands } from "./routed-places.js";
+import {
+  type PlaceThere,
+  ROUTED_PLACE,
+  routedPlaceOf,
+  routedStepStands,
+  sameDraftAt,
+} from "./routed-places.js";
 
 /**
  * routed-places.test.ts -- each routed place as the window reads it from an
@@ -185,3 +191,14 @@ test("each place over the plan names its step for itself, and Admin's as the pla
 test("Back still reaches an agent's page once another workspace is listed than the one its address names", () => {
   assert.equal(stepStands("/acme/agent/a", ACCESS, { ...THERE, listed: () => false }), true);
 });
+
+test.each([
+  ["by its id", "/workspace-acme/automation/automation-1/runs", true],
+  ["under another workspace", "/beta/automation/automation-1/runs", false],
+])(
+  "an automation's setup and its runs addressed %s hold one draft only within one workspace",
+  (_way, runs, same) => {
+    const setup = matchesOf("/acme/automation/automation-1");
+    assert.equal(sameDraftAt(setup, matchesOf(runs), ACCESS), same);
+  },
+);

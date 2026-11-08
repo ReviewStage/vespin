@@ -620,11 +620,17 @@ export function routedPlaceOf(
   return undefined;
 }
 
+/** The workspace an address step names, by its id, where it is one of the reader's under any of its steps; else the step itself. */
+function workspaceAt(step: string | undefined, access: RouteAccess): string | undefined {
+  return step === undefined ? undefined : (workspaceOfSlug(access.workspaces, step)?.id ?? step);
+}
+
 /**
  * Whether a move from what `from` names to what `to` names stays within one
  * draft: both on one routed place, under one workspace, whose declaration
  * names one draft for both. Note that the same id under another workspace is
- * another page, as the place standing turned under another workspace listed is.
+ * another page, as the place standing turned under another workspace listed is,
+ * while one workspace's id, slug, and former slugs are one workspace.
  */
 export function sameDraftAt(
   from: readonly RouteMatchSeen[],
@@ -635,7 +641,7 @@ export function sameDraftAt(
   if (place === undefined || routedPlaceOf(to, access) !== place) return false;
   const was = placeParamsOf(from);
   const goes = placeParamsOf(to);
-  if (was.workspace !== goes.workspace) return false;
+  if (workspaceAt(was.workspace, access) !== workspaceAt(goes.workspace, access)) return false;
   const draft = place.draft(was);
   return draft !== undefined && draft === place.draft(goes);
 }
