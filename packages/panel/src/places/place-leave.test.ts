@@ -258,3 +258,28 @@ test("Leave on Admin's open of the view already standing keeps the page's ask, s
   assert.equal(asked.length, 2, "the next move asks again");
   assert.equal(held.history.location.pathname, ADMIN);
 });
+
+test("Leave on a door's move held while an earlier held move to the same place waited lands only the move let go", async () => {
+  const window = mount(memoryAt(AUTOMATION));
+  const landed: string[] = [];
+
+  act(() =>
+    window.place().arrive(
+      () => window.history.push(ADMIN),
+      () => landed.push("first"),
+    ),
+  );
+  await settleQueries();
+  act(() =>
+    window.place().arrive(
+      () => window.history.push(ADMIN),
+      () => landed.push("second"),
+    ),
+  );
+  await settleQueries();
+  act(() => window.asked.at(-1)?.leave());
+  await settleQueries();
+
+  assert.equal(window.history.location.pathname, ADMIN);
+  assert.deepEqual(landed, ["second"]);
+});
