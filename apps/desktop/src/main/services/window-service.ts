@@ -5,7 +5,7 @@ import { APP_LINK_CLAIM, APP_LINK_SCHEME, appLinkClaim } from "@repo/features/ap
 import type { ShownLink } from "@repo/features/link-grammar";
 import { PAGE_SCHEME } from "@repo/features/page-frame";
 import type { AppStateSnapshot, AppWindowFacts } from "@repo/host/app-state";
-import { applyThemePreference, NativeTheme } from "@repo/host/appearance";
+import { applyThemePreference, NativeTheme, windowMaterialFor } from "@repo/host/appearance";
 import type { AppStateStore, OperatorClient } from "@repo/host/client";
 import { PUSH } from "@repo/host/contract";
 import type { DesktopService } from "@repo/host/desktop-service";
@@ -31,7 +31,6 @@ import { pageResponse } from "../window/page-protocol";
 import { PanelManager } from "../window/panel-manager";
 import { reportRendererErrors } from "../window/renderer-errors";
 import { followResponsiveness } from "../window/renderer-health";
-import { windowMaterialFor } from "../window/window-material";
 import { grantWindowPermissions } from "../window/window-permissions";
 import { windowPushes } from "../window/window-pushes";
 import { PanelWindows, zoomFactorOf, zoomSteer } from "../window/zoom";
