@@ -510,7 +510,7 @@ export type AutomationRunSummary = typeof automationRunSummarySchema.Type;
  * runs and why not where the service paused it, what fires it and what it
  * starts, its guards, when a schedule is next due, and its newest run.
  */
-export const automationSummarySchema = EffectSchema.Struct({
+const automationSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
   /** The task it was made on; null for an automation made on its workspace with no task, which its repositories stand in for. */
   planId: EffectSchema.NullOr(wireUuidSchema),
@@ -665,14 +665,9 @@ export const automationRunsAnswerSchema = EffectSchema.Struct({
 });
 
 /** One run of a workspace's runs: the run as an automation's history shows it, and the automation it is a run of. */
-export const automationWorkspaceRunSchema = EffectSchema.Struct({
+const automationWorkspaceRunSchema = EffectSchema.Struct({
   ...automationRunSummarySchema.fields,
   automation: EffectSchema.Struct({ id: wireUuidSchema, name: EffectSchema.String }),
 });
 
 export type AutomationWorkspaceRun = typeof automationWorkspaceRunSchema.Type;
-
-/** Every run of a workspace's automations the account may read, newest first. */
-export const automationWorkspaceRunsAnswerSchema = EffectSchema.Struct({
-  runs: EffectSchema.Array(automationWorkspaceRunSchema),
-});

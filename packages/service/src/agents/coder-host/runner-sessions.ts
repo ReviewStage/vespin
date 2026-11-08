@@ -160,7 +160,7 @@ import { turnAwaitedByLine } from "@repo/database/models/turn-state";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
-import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
@@ -1256,7 +1256,7 @@ export const runnerSessions = <
      */
     const restartReplay = (agent: Agent, beside: number) =>
       restartReplayOf(agent, {
-        windowTokens: contextWindowOf([], agent.model, agent.contextWindow ?? CONTEXT_WINDOW.LONG),
+        windowTokens: contextWindowOf([], agent.model, agent.contextWindow),
         instructionsTokens: REPLAY_FIT.INSTRUCTIONS_FALLBACK_TOKENS,
         besideBytes: beside,
       }).pipe(
@@ -2484,7 +2484,7 @@ const retiredHolding = (machine: MachineLifecycle, retiring: WarmRunner) =>
  * record, cleared here, would send the next message to a second runner beside
  * it; its next turn's end retires it. Answers whether the line was written.
  */
-export const retireWarmRunner = Effect.fn("web/retireWarmRunner")(function* (retiring: WarmRunner) {
+const retireWarmRunner = Effect.fn("web/retireWarmRunner")(function* (retiring: WarmRunner) {
   const machine = yield* deploymentLifecycle;
   return yield* holdingRunner(retiring.agentId, retiredHolding(machine, retiring));
 });

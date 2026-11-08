@@ -572,8 +572,8 @@ type Decision =
  * room for one more agent: a run held back is settled skipped there, and
  * one let through is claimed, started with no agent yet, which the next
  * act's concurrency counts. Note that the automation is read again under
- * the lock, because a pause or a task's move committed while this act
- * waited for it must hold the run back.
+ * the lock, because a pause, or a change of repositories that drops a GitHub
+ * firing's repository, committed while this act waited must hold the run back.
  */
 const decide = (automationId: string, run: ActedRun) =>
   withAutomationLocked(

@@ -142,7 +142,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     asked.status !== undefined || asked.archived === undefined
       ? asked.status
       : yield* hostedStoreOrUnavailable(
-          archiveAskedStatus(userId, taskId, standing ?? TASK_STATUS.TODO, asked.archived),
+          archiveAskedStatus(userId, taskId, standing, asked.archived),
         );
   return {
     changes: {

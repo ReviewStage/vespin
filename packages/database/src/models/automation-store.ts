@@ -29,6 +29,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder } from "../core/query.js";
+import { CURRENT_TXID } from "../core/txid.js";
 import { agentTable } from "../schemas/agent.js";
 import { member } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
@@ -300,14 +301,6 @@ function triggerColumns(
   };
 }
 
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * automations waits for that transaction to arrive before it confirms the
- * write.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
-
 /** A written automation's id, and the transaction it was written in. */
 const WrittenSchema = Schema.Struct({ id: Schema.String, txid: Schema.String });
 
@@ -355,7 +348,7 @@ const insertAutomation = SqlSchema.findAll({
         })
         // A caller that names the id may run its make again, which then finds the row standing and writes nothing.
         .onConflictDoNothing({ target: automation.id })
-        .returning({ id: automation.id, txid: TXID }),
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -426,7 +419,7 @@ const writeAutomation = SqlSchema.findAll({
           updatedAt: now,
         })
         .where(allowedTo(userId, access, id))
-        .returning({ id: automation.id, txid: TXID }),
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -438,7 +431,7 @@ const removeAutomation = SqlSchema.findAll({
       db
         .delete(automation)
         .where(allowedTo(userId, AUTOMATION_ACCESS.DELETE, id))
-        .returning({ id: automation.id, txid: TXID }),
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -458,7 +451,7 @@ const insertRun = SqlSchema.findAll({
         .insert(automationRun)
         .values({ ...row, status: AUTOMATION_RUN_STATUS.QUEUED })
         .onConflictDoNothing({ target: [automationRun.automationId, automationRun.dedupeKey] })
-        .returning({ ...QUEUED_RUN_COLUMNS, txid: TXID }),
+        .returning({ ...QUEUED_RUN_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 

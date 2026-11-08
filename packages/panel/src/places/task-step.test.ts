@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { agentTab, fileTab } from "@repo/ui/tab-strip-model";
 import { test } from "vitest";
-import { SIDE_PANEL_TAB } from "../tasks/use-side-panel.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { STEP_WITHIN, type StepLed, type StepShown, stepWithin } from "./task-step.js";
 
 /**

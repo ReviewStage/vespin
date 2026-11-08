@@ -29,18 +29,6 @@ export function childConversationId(parentConversationId: string, callId: string
   return hostMintedId([ID_KIND.CHILD, parentConversationId, callId]);
 }
 
-/** The store's id for one turn of one of the retired runtime's sessions. */
-export function hostTurnId(sessionId: string, runtimeTurnId: string): string {
-  return hostMintedId([ID_KIND.TURN, sessionId, runtimeTurnId]);
-}
-
-/** The developer's line a turn opened with and, under its ordinal from one, each line that joined the turn under way; the first keeps the coordinate it always had. */
-export function receivedMessageId(sessionId: string, runtimeTurnId: string, ordinal = 0): string {
-  const parts = [ID_KIND.RECEIVED, sessionId, runtimeTurnId];
-  if (ordinal > 0) parts.push(String(ordinal));
-  return hostMintedId(parts);
-}
-
 /**
  * The store's id for one turn of a native harness's conversation, by the
  * number of the runner event that opened it, which no other turn of the
@@ -48,11 +36,6 @@ export function receivedMessageId(sessionId: string, runtimeTurnId: string, ordi
  */
 export function nativeTurnId(conversationId: string, openingSequence: number): string {
   return hostMintedId([ID_KIND.NATIVE_TURN, conversationId, String(openingSequence)]);
-}
-
-/** The client id of the assistant message a turn completes; the turn's id is its journal's client id already, so this is another. */
-export function answerMessageId(sessionId: string, runtimeTurnId: string): string {
-  return hostMintedId([ID_KIND.ANSWER, sessionId, runtimeTurnId]);
 }
 
 /** The id a reasoning item stands under, since the runtime's stream carries none of the provider's. */

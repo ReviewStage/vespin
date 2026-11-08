@@ -28,9 +28,7 @@ export interface DesktopConfig {
   readonly stateRoot: string;
   /**
    * The named development instance this run is (`run.sh --instance`), absent
-   * for the plain one and always for a packaged build. A named instance runs
-   * beside the plain one, so it leaves to it what only one instance may hold: the
-   * system-wide talk and stop keys.
+   * for the plain one and always for a packaged build.
    */
   readonly instance?: string;
   readonly runMode: RunMode;

@@ -6,7 +6,7 @@
  * call names one to ten actions of the shared vocabulary
  * (`@repo/features/browser-agent-actions`) and runs them in order on the
  * Chromium in the agent's own sandbox (`agent-browser.ts`,
- * `browser-actions.ts`). Every call is routed to its browser here alone
+ * `@repo/features/browser-agent-cdp`). Every call is routed to its browser here alone
  * (`browserFor`).
  *
  * The agent's tabs are kept in the service under the conversation whose

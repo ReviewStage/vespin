@@ -71,7 +71,8 @@ export class HostedEnvironment extends Context.Service<
   HostedEnvironmentValues
 >()("HostedEnvironment") {}
 
-function present(value: Option.Option<string>): string | undefined {
+/** A value as `HostedEnvironment` reads it: trimmed, and a blank one is absent. */
+export function present(value: Option.Option<string>): string | undefined {
   return text(Option.getOrUndefined(value));
 }
 

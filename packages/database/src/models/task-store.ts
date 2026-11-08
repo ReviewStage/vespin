@@ -11,7 +11,11 @@ import {
   descriptionAgentEditSchema,
 } from "@repo/features/description-notes";
 import { DEVICE_KIND } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import {
+  GITHUB_ACCESS,
+  type GitHubAccess,
+  sameRepository,
+} from "@repo/features/github-repositories-wire";
 import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { agentName } from "@repo/features/model-label";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
@@ -58,6 +62,7 @@ import {
   readConcurrency,
   type StoreFailure,
 } from "../core/query.js";
+import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import { agentTable, type StoredArchive } from "../schemas/agent.js";
 import { agentRepository } from "../schemas/agent-repository.js";
 import { attachment } from "../schemas/attachment.js";
@@ -103,7 +108,7 @@ import {
  * (`workspace-store.ts`), so a task of a workspace the account is not in
  * reads, saves, changes, and deletes exactly as an id that names nothing: as
  * no plan. A pin is the reading member's
- * own (`plan-pin.ts`), so a plan of a shared workspace one member pinned
+ * own (`task-pin.ts`), so a plan of a shared workspace one member pinned
  * reads pinned for them alone, on every Mac they sign in on. A plan's repository is kept here as
  * handed and confirmed nowhere here: whether the account reaches it through
  * our GitHub App is the route's to settle before it calls, on the
@@ -166,13 +171,7 @@ export interface TaskDeleteGuard {
 export type TaskMoveGuard<E, R> = (repository: string | null) => Effect.Effect<void, E, R>;
 
 /** One of the task's standing agents as a finish reads it, under its conversation's lock. */
-export interface TaskStandingAgent {
-  readonly id: string;
-  readonly conversationId: string;
-  readonly createdAt: Date;
-  /** Whether it was started blank, handed neither the description nor a prompt. */
-  readonly blank: boolean;
-}
+export type TaskStandingAgent = typeof TaskStandingAgentSchema.Type;
 
 /**
  * What a finish of a task's work runs under the task's lock: whether every
@@ -200,11 +199,7 @@ export interface TaskDoneArchive<R> {
 }
 
 /** One agent a task's Done archived with it: the member who started it, under whom its device lets it go, and its conversation, whose sandbox is stopped. */
-export interface TaskArchivedAgent {
-  readonly id: string;
-  readonly userId: string;
-  readonly conversationId: string;
-}
+export type TaskArchivedAgent = typeof TaskArchivedAgentSchema.Type;
 
 /** One save a coding agent made, with the agent named as its row names it now. */
 export interface LabeledAgentEdit extends DescriptionAgentEdit {
@@ -232,7 +227,7 @@ export interface StoredTask {
 /**
  * A plan to start: the workspace it starts in, its name where one is given,
  * and the repository it is about where one is chosen. A plan started with no
- * name, or a blank one, stands as `UNTITLED_DESCRIPTION_NAME` until it is renamed. A brief is the developer's own words about the task, kept as
+ * name, or a blank one, stands as `UNTITLED_TASK_NAME` until it is renamed. A brief is the developer's own words about the task, kept as
  * written; a blank one is none.
  */
 export interface NewTask {
@@ -465,17 +460,6 @@ const findPin = SqlSchema.findOneOption({
 });
 
 /** The reader's pin of the plan, from now; one already standing keeps its instant. */
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * task list waits for that transaction to arrive before it confirms the
- * write.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
-
-/** The transaction a pin's write committed in; none where the pin stood as asked already. */
-const TxidRowSchema = Schema.Struct({ txid: Schema.String });
-
 const insertPin = SqlSchema.findOneOption({
   Result: TxidRowSchema,
   Request: Schema.Struct({ userId: Schema.String, taskId: Schema.String, now: Schema.Date }),
@@ -485,7 +469,7 @@ const insertPin = SqlSchema.findOneOption({
         .insert(taskPin)
         .values({ userId, taskId, pinnedAt: now })
         .onConflictDoNothing()
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -504,7 +488,7 @@ const placePin = SqlSchema.findOneOption({
         .insert(taskPin)
         .values({ userId, taskId, position, pinnedAt: now })
         .onConflictDoUpdate({ target: [taskPin.userId, taskPin.taskId], set: { position } })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -517,7 +501,7 @@ const removePin = SqlSchema.findOneOption({
       db
         .delete(taskPin)
         .where(and(eq(taskPin.userId, userId), eq(taskPin.taskId, taskId)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -534,7 +518,7 @@ const markRead = SqlSchema.findOneOption({
           target: [taskRead.userId, taskRead.taskId],
           set: { readThrough: now, markedUnread: false },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -551,7 +535,7 @@ const markSeen = SqlSchema.findOneOption({
           target: [taskRead.userId, taskRead.taskId],
           set: { readThrough: now },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -569,7 +553,7 @@ const markUnread = SqlSchema.findOneOption({
           set: { markedUnread: true },
           setWhere: sql`not ${taskRead.markedUnread}`,
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -902,7 +886,7 @@ const insertTask = SqlSchema.findOne({
       db
         .insert(task)
         .values(taskValues(write))
-        .returning({ ...TASK_COLUMNS, txid: TXID }),
+        .returning({ ...TASK_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -916,7 +900,7 @@ const insertTaskOnce = SqlSchema.findOneOption({
         .insert(task)
         .values(taskValues(write))
         .onConflictDoNothing({ target: task.id })
-        .returning({ ...TASK_COLUMNS, txid: TXID }),
+        .returning({ ...TASK_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1073,12 +1057,6 @@ const hasChildren = SqlSchema.findOneOption({
     ),
 });
 
-/** Whether two repositories are one: GitHub's names match whatever their case, and none matches none. */
-function sameRepository(one: string | null, other: string | null): boolean {
-  if (one === null || other === null) return one === other;
-  return one.toLowerCase() === other.toLowerCase();
-}
-
 /**
  * Refuses a change that names another repository for a task in a tree: one
  * with a parent, or with children, works in its tree's repository, so only
@@ -1193,7 +1171,7 @@ const applyChanges = SqlSchema.findOne({
         .update(task)
         .set(changes)
         .where(reachableTask(userId, taskId))
-        .returning({ ...TASK_COLUMNS, txid: TXID }),
+        .returning({ ...TASK_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1202,7 +1180,10 @@ const removeTask = SqlSchema.findOneOption({
   Result: Schema.Struct({ id: Schema.String, txid: Schema.String }),
   execute: ({ userId, taskId }) =>
     Database.use((db) =>
-      db.delete(task).where(reachableTask(userId, taskId)).returning({ id: task.id, txid: TXID }),
+      db
+        .delete(task)
+        .where(reachableTask(userId, taskId))
+        .returning({ id: task.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1242,7 +1223,7 @@ const nameUntitled = SqlSchema.findOneOption({
  * Starts a task under the account, in the workspace it was handed, as one
  * empty document, with the repository it was handed; it stands first in
  * the list. A plan handed no name, or a blank one, starts as
- * `UNTITLED_DESCRIPTION_NAME`.
+ * `UNTITLED_TASK_NAME`.
  */
 /** A started task's row as it is inserted: its name, or Untitled, its description's text, empty where none is named, and its brief, or none for a blank one. */
 const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =>
@@ -1707,6 +1688,20 @@ const followingAgentsAndInbox = Effect.fnUntraced(function* (
   );
 });
 
+const TaskStandingAgentSchema = Schema.Struct({
+  id: Schema.String,
+  conversationId: Schema.String,
+  createdAt: InstantColumnSchema,
+  /** Whether it was started blank, handed neither the description nor a prompt. */
+  blank: Schema.Boolean,
+});
+
+const TaskArchivedAgentSchema = Schema.Struct({
+  id: Schema.String,
+  userId: Schema.String,
+  conversationId: Schema.String,
+});
+
 /**
  * The task's agents still standing unarchived, or the one named among them,
  * each with its conversation locked, the lock every write of its lines and
@@ -1717,12 +1712,7 @@ const followingAgentsAndInbox = Effect.fnUntraced(function* (
  */
 const lockStandingAgents = SqlSchema.findAll({
   Request: Schema.Struct({ taskId: Schema.String, agentId: Schema.optionalKey(Schema.String) }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    conversationId: Schema.String,
-    createdAt: InstantColumnSchema,
-    blank: Schema.Boolean,
-  }),
+  Result: TaskStandingAgentSchema,
   execute: ({ taskId, agentId }) =>
     Database.use((db) =>
       db
@@ -1753,11 +1743,7 @@ const stampArchivedWithTask = SqlSchema.findAll({
     archivedAt: Schema.Date,
     archivedBy: ArchivedByColumnSchema,
   }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    userId: Schema.String,
-    conversationId: Schema.String,
-  }),
+  Result: TaskArchivedAgentSchema,
   execute: ({ agentIds, archivedAt, archivedBy }) =>
     Database.use((db) =>
       db
@@ -2139,7 +2125,7 @@ const assignUnassigned = SqlSchema.findOneOption({
         .update(task)
         .set({ assigneeId: userId })
         .where(and(reachableTask(userId, taskId), isNull(task.assigneeId)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2171,7 +2157,7 @@ const beginTask = SqlSchema.findOneOption({
         .update(task)
         .set({ status: TASK_STATUS.IN_PROGRESS, completedAt: null, doneBy: null })
         .where(and(reachableTask(userId, taskId), ne(task.status, TASK_STATUS.IN_PROGRESS)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 

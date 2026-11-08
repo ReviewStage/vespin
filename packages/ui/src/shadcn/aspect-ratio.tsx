@@ -26,7 +26,7 @@ function AspectRatio({
     style: {
       "--ratio": ratio,
       ...style,
-    } as CSSProperties,
+    } satisfies CSSProperties,
     className: cn("relative aspect-(--ratio)", className),
     ...props,
   });

@@ -379,7 +379,7 @@ export function noteGitHubRepository(sighting: RepositorySighting): TaskStoreEff
             formerNames.add(stood.value.fullName);
           }
         }
-        if (named && sighting.formerly !== undefined) formerNames.add(sighting.formerly);
+        if (named) formerNames.add(sighting.formerly);
         for (const from of formerNames) yield* relabel({ from, to: sighting.fullName });
       }),
     ),

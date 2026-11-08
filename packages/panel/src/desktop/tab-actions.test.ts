@@ -26,9 +26,10 @@ import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB, type SidePanelTab } from "../tasks/use-side-panel.js";
+import type { MainTab } from "../tasks/use-main-tabs.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {

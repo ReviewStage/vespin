@@ -386,8 +386,8 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
     "a pairing's link",
     handLink({ place: { kind: ACCOUNT_PLACE.CONNECT, code: "ABCDEFGH" } }),
     "/personal/settings/hosts",
-    // The code its link hands, which the Hosts page asks over once it stands.
-    /Connect a host/u,
+    // The code its link hands, which the Hosts page's dialog asks over once the pairing it names is read.
+    /ABCD-EFGH/u,
   ],
   [
     "a link to Admin",
@@ -420,6 +420,49 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
       yield* press;
       yield* leaveAsked();
       assert.deepEqual(router.addresses().slice(0, router.at() + 1), [...standing, arrived]);
-      if (shows !== undefined) assert.match(drawn(), shows);
+      // Note that we wait on the ask itself, because the pairing's read lands after hops a busy runner stretches past any fixed count of ticks.
+      if (shows !== undefined) {
+        yield* Effect.promise(() => vi.waitFor(() => assert.match(drawn(), shows)));
+      }
     }),
+);
+
+it.effect.each<[string, (automationId: string, runId: string) => ShownLink]>([
+  [
+    "a link to the automation being edited",
+    (automationId) => ({
+      workspace: "personal",
+      place: { kind: LINK_PLACE.AUTOMATION, automationId },
+    }),
+  ],
+  [
+    "a link to the run of it standing",
+    (automationId, runId) => ({
+      workspace: "personal",
+      place: { kind: LINK_PLACE.AUTOMATION_RUN, automationId, runId },
+    }),
+  ],
+])("%s asks nothing and stands it, edit and all, with no step of Home between", ([_link, linkTo]) =>
+  Effect.gen(function* () {
+    const router = yield* editedAutomation();
+    const standing = router.addresses().slice(0, router.at() + 1);
+    const [, , , automationId = "", , runId = ""] = router.history.location.pathname.split("/");
+
+    yield* handLink(linkTo(automationId, runId));
+
+    assert.equal(
+      [...document.querySelectorAll("button")].some((button) => button.textContent === "Leave"),
+      false,
+      "nothing asks",
+    );
+    const since = router.addresses().slice(standing.length - 1, router.at() + 1);
+    assert.ok(
+      since.every((address) => address.startsWith(`/personal/automation/${automationId}`)),
+      `no other page stood between: ${since.join(", ")}`,
+    );
+    assert.equal(
+      document.querySelector<HTMLInputElement>("input[aria-label='Automation name']")?.value,
+      "Check each deploy, edited",
+    );
+  }),
 );

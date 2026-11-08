@@ -150,12 +150,12 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
 import {
   type AgentPin,
   isAgentPin,
   type PinnedTab,
-  SIDE_PANEL_TAB,
   type SidebarPin,
   samePin,
 } from "../tasks/use-side-panel.js";

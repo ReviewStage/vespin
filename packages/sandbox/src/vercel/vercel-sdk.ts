@@ -30,6 +30,7 @@
 
 import { EXCESS_KEYS, unparsedWire, valueFromJsonText } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
+import { getVercelOidcToken } from "@vercel/oidc";
 import {
   APIError,
   type NetworkPolicy as SdkNetworkPolicy,
@@ -75,7 +76,6 @@ import {
   type SandboxUser,
   SnapshotGone,
 } from "../vocabulary.js";
-import { deploymentOidcToken, type OidcTokenRead } from "./oidc.js";
 import { openPtySocket } from "./pty.js";
 
 /** Vercel's answer for a sandbox, session, command, or snapshot already gone. */
@@ -248,9 +248,12 @@ export const SandboxFetch = Context.Reference<typeof globalThis.fetch>(
   { defaultValue: () => (input, init) => globalThis.fetch(input, init) },
 );
 
+/** How the deployment's own OIDC token is read: the function's in production, a fixed one in a test. */
+type OidcTokenRead = () => Promise<string>;
+
 /** How the deployment's own OIDC token is read: the function's in production, a fixed one under a suite's fake of Vercel. */
 export const SandboxToken = Context.Reference<OidcTokenRead>("@repo/sandbox/SandboxToken", {
-  defaultValue: () => deploymentOidcToken,
+  defaultValue: () => () => getVercelOidcToken(),
 });
 
 /** The OIDC token's claims the API is asked under: the project and team it names. */

@@ -11,7 +11,7 @@ import { nativeHelperPath } from "./native-helper";
  * AppKit API and are left alone. Its own JavaScript is not loaded, because
  * it resolves the addon through a module it does not declare and asks
  * `sw_vers` on the main thread; the window's material is decided by
- * `../window/window-material.ts` instead. A load or an `addView` that fails
+ * `@repo/host/appearance`'s `windowMaterialFor` instead. A load or an `addView` that fails
  * answers false, and the caller falls back to the sidebar's vibrancy.
  */
 

@@ -12,6 +12,7 @@
  * chosen theme draws its canvases in that theme whatever the machine says.
  */
 
+import { Schema } from "effect";
 import { THEME, type Theme } from "./surface.js";
 
 /** The machine's dark appearance, which a theme of `system` follows. */
@@ -21,7 +22,7 @@ const MACHINE_DARK = "(prefers-color-scheme: dark)";
 const THEME_ATTRIBUTE = "data-ui-theme";
 
 /** Every theme a root may wear, to read the attribute by. */
-const THEMES: ReadonlySet<string> = new Set(Object.values(THEME));
+const isTheme = Schema.is(Schema.Literals(Object.values(THEME)));
 
 /** A theme as it is drawn, `system` resolved to the machine's appearance. */
 export type DrawnTheme = Exclude<Theme, typeof THEME.SYSTEM>;
@@ -35,8 +36,7 @@ function drawnTheme(theme: Theme): DrawnTheme {
 /** The theme `root` wears, a root wearing none or one unknown following the machine. */
 function wornTheme(root: Element): Theme {
   const worn = root.getAttribute(THEME_ATTRIBUTE);
-  // SAFETY: `THEMES` holds exactly the theme values, so a member is one.
-  return worn !== null && THEMES.has(worn) ? (worn as Theme) : THEME.SYSTEM;
+  return isTheme(worn) ? worn : THEME.SYSTEM;
 }
 
 /** Whether the surface under `root`, the document's own where none is named, is drawn dark now. */

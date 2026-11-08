@@ -84,8 +84,7 @@ export const DATA_TABLE_COLUMN_KIND = {
   MARK: "mark",
 } as const;
 
-export type DataTableColumnKind =
-  (typeof DATA_TABLE_COLUMN_KIND)[keyof typeof DATA_TABLE_COLUMN_KIND];
+type DataTableColumnKind = (typeof DATA_TABLE_COLUMN_KIND)[keyof typeof DATA_TABLE_COLUMN_KIND];
 
 /** The narrowest a table draws before its frame scrolls: its words' own width, or wider for more columns. */
 export const DATA_TABLE_MIN_WIDTH = {
@@ -98,7 +97,7 @@ export const DATA_TABLE_MIN_WIDTH = {
 export type DataTableMinWidth = (typeof DATA_TABLE_MIN_WIDTH)[keyof typeof DATA_TABLE_MIN_WIDTH];
 
 /** What a column tells the table beside TanStack's own definition: what it holds, which sets its cells' alignment. */
-export interface DataTableColumnMeta {
+interface DataTableColumnMeta {
   kind?: DataTableColumnKind;
 }
 
@@ -115,7 +114,7 @@ const DATA_TABLE_FEATURES = tableFeatures({
   columnMeta: metaHelper<DataTableColumnMeta>(),
 });
 
-export type DataTableFeatures = typeof DATA_TABLE_FEATURES;
+type DataTableFeatures = typeof DATA_TABLE_FEATURES;
 
 /**
  * The hook and column helper every data table is built with. Note that a

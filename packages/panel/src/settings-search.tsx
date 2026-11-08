@@ -588,7 +588,7 @@ export function settingsSearchCorpus(input: SettingsSearchInput): SettingsSearch
 }
 
 /** A row a query found, with the stretches of its name that say why. */
-export interface SettingsSearchResult extends SettingsSearchEntry {
+interface SettingsSearchResult extends SettingsSearchEntry {
   marks: readonly MatchRange[];
 }
 

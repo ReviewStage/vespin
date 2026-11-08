@@ -4,8 +4,7 @@ import { TASKS_PAGE } from "@repo/ui/tasks-model";
 import { test } from "vitest";
 import { liveStepTitle, NAMED_STEP, stepTitle } from "./history-titles.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
-import { MAIN_TAB } from "./tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB } from "./tasks/use-side-panel.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
 import type { InboxChoice } from "./tasks/use-tasks-tab.js";
 import { tasksControl, VIEWS_AWAY } from "./testing/tasks-control.js";
 

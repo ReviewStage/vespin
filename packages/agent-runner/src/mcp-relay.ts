@@ -70,8 +70,12 @@ function relay(
   const failed = (detail: string) => {
     const id = requestId(message);
     if (id === undefined) return Effect.void;
-    const error = { jsonrpc: "2.0", id, error: { code: INTERNAL_ERROR, message: detail } };
-    return isJsonRpc(error) ? deliver(transport, error) : Effect.void;
+    const error: JsonRpcMessage = {
+      jsonrpc: "2.0",
+      id,
+      error: { code: INTERNAL_ERROR, message: detail },
+    };
+    return deliver(transport, error);
   };
   return client.execute(request).pipe(
     Effect.flatMap((response) => {

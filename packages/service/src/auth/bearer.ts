@@ -92,7 +92,7 @@ export function hostedUserId(
  * could not answer fails, so the caller is told to retry rather than to sign
  * in again.
  */
-export function userIdForAuthorization(
+function userIdForAuthorization(
   value: string | null | undefined,
   userInfo: UserInfoEndpoint,
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
@@ -160,7 +160,7 @@ const askedUserInfo: UserInfoEndpoint = (input) =>
  * route rewraps. Where the instance keeps its callers (`bearer-callers.ts`), a
  * subject it resolved within the last minute is answered from there.
  */
-export const hostedUserInfo: UserInfoEndpoint = (input) =>
+const hostedUserInfo: UserInfoEndpoint = (input) =>
   Effect.flatMap(Effect.serviceOption(BearerCallers), (kept) =>
     Option.isSome(kept) ? kept.value.through(askedUserInfo)(input) : askedUserInfo(input),
   );

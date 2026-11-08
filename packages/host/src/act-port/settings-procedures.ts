@@ -3,6 +3,7 @@ import {
   APP_SETTING_FIELDS,
   APP_SETTING_SCHEMA,
   type AppSettingField,
+  SETTING_SIDE_EFFECT,
   type SettingSideEffectId,
 } from "@repo/settings";
 import type { AppSettings, SettingsUpdateResult } from "@repo/settings/wire";
@@ -36,6 +37,27 @@ type ClientSettingSideEffect = (context: ClientSettingSideEffectContext) => Prom
 export type ClientSettingSideEffects = Readonly<
   Record<SettingSideEffectId, ClientSettingSideEffect>
 >;
+
+/** An effect this side has nothing to do about, whichever side owns it. */
+const noClientSettingSideEffect: ClientSettingSideEffect = () => {};
+
+/** What the client's own side effects have hands on. */
+interface ClientSettingSideEffectDependencies {
+  /** Opens the app at login or stops it; a client with no login item does nothing. */
+  applyLoginItem: (openAtLogin: boolean) => void;
+}
+
+/** The side effects a client has hands on; the host applied its own before answering. */
+export function clientSettingSideEffects(
+  dependencies: ClientSettingSideEffectDependencies,
+): ClientSettingSideEffects {
+  const { applyLoginItem } = dependencies;
+  return {
+    [SETTING_SIDE_EFFECT.NONE]: noClientSettingSideEffect,
+    [SETTING_SIDE_EFFECT.USAGE_DATA]: noClientSettingSideEffect,
+    [SETTING_SIDE_EFFECT.LOGIN_ITEM]: ({ settings }) => applyLoginItem(settings.stored.openAtLogin),
+  };
+}
 
 /**
  * settings-procedures.ts -- the settings writes as a client answers them.

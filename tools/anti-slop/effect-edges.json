@@ -5,7 +5,6 @@
     "apps/desktop/src/utility/task-code.ts",
     "packages/panel/src/renderer-runtime.ts",
     "packages/ui/src/ui-runtime.ts",
-    "apps/desktop/src/renderer/window-root.tsx",
     "apps/host/src/main.ts",
     "apps/cli/src/main.ts",
     "apps/web/scripts/local-server.ts",

@@ -54,8 +54,6 @@ export const integrationConnection = pgTable(
     state: text("state"),
     /** When the sign-in under way began; null when none is. */
     stateIssuedAt: timestamptz("state_issued_at"),
-    /** Retired: Connect's handle on a sign-in, read by nothing since we stopped asking Connect's undocumented result endpoint; dropped once that deployment drains. */
-    connectVerifier: text("connect_verifier"),
     /** When a sign-in last completed; null until one has. */
     connectedAt: timestamptz("connected_at"),
     /** The tools the provider's MCP server last listed for this account, as a model is shown them; null until listed, and after a sign-in completes again. */

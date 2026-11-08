@@ -15,7 +15,7 @@
 #   scripts/vercel-ignore.sh           decide, as the project's Ignored Build Step
 #   scripts/vercel-ignore.sh --paths   print the deployed tree, one pathspec a line
 #
-# The deployed tree is every path the web and dev services install or build
+# The deployed tree is every path the web service installs or builds
 # from. Its workspaces are read from the repository rather than listed here:
 # `vercel-deployed-paths.mjs` follows `workspace:` dependencies from each
 # service's root in `vercel.json`, the closure pnpm's `--filter <service>...`

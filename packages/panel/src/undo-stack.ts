@@ -228,7 +228,7 @@ export function forgetUndo(): void {
 }
 
 /** How a row write's act is sent: the `mutateAsync` of its kind's mutation (`act-mutations.ts`). */
-export type RowSend<Kind extends PortActKind> = (
+type RowSend<Kind extends PortActKind> = (
   variables: ActVariables<Kind>,
 ) => Promise<ActResult<Kind>>;
 

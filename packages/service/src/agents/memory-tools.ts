@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { MEMORY_BOUNDS, type MemorySummary, memoryIdSchema } from "@repo/features/memory-wire";
@@ -12,7 +12,7 @@ import {
   WORKSPACE_MEMORY_SAVE,
 } from "../accounts/workspace-memories.js";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../core.js";
-import { logStoreFailure, type StoreFailure } from "../http/store-failure.js";
+import { logStoreFailure } from "../http/store-failure.js";
 import {
   type AgentCall,
   callerAgent,
@@ -82,7 +82,7 @@ const readRemember = Schema.decodeUnknownResult(REMEMBER_INPUT);
 const readRecall = Schema.decodeUnknownResult(RECALL_INPUT);
 
 /** Why a memory call did nothing, in words the model can act on. */
-export const MEMORY_REFUSAL = {
+const MEMORY_REFUSAL = {
   UNREADABLE_REMEMBER: `Not remembered: give the memory as text of at most ${MEMORY_BOUNDS.MAX_CHARS} characters.`,
   UNREADABLE_RECALL: `Not recalled: give the query as text of at most ${MEMORY_BOUNDS.MAX_QUERY_CHARS} characters.`,
   CREDENTIAL:

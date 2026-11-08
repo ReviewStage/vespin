@@ -58,11 +58,6 @@ export function frameBytes(frame: VoiceFrame): number {
   return "text" in frame ? Buffer.byteLength(frame.text, "utf8") : frame.bytes.byteLength;
 }
 
-/** The text of one frame; a binary frame is not a Live event and reads as nothing. */
-export function frameText(frame: VoiceFrame): string | undefined {
-  return "text" in frame ? frame.text : undefined;
-}
-
 export interface VoiceSocketOptions {
   /**
    * How many bytes the peer may send before this closes the socket, counted

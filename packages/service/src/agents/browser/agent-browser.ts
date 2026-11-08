@@ -71,7 +71,7 @@ import { jsonOf } from "../../http/http-effect.js";
 import type { RelaySocket } from "../../terminal/relay.js";
 import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
-import { SandboxPty, type SandboxPtyService, sandboxPtyLayer } from "../sandbox-pty.js";
+import { type SandboxPtyService, sandboxPtyOf } from "../sandbox-pty.js";
 import {
   BRIDGE_WORD,
   BROWSER_START_EXIT,
@@ -602,26 +602,15 @@ export function agentBrowserOver(
 }
 
 /**
- * The service over the runtime's `Sandbox`, the PTY it reaches
- * (`sandboxPtyLayer`), and the agents' image its build names, which the
- * agent's `browser` tool composes.
- * @public
- */
-export const agentBrowserLayer: Layer.Layer<
-  AgentBrowser,
-  never,
-  Sandbox | SandboxPty | AgentImage
-> = Layer.effect(
-  AgentBrowser,
-  Effect.gen(function* () {
-    return agentBrowserOver(yield* Sandbox, yield* SandboxPty, yield* AgentImage);
-  }),
-);
-
-/**
- * The service over the PTY as the runtime's `Sandbox` reaches it and the
+ * The service over the runtime's `Sandbox`, the PTY it reaches, and the
  * agents' image the edge names: what each edge composes, so the `browser`
  * tool and the tabs reach the agent's browser.
  */
 export const agentBrowserServices: Layer.Layer<AgentBrowser, never, Sandbox | AgentImage> =
-  agentBrowserLayer.pipe(Layer.provide(sandboxPtyLayer));
+  Layer.effect(
+    AgentBrowser,
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox;
+      return agentBrowserOver(sandbox, sandboxPtyOf(sandbox), yield* AgentImage);
+    }),
+  );

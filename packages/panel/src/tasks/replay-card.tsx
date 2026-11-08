@@ -163,11 +163,9 @@ function useSource(agentId: string, place: ReplayPlace): AgentSummary | undefine
   useEffect(() => {
     if (!unlisted || reader === undefined) return;
     let current = true;
-    reader(agentId)
-      .then((answer) => {
-        if (current) setRead(answer);
-      })
-      .catch(() => undefined);
+    void reader(agentId).then((answer) => {
+      if (current) setRead(answer);
+    });
     return () => {
       current = false;
     };

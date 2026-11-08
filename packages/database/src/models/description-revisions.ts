@@ -14,11 +14,12 @@ import {
   type DescriptionRevisionsAnswer,
   UNKNOWN_AGENT_LABEL,
 } from "@repo/features/task-wire";
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { agentTable } from "../schemas/agent.js";
 import { user } from "../schemas/auth.js";
 import { descriptionRevision } from "../schemas/description-revision.js";
@@ -126,11 +127,6 @@ const findNewestRevision = SqlSchema.findOneOption({
     ),
 });
 
-/** The id of the transaction a write is part of, read in the write's own `RETURNING`, which Realtime names each change it delivers by. */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
-const TxIdSchema = Schema.Struct({ txid: Schema.String });
-
 const insertRevision = SqlSchema.findOne({
   Request: Schema.Struct({
     taskId: Schema.String,
@@ -144,9 +140,9 @@ const insertRevision = SqlSchema.findOne({
     at: Schema.Date,
     restoredFrom: Schema.NullOr(Schema.Number),
   }),
-  Result: TxIdSchema,
+  Result: TxidRowSchema,
   execute: (revision) =>
-    Database.use((db) => db.insert(descriptionRevision).values(revision).returning(TXID)),
+    Database.use((db) => db.insert(descriptionRevision).values(revision).returning(TXID_RETURNING)),
 });
 
 const moveRevisionOn = SqlSchema.findOne({
@@ -157,14 +153,14 @@ const moveRevisionOn = SqlSchema.findOne({
     changes: Schema.Number,
     at: Schema.Date,
   }),
-  Result: TxIdSchema,
+  Result: TxidRowSchema,
   execute: ({ taskId, seq, ...moved }) =>
     Database.use((db) =>
       db
         .update(descriptionRevision)
         .set(moved)
         .where(and(eq(descriptionRevision.taskId, taskId), eq(descriptionRevision.seq, seq)))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 

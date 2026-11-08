@@ -6,6 +6,7 @@ import {
   type QueryError,
   queryBuilder,
 } from "@repo/database/core/query";
+import { CURRENT_TXID } from "@repo/database/core/txid";
 import { automationReadableBy } from "@repo/database/models/automation-store";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import {
@@ -256,14 +257,6 @@ export type InboxItemWritten = InboxItem & { readonly txid?: string };
 export interface InboxMarked {
   readonly txid?: string;
 }
-
-/**
- * The id of the transaction that made a write, read in the write's own
- * `RETURNING`, as Neon's mutations guide does it: a follower of the inbox
- * waits for it to arrive on its live view. A write that changed no row
- * returns none, so there is nothing to wait for.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
 
 /** The types a file of an item's may be served under: a picture's, a video's, or any a message's file travels as. */
 const inboxFileTypeSchema = Schema.Literals(Object.values(INBOX_FILE_TYPE));
@@ -1633,8 +1626,7 @@ const sibling = alias(inboxMessage, "sibling");
  * rather than leaving the reader a moment holding neither. The order is the
  * reader's to keep, since Realtime keeps none.
  *
- * Note that each item's thread, the messages either of a read's threads
- * draws (`messagesOf`'s `LATEST_PLAIN_MESSAGES` and `THREAD_MESSAGES`), and
+ * Note that each item's thread (`messagesOf` over `THREAD_MESSAGES`), and
  * the files its answer and its messages carried are statements of their own,
  * which the reader joins to the items, rather than lists the item's row
  * aggregates, because `jsonb_agg` and `jsonb_build_object` are only stable
@@ -2022,7 +2014,7 @@ const upsertRead = SqlSchema.findOneOption({
           set: READ_ON,
           setWhere: READ_MOVES,
         })
-        .returning({ itemId: inboxItemRead.itemId, txid: TXID }),
+        .returning({ itemId: inboxItemRead.itemId, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2049,7 +2041,7 @@ const upsertUnread = SqlSchema.findOneOption({
           set: { markedUnread: true },
           setWhere: sql`not ${inboxItemRead.markedUnread}`,
         })
-        .returning({ itemId: inboxItemRead.itemId, txid: TXID }),
+        .returning({ itemId: inboxItemRead.itemId, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2098,7 +2090,7 @@ const upsertReminder = SqlSchema.findOneOption({
             remindThrough: excluded(inboxItemRead.remindThrough),
           },
         })
-        .returning({ itemId: inboxItemRead.itemId, txid: TXID }),
+        .returning({ itemId: inboxItemRead.itemId, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2158,7 +2150,7 @@ const upsertAllRead = SqlSchema.findAll({
           set: READ_ON,
           setWhere: READ_MOVES,
         })
-        .returning({ itemId: inboxItemRead.itemId, txid: TXID }),
+        .returning({ itemId: inboxItemRead.itemId, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2198,7 +2190,7 @@ const answerItem = SqlSchema.findOneOption({
             eq(inboxItem.status, INBOX_STATUS.OPEN),
           ),
         )
-        .returning({ id: inboxItem.id, txid: TXID }),
+        .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2244,7 +2236,7 @@ const acknowledgeNotice = SqlSchema.findOneOption({
             NOTICE,
           ),
         )
-        .returning({ id: inboxItem.id, txid: TXID }),
+        .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2333,7 +2325,7 @@ const memberCloseItem = SqlSchema.findOneOption({
             eq(inboxItem.status, INBOX_STATUS.OPEN),
           ),
         )
-        .returning({ id: inboxItem.id, txid: TXID }),
+        .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -3497,7 +3489,7 @@ function sameMessage(
     standing.files.length === sent.files.length &&
     standing.files.every(
       (file, at) =>
-        file.name === sent.files[at]?.name && file.mediaType === sent.files[at]?.contentType,
+        file.name === sent.files[at]?.name && file.mediaType === sent.files[at].contentType,
     )
   );
 }
@@ -4029,7 +4021,7 @@ export function accountTasklessItems(
   );
 }
 
-/** Where each item `accountWaitingItems` and `accountPlanlessItems` read stands, the same items and none of their words: what a held read of the account compares between looks. */
+/** Where each item `accountWaitingItems` and `accountTasklessItems` read stands, the same items and none of their words: what a held read of the account compares between looks. */
 export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly InboxStamp[]> {
   return Effect.map(findWaitingStamps({ userId }), (rows) =>
     rows.map((row) => ({ ...row, updatedAt: row.updatedAt.getTime() })),
