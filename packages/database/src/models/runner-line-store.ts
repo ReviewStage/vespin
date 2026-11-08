@@ -23,10 +23,11 @@
  * more.
  */
 
-import { TURN_STATUS } from "@repo/wire";
+import { TURN_STATUS, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   and,
   asc,
+  desc,
   eq,
   exists,
   gt,
@@ -42,7 +43,7 @@ import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
-import { runnerLine } from "../schemas/runner-line.js";
+import { runnerLine, type RunnerLineFile } from "../schemas/runner-line.js";
 import { messages, turns } from "../schemas/storage.js";
 
 type RunnerLineEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -69,6 +70,12 @@ const LINE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const RunnerLineSchema = Schema.Struct({ seq: Schema.Number, text: Schema.String });
 export type RunnerLine = typeof RunnerLineSchema.Type;
 
+const RunnerLineFileSchema = Schema.Struct({
+  path: Schema.String,
+  contents: Schema.String,
+  mode: Schema.Number,
+});
+
 const insertLine = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
@@ -76,10 +83,12 @@ const insertLine = SqlSchema.findAll({
     launch: Schema.Number,
     text: Schema.String,
     lineId: Schema.NullOr(Schema.String),
+    files: Schema.NullOr(Schema.Array(RunnerLineFileSchema)),
+    handed: Schema.NullOr(WireValueSchema),
     now: Schema.Date,
   }),
   Result: Schema.Struct({ seq: Schema.Number }),
-  execute: ({ userId, agentId, launch, text, lineId, now }) =>
+  execute: ({ userId, agentId, launch, text, lineId, files, handed, now }) =>
     Database.use((db) =>
       db
         .insert(runnerLine)
@@ -94,6 +103,13 @@ const insertLine = SqlSchema.findAll({
               lineId: sql<string | null>`${lineId}::uuid`.as("line_id"),
               createdAt: sql<Date>`${now}::timestamptz`.as("created_at"),
               acceptedAt: sql<Date | null>`null::timestamptz`.as("accepted_at"),
+              files: sql<
+                readonly RunnerLineFile[] | null
+              >`${files === null ? null : JSON.stringify(files)}::jsonb`.as("files"),
+              handed:
+                sql<WireValue | null>`${handed === null ? null : JSON.stringify(handed)}::jsonb`.as(
+                  "handed",
+                ),
             })
             .from(agentTable)
             .where(and(eq(agentTable.id, agentId), eq(agentTable.userId, userId))),
@@ -244,13 +260,14 @@ const deleteLine = SqlSchema.void({
     ),
 });
 
-const writeAccepted = SqlSchema.void({
+const writeAccepted = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
     agentId: Schema.String,
     lineId: Schema.String,
     now: Schema.Date,
   }),
+  Result: Schema.Struct({ handed: Schema.NullOr(WireValueSchema) }),
   execute: ({ userId, agentId, lineId, now }) =>
     Database.use((db) =>
       db
@@ -263,7 +280,55 @@ const writeAccepted = SqlSchema.void({
             eq(runnerLine.lineId, lineId),
             isNull(runnerLine.acceptedAt),
           ),
-        ),
+        )
+        .returning({ handed: runnerLine.handed }),
+    ),
+});
+
+/** The files of the agent's message lines no launch took whose turn still waits on them, in the order they were queued. */
+const findWaitingFiles = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
+  Result: Schema.Struct({ files: Schema.Array(RunnerLineFileSchema) }),
+  execute: ({ userId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ files: sql<readonly RunnerLineFile[]>`${runnerLine.files}` })
+        .from(runnerLine)
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            isNotNull(runnerLine.lineId),
+            isNull(runnerLine.acceptedAt),
+            isNotNull(runnerLine.files),
+            awaitsOpenTurn(),
+          ),
+        )
+        .orderBy(asc(runnerLine.seq)),
+    ),
+});
+
+/** The handed state of the agent's newest message line no launch took whose turn still waits on it. */
+const findPendingHanded = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
+  Result: Schema.Struct({ handed: WireValueSchema }),
+  execute: ({ userId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ handed: sql<WireValue>`${runnerLine.handed}` })
+        .from(runnerLine)
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            isNotNull(runnerLine.lineId),
+            isNull(runnerLine.acceptedAt),
+            isNotNull(runnerLine.handed),
+            awaitsOpenTurn(),
+          ),
+        )
+        .orderBy(desc(runnerLine.seq))
+        .limit(1),
     ),
 });
 
@@ -282,6 +347,10 @@ export function queueRunnerLine(
     readonly text: string;
     /** A message line's own id, the send's key; none for any other kind. */
     readonly lineId?: string;
+    /** The files a message line names, which a launch writes before its runner reads it; none where it names none. */
+    readonly files?: readonly RunnerLineFile[];
+    /** What the session will have been handed once its runner takes the message line, which its ACCEPTED writes (`acceptRunnerLine`). */
+    readonly handed?: WireValue;
   },
 ): RunnerLineEffect<Option.Option<number>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -298,6 +367,8 @@ export function queueRunnerLine(
           launch: line.launch,
           text: line.text,
           lineId: line.lineId ?? null,
+          files: line.files === undefined || line.files.length === 0 ? null : line.files,
+          handed: line.handed ?? null,
           now,
         });
         return Option.map(Option.fromNullishOr(rows[0]), (row) => row.seq);
@@ -359,9 +430,41 @@ export function acceptRunnerLine(
   userId: string,
   agentId: string,
   lineId: string,
-): RunnerLineEffect<void> {
-  if (!LINE_ID.test(lineId)) return Effect.void;
+): RunnerLineEffect<Option.Option<WireValue>> {
+  if (!LINE_ID.test(lineId)) return Effect.succeed(Option.none());
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    writeAccepted({ userId, agentId, lineId, now }),
+    Effect.map(writeAccepted({ userId, agentId, lineId, now }), (rows) =>
+      Option.fromNullishOr(rows[0]?.handed),
+    ),
+  );
+}
+
+/**
+ * The files the account's agent's message lines no launch took name, whose
+ * turn still waits on them (`awaitsOpenTurn`), in the order they were
+ * queued: what a launch writes into its place before its runner reads them.
+ */
+export function waitingRunnerFiles(
+  userId: string,
+  agentId: string,
+): RunnerLineEffect<readonly RunnerLineFile[]> {
+  return Effect.map(findWaitingFiles({ userId, agentId }), (rows) =>
+    rows.flatMap((row) => row.files),
+  );
+}
+
+/**
+ * What the session will have been handed once its runner takes the account's
+ * agent's newest message line no launch took whose turn still waits on it;
+ * none where no such line carries it. The next line is composed against it,
+ * so a line queued behind another hands only what that one does not.
+ */
+export function pendingRunnerHanded(
+  userId: string,
+  agentId: string,
+): RunnerLineEffect<Option.Option<WireValue>> {
+  return Effect.map(
+    findPendingHanded({ userId, agentId }),
+    Option.map((row) => row.handed),
   );
 }

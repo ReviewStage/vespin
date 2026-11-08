@@ -7,7 +7,7 @@ import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { asc, eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Result } from "effect";
+import { Clock, Duration, Effect, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -16,7 +16,13 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.j
 import { getTestDB, startTask } from "../../testing/index.js";
 import { settleLapsedTurns } from "../abandoned-turns.js";
 import { createAgent } from "../agent-store.js";
-import { lapsedAgents, lapsedTurnsOf, progressTurns, turnsAwaitingRunner } from "../turn-state.js";
+import {
+  lapsedAgents,
+  lapsedTurnsOf,
+  progressTurns,
+  turnAwaitedByLine,
+  turnsAwaitingRunner,
+} from "../turn-state.js";
 import { type ConversationTarget, STORE_WRITE_REFUSAL, storeWriter } from "../writer.js";
 
 /**
@@ -262,6 +268,21 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           "a Stop's deadline is not progress's to push",
         );
       }),
+  );
+
+  it.effect("a line's own turn reads by its client id, and none for a line no send wrote", () =>
+    Effect.gen(function* () {
+      const { target } = yield* openAgent;
+      yield* sent(target, "first");
+      const [turn] = yield* turnsOf(target);
+      assert.ok(turn !== undefined);
+
+      const awaited = yield* turnAwaitedByLine(target.conversationId, sentLineId("first"));
+      const none = yield* turnAwaitedByLine(target.conversationId, sentLineId("never"));
+
+      assert.deepEqual(awaited, Option.some(turn.id));
+      assert.deepEqual(none, Option.none());
+    }),
   );
 
   it.effect(

@@ -10,7 +10,7 @@
  * row has handed (`native_handed`, read and written here).
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   readNativeHanded,
@@ -19,9 +19,11 @@ import {
 import { readDescriptionCommentThreads } from "@repo/database/models/description-comments";
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { turnsBefore } from "@repo/database/models/message-reads";
+import { pendingRunnerHanded } from "@repo/database/models/runner-line-store";
 import { readTask } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { EXPERIMENT } from "@repo/settings";
+import type { WireValue } from "@repo/wire";
 import { Effect, Option, Result, Schema } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { standingContext } from "../agent-runtime/standing-context.js";
@@ -193,6 +195,37 @@ export function readNativeTurnHanded(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed((): TurnHanded => ({})),
   );
+}
+
+/**
+ * What a native harness's session will have been handed once its runner
+ * takes the agent's newest line still waiting for one (`pendingRunnerHanded`);
+ * none where no such line carries it, or where it holds what the schema
+ * refuses. The next line is composed against it, so a line queued behind
+ * another hands only what that one does not. Note that a read that failed
+ * fails, unlike the row's (`readNativeTurnHanded`), because a line composed
+ * against the row instead, behind one that hands a change, could leave out
+ * what undoes that change, and its take would record the row's state as
+ * handed though the runner last read the waiting line's.
+ */
+export function readPendingTurnHanded(
+  target: ConversationTarget,
+  agentId: string,
+): Effect.Effect<Option.Option<TurnHanded>, StoreFailure, DatabaseServices> {
+  return pendingRunnerHanded(target.userId, agentId).pipe(
+    Effect.map(
+      Option.flatMap((kept) => {
+        const read = readHanded(kept);
+        return Result.isSuccess(read) ? Option.some(read.success) : Option.none();
+      }),
+    ),
+  );
+}
+
+/** What a session has handed as its row keeps it (the JSON `native_handed` holds), for a line to carry until its runner takes it; none where the schema refuses it. */
+export function handedValue(handed: TurnHanded): Option.Option<WireValue> {
+  const written = writeHanded(handed);
+  return Result.isSuccess(written) ? Option.some(written.success) : Option.none();
 }
 
 /**

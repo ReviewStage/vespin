@@ -362,8 +362,8 @@ export const runnerCheckedOut = (agent: {
  * starter as every native call does (`NativeSessions`' `deliverTurn`): by
  * the harness its conversation runs on, in the session its record names.
  * An agent gone or on no harness, one whose session never claimed its
- * record, as a Start's not yet opened, and a function that cannot reach
- * the harness hand nothing over, and say so. Fails only where trying again
+ * record, and a function that cannot reach the harness hand nothing over,
+ * and say so. Fails only where trying again
  * may succeed.
  */
 export const turnHandedOver = (turn: {

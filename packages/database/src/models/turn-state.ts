@@ -34,7 +34,7 @@
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin, type TurnStatus } from "@repo/wire";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -426,6 +426,25 @@ const findAwaitingRunner = SqlSchema.findAll({
     ),
 });
 
+/** The turn the conversation's line under the client id given awaits. */
+const findAwaitedByLine = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, clientId: Schema.String }),
+  Result: Schema.Struct({ turnId: Schema.String }),
+  execute: ({ conversationId, clientId }) =>
+    Database.use((db) =>
+      db
+        .select({ turnId: sql<string>`${messages.awaitsTurnId}` })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.clientId, clientId),
+            isNotNull(messages.awaitsTurnId),
+          ),
+        ),
+    ),
+});
+
 /** The developer's lines awaiting the turn that no turn took and no hand-over withdrew. */
 const findUntaken = SqlSchema.findAll({
   Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
@@ -799,6 +818,17 @@ export function queuedTurnOf(conversationId: string): TurnStateEffect<Option.Opt
   return Effect.map(
     findQueued({ conversationId }),
     Option.map((row) => row.id),
+  );
+}
+
+/** The turn the conversation's line under the client id given awaits, as its send wrote it; none for a line no turn is awaited by. */
+export function turnAwaitedByLine(
+  conversationId: string,
+  clientId: string,
+): TurnStateEffect<Option.Option<string>> {
+  return Effect.map(
+    findAwaitedByLine({ conversationId, clientId }),
+    Option.map((row) => row.turnId),
   );
 }
 

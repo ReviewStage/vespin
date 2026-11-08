@@ -13,8 +13,10 @@ import { createAgent } from "../agent-store.js";
 import {
   acceptRunnerLine,
   clearRunnerLines,
+  pendingRunnerHanded,
   queueRunnerLine,
   runnerLinesPast,
+  waitingRunnerFiles,
 } from "../runner-line-store.js";
 import { storeWriter } from "../writer.js";
 
@@ -163,6 +165,54 @@ it.layer(getTestDB())("the runner line store", (it) => {
           "untaken",
           "first of the next",
         ]);
+      }),
+  );
+
+  it.effect(
+    "a message line carries its files and what its words hand to the launch that takes it: its files written while its turn waits, the newest still waiting's handed state composed against, and that state answered as its runner accepts it",
+    () =>
+      Effect.gen(function* () {
+        const account = yield* openAccount;
+        const { userId, agentId, conversationId } = account;
+        const file = (path: string) => ({ path, contents: "JVBERi0=", mode: 0o644 });
+        const failed = yield* lineSent(account, "failed");
+        yield* queueRunnerLine(userId, {
+          agentId,
+          launch: LAUNCH.FIRST,
+          text: "failed",
+          lineId: failed,
+          files: [file("/attachments/failed.pdf")],
+          handed: { task: "failed" },
+        });
+        const writer = yield* storeWriter({ tools: {} });
+        yield* settleRunnerLostTurns(writer, conversationId, yield* Clock.currentTimeMillis);
+        const first = yield* lineSent(account, "first");
+        const second = yield* lineSent(account, "second");
+        for (const [lineId, handed] of [
+          [first, { task: "first" }],
+          [second, { task: "second" }],
+        ] as const) {
+          yield* queueRunnerLine(userId, {
+            agentId,
+            launch: LAUNCH.FIRST,
+            text: lineId,
+            lineId,
+            files: [file(`/attachments/${lineId}.pdf`)],
+            handed,
+          });
+        }
+
+        const waitingFiles = (yield* waitingRunnerFiles(userId, agentId)).map((each) => each.path);
+        const pending = yield* pendingRunnerHanded(userId, agentId);
+        const accepted = yield* acceptRunnerLine(userId, agentId, first);
+        const acceptedAgain = yield* acceptRunnerLine(userId, agentId, first);
+        const stillPending = yield* pendingRunnerHanded(userId, agentId);
+
+        assert.deepEqual(waitingFiles, [`/attachments/${first}.pdf`, `/attachments/${second}.pdf`]);
+        assert.deepEqual(pending, Option.some({ task: "second" }));
+        assert.deepEqual(accepted, Option.some({ task: "first" }));
+        assert.deepEqual(acceptedAgain, Option.none());
+        assert.deepEqual(stillPending, Option.some({ task: "second" }));
       }),
   );
 
