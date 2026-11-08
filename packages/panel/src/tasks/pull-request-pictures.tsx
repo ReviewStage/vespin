@@ -187,6 +187,13 @@ export function EntryPictures({
   );
 }
 
+/** The shape a picture's written width and height give it, as an `aspect-ratio`; none where either is unwritten. */
+function writtenShape(size: GitHubPictureSize): string | undefined {
+  return size.width === undefined || size.height === undefined
+    ? undefined
+    : `${size.width} / ${size.height}`;
+}
+
 /**
  * One picture GitHub's rendering names, read through the service, drawn
  * from its `data:` URL once read: standing alone, as a description's picture is,
@@ -219,10 +226,7 @@ function GitHubPicture({
   }
   // Note that a height written alone stands as written; with a width beside it, the height follows the width at their written shape, so a picture the column narrows keeps its shape.
   const heightOnly = size.height !== undefined && size.width === undefined;
-  const shape =
-    size.width === undefined || size.height === undefined
-      ? undefined
-      : { aspectRatio: `${size.width} / ${size.height}` };
+  const shape = writtenShape(size);
   return state.kind === PICTURE_STATE.READY ? (
     <img
       className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
@@ -230,7 +234,7 @@ function GitHubPicture({
       alt={alt}
       width={size.width}
       height={size.height}
-      style={shape}
+      style={shape === undefined ? undefined : { aspectRatio: shape }}
     />
   ) : (
     <PictureSkeleton alt={alt} size={size} />
@@ -245,12 +249,18 @@ function PictureSkeleton({
   alt: string;
   size: GitHubPictureSize;
 }): React.JSX.Element {
+  const shape = writtenShape(size);
   return (
     <span
       className="pull-request-picture-skeleton"
       role="img"
       aria-label={alt}
-      style={{ width: size.width, height: size.height }}
+      // Note that with both sizes written it keeps their shape rather than their height, so it stands as tall as the picture the column narrows.
+      style={
+        shape === undefined
+          ? { width: size.width, height: size.height }
+          : { width: size.width, aspectRatio: shape }
+      }
     >
       <Skeleton shape={SKELETON_SHAPE.BLOCK} />
     </span>
