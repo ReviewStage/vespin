@@ -28,7 +28,9 @@ import type { SettingsWrites } from "./writes.js";
  * an agent's finish would. Turning notifications on asks a browser to let
  * the site post them, in that press (`AppPlatform.askForNotifications`);
  * while they are on and the system will not show them, a line under the
- * switch says so, and on a Mac opens System Settings.
+ * switch says so, and on a Mac opens System Settings. Note that the switch is
+ * the account's, so it may stand on in a browser that was never asked, as
+ * one it was turned on from elsewhere; there the line asks, by its Allow.
  */
 
 /** What Play is called, for a reader and its hover. */
@@ -39,6 +41,7 @@ const NOTIFICATIONS_OFF_WORDS = {
   packaged: `macOS has notifications off for ${PRODUCT_NAME}, so none will show.`,
   development: `macOS has notifications off for Electron, which is how the dev build appears to macOS, so none will show.`,
   browser: `Your browser blocks notifications from ${PRODUCT_NAME}, so none will show. Allow them in the site's settings in your browser.`,
+  unasked: `This browser hasn't been asked to show notifications from ${PRODUCT_NAME}, so none will show until you allow them.`,
 } as const;
 
 export function SoundsSection({
@@ -57,10 +60,9 @@ export function SoundsSection({
       </Tooltip>
     ) : undefined;
   // Note that the browser is asked in the press itself, because it refuses an ask nobody made.
+  const ask = () => appPlatform().askForNotifications?.();
   const onTurned = (field: AppSettingField, enabled: boolean) => {
-    if (field === APP_SETTING_SCHEMA.turnNotifications.field && enabled) {
-      appPlatform().askForNotifications?.();
-    }
+    if (field === APP_SETTING_SCHEMA.turnNotifications.field && enabled) ask();
   };
   const notifying = view.settings.turnNotifications ?? APP_SETTING_DEFAULTS.turnNotifications;
   const onMac = view.capabilities.includes(HOST_CAPABILITY.DESKTOP_APP);
@@ -86,6 +88,9 @@ export function SoundsSection({
         ) : (
           <NotificationsOff words={NOTIFICATIONS_OFF_WORDS.browser} />
         )
+      ) : null}
+      {notifying && !onMac && notifications.status === NOTIFICATIONS_STATUS.UNKNOWN ? (
+        <NotificationsOff words={NOTIFICATIONS_OFF_WORDS.unasked} onAllow={ask} />
       ) : null}
     </SettingsSection>
   );

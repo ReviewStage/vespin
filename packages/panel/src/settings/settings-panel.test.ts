@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { HOST_CAPABILITY } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
 import { SETTINGS_PAGE_LIST, SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -13,6 +14,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { ellipsized } from "../testing/action-label.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { settingsPageOf } from "./pages.js";
@@ -21,8 +23,9 @@ import { SettingsPanel, type SettingsPanelProps } from "./settings-panel.js";
 /**
  * Settings' Account page as the panel draws it: its own groups and no list of
  * the other pages, which the Settings sidebar alone lists; This Mac saying
- * where macOS has the app's notifications off; and no page's buttons end their
- * words with an ellipsis.
+ * where macOS has the app's notifications off; the web's Account page asking
+ * a browser never asked to show notifications the account turned on; and no
+ * page's buttons end their words with an ellipsis.
  */
 
 const ignore = () => undefined;
@@ -145,6 +148,33 @@ test("This Mac says under Ask every time where macOS refused Vespin's last notif
   );
   act(() => open?.click());
   assert.equal(opened, 1);
+});
+
+test("the web's Account page asks a browser never asked to show the notifications the account turned on elsewhere", () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  let asked = 0;
+  fakeAppPlatform({ ...QUIET_PANEL, askForNotifications: () => (asked += 1) });
+
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(SettingsPanel, {
+          ...SETTINGS,
+          settings: settingsView({ turnNotifications: true }),
+          capabilities: DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP),
+        }),
+      ),
+    ),
+  );
+  const allow = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Allow notifications",
+  );
+  act(() => allow?.click());
+
+  assert.equal(asked, 1);
 });
 
 test("no Settings page draws a button whose words end with an ellipsis", () => {
