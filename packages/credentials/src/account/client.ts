@@ -68,6 +68,12 @@ interface AccountClientOptions {
 /** The code Better Auth refuses a delete under a session signed in longer ago than its `freshAge` with. */
 const SESSION_EXPIRED = "SESSION_EXPIRED";
 
+/**
+ * How Better Auth's OAuth provider describes a token whose account is gone,
+ * at `/oauth2/userinfo` and the refresh grant alike, under `invalid_request`.
+ */
+const OAUTH_USER_NOT_FOUND = { ERROR: "invalid_request", DESCRIPTION: "user not found" } as const;
+
 class AccountClientError extends Data.TaggedError("AccountClientError")<{
   readonly message: string;
   readonly status?: number | undefined;
@@ -439,6 +445,15 @@ export function accessTokenNeedsRefresh(error: AccountClientFailure): boolean {
   );
 }
 
+/** Whether the OAuth provider answered that the account a token names no longer exists. */
+export function accountNotFound(error: AccountClientFailure): boolean {
+  return (
+    error._tag === "AccountClientError" &&
+    error.oauthError === OAUTH_USER_NOT_FOUND.ERROR &&
+    error.message === OAUTH_USER_NOT_FOUND.DESCRIPTION
+  );
+}
+
 /** Fixture and capture modes remain deterministic and never need an account. */
 export function accountGateOpen(
   runMode: { readonly requiresAccount: boolean },
@@ -457,12 +472,13 @@ export function deletionNeedsNewSession(error: AccountClientFailure): boolean {
 }
 
 /**
- * Whether a deletion's refusal says the session it was asked under is gone,
- * which ends the Mac signed out rather than signed in again: a deletion that
- * went through but whose answer was lost leaves the session it ended, and a
- * new sign-in there would make a new account rather than find the old one.
+ * Whether a deletion was refused because the service no longer takes the
+ * session it was asked under, not because the session is too old: what a
+ * deletion that went through but whose answer was lost leaves, and what a
+ * session that lapsed or was revoked elsewhere answers too, so the account
+ * is looked for before the Mac concludes either.
  */
-export function deletionSessionGone(error: AccountClientFailure): boolean {
+export function deletionSessionRefused(error: AccountClientFailure): boolean {
   return (
     error._tag === "AccountClientError" &&
     error.status === HTTP_STATUS.UNAUTHORIZED &&

@@ -8,7 +8,11 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { andList, IRREVERSIBLE_WORDS, VERB } from "@repo/features/words";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL, ACT_KIND } from "@repo/host/acts";
+import {
+  ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL,
+  ACCOUNT_DELETE_UNCONFIRMED_REFUSAL,
+  ACT_KIND,
+} from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW, searchAnchorProps } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
@@ -158,13 +162,18 @@ const ACCOUNT_DELETE_MUTATION = mutationOptions({
  * deletes an account only within a day of its sign-in, and the host refuses
  * a delete past that in its own sentence
  * (`ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL`), which a retry alone never gets
- * past, so only that refusal says to sign in again; anything else, such as a
- * service that did not answer, says to try again.
+ * past, so only that refusal says to sign in again. A deletion the Mac could
+ * not confirm (`ACCOUNT_DELETE_UNCONFIRMED_REFUSAL`) may already have
+ * happened, so it says so in the host's words rather than that it failed;
+ * anything else, such as a service that did not answer, says to try again.
  */
 function deleteRefusalWords(error: unknown): string {
-  return error instanceof Error && error.message === ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL
-    ? "The account could not be deleted. Sign out and back in, then delete it again."
-    : "The account could not be deleted. Try again.";
+  const said = error instanceof Error ? error.message : undefined;
+  if (said === ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL) {
+    return "The account could not be deleted. Sign out and back in, then delete it again.";
+  }
+  if (said === ACCOUNT_DELETE_UNCONFIRMED_REFUSAL) return ACCOUNT_DELETE_UNCONFIRMED_REFUSAL;
+  return "The account could not be deleted. Try again.";
 }
 
 /**

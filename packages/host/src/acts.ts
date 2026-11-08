@@ -29,6 +29,16 @@ export const ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL =
   "You signed in too long ago to delete the account. Sign out and back in, then delete it again." as const;
 
 /**
+ * What the account's deletion is refused with where the service no longer
+ * took the Mac's session and nothing the Mac holds could tell whether the
+ * account is gone, in place of the act's own sentence: the account may
+ * already be deleted, so the refusal says the deletion is unconfirmed
+ * rather than that it failed.
+ */
+export const ACCOUNT_DELETE_UNCONFIRMED_REFUSAL =
+  "Couldn't confirm whether the account was deleted. Check your connection, then try again." as const;
+
+/**
  * What a workspace act whose role does not allow it is refused with, in place
  * of its kind's own sentence: a member renaming the workspace, setting its
  * photo, or removing someone, or an owner removed or leaving.
