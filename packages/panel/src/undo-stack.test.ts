@@ -1,24 +1,27 @@
 import assert from "node:assert/strict";
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, type TasksPinParams, type TasksView } from "@repo/features/tasks-view";
-import type { ACT_KIND } from "@repo/host/acts";
+import { ACT_KIND } from "@repo/host/acts";
 import { afterEach, test } from "vitest";
 import {
   pressRows,
+  pressWrite,
   ROW_WRITE,
   type RowDoors,
   redoLast,
   type TaskRows,
   UNDO_RAN,
+  type UndoWrite,
   undoLast,
 } from "./undo-stack.js";
 
 /**
  * undo-stack.test.ts -- ⌘Z and ⇧⌘Z over one task's pin as the window draws
  * it: the keys take the pin back and put it back, a pin after ⌘Z leaves
- * nothing to put back, and a pin taken back since is left alone. The act
- * keeps each pin and draws the task as it leaves it, as the host does.
- * Synthetic throughout.
+ * nothing to put back, and a pin taken back since is left alone, as a row
+ * entry and as a declared one. The act keeps each pin and draws the task as
+ * it leaves it, as the host does. Synthetic throughout.
  */
 
 const TASK_ID = "3f2c8a51-6d0e-4b7a-9c14-2e5f7a9b0d36";
@@ -102,6 +105,30 @@ test("a pin after ⌘Z leaves nothing for ⇧⌘Z to put back", async () => {
 test("⌘Z leaves a pin taken back since, on another Mac, as it stands, and sends nothing", async () => {
   const window = standWindow();
   await pin(window);
+  window.show(false);
+
+  const undone = await undoLast();
+
+  assert.equal(undone, UNDO_RAN.CHANGED);
+  assert.deepEqual(window.sent, [{ taskId: TASK_ID, pinned: true }]);
+});
+
+/** The pin as a declared write, its inverse an unpin of its own, held while the task drawn is pinned. */
+const PIN_WRITE = {
+  words: "Task pinned",
+  kind: ACT_KIND.TASKS_PIN,
+  read: (_rows, taskId) => taskId,
+  act: (send, taskId) => send({ taskId, pinned: true }),
+  undo: (send, taskId) => send({ taskId, pinned: false }),
+  holds: ({ tasks }, taskId) => tasks.tasks.some((task) => task.id === taskId && task.pinnedAt),
+  undone: ({ tasks }, taskId) => tasks.tasks.some((task) => task.id === taskId && !task.pinnedAt),
+  refused: (kept) => (kept ? undefined : "The task could not be pinned."),
+  surface: FAILURE_SURFACE.TASK_MARK,
+} satisfies UndoWrite<TaskRows, string, string, typeof ACT_KIND.TASKS_PIN, boolean>;
+
+test("⌘Z leaves a declared write's target changed since as it stands, and sends nothing", async () => {
+  const window = standWindow();
+  assert.equal(await pressWrite(PIN_WRITE, window.doors, TASK_ID), true);
   window.show(false);
 
   const undone = await undoLast();

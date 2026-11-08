@@ -25,7 +25,11 @@ import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-li
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import type { PageLine } from "@repo/features/page-wire";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
-import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  FAILURE_CONDITION,
+  FAILURE_SURFACE,
+  type FailureSurface,
+} from "@repo/features/shown-failure";
 import { agentMovedAt, agentsOfTask } from "@repo/features/task-agents-model";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
 import {
@@ -33,6 +37,7 @@ import {
   type ListedPullRequest,
   type RepositoryPin,
   TASK_BLOCK_CHANGE,
+  TASK_BLOCK_RELATION,
   type Task,
   type TaskAgentPin,
   type TaskBlockRelation,
@@ -55,6 +60,9 @@ import {
   TASK_CALL_FAILURE,
   TASK_PARENT_FAILURE,
   TASKS_READ,
+  type TasksBlockAnswer,
+  type TasksChangeRelationAnswer,
+  type TasksSetParentAnswer,
   type TasksView,
 } from "@repo/features/tasks-view";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -130,6 +138,7 @@ import {
   type Kept,
   notKept,
   sendAct,
+  type Unreached,
   unreachedAs,
 } from "../act.js";
 import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
@@ -173,7 +182,16 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
 import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
-import { pressRows, ROW_WRITE, type RowDoors, type TaskRows } from "../undo-stack.js";
+import {
+  heldTask,
+  pressRows,
+  pressWrite,
+  ROW_WRITE,
+  type RowDoors,
+  type TaskRows,
+  taskRow,
+  type UndoWrite,
+} from "../undo-stack.js";
 import {
   appStateIn,
   appStateQuery,
@@ -1202,6 +1220,105 @@ function relationRefusedNote(failure: RelationCallFailure | ParentCallFailure): 
       return BLOCK_REFUSED_NOTE;
   }
 }
+
+/** A relation write's answer as the window hears it: the service's, or one that never arrived. */
+type RelationAnswer =
+  | TasksBlockAnswer
+  | TasksSetParentAnswer
+  | TasksChangeRelationAnswer
+  | Unreached<typeof TASK_CALL_FAILURE.UNANSWERED>;
+
+/** A relation write's act, settled as unanswered where it never answered, so it never rejects. */
+function relationAsked<Answer extends RelationAnswer>(
+  asked: Promise<Answer>,
+): Promise<Answer | Unreached<typeof TASK_CALL_FAILURE.UNANSWERED>> {
+  return asked.catch(taskUnreached);
+}
+
+/** What a relation write's refusal says; nothing where the service kept it. */
+function relationRefused(answer: RelationAnswer): string | undefined {
+  return "failure" in answer ? relationRefusedNote(answer.failure) : undefined;
+}
+
+/** A block a press took away: the task it was taken from, the other task, and the side the other stood on. */
+interface BlockRemoved {
+  readonly taskId: string;
+  readonly relation: TaskBlockRelation;
+  readonly otherId: string;
+}
+
+/** A parent a press cleared: the task, and the parent it had. */
+interface ParentRemoved {
+  readonly taskId: string;
+  readonly parentTaskId: string;
+}
+
+/** Whether the task's plan, as the host holds it, lists the block; none where it holds no plan of it, as the list carries no blocks. */
+function blockStands(rows: TaskRows, { taskId, relation, otherId }: BlockRemoved) {
+  const task = heldTask(rows, taskId);
+  if (task === undefined) return undefined;
+  const side = relation === TASK_BLOCK_RELATION.BLOCKED_BY ? task.blockedBy : task.blocks;
+  return side?.includes(otherId) ?? false;
+}
+
+/**
+ * The relation writes ⌘Z takes back, which ask nothing first since each can
+ * be added back: a block taken away, added again only while the task still
+ * stands without it, and a parent cleared, set again only while the task
+ * still stands at the top. A refusal says why in the relation's own words.
+ */
+const RELATION_WRITE = {
+  BLOCK_REMOVAL: {
+    words: BLOCK_REMOVED_NOTE,
+    kind: ACT_KIND.TASKS_BLOCK,
+    read: (_rows, removed) => removed,
+    act: (send, { taskId, relation, otherId }) =>
+      relationAsked(
+        send({ taskId, block: { change: TASK_BLOCK_CHANGE.REMOVE, relation, taskId: otherId } }),
+      ),
+    undo: (send, { taskId, relation, otherId }) =>
+      relationAsked(
+        send({ taskId, block: { change: TASK_BLOCK_CHANGE.ADD, relation, taskId: otherId } }),
+      ),
+    holds: (rows, removed) => blockStands(rows, removed) === false,
+    undone: (rows, removed) => blockStands(rows, removed) === true,
+    refused: relationRefused,
+    surface: FAILURE_SURFACE.TASK_BLOCK,
+    about: ({ taskId }) => ({ taskId }),
+  } satisfies UndoWrite<
+    TaskRows,
+    BlockRemoved,
+    BlockRemoved,
+    typeof ACT_KIND.TASKS_BLOCK,
+    RelationAnswer
+  >,
+  PARENT_REMOVAL: {
+    words: PARENT_REMOVED_NOTE,
+    kind: ACT_KIND.TASKS_SET_PARENT,
+    read: (rows, { taskId }) => {
+      const parentTaskId =
+        taskRow(rows, taskId)?.parentTaskId ?? heldTask(rows, taskId)?.parentTaskId;
+      return parentTaskId === undefined ? undefined : { taskId, parentTaskId };
+    },
+    act: (send, { taskId }) => relationAsked(send({ taskId, parentTaskId: null })),
+    undo: (send, { taskId, parentTaskId }) => relationAsked(send({ taskId, parentTaskId })),
+    holds: (rows, { taskId }) => {
+      const task = taskRow(rows, taskId);
+      return task !== undefined && task.parentTaskId === undefined;
+    },
+    undone: (rows, { taskId, parentTaskId }) =>
+      taskRow(rows, taskId)?.parentTaskId === parentTaskId,
+    refused: relationRefused,
+    surface: FAILURE_SURFACE.TASK_PARENT,
+    about: ({ taskId }) => ({ taskId }),
+  } satisfies UndoWrite<
+    TaskRows,
+    { readonly taskId: string },
+    ParentRemoved,
+    typeof ACT_KIND.TASKS_SET_PARENT,
+    RelationAnswer
+  >,
+} as const;
 
 /** What the toast says when opening a task listed the workspace it is in. */
 function switchedNote(workspace: string): string {
@@ -2880,96 +2997,55 @@ export function useTasksTab(input: {
     });
   };
 
-  // A fixture's tasks are read from nowhere, so no block of one is kept. The
-  // open document takes the task the service answers, so a refusal is all
-  // there is to say, in a toast, since the menu that asked has closed.
-  const setTaskBlock = (taskId: string, block: TaskBlockRequest, onKept?: () => void) => {
+  // The relation writes' one recipe. A fixture's tasks are read from
+  // nowhere, so no relation of one is kept. The sidebar and the open
+  // document take the task the service answers, so a refusal is all there is
+  // to say, in a toast in the relation's own words, since the menu that
+  // asked has closed.
+  const askRelation = (
+    surface: FailureSurface,
+    taskId: string,
+    asked: () => Promise<RelationAnswer>,
+  ) => {
     if (fixture !== undefined) return;
-    void sendBlock({ taskId, block })
-      .catch(taskUnreached)
-      .then((answer) => {
-        if (!("failure" in answer)) {
-          onKept?.();
-          return;
-        }
-        toast({
-          replayUnmasked: true,
-          words: relationRefusedNote(answer.failure),
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.TASK_BLOCK, cause: answer, about: { taskId } },
-        });
+    void relationAsked(asked()).then((answer) => {
+      const words = relationRefused(answer);
+      if (words === undefined) return;
+      toast({
+        replayUnmasked: true,
+        words,
+        tone: STATUS_TONE.DANGER,
+        hold: TOAST_HOLD.FAILED,
+        failure: { surface, cause: answer, about: { taskId } },
       });
+    });
   };
+  const setTaskBlock = (taskId: string, block: TaskBlockRequest) =>
+    askRelation(FAILURE_SURFACE.TASK_BLOCK, taskId, () => sendBlock({ taskId, block }));
+  const setTaskParent = (taskId: string, parentTaskId: string | null) =>
+    askRelation(FAILURE_SURFACE.TASK_PARENT, taskId, () => sendParent({ taskId, parentTaskId }));
+  // A relation's kind moves in one call, so a refusal leaves it as it stood.
+  const changeTaskRelation = (taskId: string, relation: TaskRelationChangeRequest) =>
+    askRelation(FAILURE_SURFACE.TASK_RELATION, taskId, () => sendRelation({ taskId, relation }));
 
-  // Remove relation asks nothing of a block, since it can be added back: once
-  // the service keeps it, a toast offers Undo, which adds the same block again.
+  // Remove relation and Remove parent ask nothing, since either can be added
+  // back: once the service keeps it, ⌘Z and its toast's Undo add it again,
+  // while the task still stands as the removal left it (`undo-stack.ts`).
+  const blockDoors: RowDoors<TaskRows, typeof ACT_KIND.TASKS_BLOCK> = {
+    rows: drawnRows,
+    send: sendBlock,
+  };
+  const parentDoors: RowDoors<TaskRows, typeof ACT_KIND.TASKS_SET_PARENT> = {
+    rows: drawnRows,
+    send: sendParent,
+  };
   const removeTaskBlock = (taskId: string, relation: TaskBlockRelation, otherId: string) => {
-    setTaskBlock(taskId, { change: TASK_BLOCK_CHANGE.REMOVE, relation, taskId: otherId }, () =>
-      toast({
-        ...undoToast(BLOCK_REMOVED_NOTE, () =>
-          setTaskBlock(taskId, { change: TASK_BLOCK_CHANGE.ADD, relation, taskId: otherId }),
-        ),
-        replayUnmasked: true,
-      }),
-    );
-  };
-
-  // A fixture's tasks are read from nowhere, so no parent of one is kept. The
-  // sidebar and the open document take the task the service answers, so a
-  // refusal is all there is to say, in a toast.
-  const setTaskParent = (taskId: string, parentTaskId: string | null, onKept?: () => void) => {
     if (fixture !== undefined) return;
-    void sendParent({ taskId, parentTaskId })
-      .catch(taskUnreached)
-      .then((answer) => {
-        if (!("failure" in answer)) {
-          onKept?.();
-          return;
-        }
-        toast({
-          replayUnmasked: true,
-          words: relationRefusedNote(answer.failure),
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.TASK_PARENT, cause: answer, about: { taskId } },
-        });
-      });
+    void pressWrite(RELATION_WRITE.BLOCK_REMOVAL, blockDoors, { taskId, relation, otherId });
   };
-
-  // Remove parent asks nothing, since the parent can be set back: once the
-  // service keeps it, a toast offers Undo, which sets the parent it had.
   const removeTaskParent = (taskId: string) => {
-    const parentTaskId =
-      tasks.tasks.find((task) => task.id === taskId)?.parentTaskId ??
-      (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId
-        ? region.task.parentTaskId
-        : undefined);
-    if (parentTaskId === undefined) return;
-    setTaskParent(taskId, null, () =>
-      toast({
-        ...undoToast(PARENT_REMOVED_NOTE, () => setTaskParent(taskId, parentTaskId)),
-        replayUnmasked: true,
-      }),
-    );
-  };
-
-  // A relation's kind moves in one call, so a refusal leaves it as it stood,
-  // and the sidebar and the open document take the task the service answers.
-  const changeTaskRelation = (taskId: string, relation: TaskRelationChangeRequest) => {
     if (fixture !== undefined) return;
-    void sendRelation({ taskId, relation })
-      .catch(taskUnreached)
-      .then((answer) => {
-        if (!("failure" in answer)) return;
-        toast({
-          replayUnmasked: true,
-          words: relationRefusedNote(answer.failure),
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.TASK_RELATION, cause: answer, about: { taskId } },
-        });
-      });
+    void pressWrite(RELATION_WRITE.PARENT_REMOVAL, parentDoors, { taskId });
   };
 
   // A fixture's tasks move nowhere, as they are read from nowhere. Note that

@@ -1,5 +1,5 @@
 /**
- * undo-stack.ts -- ⌘Z and ⇧⌘Z for the reader's row writes in this window: the entries each takes back and puts back, run one at a time, and the row entries whose fields before are read off the rows the window shows.
+ * undo-stack.ts -- ⌘Z and ⇧⌘Z for the reader's writes in this window: the entries each takes back and puts back, run one at a time, the row entries whose fields before are read off the rows the window shows, and the declared entries whose inverse is an act of its own.
  *
  * An entry is one press's write: what it did, in a toast's words, and how
  * to take it back and put it back, each run answering whether it applied.
@@ -22,31 +22,34 @@
  * that each row is taken back only while it still holds what the act set,
  * because a row changed since, here, on another Mac, or by a teammate, was
  * chosen anew, and an undo must not take that choice back.
+ *
+ * A declared entry (`pressWrite`) is built from a declaration of a write
+ * whose inverse is no field sent back (`UndoWrite`): its words, the act and
+ * its inverse, whether the target still holds what each set, and what a
+ * refusal says and is reported as. The stack sends its act, says what came
+ * of it, and keeps it for ⌘Z where the service kept it, so a caller names
+ * the declaration and what it asks, and builds no Undo of its own.
  */
 
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import type { LIVE_READ } from "@repo/features/live-wire";
-import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
-import type { TaskPriority, TaskStatus, TaskSummary } from "@repo/features/task-wire";
+import {
+  FAILURE_SURFACE,
+  type FailureAbout,
+  type FailureSurface,
+} from "@repo/features/shown-failure";
+import type { Task, TaskPriority, TaskStatus, TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { PortActKind } from "@repo/host/contract";
 import { STATUS_TONE } from "@repo/ui";
 import { Store, useSelector } from "@tanstack/react-store";
-import {
-  type ActResult,
-  type ActVariables,
-  askKept,
-  firstRefusal,
-  KEPT,
-  type Kept,
-  notKept,
-} from "./act.js";
+import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
 import { priorityOf, statusOf } from "./desktop/task-row-parts.js";
 import type { ShownFailure } from "./failure-report.js";
-import { showToast, TOAST_HOLD } from "./toast.js";
+import { showToast, TOAST_HOLD, undoToast } from "./toast.js";
 
 /** The most entries each list keeps; an older one leaves as a newer one comes. */
 const MAX_ENTRIES = 50;
@@ -63,10 +66,18 @@ export const UNDO_RAN = {
 
 export type UndoRan = (typeof UNDO_RAN)[keyof typeof UNDO_RAN];
 
-/** A run's answer: whether it applied, and the failure where the service refused it. */
+/** A run's answer: whether it applied, and the failure where the service refused it, with its own words where its declaration names them. */
 type UndoRun =
   | { readonly ran: typeof UNDO_RAN.APPLIED | typeof UNDO_RAN.CHANGED }
-  | { readonly ran: typeof UNDO_RAN.REFUSED; readonly failure: ShownFailure };
+  | {
+      readonly ran: typeof UNDO_RAN.REFUSED;
+      readonly failure: ShownFailure;
+      readonly words?: string;
+    };
+
+const APPLIED_RUN: UndoRun = { ran: UNDO_RAN.APPLIED };
+
+const CHANGED_RUN: UndoRun = { ran: UNDO_RAN.CHANGED };
 
 /** One press's write: what it did, in a toast's words, and how to take it back and put it back. */
 interface UndoEntry {
@@ -140,10 +151,11 @@ function stacked(entries: readonly UndoEntry[], entry: UndoEntry): readonly Undo
 function said(entry: UndoEntry, way: UndoWay, run: UndoRun, keyed: boolean): void {
   if (run.ran === UNDO_RAN.REFUSED) {
     showToast({
-      words: REFUSED_WORDS[way],
+      words: run.words ?? REFUSED_WORDS[way],
       tone: STATUS_TONE.DANGER,
       hold: TOAST_HOLD.FAILED,
       failure: run.failure,
+      replayUnmasked: run.words !== undefined,
     });
     return;
   }
@@ -304,6 +316,23 @@ function holdsEach<Fields extends object>(now: Fields, wanted: Fields): boolean 
 }
 
 /**
+ * Each of `changes` that `due` finds still holding what the run takes away,
+ * sent on `send`, as one run: it applied where every one sent was, it was
+ * refused as the first refused one was, and it changed where none was due.
+ */
+function dueRun<Change>(
+  changes: readonly Change[],
+  due: (change: Change) => boolean,
+  send: (change: Change) => Promise<UndoRun>,
+): Promise<UndoRun> {
+  const sent = changes.filter(due);
+  if (sent.length === 0) return Promise.resolve(CHANGED_RUN);
+  return Promise.all(sent.map(send)).then(
+    (runs) => runs.find((run) => run.ran === UNDO_RAN.REFUSED) ?? APPLIED_RUN,
+  );
+}
+
+/**
  * Each row of `changes` still holding what `from` names sent what `to`
  * names, as one run: it applied where every row sent was kept, and changed
  * where no row still held it.
@@ -316,19 +345,20 @@ function rowsRun<Rows, Fields extends object, Kind extends PortActKind>(
   to: (change: RowChange<Fields>) => Fields,
 ): Promise<UndoRun> {
   const rows = doors.rows();
-  const due = changes.filter((change) => {
-    const now = write.read(rows, change.id);
-    return now !== undefined && write.holds(now, from(change));
-  });
-  if (due.length === 0) return Promise.resolve({ ran: UNDO_RAN.CHANGED });
-  return Promise.all(due.map((change) => write.send(doors.send, change.id, to(change)))).then(
-    (answers) =>
-      answers.every((answer) => answer.kept)
-        ? { ran: UNDO_RAN.APPLIED }
-        : {
-            ran: UNDO_RAN.REFUSED,
-            failure: { surface: write.surface, cause: firstRefusal(answers) },
-          },
+  return dueRun(
+    changes,
+    (change) => {
+      const now = write.read(rows, change.id);
+      return now !== undefined && write.holds(now, from(change));
+    },
+    (change) =>
+      write
+        .send(doors.send, change.id, to(change))
+        .then((kept) =>
+          kept.kept
+            ? APPLIED_RUN
+            : { ran: UNDO_RAN.REFUSED, failure: { surface: write.surface, cause: kept.cause } },
+        ),
   );
 }
 
@@ -378,6 +408,104 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
 }
 
 /**
+ * A write an entry takes back by an act of its own rather than by sending
+ * fields back: a block taken away is added again, a parent cleared is set
+ * again. `Asked` is what a press names, `Change` what the press read of it
+ * that its inverse needs, and `Answer` what its act answers, which it
+ * settles itself, an act that never answered among it, so it never rejects.
+ */
+export interface UndoWrite<Rows, Asked, Change, Kind extends PortActKind, Answer> {
+  /** What its toast says once the act is kept, and what ⌘Z's toast calls it. */
+  readonly words: string;
+  /** The act its write and its inverse are sent on, whose mutation a caller's doors send it on. */
+  readonly kind: Kind;
+  /** What `asked` changes as `rows` show it, read as the press is made; none where there is nothing to change. */
+  readonly read: (rows: Rows, asked: Asked) => Change | undefined;
+  /** Sends the write. */
+  readonly act: (send: RowSend<Kind>, change: Change) => Promise<Answer>;
+  /** Sends its inverse. */
+  readonly undo: (send: RowSend<Kind>, change: Change) => Promise<Answer>;
+  /** Whether `rows` still hold what the act set, so ⌘Z may take it back. */
+  readonly holds: (rows: Rows, change: Change) => boolean;
+  /** Whether `rows` still hold what the inverse set, so ⇧⌘Z may put it back. */
+  readonly undone: (rows: Rows, change: Change) => boolean;
+  /** What a refusal of the act or its inverse says, of the answer that refused it; none where the answer kept it. */
+  readonly refused: (answer: Answer) => string | undefined;
+  /** What a refusal of it is reported as. */
+  readonly surface: FailureSurface;
+  /** What a refusal of it is about. */
+  readonly about?: (change: Change) => FailureAbout;
+}
+
+/** What a declared write's refusal reports: its surface, the answer that refused it, and what it is about. */
+function writeFailure<Rows, Asked, Change, Kind extends PortActKind, Answer>(
+  write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
+  change: Change,
+  answer: Answer,
+): ShownFailure {
+  return { surface: write.surface, cause: answer, about: write.about?.(change) };
+}
+
+/** A declared write's answer as a run of it: applied where kept, else refused in its own words. */
+function answeredRun<Rows, Asked, Change, Kind extends PortActKind, Answer>(
+  write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
+  change: Change,
+  answer: Answer,
+): UndoRun {
+  const words = write.refused(answer);
+  return words === undefined
+    ? APPLIED_RUN
+    : { ran: UNDO_RAN.REFUSED, words, failure: writeFailure(write, change, answer) };
+}
+
+/**
+ * Presses a declared write: reads what `asked` changes off `doors`' rows,
+ * sends its act, and once the service keeps it keeps it as the newest entry
+ * for ⌘Z and says so with its toast's Undo, which runs that entry; a
+ * refusal says so in its own words, since the menu that asked has closed.
+ * The entry is taken back only while the rows still hold what the act set,
+ * and put back only while they hold what its inverse set. Answers whether
+ * the service kept it; not where there was nothing to change.
+ */
+export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
+  write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
+  doors: RowDoors<Rows, Kind>,
+  asked: Asked,
+): Promise<boolean> {
+  const change = write.read(doors.rows(), asked);
+  if (change === undefined) return Promise.resolve(false);
+  const run = (
+    due: (rows: Rows, change: Change) => boolean,
+    send: (send: RowSend<Kind>, change: Change) => Promise<Answer>,
+  ) =>
+    dueRun(
+      [change],
+      (each) => due(doors.rows(), each),
+      (each) => send(doors.send, each).then((answer) => answeredRun(write, each, answer)),
+    );
+  return write.act(doors.send, change).then((answer) => {
+    const words = write.refused(answer);
+    if (words !== undefined) {
+      showToast({
+        replayUnmasked: true,
+        words,
+        tone: STATUS_TONE.DANGER,
+        hold: TOAST_HOLD.FAILED,
+        failure: writeFailure(write, change, answer),
+      });
+      return false;
+    }
+    const undo = undoable({
+      words: write.words,
+      undo: () => run(write.holds, write.undo),
+      redo: () => run(write.undone, write.act),
+    });
+    showToast({ ...undoToast(write.words, undo), replayUnmasked: true });
+    return true;
+  });
+}
+
+/**
  * The rows a task's write reads: the tasks drawn, and the plans the host
  * holds for the window (`LIVE_READ.DESCRIPTION_DOCUMENT`), none before the
  * document is read, as the caller's Query client holds them.
@@ -387,16 +515,19 @@ export interface TaskRows {
   readonly held: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] | undefined;
 }
 
+/** A task as the host holds its plan for the window, with what the list leaves out, its blocks among it; none where it holds none. */
+export function heldTask({ held }: TaskRows, taskId: string): Task | undefined {
+  const rows = held?.[taskId]?.rows;
+  return rows !== undefined && "task" in rows ? rows.task : undefined;
+}
+
 /**
  * A task's row as the tasks drawn show it: the list's, else its plan's as
  * the host holds it for the window, as a task just started is held before
  * the list carries it.
  */
-function taskRow({ tasks, held }: TaskRows, taskId: string): TaskSummary | undefined {
-  const listed = tasks.tasks.find((task) => task.id === taskId);
-  if (listed !== undefined) return listed;
-  const rows = held?.[taskId]?.rows;
-  return rows !== undefined && "task" in rows ? rows.task : undefined;
+export function taskRow(rows: TaskRows, taskId: string): TaskSummary | undefined {
+  return rows.tasks.tasks.find((task) => task.id === taskId) ?? heldTask(rows, taskId);
 }
 
 /** A pin as an entry reads and sends it: whether it stands, and where it was dragged, none while it stands by when it was pinned. */
