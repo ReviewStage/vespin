@@ -6,12 +6,17 @@
  * running sandbox's last visit is read from its helper's folder: past the
  * idle bound, the share is closed as the developer's own close does; within
  * it, the sandbox is touched, as a forwarded port's traffic touches it. A
- * stopped one is left until it runs again, when its old visit closes it.
+ * stopped one is left until it runs again, when its old visit closes it,
+ * and one gone is forgotten.
  * What is logged of a failure is the sandbox's own words.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { listPortShares, type PortShare } from "@repo/database/models/sandbox-port-shares";
+import {
+  forgetPortShare,
+  listPortShares,
+  type PortShare,
+} from "@repo/database/models/sandbox-port-shares";
 import {
   isSandboxError,
   SANDBOX_STATUS,
@@ -30,7 +35,9 @@ const CONCURRENCY = 5;
 const sweptShare = (api: SandboxService, share: PortShare, now: Date) =>
   Effect.gen(function* () {
     const sandbox = yield* agentSandboxOf(api, share.sessionId);
-    if (sandbox?.status !== SANDBOX_STATUS.RUNNING || sandbox.running === undefined) return false;
+    // A sandbox gone took its route with it, so its share is only forgotten.
+    if (sandbox === undefined) return yield* Effect.as(forgetPortShare(share.sessionId), false);
+    if (sandbox.status !== SANDBOX_STATUS.RUNNING || sandbox.running === undefined) return false;
     const running = { name: sandbox.name, running: sandbox.running };
     const visitedAt = (yield* readSharedPort(api, running))?.visitedAt ?? 0;
     if (now.getTime() - visitedAt >= Duration.toMillis(PORT_SHARE.IDLE)) {
@@ -42,6 +49,9 @@ const sweptShare = (api: SandboxService, share: PortShare, now: Date) =>
   }).pipe(
     Effect.catchIf(isSandboxError, (failure) =>
       Effect.as(Effect.logWarning(`a shared port was not swept: ${failure.message}`), false),
+    ),
+    Effect.catch((failure) =>
+      Effect.as(Effect.logWarning(`a shared port was not forgotten: ${failure._tag}`), false),
     ),
   );
 
