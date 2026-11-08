@@ -441,7 +441,7 @@ export const START_AGENT_REFUSAL = {
     "another direction from one of your own messages, fork yourself at its messageId.",
   STARTER_CONTINUE:
     "Not started: you can't continue an agent that started you, directly or through the agents " +
-    "between you, since each of you would then name the other as its starter; tell its " +
+    "between you, since your reports would still go to the agent the continue stops; tell its " +
     "starter, or ask a member to continue it.",
   SOURCE_RUNNING:
     "Not started: that agent is still starting or working, and a continue would take over work " +
@@ -1945,7 +1945,7 @@ const sourceLanding = (
       if (Option.isNone(at)) return Result.fail(START_AGENT_REFUSAL.NO_MESSAGE);
       return Result.succeed({ place, continuedBy: [] });
     }
-    // Note that a continue of an agent that started the caller records the caller as the new agent's starter, so the two would name each other.
+    // Note that a continue of an agent that started the caller stops that agent, while the caller's reports still go to it.
     // A member is started by no agent, so no source started them.
     const calling = callerAgent(caller);
     if (
