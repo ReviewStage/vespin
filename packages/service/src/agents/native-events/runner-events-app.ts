@@ -78,7 +78,6 @@ import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
-import { estimatedTokens } from "../coder-host/token-estimate.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
@@ -162,6 +161,9 @@ export const RUNNER_EVENTS_PATH = "/api/agents/runner-events";
 /** The most a batch may hold: the runner's 256 events, a tool's whole answer among them, under the platform's own bound. */
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
+/** The bytes a token stands for in a step's estimate. */
+const BYTES_PER_TOKEN = 4;
+
 const RunnerEventBatchSchema = Schema.Struct({
   events: Schema.Array(
     Schema.Struct({
@@ -173,6 +175,14 @@ const RunnerEventBatchSchema = Schema.Struct({
 type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
+
+/**
+ * The tokens of a value's JSON as a step's estimate tells them: its bytes
+ * over four, rounded up, the rule the retired runtime's steps were estimated by.
+ */
+function estimatedTokens(json: string): number {
+  return Math.ceil(new TextEncoder().encode(json).byteLength / BYTES_PER_TOKEN);
+}
 
 /**
  * How a harness's messages are read: one message, as its runner posted it,

@@ -28,7 +28,6 @@ import {
   readAgent,
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
-import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { Effect, Option, Result } from "effect";
@@ -42,18 +41,6 @@ import type { StoreFailure } from "../http/store-failure.js";
 import { GitHubApp, type ReachedRepository } from "./github-app.js";
 import { memberWorkspaceOnOwner } from "./github-installations.js";
 import { githubReachOrRefusal, logWorkspaceReadFailure } from "./github-refusal.js";
-
-/**
- * The workspace of a task the account reaches, whose installation every
- * GitHub read of the task's repository goes through; none where the account
- * reaches no such task.
- */
-export function taskWorkspace(
-  userId: string,
-  taskId: string,
-): Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices> {
-  return readTaskWorkspace(userId, taskId);
-}
 
 /**
  * The workspace an agent's repository is reached through: its own, which
