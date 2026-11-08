@@ -1152,6 +1152,13 @@
   order: -1;
 }
 
+/* A merged pull request's state is a borderless chip, no press of its own,
+   whose glyph sits a chip's inset inside its box, so it stands that inset
+   before the row's edge, its glyph over the branches' under it. */
+.pull-request-state:has(> span.ui-chip) {
+  margin-inline-start: calc(-1 * var(--ui-space-8));
+}
+
 /* The pill's mark stands at the control's glyph size, as the glyphs of the
    buttons beside it do, rather than a row's 12px. */
 .pull-request-state .pull-request-mark {
@@ -1403,6 +1410,16 @@
   flex: 0 1 auto;
 }
 
+/* The branches and the stack are borderless chips whose words sit a chip's
+   inset (`chip-inset`, 8px) inside their wash, so their row stands that
+   inset before the line's edge: their glyphs and words line up with the
+   opened line's face and the reviewers' faces on the lines under them, and
+   the wash under the pointer reaches past the edge into the room the line's
+   clip leaves. A stack wrapped onto a line of its own stands there too. */
+.changes-people.pull-request-people > .pull-request-branch-row {
+  margin-inline-start: calc(-1 * var(--ui-space-8));
+}
+
 /* The reviewers' faces stand a press's inset further from the pickers
    after them, because a subtle press's words sit that inset inside its
    fill: so the faces and the first picker's words stand as far apart as two
@@ -1503,18 +1520,21 @@
    row, its edge the pill's. A hairline stands in the gap between each two
    groups; one that would lead a wrapped line falls outside the row's box,
    which clips it, while a focus ring or a face's badge at a line's start
-   stays within the room the clip leaves. Note that it clips its inline
-   axis alone, where such a hairline falls, because a picker's menu hangs
-   below the row and a clip on the block axis would leave it no room. */
+   stays within the room the clip leaves, as does the wash of a branch or
+   the stack under the pointer, which reaches a chip's inset past the edge.
+   Note that the room is a pixel short of that inset, because the hairline
+   is centered on it and must stay clipped. It clips by `clip-path` rather
+   than `overflow`, because a picker's menu hangs below the row, so the clip
+   reaches far past its block axis, and `overflow-clip-margin` gives no room
+   to an axis clipped alone. */
 .changes-people.pull-request-people {
   --people-gap: var(--ui-space-16);
   gap: var(--ui-item-gap) var(--people-gap);
   padding-block: var(--ui-item-gap) 0;
   padding-inline: 0;
   border-bottom: 0;
-  overflow-x: clip;
-  overflow-y: visible;
-  overflow-clip-margin: var(--ui-space-4);
+  overflow: visible;
+  clip-path: inset(-100vh -4px -100vh calc(1px - var(--ui-space-8)));
 }
 
 .changes-people.pull-request-people > * {
