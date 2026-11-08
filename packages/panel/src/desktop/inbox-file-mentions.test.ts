@@ -31,7 +31,7 @@ import {
   fakeActs,
 } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handInboxItems, handState } from "../testing/app-state.js";
+import { handInboxItems, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
@@ -147,6 +147,12 @@ async function inbox() {
       taskAgents: [listedAgent(AGENT)],
       workspaces: [ACME],
     },
+    // Main's read of the account's inbox holds the task's one item as waiting.
+    inbox: {
+      ...stateWith({}, {}).inbox,
+      waiting: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
+      tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
+    },
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
@@ -175,8 +181,6 @@ async function inbox() {
         tasks: tasksControl({
           workspace: ACME,
           tasks: [TASK],
-          inbox: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
-          inboxTasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
           inboxView: { ...tasksControl().inboxView, pages: [], onTaskAgents: taskAgents.onRead },
           sidePanel,
           onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) =>

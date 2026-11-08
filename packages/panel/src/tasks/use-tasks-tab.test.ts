@@ -41,6 +41,7 @@ import {
   type AppDescriptionDocuments,
   type AppInboxTask,
   type AppInboxTaskHolding,
+  type AppStateSnapshot,
   RUN_PROFILE,
 } from "@repo/host/app-state";
 import type { PortActKind, PortActResult } from "@repo/host/contract";
@@ -123,14 +124,15 @@ import {
   holdRepositoryLists,
   readExperiments,
   stateWith,
-  withExperiments,
+  writeExperiments,
 } from "../testing/app-state.js";
-import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
+import { appStateQuery } from "../use-app-state.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
   type RoutedViews,
@@ -147,6 +149,7 @@ import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
+import { useListedInbox } from "./use-inbox-slices.js";
 import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
@@ -187,6 +190,11 @@ const HELD_DESCRIPTIONS: AppDescriptionDocuments = { [TASK.id]: { rows: { task: 
  * holds them for it (`LIVE_READ.DESCRIPTION_DOCUMENT`), for a surface that reads
  * the document from here on.
  */
+/** Main's read of the inbox on `document`, holding what the standing says waits and which tasks hold items. */
+function inboxRead(document: AppStateSnapshot, standing: Standing): AppStateSnapshot["inbox"] {
+  return { ...document.inbox, waiting: standing.inboxWaiting, tasks: standing.inboxTasks };
+}
+
 function handDescriptions(descriptions: AppDescriptionDocuments): void {
   const handed = fakeAppBridgeCalls().requestAppState;
   fakeAppBridge({
@@ -210,7 +218,9 @@ interface Standing {
   profile: string;
   fixtureMode: boolean;
   unseenAgents: readonly string[];
+  /** What main's read of the inbox says waits on the developer, laid on the document. */
   inboxWaiting: readonly AppInboxTask[];
+  /** Every task main's read of the inbox says holds an item, laid on the document. */
   inboxTasks: readonly AppInboxTaskHolding[];
   /** Whether an account is signed in to the window. */
   signedIn: boolean;
@@ -295,6 +305,8 @@ let adminStanding: AdminView | undefined;
 let inboxDoor: InboxDoor | undefined;
 /** The Inbox as a surface of the window last mounted reads it. */
 let inboxStanding: InboxView | undefined;
+/** The listed workspace's share of main's inbox read, as a surface of the window last mounted reads it. */
+let listedInbox: ReturnType<typeof useListedInbox> | undefined;
 /** The Inbox's route in the window last mounted, whose close only the window's own leave calls now. */
 let inboxRoute: InboxRoute | undefined;
 
@@ -431,8 +443,6 @@ function mount(
       account: held.signedIn ? held.account : undefined,
       shown: held.shown,
       unseenAgents: held.unseenAgents,
-      inboxWaiting: held.inboxWaiting,
-      inboxTasks: held.inboxTasks,
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: (link) => links.push(link),
@@ -457,6 +467,7 @@ function mount(
     automationsDoor = useAutomationsDoor(control);
     inboxDoor = useInboxDoor(control);
     inboxStanding = useInboxView(control);
+    listedInbox = useListedInbox(control);
     views = useRoutedViews();
     const adminView = useAdminView();
     adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
@@ -502,7 +513,10 @@ function mount(
   held.history.subscribe(({ location }) => passed.push(location.href));
   // The test's Query client is handed the document here, its descriptions among it, rather than one an earlier test handed.
   act(() => {
-    root.render(held.provide(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), surface)));
+    writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), {
+      inbox: inboxRead(stateWith({}, {}), standing),
+    });
+    root.render(held.provide(withQueryClient(surface)));
   });
   return {
     /** Where the router's history stands. */
@@ -529,7 +543,15 @@ function mount(
     history: () => windowHistory ?? assert.fail("the window's history stands"),
     stand: (patch: Partial<Standing>) => {
       standing = { ...standing, ...patch };
-      act(() => restand?.(standing));
+      act(() => {
+        const client = testQueryClientNow();
+        const held = client.getQueryData(appStateQuery.queryKey) ?? stateWith({}, {});
+        client.setQueryData(appStateQuery.queryKey, {
+          ...held,
+          inbox: inboxRead(held, standing),
+        });
+        restand?.(standing);
+      });
     },
   };
 }
@@ -2624,10 +2646,13 @@ test("the Inbox lists the chosen workspace's share of what waits, and a plan the
       { taskId: "unread", items: 3, updatedAt: 1 },
     ],
   });
-  const share = () => ({
-    inbox: tab.control().listed.inbox.map((task) => task.taskId),
-    inboxTasks: tab.control().listed.inboxTasks.map((holding) => holding.taskId),
-  });
+  const share = () => {
+    assert.ok(listedInbox, "a surface reads the listed share");
+    return {
+      inbox: listedInbox.inbox.map((task) => task.taskId),
+      inboxTasks: listedInbox.inboxTasks.map((holding) => holding.taskId),
+    };
+  };
 
   const personal = share();
   act(() => tab.control().onChooseWorkspace(ACME.id));

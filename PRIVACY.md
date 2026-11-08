@@ -181,6 +181,20 @@ on) shows it and may keep it in its notification history under its own
 settings, outside Vespin. Showing one sends nothing to us or anyone else. It is off until you
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
+
+If you sign in to the Vespin iOS app and allow notifications, the app
+registers your iPhone's Apple push token with the Service, with which of
+Apple's gateways the token belongs to and the app it was issued to, and we
+keep them with your account. When the Service pushes a notification to your
+phone, it sends Apple that token and the notification itself: **its title and
+body, which may carry the words of an Inbox thread, and the agent's or the
+task's name**, with the ids the app opens on a tap. Apple delivers it under
+its own policies, and your phone keeps it in its notification history under
+its own settings, outside Vespin. We keep the token while the phone stays
+registered: the app unregisters it when you sign out, we delete it when
+Apple tells us the phone will no longer take pushes on it, and it is deleted
+with your account.
+
 ### Setup questions
 
 If you answer the optional questions in setup (how you heard about Vespin,
@@ -253,6 +267,9 @@ data with:
 - **GitHub:** to check out repositories, push branches, and open pull requests
   through the Vespin GitHub App. Your devices also contact GitHub directly to
   check for updates and load avatars.
+- **Apple:** notifications to the Vespin iOS app go through Apple's Push
+  Notification service, which receives your phone's push token and each
+  notification's title and body, as the Notifications section says.
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
@@ -300,7 +317,8 @@ kept for the workspace's agents until we remove it, and a repository snapshot
 made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, and integration records) is deleted at once.
+  preferences, integration records, and your phones' push tokens) is deleted
+  at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
   and we ask Vercel to delete your agents' sandboxes and the drives holding
   their checkouts; where that fails or does not finish in time, your account is

@@ -763,16 +763,23 @@ export function mount(
   // Note that the host's inbox holds are answered beside whatever acts the test answers by now.
   fakeActPort({ ...fakeActPortCalls(), ...world.main.procedures });
   // Note that the host's reads are laid over whatever document the test handed the window, its experiments among it.
-  // Note that main's read of the inbox holds the items of agents with no task given, and the agents holding them, as main lists both from one read.
-  const inboxOf = (
-    taskless: readonly AppInboxTasklessItem[],
-    agents: readonly AppInboxAgentHolding[],
-  ): AppInboxSlice => ({ ...NO_INBOX, taskless, agents });
+  // Note that main's read of the inbox holds what waits on the tasks, the tasks holding items, the items of agents with no task, and the agents holding them, as main lists them all from one read.
+  let mainInbox: AppInboxSlice = {
+    ...NO_INBOX,
+    waiting,
+    tasks: firstHolding,
+    taskless: firstTaskless,
+    agents: firstAgents,
+  };
   const reads = handHostReads({
     items: feedNow(),
     holders: world.main.now(),
-    inbox: inboxOf(firstTaskless, firstAgents),
+    inbox: mainInbox,
   });
+  const deliverInbox = (next: Partial<AppInboxSlice>) => {
+    mainInbox = { ...mainInbox, ...next };
+    reads.deliverInbox(mainInbox);
+  };
   world.deliverFeed = reads.deliverItems;
   world.deliverHolders = reads.deliverHolders;
   // Note that a workspace's automations are laid on the document as the window holds them, as the host lays them.
@@ -803,17 +810,16 @@ export function mount(
     const route = useInboxRoute();
     world.chooseFromOutside = (chosen) => route.onChoose(chosen);
     const inboxOpen = route.open;
-    const [holding, setHeld] = useState(firstHolding);
     const [listed, setListed] = useState<readonly TaskSummary[]>(listUnread ? [] : standing);
     const [listRead, setRead] = useState(!listUnread);
     world.setListRead = setRead;
     // Note that main's word of a change comes with the change pushed, as the host follows both.
     world.setHolding = (next) => {
-      setHeld(next);
+      deliverInbox({ tasks: next });
       pushAgain();
     };
     world.setTaskless = (next, holding = agentHoldingsOf(next)) => {
-      reads.deliverInbox(inboxOf(next, holding));
+      deliverInbox({ taskless: next, agents: holding });
       pushAgain();
     };
     world.setTasks = setListed;
@@ -864,8 +870,6 @@ export function mount(
           }
         },
       },
-      inbox: waiting,
-      inboxTasks: holding,
       inboxView: {
         onClear: route.onClear,
         pages: undefined,

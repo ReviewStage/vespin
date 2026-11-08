@@ -35,7 +35,7 @@ import {
   fakeAppBridge,
 } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
-import { handHostReads, handInboxItems, handState } from "./testing/app-state.js";
+import { handHostReads, handState, stateWith } from "./testing/app-state.js";
 import { ChangesTabReading } from "./testing/changes-tab.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar } from "./testing/desktop-sidebar.js";
@@ -212,7 +212,10 @@ test("the sidebar's tasks that could not be read again while the app is offline 
 
 test("the Inbox's list says its feed could not be read as the sidebar does, and Retry lists what the plan holds", async () => {
   // The account's feed could not be read until it is read again, then holds nothing of the plan.
-  const deliver = handInboxItems({ failed: true });
+  const { deliverItems: deliver } = handHostReads({
+    items: { failed: true },
+    inbox: { ...stateWith({}, {}).inbox, tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2 }] },
+  });
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
@@ -222,10 +225,7 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
   });
   const page = await mount(
     createElement(DesktopInbox, {
-      tasks: tasksControl({
-        tasks: [TASK],
-        inboxTasks: [{ taskId: TASK.id, items: 1, updatedAt: 2 }],
-      }),
+      tasks: tasksControl({ tasks: [TASK] }),
     }),
     INBOX_AT,
   );

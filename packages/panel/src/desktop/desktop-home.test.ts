@@ -26,10 +26,10 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
   handHostReads,
-  handInboxItems,
   handMembers,
   handState,
   holdRepositoryLists,
+  stateWith,
 } from "../testing/app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
@@ -151,8 +151,8 @@ function mount(
   refused = false,
 ) {
   const opened: { tasks: string[]; settings: SettingsLink[] } = { tasks: [], settings: [] };
-  handInboxItems(
-    refused
+  handHostReads({
+    items: refused
       ? { failed: true }
       : {
           rows: {
@@ -160,21 +160,22 @@ function mount(
             [INBOX_SCOPE_KIND.AGENT]: {},
           },
         },
-  );
-  const holding: Pick<TasksControl, "inbox" | "inboxTasks"> =
-    items.length === 0
-      ? { inbox: [], inboxTasks: [] }
-      : {
-          inbox: [{ taskId: RETRIES.id, items: items.map(waitingOf) }],
-          inboxTasks: [{ taskId: RETRIES.id, items: items.length, updatedAt: NOW }],
-        };
+    inbox: {
+      ...stateWith({}, {}).inbox,
+      ...(items.length === 0
+        ? {}
+        : {
+            waiting: [{ taskId: RETRIES.id, items: items.map(waitingOf) }],
+            tasks: [{ taskId: RETRIES.id, items: items.length, updatedAt: NOW }],
+          }),
+    },
+  });
   const tasks = tasksControl({
     me: DEAN.userId,
     listRead: true,
     workspace: ACME,
     tasks: TASKS,
-    listed: { tasks: TASKS, ...holding },
-    ...holding,
+    listed: { tasks: TASKS },
     onSelect: (taskId) => opened.tasks.push(taskId),
     onResume: (taskId) => opened.tasks.push(taskId),
     ...overrides,
@@ -374,7 +375,7 @@ function newAccount(): Partial<TasksControl> {
   const base = tasksControl();
   return {
     tasks: [],
-    listed: { tasks: [], inbox: [], inboxTasks: [] },
+    listed: { tasks: [] },
     newTask: {
       ...base.newTask,
       workspaceId: ACME.id,

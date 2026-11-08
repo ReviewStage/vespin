@@ -93,6 +93,7 @@ import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
+import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
@@ -452,11 +453,12 @@ function DescriptionDocument({
     inboxTaskId === undefined ? undefined : { taskId: inboxTaskId },
     phone,
   );
+  const inboxWaiting = useInboxWaitingTasks();
   const inbox = useTaskInbox({
     taskId: inboxTaskId,
     shown: tasks.shown,
     onScreen: inboxTaskId !== undefined && tasks.inboxShown === inboxTaskId,
-    waiting: tasks.inbox.some((task) => task.taskId === inboxTaskId),
+    waiting: inboxWaiting.some((task) => task.taskId === inboxTaskId),
     readerId: tasks.me,
     agents: tasks.agents,
   });

@@ -38,6 +38,7 @@ export * from "./native-call-key.js";
 export * from "./personal-workspace.js";
 export * from "./preferences.js";
 export * from "./pull-request-chapters.js";
+export * from "./push-device.js";
 export * from "./repository-pin.js";
 export * from "./runner-line.js";
 export * from "./sandbox-firewall.js";

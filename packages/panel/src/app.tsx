@@ -5,12 +5,7 @@ import { type AccountLink, LINK_PLACE, type ReadLink } from "@repo/features/link
 import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import {
-  type AppInboxTask,
-  type AppInboxTaskHolding,
-  type AppStateSnapshot,
-  RUN_PROFILE,
-} from "@repo/host/app-state";
+import { type AppStateSnapshot, RUN_PROFILE } from "@repo/host/app-state";
 import {
   APP_SETTING_SCHEMA,
   EXPERIMENT,
@@ -118,7 +113,6 @@ import {
   selectAdminAccessPending,
   selectAppSettingsView,
   selectExperiment,
-  selectInbox,
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
@@ -138,14 +132,8 @@ import { useWorkspacesRead } from "./workspaces-read.js";
 /** No agent ended unseen, as the document reads before main has answered. */
 const NO_UNSEEN_AGENTS: readonly string[] = [];
 
-/** Nothing waits on the developer, as the document reads before main has answered. */
-const NOTHING_WAITING: readonly AppInboxTask[] = [];
-
 /** A door's landing that does nothing more than its move. */
 const NOTHING_MORE = (): void => undefined;
-
-/** No task holds an inbox item, as the document reads before main has answered. */
-const NO_TASKS_HOLDING: readonly AppInboxTaskHolding[] = [];
 
 /** No platform capability, as the document reads before main has answered. */
 const NO_CAPABILITIES: readonly HostCapability[] = [];
@@ -277,7 +265,6 @@ function AppWindow(): React.JSX.Element {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
   const planning = useQuery({ ...appStateQuery, select: selectTasks }).data;
-  const inbox = useQuery({ ...appStateQuery, select: selectInbox }).data;
   const unseenAgents =
     useQuery({ ...appStateQuery, select: selectUnseenAgents }).data ?? NO_UNSEEN_AGENTS;
   const settingsHeld = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
@@ -489,8 +476,6 @@ function AppWindow(): React.JSX.Element {
     accountId: account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined,
     shown: tab === PANEL_TAB.TASKS,
     unseenAgents,
-    inboxWaiting: inbox?.waiting ?? NOTHING_WAITING,
-    inboxTasks: inbox?.tasks ?? NO_TASKS_HOLDING,
     onOpenSettings: openSettings,
     onOpenIntegrations: openIntegrations,
     onOpenApiKeys: openApiKeys,

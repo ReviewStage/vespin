@@ -104,8 +104,6 @@ async function mount() {
       account: "dean@acme.dev",
       shown: true,
       unseenAgents: [],
-      inboxWaiting: [],
-      inboxTasks: [],
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: () => undefined,

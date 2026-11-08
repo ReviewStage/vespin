@@ -83,6 +83,7 @@ import type {
   WorkspaceMember,
   WorkspaceMembersAnswer,
 } from "@repo/features/workspace-wire";
+import type { AppInboxTask } from "@repo/host/app-state";
 import {
   EXPERIMENT,
   type ExperimentChoices,
@@ -208,6 +209,7 @@ import { cardTitle } from "../tasks/tool-call-model.js";
 import { type AgentsControl, type HeldPeople, readAgentById } from "../tasks/use-agents.js";
 import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
+import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
@@ -972,6 +974,7 @@ function paletteEntries(entry: AddEntry): readonly AddEntry[] {
  */
 function agentRows(
   tasks: TasksControl,
+  inboxWaiting: readonly AppInboxTask[],
   inboxStanding: InboxStanding,
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
@@ -981,7 +984,7 @@ function agentRows(
   if (taskId === undefined) return [];
   const taskName = tasks.tasks.find((task) => task.id === taskId)?.name;
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
-  const waiting = tasks.inbox.find((each) => each.taskId === taskId)?.items.length ?? 0;
+  const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
   const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
   const agents = agentEntries(tasks.mainTabs, tasks.agents).map((entry) => ({
     ...entry,
@@ -2003,6 +2006,7 @@ export function CommandPalette({
   const [open, setOpen] = useState(false);
   // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
+  const inboxWaiting = useInboxWaitingTasks();
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
@@ -2284,7 +2288,7 @@ export function CommandPalette({
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
     [PALETTE_FILTER.THIS_TASK]: () => [
-      agentRows(tasks, inboxStanding, offerDoors, onTasks, changesPeople),
+      agentRows(tasks, inboxWaiting, inboxStanding, offerDoors, onTasks, changesPeople),
     ],
     [PALETTE_FILTER.PEOPLE]: () => [
       peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),

@@ -18,7 +18,7 @@ import {
   taskHoldings,
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";
-import { useInboxAgents } from "./use-inbox-slices.js";
+import { useInboxAgents, useListedInbox } from "./use-inbox-slices.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /** What a search finds in the Inbox: its items, what needs the reader first, then the latest changed; and how far their read has come. */
@@ -43,7 +43,8 @@ function searchOrder(groups: readonly InboxGroup[], readerId: string | undefined
 
 /** The listed workspace's Inbox, followed while `asked`; see the module's head. */
 export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch {
-  const { inboxTasks, tasks: standing } = tasks.listed;
+  const { inboxTasks } = useListedInbox(tasks);
+  const standing = tasks.listed.tasks;
   const agents = useInboxAgents();
   // Note that nothing is followed while no search asks.
   const holdings = useMemo(

@@ -27,6 +27,8 @@ import { integrationConnectFromEnvironment } from "./integrations/integration-co
 import { sentryLogger } from "./observability/sentry.js";
 import { pageLinksFromEnvironment } from "./pages/page-links.js";
 import { modelCatalogLayer } from "./providers/model-catalog.js";
+import { apnsSenderFromEnvironment } from "./push/apns.js";
+import { apnsHttp2Transport } from "./push/apns-http2.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
 import { syncFromEnvironment } from "./sync/hub.js";
 import { sentryAppFromEnvironment } from "./triggers/sentry/sentry-app-config.js";
@@ -120,6 +122,11 @@ const slackBot = slackBotFromEnvironment.pipe(
  * `InvitationMail` is the one place the Resend key and the sender a
  * workspace invitation is emailed from are read (`accounts/invitation-mail.ts`).
  *
+ * `ApnsSender` is the one place the deployment's APNs key is read
+ * (`push/apns.ts`), over one HTTP/2 connection per Apple gateway that the
+ * instance keeps for its life (`push/apns-http2.ts`), so every push an
+ * instance sends shares it, as Apple asks.
+ *
  * `BearerCallers` keeps the caller each bearer resolved to for a minute
  * (`auth/bearer-callers.ts`), so a held read and the polls inside it ask the
  * auth service once a minute per bearer rather than on every request.
@@ -170,6 +177,7 @@ export const webServices = Layer.mergeAll(
   invitationMailFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   welcomeMailFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   onboardingEventsFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
+  apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transport)),
 ).pipe(Layer.provide(webConfigProvider));
 
 /** What an effect run on a runtime over these services may require. */

@@ -10,7 +10,12 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
-import { agentsControl, handInboxTaskless, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentHoldingsOf,
+  agentsControl,
+  handInbox,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { ArchivedAgents } from "./agent-archive.js";
 
 /**
@@ -187,7 +192,7 @@ test("a repository's header folds on its name, says its pin, counts its plans fo
 });
 
 test("the Inbox row counts what waits on a plan and what waits from an agent with no plan alike, and not a teammate's agent's with no plan, which waits on them", () => {
-  handInboxTaskless([
+  const taskless = [
     {
       id: "item-2",
       agentId: "agent-2",
@@ -214,17 +219,21 @@ test("the Inbox row counts what waits on a plan and what waits from an agent wit
       repository: "acme/relay",
       startedBy: "user-charles",
     },
-  ]);
+  ];
+  handInbox({
+    waiting: [
+      {
+        taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+        items: [{ id: "item-1", agentId: "agent-1", title: "Retry?", postedAt: 1 }],
+      },
+    ],
+    taskless,
+    agents: agentHoldingsOf(taskless),
+  });
   const page = mountSidebar(
     tasksControl({
       me: "user-dean",
       tasks: [task("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Webhook retries", "acme/relay")],
-      inbox: [
-        {
-          taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
-          items: [{ id: "item-1", agentId: "agent-1", title: "Retry?", postedAt: 1 }],
-        },
-      ],
     }),
   );
 

@@ -32,7 +32,12 @@ import {
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
-import { useInboxAgents, useInboxTaskless } from "./use-inbox-slices.js";
+import {
+  useInboxAgents,
+  useInboxTaskless,
+  useInboxWaitingTasks,
+  useListedInbox,
+} from "./use-inbox-slices.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
 import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
@@ -80,7 +85,7 @@ const TASK_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES } as const;
  * it out: a task done or canceled is listed, its items with it.
  */
 function listedHoldings(
-  holdings: TasksControl["inboxTasks"],
+  holdings: readonly AppInboxTaskHolding[],
   listed: TasksControl["tasks"],
 ): readonly AppInboxTaskHolding[] {
   const ids = new Set(listed.map((task) => task.id));
@@ -177,7 +182,9 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
   );
-  const { inboxTasks, tasks: listedTasks } = tasks.listed;
+  const { inboxTasks } = useListedInbox(tasks);
+  const listedTasks = tasks.listed.tasks;
+  const inboxWaiting = useInboxWaitingTasks();
   const holdings = useMemo(
     () => listedHoldings(inboxTasks, listedTasks),
     [inboxTasks, listedTasks],
@@ -244,7 +251,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     shown: tasks.shown,
     onScreen: taskId !== undefined && tasks.inboxShown === taskId,
     waiting:
-      tasks.inbox.some((each) => each.taskId === taskId) ||
+      inboxWaiting.some((each) => each.taskId === taskId) ||
       waitingTaskless.some((each) => each.agentId === chosenAgentId),
     readerId: tasks.me,
     agents,

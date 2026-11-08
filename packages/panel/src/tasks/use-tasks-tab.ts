@@ -35,7 +35,6 @@ import {
   type RepositoryPin,
   TASK_BLOCK_CHANGE,
   TASK_BLOCK_RELATION,
-  type Task,
   type TaskAgentPin,
   type TaskBlockRelation,
   type TaskBlockRequest,
@@ -64,7 +63,7 @@ import {
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxTask, AppInboxTaskHolding, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppInboxTask, AppStateSnapshot } from "@repo/host/app-state";
 import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn } from "@repo/settings";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
@@ -248,6 +247,7 @@ import {
   useDescriptionHistory,
 } from "./use-description-history.js";
 import { useIdleTabs } from "./use-idle-tabs.js";
+import { useInboxWaitingTasks } from "./use-inbox-slices.js";
 import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
 import {
@@ -539,15 +539,9 @@ export interface TasksControl {
   me: string | undefined;
   /** Every task of every workspace, in the sidebar's order: the pinned ones first, newest pinned first, then the rest, newest started first; what the palette, the inbox, and the history find a task in. */
   tasks: TasksView["tasks"];
-  /**
-   * The chosen workspace's share of `plans`, which alone the sidebar lists,
-   * and of `inbox` and `inboxTasks`, which alone the Inbox, its count, and
-   * Home list; everything while no workspace is chosen.
-   */
+  /** The chosen workspace's share of `plans`, which alone the sidebar lists; everything while no workspace is chosen. */
   listed: {
     tasks: TasksView["tasks"];
-    inbox: readonly AppInboxTask[];
-    inboxTasks: readonly AppInboxTaskHolding[];
   };
   /** The tasks a rename, a pin, or where they stand, asked here and not yet carried by the list, is drawn over (main's view's own), which a list held still moves at once; none where nothing waits. */
   pendingTasks?: ReadonlySet<string>;
@@ -664,12 +658,8 @@ export interface TasksControl {
   onCommentRevealed: (ask: number) => void;
   /** Opens the window's Inbox narrowed to one task's items, on the item named, or on nothing chosen: what a task's "needs you" count, or an agent's waiting threads, ask. */
   onShowInbox: (narrowed: { readonly taskId: string; readonly itemId?: string }) => void;
-  /** What waits on the developer across the account's tasks, as main's read last answered: each task with an open inbox item, and its items. */
-  inbox: readonly AppInboxTask[];
   /** The task whose Inbox is on screen, or the agent whose own page's Inbox tab is, or none. */
   inboxShown: string | null;
-  /** Every task holding an inbox item, waiting or settled, the task whose item changed latest first: what the window's Inbox lists. */
-  inboxTasks: readonly AppInboxTaskHolding[];
   /** The window's Inbox: whether it stands in the task's place, the task chosen in it, and its presses. */
   inboxView: InboxViewControl;
   /** Says which agent's card in the column shows its threads in its transcript's place (`agent-threads.tsx`), none while it shows its transcript, so main is not told that transcript is on screen. */
@@ -1221,19 +1211,6 @@ function sidebarList(tasks: readonly TaskSummary[]): readonly TaskSummary[] {
   return [...pinned, ...rest];
 }
 
-/** The entries of the tasks in `workspaceId`, or every entry while no workspace is listed. */
-function inWorkspace<Entry extends { readonly taskId: string }>(
-  entries: readonly Entry[],
-  tasks: readonly Pick<Task, "id" | "workspaceId">[],
-  workspaceId: string | undefined,
-): readonly Entry[] {
-  if (workspaceId === undefined) return entries;
-  const listed = new Set(
-    tasks.filter((task) => task.workspaceId === workspaceId).map((task) => task.id),
-  );
-  return entries.filter((entry) => listed.has(entry.taskId));
-}
-
 /** The Inbox's choice of the item a link names: under its task, its agent, or by its id alone. */
 function inboxChoiceOf(place: InboxItemPlace): InboxChoice {
   if ("planId" in place) return { taskId: place.planId, itemId: place.itemId };
@@ -1281,10 +1258,6 @@ export function useTasksTab(input: {
   shown: boolean;
   /** The agents main says ended while no one was looking, each until its tab is shown. */
   unseenAgents: readonly string[];
-  /** What main says waits on the developer across the account's tasks. */
-  inboxWaiting: readonly AppInboxTask[];
-  /** Every task main says holds an inbox item, waiting or settled. */
-  inboxTasks: readonly AppInboxTaskHolding[];
   /** Opens Settings on its Integrations page, where an agent's MCP server is connected. */
   onOpenIntegrations: () => void;
   /** Opens Settings on its Agents page at the provider's harness row, where the developer's key for it is. */
@@ -1612,14 +1585,7 @@ export function useTasksTab(input: {
         : [...tasks.taskAgents, ...(tasklessAgents ?? NO_TASKLESS_AGENTS).map(summaryOfTaskless)],
     [tasks.taskAgents, tasklessAgents],
   );
-  const { inboxWaiting, inboxTasks } = input;
-  const listedInbox = useMemo(
-    () => ({
-      inbox: inWorkspace(inboxWaiting, tasks.tasks, listedWorkspaceId),
-      inboxTasks: inWorkspace(inboxTasks, tasks.tasks, listedWorkspaceId),
-    }),
-    [inboxWaiting, inboxTasks, tasks.tasks, listedWorkspaceId],
-  );
+  const inboxWaiting = useInboxWaitingTasks();
   const signedIn = fixture !== undefined || input.signedIn;
   const page = tasksPage(tasks);
   // The open task's description is held whenever a task is open, so a task held lately draws its description in
@@ -2987,7 +2953,7 @@ export function useTasksTab(input: {
     openUnpinned(taskId);
     const narrow = input.room === SHELL_ROOM.NARROW;
     if (narrow) sidePanel.onSetOpen(false);
-    const agentId = resumingAgentOf(taskId, tasks.taskAgents, input.inboxWaiting);
+    const agentId = resumingAgentOf(taskId, tasks.taskAgents, inboxWaiting);
     if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));
     else if (narrow) mainTabs.onShow(taskId, MAIN_TAB.OVERVIEW);
   };
@@ -4087,8 +4053,8 @@ export function useTasksTab(input: {
     [agents.agents],
   );
   const waitingAgents = useMemo(
-    () => input.inboxWaiting.flatMap((task) => task.items.map((item) => item.agentId)),
-    [input.inboxWaiting],
+    () => inboxWaiting.flatMap((task) => task.items.map((item) => item.agentId)),
+    [inboxWaiting],
   );
   const awakeAgents = useMemo(
     () => [...new Set([...workingAgents, ...waitingAgents])],
@@ -4290,8 +4256,6 @@ export function useTasksTab(input: {
     tasks: sidebar,
     listed: {
       tasks: listedSidebar,
-      inbox: listedInbox.inbox,
-      inboxTasks: listedInbox.inboxTasks,
     },
     listedAgents,
     pendingTasks,
@@ -4370,9 +4334,7 @@ export function useTasksTab(input: {
     tabKeys,
     onTabKeys: onKeys,
     onTabKeysTaken: onKeysTaken,
-    inbox: input.inboxWaiting,
     inboxShown: shownInbox,
-    inboxTasks: input.inboxTasks,
     onThreadsShown: setThreadsShown,
     // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {

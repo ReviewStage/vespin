@@ -28,7 +28,9 @@
  * its inverse, whether the target still holds what each set, and what a
  * refusal says and is reported as. The stack sends its act, says what came
  * of it, and keeps it for ⌘Z where the service kept it, so a caller names
- * the declaration and what it asks, and builds no Undo of its own.
+ * the declaration and what it asks, and builds no Undo of its own. A write
+ * whose change is read off its act's answer is sent by its caller and kept
+ * once the service kept it (`keepWrite`).
  *
  * A local entry (`pressLocal`) is built from a declaration of a write to
  * state this window holds alone (`LocalWrite`): a draft closed, a held
@@ -497,16 +499,6 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
 ): Promise<boolean> {
   const change = write.read(doors.rows(), asked);
   if (change === undefined) return Promise.resolve(false);
-  const run = (
-    due: (rows: Rows, change: Change) => boolean,
-    send: (send: RowSend<Kind>, change: Change, rows: Rows) => Promise<Answer>,
-  ) =>
-    dueRun(
-      [change],
-      (each) => due(doors.rows(), each),
-      (each) =>
-        send(doors.send, each, doors.rows()).then((answer) => answeredRun(write, each, answer)),
-    );
   return write.act(doors.send, change, doors.rows()).then((answer) => {
     const refusal = write.refused(answer);
     if (refusal !== undefined) {
@@ -519,15 +511,42 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
       });
       return false;
     }
-    const words = typeof write.words === "string" ? write.words : write.words(change);
-    const undo = undoable({
-      words,
-      undo: () => run(write.holds, write.undo),
-      redo: () => run(write.undone, write.act),
-    });
-    say({ ...undoToast(words, undo), replayUnmasked: write.unmasked?.(change) ?? true });
+    keepWrite(write, doors, change, say);
     return true;
   });
+}
+
+/**
+ * Keeps a declared write its caller sent and the service kept as the newest
+ * entry for ⌘Z, and says so with its toast's Undo, which runs that entry:
+ * for a write whose change is read off its act's answer, which `pressWrite`
+ * cannot read before it sends. The entry is taken back only while the rows
+ * still hold what the act set, and put back only while they hold what its
+ * inverse set. Its toast is said on `say`, as `pressWrite`'s are.
+ */
+export function keepWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
+  write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
+  doors: RowDoors<Rows, Kind>,
+  change: Change,
+  say: (notice: ToastNotice) => void = showToast,
+): void {
+  const run = (
+    due: (rows: Rows, change: Change) => boolean,
+    send: (send: RowSend<Kind>, change: Change, rows: Rows) => Promise<Answer>,
+  ) =>
+    dueRun(
+      [change],
+      (each) => due(doors.rows(), each),
+      (each) =>
+        send(doors.send, each, doors.rows()).then((answer) => answeredRun(write, each, answer)),
+    );
+  const words = typeof write.words === "string" ? write.words : write.words(change);
+  const undo = undoable({
+    words,
+    undo: () => run(write.holds, write.undo),
+    redo: () => run(write.undone, write.act),
+  });
+  say({ ...undoToast(words, undo), replayUnmasked: write.unmasked?.(change) ?? true });
 }
 
 /**

@@ -99,6 +99,7 @@ const DECLARED_TABLES = [
   "task_page_version",
   "description_revision",
   "pull_request_chapters",
+  "push_device",
   "queued_message",
   "rate_limit",
   "repository_pin",

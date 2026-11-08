@@ -46,7 +46,7 @@ import {
   fakeActs,
 } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handInboxItems, handState } from "../testing/app-state.js";
+import { handInboxItems, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { holdFrames, settleFrames } from "../testing/frames.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -247,7 +247,14 @@ async function inbox(
   fakeAppPlatform({ ...QUIET_PANEL, pageFrameUrl });
   fakeActs({ act: answer });
   fakeActPort({ ...fakeActPortCalls() });
-  handState(NO_EXPERIMENTS);
+  // Main's read of the account's inbox holds the task's one item as waiting.
+  handState(NO_EXPERIMENTS, {
+    inbox: {
+      ...stateWith({}, {}).inbox,
+      waiting: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
+      tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
+    },
+  });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
     rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] }, [INBOX_SCOPE_KIND.AGENT]: {} },
@@ -288,8 +295,6 @@ async function inbox(
             taskId: TASK.id,
             pullRequest: BATCHED,
           })),
-          inbox: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
-          inboxTasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
           inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
           sidePanel,
           onShowTask: (taskId) => left.tasks.push(taskId),
