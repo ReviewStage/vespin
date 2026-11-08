@@ -3497,7 +3497,7 @@ function sameMessage(
     standing.files.length === sent.files.length &&
     standing.files.every(
       (file, at) =>
-        file.name === sent.files[at]?.name && file.mediaType === sent.files[at]?.contentType,
+        file.name === sent.files[at]?.name && file.mediaType === sent.files[at].contentType,
     )
   );
 }

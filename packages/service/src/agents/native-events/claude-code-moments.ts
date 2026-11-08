@@ -675,9 +675,7 @@ function failureNoticeMoments(
       const read = Option.getOrUndefined(readInformational(message));
       const stopped = read?.prevent_continuation === true;
       return read?.level === INFORMATIONAL_WARNING || stopped
-        ? noted(
-            `${subtype}: ${read?.level ?? "notice"}${stopped ? ", prevented continuation" : ""}`,
-          )
+        ? noted(`${subtype}: ${read.level ?? "notice"}${stopped ? ", prevented continuation" : ""}`)
         : [];
     }
     case SYSTEM_SUBTYPE.FILES_PERSISTED: {

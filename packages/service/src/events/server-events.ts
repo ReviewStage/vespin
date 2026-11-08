@@ -689,7 +689,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
           const now = yield* Clock.currentTimeMillis;
           const naming = yield* groupItems(userId, workspaceId, now);
           if (naming.length > 0) yield* postNaming(workspaceId, naming, [], now);
-        }).pipe(Effect.ignore),
+        }),
     };
   }),
 );

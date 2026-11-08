@@ -106,7 +106,7 @@ function describeStopFailure(failure: {
   readonly _tag: string;
   readonly message?: string;
 }): string {
-  return isSandboxError(failure) ? (failure.message ?? failure._tag) : failure._tag;
+  return isSandboxError(failure) ? failure.message : failure._tag;
 }
 
 /**
