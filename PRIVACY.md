@@ -51,9 +51,10 @@ as written, not end-to-end encrypted, and our operators can read them.
 Through your workspace's GitHub App installation, we access repository
 contents, pull requests, code diffs, review comments, checks, and issues for
 repositories where the App is installed. A cloud agent works on a checkout of
-the repository in its own Vercel Sandbox, on a drive of its own where it
-started from its repository's default-branch drive and in the sandbox
-otherwise; an agent on your own machine keeps its work there. A workspace
+the repository in its own Vercel Sandbox: on a drive of its own where it was
+forked from its repository's default-branch drive or from the drive of the agent
+it was continued from, and in the sandbox otherwise; an agent on your own
+machine keeps its work there. A workspace
 repository's default branch may be kept on a drive cloud agents start from.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
 Apart from them, we generally do not keep copies of repository content beyond
@@ -273,9 +274,9 @@ agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
 the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. A
-repository's default-branch drive is kept for the workspace's agents until we
-remove it. When you delete your account:
+seven days after they were last used. A repository's default-branch drive is
+kept for the workspace's agents until we remove it, and a repository snapshot
+made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, and integration records) is deleted at once.
