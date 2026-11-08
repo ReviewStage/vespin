@@ -6,7 +6,7 @@ import { ADMIN_ERROR, ADMIN_HTTP_STATUS, type AdminError } from "@repo/features/
  * hosted tier's for the reason `@repo/features/admin-wire` gives: these slugs
  * are a browser's, not the desktop wire contract's. The hosted oRPC handler
  * answers each one as `{ error: slug }` under its status
- * (`packages/service/src/orpc/errors.ts`), as the old group's responses did.
+ * (`packages/service/src/orpc/errors.ts`).
  */
 
 /** The status each admin refusal is answered with, which is a function of the refusal alone. */
