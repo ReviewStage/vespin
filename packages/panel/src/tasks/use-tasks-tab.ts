@@ -454,7 +454,19 @@ export interface NewTaskPreset {
   /** What the card starts; a task's agent where none is named. */
   readonly purpose?: NewTaskPurpose;
   /** The card as it pressed Start, and why the start was refused, where the card is opened again on a refusal. */
-  readonly refused?: { readonly card: NewTaskCardKept; readonly note: Failure };
+  readonly refused?: NewTaskRefusal;
+}
+
+/** The card as it pressed Start, and why the start was refused, which the card opens again on. */
+export interface NewTaskRefusal {
+  readonly card: NewTaskCardKept;
+  readonly note: Failure;
+}
+
+/** A start pressed on Home's own composer and refused, which that composer opens again on: each refusal a new opening, so the composer draws it afresh. */
+export interface HomeRefusal {
+  readonly opening: number;
+  readonly refused: NewTaskRefusal;
 }
 
 /**
@@ -776,6 +788,8 @@ export interface TasksControl {
     preset: NewTaskPreset | undefined;
     /** How many times New task was pressed on Home, whose composer takes the caret at each press rather than a dialog opening over it. */
     homeAsks: number;
+    /** A start pressed on Home's own composer and refused while Home stood, which that composer opens again on rather than a dialog over it; none once the developer went elsewhere. */
+    homeRefused: HomeRefusal | undefined;
     /** The workspaces a task may start in, the account's every one. */
     workspaces: readonly Workspace[];
     /** The workspace the dialog starts the task in until another is chosen: the one listed; none before the workspaces are read. */
@@ -1348,6 +1362,10 @@ export function useTasksTab(input: {
   >(undefined);
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
+  // A start pressed on Home's own composer and refused while Home stood, with the arrivals counted as it was refused, past which it gives way.
+  const [homeRefused, setHomeRefused] = useState<
+    (HomeRefusal & { readonly arrivals: number }) | undefined
+  >(undefined);
   // New task's agent start under way: what its page draws, and the arrivals counted once the window stood where it was pressed into.
   const [startingTask, setStartingTask] = useState<
     (StartingTask & { readonly arrivals: number }) | undefined
@@ -3143,6 +3161,10 @@ export function useTasksTab(input: {
     // composer, whose page the task's took the place of, says its refusal in a toast, as no
     // card stands to say it.
     const saidInToast = handed === undefined && !stays && newTaskAsk === undefined;
+    // Note that only Home's own route draws its composer, once no task is bound there, so a press
+    // with no dialog standing over Home was the composer's own.
+    const homeNowAt = () => homeNow.current.home.open && homeNow.current.boundFor === undefined;
+    const pressedOnHome = newTaskAsk === undefined && homeNowAt();
     // Note that a refusal keeps what refused it, so the box that shows it reports that in its place.
     const refusedWith = (note: ComposerNote): ComposerNote => {
       if (saidInToast) {
@@ -3157,15 +3179,25 @@ export function useTasksTab(input: {
         letGoOfPage();
         // Note that what stood before the press comes back only where the developer went nowhere since.
         standBack();
-        setNewTaskAsk({
-          preset:
-            card === undefined
-              ? undefined
-              : {
-                  ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
-                  refused: { card, note },
-                },
-        });
+        // A start pressed on Home's own composer opens it again where Home still stands, rather than a
+        // second composer in a dialog over it holding the same words; elsewhere the dialog says it.
+        if (card !== undefined && pressedOnHome && homeNowAt()) {
+          setHomeRefused((was) => ({
+            opening: (was?.opening ?? 0) + 1,
+            refused: { card, note },
+            arrivals: arrivals(),
+          }));
+        } else {
+          setNewTaskAsk({
+            preset:
+              card === undefined
+                ? undefined
+                : {
+                    ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
+                    refused: { card, note },
+                  },
+          });
+        }
       }
       return note;
     };
@@ -4308,6 +4340,11 @@ export function useTasksTab(input: {
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
   const starting =
     startingTask !== undefined && arrivals() <= startingTask.arrivals ? startingTask : undefined;
+  // Note that Home's refused start gives way the same, so Home opened again later opens on its draft alone.
+  const homeRefusedNow =
+    homeRefused !== undefined && arrivals() <= homeRefused.arrivals
+      ? { opening: homeRefused.opening, refused: homeRefused.refused }
+      : undefined;
 
   return useSteadyDoors({
     page,
@@ -4559,6 +4596,7 @@ export function useTasksTab(input: {
       open: newTaskAsk !== undefined,
       preset: newTaskAsk?.preset,
       homeAsks: homeNewTasks,
+      homeRefused: homeRefusedNow,
       workspaces: viewed.workspaces,
       workspaceId: listedWorkspace?.id,
       repositoriesIn,

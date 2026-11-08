@@ -621,6 +621,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       open: false,
       preset: undefined,
       homeAsks: 0,
+      homeRefused: undefined,
       workspaces: [],
       workspaceId: undefined,
       repositoriesIn: () => NO_REPOSITORIES,

@@ -772,6 +772,46 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   assert.equal(home.control().newTask.homeAsks, 1);
 });
 
+test("an agent's start pressed on Home's own composer and refused opens no dialog over Home, handing the composer the card it pressed with and why, which a page opened since lets go", async () => {
+  const tab = mount(
+    { shown: true, tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces } },
+    {
+      [ACT_KIND.TASKS_START]: () =>
+        Promise.resolve({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE }),
+    },
+  );
+  const { idempotencyKey: key, ...agent } = handedStart();
+  const ask = { repository: "acme/api", workspaceId: undefined, relations: [], agent };
+  const card = { relations: [], repository: "acme/api", choice: undefined, words: agent.prompt };
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/api", undefined, {
+      handed: { idempotencyKey: key, ...agent },
+      card: { ...card, press: { key, ask } },
+    });
+  });
+  const refused = tab.control().newTask.homeRefused?.refused;
+  const refusedOnHome = {
+    dialog: tab.control().newTask.open,
+    words: refused?.card.words,
+    repository: refused?.card.repository,
+    says: refused?.note.text.length !== 0,
+  };
+  act(() => inboxDoorNow().open());
+  act(() => tab.control().onGoHome());
+
+  assert.deepEqual(refusedOnHome, {
+    dialog: false,
+    words: "Sweep the tests.",
+    repository: "acme/api",
+    says: true,
+  });
+  assert.equal(
+    tab.control().newTask.homeRefused,
+    undefined,
+    "Home opened again after the Inbox opens on its draft alone",
+  );
+});
+
 /** A start's payload, read back for whether it asked to open nothing. */
 const readQuiet = Schema.decodeUnknownOption(
   Schema.Struct({ quiet: Schema.optionalKey(Schema.Boolean) }),
