@@ -470,7 +470,9 @@ describe("a host waiting on its record", () => {
         yield* fileSystem.makeDirectory(stateRoot, { recursive: true });
         const waiting = yield* hostDeviceWhen(stateRoot, Option.isSome).pipe(Effect.forkScoped);
         yield* elapsed(Duration.seconds(30));
+        // Note that the folder is made again before its removal is heard, as on a busy box, so the record lands in a folder the first watch is not laid on.
         yield* fileSystem.remove(stateRoot, { recursive: true });
+        yield* fileSystem.makeDirectory(stateRoot, { recursive: true });
         yield* elapsed(Duration.seconds(30));
         yield* writeHostDevice(stateRoot, DEVICE);
         yield* untilEnded(waiting);
