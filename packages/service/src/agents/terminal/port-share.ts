@@ -31,7 +31,7 @@ import {
 } from "@repo/sandbox";
 import { Duration, Effect } from "effect";
 import { AGENT_TAG, SESSION_TAG } from "../agent-sandbox-open.js";
-import { agentTag } from "../machine/vercel-machine.js";
+import { agentTag } from "../machine/sandbox-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
@@ -119,7 +119,7 @@ function readShare(): CommandAsk {
  * The sandbox's tags as a share writes them whole: its session, its agent
  * (read under either of the agent tag's names, written under the current
  * one), and the share's mark where shared. Note that every other tag is
- * dropped, because Vercel refuses a sandbox more than five, and a sandbox
+ * dropped, because the provider refuses a sandbox more than five, and a sandbox
  * from before the runner's state moved to our store still carries three
  * leftovers that would push the mark past it.
  */

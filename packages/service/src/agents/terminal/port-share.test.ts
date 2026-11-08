@@ -6,7 +6,7 @@ import http from "node:http";
 import net, { type AddressInfo } from "node:net";
 import { join } from "node:path";
 import { it as effectIt } from "@effect/vitest";
-import type { SandboxSessionApi, VercelSandboxApi } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { Effect } from "effect";
 import { it } from "vitest";
@@ -70,18 +70,8 @@ effectIt.effect(
   "sharing a sandbox carrying leftover tags writes only the session, the agent, and the share's mark",
   () =>
     Effect.gen(function* () {
-      const written: Record<string, string>[] = [];
-      // SAFETY: sharing reaches the API only through updatePorts and the session only through start.
-      const api = {
-        updatePorts: (_name: string, _ports: readonly number[], tags: Record<string, string>) =>
-          Effect.sync(() => {
-            written.push(tags);
-            return [{ port: PORT_SHARE.HELPER_PORT, url: "https://shared.example" }];
-          }),
-      } as unknown as VercelSandboxApi;
-      // SAFETY: as above.
-      const running = { start: () => Effect.succeed("cmd") } as unknown as SandboxSessionApi;
-      const sandbox = {
+      const memory = memorySandbox();
+      const standing = memory.stand({
         name: "sandbox",
         tags: {
           [AGENT_TAG]: "agent",
@@ -90,12 +80,16 @@ effectIt.effect(
           agentRunnerLaunch: "launch",
           agentRunnerSession: "runner",
         },
-      };
+      });
+      const sandbox = { name: standing.name, tags: standing.tags };
+      const running = { name: standing.name, running: standing.running };
 
-      yield* sharePort(api, sandbox, running, 3000);
+      yield* sharePort(memory.service, sandbox, running, 3000);
 
-      assert.deepEqual(written, [
-        { [AGENT_TAG]: "agent", [SESSION_TAG]: "session", [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON },
-      ]);
+      assert.deepEqual(standing.tags, {
+        [AGENT_TAG]: "agent",
+        [SESSION_TAG]: "session",
+        [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON,
+      });
     }),
 );
