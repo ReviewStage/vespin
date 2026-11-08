@@ -62,7 +62,8 @@ import {
 } from "../route-gates.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { stripTabSurface } from "../tasks/strip-tab-kinds.js";
-import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
+import { MAIN_TAB } from "../tasks/task-tab-model.js";
+import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";

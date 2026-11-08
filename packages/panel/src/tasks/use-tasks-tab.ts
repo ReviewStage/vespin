@@ -227,6 +227,7 @@ import {
   stripTabReopens,
   TAB_PIN,
 } from "./strip-tab-kinds.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture } from "./tasks-fixture-loader.js";
 import type { ThreadReveal } from "./thread-reveal.js";
 import type { ComposerNote } from "./use-agent-composer.js";
@@ -245,16 +246,9 @@ import {
 } from "./use-description-history.js";
 import { useIdleTabs } from "./use-idle-tabs.js";
 import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
-import {
-  isOverviewTab,
-  MAIN_TAB,
-  type MainTab,
-  type MainTabsControl,
-  useMainTabs,
-} from "./use-main-tabs.js";
+import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
 import {
   DRAWN_KINDS,
-  SIDE_PANEL_TAB,
   type SidebarPin,
   type SidePanelControl,
   type SidePanelTab,

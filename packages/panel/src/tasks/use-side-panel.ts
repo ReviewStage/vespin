@@ -37,6 +37,13 @@ import {
   withPullRequestTab,
 } from "./pull-request-number.js";
 import { stripTabKept, stripTabPin, TAB_PIN } from "./strip-tab-kinds.js";
+import {
+  type FixedSidePanelTab,
+  type PullRequestView,
+  SIDE_PANEL_TAB,
+  SIDE_PANEL_TABS,
+  SIDE_PANEL_WIDTH,
+} from "./task-tab-model.js";
 import { type HeldShells, holdsShell, useOwnedShells } from "./terminal-held.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
 import { TerminalsContext } from "./use-terminal-session.js";
@@ -158,34 +165,6 @@ import { useWindowAccount } from "./window-account.js";
  * holds the window's focus, which stands until the "+" opens its menu.
  */
 
-/** The panel's kinds of tab, the fixed three. A kind is one entry here, one row below, and one case where the panel draws it. */
-export const SIDE_PANEL_TAB = {
-  /**
-   * The task's description, which the column's Overview holds now
-   * (`use-main-tabs.ts`). Note that it is kept here, drawn and offered
-   * nowhere (`DRAWN_KINDS`), because what an earlier version kept and pinned
-   * names it, and a pin or a link naming it opens Overview instead. Its value
-   * is the name the description had then, which is what was kept.
-   */
-  DESCRIPTION: "plan",
-  /**
-   * The task's Inbox, whose threads open in the window's Inbox narrowed to
-   * the task now. Note that it is kept here, drawn and offered nowhere
-   * (`DRAWN_KINDS`), because what an earlier version kept and pinned names
-   * it, and a pin naming it opens the window's Inbox instead.
-   */
-  INBOX: "inbox",
-  /**
-   * The description's comment threads, which the description lists in its margin's place
-   * now (`description-comments.tsx`'s `DescriptionCommentList`). Note that it is kept
-   * here, drawn and offered nowhere (`DRAWN_KINDS`), because what an earlier
-   * version kept and pinned names it.
-   */
-  COMMENTS: "comments",
-} as const;
-
-export type FixedSidePanelTab = (typeof SIDE_PANEL_TAB)[keyof typeof SIDE_PANEL_TAB];
-
 /** A tab of the panel: one of the fixed kinds, one subagent's, one file's, one agent's Changes or Terminal, one page's, or one of an agent's cloud Browser tabs. */
 export type SidePanelTab =
   | FixedSidePanelTab
@@ -233,16 +212,6 @@ export interface OpenFile {
 /** A file a File tab showed, as its history holds it to show again. */
 type FileVisit = Pick<OpenFile, "path" | "range" | "browsedOn" | "reads" | "commit">;
 
-/** Which of an agent's Pull request tab's tabs it shows under its fixed header: the description and conversation, the checks, the chapters, or the changed files. */
-export const PULL_REQUEST_VIEW = {
-  CONVERSATION: "conversation",
-  CHECKS: "checks",
-  CHAPTERS: "chapters",
-  FILES: "files",
-} as const;
-
-export type PullRequestView = (typeof PULL_REQUEST_VIEW)[keyof typeof PULL_REQUEST_VIEW];
-
 /** Which way a File tab's history is walked. */
 export const FILE_HISTORY_STEP = {
   BACK: "back",
@@ -268,9 +237,6 @@ export const SIDE_PANEL_TAB_KIND = {
   [SIDE_PANEL_TAB.COMMENTS]: { label: "Comments", icon: CommentsIcon },
 } as const satisfies Record<FixedSidePanelTab, SidePanelTabKind>;
 
-/** Every kind of tab, in the order the "+" offers them and a task whose order holds none of them stands them in. */
-export const SIDE_PANEL_TABS: readonly FixedSidePanelTab[] = Object.values(SIDE_PANEL_TAB);
-
 const FIXED_TABS: ReadonlySet<StripTab> = new Set(SIDE_PANEL_TABS);
 
 /** The kinds of old that are chosen and shown nowhere: the Inbox's, whose threads the window's Inbox holds, and Comments, which the description lists itself. */
@@ -290,17 +256,6 @@ function retiredKind(tab: SidePanelTab): boolean {
 function isFixedTab(tab: SidePanelTab): tab is FixedSidePanelTab {
   return FIXED_TABS.has(tab);
 }
-
-/**
- * How narrow the panel may be dragged, in CSS pixels, and where it starts. It
- * has no greatest width of its own: it is dragged as wide as the document
- * beside it leaves room for (side-panel.tsx), as an editor's secondary side
- * bar is.
- */
-export const SIDE_PANEL_WIDTH = {
-  MIN: 280,
-  DEFAULT: 400,
-} as const;
 
 /** Where the preference is kept in the renderer's storage. */
 const STORAGE_KEY = "app.sidePanel";

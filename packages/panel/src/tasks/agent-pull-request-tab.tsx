@@ -259,6 +259,7 @@ import {
   usePullRequestWrites,
   WritePlaceProvider,
 } from "./pull-request-writes.js";
+import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import {
   THREAD_REVEAL_WORDS,
   type ThreadLanding,
@@ -277,7 +278,6 @@ import {
   useOpenLink,
   useOpenPlace,
 } from "./use-open-link.js";
-import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
 
 /**
  * agent-pull-request-tab.tsx -- one agent's Pull request tab in the side panel: its pull request as GitHub holds it, laid out as stage-cli's pull request page: a fixed header, then tabs for its conversation, its checks, its chapters, and its files.

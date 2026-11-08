@@ -14,12 +14,9 @@ import { createRoot } from "react-dom/client";
 import { test } from "vitest";
 import { agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
+import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import {
-  PULL_REQUEST_VIEW,
-  type SidePanelControl,
-  type SidePanelTab,
-} from "../tasks/use-side-panel.js";
+import type { SidePanelControl, SidePanelTab } from "../tasks/use-side-panel.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { tasksControl } from "../testing/tasks-control.js";

@@ -14,12 +14,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { onTerminals, windowTerminals } from "../testing/terminals.js";
+import { SIDE_PANEL_TABS } from "./task-tab-model.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
 import {
   drawsChanges,
   drawsTerminal,
   type OpenTask,
-  SIDE_PANEL_TABS,
   type SidePanelControl,
   useSidePanel,
 } from "./use-side-panel.js";

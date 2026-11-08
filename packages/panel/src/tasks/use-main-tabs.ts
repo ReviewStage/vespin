@@ -18,6 +18,7 @@ import {
 import { absurd, Option, Schema } from "effect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stripTabKept, stripTabStays } from "./strip-tab-kinds.js";
+import { MAIN_TAB } from "./task-tab-model.js";
 
 /**
  * use-main-tabs.ts -- the task's column's tabs: its Overview, each of its agents, and its draft agent, which is chosen, and the order they stand in, kept per task across launches.
@@ -85,15 +86,6 @@ import { stripTabKept, stripTabStays } from "./strip-tab-kinds.js";
  * (`use-idle-tabs.ts`), which the agent waking opens again; a tab the
  * developer closes or opens is no longer one of those.
  */
-
-/**
- * The column's own tabs, named by a word: the task's Overview, holding its
- * description, which leads the strip on every task. Note that it is not
- * spelled `plan`, the word a retired tab was kept under below.
- */
-export const MAIN_TAB = {
-  OVERVIEW: "overview",
-} as const;
 
 /** The task's Overview tab. */
 type OverviewTab = typeof MAIN_TAB.OVERVIEW;

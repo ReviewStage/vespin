@@ -36,7 +36,7 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { landedBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
 import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
-import { PULL_REQUEST_VIEW } from "./use-side-panel.js";
+import { PULL_REQUEST_VIEW } from "./task-tab-model.js";
 
 /**
  * pull-request-description.test.ts -- a pull request's description edited
