@@ -8,8 +8,9 @@
    the fold, which hides an option's name beside its glyph, and any part of
    its count that folds with it (`data-folds`), by the bar's width in a
    container query keyed by `:has()` on whether one is chosen, or by the
-   bar's measured `data-folded`. The panel's narrow tests read the
-   fold from this sheet with markup of their own. */
+   bar's measured `data-folded`, every option's or all but the chosen
+   one's. The panel's narrow tests read the fold from this sheet with
+   markup of their own. */
 
 @layer components {
   /* The thumb stands where the row last measured its chosen option; it
@@ -96,14 +97,20 @@
     }
   }
 
-  /* A bar folding together, once its options' names no longer fit
+  /* A bar folding by measure, once its options' names no longer fit
      (`data-folded`, measured by `choice-bar.tsx`), shows every option by
-     its glyph alone, the chosen one too, so no option is named while its
-     neighbors are not; a reader still has every name. */
-  .ui-choice-bar[data-fold="together"][data-folded="true"]
-    .ui-choice-bar-icon
+     its glyph alone (`all`), the chosen one too, so no option is named
+     while its neighbors are not; or, folding in steps, every option but
+     the chosen one first (`others`), which keeps its name until even that
+     does not fit. A count's words that fold (`data-folds`) leave every
+     glyphed option at either step, so the counts read alike; a reader
+     still has every name. */
+  .ui-choice-bar[data-folded="all"] .ui-choice-bar-icon + .ui-choice-bar-label,
+  .ui-choice-bar[data-folded="others"]
+    .ui-choice-bar-option:not([aria-selected="true"], [aria-checked="true"])
+    > .ui-choice-bar-icon
     + .ui-choice-bar-label,
-  .ui-choice-bar[data-fold="together"][data-folded="true"]
+  .ui-choice-bar[data-folded]
     .ui-choice-bar-option:has(> .ui-choice-bar-icon)
     .ui-count-part[data-folds] {
     position: absolute;

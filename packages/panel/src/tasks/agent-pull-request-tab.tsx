@@ -339,9 +339,11 @@ import {
  * each over its own hunks in Files changed's list, its count saying
  * where they stand: being made, failed, out of date, or how many, and how
  * many viewed once any is; and Files changed (`AgentChangesTab`), its own bar and
- * tree, counted by its files as Chapters counts its chapters. A phone names
- * the chosen tab alone and draws the others by their glyphs and counts, and
- * a folded row leaves "viewed" out of every count. A review carries the
+ * tree, counted by its files as Chapters counts its chapters. A phone, and
+ * a panel too narrow for every tab's name, names the chosen tab alone and
+ * draws the others by their glyphs and counts, the chosen one too only
+ * where even that does not fit, and a folded row leaves "viewed" out of
+ * every count. A review carries the
  * threads on lines it started, each on the card every annotation on code
  * stands on (`annotation-card.tsx`): its file and lines in the strip over
  * its head, then the end of the hunk it was made on, drawn as Files changed
@@ -3354,10 +3356,11 @@ function PullRequestTabBody({
 }: Omit<AgentPullRequestTabProps, "control"> & { source: PullRequestSource }): React.JSX.Element {
   const id = useId();
   // A phone names the chosen tab and draws the others by their glyphs and counts, so the four fit its row without scrolling; a tab pressed is named.
+  // A narrow panel folds the same way once their names stop fitting, the chosen tab's last, so the view standing open is named in words, not a bare count.
   const tabsFold =
     useContext(ShellRoomContext) === SHELL_ROOM.NARROW
       ? CHOICE_BAR_FOLD.OWN
-      : CHOICE_BAR_FOLD.TOGETHER;
+      : CHOICE_BAR_FOLD.CHOSEN_LAST;
   const ids = (each: PullRequestView) => ({
     tab: `${id}-${each}-tab`,
     panel: `${id}-${each}-panel`,

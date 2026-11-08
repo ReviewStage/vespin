@@ -991,11 +991,12 @@
 
 /* The tabs' row under the header, Review at its end while the pull request
    is open, gives way in steps as the tab narrows, so every tab keeps its
-   name for as long as it can and none is named while the others are not:
-   first Review folds to a square around its glyph, which wears its count,
-   its word left to its hint; then the tabs take in their room; and only once their names no
-   longer fit do they fold, every one to its glyph at once
-   (`CHOICE_BAR_FOLD.TOGETHER`), about 480px with counts of a usual size. */
+   name for as long as it can: first Review folds to a square around its
+   glyph, which wears its count, its word left to its hint; then the tabs
+   take in their room; and only once their names no longer fit do they
+   fold, about 480px with counts of a usual size, every tab but the chosen
+   one to its glyph, as a phone's, and the chosen one last
+   (`CHOICE_BAR_FOLD.CHOSEN_LAST`). */
 /* off-scale: 650px, where Review's word stops fitting beside the tabs */
 @container pull-request-tab (width < 650px) {
   .pull-request-tab > .ui-pane-bar .pull-request-review {
