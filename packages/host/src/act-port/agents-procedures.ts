@@ -1,8 +1,8 @@
 /**
  * agents-procedures.ts -- the Tasks tab's asks of a task's coding agents whose answer is noted on its way, and its notes of which agent is shown and seen.
  *
- * Only a panel draws a task's agents, so every procedure refuses the
- * takeover and any other window, in its own sentence. The agents' plain
+ * Only a panel draws a task's agents, so every procedure refuses any
+ * other window, in its own sentence. The agents' plain
  * acts and live follows are declared (`contract/agents.ts`) and answered
  * by their composer;
  * those written here are the ones whose answer is noted on its way, by the

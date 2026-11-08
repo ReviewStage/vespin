@@ -19,7 +19,7 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
  *
  * Only a panel draws Settings, so every ask is the panel's alone. A refusal
  * or a defect of the host's is drawn as the skill calls' unanswered
- * failure, as every one was before it was declared. A workspace's skills are
+ * failure. A workspace's skills are
  * a live follow, declared once (`live-follow.ts`).
  */
 

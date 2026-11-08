@@ -18,7 +18,7 @@
  *
  * Only a panel draws the Inbox, so every act is the panel's alone, and a
  * refusal or a defect of the host's is drawn as the coding-agent calls'
- * unanswered failure, as every one was before it was declared, or, for a
+ * unanswered failure, or, for a
  * held close let go, as one no longer held. A task's or an agent's inbox
  * is a live follow, declared once (`live-follow.ts`), not a plain act.
  */
@@ -72,7 +72,7 @@ export const AGENT_INBOX_ACTS = declaredActs({
     door: ACT.ROW_WRITE,
     unanswered: UNANSWERED,
   }),
-  // Note that a release the host could not answer reads as a close no longer held, as it did before it was declared.
+  // Note that a release the host could not answer reads as a close no longer held.
   AGENTS_INBOX_CLOSE_RELEASE: hostAct({
     input: agentInboxCloseReleaseParamsSchema,
     output: agentInboxCloseReleasedViewSchema,

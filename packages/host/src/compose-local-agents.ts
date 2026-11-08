@@ -1316,7 +1316,7 @@ export function composeLocalAgents(
         const latest = yield* Queue.sliding<HeardBeat | undefined>(1);
         const told = Effect.flatMap(timedBeat(heardBeat), (heard) => Queue.offer(latest, heard));
         const reconciling = Effect.forever(Effect.flatMap(Queue.take(latest), followedBeat));
-        // Note that a reconcile that died ends the follow, as it did while it ran on the beat's own path, so the turn reports it and starts again.
+        // Note that a reconcile that died ends the follow, so the turn reports it and starts again.
         yield* Effect.raceFirst(presence(told), Effect.provideContext(reconciling, services));
       });
 
