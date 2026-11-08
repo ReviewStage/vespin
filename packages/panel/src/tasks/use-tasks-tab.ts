@@ -3470,11 +3470,12 @@ export function useTasksTab(input: {
   };
   showMissingTask.current = (taskId) => showMention({ kind: MENTION_KIND.TASK, taskId });
 
-  // The page of `agentId`, under the workspace it stands under where it stands, else `home`, a link's, else the listed one, whatever stood in the plan's place giving way to it as the router stands one place at a time.
+  // The page of `agentId`, under the workspace it stands under where it stands, else `home`, a link's where it names one, else the listed one, whatever stood in the plan's place giving way to it as the router stands one place at a time.
+  // Note that a link naming no workspace (`""`), as a notification's click hands one, names none here, as `routedLinkOf` reads it.
   const openAgentPage = (agentId: string, home?: string) => {
     const standing = input.agentView.agentId === agentId ? input.agentView.workspace : undefined;
     const listed = listedWorkspace === undefined ? undefined : stepOf(listedWorkspace);
-    const workspace = standing ?? home ?? listed;
+    const workspace = standing ?? (home === "" ? undefined : home) ?? listed;
     if (workspace === undefined) return;
     input.agentView.onOpen(agentId, workspace);
   };

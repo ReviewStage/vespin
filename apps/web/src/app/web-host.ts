@@ -81,7 +81,6 @@ import {
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { highlightSnippet } from "@repo/host/task-code";
 import type { AppPlatform } from "@repo/panel/app-platform";
-import { SETTING_SIDE_EFFECT } from "@repo/settings";
 import type { NotificationsStatus } from "@repo/settings/settings-controls";
 import type { RouterHistory } from "@tanstack/react-router";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
