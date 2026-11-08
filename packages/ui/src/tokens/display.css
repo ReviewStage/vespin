@@ -41,8 +41,7 @@
 
   /* The landing's warmth over the brand's warm near-black: the line of
      light along the top edge of the floating bar and the hero's Inbox, of the
-     warm gray, and the soft
-     warm-gray glow round a product screen. */
+     warm gray, and the soft warm-gray glow round a product screen. */
   --ui-display-landing-edge: inset 0 1px 0
     color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-display-landing-screen-glow:
