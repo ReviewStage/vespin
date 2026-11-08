@@ -3545,14 +3545,21 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
 /** The task the doors below go to, listed beside the open one in the open one's workspace. */
 const BILLING = row("billing", 2);
 
-/** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead. */
-async function onInbox(away: (control: TasksControl) => void = () => inboxDoorNow().open()) {
+/** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead; over none where `bound` says so. */
+async function onInbox(
+  away: (control: TasksControl) => void = () => inboxDoorNow().open(),
+  bound = true,
+) {
   const tab = mount(
     {
       shown: true,
       // Note that the window's history stands beside the tab, since a door's step is written through it.
       history: true,
-      tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+      tasks: {
+        ...TWO_WORKSPACES,
+        tasks: [row("notes", 4), BILLING],
+        ...(bound ? { activeTaskId: "notes" } : undefined),
+      },
     },
     {
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
@@ -3590,6 +3597,7 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
         ? undefined
         : { taskId: control.sectionReveal.taskId, anchor: control.sectionReveal.reveal.anchor },
     pin: control.chosenPin,
+    founding: control.newWorkspace.open,
   };
 }
 
@@ -3735,6 +3743,49 @@ test.each(TAB_DOORS)(
   async (_door, press) => askedOver(press, () => automationsDoor?.open()),
 );
 
+/** The workspace doors, each pressed from `away`'s place over Personal's open task, or over no task where `bound` is false. */
+const WORKSPACE_DOORS: [
+  string,
+  (control: TasksControl) => void,
+  ((control: TasksControl) => void) | undefined,
+  boolean?,
+][] = [
+  [
+    "another workspace chosen, which leaves the open task",
+    (control) => control.onChooseWorkspace(ACME.id),
+    () => undefined,
+  ],
+  [
+    "another workspace chosen over the Inbox",
+    (control) => control.onChooseWorkspace(ACME.id),
+    undefined,
+  ],
+  [
+    "another workspace chosen over the Inbox with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    undefined,
+    false,
+  ],
+  [
+    "another workspace chosen over an automation with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    () => automationsDoor?.open(EDIT),
+    false,
+  ],
+  [
+    "another workspace chosen over the Board with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    FROM_BOARD,
+    false,
+  ],
+  ["New workspace", (control) => control.newWorkspace.onOpen(), undefined],
+];
+
+test.each(WORKSPACE_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press, away, bound) => askedOver(press, away, bound),
+);
+
 /** A link to each family of places, opened in the Tasks tab as the window hands it one, each naming the task the doors above go to. */
 const ON_BILLING = `${LINK_ORIGIN}/personal/task/${BILLING.id}`;
 const LINK_DOORS: [string, string][] = [
@@ -3785,8 +3836,9 @@ test("a section's mention over a page holding unsaved work asks the section into
 async function askedOver(
   press: (control: TasksControl) => void,
   away?: (control: TasksControl) => void,
+  bound?: boolean,
 ) {
-  const unasked = await onInbox(away);
+  const unasked = await onInbox(away, bound);
   act(() => press(unasked.control()));
   await settle();
   const arrived = windowOf(unasked);
@@ -3794,7 +3846,7 @@ async function askedOver(
   // Note that the second window starts as the first did, with nothing the first chose kept for it.
   window.localStorage.clear();
 
-  const tab = await onInbox(away);
+  const tab = await onInbox(away, bound);
   const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
   act(() => void tab.control().placeLeave.stand((leave, stay) => asks.push({ leave, stay })));
   await settle();
