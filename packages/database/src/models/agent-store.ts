@@ -2952,18 +2952,23 @@ export function publishedWrite(
   reread: readonly StoredPullRequest[],
 ): PublishedWrite {
   const before = kept.earlierPublished ?? [];
-  let firstMerged = newlyMerged(kept.published, published) ? 1 : 0;
+  const current = published?.number;
+  // Note that the newest is weighed against the row's own copy of it, which is an earlier one where the row went back to its branch, so one merge counts once.
+  const keptCurrent =
+    kept.published?.number === current
+      ? kept.published
+      : before.find((each) => each.pullRequest.number === current)?.pullRequest;
+  let firstMerged = newlyMerged(keptCurrent ?? null, published) ? 1 : 0;
   const refreshed = before.map((earlier) => {
     const again = reread.find((each) => each.number === earlier.pullRequest.number);
     if (again === undefined) return earlier;
-    if (newlyMerged(earlier.pullRequest, again)) firstMerged += 1;
+    if (again.number !== current && newlyMerged(earlier.pullRequest, again)) firstMerged += 1;
     return { ...earlier, pullRequest: again };
   });
   const left =
     kept.published !== null && published !== null && kept.published.number !== published.number
       ? [{ branch: kept.publishedRead?.branch ?? null, pullRequest: kept.published }]
       : [];
-  const current = published?.number;
   const earlier = [...left, ...refreshed].filter(
     (each, at, all) =>
       each.pullRequest.number !== current &&

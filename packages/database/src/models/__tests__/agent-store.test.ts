@@ -1328,6 +1328,38 @@ it.layer(getTestDB())("the coding-agent store's agents by their pull request", (
   );
 });
 
+it.layer(getTestDB())("the coding-agent store's pull requests an agent opened", (it) => {
+  it.effect(
+    "counts one merge once where the agent went back to the branch of a pull request it opened before",
+    () =>
+      Effect.gen(function* () {
+        const dean = yield* openAccount;
+        const workspace = yield* openWorkspace(dean);
+        const { agentId } = yield* tasklessAgent(dean, workspace);
+        const pullRequest = (number: number, state: PullRequestState) => ({
+          number,
+          title: "Invite flow",
+          url: `https://github.com/acme/api/pull/${number}`,
+          state,
+          checks: CHECK_SUMMARY.PASSING,
+          additions: 1,
+          deletions: 0,
+          changedFiles: 1,
+        });
+        const first = { at: 0, branch: "agent/first", pushed: true };
+        yield* recordAgentPublished(dean, agentId, pullRequest(41, PULL_REQUEST_STATE.OPEN), first);
+        yield* recordAgentPublished(dean, agentId, pullRequest(42, PULL_REQUEST_STATE.OPEN), {
+          ...first,
+          branch: "agent/second",
+        });
+
+        const merged = pullRequest(41, PULL_REQUEST_STATE.MERGED);
+        assert.equal(yield* recordAgentPublished(dean, agentId, merged, first, [merged]), 1);
+        assert.equal(yield* recordAgentPublished(dean, agentId, merged, first), 0);
+      }),
+  );
+});
+
 it.layer(getTestDB())("the coding-agent store's agents on a branch", (it) => {
   it.effect(
     "a delivery about a repository's branch finds the agents standing on it in their own repository whatever case either spells it in, and those whose extra repository's pull request is from it, the branch matched exactly",
