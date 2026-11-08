@@ -48,9 +48,9 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
  * the Mac's port differs ("from :3000"). Under them, a port may be shared
  * by a public link (`PORT_SHARE_SET`): one row per port, "Share :3000",
  * and while one is shared, its link, which opens it, Copy, and Stop
- * sharing, as the host keeps the link beside the ports. The switch and
- * the share rows leave the menu standing, so it redraws as forwarding
- * answers them; only a row that opens the browser closes it. Every word drawn
+ * sharing, as the host keeps the link beside the ports. The switch, a
+ * setting, leaves the menu standing as every menu's switch does, so the
+ * ports appear under it; every other row is an action and closes it. Every word drawn
  * but the link is the app's own, port numbers among them, so a screen
  * recording shows them as they read.
  */
@@ -166,7 +166,7 @@ function portRows(answer: PortForwardingAnswer): MenuAction[] {
   );
 }
 
-/** The share rows: one per port, or the shared port's link, Copy, and Stop sharing; all but the link, which leaves for the browser, leave the menu standing. */
+/** The share rows: one per port, or the shared port's link, Copy, and Stop sharing. */
 function shareRows(
   agentId: string,
   answer: PortForwardingAnswer,
@@ -178,7 +178,6 @@ function shareRows(
       key: port,
       label: `${WORDS.SHARE} :${port}`,
       icon: <LinkIcon aria-hidden="true" />,
-      stays: true,
       onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
     }));
   return [
@@ -192,13 +191,11 @@ function shareRows(
     {
       label: WORDS.COPY,
       icon: <CopyIcon aria-hidden="true" />,
-      stays: true,
       onSelect: () => copy(shared.url, LINK_COPY.COPIED),
     },
     {
       label: WORDS.STOP_SHARING,
       icon: <UnlinkIcon aria-hidden="true" />,
-      stays: true,
       onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port: null }),
     },
   ];
