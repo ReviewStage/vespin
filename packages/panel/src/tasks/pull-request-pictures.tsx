@@ -217,14 +217,20 @@ function GitHubPicture({
     const open = door === undefined ? undefined : () => door.open(agentId, src);
     return <PictureBlock state={state} alt={alt} caption={undefined} onOpen={open} />;
   }
-  // Note that a written height stands as written, as GitHub draws it; with none, the height follows the width.
+  // Note that a height written alone stands as written; with a width beside it, the height follows the width at their written shape, so a picture the column narrows keeps its shape.
+  const heightOnly = size.height !== undefined && size.width === undefined;
+  const shape =
+    size.width === undefined || size.height === undefined
+      ? undefined
+      : { aspectRatio: `${size.width} / ${size.height}` };
   return state.kind === PICTURE_STATE.READY ? (
     <img
-      className={`inline-block max-w-full rounded-ui-6 align-middle${size.height === undefined ? " h-auto" : ""}`}
+      className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
       src={state.url}
       alt={alt}
       width={size.width}
       height={size.height}
+      style={shape}
     />
   ) : (
     <PictureSkeleton alt={alt} size={size} />
