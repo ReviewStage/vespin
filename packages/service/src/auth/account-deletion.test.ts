@@ -130,7 +130,7 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
     return { auth, post, signUp, sandboxes, forgotten };
   });
 
-/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox, and that member's scheduled automation, and one she shares with Grace. */
+/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation. */
 const openWorkspaces = (
   route: Effect.Success<ReturnType<typeof openAuthRoute>>,
   ada: string,
@@ -189,16 +189,31 @@ const openWorkspaces = (
       })
       .returning({ id: automation.id });
     assert.ok(scheduled);
+    const [sharedScheduled] = yield* db
+      .insert(automation)
+      .values({
+        userId: ada,
+        organizationId: shared.id,
+        name: "Every evening",
+        enabled: true,
+        triggerKind: AUTOMATION_TRIGGER.SCHEDULE,
+        trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 18 * * *", timezone: "UTC" },
+        action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Summarize the day" },
+        guards: AUTOMATION_DEFAULT_GUARDS,
+      })
+      .returning({ id: automation.id });
+    assert.ok(sharedScheduled);
     return {
       solo: solo.id,
       shared: shared.id,
       leftBehind: agent.conversationId,
       schedule: scheduled.id,
+      sharedSchedule: sharedScheduled.id,
     };
   });
 
 it.effect(
-  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left and its automations' schedules, and leaves a workspace others share",
+  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left and its automations' schedules, and leaves a workspace others share, forgetting the account's own schedule there",
   () =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
@@ -209,7 +224,11 @@ it.effect(
         const route = yield* openAuthRoute(client);
         const ada = yield* route.signUp("ada");
         const grace = yield* route.signUp("grace");
-        const { shared, leftBehind, schedule } = yield* openWorkspaces(route, ada.id, grace.id);
+        const { shared, leftBehind, schedule, sharedSchedule } = yield* openWorkspaces(
+          route,
+          ada.id,
+          grace.id,
+        );
 
         const deleted = yield* route.post("delete-user", {}, ada.cookie);
 
@@ -230,7 +249,8 @@ it.effect(
           [],
         );
         assert.deepEqual(route.sandboxes.state.deleted, ["sandbox-of-grace"]);
-        assert.deepEqual(route.forgotten, [schedule]);
+        // The solo workspace's schedule goes with it, then Ada's own in the shared one with her account.
+        assert.deepEqual(route.forgotten, [schedule, sharedSchedule]);
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
 );

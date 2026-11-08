@@ -206,6 +206,31 @@ export const AutomationCadence = Context.Reference<AutomationCadenceShape>(
   { defaultValue: () => RECORDED_ONLY },
 );
 
+/**
+ * The schedules of automations a delete has already taken deleted at
+ * Vercel, one after another, a failure logged as `removeAutomationAs` logs
+ * one, since the rows are gone and nothing else would stop them firing.
+ */
+export const schedulesForgotten = Effect.fnUntraced(function* (
+  schedules: readonly Pick<CadencedAutomation, "id" | "organizationId">[],
+) {
+  const cadence = yield* AutomationCadence;
+  yield* Effect.forEach(
+    schedules,
+    (schedule) =>
+      cadence
+        .forget(schedule)
+        .pipe(
+          Effect.catch((failure) =>
+            Effect.logWarning(
+              `a deleted automation's schedule stands: ${failure.code ?? "unreachable"}`,
+            ),
+          ),
+        ),
+    { discard: true },
+  );
+});
+
 /** The cadence as the deployment's environment names it: Vercel's on production, and the default anywhere else. */
 export const automationCadenceFromEnvironment = Layer.effect(
   AutomationCadence,

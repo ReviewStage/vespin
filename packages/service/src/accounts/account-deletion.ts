@@ -11,18 +11,23 @@
  * on; the analytics person is asked to be erased, since nothing after the
  * delete would still name it; and what the delete leaves to settle is read,
  * the integration grants among it, since an added account's subject is no id
- * the account still names after it. After the delete, every grant is
+ * the account still names after it, and its scheduled automations in every
+ * workspace, since the automations cascade with the user row while their
+ * schedules at Vercel would go on firing. After the delete, every grant is
  * revoked at Vercel Connect, as a Disconnect revokes one, a revoke that fails
- * logged by its word. A sandbox left behind expires with its snapshot
+ * logged by its word, and each schedule is deleted at Vercel, a failure
+ * logged. A sandbox left behind expires with its snapshot
  * (`@repo/sandbox`'s retention), and a deleted workspace's agents'
  * conversations and sandboxes, and its automations' schedules, are deleted
  * by its own delete's hooks (`workspace-deletion.ts`).
  */
 
+import { accountScheduledAutomations } from "@repo/database/models/automation-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { Effect, Redacted } from "effect";
 import type { HttpClient } from "effect/http";
 import { retireSessions, retiringReach } from "../agents/retire-sessions.js";
+import { schedulesForgotten } from "../automations/automation-cadence.js";
 import { HostedEnvironment } from "../environment.js";
 import { revokeIntegrationGrants } from "../integrations/integration-connect.js";
 import {
@@ -59,6 +64,8 @@ const forgetAnalytics = /* @__PURE__ */ Effect.fn("web/forgetAnalytics")(functio
 /** What the deletion read before Better Auth deleted the account, which it settles after. */
 export interface AccountDeletionPending {
   readonly grants: readonly IntegrationConnectionRow[];
+  /** The account's scheduled automations in every workspace, named as their schedules are kept at Vercel. */
+  readonly schedules: readonly { readonly id: string; readonly organizationId: string }[];
 }
 
 /** What the deletion does before Better Auth deletes the account, answering what it settles after; a store that cannot be read refuses the delete. */
@@ -68,7 +75,8 @@ export const beforeAccountDeletion = /* @__PURE__ */ Effect.fn("web/beforeAccoun
     yield* retireSessions(retiring, yield* standingSessionsOf(userId));
     yield* forgetAnalytics(userId);
     const grants = yield* readIntegrationConnections(userId);
-    return { grants } satisfies AccountDeletionPending;
+    const schedules = yield* accountScheduledAutomations(userId);
+    return { grants, schedules } satisfies AccountDeletionPending;
   },
 );
 
@@ -76,5 +84,6 @@ export const beforeAccountDeletion = /* @__PURE__ */ Effect.fn("web/beforeAccoun
 export const afterAccountDeletion = /* @__PURE__ */ Effect.fn("web/afterAccountDeletion")(
   function* (userId: string, pending: AccountDeletionPending) {
     yield* revokeIntegrationGrants(userId, pending.grants);
+    yield* schedulesForgotten(pending.schedules);
   },
 );

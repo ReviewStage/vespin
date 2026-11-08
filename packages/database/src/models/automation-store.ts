@@ -874,6 +874,23 @@ const findWorkspaceScheduledAutomations = SqlSchema.findAll({
     ),
 });
 
+const findAccountScheduledAutomations = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: ScheduledAutomationNameSchema,
+  execute: (userId) =>
+    Database.use((db) =>
+      db
+        .select({ id: automation.id, organizationId: automation.organizationId })
+        .from(automation)
+        .where(
+          and(
+            eq(automation.userId, userId),
+            eq(automation.triggerKind, AUTOMATION_TRIGGER.SCHEDULE),
+          ),
+        ),
+    ),
+});
+
 const findIntegrationAutomations = SqlSchema.findAll({
   Request: Schema.Struct({
     organizationId: Schema.String,
@@ -1565,6 +1582,18 @@ export function workspaceScheduledAutomations(
   organizationId: string,
 ): TaskStoreEffect<readonly (typeof ScheduledAutomationNameSchema.Type)[]> {
   return findWorkspaceScheduledAutomations(organizationId);
+}
+
+/**
+ * Every automation the account made that fires on a schedule, in any
+ * workspace, enabled or not, named as its schedule is kept at Vercel: what
+ * an account's delete reads while the rows stand, since the schedules
+ * outlive the rows its user row cascades.
+ */
+export function accountScheduledAutomations(
+  userId: string,
+): TaskStoreEffect<readonly (typeof ScheduledAutomationNameSchema.Type)[]> {
+  return findAccountScheduledAutomations(userId);
 }
 
 /**

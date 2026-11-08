@@ -22,7 +22,7 @@ import { deleteConversations } from "@repo/database/models/conversation-delete";
 import { workspaceAgentConversations } from "@repo/database/models/workspace-store";
 import { Effect } from "effect";
 import { deletedWithWorkspace, deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
-import { AutomationCadence } from "../automations/automation-cadence.js";
+import { schedulesForgotten } from "../automations/automation-cadence.js";
 
 /** What the deletion read before Better Auth deleted the workspace, which it settles after. */
 export interface WorkspaceDeletionPending {
@@ -46,27 +46,6 @@ export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWork
   },
 );
 
-/** Each schedule deleted at Vercel, one that stands logged as `removeAutomationAs` logs it. */
-const forgetSchedules = Effect.fnUntraced(function* (
-  schedules: WorkspaceDeletionPending["schedules"],
-) {
-  const cadence = yield* AutomationCadence;
-  yield* Effect.forEach(
-    schedules,
-    (schedule) =>
-      cadence
-        .forget(schedule)
-        .pipe(
-          Effect.catch((failure) =>
-            Effect.logWarning(
-              `a deleted automation's schedule stands: ${failure.code ?? "unreachable"}`,
-            ),
-          ),
-        ),
-    { discard: true },
-  );
-});
-
 /** What the deletion settles once Better Auth has deleted the workspace, a failure logged since the workspace is already gone. */
 export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorkspaceDeletion")(
   function* (pending: WorkspaceDeletionPending) {
@@ -79,6 +58,6 @@ export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorksp
       ),
     );
     yield* deletedWithWorkspace(deploymentSandboxDeletes, pending.sessionIds);
-    yield* forgetSchedules(pending.schedules);
+    yield* schedulesForgotten(pending.schedules);
   },
 );
