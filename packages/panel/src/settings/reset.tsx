@@ -18,10 +18,12 @@ import { appSettingsView, SETTINGS_RESET_SCOPE } from "@repo/settings/wire";
 import { BUTTON_VARIANT, Button, IconButton, STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
-import { useIsMutating } from "@tanstack/react-query";
+import { useIsMutating, useQueryClient } from "@tanstack/react-query";
 import { actFailureWords, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
+import { keepWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
+import { appStateIn, selectAppSettingsView } from "../use-app-state.js";
 import type { SettingsWrites } from "./writes.js";
 
 /** What the toast says once a page's reset landed, by the group it reset. */
@@ -35,8 +37,36 @@ const RESET_LABEL = "Reset to defaults";
 /** What the toast says when an Undo could not write a setting back. */
 const UNDO_REFUSED_NOTE = "The settings could not be put back. Try again.";
 
+/** What the toast says when ⇧⌘Z could not reset the settings an Undo put back. */
+const REDO_REFUSED_NOTE = "The settings could not be reset again. Try again.";
+
 /** One setting as it stood, which an Undo writes back. */
 type HeldSetting = readonly [AppSettingField, AppSettingValue<AppSettingField>];
+
+/** One setting a reset changed: as it stood before, and as the reset left it. */
+interface ResetField {
+  readonly field: AppSettingField;
+  readonly before: AppSettingValue<AppSettingField>;
+  readonly after: AppSettingValue<AppSettingField>;
+}
+
+/**
+ * A page's reset that landed: the settings it changed, and the
+ * page's writes and the window's settings as they stand, which its Undo
+ * sends on and reads, since a page's control is gone once its reset lands.
+ */
+interface SettingsReset {
+  readonly changed: readonly ResetField[];
+  readonly writes: SettingsWrites;
+  readonly now: () => AppSettingsView | undefined;
+}
+
+/** A reset's or its Undo's answer: kept, or refused, with what refused it and what ⌘Z's toast says. */
+type ResetAnswer =
+  | { readonly kept: true }
+  | { readonly kept: false; readonly cause: unknown; readonly note: string };
+
+const RESET_KEPT: ResetAnswer = { kept: true };
 
 /** Whether two readings of a setting say the same, a chord compared by its keys rather than by which object carries them. */
 function sameSetting(
@@ -47,7 +77,7 @@ function sameSetting(
 }
 
 /**
- * The group's settings the reset changed, as they stood before it: each
+ * The group's settings the reset changed, as they stood before it and as it left them: each
  * whose reading before differs from the store's answer after. Note that
  * the answer is what decides, not the defaults, because a setting the file
  * never held is read as what the launch resolved, and the reset leaves it
@@ -58,15 +88,25 @@ function changedBy(
   before: AppSettingsView,
   after: AppSettingsView,
   scope: SettingsResetScope,
-): readonly HeldSetting[] {
-  return APP_SETTING_FIELDS.flatMap((field): HeldSetting[] => {
+): readonly ResetField[] {
+  return APP_SETTING_FIELDS.flatMap((field): ResetField[] => {
     if (APP_SETTING_SCHEMA[field].resetScope !== scope) return [];
     // SAFETY: the value is the one this field holds, read from the settings by the field.
     const was = before[field];
     // SAFETY: as above, from the settings the reset left.
     const now = after[field];
-    return sameSetting(was, now) ? [] : [[field, was]];
+    return sameSetting(was, now) ? [] : [{ field, before: was, after: now }];
   });
+}
+
+/** Of the settings a reset changed, those `settings` still read as `side` names; none before the first read. */
+function standing(
+  settings: AppSettingsView | undefined,
+  changed: readonly ResetField[],
+  side: Exclude<keyof ResetField, "field">,
+): readonly ResetField[] {
+  if (settings === undefined) return [];
+  return changed.filter((each) => sameSetting(settings[each.field], each[side]));
 }
 
 /**
@@ -93,6 +133,55 @@ function writeBack(writes: SettingsWrites, held: readonly HeldSetting[]): Promis
 }
 
 /**
+ * A page's reset as ⌘Z takes it back and ⇧⌘Z puts it back, which asks
+ * nothing first since an Undo writes back what it changed. Note that each
+ * setting is taken back only while it still reads as the reset left it,
+ * and reset again only while it still reads as the Undo put it, because a
+ * setting changed since, in this window or another, was chosen anew, as
+ * the stack leaves a row changed since alone. Its words name the group it
+ * reset.
+ */
+const resetWrite = (
+  scope: SettingsResetScope,
+): UndoWrite<
+  AppSettingsView | undefined,
+  SettingsReset,
+  SettingsReset,
+  typeof ACT_KIND.SETTINGS_RESET,
+  ResetAnswer
+> => ({
+  words: RESET_NOTES[scope],
+  kind: ACT_KIND.SETTINGS_RESET,
+  read: (_settings, reset) => reset,
+  // Note that the reset keeps every field of its group but those it takes back, so nothing else moves.
+  act: (send, { changed, now }) => {
+    const due = standing(now(), changed, "before").map(({ field }) => field);
+    const kept = APP_SETTING_FIELDS.filter(
+      (field) => APP_SETTING_SCHEMA[field].resetScope === scope && !due.includes(field),
+    );
+    return send({ scope, kept }).then(
+      (result): ResetAnswer =>
+        result.status === ACTION_RESULT_STATUS.ACCEPTED
+          ? RESET_KEPT
+          : { kept: false, cause: result, note: REDO_REFUSED_NOTE },
+      (error: unknown): ResetAnswer => ({ kept: false, cause: error, note: REDO_REFUSED_NOTE }),
+    );
+  },
+  undo: (_send, { changed, writes, now }) =>
+    writeBack(
+      writes,
+      standing(now(), changed, "after").map(({ field, before }): HeldSetting => [field, before]),
+    ).then(
+      (taken): ResetAnswer =>
+        taken.kept ? RESET_KEPT : { kept: false, cause: taken.cause, note: UNDO_REFUSED_NOTE },
+    ),
+  holds: (settings, { changed }) => standing(settings, changed, "after").length > 0,
+  undone: (settings, { changed }) => standing(settings, changed, "before").length > 0,
+  refused: (answer) => (answer.kept ? undefined : answer.note),
+  surface: FAILURE_SURFACE.SETTINGS_RESET,
+});
+
+/**
  * The one control that returns a whole page to its defaults, drawn only
  * while the page holds something to return — until then it could only offer
  * to change nothing, the same reason a shortcut's own reset waits for a
@@ -102,7 +191,8 @@ function writeBack(writes: SettingsWrites, held: readonly HeldSetting[]): Promis
  * in a toast held as a failure is, since the page's title line has no row
  * under it to say it in.
  * A reset that landed takes the control away with what it reset, so it is
- * said in a toast with an Undo, which writes back what the page held.
+ * said in a toast with an Undo, which writes back what the page held, kept
+ * on the undo stack so ⌘Z takes it back too (`resetWrite`).
  * The control is `@repo/ui`'s quiet `Button`, its glyph in the button's icon
  * slot; on a phone, whose page ends its bar rather than its title line, it is
  * a glyph-alone `IconButton` in the bar's end corner, resting as the button would.
@@ -125,6 +215,16 @@ function ResetPageButton({
   more: string | undefined;
 }): React.JSX.Element {
   const toast = useToast();
+  const client = useQueryClient();
+  // Note that the Undo reads the window's settings as they stand, through the client, because the control is gone once its reset lands.
+  const now = () => {
+    const state = appStateIn(client);
+    return state === undefined ? undefined : selectAppSettingsView(state);
+  };
+  const doors: RowDoors<AppSettingsView | undefined, typeof ACT_KIND.SETTINGS_RESET> = {
+    rows: now,
+    send: ({ scope, kept }) => writes.reset(scope, kept),
+  };
   const reset = (asked: SettingsResetScope): Promise<ActionResult> => {
     const before = settings;
     const unseen = APP_SETTING_FIELDS.filter(
@@ -141,21 +241,10 @@ function ResetPageButton({
         return result;
       }
       // Note that a kept row never enters the Undo, because another window may have changed it since this page read it.
-      const held = changedBy(before, appSettingsView(result.settings), asked).filter(
-        ([field]) => !unseen.includes(field),
+      const changed = changedBy(before, appSettingsView(result.settings), asked).filter(
+        ({ field }) => !unseen.includes(field),
       );
-      const undo = () =>
-        writeBack(writes, held).then((taken) => {
-          if (taken.kept) return;
-          toast({
-            words: UNDO_REFUSED_NOTE,
-            replayUnmasked: true,
-            tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
-            failure: { surface: FAILURE_SURFACE.SETTINGS_RESET, cause: taken.cause },
-          });
-        });
-      toast({ ...undoToast(RESET_NOTES[asked], undo), replayUnmasked: true });
+      keepWrite(resetWrite(asked), doors, { changed, writes, now });
       return result;
     });
   };

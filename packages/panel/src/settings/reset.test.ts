@@ -8,8 +8,8 @@ import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { DESKTOP_CAPABILITIES } from "../testing/app-state.js";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { DESKTOP_CAPABILITIES, stateWith } from "../testing/app-state.js";
+import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { pageResetControl } from "./reset.js";
@@ -102,12 +102,15 @@ test("a zoom changed in a browser, which draws no Zoom row, offers no reset on A
   );
 });
 
-/** A store holding `start`, whose reset returns the Appearance group to its defaults in one write but for the fields it is asked to keep, as the host's does. */
+/** A store holding `start`, whose reset returns the Appearance group to its defaults in one write but for the fields it is asked to keep, as the host's does, each write delivered to the window's document as main delivers it. */
 function appearanceStore(start: typeof settings) {
   let held = start;
+  const deliver = () => writeAppState(stateWith({}, { settings: appSettingsWire(held) }));
+  deliver();
   const writes: SettingsWrites = {
     setting: (field, value) => {
       held = Object.assign(settingsView(), held, { [field]: value });
+      deliver();
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
     },
     reset: (_scope, kept) => {
@@ -123,6 +126,7 @@ function appearanceStore(start: typeof settings) {
           Object.entries(reset).filter(([field]) => !kept.some((each) => each === field)),
         ),
       );
+      deliver();
       return Promise.resolve({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         settings: appSettingsWire(held),
