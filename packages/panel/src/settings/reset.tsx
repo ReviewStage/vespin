@@ -229,6 +229,7 @@ function ResetPageButton({
     const unseen = APP_SETTING_FIELDS.filter(
       (field) => APP_SETTING_SCHEMA[field].resetScope === asked && !settingVisible(field, rows),
     );
+    const keep = keepWrite(resetWrite(asked), doors);
     return writes.reset(asked, unseen).then((result) => {
       if (result.status !== ACTION_RESULT_STATUS.ACCEPTED) {
         toast({
@@ -243,7 +244,7 @@ function ResetPageButton({
       const changed = changedBy(before, appSettingsView(result.settings), asked).filter(
         ({ field }) => !unseen.includes(field),
       );
-      keepWrite(resetWrite(asked), doors, { changed, writes });
+      keep({ changed, writes });
       return result;
     });
   };

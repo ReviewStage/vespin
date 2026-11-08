@@ -15,7 +15,7 @@ import {
   useDatePicker,
 } from "./date-picker.js";
 import { hasReminder } from "./inbox-model.js";
-import { keptToast, useInboxPresses } from "./inbox-writes.js";
+import { useInboxPresses } from "./inbox-writes.js";
 
 /**
  * inbox-remind.tsx -- setting a reminder on an Inbox item: the times its menus offer, the menu H opens on the chosen row, and the date picker for a time of the reader's own.
@@ -217,12 +217,8 @@ export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindM
           touched.filter((_, at) => taken[at]?.kept === true).map(({ id }) => id),
         );
         if (kept.size === 0) return;
-        toast(
-          keptToast(
-            words,
-            pressed.keep(words, (id) => kept.has(id)),
-          ),
-        );
+        const said = pressed.keep(words, (id) => kept.has(id));
+        if (said !== undefined) toast(said);
       });
     },
     [onRemind, remind, toast],

@@ -26,8 +26,8 @@ import type { MenuEntry } from "../desktop/action-menu.js";
 import { PhoneHead, PlaceMore, phoneFindGroups } from "../desktop/phone-head.js";
 import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
-import { TOAST_HOLD, type ToastNotice, undoToast, useToast } from "../toast.js";
-import type { UndoWrite } from "../undo-stack.js";
+import { TOAST_HOLD, type ToastNotice, useToast } from "../toast.js";
+import { TOAST_ONLY_UNDO, toastOnlyUndo, type UndoWrite } from "../undo-stack.js";
 import { VERSION_CHANGE, type VersionDiff, versionDiff } from "./description-history-model.js";
 import { DescriptionPictures, useDescriptionPictureDrawer } from "./description-pictures.js";
 import { DocumentScroll } from "./document-frame.js";
@@ -332,9 +332,8 @@ export function sayRestored(
     });
     return;
   }
-  toast({
-    replayUnmasked: true,
-    ...undoToast(VERSION_RESTORE.words, () => {
+  toast(
+    toastOnlyUndo(TOAST_ONLY_UNDO.VERSION_RESTORE, VERSION_RESTORE.words, () => {
       undo().then((undone) => {
         const words = VERSION_RESTORE.refused(undone);
         if (words === undefined || undone.kept) return;
@@ -347,7 +346,7 @@ export function sayRestored(
         });
       });
     }),
-  });
+  );
 }
 
 /**

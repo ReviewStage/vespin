@@ -157,7 +157,7 @@ import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-s
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import {
   heldTask,
   pressRows,
@@ -2399,12 +2399,8 @@ export function useTasksTab(input: {
         return;
       }
       const words = settledNote(status, landed.length, refused);
-      const undo = pressed.keep(words, (taskId) => landed.includes(taskId));
-      toast(
-        undo === undefined
-          ? { replayUnmasked: true, words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE }
-          : { ...undoToast(words, undo), replayUnmasked: true },
-      );
+      const said = pressed.keep(words, (taskId) => landed.includes(taskId));
+      if (said !== undefined) toast(said);
     });
   };
 
