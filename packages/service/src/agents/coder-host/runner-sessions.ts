@@ -133,7 +133,9 @@ import {
   readAgentRouting,
   readNativeRunStanding,
   recordAgentNativeSession,
+  recordAgentRunnerLaunch,
   recordAgentRunnerToken,
+  runnerLaunchOf,
 } from "@repo/database/models/agent-store";
 import { holdsSession } from "@repo/database/models/claude-session-entries";
 import {
@@ -215,7 +217,7 @@ import {
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
 import { experimentsOnIn, experimentsReadIn } from "../workspace-experiment-on.js";
-import { BEARER_PREFIX, runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import { BEARER_PREFIX, launchUrl, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { type AgentImage, AgentImageMissing } from "./agent-image.js";
 import { agentFailureSaid, agentLogIds, keptFailureWords, runningLogId } from "./agent-log.js";
 import { CODER, CODER_REFUSAL } from "./bounds.js";
@@ -877,8 +879,9 @@ export const runnerSessions = <
      * One launch of the runner in the running place: its swaps kept at the
      * place's firewall where its machine holds them there (`runnerBearer`,
      * `HarnessLaunch`'s `credentials`), ahead of every write that composes the
-     * place's policy; then a fresh bearer recorded, the launch's record
-     * written, its config read, the caller's own steps (`alongside`) run,
+     * place's policy; then a fresh bearer recorded, numbering the launch,
+     * ahead of its config, whose URLs name that number (`launchUrl`); the
+     * launch's record written, the caller's own steps (`alongside`) run,
      * and the place's whole policy written, the repository's credential
      * minted afresh beside the swaps, all at once beside the machine's own,
      * since none waits on another and the runner waits on them all; then the runner
@@ -951,7 +954,20 @@ export const runnerSessions = <
         const ready = Effect.all(
           [
             Effect.gen(function* () {
-              const firstSequence = yield* options.nextSequence(agent.conversationId);
+              // The bearer is recorded first, as a launch numbered past every one before it, so the
+              // URLs its runner posts to name that number: a bearer alone does not tell launches apart.
+              const [firstSequence, recordedLaunch] = yield* Effect.all(
+                [
+                  options.nextSequence(agent.conversationId),
+                  recordAgentRunnerLaunch(userId, agent.id, runnerTokenDigest(bearer)),
+                ],
+                { concurrency: "unbounded" },
+              );
+              const named = (url: string) =>
+                Option.match(recordedLaunch, {
+                  onNone: () => url,
+                  onSome: (number) => launchUrl(url, number),
+                });
               // A rewind's cut is handed to the launch that resumes the harness's session, and let go
               // once the runner has it; a fresh session never heard the line it names.
               const read = Effect.gen(function* () {
@@ -971,9 +987,11 @@ export const runnerSessions = <
                 return {
                   config: {
                     ...config,
-                    ...(layout.linesRead ? { linesUrl: options.linesUrl } : undefined),
+                    eventsUrl: named(config.eventsUrl),
+                    ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
+                    ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
                     ...(layout.transcriptsKept
-                      ? { transcriptsUrl: options.transcriptsUrl }
+                      ? { transcriptsUrl: named(options.transcriptsUrl) }
                       : undefined),
                     ...(from.fork === true ? { fork: true } : undefined),
                     warm: true,
@@ -1013,7 +1031,6 @@ export const runnerSessions = <
             layout.linesRead ? waitingFilesWritten(agent, place.running) : Effect.void,
             // An earlier launch's lines go but its untaken messages in the window, which this launch is handed.
             layout.linesRead ? clearRunnerLines(userId, agent.id) : Effect.void,
-            recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer)),
             // The launch's swaps stand before the runner starts, so its first request carries the
             // real value: the machine starts the runner once every step here is done. Note that a
             // post refused for want of its bearer is refused for good.
@@ -2399,12 +2416,13 @@ export const runnerSessions = <
     return sessions;
   });
 
-/** What the events route names of a launch's end: the agent, its session, the END event's number, and why it ended where the END said. */
+/** What the events route names of a launch's end: the agent, its session, the END event's number, why it ended where the END said, and the launch its post named (`agent.runner_launch`), where it named one. */
 export interface RunnerEnding {
   readonly target: ConversationTarget;
   readonly sessionId: string;
   readonly sequence: number;
   readonly reason?: RunnerEnd | undefined;
+  readonly launch?: number | undefined;
 }
 
 /**
@@ -2548,7 +2566,14 @@ const leftAtEnd = Effect.fn("web/leftAtEnd")(function* (
   if (Option.isNone(found)) return RUNNER_ENDED.STALE;
   // Read apart from the runner's record, which a launch writes only once its command started.
   const { launch, running, agentId } = found.value;
-  if (launch !== undefined && ending.sequence < launch.firstSequence) return RUNNER_ENDED.STALE;
+  // An END is a newer launch's to stop only where it is that launch's own: by the launch its post
+  // named, read under the lease every launch records its number under, or, for a post that named
+  // none, by its event's number, which launches that posted nothing between them share.
+  if (ending.launch !== undefined && agentId !== undefined) {
+    if (ending.launch !== (yield* runnerLaunchOf(agentId))) return RUNNER_ENDED.STALE;
+  } else if (launch !== undefined && ending.sequence < launch.firstSequence) {
+    return RUNNER_ENDED.STALE;
+  }
   if (running === undefined) return RUNNER_ENDED.STALE;
   // The runner said it ended, so its record tells of it no longer, its launch kept for a late END:
   // a message or a delivery after this reads no runner up, and launches one rather than awaiting it.

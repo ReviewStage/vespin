@@ -64,7 +64,7 @@ import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { CURSOR_START, transcriptPast } from "../coder-host/transcript.js";
 import { readNativeTurnHanded, recordNativeTurnHanded } from "../coder-host/turn-message.js";
-import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import { launchUrl, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import {
   RUNNER_EVENTS_PATH,
   type RunnerAlive,
@@ -117,12 +117,13 @@ const standingWith = (
       },
     );
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
-    return (bearer: string | undefined, events: readonly RunnerEvent[]) =>
+    return (bearer: string | undefined, events: readonly RunnerEvent[], launch?: number) =>
       Effect.promise(async () => {
         const headers = new Headers({ "content-type": "application/json" });
         if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+        const url = `${ORIGIN}${RUNNER_EVENTS_PATH}`;
         const response = await web.handler(
-          new Request(`${ORIGIN}${RUNNER_EVENTS_PATH}`, {
+          new Request(launch === undefined ? url : launchUrl(url, launch), {
             method: "POST",
             headers,
             body: JSON.stringify({ events }),
@@ -588,36 +589,50 @@ it.layer(SUITE)("the runner events route", (it) => {
       }),
   );
 
-  it.effect("a wrong bearer, none, and one retired from the conversation are refused", () =>
-    Effect.gen(function* () {
-      const post = yield* standing;
-      const agent = yield* agentWithBearer;
-      const events = workflowTurn(agent.lineId).slice(0, 2);
+  it.effect(
+    "a wrong bearer, none, a launch a newer one replaced under the bearer its sandbox's firewall now swaps in, and one retired from the conversation are refused",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const events = workflowTurn(agent.lineId).slice(0, 2);
 
-      const wrong = yield* post(randomBytes(32).toString("base64url"), events);
-      const none = yield* post(undefined, events);
-      yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
-      const retired = yield* post(agent.bearer, events);
-      const { rows, turns: written } = yield* transcriptOf(agent.target.conversationId);
+        const wrong = yield* post(randomBytes(32).toString("base64url"), events);
+        const none = yield* post(undefined, events);
+        // A newer launch in the same sandbox records the bearer its one firewall swap hands both runners.
+        yield* recordAgentRunnerToken(agent.userId, agent.agentId, runnerTokenDigest(agent.bearer));
+        const cutOff: RunnerEvent = {
+          sequence: 0,
+          message: {
+            type: RUNNER_EVENT.END,
+            reason: RUNNER_END.FAILED,
+            detail: "the service refused the launch's lines: The service answered 401",
+          },
+        };
+        const replaced = yield* post(agent.bearer, [cutOff], 1);
+        yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
+        const retired = yield* post(agent.bearer, events);
+        const { rows, turns: written } = yield* transcriptOf(agent.target.conversationId);
 
-      assert.deepEqual(
-        [wrong.status, none.status, retired.status],
-        [
-          HOSTED_HTTP_STATUS.UNAUTHORIZED,
-          HOSTED_HTTP_STATUS.UNAUTHORIZED,
-          HOSTED_HTTP_STATUS.UNAUTHORIZED,
-        ],
-      );
-      // The awaiting line and the turn it queued alone stand: nothing of the batch was applied.
-      assert.deepEqual(
-        rows.map((row) => row.turnId),
-        [null],
-      );
-      assert.deepEqual(
-        written.map((turn) => turn.status),
-        [TURN_STATUS.QUEUED],
-      );
-    }),
+        assert.deepEqual(
+          [wrong.status, none.status, replaced.status, retired.status],
+          [
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+          ],
+        );
+        // The awaiting line and the turn it queued alone stand: nothing of the batch was applied.
+        assert.deepEqual(
+          rows.map((row) => row.turnId),
+          [null],
+        );
+        assert.deepEqual(
+          written.map((turn) => turn.status),
+          [TURN_STATUS.QUEUED],
+        );
+      }),
   );
 
   it.effect(

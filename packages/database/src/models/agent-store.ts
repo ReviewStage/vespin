@@ -1359,6 +1359,7 @@ const findRunnerTokenConversation = SqlSchema.findOneOption({
     userId: Schema.String,
     conversationId: Schema.String,
     runtimeSessionId: Schema.NullOr(Schema.String),
+    launch: Schema.Number,
   }),
   execute: ({ runnerTokenHash }) =>
     Database.use((db) =>
@@ -1367,6 +1368,7 @@ const findRunnerTokenConversation = SqlSchema.findOneOption({
           userId: conversations.userId,
           conversationId: conversations.id,
           runtimeSessionId: conversations.runtimeSessionId,
+          launch: agentTable.runnerLaunch,
         })
         .from(agentTable)
         .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -1494,7 +1496,7 @@ const updateAgentRunnerToken = SqlSchema.findAll({
     agentId: Schema.String,
     runnerTokenHash: Schema.NullOr(Schema.String),
   }),
-  Result: IdRowSchema,
+  Result: Schema.Struct({ id: Schema.String, launch: Schema.Number }),
   execute: ({ userId, agentId, runnerTokenHash }) =>
     Database.use((db) =>
       db
@@ -1506,7 +1508,7 @@ const updateAgentRunnerToken = SqlSchema.findAll({
             : { runnerTokenHash, runnerLaunch: sql`${agentTable.runnerLaunch} + 1` },
         )
         .where(reachableAgent(userId, agentId))
-        .returning({ id: agentTable.id }),
+        .returning({ id: agentTable.id, launch: agentTable.runnerLaunch }),
     ),
 });
 
@@ -3636,6 +3638,22 @@ export function recordAgentNativeSession(
 }
 
 /**
+ * The digest of a launch's bearer recorded as `recordAgentRunnerToken`
+ * records it, answering the number the launch was recorded as
+ * (`agent.runner_launch`), which every post of its runner names; nothing
+ * where the account no longer reaches the agent.
+ */
+export function recordAgentRunnerLaunch(
+  userId: string,
+  agentId: string,
+  runnerTokenHash: string,
+): AgentStoreEffect<Option.Option<number>> {
+  return Effect.map(updateAgentRunnerToken({ userId, agentId, runnerTokenHash }), (rows) =>
+    Option.map(Option.fromNullishOr(rows[0]), (row) => row.launch),
+  );
+}
+
+/**
  * What the turns' messages of a Claude Code or Codex conversation have
  * handed its harness's session, as the JSON it was handed
  * (`coder-host/turn-context.ts`'s `TurnHanded`, whose shape is the service's
@@ -3686,6 +3704,8 @@ export interface RunnerTokenConversation {
   readonly userId: string;
   readonly conversationId: string;
   readonly runtimeSessionId: string | null;
+  /** The launch the bearer was recorded as (`agent.runner_launch`), which a post that names its launch must name. */
+  readonly launch: number;
 }
 
 /**

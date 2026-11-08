@@ -17,8 +17,9 @@
  *
  * The bearer is admitted as the events route admits it
  * (`../workspace-mcp/bearer.ts`): one no standing agent holds, a retired one's
- * among them, is refused, and a launch's bearer is its own, so a launch a
- * newer one replaced reads nothing more. An answer carries the lines whole,
+ * among them, is refused, and so is a read naming a launch other than the
+ * one its bearer was recorded as, so a launch a newer one replaced reads
+ * nothing more, even under the bearer its sandbox's firewall now swaps in. An answer carries the lines whole,
  * at least one, up to `RUNNER_LINES_ANSWER.MAX_BYTES`, so a run of large
  * messages is read over several answers.
  */
@@ -42,7 +43,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
-import { admitRunnerBearer, presentedBearer } from "../workspace-mcp/bearer.js";
+import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
 
 /** The path a runner reads its lines from. */
 export const RUNNER_LINES_PATH = "/api/agents/runner-lines";
@@ -96,7 +97,9 @@ const runnerLinesEndpoint = /* @__PURE__ */ Effect.fn("web/runnerLinesEndpoint")
     if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const query = readQuery(Object.fromEntries(new URL(request.url).searchParams));
     if (Option.isNone(query)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-    const admitted = yield* hostedStoreOrUnavailable(admitRunnerBearer(bearer));
+    const admitted = yield* hostedStoreOrUnavailable(
+      admitRunnerBearer(bearer, presentedLaunch(request)),
+    );
     if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const { target } = admitted.value;
     const agent = yield* hostedStoreOrUnavailable(
