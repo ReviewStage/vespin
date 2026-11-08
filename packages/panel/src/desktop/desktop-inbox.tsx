@@ -1043,6 +1043,7 @@ export function paneDoors(
     const openTask = (taskId: string) =>
       seams.openPlace({ kind: LINK_PLACE.TASK, planId: taskId }, () => tasks.onSelect(taskId));
     return {
+      tasks,
       onOpenHolder: () => tasks.onShowTask(task.id),
       // Note that the card's times count from the window's minute, so the page reads no clock.
       taskCard: taskCardOf(
@@ -1064,6 +1065,7 @@ export function paneDoors(
   }
   const automationId = holderAutomationId(holder);
   return {
+    tasks,
     onOpenHolder:
       automationId !== null
         ? () => seams.openAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId })

@@ -17,7 +17,7 @@ import {
 import { useDisclosure } from "../../use-disclosure.js";
 import { BUTTON_VARIANT } from "../button/button.js";
 import { FoldingButton, type FoldingButtonHint } from "../folding-button/folding-button.js";
-import { dropBelowStart, Menu, type MenuAction, useMenu } from "../menu/menu.js";
+import { dropBelowStart, Menu, type MenuAction, useMenu, withContextMenu } from "../menu/menu.js";
 import {
   ClippedLine,
   ONE_LINE_ELEMENT,
@@ -39,7 +39,10 @@ import { useCrumbFold } from "./crumb-fold.js";
  * open, and its press is handed the crumb, which the caller hangs what it
  * opens from and hands the keyboard back to. A crumb may wear a glyph
  * before its words, as a tab names its kind, and hang a card in its hint's
- * place, its hint raising it as it raises a pill. A crumb may come
+ * place, its hint raising it as it raises a pill. A crumb that presses
+ * may hold a menu of what it names on a right-click, a long press, and the
+ * menu key (`menu`), and stand as a field in its words' place while its
+ * name is edited (`editing`), as a row of the same thing does. A crumb may come
  * and go (`shown`), as a page's title joins its bar once its heading has
  * scrolled away: it fades in with a short rise as it comes, and fades out
  * before it goes (`use-disclosure.ts`).
@@ -229,6 +232,7 @@ function CrumbControl({
       />
     );
   }
+  if (crumb.editing !== undefined && crumb.editing !== null) return <>{crumb.editing}</>;
   const control =
     onPress === undefined ? (
       <BreadcrumbPage
@@ -245,6 +249,8 @@ function CrumbControl({
         aria-haspopup={crumb.popup}
         aria-expanded={crumb.popup === undefined ? undefined : crumb.expanded === true}
         onClick={pulseOnPress((event) => onPress(event.currentTarget))}
+        {...withContextMenu(crumb.menu?.contextMenu, {})}
+        onKeyDown={crumb.menu?.keyMenu}
       >
         <CrumbFace glyph={crumb.glyph} label={label} end={crumb.end} />
       </BreadcrumbLink>

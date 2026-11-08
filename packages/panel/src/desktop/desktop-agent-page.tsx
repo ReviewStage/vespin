@@ -90,6 +90,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 import {
+  type AgentMenuDoors,
   type AgentTerminalDoors,
   agentMenuGroups,
   useAgentActions,
@@ -214,6 +215,51 @@ function listedAgent(tasks: TasksControl, agent: AgentSummary): TasklessAgent | 
   return [...standing, ...archived].find((each) => each.id === agent.id);
 }
 
+/** An agent's own doors beside its actions, as its sidebar row offers them, and the dialogs Move to section asks through. */
+export interface AgentOwnDoors {
+  readonly read: AgentMenuDoors["read"];
+  readonly agentPin: AgentMenuDoors["agentPin"];
+  readonly section: AgentMenuDoors["section"];
+  readonly dialog: React.ReactNode;
+}
+
+/**
+ * The doors an agent's menu offers beyond its actions, read off its sidebar
+ * row (`listedAgent`): its read mark, its Pin, and Move to section, none of
+ * them for an agent on a task or one the list does not hold, and neither a
+ * pin nor a section for an archived agent, as an archived task. Every
+ * surface naming the agent apart from its row, its page's bar and an Inbox
+ * item's crumb, offers them alike.
+ */
+export function useAgentOwnDoors(
+  tasks: TasksControl,
+  agent: AgentSummary,
+  shown: boolean,
+): AgentOwnDoors {
+  const listed = listedAgent(tasks, agent);
+  const reads = useAgentReadMarks();
+  const sectionDialogs = useSectionDialogs(tasks, shown);
+  // Note that the agent on screen is unread only by a mark by hand, as its sidebar row reads it while current.
+  const read =
+    listed === undefined
+      ? undefined
+      : {
+          unread: reads.markedUnread(agent.id),
+          onMark: (next: boolean) => reads.mark(listed, next),
+        };
+  const own = listed !== undefined && agent.archivedAt === undefined;
+  const agentPin = own
+    ? {
+        pinned: listed.pinnedAt !== undefined,
+        onToggle: () => tasks.onPinAgent(agent.id, listed.pinnedAt === undefined),
+      }
+    : undefined;
+  const section = own
+    ? moveToSectionEntry(tasks, { agent: true, id: agent.id }, listed.workspaceId, sectionDialogs)
+    : undefined;
+  return { read, agentPin, section, dialog: sectionDialogs.dialog };
+}
+
 /**
  * What a tab of the agent's page is pinned on: the agent while the sidebar
  * lists it standing, which is where the pin is drawn, or the task of an
@@ -277,28 +323,7 @@ function AgentPageBar({
     shown && deletion !== undefined && deletion.disabled !== true ? deletion.onSelect : undefined,
   );
   const menu = useMenu(shown);
-  const listed = listedAgent(tasks, agent);
-  const reads = useAgentReadMarks();
-  const sectionDialogs = useSectionDialogs(tasks, shown);
-  // Note that the agent on screen is unread only by a mark by hand, as its sidebar row reads it while current.
-  const read =
-    listed === undefined
-      ? undefined
-      : {
-          unread: reads.markedUnread(agent.id),
-          onMark: (next: boolean) => reads.mark(listed, next),
-        };
-  // Note that an archived agent offers neither a pin nor a section, as an archived task.
-  const own = listed !== undefined && agent.archivedAt === undefined;
-  const agentPin = own
-    ? {
-        pinned: listed.pinnedAt !== undefined,
-        onToggle: () => tasks.onPinAgent(agent.id, listed.pinnedAt === undefined),
-      }
-    : undefined;
-  const section = own
-    ? moveToSectionEntry(tasks, { agent: true, id: agent.id }, listed.workspaceId, sectionDialogs)
-    : undefined;
+  const { read, agentPin, section, dialog: sectionDialog } = useAgentOwnDoors(tasks, agent, shown);
   // Note that the page's own head already leads with the Slack crumb an agent started from Slack opens, so its menu offers no Open in Slack beside it.
   const groups = agentMenuGroups({
     chosen: true,
@@ -358,7 +383,7 @@ function AgentPageBar({
     <>
       {drawnMenu}
       {actions.dialog}
-      {sectionDialogs.dialog}
+      {sectionDialog}
     </>
   );
   if (phone !== undefined) {

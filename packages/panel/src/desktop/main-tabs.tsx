@@ -75,6 +75,7 @@ import {
 import { LOOK_STRIP, useStripLooks } from "./switcher-looks.js";
 import { tabCard } from "./tab-card.js";
 import { TabStrip } from "./tab-strip.js";
+import { TASK_MENU_LABEL } from "./task-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
 
 /**
@@ -472,9 +473,6 @@ function MainTabsRow({ children }: { children: React.ReactNode }): React.JSX.Ele
 
 /** What the task's name in its topbar opens, and the place the details' way back leads to. */
 export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
-
-/** What the task's menu is named, which a right-click on its name opens. */
-const TASK_MENU_LABEL = "Task actions";
 
 /**
  * The task's topbar, across the task's page over its column and its side

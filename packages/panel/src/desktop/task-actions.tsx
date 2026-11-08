@@ -557,6 +557,9 @@ function relationDoor(tasks: TaskRowTab, task: TaskSummary): TaskRelationDoor {
   };
 }
 
+/** What the task's menu is named, wherever a right-click on what names the task opens it. */
+export const TASK_MENU_LABEL = "Task actions";
+
 /** What a task's one Move to is called, and what it names the move out of its workspace, at the foot of its sections. */
 const MOVE_TO = "Move to";
 const ANOTHER_WORKSPACE = "Another workspace";
