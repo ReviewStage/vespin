@@ -43,7 +43,7 @@ import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
-import { runnerLine, type RunnerLineFile } from "../schemas/runner-line.js";
+import { type RunnerLineFile, runnerLine } from "../schemas/runner-line.js";
 import { messages, turns } from "../schemas/storage.js";
 
 type RunnerLineEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -203,13 +203,13 @@ const findLinesPast = SqlSchema.findAll({
     ),
 });
 
-const findWaiting = SqlSchema.findAll({
+const findWaiting = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({ seq: Schema.Number }),
+  Result: Schema.Struct({ createdAt: Schema.Date }),
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
-        .select({ seq: runnerLine.seq })
+        .select({ createdAt: runnerLine.createdAt })
         .from(runnerLine)
         .where(
           and(
@@ -220,6 +220,7 @@ const findWaiting = SqlSchema.findAll({
             awaitsOpenTurn(),
           ),
         )
+        .orderBy(asc(runnerLine.createdAt))
         .limit(1),
     ),
 });
@@ -391,9 +392,15 @@ export function runnerLinesPast(
   return findLinesPast({ userId, agentId, ...read });
 }
 
-/** Whether a message line of the account's agent stands that no launch acknowledged and whose turn still waits on it, which a launch would be handed. */
-export function runnerLinesWaiting(userId: string, agentId: string): RunnerLineEffect<boolean> {
-  return Effect.map(findWaiting({ userId, agentId }), (rows) => rows.length > 0);
+/** When the oldest message line of the account's agent was queued that no launch acknowledged and whose turn still waits on it, which a launch would be handed; none where none stands. */
+export function runnerLineWaitingSince(
+  userId: string,
+  agentId: string,
+): RunnerLineEffect<Option.Option<Date>> {
+  return Effect.map(
+    findWaiting({ userId, agentId }),
+    Option.map((row) => row.createdAt),
+  );
 }
 
 /**
