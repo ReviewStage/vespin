@@ -73,6 +73,7 @@ import {
   type TitleRename,
 } from "../tasks/description-body.js";
 import { CommentFocusScope } from "../tasks/description-comments.js";
+import { useDescriptionEdit, useDescriptionRetry } from "../tasks/description-doors.js";
 import { keyedItem, NO_ITEMS, waitingByAgent } from "../tasks/inbox-model.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
@@ -86,6 +87,7 @@ import {
 } from "../tasks/task-mentions.js";
 import { taskLinkPlace, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
+import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
@@ -96,7 +98,7 @@ import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
-import { type StartingTask, TASK_RENAME_SHAPE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { StartingTask, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
@@ -505,10 +507,10 @@ function DescriptionDocument({
     [onOpenAutomations],
   );
   const taskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
-  const renaming = useMutation(tasks.renameTask);
+  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(tasks.renameTask);
+  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
   const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
   // The description is shown while the column is on Overview, with no panel filling the window over it.
   const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
@@ -739,7 +741,8 @@ function DescriptionDocument({
   const preloadHistory = useSteadyDoor(() => {
     if (opened !== undefined) historyDoor.preload(opened.id);
   });
-  const descriptionEdit = opened === undefined ? undefined : tasks.descriptionEdit(opened.id);
+  const descriptionEdit = useDescriptionEdit(opened?.id);
+  const retryDescription = useDescriptionRetry(tasks.activeTaskId);
   // Note that the plan's title reads its rename's answer, on the same mutation the header's field draws its refusal from.
   const renameDoor = useSteadyDoor(
     (name: string): Promise<boolean> =>
@@ -1141,7 +1144,7 @@ function DescriptionDocument({
           {region.kind === DOCUMENT_REGION.FAILED ? (
             <ErrorState
               failure={unreadShown(FAILURE_SURFACE.TASK_DOCUMENT_READ)}
-              onRetry={tasks.onRetryDocument}
+              onRetry={retryDescription}
               placement={ERROR_STATE_PLACEMENT.CENTERED}
               exit={close}
             >

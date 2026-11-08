@@ -11,6 +11,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { CARD_PRESS_SELECTOR, CHIP_LOOK } from "@repo/ui";
 import {
@@ -27,7 +28,6 @@ import { askKept } from "../act.js";
 import { runAppCommand } from "../app-commands.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { taskRenameMutation } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
@@ -110,7 +110,12 @@ beforeEach(() => {
     openWeb: (url) => pages.push(url),
   });
   fakeAppBridge({});
-  fakeActPort({});
+  fakeActPort({
+    [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
+      renamed.push([taskId, name]);
+      return Promise.resolve(true);
+    },
+  });
   handMembers(() => ({ rows: { members: MEMBERS } }));
 });
 
@@ -184,10 +189,6 @@ async function mountBoard(
       sent.push([taskId, standing]);
       return askKept(Promise.resolve(keeps));
     },
-    renameTask: taskRenameMutation(({ taskId, name }) => {
-      renamed.push([taskId, name]);
-      return Promise.resolve(true);
-    }, undefined),
     ...overrides,
   });
   // The window's router, whose routed exits the Board's close leaves by, as the window's history does.

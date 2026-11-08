@@ -245,6 +245,9 @@ export function appStateIn(client: QueryClient): AppStateSnapshot | undefined {
  * document moves, as the docs' Render Optimizations guide asks of `select`.
  */
 export const selectRun = (state: AppStateSnapshot) => state.run;
+/** Whether a fixture run's synthetic tasks stand in for the account's, which are then read from nowhere and written nowhere. */
+export const selectFixtureTasks = (state: AppStateSnapshot): boolean =>
+  loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
 export const selectAccount = (state: AppStateSnapshot) => state.account;
 
 /** Who is signed in, by the id and the address main's document names; none while none is. */

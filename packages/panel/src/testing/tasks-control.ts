@@ -10,7 +10,7 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import type {
   AppHostRead,
   AppInboxAgentHolding,
@@ -25,7 +25,6 @@ import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
-import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
 import { MAIN_TAB, SIDE_PANEL_WIDTH } from "../tasks/task-tab-model.js";
 import {
   AGENT_RENAME_SHAPE,
@@ -39,10 +38,7 @@ import { HISTORY_READ } from "../tasks/use-description-history.js";
 import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
 import {
   type TasksControl,
-  taskDeleteMutation,
   taskMoveMutation,
-  taskRenameMutation,
-  tasksDeleteMutation,
   type VersionHistoryControl,
 } from "../tasks/use-tasks-tab.js";
 import type { HomeRoute, RoutedViews, UnknownWorkspaceRoute } from "../workspace-routes.js";
@@ -438,8 +434,6 @@ export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
 export function tasksControl(overrides: Partial<TasksControl> = {}): TasksControl {
   const onMoveTask: TasksControl["onMoveTask"] =
     overrides.onMoveTask ?? (() => Promise.resolve(false));
-  const onDeleteTask: TasksControl["onDeleteTask"] =
-    overrides.onDeleteTask ?? (() => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED }));
   return {
     page: TASKS_PAGE.HOME,
     starting: undefined,
@@ -473,10 +467,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     listRead: true,
     region: { kind: DOCUMENT_REGION.NONE },
     copy: { onPress: ignore },
-    descriptionEdit: (taskId) =>
-      descriptionEditMutation(taskId, () =>
-        Promise.resolve({ failure: TASK_CALL_FAILURE.UNANSWERED }),
-      ),
     mainTabs: {
       tabs: [MAIN_TAB.OVERVIEW],
       tab: MAIN_TAB.OVERVIEW,
@@ -611,7 +601,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onRemoveTaskBlock: () => undefined,
     onChangeTaskRelation: () => undefined,
     onRetryList: ignore,
-    onRetryDocument: ignore,
     onNewTask: ignore,
     onNewTaskIn: ignore,
     onNewRelatedTask: ignore,
@@ -639,7 +628,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onGoHome: ignore,
     onLeaveRouted: ignore,
     onUnbindTask: ignore,
-    renameTask: taskRenameMutation(() => Promise.resolve(true), undefined),
+    drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: overrides.tasks ?? [] }),
     onDraftName: ignore,
     onMarkTask: ignore,
     onSettleTasks: ignore,
@@ -652,9 +641,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     liveAgents: [],
     listedPullRequests: undefined,
     onMovePins: ignore,
-    onDeleteTask,
-    deleteTask: taskDeleteMutation((taskId) => onDeleteTask(taskId)),
-    deleteTasks: tasksDeleteMutation((taskId) => onDeleteTask(taskId)),
     back: () => false,
     placeLeave: NO_LEAVE_ASK,
     ...overrides,
