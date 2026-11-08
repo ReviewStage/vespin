@@ -1689,7 +1689,31 @@ are for and their topic; with any unset it answers unavailable and sends
 nothing, as the sweep does without `CRON_SECRET`. The key is revealed into
 the signer alone, the provider token into the authorization header alone, and
 a log line names a status and Apple's reason, never a token, a payload, or a
-key. What decides to push, and what a notification says, is the later tasks'.
+key.
+
+`inbox-pushes.ts` decides when to push, in three kinds of its own
+(`PUSH_KIND`) so one can be dropped alone: an agent's post that asks the
+member its thread waits on something (decide, do, or answer), any other post
+of an agent's on such a thread, both from the coding agent's thread tool
+(`agents/coder-host/inbox.ts`), and a failed turn of an agent the member
+started, from the settled-turn listener (`agents/coder-host/settled-turns.ts`);
+a Stop and a turn that finished well push nothing. A thread waits on one
+member, as its Slack DM does, and only that member's phones are pushed. An
+alert says the thread's or the agent's title over the message's first line,
+its `thread-id` the task (or the agent with none), its `category`
+`inbox-decide` for a decide that takes one option, whose labels ride in
+`options` for the app's service extension to make buttons of, `inbox-reply`
+for any other post, and `agent-run-failed`; it carries `mutable-content`, the
+ids the app opens and answers the thread by (`itemId`, `messageId`,
+`agentId`, `taskId`, `revision`), the thread's id as its collapse id, and the
+member's Inbox count as the desktop's Dock counts it as its badge
+(`inbox/inbox-store.ts`'s `inboxWaitingCount`). Once a thread settles, an ask
+answered or withdrawn or a notice acknowledged or closed, wherever it was
+(`inbox/inbox-procedures.ts`'s `settledForAgent`, the agent's withdrawal), the
+member it waits on is sent a background push naming it with the new badge, so
+the app removes the delivered notification by the thread's id. No switch of
+ours gates a push: the member opts in by granting the app iOS notification
+permission, and iOS's own settings silence it.
 
 ## The chapters group
 

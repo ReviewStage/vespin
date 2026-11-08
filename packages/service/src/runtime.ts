@@ -70,6 +70,9 @@ const slackBot = slackBotFromEnvironment.pipe(
   Layer.provide(Layer.merge(FetchHttpClient.layer, integrationConnectFromEnvironment)),
 );
 
+/** The APNs sender as the environment names it, named once so the turn listener and every request share one provider token and connection. */
+const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transport));
+
 /**
  * The services every web function's and every agent's effects run against. A
  * function reaches this layer only through its edge's runtime, so a service
@@ -157,7 +160,9 @@ export const webServices = Layer.mergeAll(
   hostedEnvironment,
   githubApp,
   settledTurnListener.pipe(
-    Layer.provide(Layer.mergeAll(gatedGitHubClient, githubApp, hostedEnvironment, slackBot)),
+    Layer.provide(
+      Layer.mergeAll(gatedGitHubClient, githubApp, hostedEnvironment, slackBot, apnsSender),
+    ),
   ),
   sentryAppFromEnvironment,
   integrationConnectFromEnvironment,
@@ -177,7 +182,7 @@ export const webServices = Layer.mergeAll(
   invitationMailFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   welcomeMailFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   onboardingEventsFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
-  apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transport)),
+  apnsSender,
 ).pipe(Layer.provide(webConfigProvider));
 
 /** What an effect run on a runtime over these services may require. */

@@ -41,6 +41,7 @@ import {
   type InboxPostRefusal,
   postInboxThread,
 } from "../../inbox/inbox-store.js";
+import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { pageStepOf } from "../written-mentions.js";
 import { CODER } from "./bounds.js";
@@ -568,6 +569,10 @@ export function postToInbox(
         wasOpen,
       }),
     );
+    yield* afterResponse(
+      "a thread's push",
+      pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId: agent.taskId }),
+    );
     return yield* accepted(agent);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -589,6 +594,7 @@ export function withdrawAsk(
     const withdrawn = yield* closeInboxItem(agent, key, reason);
     if (Option.isNone(withdrawn)) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
     yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
+    yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
     return yield* accepted(agent);
   }).pipe(
     Effect.tapError(logStoreFailure),

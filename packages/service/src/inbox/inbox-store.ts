@@ -4037,6 +4037,57 @@ export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly 
   );
 }
 
+/** How many open items the reader may read wait on them with no reminder set for later than `now`, in epoch milliseconds. */
+const countWaitingDue = SqlSchema.findOne({
+  Request: Schema.Struct({ userId: Schema.String, now: Schema.Number }),
+  Result: Schema.Struct({ waiting: Schema.Number }),
+  execute: ({ userId, now }) =>
+    Database.use((db) =>
+      db
+        .select({ waiting: sql<number>`count(*)::int` })
+        .from(inboxItem)
+        .where(
+          and(
+            itemVisibleTo(userId),
+            waitingOnReader(userId),
+            sql`coalesce(${remindAtMillisFor(userId)} <= ${now}, true)`,
+          ),
+        ),
+    ),
+});
+
+/**
+ * How many items wait on the reader now, as the desktop's Dock badge counts
+ * them (`@repo/host/agent-notices`): every open item, a question and a
+ * notice not yet acknowledged alike, that waits on them (`WAITS_ON`), but
+ * those whose reminder is set for later than `now`; what a push to their
+ * phone sets its badge to.
+ */
+export function inboxWaitingCount(userId: string, now: number): InboxStoreEffect<number> {
+  return countWaitingDue({ userId, now }).pipe(
+    // A count that returned no row is the database breaking its own contract, not an outcome.
+    Effect.catchTag("NoSuchElementError", Effect.die),
+    Effect.map((row) => row.waiting),
+  );
+}
+
+const findItemWaitsOn = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ waitsOn: Schema.String }),
+  execute: (itemId) =>
+    Database.use((db) =>
+      db.select({ waitsOn: WAITS_ON }).from(inboxItem).where(eq(inboxItem.id, itemId)),
+    ),
+});
+
+/** The member the item waits on (`WAITS_ON`), by account; nothing for an item that is gone. */
+export function inboxItemWaitsOn(itemId: string): InboxStoreEffect<Option.Option<string>> {
+  return Effect.map(
+    findItemWaitsOn(itemId),
+    Option.map((row) => row.waitsOn),
+  );
+}
+
 /**
  * Every task of the account's that holds an inbox item, waiting or settled,
  * with how many, how many are the reader's to do, and when the latest

@@ -68,6 +68,7 @@ import {
 } from "../http/http-effect.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
+import { pushThreadSettled } from "../push/inbox-pushes.js";
 import { settleThreadDms } from "../slack/thread-dms.js";
 import { settleAgentTaskIfFinished } from "../tasks/task-finish.js";
 import {
@@ -142,10 +143,14 @@ const NOD: InboxReply = { reply: INBOX_REPLY.ACKNOWLEDGED };
  * What an item of the agent's settling asks once it is: the agent's task
  * settled done where its work is finished, and the automation run it
  * belongs to archived where it finished well, since an item put away
- * unanswered wakes no agent and so no settle of its turn would.
+ * unanswered wakes no agent and so no settle of its turn would; and the
+ * phone of the member it waited on told, so its notification is removed.
  */
-function settledForAgent(userId: string, agentId: string) {
-  return Effect.andThen(settleAgentTaskIfFinished(userId, agentId), reconsiderRunArchive(agentId));
+function settledForAgent(userId: string, agentId: string, itemId: string) {
+  return Effect.andThen(
+    afterResponse("a settled thread's push", pushThreadSettled(itemId)),
+    Effect.andThen(settleAgentTaskIfFinished(userId, agentId), reconsiderRunArchive(agentId)),
+  );
 }
 
 /** Whether the item holds an ask open on its thread, which a nod never settles. */
@@ -243,7 +248,7 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* afterResponse("an answered thread's Slack DM", settleThreadDms(itemId, chosen));
   // The question settled may have finished the task's work, asked once the agent was told, so one
   // woken by the answer reads as running (`tasks/task-finish.ts`).
-  yield* settledForAgent(userId, agentId);
+  yield* settledForAgent(userId, agentId, itemId);
 });
 
 /**
@@ -291,7 +296,7 @@ const acknowledged = /* @__PURE__ */ Effect.fnUntraced(function* (
   const writtenIn = txid === undefined ? {} : { txid };
   if (!inboxAnswerHeard(taken, NOD)) {
     yield* counted;
-    yield* settledForAgent(userId, taken.agentId);
+    yield* settledForAgent(userId, taken.agentId, itemId);
     return { item: taken, taken: true, ...writtenIn };
   }
   yield* handedAnswer(
@@ -378,7 +383,7 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const reply = inboxAnswersReply(answers, text);
   if (!inboxAnswerHeard(item, reply, attachments)) {
     yield* counted;
-    yield* settledForAgent(userId, item.agentId);
+    yield* settledForAgent(userId, item.agentId, itemId);
     return { item, outcome, ...writtenIn };
   }
   const message = inboxAnswerMessage(
@@ -491,7 +496,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const dmSettled = afterResponse("a closed thread's Slack DM", settleThreadDms(itemId));
   if (!taken.needsReply && !noted) {
     yield* dmSettled;
-    yield* settledForAgent(userId, taken.agentId);
+    yield* settledForAgent(userId, taken.agentId, itemId);
     return { item: taken, taken: true, ...writtenIn };
   }
   const handedOver = Effect.gen(function* () {
@@ -525,7 +530,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
   yield* dmSettled;
-  yield* settledForAgent(userId, taken.agentId);
+  yield* settledForAgent(userId, taken.agentId, itemId);
   return { item: taken, taken: true, ...writtenIn };
 });
 
@@ -617,6 +622,10 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       readVisibleAgentWorkspace(userId, item.agentId),
       { answered_ask: false, has_media: attachments.length > 0 },
     );
+  }
+  // A reply that settled the notice it was written on clears it from the phone, as the nod does.
+  if (revision !== undefined && item.status !== INBOX_STATUS.OPEN) {
+    yield* afterResponse("a settled thread's push", pushThreadSettled(item.id));
   }
   return { item };
 });

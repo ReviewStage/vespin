@@ -42,7 +42,11 @@ import type { AppInboxSlice, AppInboxWaitingItem } from "./app-state.js";
  * center, which is why the notification waits on the developer's switch.
  * A burst sounds once and posts one notification counting its news. Each
  * is heard in one place (`heard`), which chimes and posts through the
- * doors, in one window of the app.
+ * doors, in one window of the app. The phone is opted into apart from this:
+ * the service pushes the iOS app an Inbox item waiting on the member and a
+ * failed run of theirs (`@repo/service`'s `push/inbox-pushes.ts`) once the
+ * member grants it iOS notification permission, and reads no
+ * `turnNotifications`, since that grant is the developer's own ask.
  *
  * The panel reads an agent's status only while its tab is on screen, so
  * main keeps a ledger of its own, fed by every coding-agent answer that
