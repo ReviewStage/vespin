@@ -316,7 +316,8 @@ export function composePortForwards(
     /** The ending agent's public link closed, a close the service refuses logged rather than holding forwarding on. */
     const unshared = (ending: Forwarding) =>
       Effect.gen(function* () {
-        if (ending.shared === undefined) return;
+        // Note that a link not yet read may still stand from before forwarding turned on, so only one read as none is skipped.
+        if (ending.sharedRead && ending.shared === undefined) return;
         const answer = yield* withHttp(client.unshare(ending.agentId));
         if ("failure" in answer)
           yield* Effect.logWarning(
@@ -409,6 +410,11 @@ export function composePortForwards(
             const answer = yield* withHttp(client.share(agentId, port));
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
             current.shared = { port, url: answer.url };
+            // Note that forwarding turned off while the share was asked closes the link it opened, since the stop's own close may have run before it.
+            if (forwarding !== current) {
+              yield* unshared(current);
+              return standing(agentId);
+            }
           }
           current.shareMoves++;
           current.sharedRead = true;
