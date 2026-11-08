@@ -440,9 +440,10 @@ function GlyphColors({
       look={POPOVER_PANEL_LOOK.MENU}
       initialFocus={start}
       onDismiss={() => onClose(true)}
+      // Note that the focus going to the glyph's own cell is no leaving, so a press on the glyph, which takes the focus before its click, closes the colors rather than putting them away and opening them again; a press anywhere else puts them away (`onPressAway`).
       onLeave={(left) => {
-        if (!(left instanceof Node && holder.current?.parentElement?.contains(left)))
-          onClose(false);
+        const cell = holder.current?.closest(".section-icon-cell");
+        if (!(left instanceof Node && cell?.contains(left))) onClose(false);
       }}
     >
       <div
@@ -587,7 +588,12 @@ const GlyphCell = memo(function GlyphCell({
         onPress={() => onOpen({ group, glyph, color: starts })}
       />
       {open ? (
-        <AnchoredPopover open align={POPOVER_ALIGN.START} width={POPOVER_WIDTH.FIT}>
+        <AnchoredPopover
+          open
+          align={POPOVER_ALIGN.START}
+          width={POPOVER_WIDTH.FIT}
+          onPressAway={() => onClose(false)}
+        >
           <GlyphColors
             Glyph={Glyph}
             label={label}

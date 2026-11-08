@@ -1377,6 +1377,19 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
   assert.equal(document.querySelectorAll(".section-icon-colors").length, 1);
 });
 
+test("a glyph pressed again while its colors stand open closes them, its press taking the focus first as a pointer's does", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  const folder = dialogButton("Folder");
+  act(() => folder.click());
+  assert.ok(document.querySelector(".section-icon-colors"), "the colors are asked");
+  act(() => folder.focus());
+  act(() => folder.click());
+
+  assert.equal(document.querySelector(".section-icon-colors"), null);
+});
+
 test("an emoji typed into the search is offered first, one the grid leaves out included", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
