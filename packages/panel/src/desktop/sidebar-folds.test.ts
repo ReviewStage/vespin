@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
-import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/task-wire";
+import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -317,17 +317,15 @@ test("a pinned parent's child tasks stand under it in Pinned, folded until opene
   assert.deepEqual(rowNames(sidebar, "My tasks"), []);
 });
 
-test("a Done parent stays in the sidebar while a child task under it is open, and leaves with the last of them", () => {
-  const listed = (childStatus: TaskStatus) =>
+test("a canceled parent the view hides takes its child tasks to do out of the sidebar with it", () => {
+  const sidebar = mountSidebar(
     tasksControl({
       tasks: [
-        family("Shipped", undefined, { status: TASK_STATUS.DONE }),
-        family("Follow-up", "Shipped", { status: childStatus }),
+        family("Migrate", undefined, { status: TASK_STATUS.CANCELED }),
+        family("Import", "Migrate", { status: TASK_STATUS.TODO }),
         family("Other", undefined, { status: TASK_STATUS.IN_PROGRESS }),
       ],
-    });
-  const open = mountSidebar(listed(TASK_STATUS.IN_PROGRESS));
-  act(() => childFold(open, "Shipped").click());
-  assert.deepEqual(rowNames(open, "My tasks"), ["Shipped", "Follow-up", "Other"]);
-  assert.deepEqual(rowNames(mountSidebar(listed(TASK_STATUS.CANCELED)), "My tasks"), ["Other"]);
+    }),
+  );
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Other"]);
 });
