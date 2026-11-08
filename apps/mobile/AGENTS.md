@@ -74,7 +74,9 @@ gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 ```
 
 Each simulator's pictures are under `/tmp/mobile-screenshots/<slug>/takeScreenshot/`,
-named as the flow's `takeScreenshot` steps name them.
+named as the flow's `takeScreenshot` steps name them. A flow tagged
+`appearance` runs again with the simulator in dark mode, its pictures under
+`/tmp/mobile-screenshots/<slug>/dark/takeScreenshot/`.
 
 ## Tests
 

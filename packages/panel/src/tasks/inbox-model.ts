@@ -40,11 +40,11 @@ import {
   recommendedLabels,
   threadNeedsReader,
 } from "@repo/features/inbox-wire";
+import { markdownTree } from "@repo/features/markdown-tree";
 import { insideCode } from "@repo/features/mention-link";
 import type { TaskFileRequest, TaskSummary } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
 import type { AppInboxTasklessItem, AppInboxWaitingItem } from "@repo/host/app-state";
-import { markdownTree } from "@repo/ui/markdown-words";
 import { matchesTokens } from "@repo/ui/search-tokens";
 import { isWireString } from "@repo/wire";
 import type { CountNoun } from "../desktop/sidebar-fold.js";

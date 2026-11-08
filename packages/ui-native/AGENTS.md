@@ -14,6 +14,13 @@ builds a control of its own.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows and message markdown. `Pressable`, `TextInput`, and the
   rest of React Native's controls appear only here.
+- **Markdown** is drawn by `Markdown` in React Native views, and a page of
+  it by `MarkdownPage`, which hosts them in SwiftUI's scroller through
+  `RNHostView`. Its words are parsed by `@repo/features/markdown-tree`, the
+  parse the panel's other readers share, and read into blocks by
+  `markdown-model.ts`, which reads each link as the panel's chip does
+  (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
+  `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
   or builds a control from React Native's pieces.** Everywhere else
   `anti-slop/no-raw-press-outside-ui-native` refuses them, and a press prop

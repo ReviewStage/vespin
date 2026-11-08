@@ -6,6 +6,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListRow,
+  MarkdownPage,
   PageHeader,
   ROW_ACTION_TONE,
   RowList,
@@ -14,7 +15,11 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import type { PlaceholderCollection, PlaceholderItem } from "../placeholders.js";
+import {
+  PLACEHOLDER_REPOSITORY,
+  type PlaceholderCollection,
+  type PlaceholderItem,
+} from "../placeholders.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
@@ -67,8 +72,23 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
   );
 }
 
+// Note that a place a message names opens nothing yet, since the placeholder
+// has no screen for one; the host's routes will take it.
+function openNothing() {}
+
 function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
   const [picked, setPicked] = useState<readonly string[]>([]);
+  if (item.message !== undefined) {
+    return (
+      <MarkdownPage
+        title={item.title}
+        summary={item.summary}
+        words={item.message}
+        repository={PLACEHOLDER_REPOSITORY}
+        onOpenPlace={openNothing}
+      />
+    );
+  }
   if (item.choices === undefined) return <PageHeader title={item.title} summary={item.summary} />;
   return (
     <RowList look={LIST_LOOK.INSET}>

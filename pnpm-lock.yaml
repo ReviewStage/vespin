@@ -782,6 +782,15 @@ importers:
       ignore:
         specifier: 7.0.14
         version: 7.0.14
+      mdast-util-from-markdown:
+        specifier: 2.0.3
+        version: 2.0.3
+      mdast-util-gfm:
+        specifier: 3.1.0
+        version: 3.1.0
+      micromark-extension-gfm:
+        specifier: 3.0.0
+        version: 3.0.0
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
@@ -789,6 +798,9 @@ importers:
       '@sentry/core':
         specifier: 11.7.0
         version: 11.7.0
+      '@types/mdast':
+        specifier: 4.0.4
+        version: 4.0.4
       '@types/node':
         specifier: 'catalog:'
         version: 26.2.0
@@ -1343,15 +1355,6 @@ importers:
       lucide-react:
         specifier: 1.53.0
         version: 1.53.0(@types/react@19.2.18)(react@19.2.8)
-      mdast-util-from-markdown:
-        specifier: 2.0.3
-        version: 2.0.3
-      mdast-util-gfm:
-        specifier: 3.1.0
-        version: 3.1.0
-      micromark-extension-gfm:
-        specifier: 3.0.0
-        version: 3.0.0
       react:
         specifier: 'catalog:'
         version: 19.2.8
@@ -1410,6 +1413,9 @@ importers:
       expo-glass-effect:
         specifier: 58.0.5
         version: 58.0.5(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+      expo-symbols:
+        specifier: 58.0.4
+        version: 58.0.4(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       react:
         specifier: catalog:mobile
         version: 19.3.0
@@ -1417,6 +1423,9 @@ importers:
         specifier: 0.88.1
         version: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
     devDependencies:
+      '@types/mdast':
+        specifier: 4.0.4
+        version: 4.0.4
       '@types/react':
         specifier: catalog:mobile
         version: 19.3.0

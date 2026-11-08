@@ -1,3 +1,4 @@
+import { markdownTree } from "@repo/features/markdown-tree";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -59,7 +60,6 @@ import {
   personActor,
 } from "@repo/ui/actor-model";
 import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
-import { markdownTree } from "@repo/ui/markdown-words";
 import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {

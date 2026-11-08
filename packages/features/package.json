@@ -55,6 +55,7 @@
     "./installed-skill-wire": "./src/installed-skill-wire.js",
     "./ios-sign-in-wire": "./src/ios-sign-in-wire.js",
     "./video-signature": "./src/video-signature.js",
+    "./markdown-tree": "./src/markdown-tree.js",
     "./media-signature": "./src/media-signature.js",
     "./agent-origin-live": "./src/agent-origin-live.js",
     "./agent-pictures-model": "./src/agent-pictures-model.js",
@@ -224,11 +225,15 @@
     "diff": "9.0.0",
     "effect": "catalog:",
     "fractional-indexing": "3.2.0",
-    "ignore": "7.0.14"
+    "ignore": "7.0.14",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm": "3.1.0",
+    "micromark-extension-gfm": "3.0.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@sentry/core": "11.7.0",
+    "@types/mdast": "4.0.4",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
