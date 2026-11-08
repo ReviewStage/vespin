@@ -33,7 +33,7 @@ import {
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { bothInOrder } from "@repo/runtime/effect";
-import { deploymentOidcToken, SANDBOX_STATUS, vercelSandboxApi } from "@repo/sandbox";
+import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { START_LINE_BRIEF } from "@repo/wire";
 import { Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -432,7 +432,7 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
  * Where the source's work reaches the new agent. A source whose sandbox
  * stands under its session's name, stopped on a snapshot, hands that
  * sandbox, whose latest snapshot the new agent's is created from at its
- * first open (`../machine/vercel-machine.ts`), so it is never woken; any
+ * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
  * other has its work copied to a branch (`snapshot.ts`). Note that a
  * sandbox still running is copied rather than handed, because its snapshot
  * is its last stop's, behind what it holds now; that a source in another
@@ -457,9 +457,8 @@ const sourceWorkOf = (
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
         : [];
     if (session !== undefined) {
-      const api = yield* vercelSandboxApi(deploymentOidcToken);
-      const found = yield* api.getNamed(agentSandboxName(session.sessionId));
-      if (found?.status === SANDBOX_STATUS.STOPPED && found.currentSnapshotId !== undefined) {
+      const found = yield* (yield* Sandbox).get(agentSandboxName(session.sessionId));
+      if (found?.status === SANDBOX_STATUS.STOPPED && found.snapshotId !== undefined) {
         return { on: TAKEN_ON.SNAPSHOT, sandbox: found.name } satisfies SourceWork;
       }
     }
@@ -898,7 +897,7 @@ export const openedTakingOver = <E, R>(
 ): Effect.Effect<
   Option.Option<string>,
   E | HostedRefusal,
-  R | DatabaseServices | HttpClient.HttpClient
+  R | DatabaseServices | HttpClient.HttpClient | Sandbox
 > =>
   Effect.gen(function* () {
     const { from, rules } = inherited;

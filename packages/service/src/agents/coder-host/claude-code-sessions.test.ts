@@ -69,8 +69,9 @@ import {
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import { deploymentOidcToken } from "@repo/sandbox";
-import { fixtureToken, sandboxFetchOver } from "@repo/sandbox/testing";
+import type { Sandbox } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -127,7 +128,7 @@ import { AGENT_TAG, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
 import { BASE_SNAPSHOT } from "../base-snapshot.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
-import { type SandboxRunner, vercelMachineLayer } from "../machine/vercel-machine.js";
+import { type SandboxRunner, sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import {
@@ -147,6 +148,9 @@ import { RUNNER_CHOICE, TURN_HANDOVER } from "./runtime-sessions.js";
 import { agentFailureOf } from "./status.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { recordNativeTurnHanded } from "./turn-message.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A coding agent's sessions on Claude Code, against a fake of Vercel
@@ -209,8 +213,11 @@ const NO_KEYS: HostedEnvironmentValues = {
 const rootRunner: SandboxRunner = (effect) => Effect.runPromise(effect);
 
 /** The agent's machine over the fake Vercel the client given answers as, its checkout run on the runner given, this test's own by default. */
-function machineOver<E, R>(http: Layer.Layer<HttpClient.HttpClient, E, R>, run = rootRunner) {
-  return vercelMachineLayer({ readToken: deploymentOidcToken, run }).pipe(Layer.provide(http));
+function machineOver<E, R>(
+  http: Layer.Layer<HttpClient.HttpClient | Sandbox, E, R>,
+  run = rootRunner,
+) {
+  return sandboxMachineLayer({ run }).pipe(Layer.provide(http));
 }
 
 /** The script root readied the sandbox with before the runner started, as `sudo -n bash -c` ran it. */
@@ -503,7 +510,7 @@ const repositoryAgent = (
       return undefined;
     });
     // The SDK's calls of Vercel reach the same fake as the client's, through its own `fetch`.
-    const http = Layer.merge(github.layer, sandboxFetchOver(api.respond));
+    const http = Layer.provideMerge(vercelSandboxOver(api.respond), github.layer);
     const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -627,7 +634,7 @@ const anthropicSwaps = (api: ReturnType<typeof runnerSandboxApi>, session: strin
   );
 };
 
-it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
+it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   it.effect(
     "open starts the image's runner as the agent's own user, its bearer and the plan's placeholder in its environment and the plan's token at its firewall, and writes its config and first message to its stdin",
     () =>
@@ -1016,7 +1023,6 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         );
         const onKey = runnerSandboxApi();
         const machines = agentMachinesLayer({
-          readToken: deploymentOidcToken,
           run: () => assert.fail("a Mac's launch runs no sandbox checkout"),
         }).pipe(Layer.provide(onKey.layer));
         // Note that the machines are provided innermost, so the Mac's machine answers rather than the fake sandbox's.
@@ -1517,9 +1523,11 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
 
         // The first launch's END, arriving late, stops nothing of the second's.
         yield* runnerTook(agent.id);
-        const late = yield* runnerEnded({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
-          Effect.provide(api.layer),
-        );
+        const late = yield* runnerEnded({
+          target,
+          sessionId: opened.sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
         assert.equal(late, RUNNER_ENDED.STALE);
         assert.equal(api.sandboxes[0]?.status, "running");
       }),
@@ -2542,8 +2550,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.ok(JSON.stringify(yield* launchLines(api.commands[0])).includes("Again."));
-        // The fake refuses the read with a 400, a status `@vercel/sandbox` never tries again.
-        assert.deepEqual(canceled, { outcome: "failed", status: 400 });
+        // The fake refuses the read with a 400, a status `@vercel/sandbox` never tries again, which answers as the sandbox unavailable.
+        assert.deepEqual(canceled, { outcome: "failed", status: 503 });
         assert.equal(retuned, RUNNER_CHOICE.FAILED);
         assert.equal(api.commands.length, 1);
         assert.equal((yield* launchLines(api.commands[0])).length, before);
@@ -2834,7 +2842,10 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sandbox.status, "running");
         // The send's relaunch records its launch, past the END's sequence, and lets go.
         const recorded = Option.getOrThrow(yield* readAgentRunnerRecord(userId, opened.sessionId));
-        yield* writeAgentRunnerRecord(userId, opened.sessionId, { ...recorded, firstSequence: 42 });
+        yield* writeAgentRunnerRecord(userId, opened.sessionId, {
+          ...recorded,
+          firstSequence: 42,
+        });
         yield* releaseAgentRunnerLease(agent.id, elsewhere);
         yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
 
@@ -3076,7 +3087,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.ok(
           logged.includes(
-            "A Claude Code launch failed after its Start: Vercel Sandbox stdin answered 400: stdin_refused: the command's stdin was refused",
+            "A Claude Code launch failed after its Start: the sandbox's stdin was unavailable: Vercel answered 400: stdin_refused: the command's stdin was refused",
           ),
           logged.join("\n"),
         );
@@ -3092,7 +3103,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         });
         assert.equal(
           yield* newestFailureDetail(agent),
-          `${REPOSITORY_REFUSAL.SANDBOX_UNAVAILABLE} Vercel Sandbox stdin answered 400: stdin_refused: the command's stdin was refused`,
+          `${REPOSITORY_REFUSAL.SANDBOX_UNAVAILABLE} the sandbox's stdin was unavailable: Vercel answered 400: stdin_refused: the command's stdin was refused`,
         );
       }),
   );
@@ -3112,7 +3123,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
 
         const detail = (yield* newestFailureDetail(agent)) ?? "";
         assert.ok(
-          detail.startsWith(`${REPOSITORY_REFUSAL.CHECKOUT_FAILED} Vercel Sandbox cmd`),
+          detail.startsWith(`${REPOSITORY_REFUSAL.CHECKOUT_FAILED} the sandbox's cmd`),
           detail,
         );
         assert.ok(detail.includes("socket hang up"), detail);

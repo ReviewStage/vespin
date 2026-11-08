@@ -26,6 +26,7 @@ import { BROWSER_AGENT_ACTION } from "@repo/features/browser-agent-actions";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import {
   TURN_ORIGIN,
@@ -104,6 +105,9 @@ import { admitRunnerBearer, runnerTokenDigest } from "./bearer.js";
 import { NATIVE_CALL_KEY_WINDOW_MS } from "./call-key.js";
 import { workspaceMcpDoorSeams } from "./door-seams.js";
 
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+
 /**
  * Our MCP server, answered by its group the way a function answers it,
  * over a real dialect, and driven by the MCP SDK's own client, the one a
@@ -149,6 +153,7 @@ const NO_INTEGRATIONS = integrationConnectOf(() => ({
 /** The services the doors run against, over the test's database: GitHub, the catalog, and Linear none of them reach. */
 const doorServices = Effect.gen(function* () {
   return Layer.mergeAll(
+    memorySandbox().layer,
     Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
     Layer.succeed(Database, yield* Database),
     Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -449,7 +454,7 @@ const initialize = (protocolVersion: string) => ({
   params: { protocolVersion, capabilities: {}, clientInfo: { name: "raw", version: "1" } },
 });
 
-it.layer(getTestDB())("Vespin's MCP server", (it) => {
+it.layer(SUITE)("Vespin's MCP server", (it) => {
   it.effect(
     "an SDK client under the runner's bearer lists read_threads and reads its agent's threads through the inbox door",
     () =>

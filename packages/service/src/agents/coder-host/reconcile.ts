@@ -74,12 +74,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { causeKind } from "@repo/runtime/effect";
-import {
-  COMMAND_GONE,
-  type CommandExit,
-  deploymentOidcToken,
-  vercelSandboxApi,
-} from "@repo/sandbox";
+import { COMMAND_GONE, type CommandExit, Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, ErrorReporter, Exit, Option } from "effect";
 import { RUN_STATUS, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { FoundPlace, MachineLifecycle, RecordedRunner } from "../machine/agent-machine.js";
@@ -161,14 +156,15 @@ const placeOf = (machine: MachineLifecycle, agent: ReconciledAgent) =>
     return found?.agentId === agent.id ? found : undefined;
   });
 
-/** What a sandbox's runner printed on stderr before it went, its tail redacted; none on a Mac, or where Vercel did not answer. */
+/** What a sandbox's runner printed on stderr before it went, its tail redacted; none on a Mac, or where the sandbox did not answer. */
 const stderrOf = (runner: RecordedRunner) =>
   runner.handle.machine !== AGENT_MACHINE.VERCEL
     ? Effect.succeed(undefined)
-    : Effect.flatMap(vercelSandboxApi(deploymentOidcToken), (api) =>
-        api
-          .session({ name: runner.handle.name, sessionId: runner.handle.running })
-          .pipe(Effect.flatMap((session) => session.commandStderrTail(runner.handle.command))),
+    : Effect.flatMap(Sandbox, (sandbox) =>
+        sandbox.commandStderrTail(
+          { name: runner.handle.name, running: runner.handle.running },
+          runner.handle.command,
+        ),
       ).pipe(Effect.orElseSucceed(() => undefined));
 
 /** A lost runner's turn's failure detail: the fixed sentence the status words match on, then how the runner ended, redacted and bounded as a runner's own failure is. */

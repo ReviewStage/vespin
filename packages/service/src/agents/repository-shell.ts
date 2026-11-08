@@ -4,7 +4,7 @@ import {
   checkoutIdentityEnv,
 } from "@repo/features/checkout-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import type { SandboxUnavailable } from "@repo/sandbox";
+import type { SandboxError } from "@repo/sandbox";
 import { Data, Duration, Effect, Option, type Redacted, Tracer } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
@@ -64,7 +64,7 @@ const COMMAND_ENVIRONMENT = {
 /**
  * How every write of the checkout is made: group-writable, files and
  * folders alike. Note that this is because a coding agent's runner runs as
- * a user in the default user's group (`machine/vercel-machine.ts`), and
+ * a user in the default user's group (`machine/sandbox-machine.ts`), and
  * what the default user writes at its own umask, 0022, that user alone may
  * write; a clone shares its repository with the group too
  * (`core.sharedRepository`), so git keeps what it writes under `.git` so
@@ -170,7 +170,7 @@ const REFRESH_SCRIPT = [
  * those, and sent (`sandbox-firewall.ts`).
  */
 export interface RepositoryFirewall {
-  readonly write: (sources: FirewallSources) => Effect.Effect<void, SandboxUnavailable>;
+  readonly write: (sources: FirewallSources) => Effect.Effect<void, SandboxError>;
 }
 
 /** One command run in the sandbox: its line, and where and with what environment it runs. */

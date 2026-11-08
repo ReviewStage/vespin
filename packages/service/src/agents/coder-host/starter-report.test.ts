@@ -10,6 +10,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { AGENT_PAYER, agentMessageReplyLine } from "@repo/features/agent-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
@@ -17,6 +18,9 @@ import { endedAt } from "../../testing/agent-turns.js";
 import { githubReaching } from "../../testing/github-app-fake.js";
 import { recordingSessions, sentTo } from "../../testing/recording-sessions.js";
 import { reportToStarter } from "./starter-report.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A started agent's final message handed to its starter as the store writer
@@ -78,11 +82,11 @@ const reporting = (agentSessions: ReturnType<typeof recordingSessions>) =>
   Layer.succeed(SettledTurnListener, {
     heard: (turn) =>
       reportToStarter(agentSessions.sessionsFor, turn).pipe(
-        Effect.provide(githubReaching([]).layer),
+        Effect.provide(Layer.merge(githubReaching([]).layer, memorySandbox().layer)),
       ),
   });
 
-it.layer(getTestDB())("a started agent's final message handed to its starter", (it) => {
+it.layer(SUITE)("a started agent's final message handed to its starter", (it) => {
   it.effect(
     "a completed turn hands its last words to the starter once, under the agent's name and how it ended, however many times the settle is heard",
     () =>

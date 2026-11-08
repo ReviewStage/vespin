@@ -97,6 +97,7 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
+import type { Sandbox } from "@repo/sandbox";
 import {
   EXPERIMENT,
   isExperiment,
@@ -239,6 +240,7 @@ import {
 
 /** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, and the member the call acts for. */
 export type MemberMcpServices =
+  | Sandbox
   | DatabaseServices
   | HttpClient.HttpClient
   | GitHubApp

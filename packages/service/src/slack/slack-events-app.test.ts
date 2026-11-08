@@ -24,6 +24,7 @@ import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_MESSAGE_AUTHOR } from "@repo/features/inbox-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { eq } from "drizzle-orm";
 import { Clock, DateTime, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
@@ -44,6 +45,9 @@ import { recordingHarness } from "../testing/native-harness-fake.js";
 import { SlackBot, type SlackFileTransfer, type SlackWebApi, slackBotOver } from "./slack-bot.js";
 import { slackEventsApp } from "./slack-events-app.js";
 import { dmThreadPost } from "./thread-dms.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * Our Slack route, answered by its group the way a function answers it,
@@ -218,6 +222,7 @@ const answer = (
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -433,7 +438,7 @@ const openThreadAgent = (runtime: ConversationRuntime, inBeacon: boolean) =>
     return { owner, agent, taskId: task.id, threadTs, slackUserId: `U-${row?.email}` };
   });
 
-it.layer(getTestDB())("our Slack route", (it) => {
+it.layer(SUITE)("our Slack route", (it) => {
   it.effect(
     "a press Connect signed is acknowledged first, then answers the ask as the member it was written to, tells the agent, and says the choice in the DM; one unsigned is refused",
     () => {

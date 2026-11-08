@@ -1,5 +1,5 @@
 /**
- * production.ts -- the terminal relay's dependencies as the deployment stands them: the agent read by the one rule, its sandbox through Vercel's SDK, the PTY reached by WebSocket (`sandbox-pty.ts`), and the lease in the store.
+ * production.ts -- the terminal relay's dependencies as the deployment stands them: the agent read by the one rule, its sandbox through `Sandbox`, the PTY reached by WebSocket (`sandbox-pty.ts`), and the lease in the store.
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the relay stands, so the relay itself requires none. A
@@ -9,7 +9,7 @@
  * the claim lapses on the agent's own rule. One that cannot say when the
  * credential was last renewed is logged and read as never, so the claim
  * decides. A keep-alive of the sandbox
- * Vercel did not confirm is logged, since the next one tries again.
+ * the sandbox did not confirm is logged, since the next one tries again.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -22,8 +22,9 @@ import {
   releaseCredentialRenewal,
 } from "@repo/database/models/sandbox-terminal-lease";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
-import { HttpClient } from "effect/http";
+import type { HttpClient } from "effect/http";
 import { controlsAgent } from "../agents/agent-reach.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { agentRepositoryToken } from "../agents/coder-host/checkout.js";
@@ -34,13 +35,18 @@ import type { GitHubApp } from "../github/github-app.js";
 import type { RelayDependencies } from "./relay.js";
 
 /** What the relay's dependencies answer over: the agents' image among it, which a sandbox is made again from. */
-export type RelayServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | AgentImage;
+export type RelayServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | AgentImage
+  | Sandbox;
 
 /** The relay's dependencies over the services the runtime holds now. */
 export const relayDependencies: Effect.Effect<RelayDependencies, never, RelayServices> = Effect.gen(
   function* () {
     const context = yield* Effect.context<RelayServices>();
-    const client = yield* HttpClient.HttpClient;
+    const sandboxes = yield* Sandbox;
     const run = <A, E>(effect: Effect.Effect<A, E, RelayServices>) =>
       Effect.provideContext(effect, context);
     const sandbox = yield* Effect.provide(
@@ -72,7 +78,7 @@ export const relayDependencies: Effect.Effect<RelayDependencies, never, RelaySer
           }),
         ),
       sandbox,
-      connect: (shell) => connectPty(shell, client),
+      connect: (shell) => connectPty(sandboxes, shell),
       hold: (conversationId, heldUntil) =>
         run(holdSandbox(conversationId, heldUntil)).pipe(
           Effect.catch(() => Effect.logWarning("a terminal's lease was not moved on")),

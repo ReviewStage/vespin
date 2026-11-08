@@ -20,6 +20,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TASK_STATUS, type TaskUpdateRequest } from "@repo/features/task-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Data, Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import {
@@ -87,7 +88,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   TaskChangeConfirmed,
   HostedRefusal,
-  GitHubApp | HttpClient.HttpClient | DatabaseServices
+  GitHubApp | HttpClient.HttpClient | DatabaseServices | Sandbox
 > {
   const header = yield* hostedStoreOrUnavailable(readTaskHeader(userId, taskId));
   if (Option.isNone(header)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);

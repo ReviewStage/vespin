@@ -1458,7 +1458,7 @@ model. An account that saved no API key, as one on a plan alone, has its
 replays carried without a summary.
 
 The sandbox is one Vercel Sandbox per agent
-(`src/agents/machine/vercel-machine.ts`), booted from the agents' custom image
+(`src/agents/machine/sandbox-machine.ts`), booted from the agents' custom image
 (`apps/web/agent-image/Dockerfile`: Node, git, pnpm, Python, Playwright's
 Chromium, Claude Code, Codex, `gh`, and the runner itself), which CI pushes
 to the project's registry before the deploy that names it, and kept alive

@@ -7,6 +7,7 @@
  * `ManagedRuntime` over this layer.
  */
 
+import { Sandbox } from "@repo/sandbox";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { invitationMailFromEnvironment } from "./accounts/invitation-mail.js";
@@ -142,6 +143,8 @@ const slackBot = slackBotFromEnvironment.pipe(
  * that re-export a bundle stand, rather than out of the bundle itself.
  */
 export const webServices = Layer.mergeAll(
+  // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
+  Layer.effect(Sandbox, Effect.service(Sandbox)),
   gatedGitHubClient,
   webSqlClient,
   hostedEnvironment,

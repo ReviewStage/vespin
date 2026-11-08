@@ -55,6 +55,7 @@ import {
   type BrowserTabsPlace,
 } from "@repo/features/agent-browser-tab-wire";
 import { isBrowserAddress } from "@repo/features/browser-acts";
+import type { Sandbox } from "@repo/sandbox";
 import { DateTime, Duration, Effect, type Layer, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { BROWSER_LIVE_BOUNDS } from "../browser-live/bounds.js";
@@ -91,7 +92,7 @@ const OPEN_HOLD = Duration.sum(BROWSER_LIVE_BOUNDS.IDLE, BROWSER_LIVE_BOUNDS.LEA
 export interface AgentBrowserTabsProcedureSeams {
   resolveUserId: UserIdResolver;
   /** The agents' browsers as an open reaches them: Vercel's sandboxes in production, a script's in a test. */
-  readonly agentBrowser: Layer.Layer<AgentBrowser, never, HttpClient.HttpClient>;
+  readonly agentBrowser: Layer.Layer<AgentBrowser, never, HttpClient.HttpClient | Sandbox>;
 }
 
 /** A reached tab as the wire carries it, its driver only while their takeover stands at `now`, its cursor once its agent pointed at it. */

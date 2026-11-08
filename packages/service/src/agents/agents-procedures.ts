@@ -64,6 +64,7 @@ import {
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS } from "@repo/features/contract";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Clock, Duration, Effect, type Layer, Option, type Redacted, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
@@ -138,7 +139,11 @@ import { runOnMacStanding } from "./workspace-tools.js";
 export interface AgentsProcedureSeams extends PublishedReach, SandboxStopReach {
   resolveUserId: UserIdResolver;
   /** The agent's sandbox as the shells reach it: Vercel's in production, a script's in a test. */
-  readonly sandbox: Layer.Layer<AgentSandbox, never, HttpClient.HttpClient | DatabaseServices>;
+  readonly sandbox: Layer.Layer<
+    AgentSandbox,
+    never,
+    HttpClient.HttpClient | DatabaseServices | Sandbox
+  >;
   /** The model a Start from another agent summarizes the steps it cannot keep on; the deployment's own (`coder-host/replay-summary.ts`) where none is named. */
   summaryModel?: SummaryModelOf;
 }

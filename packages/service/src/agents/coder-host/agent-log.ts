@@ -63,7 +63,7 @@ export function agentLogIds(
   };
 }
 
-/** The running session of the agent's machine a line is annotated with: Vercel's own, on a sandbox. */
+/** Where the agent's machine runs it, a line is annotated with: the sandbox's run, on a sandbox. */
 export function runningLogId(running: string): Readonly<Record<string, string>> {
   return { sandboxSessionId: running };
 }

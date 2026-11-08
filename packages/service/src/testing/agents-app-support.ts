@@ -23,7 +23,7 @@ import {
 } from "@repo/features/agent-wire";
 import { INBOX_ASK_STATUS, INBOX_IMAGE_TYPE, type InboxItem } from "@repo/features/inbox-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
-import { sandboxFetchOver } from "@repo/sandbox/testing";
+import { vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -431,8 +431,8 @@ export const standing = (
       Layer.succeed(HostedEnvironment, NO_KEYS),
       scriptedHarnessLayer((account) => agentSessions.agentSessions(harnessFor(account))),
       github.layer,
-      // A sandbox's calls reach the same fake as GitHub's, through the `fetch` `@vercel/sandbox` sends on.
-      sandboxFetchOver(github.respond),
+      // A sandbox's calls reach the same fake as GitHub's, through the adapter's `fetch`.
+      Layer.provide(vercelSandboxOver(github.respond), github.layer),
       modelCatalogOf(CATALOG),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),

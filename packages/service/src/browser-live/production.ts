@@ -1,5 +1,5 @@
 /**
- * production.ts -- the live view's dependencies as the deployment stands them: the tab read and taken over in the store by the tabs contract's rules, the agent's sandbox session from its conversation, its browser over Vercel's REST API and the sandbox's PTY, and the terminal's lease.
+ * production.ts -- the live view's dependencies as the deployment stands them: the tab read and taken over in the store by the tabs contract's rules, the agent's sandbox session from its conversation, its browser through `Sandbox` and the sandbox's PTY, and the terminal's lease.
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the service stands, so the relay itself requires none.
@@ -19,6 +19,7 @@ import {
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
+import type { Sandbox } from "@repo/sandbox";
 import { Effect, Layer, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { AgentBrowser, agentBrowserLayer } from "../agents/browser/agent-browser.js";
@@ -30,7 +31,7 @@ import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
 /** What the live view's dependencies answer over: the agents' image among it, which a sandbox is made again from. */
-export type BrowserLiveServices = DatabaseServices | HttpClient.HttpClient | AgentImage;
+export type BrowserLiveServices = DatabaseServices | HttpClient.HttpClient | AgentImage | Sandbox;
 
 /** The live view's dependencies over the services the runtime holds now. */
 export const browserLiveDependencies: Effect.Effect<

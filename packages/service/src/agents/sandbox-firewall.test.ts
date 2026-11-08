@@ -6,14 +6,8 @@ import { readFirewallLaunch } from "@repo/database/models/sandbox-firewall-store
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openTaskAgent, openWorkspace } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { vercelSandboxApi } from "@repo/sandbox";
-import {
-  fixtureToken,
-  sandboxFetchOver,
-  sandboxFound,
-  sessionAnswered,
-} from "@repo/sandbox/testing";
-import { Effect, Layer, Redacted } from "effect";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { Effect, Redacted } from "effect";
 import { LOCAL_AGENT_ENVIRONMENT } from "../testing/local-agent.js";
 import {
   composePolicy,
@@ -44,21 +38,17 @@ const basic = (token: string) =>
 
 /** The runner's bearer swapped in on our host for the placeholder its launch holds. */
 const BEARER_RULE = {
-  match: {
-    headers: [
-      { key: { exact: "authorization" }, value: { exact: "Bearer runner-placeholder-fixture" } },
-    ],
-  },
-  transform: [{ headers: { authorization: BEARER } }],
+  headers: { authorization: "Bearer runner-placeholder-fixture" },
+  set: { authorization: BEARER },
 };
 
 /** The write token on GitHub's two hosts. */
-const WRITE_RULE = { transform: [{ headers: { authorization: basic(WRITE_TOKEN) } }] };
+const WRITE_RULE = { set: { authorization: basic(WRITE_TOKEN) } };
 
 /** The clone's read token on the repository's git endpoint alone. */
 const CLONE_RULE = {
-  match: { path: { startsWith: `/${REPOSITORY}.git/` } },
-  transform: [{ headers: { authorization: basic(READ_TOKEN) } }],
+  path: { startsWith: `/${REPOSITORY}.git/` },
+  set: { authorization: basic(READ_TOKEN) },
 };
 
 const write = { token: Redacted.make(WRITE_TOKEN), fullName: REPOSITORY, access: APP };
@@ -96,38 +86,15 @@ const ownSession = Effect.gen(function* () {
   };
 });
 
-/** Vercel as the scenario has it: the session's sandbox found running it, and each policy kept as it lands, in that order. */
-function vercel(session: Effect.Success<typeof ownSession>) {
-  const landed: unknown[] = [];
-  const layer = sandboxFetchOver(async (url, init) => {
-    const { pathname } = new URL(url);
-    if (pathname === `/api/v2/sandboxes/${session.name}`) {
-      return Response.json(
-        sandboxFound({
-          name: session.name,
-          status: "running",
-          currentSessionId: session.sandboxSessionId,
-          createdAt: 0,
-        }),
-      );
-    }
-    assert.equal(
-      pathname,
-      `/api/v2/sandboxes/sessions/${session.sandboxSessionId}/network-policy`,
-      `an unexpected call: ${url}`,
-    );
-    landed.push(JSON.parse(await new Response(init.body).text()));
-    return Response.json(sessionAnswered({ id: session.sandboxSessionId, status: "running" }));
-  });
-  return { layer, landed };
+/** The sandbox as the scenario has it: the session's sandbox up in its run, each policy kept as it lands, in that order. */
+function standing(session: Effect.Success<typeof ownSession>) {
+  const sandbox = memorySandbox();
+  sandbox.stand({ name: session.name, running: session.sandboxSessionId });
+  return {
+    firewall: sandboxFirewall(sandbox.service),
+    policies: () => sandbox.state.policies.map((each) => each.policy),
+  };
 }
-
-/** The firewall over the scripted Vercel, and its services: the scripted Vercel, and the suite's key ring. */
-const firewallOver = (layer: Layer.Layer<never>) =>
-  Effect.map(vercelSandboxApi(async () => fixtureToken()).pipe(Effect.provide(layer)), (api) => ({
-    firewall: sandboxFirewall(api),
-    services: Effect.provide(Layer.merge(layer, LOCAL_AGENT_ENVIRONMENT)),
-  }));
 
 it.layer(getTestDB())("a sandbox session's firewall", (it) => {
   it.effect(
@@ -135,28 +102,25 @@ it.layer(getTestDB())("a sandbox session's firewall", (it) => {
     () =>
       Effect.gen(function* () {
         const session = yield* ownSession;
-        const api = vercel(session);
-        const { firewall, services } = yield* firewallOver(api.layer);
+        const { firewall, policies } = standing(session);
 
         const kept = yield* Effect.gen(function* () {
           yield* firewall.keepLaunch(session, bearerLaunch(session.agentId));
           yield* firewall.write(session, { github: write });
           yield* firewall.write(session, { github: write, clone: read });
           return yield* readFirewallLaunch(session);
-        }).pipe(services);
+        }).pipe(Effect.provide(LOCAL_AGENT_ENVIRONMENT));
 
-        assert.deepEqual(api.landed, [
+        assert.deepEqual(policies(), [
           {
-            allow: {
-              "*": [],
+            hosts: {
               "github.com": [WRITE_RULE],
               "api.github.com": [WRITE_RULE],
               [SERVICE_HOST]: [BEARER_RULE],
             },
           },
           {
-            allow: {
-              "*": [],
+            hosts: {
               "github.com": [WRITE_RULE, CLONE_RULE],
               "api.github.com": [WRITE_RULE],
               [SERVICE_HOST]: [BEARER_RULE],
@@ -181,15 +145,9 @@ it("a placeholder swap is a rule on its domain matching its header at the placeh
   });
 
   assert.deepEqual(composePolicy({}, new Map([[LAUNCH_SWAP.CLAUDE, swap]])), {
-    allow: {
-      "*": [],
+    hosts: {
       "api.provider.test": [
-        {
-          match: {
-            headers: [{ key: { exact: "x-api-key" }, value: { exact: "placeholder-fixture" } }],
-          },
-          transform: [{ headers: { "x-api-key": "secret-fixture" } }],
-        },
+        { headers: { "x-api-key": "placeholder-fixture" }, set: { "x-api-key": "secret-fixture" } },
       ],
     },
   });

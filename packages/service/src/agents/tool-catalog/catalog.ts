@@ -47,6 +47,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
 import { pictureTypeSchema } from "@repo/features/picture-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { emitJsonSchema } from "@repo/wire/effect";
 import { Effect, Exit, Option, Schema } from "effect";
@@ -170,6 +171,7 @@ export type WorkspaceMcpToolResult = { readonly status?: string } & object;
 
 /** What the doors run against, every one of which a web function's runtime provides. */
 export type WorkspaceMcpServices =
+  | Sandbox
   | DatabaseServices
   | HttpClient.HttpClient
   | GitHubApp

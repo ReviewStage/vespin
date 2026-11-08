@@ -6,15 +6,14 @@ import { Database } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { vercelSandboxApi } from "@repo/sandbox";
-import { commandRunStreamed, sandboxFetchOver } from "@repo/sandbox/testing";
+import { commandRunStreamed, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { Deferred, Duration, Effect, Fiber, Layer, Logger, Redacted } from "effect";
+import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import type { TestContext } from "vitest";
 import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import {
-  fixtureOidcToken,
   type SentToSandbox,
   SOURCE_SANDBOX,
   type SourceCheckout,
@@ -71,7 +70,7 @@ function standing({ checkout, sh }: SourceCheckout) {
 
 /** The copy asked of the sandbox over the responder given, through the credential given, the sandbox left up where `keepUp` says so. */
 function copyOver(
-  respond: Parameters<typeof sandboxFetchOver>[0],
+  respond: Parameters<typeof vercelSandboxOver>[0],
   keepUp: Effect.Effect<boolean> = Effect.succeed(false),
   credential: RepositoryCredential = CREDENTIAL.APP,
 ) {
@@ -82,8 +81,7 @@ function copyOver(
         .values({ id: SOURCE_OWNER, name: "Test User", email: `${SOURCE_OWNER}@app.test` })
         .onConflictDoNothing(),
     );
-    const api = yield* vercelSandboxApi(async () => fixtureOidcToken());
-    return yield* snapshotSource(api, {
+    return yield* snapshotSource({
       userId: SOURCE_OWNER,
       sessionId: SESSION,
       branch: BRANCH,
@@ -91,7 +89,14 @@ function copyOver(
       credential: Effect.succeed(credential),
       keepUp,
     });
-  }).pipe(Effect.provide(Layer.merge(sandboxFetchOver(respond), LOCAL_AGENT_ENVIRONMENT)));
+  }).pipe(
+    Effect.provide(
+      Layer.merge(
+        vercelSandboxOver(respond).pipe(Layer.provide(FetchHttpClient.layer)),
+        LOCAL_AGENT_ENVIRONMENT,
+      ),
+    ),
+  );
 }
 
 /** A request as the double reads it. */

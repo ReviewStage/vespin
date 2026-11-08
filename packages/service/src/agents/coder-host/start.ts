@@ -60,6 +60,7 @@ import { automationRun } from "@repo/features/model-label";
 import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wire";
 import { TASK_MODE, type Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, type SlackLineMetadata, START_LINE_BRIEF } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -294,7 +295,12 @@ export interface AgentStarted {
 }
 
 /** What a Start reaches: the store, the catalog, GitHub through the App on the developer's standing, and the network to the agent's harness. */
-export type StartServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | ModelCatalog;
+export type StartServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | ModelCatalog
+  | Sandbox;
 
 /** What an account may start an agent on: the models the catalog offers it, and the choice a Start naming none runs on. */
 export interface AccountModelChoices {

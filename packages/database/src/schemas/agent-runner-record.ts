@@ -8,7 +8,7 @@ import { user } from "./auth.js";
  * A launch writes the row under the agent's runner lease
  * (`agent-runner-lease.ts`), and every call that reads where the runner
  * stands reads it back (`../models/agent-runner-record.ts`,
- * `@repo/service`'s `agents/machine/vercel-machine.ts`), so the sandbox's
+ * `@repo/service`'s `agents/machine/sandbox-machine.ts`), so the sandbox's
  * tags carry only what finds it: our session and its agent. One row per
  * account and session, which names the sandbox it was written for, so a
  * session's older sandbox, kept beside the one that replaced it, reads no

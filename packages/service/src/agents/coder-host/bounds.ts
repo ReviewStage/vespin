@@ -77,21 +77,6 @@ export const CODER = {
    * boots with the default, lets it lint there in 36 seconds.
    */
   SANDBOX_VCPUS_BY_REPOSITORY: new Map([["reviewstage/vespin", 4]]) as ReadonlyMap<string, number>,
-  /**
-   * The snapshots Vercel keeps of the agent's sandbox: the newest alone, which
-   * is all a resume reads, so snapshot storage stays flat however many turns
-   * stop it. An evicted one is deleted at once, and the kept one expires
-   * seven days after it was last used, as Vercel's persistent sandbox
-   * examples keep one (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes),
-   * named here because Vercel's own pages disagree on the default. The cost:
-   * an agent resumed after 7 idle days finds no snapshot, and its sandbox is
-   * created again on its drive (`../machine/vercel-machine.ts`), its checkout
-   * as the agent left it, but what stood outside the drive, its harness's own
-   * session among it, is gone; one opened before drives starts from a fresh
-   * clone of its repository, its uncommitted and unpushed work gone
-   * (`runner-sessions.ts`).
-   */
-  SANDBOX_SNAPSHOTS: { count: 1, expiration: Duration.days(7), deleteEvicted: true },
   /** An installation token is good for an hour from its mint; the one at the firewall is renewed this long after, inside that hour, as a host renews its agents' (`@repo/features/host-wire`). */
   GITHUB_TOKEN_REFRESH,
   /** The context window the session is told where the catalog names none for the model. */

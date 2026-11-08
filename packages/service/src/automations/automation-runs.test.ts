@@ -58,6 +58,7 @@ import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/i
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
@@ -84,6 +85,9 @@ import {
 import { consumeAutomationRunMessage } from "./automation-run-consumer.js";
 import { executeAutomationRun } from "./automation-runs.js";
 import { reconsiderRunArchive } from "./run-archive.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * An automation's runs acted on, over a real dialect: a schedule's delivery
@@ -370,7 +374,7 @@ const serversTaken = (owner: string, agentId: string) =>
     return yield* takeAgentMentionedServers(owner, agent.conversationId);
   });
 
-it.layer(getTestDB())("an automation's runs", (it) => {
+it.layer(SUITE)("an automation's runs", (it) => {
   it.effect(
     "a run's new agent is handed the switched-off servers its automation's own prompt mentions, and none a webhook body or a GitHub event's title mentions",
     () =>

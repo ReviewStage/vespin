@@ -16,7 +16,7 @@
  * it as it stands.
  */
 
-/** The unprivileged user the harness runs as, which a sandbox makes as the Sandbox SDK makes a user (`vercel-machine.ts`). */
+/** The unprivileged user the harness runs as, which a sandbox makes as the Sandbox SDK makes a user (`sandbox-machine.ts`). */
 export const AGENT_USER = "agent";
 
 /**
@@ -69,7 +69,7 @@ export const SANDBOX_TOOL_ENV = { PLAYWRIGHT_BROWSERS_PATH: "0" } as const;
  * it. Note that a persistent sandbox resumes from its own snapshot of the
  * image it was made from, so one made before the product's rename holds them
  * under `SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME`, which each launch links this
- * name to (`vercel-machine.ts`'s launch).
+ * name to (`sandbox-machine.ts`'s launch).
  */
 export const SANDBOX_TOOLS_DIRECTORY = "/opt/agent";
 
@@ -87,7 +87,7 @@ export const RUNNER_DIRECTORY = `${SANDBOX_TOOLS_DIRECTORY}/agent-runner`;
  * context holds the unit in a folder of its own, the web build ships it the
  * same way beside each function that opens a sandbox
  * (`apps/web/scripts/agent-image.ts`), and each cloud launch installs it
- * whole over `RUNNER_DIRECTORY` (`@repo/service`'s `vercel-machine.ts`), so
+ * whole over `RUNNER_DIRECTORY` (`@repo/service`'s `sandbox-machine.ts`), so
  * no file of it comes from another build than the bundle, whatever disk the
  * sandbox resumed on.
  */

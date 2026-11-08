@@ -1,28 +1,29 @@
 /**
- * vercel-sdk.ts -- every call we make of Vercel Sandbox, through `@vercel/sandbox`, under the deployment's own OIDC token.
+ * vercel-sdk.ts -- `Sandbox` as Vercel Sandbox answers it: every call made through `@vercel/sandbox` under the deployment's own OIDC token, and Vercel's answers read as the package's own words.
  *
  * Everything a caller asks of a sandbox — one deleted, stopped, resumed, or
  * got or created from an image or a snapshot, a user made in it and a
  * command started as that user, a short command, a PTY, a network policy, a
- * snapshot, its tags and its public ports — it asks here, of the SDK at the
+ * snapshot, its tags and its public ports — is asked here, of the SDK at the
  * version the catalog pins, which loads in a function's bundle. The SDK
  * tries a 429, a 5xx, and a failure to connect again before it answers (a
  * 429 waits out Vercel's `Retry-After` up to 20 seconds), so nothing here
  * tries again.
  *
- * Every call goes under the token we read and the `fetch` `SandboxFetch`
- * names: a call on a sandbox by name, a list, and a create through the
- * SDK's statics, and the calls on a running session, and
- * on a command in it, through the session the documented way reaches it
- * (`Sandbox.get` by the sandbox's name, without resuming it, then
- * `currentSession`), looked up once and held for one operation's calls and
- * polls (`session`).
+ * Every call goes under the token `SandboxToken` reads and the `fetch`
+ * `SandboxFetch` names: a call on a sandbox by name, a list, and a create
+ * through the SDK's statics, and the calls on what runs in a sandbox
+ * through the session the documented way reaches it (`Sandbox.get` by the
+ * sandbox's name, without resuming it, then `currentSession`), looked up at
+ * each call. A run a caller names is one of Vercel's sessions, and a
+ * sandbox no longer in it answers as Vercel answers a session it no longer
+ * holds.
  *
  * A sandbox is found by a tag its caller gave it, whose value names few
  * sandboxes, so the first page is all of them. What is sent is a tag, a
  * name, and the argv of a command a caller wrote; what a failure carries is
- * the call that failed, its status, and Vercel's own error code and message,
- * or the cause's where Vercel never answered, every token-shaped run of it
+ * the call that failed, and Vercel's status, error code and message, or the
+ * cause's where Vercel never answered, every token-shaped run of it
  * redacted, and never what was sent. A deployment without an OIDC token
  * answers every call as unavailable.
  */
@@ -31,33 +32,43 @@ import { EXCESS_KEYS, unparsedWire, valueFromJsonText } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import {
   APIError,
-  type Command,
-  Sandbox,
   type NetworkPolicy as SdkNetworkPolicy,
+  Sandbox as SdkSandbox,
   type Session,
   StreamError,
 } from "@vercel/sandbox";
-import { Context, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
-import type { OidcTokenRead } from "./oidc.js";
+import { Context, Data, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
+import { HttpClient } from "effect/http";
+import { Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
+  type CommandAsk,
   type CommandExit,
+  ImageNotReady,
   type ListedSandbox,
   type NetworkPolicy,
-  NOT_FOUND_STATUS,
-  OPEN_INTERNET_POLICY,
+  OPEN_INTERNET,
   type OpenedSandbox,
   SANDBOX_CALL,
   SANDBOX_STATUS,
   type SandboxCall,
   type SandboxCreate,
+  SandboxEnding,
+  type SandboxError,
+  SandboxGone,
+  SandboxNameTaken,
   type SandboxRoute,
-  type SandboxSessionApi,
+  type SandboxStatus,
+  type SandboxTarget,
   SandboxUnavailable,
   type SandboxUser,
-  type SessionRef,
-  type VercelSandboxApi,
-} from "./vocabulary.js";
+  SnapshotGone,
+} from "../vocabulary.js";
+import { deploymentOidcToken, type OidcTokenRead } from "./oidc.js";
+import { openPtySocket } from "./pty.js";
+
+/** Vercel's answer for a sandbox, session, command, or snapshot already gone. */
+const NOT_FOUND_STATUS = 404;
 
 /** Vercel's answer for a create whose name another sandbox already holds. */
 const NAME_TAKEN_STATUS = 409;
@@ -69,13 +80,64 @@ const NAME_TAKEN_STATUS = 409;
  */
 const SESSION_STOPPED = { STATUS: 410, CODE: "sandbox_stopped" } as const;
 
+/**
+ * Vercel's answer for a resume or a create whose snapshot is gone: expired
+ * past the expiration it was kept for, or deleted, its body naming
+ * `snapshot_not_found`, as the SDK's own check reads it. Note that Vercel
+ * answers 410 for a call to a stopped sandbox too (`SESSION_STOPPED`), which
+ * a resume mends, and that a body that could not be read names no code, so
+ * only a 410 that names this code says the snapshot is gone.
+ */
+const SNAPSHOT_GONE = { STATUS: 410, CODE: "snapshot_not_found" } as const;
+
+/**
+ * Vercel's answer for a call to a session that is stopping, or being
+ * snapshotted, under it, and the codes its body names: what a resume of the
+ * sandbox mends, as the SDK's own `withResume` reads it.
+ */
+const SESSION_ENDING = {
+  STATUS: 422,
+  CODES: new Set(["sandbox_stopping", "sandbox_snapshotting"]),
+} as const;
+
+/**
+ * Vercel's error code for a create on an image its registry has not finished
+ * preparing for Sandbox, which its docs say to retry once the preparation
+ * finishes (https://vercel.com/docs/sandbox/concepts/images).
+ */
+const IMAGE_NOT_READY_CODE = "image_not_ready";
+
+/** The statuses past which Vercel's answer says it may take the call another time: busy, or at fault. */
+const AGAIN_STATUS = { TOO_MANY_REQUESTS: 429, SERVER_ERROR: 500 } as const;
+
 const OK_STATUS = { FIRST: 200, LAST: 299 } as const;
+
+/** Vercel's statuses as the package names them; one named none of these (`failed`, `aborted`) reads as none. */
+const STATUS_OF_VERCEL: ReadonlyMap<string, SandboxStatus> = new Map([
+  ["pending", SANDBOX_STATUS.STARTING],
+  ["running", SANDBOX_STATUS.RUNNING],
+  ["stopping", SANDBOX_STATUS.STOPPING],
+  ["snapshotting", SANDBOX_STATUS.STOPPING],
+  ["stopped", SANDBOX_STATUS.STOPPED],
+]);
+
+/**
+ * The snapshots Vercel keeps of a sandbox: the newest alone, which is all a
+ * resume reads, so snapshot storage stays flat however many runs stop it.
+ * An evicted one is deleted at once, and the kept one expires `EXPIRATION`
+ * after it was last used unless the create names its own lapse, as Vercel's
+ * persistent sandbox examples keep one
+ * (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes), named here
+ * because Vercel's own pages disagree on the default. The cost: a sandbox
+ * resumed after 7 idle days finds no snapshot (`SnapshotGone`).
+ */
+const KEPT_SNAPSHOTS = { COUNT: 1, EXPIRATION: Duration.days(7), DELETE_EVICTED: true } as const;
 
 const SANDBOX_API = {
   /**
-   * A session has one sandbox, so the first page is all of them. Note that
-   * the page is the API's widest, because a list asked for more is refused
-   * whole (`limit`'s maximum in Vercel's REST reference is 50).
+   * A tag's value names few sandboxes, so the first page is all of them.
+   * Note that the page is the API's widest, because a list asked for more is
+   * refused whole (`limit`'s maximum in Vercel's REST reference is 50).
    */
   PAGE: 50,
   /**
@@ -101,13 +163,56 @@ const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.LIST]: "web/sandboxList",
   [SANDBOX_CALL.DELETE]: "web/sandboxDelete",
   [SANDBOX_CALL.STOP]: "web/sandboxStop",
-  [SANDBOX_CALL.SESSION]: "web/sandboxSession",
+  [SANDBOX_CALL.RUN]: "web/sandboxSession",
   [SANDBOX_CALL.EXTEND]: "web/sandboxExtend",
   [SANDBOX_CALL.NETWORK_POLICY]: "web/sandboxNetworkPolicy",
   [SANDBOX_CALL.INTERACTIVE]: "web/sandboxInteractive",
   [SANDBOX_CALL.SNAPSHOT]: "web/sandboxSnapshot",
   [SANDBOX_CALL.PORTS]: "web/sandboxUpdatePorts",
 } as const satisfies Record<SandboxCall, string>;
+
+/**
+ * Vercel could not be asked, or did not confirm what was asked, as this
+ * adapter reads it before the package's own words: the call that failed,
+ * the status where Vercel answered one, its error code where it named one,
+ * and what went wrong in a line.
+ */
+class Refused extends Data.TaggedError("Refused")<{
+  readonly call: SandboxCall;
+  readonly status?: number;
+  readonly code?: string;
+  readonly detail?: string;
+}> {}
+
+/** What a refusal's line says: Vercel's status where it answered one, and its words or the cause's. */
+function refusalDetail(refusal: Refused): string | undefined {
+  if (refusal.status === undefined) return refusal.detail;
+  const answered = `Vercel answered ${refusal.status}`;
+  return refusal.detail === undefined ? answered : `${answered}: ${refusal.detail}`;
+}
+
+/** A refusal in the package's words: what was named gone, its name taken, its snapshot gone, its run ending, its image not ready, or the call unavailable. */
+function neutralOf(refusal: Refused): SandboxError {
+  const { call, status, code } = refusal;
+  if (status === NOT_FOUND_STATUS) return new SandboxGone({ call });
+  if (status === NAME_TAKEN_STATUS) return new SandboxNameTaken({ call });
+  if (status === SNAPSHOT_GONE.STATUS && code === SNAPSHOT_GONE.CODE) {
+    return new SnapshotGone({ call });
+  }
+  if (status === SESSION_ENDING.STATUS && code !== undefined && SESSION_ENDING.CODES.has(code)) {
+    return new SandboxEnding({ call });
+  }
+  if (code === IMAGE_NOT_READY_CODE) return new ImageNotReady({ call });
+  const retryable =
+    status !== undefined &&
+    (status === AGAIN_STATUS.TOO_MANY_REQUESTS || status >= AGAIN_STATUS.SERVER_ERROR);
+  const detail = refusalDetail(refusal);
+  return new SandboxUnavailable({
+    call,
+    ...(retryable ? { retryable } : undefined),
+    ...(detail === undefined ? undefined : { detail }),
+  });
+}
 
 /**
  * The `fetch` the SDK sends on: the platform's own, and a suite's fake of
@@ -119,6 +224,11 @@ export const SandboxFetch = Context.Reference<typeof globalThis.fetch>(
   "@repo/sandbox/SandboxFetch",
   { defaultValue: () => (input, init) => globalThis.fetch(input, init) },
 );
+
+/** How the deployment's own OIDC token is read: the function's in production, a fixed one under a suite's fake of Vercel. */
+export const SandboxToken = Context.Reference<OidcTokenRead>("@repo/sandbox/SandboxToken", {
+  defaultValue: () => deploymentOidcToken,
+});
 
 /** The OIDC token's claims the API is asked under: the project and team it names. */
 const OidcClaimsSchema = Schema.Struct({ project_id: Schema.String, owner_id: Schema.String });
@@ -246,11 +356,11 @@ function succeeded(status: number): boolean {
 function refused(
   call: SandboxCall,
   answered: { readonly status: number; readonly text: string },
-): SandboxUnavailable {
+): Refused {
   const detail =
     errorDetail(answered.text) ?? (succeeded(answered.status) ? UNREADABLE_DETAIL : undefined);
   const code = errorCode(answered.text);
-  return new SandboxUnavailable({
+  return new Refused({
     call,
     status: answered.status,
     ...(code === undefined ? undefined : { code }),
@@ -265,70 +375,82 @@ function refused(
  * message; and anything else as the cause. Note that the SDK has already
  * tried a 429, a 5xx, and a failure to connect again by then.
  */
-function sdkFailure(call: SandboxCall, cause: unknown): SandboxUnavailable {
+function sdkFailure(call: SandboxCall, cause: unknown): Refused {
   if (cause instanceof APIError) {
     return refused(call, { status: cause.response.status, text: cause.text ?? "" });
   }
   if (cause instanceof StreamError) {
-    return new SandboxUnavailable({
+    return new Refused({
       call,
       ...(ERROR_CODE.test(cause.code) ? { code: cause.code } : undefined),
       detail: capped(cause.message),
     });
   }
-  return new SandboxUnavailable({ call, detail: causeDetail(cause) });
+  return new Refused({ call, detail: causeDetail(cause) });
 }
 
 /** One SDK call as an effect under the call's span, its failure read as the call's; interrupting it aborts the SDK's request. */
 function sdkCall<A>(
   call: SandboxCall,
   run: (signal: AbortSignal) => Promise<A>,
-): Effect.Effect<A, SandboxUnavailable> {
+): Effect.Effect<A, Refused> {
   return Effect.tryPromise({ try: run, catch: (cause) => sdkFailure(call, cause) }).pipe(
     Effect.withSpan(SANDBOX_CALL_SPAN[call]),
   );
 }
 
-/** Whether a failure is Vercel's answer that what was named is already gone. */
-function isGone(failure: SandboxUnavailable): boolean {
-  return failure.status === NOT_FOUND_STATUS;
+/** Whether a refusal is Vercel's answer that what was named is already gone. */
+function isGone(refusal: Refused): boolean {
+  return refusal.status === NOT_FOUND_STATUS;
 }
 
 /** Whether a call on a session failed because the session ended: gone, or stopped under it, which leaves nothing of it running. */
-function sessionGone(failure: SandboxUnavailable): boolean {
+function sessionGone(refusal: Refused): boolean {
   return (
-    isGone(failure) ||
-    (failure.status === SESSION_STOPPED.STATUS && failure.code === SESSION_STOPPED.CODE)
+    isGone(refusal) ||
+    (refusal.status === SESSION_STOPPED.STATUS && refusal.code === SESSION_STOPPED.CODE)
   );
 }
 
-/** The SDK's own name for its network policy, from ours: the open internet by name, and every rule copied, since the SDK takes them as mutable arrays. */
+/** The SDK's own name for a network policy, from the package's: the open internet by name, else every host open and each named host's rules as the SDK's matchers and transforms. */
 function sdkPolicyOf(policy: NetworkPolicy): SdkNetworkPolicy {
-  if ("mode" in policy) return policy.mode;
+  const hosts = Object.entries(policy.hosts);
+  if (hosts.length === 0) return "allow-all";
   return {
-    allow: Object.fromEntries(
-      Object.entries(policy.allow).map(([host, rules]) => [
+    allow: Object.fromEntries([
+      // Note that the wildcard leaves every other host open, as the open internet is.
+      ["*", []],
+      ...hosts.map(([host, rules]) => [
         host,
-        rules.map((rule) => ({
-          ...(rule.match === undefined
-            ? undefined
-            : {
-                match: {
-                  ...(rule.match.path === undefined ? undefined : { path: rule.match.path }),
-                  ...(rule.match.headers === undefined
-                    ? undefined
-                    : { headers: [...rule.match.headers] }),
-                },
-              }),
-          transform: rule.transform.map((each) => ({ headers: { ...each.headers } })),
-        })),
+        rules.map((rule) => {
+          const headers = Object.entries(rule.headers ?? {}).map(([key, value]) => ({
+            key: { exact: key },
+            value: { exact: value },
+          }));
+          const matched = rule.path !== undefined || headers.length > 0;
+          return {
+            ...(matched
+              ? {
+                  match: {
+                    ...(rule.path === undefined ? undefined : { path: rule.path }),
+                    ...(headers.length === 0 ? undefined : { headers }),
+                  },
+                }
+              : undefined),
+            transform: [{ headers: { ...rule.set } }],
+          };
+        }),
       ]),
-    ),
+    ]),
   };
 }
 
 /** The user made in the sandbox as the SDK makes one, its home's folders made and the home closed (`SandboxUser`), under the create's span. */
-async function madeUser(sandbox: Sandbox, made: SandboxUser, signal: AbortSignal): Promise<void> {
+async function madeUser(
+  sandbox: SdkSandbox,
+  made: SandboxUser,
+  signal: AbortSignal,
+): Promise<void> {
   const user = await sandbox.createUser(made.name, { signal });
   const { group } = await sandbox.getDefaultUser({ signal });
   await sandbox.addUserToGroup(made.name, group, { signal });
@@ -339,7 +461,7 @@ async function madeUser(sandbox: Sandbox, made: SandboxUser, signal: AbortSignal
   if (closed.exitCode !== 0) throw new Error(`${user.homeDir} could not be closed`);
 }
 
-/** A create as `@vercel/sandbox` takes it: persistent, from the image or the snapshot the ask names, on the open internet. */
+/** A create as `@vercel/sandbox` takes it: persistent, from the image or the snapshot the ask names, keeping its newest snapshot alone (`KEPT_SNAPSHOTS`), on the open internet. */
 function createParams(ask: SandboxCreate) {
   return {
     ...("image" in ask.from
@@ -350,235 +472,59 @@ function createParams(ask: SandboxCreate) {
     tags: { ...ask.tags },
     timeout: ask.timeoutMs,
     ...(ask.vcpus === undefined ? undefined : { resources: { vcpus: ask.vcpus } }),
-    keepLastSnapshots: { ...ask.keepLastSnapshots },
+    keepLastSnapshots: {
+      count: KEPT_SNAPSHOTS.COUNT,
+      expiration: Duration.toMillis(ask.snapshotLapse ?? KEPT_SNAPSHOTS.EXPIRATION),
+      deleteEvicted: KEPT_SNAPSHOTS.DELETE_EVICTED,
+    },
     env: { ...ask.env },
-    networkPolicy: sdkPolicyOf(OPEN_INTERNET_POLICY),
+    networkPolicy: sdkPolicyOf(OPEN_INTERNET),
   };
 }
 
 /** A sandbox as the SDK's list names it. */
-type ListedMetadata = Awaited<ReturnType<typeof Sandbox.list>>["sandboxes"][number];
+type ListedMetadata = Awaited<ReturnType<typeof SdkSandbox.list>>["sandboxes"][number];
 
-/** A listed sandbox as we read it. */
+/** A listed sandbox as the package reads it. */
 function listedOf(listed: ListedMetadata): ListedSandbox {
   return {
     name: listed.name,
-    status: listed.status,
-    currentSessionId: listed.currentSessionId,
+    status: STATUS_OF_VERCEL.get(listed.status),
+    running: listed.currentSessionId,
     tags: listed.tags,
-    currentSnapshotId: listed.currentSnapshotId,
+    snapshotId: listed.currentSnapshotId,
     createdAt: listed.createdAt,
     timeout: listed.timeout,
     vcpus: listed.vcpus,
     expiresAt: listed.expiresAt,
-    keepLastSnapshots: listed.keepLastSnapshots,
   };
 }
 
 /** The public routes the sandbox's session serves, each at the address the SDK names for its port. */
-function routesOf(sandbox: Sandbox): readonly SandboxRoute[] {
+function routesOf(sandbox: SdkSandbox): readonly SandboxRoute[] {
   return sandbox.routes.map(({ port }) => ({ port, url: sandbox.domain(port) }));
 }
 
-/** A sandbox the SDK answered whole, as we read it: the session it holds is the one running now, whatever the sandbox's own record lags. */
-function openedOf(sandbox: Sandbox): OpenedSandbox {
+/** A sandbox the SDK answered whole, as the package reads it: the session it holds is the run it is up in now, whatever the sandbox's own record lags. */
+function openedOf(sandbox: SdkSandbox): OpenedSandbox {
   const session = sandbox.currentSession();
   return {
     name: sandbox.name,
-    status: session.status,
-    currentSessionId: session.sessionId,
+    status: STATUS_OF_VERCEL.get(session.status),
+    running: session.sessionId,
     tags: sandbox.tags,
-    currentSnapshotId: sandbox.currentSnapshotId,
+    snapshotId: sandbox.currentSnapshotId,
     createdAt: sandbox.createdAt.getTime(),
     timeout: sandbox.timeout,
     vcpus: sandbox.vcpus,
     expiresAt: sandbox.expiresAt?.getTime(),
-    keepLastSnapshots: sandbox.keepLastSnapshots,
     routes: routesOf(sandbox),
   };
 }
 
-/**
- * The fetch given, sending a list with Vercel's own filter to running
- * sandboxes. Note that the filter is added here, because the SDK's list
- * forwards no status, and the sweeps read a bounded number of pages of the
- * running sandboxes, which stopped ones listed beside them would crowd out
- * (https://vercel.com/docs/rest-api/sandboxes/list-sandboxes takes `status`
- * under a sort by creation).
- */
-function runningOnly(fetch: typeof globalThis.fetch): typeof globalThis.fetch {
-  return (input, init) => {
-    const url = new URL(input instanceof Request ? input.url : input);
-    url.searchParams.set("status", SANDBOX_STATUS.RUNNING);
-    return fetch(url, init);
-  };
-}
-
 /** What a call on a session its sandbox no longer runs answers: Vercel's not-found, as it answers a session it no longer holds. */
-function sessionEnded(call: SandboxCall): SandboxUnavailable {
-  return new SandboxUnavailable({ call, status: NOT_FOUND_STATUS, detail: "the session ended" });
-}
-
-/**
- * The calls on a sandbox's session through the SDK's handle on it, where the
- * sandbox still runs it, holding each command it starts or reads for the
- * operation's later calls on it, so a launch's start, stdin, and kill look
- * nothing up again.
- */
-function sessionCallsOf(current: Option.Option<Session>): SandboxSessionApi {
-  const commands = new Map<string, Command>();
-  const on = <A>(
-    call: SandboxCall,
-    run: (session: Session, signal: AbortSignal) => Promise<A>,
-  ): Effect.Effect<A, SandboxUnavailable> =>
-    Option.match(current, {
-      onNone: () => Effect.fail(sessionEnded(call)),
-      onSome: (session) => sdkCall(call, (signal) => run(session, signal)),
-    });
-  const held = (command: Command) =>
-    Effect.sync(() => {
-      commands.set(command.cmdId, command);
-    });
-  const onCommand = <A>(
-    call: SandboxCall,
-    commandId: string,
-    run: (command: Command, signal: AbortSignal) => Promise<A>,
-  ) =>
-    Effect.suspend(() => {
-      const known = commands.get(commandId);
-      return known === undefined
-        ? Effect.tap(
-            on(call, (session, signal) => session.getCommand(commandId, { signal })),
-            held,
-          )
-        : Effect.succeed(known);
-    }).pipe(Effect.flatMap((command) => sdkCall(call, (signal) => run(command, signal))));
-  return {
-    run: (ask) =>
-      on(SANDBOX_CALL.CMD, async (session, signal) => {
-        const finished = await session.runCommand({
-          cmd: ask.command,
-          args: [...ask.args],
-          ...(ask.cwd === undefined ? undefined : { cwd: ask.cwd }),
-          ...(ask.env === undefined ? undefined : { env: { ...ask.env } }),
-          signal,
-        });
-        return {
-          exitCode: finished.exitCode,
-          stdout: await finished.stdout(),
-          stderr: await finished.stderr(),
-        };
-      }),
-    openInteractive: () =>
-      Effect.gen(function* () {
-        // Note that the session's own call is made, never the sandbox's, because the sandbox's resumes a stopped sandbox to open it.
-        const minted = yield* on(SANDBOX_CALL.INTERACTIVE, (session, signal) =>
-          session.openInteractive({ signal }),
-        );
-        if (!isSandboxShellAddress(minted.url)) {
-          yield* Effect.logWarning("a minted PTY address was not on Vercel's sandbox domain");
-          return yield* new SandboxUnavailable({ call: SANDBOX_CALL.INTERACTIVE });
-        }
-        return { url: minted.url, token: Redacted.make(minted.token) };
-      }),
-    stop: () =>
-      on(SANDBOX_CALL.STOP, (session, signal) => session.stop({ signal })).pipe(
-        Effect.asVoid,
-        Effect.catchIf(isGone, () => Effect.void),
-      ),
-    extendTimeout: (durationMs) =>
-      on(SANDBOX_CALL.EXTEND, (session, signal) => session.extendTimeout(durationMs, { signal })),
-    snapshot: (expiresAfter) =>
-      on(SANDBOX_CALL.SNAPSHOT, async (session, signal) => {
-        // Vercel's create-a-snapshot takes 0 for a snapshot that never expires.
-        const expiration = Duration.isFinite(expiresAfter) ? Duration.toMillis(expiresAfter) : 0;
-        return (await session.snapshot({ expiration, signal })).snapshotId;
-      }),
-    writeFiles: (files) =>
-      on(SANDBOX_CALL.FS_WRITE, (session, signal) =>
-        session.writeFiles(
-          files.map((file) => ({ path: file.path, content: file.contents, mode: file.mode })),
-          { signal },
-        ),
-      ),
-    updateNetworkPolicy: (policy) =>
-      on(SANDBOX_CALL.NETWORK_POLICY, (session, signal) =>
-        session.update({ networkPolicy: sdkPolicyOf(policy) }, { signal }),
-      ),
-    start: (ask) =>
-      on(SANDBOX_CALL.CMD, (session, signal) =>
-        session.runCommand({
-          cmd: ask.command,
-          args: [...ask.args],
-          ...(ask.cwd === undefined ? undefined : { cwd: ask.cwd }),
-          env: { ...ask.env },
-          sudo: ask.sudo,
-          detached: true,
-          stdin: true,
-          signal,
-        }),
-      ).pipe(
-        Effect.tap(held),
-        Effect.map((command) => command.cmdId),
-      ),
-    writeStdin: (commandId, text) =>
-      // Note that the SDK asks where the stdin stands first and writes from there, so a write it tries again is never taken twice.
-      onCommand(SANDBOX_CALL.STDIN, commandId, (command, signal) =>
-        command.writeStdin(text, { abortSignal: signal }),
-      ),
-    commandExit: (commandId, within = SANDBOX_API.EXIT_WAIT) =>
-      onCommand(SANDBOX_CALL.CMD, commandId, async (command, signal) => {
-        // Note that the read waits for the exit, because Vercel records an exit only once such a read has seen it.
-        const finished = await command.wait({ signal });
-        return finished.exitCode;
-      }).pipe(
-        Effect.timeoutOption(within),
-        Effect.map((exit): CommandExit => (Option.isNone(exit) ? null : exit.value)),
-        Effect.catchIf(sessionGone, () => Effect.succeed<CommandExit>(COMMAND_GONE)),
-        // Note that a wait Vercel ended before the command did answers it with no exit, which the SDK cannot read as a finished command.
-        Effect.catchIf(
-          (failure) => failure.status !== undefined && succeeded(failure.status),
-          () => Effect.succeed<CommandExit>(null),
-        ),
-      ),
-    commandStderrTail: (commandId, secrets = []) =>
-      onCommand(SANDBOX_CALL.LOGS, commandId, (command, signal) => command.stderr({ signal })).pipe(
-        Effect.timeoutOption(SANDBOX_API.EXIT_WAIT),
-        Effect.flatMap((stderr) =>
-          Option.isNone(stderr)
-            ? Effect.fail(
-                new SandboxUnavailable({ call: SANDBOX_CALL.LOGS, detail: "no answer in time" }),
-              )
-            : Effect.succeed(stderr.value === "" ? undefined : stderrTail(stderr.value, secrets)),
-        ),
-      ),
-    kill: (commandId) =>
-      onCommand(SANDBOX_CALL.KILL, commandId, (command, signal) =>
-        command.kill("SIGTERM", { abortSignal: signal }),
-      ).pipe(Effect.catchIf(sessionGone, () => Effect.void)),
-  };
-}
-
-/**
- * The session named, looked up at its first use and held for every later
- * one: what an operation hands its calls where none of them is the one
- * place to look it up first. A lookup that fails is not held, so the next
- * call asks again.
- */
-export function sessionOnFirstUse(
-  api: VercelSandboxApi,
-  ref: SessionRef,
-): Effect.Effect<SandboxSessionApi, SandboxUnavailable> {
-  let held: SandboxSessionApi | undefined;
-  return Effect.suspend(() =>
-    held === undefined
-      ? Effect.tap(api.session(ref), (session) =>
-          Effect.sync(() => {
-            held = session;
-          }),
-        )
-      : Effect.succeed(held),
-  );
+function sessionEnded(call: SandboxCall): Refused {
+  return new Refused({ call, status: NOT_FOUND_STATUS, detail: "the session ended" });
 }
 
 /** The project and team a token names, read from its payload; Vercel verifies the token itself. */
@@ -595,131 +541,149 @@ function claimsOf(
     : undefined;
 }
 
-/** The API under the token the reader hands, read afresh for each call, sending its static calls on the `SandboxFetch` it is built under. */
-export function vercelSandboxApi(readToken: OidcTokenRead): Effect.Effect<VercelSandboxApi> {
-  return Effect.map(Effect.service(SandboxFetch), (fetch) => {
-    /**
-     * The token's credentials for the call given, which a failure to read
-     * them names. Note that every call reads them, a session's too, because
-     * a deployment without a token must answer unavailable rather than fall
-     * into the SDK's own sign-in for a developer's terminal.
-     */
-    const credentials = (call: SandboxCall) =>
-      Effect.gen(function* () {
-        const token = yield* Effect.tryPromise({
-          try: readToken,
-          catch: (cause) => new SandboxUnavailable({ call, detail: causeDetail(cause) }),
-        });
-        const claims = claimsOf(token);
-        if (claims === undefined) {
-          return yield* new SandboxUnavailable({ call, detail: "a token naming no project" });
-        }
-        return { token, ...claims, fetch };
+/** The argv of a command as the SDK's `runCommand` takes it. */
+function commandParams(ask: CommandAsk) {
+  return {
+    cmd: ask.command,
+    args: [...ask.args],
+    ...(ask.cwd === undefined ? undefined : { cwd: ask.cwd }),
+  };
+}
+
+/** `Sandbox` over the SDK, under the token `SandboxToken` reads afresh for each call and the `fetch` `SandboxFetch` names, its PTY reached over the HTTP client given. */
+function vercelSandbox(
+  readToken: OidcTokenRead,
+  fetch: typeof globalThis.fetch,
+  client: HttpClient.HttpClient,
+): SandboxService {
+  /**
+   * The token's credentials for the call given, which a failure to read
+   * them names. Note that every call reads them, a session's too, because
+   * a deployment without a token must answer unavailable rather than fall
+   * into the SDK's own sign-in for a developer's terminal.
+   */
+  const credentials = (call: SandboxCall) =>
+    Effect.gen(function* () {
+      const token = yield* Effect.tryPromise({
+        try: readToken,
+        catch: (cause) => new Refused({ call, detail: causeDetail(cause) }),
       });
+      const claims = claimsOf(token);
+      if (claims === undefined) {
+        return yield* new Refused({ call, detail: "a token naming no project" });
+      }
+      return { token, ...claims, fetch };
+    });
 
-    /** A call of the SDK's statics, under the credentials and the fetch they are made with. */
-    const asked = <A>(
-      call: SandboxCall,
-      run: (
-        signal: AbortSignal,
-        under: Effect.Success<ReturnType<typeof credentials>>,
-      ) => Promise<A>,
-    ) =>
-      Effect.flatMap(credentials(call), (under) => sdkCall(call, (signal) => run(signal, under)));
+  /** A call of the SDK's statics, under the credentials and the fetch they are made with. */
+  const asked = <A>(
+    call: SandboxCall,
+    run: (signal: AbortSignal, under: Effect.Success<ReturnType<typeof credentials>>) => Promise<A>,
+  ) => Effect.flatMap(credentials(call), (under) => sdkCall(call, (signal) => run(signal, under)));
 
-    /** The named sandbox as it stands, without resuming it. */
-    const found = (call: SandboxCall, name: string) =>
-      asked(call, (signal, under) => Sandbox.get({ ...under, name, resume: false, signal }));
+  /** The named sandbox as it stands, without resuming it. */
+  const found = (call: SandboxCall, name: string) =>
+    asked(call, (signal, under) => SdkSandbox.get({ ...under, name, resume: false, signal }));
 
-    /** The named sandbox's configuration updated, without resuming it. */
-    const updated = (call: SandboxCall, name: string, update: Parameters<Sandbox["update"]>[0]) =>
-      asked(call, async (signal, under) => {
-        const sandbox = await Sandbox.get({ ...under, name, resume: false, signal });
-        await sandbox.update(update, { signal });
-      });
+  /**
+   * The target's session, looked up by the sandbox's name without resuming
+   * it: the one it runs now, or for a run named, that one alone, a sandbox
+   * gone or in another answering as Vercel answers a session it no longer
+   * holds.
+   */
+  const sessionOf = (call: SandboxCall, target: SandboxTarget) =>
+    Effect.flatMap(
+      found(call, typeof target === "string" ? target : target.name).pipe(
+        Effect.catchIf(isGone, () => Effect.fail(sessionEnded(call))),
+      ),
+      (sandbox) => {
+        const current = sandbox.currentSession();
+        return typeof target === "string" || current.sessionId === target.running
+          ? Effect.succeed({ sandbox, session: current })
+          : Effect.fail(sessionEnded(call));
+      },
+    );
 
-    const resume = (name: string) =>
-      Effect.map(
-        asked(SANDBOX_CALL.GET, (signal, under) =>
-          Sandbox.get({ ...under, name, resume: true, signal }),
+  /** A call on the target's session. */
+  const on = <A>(
+    call: SandboxCall,
+    target: SandboxTarget,
+    run: (session: Session, signal: AbortSignal, sandbox: SdkSandbox) => Promise<A>,
+  ) =>
+    Effect.flatMap(sessionOf(call, target), ({ sandbox, session }) =>
+      sdkCall(call, (signal) => run(session, signal, sandbox)),
+    );
+
+  /** A call on a command the target's session ran. */
+  const onCommand = <A>(
+    call: SandboxCall,
+    target: SandboxTarget,
+    commandId: string,
+    run: (command: Awaited<ReturnType<Session["getCommand"]>>, signal: AbortSignal) => Promise<A>,
+  ) =>
+    on(call, target, async (session, signal) =>
+      run(await session.getCommand(commandId, { signal }), signal),
+    );
+
+  /** The effect with its refusal in the package's words. */
+  const said = <A>(effect: Effect.Effect<A, Refused>): Effect.Effect<A, SandboxError> =>
+    Effect.mapError(effect, neutralOf);
+
+  const listTagged = (tag: string, value: string) =>
+    Effect.map(
+      asked(SANDBOX_CALL.LIST, (signal, under) =>
+        SdkSandbox.list({
+          ...under,
+          limit: SANDBOX_API.PAGE,
+          // SAFETY: one tag, as the SDK's filter takes it, which its type holds only for a literal name.
+          tags: { [tag]: value } as Record<"tag", string>,
+          signal,
+        }),
+      ),
+      (page) =>
+        page.sandboxes
+          .map(listedOf)
+          .toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
+    );
+
+  return {
+    listTagged: (tag, value) => said(listTagged(tag, value)),
+    get: (name) =>
+      said(
+        found(SANDBOX_CALL.GET, name).pipe(
+          Effect.map((sandbox): ListedSandbox | undefined => openedOf(sandbox)),
+          Effect.catchIf(isGone, () => Effect.succeed(undefined)),
         ),
-        openedOf,
-      ).pipe(Effect.withSpan("web/sandboxResume"));
-
-    const listCarrying = (tag: string, value: string) =>
-      Effect.map(
-        asked(SANDBOX_CALL.LIST, (signal, under) =>
-          Sandbox.list({
-            ...under,
-            limit: SANDBOX_API.PAGE,
-            // SAFETY: one tag, as the SDK's filter takes it, which its type holds only for a literal name.
-            tags: { [tag]: value } as Record<"tag", string>,
-            signal,
-          }),
-        ),
-        (page) => page.sandboxes.map(listedOf),
-      );
-
-    return {
-      listTagged: (tag, value) =>
-        Effect.map(listCarrying(tag, value), (listed) =>
-          listed.toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
-        ),
-      listCarrying,
-      listRunning: (cursor, order) =>
+      ),
+    resume: (name) =>
+      said(
         Effect.map(
-          asked(SANDBOX_CALL.LIST, (signal, under) =>
-            Sandbox.list({
-              ...under,
-              fetch: runningOnly(under.fetch),
-              limit: SANDBOX_API.PAGE,
-              // Note that the API takes a status filter only under a sort by creation; its cursor is opaque, the `pagination.next` of the page before.
-              sortBy: "createdAt",
-              sortOrder: order,
-              ...(cursor === undefined ? undefined : { cursor }),
-              signal,
-            }),
+          asked(SANDBOX_CALL.GET, (signal, under) =>
+            SdkSandbox.get({ ...under, name, resume: true, signal }),
           ),
-          (page) => ({
-            sandboxes: page.sandboxes.map(listedOf),
-            next: page.pagination.next ?? undefined,
-          }),
-        ),
-      resume,
-      deleteSandbox: (name) =>
-        asked(SANDBOX_CALL.DELETE, async (signal, under) => {
-          // Note that the lookup asks no resume, because a sandbox on its way out is never woken to be deleted.
-          const sandbox = await Sandbox.get({ ...under, name, resume: false, signal });
-          await sandbox.delete({ deleteOrphanSnapshots: true, signal });
-        }).pipe(Effect.catchIf(isGone, () => Effect.void)),
-      session: (ref) =>
-        found(SANDBOX_CALL.SESSION, ref.name).pipe(
-          Effect.map((sandbox) => {
-            const current = sandbox.currentSession();
-            return current.sessionId === ref.sessionId
-              ? Option.some(current)
-              : Option.none<Session>();
-          }),
-          Effect.catchIf(isGone, () => Effect.succeed(Option.none<Session>())),
-          Effect.map(sessionCallsOf),
-        ),
-      create: (ask) =>
+          openedOf,
+        ).pipe(Effect.withSpan("web/sandboxResume")),
+      ),
+    create: (ask) =>
+      said(
         Effect.map(
           asked(SANDBOX_CALL.CREATE, (signal, under) =>
-            Sandbox.create({ ...under, ...createParams(ask), signal }),
+            SdkSandbox.create({ ...under, ...createParams(ask), signal }),
           ),
           openedOf,
         ),
-      getOrCreate: (ask, onCreate) =>
+      ),
+    getOrCreate: (ask, onCreate) =>
+      said(
         Effect.map(
           asked(SANDBOX_CALL.GET_OR_CREATE, async (signal, under) => {
             /** A sandbox this call created, set up as the ask says before it is handed back. */
-            const setUp = async (created: Sandbox) => {
+            const setUp = async (created: SdkSandbox) => {
               if (ask.user !== undefined) await madeUser(created, ask.user, signal);
               await onCreate?.(openedOf(created));
             };
             try {
-              return await Sandbox.getOrCreate({
+              return await SdkSandbox.getOrCreate({
                 ...under,
                 ...createParams(ask),
                 resume: true,
@@ -731,39 +695,182 @@ export function vercelSandboxApi(readToken: OidcTokenRead): Effect.Effect<Vercel
               if (!(failure instanceof APIError) || failure.response.status !== NAME_TAKEN_STATUS) {
                 throw failure;
               }
-              const joined = await Sandbox.get({ ...under, name: ask.name, resume: true, signal });
+              const joined = await SdkSandbox.get({
+                ...under,
+                name: ask.name,
+                resume: true,
+                signal,
+              });
               await setUp(joined);
               return joined;
             }
           }),
           openedOf,
         ),
-      startAsUser: (name, username, ask) =>
-        asked(SANDBOX_CALL.CMD, async (signal, under) => {
-          const sandbox = await Sandbox.get({ ...under, name, resume: false, signal });
-          const command = await sandbox.asUser(username).runCommand({
-            cmd: ask.command,
-            args: [...ask.args],
-            ...(ask.cwd === undefined ? undefined : { cwd: ask.cwd }),
-            ...(ask.env === undefined ? undefined : { env: { ...ask.env } }),
-            detached: true,
-            stdin: true,
-            signal,
-          });
-          return command.cmdId;
-        }),
-      getNamed: (name) =>
-        found(SANDBOX_CALL.GET, name).pipe(
-          Effect.map((sandbox): ListedSandbox | undefined => openedOf(sandbox)),
-          Effect.catchIf(isGone, () => Effect.succeed(undefined)),
+      ),
+    delete: (name) =>
+      said(
+        asked(SANDBOX_CALL.DELETE, async (signal, under) => {
+          // Note that the lookup asks no resume, because a sandbox on its way out is never woken to be deleted.
+          const sandbox = await SdkSandbox.get({ ...under, name, resume: false, signal });
+          await sandbox.delete({ deleteOrphanSnapshots: true, signal });
+        }).pipe(Effect.catchIf(isGone, () => Effect.void)),
+      ),
+    stop: (target) =>
+      said(
+        on(SANDBOX_CALL.STOP, target, (session, signal) => session.stop({ signal })).pipe(
+          Effect.asVoid,
+          Effect.catchIf(isGone, () => Effect.void),
         ),
-      updateTags: (name, tags) => updated(SANDBOX_CALL.TAGS, name, { tags: { ...tags } }),
-      updatePorts: (name, ports, tags) =>
+      ),
+    updateTags: (name, tags) =>
+      said(
+        asked(SANDBOX_CALL.TAGS, async (signal, under) => {
+          const sandbox = await SdkSandbox.get({ ...under, name, resume: false, signal });
+          await sandbox.update({ tags: { ...tags } }, { signal });
+        }),
+      ),
+    updatePorts: (name, ports, tags) =>
+      said(
         asked(SANDBOX_CALL.PORTS, async (signal, under) => {
-          const sandbox = await Sandbox.get({ ...under, name, resume: false, signal });
+          const sandbox = await SdkSandbox.get({ ...under, name, resume: false, signal });
           await sandbox.update({ ports: [...ports], tags: { ...tags } }, { signal });
           return routesOf(sandbox);
         }),
-    };
-  });
+      ),
+    run: (target, ask) =>
+      said(
+        on(SANDBOX_CALL.CMD, target, async (session, signal) => {
+          const finished = await session.runCommand({
+            ...commandParams(ask),
+            ...(ask.env === undefined ? undefined : { env: { ...ask.env } }),
+            signal,
+          });
+          return {
+            exitCode: finished.exitCode,
+            stdout: await finished.stdout(),
+            stderr: await finished.stderr(),
+          };
+        }),
+      ),
+    start: (target, ask) =>
+      said(
+        on(SANDBOX_CALL.CMD, target, async (session, signal, sandbox) => {
+          // Note that a user's command is started as the SDK starts one (`asUser(...).runCommand`), which writes its `env` on `sudo`'s command line.
+          const command =
+            "user" in ask
+              ? await sandbox.asUser(ask.user).runCommand({
+                  ...commandParams(ask),
+                  ...(ask.env === undefined ? undefined : { env: { ...ask.env } }),
+                  detached: true,
+                  stdin: true,
+                  signal,
+                })
+              : await session.runCommand({
+                  ...commandParams(ask),
+                  env: { ...ask.env },
+                  sudo: ask.sudo,
+                  detached: true,
+                  stdin: true,
+                  signal,
+                });
+          return command.cmdId;
+        }),
+      ),
+    writeStdin: (target, commandId, text) =>
+      // Note that the SDK asks where the stdin stands first and writes from there, so a write it tries again is never taken twice.
+      said(
+        onCommand(SANDBOX_CALL.STDIN, target, commandId, (command, signal) =>
+          command.writeStdin(text, { abortSignal: signal }),
+        ),
+      ),
+    commandExit: (target, commandId, within = SANDBOX_API.EXIT_WAIT) =>
+      said(
+        onCommand(SANDBOX_CALL.CMD, target, commandId, async (command, signal) => {
+          // Note that the read waits for the exit, because Vercel records an exit only once such a read has seen it.
+          const finished = await command.wait({ signal });
+          return finished.exitCode;
+        }).pipe(
+          Effect.timeoutOption(within),
+          Effect.map((exit): CommandExit => (Option.isNone(exit) ? null : exit.value)),
+          Effect.catchIf(sessionGone, () => Effect.succeed<CommandExit>(COMMAND_GONE)),
+          // Note that a wait Vercel ended before the command did answers it with no exit, which the SDK cannot read as a finished command.
+          Effect.catchIf(
+            (refusal) => refusal.status !== undefined && succeeded(refusal.status),
+            () => Effect.succeed<CommandExit>(null),
+          ),
+        ),
+      ),
+    commandStderrTail: (target, commandId, secrets = []) =>
+      said(
+        onCommand(SANDBOX_CALL.LOGS, target, commandId, (command, signal) =>
+          command.stderr({ signal }),
+        ).pipe(
+          Effect.timeoutOption(SANDBOX_API.EXIT_WAIT),
+          Effect.flatMap((stderr) =>
+            Option.isNone(stderr)
+              ? Effect.fail(new Refused({ call: SANDBOX_CALL.LOGS, detail: "no answer in time" }))
+              : Effect.succeed(stderr.value === "" ? undefined : stderrTail(stderr.value, secrets)),
+          ),
+        ),
+      ),
+    kill: (target, commandId) =>
+      said(
+        onCommand(SANDBOX_CALL.KILL, target, commandId, (command, signal) =>
+          command.kill("SIGTERM", { abortSignal: signal }),
+        ).pipe(Effect.catchIf(sessionGone, () => Effect.void)),
+      ),
+    writeFiles: (target, files) =>
+      said(
+        on(SANDBOX_CALL.FS_WRITE, target, (session, signal) =>
+          session.writeFiles(
+            files.map((file) => ({ path: file.path, content: file.contents, mode: file.mode })),
+            { signal },
+          ),
+        ),
+      ),
+    openInteractive: (target) =>
+      said(
+        Effect.gen(function* () {
+          // Note that the session's own call is made, never the sandbox's, because the sandbox's resumes a stopped sandbox to open it.
+          const minted = yield* on(SANDBOX_CALL.INTERACTIVE, target, (session, signal) =>
+            session.openInteractive({ signal }),
+          );
+          if (!isSandboxShellAddress(minted.url)) {
+            yield* Effect.logWarning("a minted PTY address was not on Vercel's sandbox domain");
+            return yield* new Refused({ call: SANDBOX_CALL.INTERACTIVE });
+          }
+          return { url: minted.url, token: Redacted.make(minted.token) };
+        }),
+      ),
+    connectPty: (shell) => openPtySocket(shell, client),
+    updateNetworkPolicy: (target, policy) =>
+      said(
+        on(SANDBOX_CALL.NETWORK_POLICY, target, (session, signal) =>
+          session.update({ networkPolicy: sdkPolicyOf(policy) }, { signal }),
+        ),
+      ),
+    snapshot: (target, expiresAfter) =>
+      said(
+        on(SANDBOX_CALL.SNAPSHOT, target, async (session, signal) => {
+          // Vercel's create-a-snapshot takes 0 for a snapshot that never expires.
+          const expiration = Duration.isFinite(expiresAfter) ? Duration.toMillis(expiresAfter) : 0;
+          return (await session.snapshot({ expiration, signal })).snapshotId;
+        }),
+      ),
+    extendTimeout: (target, durationMs) =>
+      said(
+        on(SANDBOX_CALL.EXTEND, target, (session, signal) =>
+          session.extendTimeout(durationMs, { signal }),
+        ),
+      ),
+  };
 }
+
+/** `Sandbox` as the deployment runs it: Vercel Sandbox under the function's own OIDC token, its PTY reached over the runtime's HTTP client. */
+export const vercelSandboxLayer: Layer.Layer<Sandbox, never, HttpClient.HttpClient> = Layer.effect(
+  Sandbox,
+  Effect.gen(function* () {
+    return vercelSandbox(yield* SandboxToken, yield* SandboxFetch, yield* HttpClient.HttpClient);
+  }),
+);

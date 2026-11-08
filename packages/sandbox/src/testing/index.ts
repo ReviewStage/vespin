@@ -1,5 +1,5 @@
 /**
- * index.ts -- `@repo/sandbox/testing`: a fake of Vercel Sandbox's REST API at the `fetch` the SDK sends through, for the suites that stand one.
+ * index.ts -- `@repo/sandbox/testing`: `Sandbox` kept in memory, for the suites that provide it on its tag.
  */
 
-export * from "../vercel/testing/vercel-sandbox-fake.js";
+export * from "./memory-sandbox.js";

@@ -9,7 +9,9 @@
  */
 
 import { Layer } from "effect";
-import { SandboxFetch } from "../vercel-sdk.js";
+import type { HttpClient } from "effect/http";
+import type { Sandbox } from "../../sandbox.js";
+import { SandboxFetch, SandboxToken, vercelSandboxLayer } from "../vercel-sdk.js";
 
 const TEAM = "team_fixture";
 const PROJECT = "prj_fixture";
@@ -233,9 +235,19 @@ export function snapshotOf(snapshot: {
 /** A fake's responder as `fetch`. */
 type Responder = (url: string, init: RequestInit) => Response | Promise<Response>;
 
-/** `@vercel/sandbox`'s `fetch` over a fake's responder, which the `HttpClient` the fake stands behind answers through too. */
+/** `@vercel/sandbox`'s `fetch` over a fake's responder, which the `HttpClient` the fake stands behind answers through too, under the fixture's token. */
 export function sandboxFetchOver(respond: Responder): Layer.Layer<never> {
   const send: typeof globalThis.fetch = (input, init) =>
     Promise.resolve(respond(input instanceof Request ? input.url : String(input), init ?? {}));
-  return Layer.succeed(SandboxFetch, send);
+  return Layer.mergeAll(
+    Layer.succeed(SandboxFetch, send),
+    Layer.succeed(SandboxToken, async () => fixtureToken()),
+  );
+}
+
+/** `Sandbox` as the adapter answers it over a fake's responder, under the fixture's token; the PTY's health is asked through the HTTP client the suite provides. */
+export function vercelSandboxOver(
+  respond: Responder,
+): Layer.Layer<Sandbox, never, HttpClient.HttpClient> {
+  return vercelSandboxLayer.pipe(Layer.provide(sandboxFetchOver(respond)));
 }

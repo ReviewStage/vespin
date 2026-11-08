@@ -24,7 +24,7 @@ import {
   sandboxListRefusal,
   sandboxStopRefusal,
   sessionAnswered,
-} from "@repo/sandbox/testing";
+} from "@repo/sandbox/vercel/testing";
 import { Deferred, Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 

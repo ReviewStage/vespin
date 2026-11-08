@@ -1,25 +1,20 @@
 /**
- * vercel-sdk.test.ts -- what a call of Vercel Sandbox through `@vercel/sandbox` says of a failure, against a scripted fake of Vercel behind the SDK's `fetch`: the call, its status, and Vercel's error or the cause's, every token-shaped run redacted; and what this module decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it with the 409, each list asks the query Vercel takes, and a sandbox or a snapshot already gone reads as gone.
+ * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, and a delete wakes nothing.
  */
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import { Sandbox, type SandboxService } from "../sandbox.js";
+import { SANDBOX_CALL, type SandboxCall, type SandboxError } from "../vocabulary.js";
 import {
   fixtureToken,
   sandboxDeleted,
-  sandboxesListed,
   sandboxFetchOver,
   sandboxFound,
 } from "./testing/vercel-sandbox-fake.js";
-import { vercelSandboxApi } from "./vercel-sdk.js";
-import {
-  SANDBOX_CALL,
-  type SandboxCall,
-  type SandboxUnavailable,
-  snapshotGone,
-  type VercelSandboxApi,
-} from "./vocabulary.js";
+import { SandboxToken, vercelSandboxLayer } from "./vercel-sdk.js";
 
 const SESSION = "sbs_fixture";
 const NAME = "luke-native-fixture";
@@ -42,34 +37,36 @@ const CREATE_ASK = {
   tags: {},
   timeoutMs: 60_000,
   vcpus: 2,
-  keepLastSnapshots: { count: 1, expiration: 0, deleteEvicted: true },
   env: { SECRET: SECRET_ENV },
 } as const;
 
 /** Each call made through the SDK's statics, as a caller asks it. */
 const CALLS: readonly {
   readonly call: SandboxCall;
-  readonly ask: (api: VercelSandboxApi) => Effect.Effect<unknown, SandboxUnavailable>;
+  readonly ask: (api: SandboxService) => Effect.Effect<unknown, SandboxError>;
 }[] = [
   { call: SANDBOX_CALL.CREATE, ask: (api) => api.create(CREATE_ASK) },
   { call: SANDBOX_CALL.TAGS, ask: (api) => api.updateTags(NAME, { sessionId: "s" }) },
-  { call: SANDBOX_CALL.GET, ask: (api) => api.getNamed(NAME) },
+  { call: SANDBOX_CALL.GET, ask: (api) => api.get(NAME) },
   { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("sessionId", "session_fixture") },
 ];
 
 type Responder = (url: string, init: RequestInit) => Response | Promise<Response>;
 
-/** The API under the fixture's token, the SDK sending through the responder given. */
-function apiOver(
-  respond: Responder,
-  readToken: () => Promise<string> = () => Promise.resolve(fixtureToken()),
-) {
-  return vercelSandboxApi(readToken).pipe(Effect.provide(sandboxFetchOver(respond)));
+/** `Sandbox` under the fixture's token, or the reader given, the SDK sending through the responder given. */
+function apiOver(respond: Responder, readToken?: () => Promise<string>) {
+  const under = Layer.mergeAll(
+    FetchHttpClient.layer,
+    sandboxFetchOver(respond),
+    ...(readToken === undefined ? [] : [Layer.succeed(SandboxToken, readToken)]),
+  );
+  return Effect.provide(Effect.service(Sandbox), Layer.provide(vercelSandboxLayer, under));
 }
 
-/** A page of the sandboxes named, as Vercel's list answers it. */
-const listed = (...names: readonly string[]) =>
-  Response.json(sandboxesListed(names.map((name) => ({ ...RUNNING_SANDBOX, name }))));
+/** The failure's line, where it is one that carries one. */
+function detailOf(failure: SandboxError): string | undefined {
+  return failure._tag === "SandboxUnavailable" ? failure.detail : undefined;
+}
 
 const refusedWith = (status: number) => () => Response.json({ error: REFUSAL }, { status });
 
@@ -78,12 +75,11 @@ it.effect("each call Vercel refused names the call, its status, and Vercel's err
     const api = yield* apiOver(refusedWith(400));
     for (const { call, ask } of CALLS) {
       const failure = yield* Effect.flip(ask(api));
+      assert.equal(failure._tag, "SandboxUnavailable");
       assert.equal(failure.call, call);
-      assert.equal(failure.status, 400);
-      assert.equal(failure.detail, `${REFUSAL.code}: ${REFUSAL.message}`);
       assert.equal(
         failure.message,
-        `Vercel Sandbox ${call} answered 400: ${REFUSAL.code}: ${REFUSAL.message}`,
+        `the sandbox's ${call} was unavailable: Vercel answered 400: ${REFUSAL.code}: ${REFUSAL.message}`,
       );
       assert.equal(failure.message.includes(SECRET_ENV), false);
       assert.equal(failure.message.includes(fixtureToken()), false);
@@ -99,10 +95,10 @@ it.effect("a refusal's detail is one line of at most 300 characters", () =>
         { status: 400 },
       ),
     );
-    const failure = yield* Effect.flip(api.updateTags(NAME, {}));
-    assert.ok(failure.detail !== undefined);
-    assert.equal(failure.detail.length, 300);
-    assert.equal(failure.detail.includes("\n"), false);
+    const detail = detailOf(yield* Effect.flip(api.updateTags(NAME, {})));
+    assert.ok(detail !== undefined);
+    assert.equal(detail.length, "Vercel answered 400: ".length + 300);
+    assert.equal(detail.includes("\n"), false);
   }),
 );
 
@@ -118,7 +114,7 @@ it.effect("a secret Vercel or a cause echoes back is redacted from the detail", 
     });
     for (const api of [refusing, throwing]) {
       const failure = yield* Effect.flip(api.create(CREATE_ASK));
-      assert.match(failure.detail ?? "", /env SECRET=\[redacted\] under Bearer \[redacted\]/u);
+      assert.match(detailOf(failure) ?? "", /env SECRET=\[redacted\] under Bearer \[redacted\]/u);
       assert.equal(failure.message.includes(SECRET_ENV), false);
       assert.equal(failure.message.includes(fixtureToken()), false);
     }
@@ -133,9 +129,11 @@ it.effect("a long error code of Vercel's own is kept whole", () =>
         { status: 415 },
       ),
     );
-    const failure = yield* Effect.flip(api.getNamed(NAME));
-    assert.equal(failure.code, "unsupported_media_type");
-    assert.equal(failure.detail, "unsupported_media_type: Unsupported Media Type");
+    const failure = yield* Effect.flip(api.get(NAME));
+    assert.equal(
+      detailOf(failure),
+      "Vercel answered 415: unsupported_media_type: Unsupported Media Type",
+    );
   }),
 );
 
@@ -146,17 +144,17 @@ it.effect("a token that could not be read names the call and why", () =>
     );
     const failure = yield* Effect.flip(unread.listTagged("sessionId", "session_fixture"));
     assert.equal(failure.call, SANDBOX_CALL.LIST);
-    assert.equal(failure.detail, "Error: the token endpoint was down");
+    assert.equal(detailOf(failure), "Error: the token endpoint was down");
 
     const unnamed = yield* apiOver(refusedWith(400), () => Promise.resolve("not-a-token"));
     const unclaimed = yield* Effect.flip(unnamed.updateTags(NAME, {}));
     assert.equal(unclaimed.call, SANDBOX_CALL.TAGS);
-    assert.equal(unclaimed.detail, "a token naming no project");
+    assert.equal(detailOf(unclaimed), "a token naming no project");
   }),
 );
 
 it.effect(
-  "a get-or-create resumes the sandbox standing, hands one it created to onCreate before it answers, and meets its name taken on its create with the sandbox holding it, handed to onCreate too; a create refuses that name with Vercel's 409",
+  "a get-or-create resumes the sandbox standing, hands one it created to onCreate before it answers, and meets its name taken on its create with the sandbox holding it, handed to onCreate too; a create refuses that name as taken",
   () =>
     Effect.gen(function* () {
       const gets: (string | null)[] = [];
@@ -177,8 +175,8 @@ it.effect(
         return standing ? Response.json(sandboxFound(RUNNING_SANDBOX)) : refusedWith(404)();
       });
       const setUp: string[] = [];
-      const onCreate = async (created: { readonly currentSessionId: string }) => {
-        setUp.push(created.currentSessionId);
+      const onCreate = async (created: { readonly running: string }) => {
+        setUp.push(created.running);
       };
 
       const found = yield* api.getOrCreate(CREATE_ASK, onCreate);
@@ -190,37 +188,14 @@ it.effect(
       const refused = yield* Effect.flip(api.create(CREATE_ASK));
 
       assert.deepEqual(
-        [found, created, joined].map((each) => each.currentSessionId),
+        [found, created, joined].map((each) => each.running),
         [SESSION, SESSION, SESSION],
       );
       assert.equal(setUpOnFound, 0);
       assert.deepEqual(setUp, [SESSION, SESSION]);
       assert.deepEqual(gets, ["true", "true", "true", "true"]);
+      assert.equal(refused._tag, "SandboxNameTaken");
       assert.equal(refused.call, SANDBOX_CALL.CREATE);
-      assert.equal(refused.status, 409);
-    }),
-);
-
-it.effect(
-  "the list of running sandboxes asks the query Vercel takes: running ones alone, by creation, in the order asked",
-  () =>
-    Effect.gen(function* () {
-      const queries: URLSearchParams[] = [];
-      const api = yield* apiOver((url) => {
-        queries.push(new URL(url).searchParams);
-        return listed("luke-native-a");
-      });
-
-      const running = yield* api.listRunning(undefined, "desc");
-
-      const [runningQuery] = queries;
-      assert.equal(runningQuery?.get("status"), "running");
-      assert.equal(runningQuery?.get("sortBy"), "createdAt");
-      assert.equal(runningQuery?.get("sortOrder"), "desc");
-      assert.deepEqual(
-        running.sandboxes.map((each) => each.name),
-        ["luke-native-a"],
-      );
     }),
 );
 
@@ -228,7 +203,7 @@ it.effect("a sandbox Vercel no longer holds is none", () =>
   Effect.gen(function* () {
     const api = yield* apiOver(refusedWith(404));
 
-    assert.equal(yield* api.getNamed(NAME), undefined);
+    assert.equal(yield* api.get(NAME), undefined);
   }),
 );
 
@@ -246,9 +221,9 @@ it.effect(
       error = { message: "gone" };
       const unnamed = yield* refusal();
 
-      assert.equal(snapshotGone(lost), true);
-      assert.equal(snapshotGone(stopped), false);
-      assert.equal(snapshotGone(unnamed), false);
+      assert.equal(lost._tag, "SnapshotGone");
+      assert.equal(stopped._tag, "SandboxUnavailable");
+      assert.equal(unnamed._tag, "SandboxUnavailable");
     }),
 );
 
@@ -273,20 +248,47 @@ it.effect(
         return answer(method);
       });
 
-      yield* api.deleteSandbox(NAME);
+      yield* api.delete(NAME);
       const [lookup, deletion] = asked;
       assert.equal(lookup?.url.searchParams.get("resume"), "false");
       assert.equal(deletion?.method, "DELETE");
       assert.equal(deletion?.url.searchParams.get("deleteOrphanSnapshots"), "true");
 
       answer = () => refusedWith(404)();
-      yield* api.deleteSandbox(NAME);
+      yield* api.delete(NAME);
 
       answer = () => refusedWith(400)();
-      const failure = yield* Effect.flip(api.deleteSandbox(NAME));
+      const failure = yield* Effect.flip(api.delete(NAME));
       assert.equal(failure.call, SANDBOX_CALL.DELETE);
-      assert.equal(failure.status, 400);
-      assert.equal(failure.detail, `${REFUSAL.code}: ${REFUSAL.message}`);
+      assert.equal(detailOf(failure), `Vercel answered 400: ${REFUSAL.code}: ${REFUSAL.message}`);
       assert.equal(failure.message.includes(fixtureToken()), false);
+    }),
+);
+
+it.effect(
+  "a minted PTY address off Vercel's sandbox domain is refused, its token never handed on",
+  () =>
+    Effect.gen(function* () {
+      const addresses = [
+        "wss://pty.attacker.test/ws",
+        "wss://vercel.run.attacker.test/ws",
+        "ws://sbx-fixture.vercel.run/ws",
+        "wss://user:pass@sbx-fixture.vercel.run/ws",
+      ];
+      for (const address of addresses) {
+        const api = yield* apiOver((url) =>
+          new URL(url).pathname.endsWith("/interactive")
+            ? Response.json({ url: address, token: "pty-token" })
+            : Response.json(sandboxFound(RUNNING_SANDBOX)),
+        );
+        const refused = yield* Effect.flip(api.openInteractive(NAME));
+        assert.equal(refused._tag, "SandboxUnavailable", address);
+      }
+      const minted = yield* apiOver((url) =>
+        new URL(url).pathname.endsWith("/interactive")
+          ? Response.json({ url: "wss://sbx-fixture.vercel.run/ws", token: "pty-token" })
+          : Response.json(sandboxFound(RUNNING_SANDBOX)),
+      );
+      assert.equal((yield* minted.openInteractive(NAME)).url, "wss://sbx-fixture.vercel.run/ws");
     }),
 );

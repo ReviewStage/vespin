@@ -35,6 +35,7 @@ import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import type { Sandbox } from "@repo/sandbox";
 import { isRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
 import { Clock, Effect, Option, Result, Schema, Struct } from "effect";
@@ -352,6 +353,7 @@ export const RUN_AUTOMATION_TOOL = {
 
 /** What the automation tools reach: the store, the catalog a model is checked against, GitHub through the workspace's installation, and our Sentry integration. */
 type AutomationToolServices =
+  | Sandbox
   | DatabaseServices
   | ModelCatalog
   | GitHubApp

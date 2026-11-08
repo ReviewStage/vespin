@@ -22,6 +22,7 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { OPEN_INTERNET } from "@repo/sandbox";
 import { COMMIT_AUTHOR } from "@repo/settings";
 import { Effect, Option } from "effect";
 import { LINK_OUTCOME } from "../../github/github-installations.js";
@@ -279,15 +280,12 @@ const checkOutAndFinish = (
 
 /** A rule that sets the authorization given, on every request to its host or on those whose path matches. */
 const authorizing = (authorization: string, path?: object) =>
-  path === undefined
-    ? { transform: [{ headers: { authorization } }] }
-    : { match: { path }, transform: [{ headers: { authorization } }] };
+  path === undefined ? { set: { authorization } } : { path, set: { authorization } };
 
 /** The App's installation token for the repository, as the session's firewall carries it: on GitHub's two hosts, as Basic credentials, every other host open. */
 const APP_AUTHORIZATION = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
 const APP_CREDENTIAL = {
-  allow: {
-    "*": [],
+  hosts: {
     "github.com": [authorizing(APP_AUTHORIZATION)],
     "api.github.com": [authorizing(APP_AUTHORIZATION)],
   },
@@ -319,7 +317,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
           },
         ]);
         assert.equal(sandbox.checkedOut, RELAY_FULL_NAME);
-        assert.deepEqual(sandbox.policies.at(-1), { mode: "allow-all" });
+        assert.deepEqual(sandbox.policies.at(-1), OPEN_INTERNET);
         assert.deepEqual(sandbox.identities, []);
         assert.deepEqual(repositoryMints(github.sent), [
           { repositories: [RELAY.name], permissions: { contents: "read" } },
@@ -498,8 +496,7 @@ it.layer(getTestDB())("a coding agent's checkout", (it) => {
         const basic = `Basic ${Buffer.from(`${GITHUB_FIXTURE_MEMBER.LOGIN}:${GITHUB_FIXTURE_MEMBER.TOKEN}`).toString("base64")}`;
         const bearer = `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`;
         assert.deepEqual(standing, {
-          allow: {
-            "*": [],
+          hosts: {
             "github.com": [authorizing(basic, { startsWith: `/${RELAY_FULL_NAME}.git/` })],
             "api.github.com": [
               authorizing(bearer, { exact: `/repos/${RELAY_FULL_NAME}` }),

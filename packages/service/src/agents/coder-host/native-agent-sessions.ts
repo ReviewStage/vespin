@@ -20,7 +20,6 @@ import { type Agent, hasRepository } from "@repo/database/models/agent-store";
 import { readNativeSequence } from "@repo/database/models/native-projection-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { deploymentOidcToken } from "@repo/sandbox";
 import { Effect, Layer, Option } from "effect";
 import { deploymentOrigin } from "../../deployment-origin.js";
 import { logStoreFailure } from "../../http/store-failure.js";
@@ -30,7 +29,7 @@ import {
 } from "../../integrations/connection-door.js";
 import type { AgentMachine, MachineLayout } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
-import type { SandboxRunner } from "../machine/vercel-machine.js";
+import type { SandboxRunner } from "../machine/sandbox-machine.js";
 import { RUNNER_EVENTS_PATH } from "../native-events/runner-events-app.js";
 import { RUNNER_LINES_PATH } from "../native-events/runner-lines-app.js";
 import { RUNNER_TOKEN_PATH } from "../native-events/runner-token-app.js";
@@ -145,7 +144,7 @@ const nativeIntegrations = (userId: string, agent: Agent, origin: string) =>
     (names) => names.map((name) => ({ name, url: workspaceIntegrationMcpUrl(origin, name) })),
   );
 
-/** The native harnesses over the function's services, as above, each agent's runner on the machine its row names (`agent-machines.ts`): Vercel Sandbox, or its starter's Mac. */
+/** The native harnesses over the function's services, as above, each agent's runner on the machine its row names (`agent-machines.ts`): a cloud sandbox, or its starter's Mac. */
 export function nativeAgentSessionsLayer(
   options: NativeAgentSessionsOptions,
 ): Layer.Layer<
@@ -206,5 +205,5 @@ export function nativeAgentSessionsLayer(
         },
       };
     }),
-  ).pipe(Layer.provide(agentMachinesLayer({ readToken: deploymentOidcToken, run: options.run })));
+  ).pipe(Layer.provide(agentMachinesLayer({ run: options.run })));
 }

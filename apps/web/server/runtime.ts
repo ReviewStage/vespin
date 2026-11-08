@@ -1,4 +1,4 @@
-import { deploymentOidcToken } from "@repo/sandbox";
+import { vercelSandboxLayer } from "@repo/sandbox/vercel";
 import type { NativeAgentSessions } from "@repo/service/agents/coder-host/runtime-sessions";
 import { agentMachinesLayer } from "@repo/service/agents/machine/agent-machines";
 import { agentSandboxDoors } from "@repo/service/agents/workspace-mcp/sandbox-door";
@@ -7,6 +7,7 @@ import { sentryLayer, sentryQueueSent } from "@repo/service/observability/sentry
 import { type WebServices, type WebServicesError, webServices } from "@repo/service/runtime";
 import { waitUntil } from "@vercel/functions";
 import { type Context, Effect, Layer, ManagedRuntime } from "effect";
+import { FetchHttpClient } from "effect/http";
 
 /**
  * Module scope is the memoization: Vercel keeps a warm instance's module
@@ -31,13 +32,23 @@ const afterResponseLayer = Layer.succeed(AfterResponse, {
 });
 
 /**
+ * The deployment's sandboxes: Vercel Sandbox under the function's own OIDC
+ * token, its PTY reached over the platform's `fetch`.
+ */
+const sandboxLayer = vercelSandboxLayer.pipe(Layer.provide(FetchHttpClient.layer));
+
+/**
  * The one runtime a web function runs an effect on, with Sentry started
  * before the services it watches, as Sentry's Effect guide provides it to
- * the HTTP layer, and the after-response work beside them.
+ * the HTTP layer, the deployment's sandboxes beneath them, and the
+ * after-response work beside them.
  */
 function webRuntime(): ManagedRuntime.ManagedRuntime<WebServices, WebServicesError> {
   standing ??= ManagedRuntime.make(
-    Layer.provideMerge(webServices, Layer.merge(sentryLayer(), afterResponseLayer)),
+    Layer.provideMerge(
+      webServices,
+      Layer.mergeAll(sentryLayer(), afterResponseLayer, sandboxLayer),
+    ),
   );
   return standing;
 }
@@ -63,13 +74,9 @@ export function webServicesWith(
 /**
  * The doors to a native agent's machine, for our MCP server's tools that
  * read a file the agent names: their calls run on this runtime, a
- * sandbox's under the function's own OIDC token, as every other call of
- * ours to Vercel Sandbox is made, and a local agent's as requests its Mac answers.
+ * sandbox's through its `Sandbox`, and a local agent's as requests its Mac answers.
  */
-export const webAgentSandboxDoor = agentSandboxDoors(
-  runWeb,
-  agentMachinesLayer({ readToken: deploymentOidcToken, run: runWeb }),
-);
+export const webAgentSandboxDoor = agentSandboxDoors(runWeb, agentMachinesLayer({ run: runWeb }));
 
 /**
  * Releases what the layer acquired and leaves the next call to build it again.

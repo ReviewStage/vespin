@@ -52,7 +52,7 @@ const TAKEN_FOLDERS = new Set(
  * `/workspace/<owner>-<name>` where another of them shares its name in any
  * case, or the name is a folder the workspace already holds, and that with
  * its place in the list after it where even that is taken. Note that the
- * folder is spliced into the launch's shell text (`vercel-machine.ts`),
+ * folder is spliced into the launch's shell text (`sandbox-machine.ts`),
  * which is safe because an `owner/name` is held to GitHub's own letters,
  * digits, dots, underscores, and hyphens (`GITHUB_REPOSITORY_PATTERN`).
  */

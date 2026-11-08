@@ -19,6 +19,7 @@ import { githubAppAvatarUrl, githubAvatarUrl } from "@repo/features/account-pict
 import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
 import { GITHUB_READER, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import { mentionMarkdownLink } from "@repo/features/link-grammar";
+import type { Sandbox } from "@repo/sandbox";
 import {
   EXCESS_KEYS,
   GITHUB_LINE_BOUNDS,
@@ -1026,7 +1027,7 @@ export function agentIsWoken(
 }
 
 /** The services a wake's reads and sends run on. */
-type WakeServices = DatabaseServices | HttpClient.HttpClient | GitHubApp;
+type WakeServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
 
 /**
  * The checks on the commit given, read on the pull-request token of the

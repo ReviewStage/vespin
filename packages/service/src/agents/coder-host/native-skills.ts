@@ -19,11 +19,8 @@
 import { INSTALLED_SKILLS } from "@repo/agent-runner/protocol";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SKILL_KEY } from "@repo/features/skill-file";
-import type { SandboxSessionApi } from "@repo/sandbox";
+import type { SandboxFile } from "@repo/sandbox";
 import type { AgentSkill } from "../agent-runtime/skills.js";
-
-/** One file as the sandbox's API writes it. */
-type SandboxFile = Parameters<SandboxSessionApi["writeFiles"]>[0][number];
 
 /** Where the installed skills stand: uploaded as the default user, then where root installs them, which a launch's config names. */
 export const NATIVE_SKILLS_PATH = {

@@ -1,9 +1,9 @@
 /**
- * port-share.ts -- one port of an agent's running sandbox shared by a public link: the helper that serves it, the route Vercel opens to the helper, and the tag that marks the sandbox shared.
+ * port-share.ts -- one port of an agent's running sandbox shared by a public link: the helper that serves it, the public route opened to the helper, and the tag that marks the sandbox shared.
  *
- * Vercel serves a sandbox's port on a public route, which anyone holding its
+ * A sandbox serves a port on a public route, which anyone holding its
  * address may open. Only the helper's own fixed port is ever routed: the
- * helper, one small Node process started detached in the running session,
+ * helper, one small Node process started detached in the running sandbox,
  * pipes each connection to `127.0.0.1` at the port shared, and rewrites the
  * `Host` and `Origin` request headers to `localhost` at that port as they
  * pass, so a dev server that answers only on localhost still answers. A
@@ -24,9 +24,10 @@ import {
   type CommandAsk,
   type ListedSandbox,
   SANDBOX_CALL,
-  type SandboxSessionApi,
+  type SandboxError,
+  type SandboxRunning,
+  type SandboxService,
   SandboxUnavailable,
-  type VercelSandboxApi,
 } from "@repo/sandbox";
 import { Duration, Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
@@ -125,12 +126,10 @@ export function shareHeldUntil(visitedAt: number): Date {
 
 /** The share as the folder holds it: the port shared and its last visit; none where it holds no port. */
 export function readSharedPort(
-  running: SandboxSessionApi,
-): Effect.Effect<
-  { readonly port: number; readonly visitedAt: number } | undefined,
-  SandboxUnavailable
-> {
-  return Effect.map(running.run(readShare()), (run) => {
+  api: SandboxService,
+  running: SandboxRunning,
+): Effect.Effect<{ readonly port: number; readonly visitedAt: number } | undefined, SandboxError> {
+  return Effect.map(api.run(running, readShare()), (run) => {
     const [port, visitedAt] = run.stdout.split("\n").map(Number);
     return port === undefined || !Number.isInteger(port) || port <= 0
       ? undefined
@@ -140,13 +139,13 @@ export function readSharedPort(
 
 /** Shares the port from the running sandbox, replacing any shared before, answering its public link. */
 export function sharePort(
-  api: VercelSandboxApi,
+  api: SandboxService,
   sandbox: ListedSandbox,
-  running: SandboxSessionApi,
+  running: SandboxRunning,
   port: number,
-): Effect.Effect<string, SandboxUnavailable> {
+): Effect.Effect<string, SandboxError> {
   return Effect.gen(function* () {
-    yield* running.start({ ...startHelper(port), env: {}, sudo: false });
+    yield* api.start(running, { ...startHelper(port), env: {}, sudo: false });
     const routes = yield* api.updatePorts(
       sandbox.name,
       [PORT_SHARE.HELPER_PORT],
@@ -162,28 +161,28 @@ export function sharePort(
 
 /** Closes the sandbox's share: no public route, no mark, and, while it runs, the helper gone with its folder. */
 export function unsharePort(
-  api: VercelSandboxApi,
+  api: SandboxService,
   sandbox: ListedSandbox,
-  running: SandboxSessionApi | undefined,
-): Effect.Effect<void, SandboxUnavailable> {
+  running: SandboxRunning | undefined,
+): Effect.Effect<void, SandboxError> {
   return Effect.gen(function* () {
     yield* api.updatePorts(sandbox.name, [], tagsOf(sandbox, false));
     if (running !== undefined)
-      yield* running.run({ command: "rm", args: ["-rf", PORT_SHARE.FOLDER] });
+      yield* api.run(running, { command: "rm", args: ["-rf", PORT_SHARE.FOLDER] });
   });
 }
 
 /** The port the running sandbox shares now and its link: its helper's route and the port the helper serves. */
 export function sharedPortOf(
-  api: VercelSandboxApi,
+  api: SandboxService,
   sandbox: ListedSandbox,
-  running: SandboxSessionApi,
-): Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxUnavailable> {
+  running: SandboxRunning,
+): Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxError> {
   return Effect.gen(function* () {
-    const named = yield* api.getNamed(sandbox.name);
+    const named = yield* api.get(sandbox.name);
     const route = named?.routes?.find((each) => each.port === PORT_SHARE.HELPER_PORT);
     if (route === undefined) return null;
-    const share = yield* readSharedPort(running);
+    const share = yield* readSharedPort(api, running);
     return share === undefined ? null : { port: share.port, url: route.url };
   });
 }

@@ -1,5 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { causeKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, type Redacted } from "effect";
 import { GitHubBackground } from "../github/github-rate-gate.js";
 import {
@@ -18,7 +19,7 @@ import {
  * or calls twice ends nothing it should not.
  */
 
-type SweepRead<A> = Effect.Effect<A, unknown, DatabaseServices>;
+type SweepRead<A> = Effect.Effect<A, unknown, DatabaseServices | Sandbox>;
 
 interface MaintenanceSweeps {
   /** Prunes the sync log's transactions older than its keep, a sweep's worth, answering how many rows went. */
@@ -88,7 +89,7 @@ const isolated = <A>(name: string, sweep: SweepRead<A>): SweepRead<Swept<A>> =>
 /** The sweeps in turn, each handed the same instant and each kept from the others (`isolated`). */
 const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
   sweeps: MaintenanceSweeps,
-): Effect.fn.Return<MaintenanceSweepAnswer, unknown, DatabaseServices> {
+): Effect.fn.Return<MaintenanceSweepAnswer, unknown, DatabaseServices | Sandbox> {
   const now = yield* Clock.currentTimeMillis;
   return {
     syncLog: yield* isolated("pruneSyncLog", sweeps.pruneSyncLog(now)),
@@ -101,7 +102,7 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
 export const handleMaintenanceSweep = /* @__PURE__ */ Effect.fn("web/handleMaintenanceSweep")(
   function* (
     options: MaintenanceSweepOptions,
-  ): Effect.fn.Return<Response, unknown, DatabaseServices> {
+  ): Effect.fn.Return<Response, unknown, DatabaseServices | Sandbox> {
     const { request } = options;
     if (request.method !== "GET") {
       return errorResponse(

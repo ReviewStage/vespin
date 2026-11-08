@@ -18,6 +18,7 @@ import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_STATUS, type AgentStatus, type AgentSummary } from "@repo/features/agent-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Clock, DateTime, Effect, Exit, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
@@ -154,7 +155,7 @@ export const stoppedTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   agent: Agent,
   stop: TurnStop = {},
-): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   // An agent its starter's plan pays for is stopped by those the plan's policy admits.
   yield* admitsPlanWriter(account, agent);
   return yield* canceledTurn(routedSessions(account), writer, agent, stop);
@@ -166,7 +167,7 @@ export const stoppedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   agent: Agent,
   stop: TurnStop = {},
-): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const stopped = yield* stoppedTurn(writer, account, agent, stop);
   if (stopped) {
     yield* recordServerEvent(
@@ -197,7 +198,7 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   agent: Agent,
   { key, by }: TurnStop = {},
-): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   // Every Stop, the developer's, a Continue's, another agent's, or a rewind's, pauses what is queued behind the
   // turn, so nothing more goes until Resume. Note that it pauses before the cancel goes out, because the turn's
@@ -255,7 +256,7 @@ export const stoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   account: string,
   agent: Agent,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   yield* stoppedTurn(writer, account, agent);
   const status = yield* statusOf(agent);
   if (status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING) {
@@ -277,7 +278,7 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   account: string,
   agents: readonly Agent[],
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const stops = yield* Effect.forEach(
     agents,
     (agent) => Effect.exit(stoppedForGood(writer, account, agent)),

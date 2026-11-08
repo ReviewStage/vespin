@@ -22,7 +22,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import type { SandboxUnavailable } from "@repo/sandbox";
+import type { Sandbox, SandboxError } from "@repo/sandbox";
 import { Clock, Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
@@ -33,8 +33,12 @@ import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach
 
 export interface AgentPortsProcedureSeams {
   resolveUserId: UserIdResolver;
-  /** The agent's sandbox as the ports are read in it: Vercel's in production, a script's in a test. */
-  readonly sandbox: Layer.Layer<AgentSandbox, never, HttpClient.HttpClient | DatabaseServices>;
+  /** The agent's sandbox as the ports are read in it: over the runtime's `Sandbox` in production, a script's in a test. */
+  readonly sandbox: Layer.Layer<
+    AgentSandbox,
+    never,
+    HttpClient.HttpClient | DatabaseServices | Sandbox
+  >;
 }
 
 /** The agent ports resource: its read, and its one shared port, to a signed-in caller. */
@@ -46,10 +50,8 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
       conversationId: reached.conversationId,
       sessionId: reached.machine === AGENT_MACHINE.DEVICE ? undefined : reached.sessionId,
     }));
-  /** One call on the agent's sandbox, a failure of Vercel's refused as upstream. */
-  const onSandbox = <A>(
-    call: (sandbox: AgentSandboxService) => Effect.Effect<A, SandboxUnavailable>,
-  ) =>
+  /** One call on the agent's sandbox, a failure of the sandbox's refused as upstream. */
+  const onSandbox = <A>(call: (sandbox: AgentSandboxService) => Effect.Effect<A, SandboxError>) =>
     Effect.provide(
       Effect.gen(function* () {
         return yield* sandboxOrUpstream(call(yield* AgentSandbox));

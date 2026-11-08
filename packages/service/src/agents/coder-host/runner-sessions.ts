@@ -20,8 +20,8 @@
  * the app beside it (`native-skills.ts`), and launches the runner. A launch that
  * fails there is the agent's failed turn. The place, the launch, and every
  * write to the runner's stdin go through the agent's machine
- * (`../machine/agent-machine.ts`: Vercel Sandbox in
- * `../machine/vercel-machine.ts`, or the starter's Mac in
+ * (`../machine/agent-machine.ts`: a cloud sandbox in
+ * `../machine/sandbox-machine.ts`, or the starter's Mac in
  * `../machine/device-machine.ts`, which the agent's row picks). A launch mints
  * the runner's bearer and records its digest on the agent's row, and starts
  * the runner with the harness's credential and the bearer in its
@@ -91,14 +91,14 @@
  * Every call answers in `AgentSessions`' outcomes, so a caller holds one interface
  * whichever runtime answers. What fails here (the machine, the store, GitHub, a
  * missing credential or snapshot) answers `failed`, said once in the log as an
- * error naming the agent, in the failure's own words, Vercel's answer for a
+ * error naming the agent, in the failure's own words, the sandbox's answer for a
  * sandbox's, and reported where no named refusal explains it (`agent-log.ts`);
  * a launch refused for the account's plan says which way its plan failed.
  * A launch past its Start's answer says each step it reaches, and one that
  * fails, dies, or is interrupted there is the agent's failed turn, with why.
  * Nothing is retried but a resume that meets its sandbox still stopping or
  * being snapshotted, and a create on an image the registry is still preparing
- * (`vercel-machine.ts`).
+ * (`sandbox-machine.ts`).
  */
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -160,10 +160,11 @@ import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   COMMAND_GONE,
   type CommandExit,
-  NOT_FOUND_STATUS,
+  isSandboxError,
+  type Sandbox,
+  type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
-  sessionEnding,
 } from "@repo/sandbox";
 import { TURN_STATUS } from "@repo/wire";
 import type { UserContent } from "ai";
@@ -245,8 +246,13 @@ import { nativeSkills } from "./skills.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { coderTurnMessage, readNativeTurnHanded, recordNativeTurnHanded } from "./turn-message.js";
 
-/** What the sessions reach: the store, GitHub, Vercel, the agent's machine, the agents' image, and the deployment's key ring. */
-export type RunnerServices = CheckoutServices | AgentMachine | AgentImage | HostedEnvironment;
+/** What the sessions reach: the store, GitHub, the sandboxes, the agent's machine, the agents' image, and the deployment's key ring. */
+export type RunnerServices =
+  | CheckoutServices
+  | AgentMachine
+  | AgentImage
+  | HostedEnvironment
+  | Sandbox;
 
 /** What every harness's sessions are composed with. */
 export interface RunnerSessionsOptions {
@@ -326,10 +332,9 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
 const FINGERPRINT_CHARS = 32;
 
 /**
- * The statuses a failure answers as, which a caller logs: Vercel's own where
- * it answered one, unavailable where it did not, and refused where the
- * launch could not start at all (no agent, no credential, no snapshot, no
- * bundle).
+ * The statuses a failure answers as, which a caller logs: unavailable where
+ * a machine or the store did not answer, and refused where the launch could
+ * not start at all (no agent, no credential, no snapshot, no bundle).
  */
 const FAILED_STATUS = { UNAVAILABLE: 503, REFUSED: 422 } as const;
 
@@ -645,11 +650,21 @@ function resumedPath(created: boolean, wasUp: boolean): LaunchPath {
   return wasUp ? LAUNCH_PATH.RELAUNCHED : LAUNCH_PATH.RESUMED;
 }
 
+/** Whether a call failed because its sandbox's run was stopping, or being snapshotted, under it: one a resume mends. */
+function sandboxEnding(failure: { readonly _tag: string }): boolean {
+  return failure._tag === "SandboxEnding";
+}
+
+/** Whether a call failed because what it named is gone: a sandbox's run, or a Mac's runner, ended. */
+function sandboxGone(failure: { readonly _tag: string }): boolean {
+  return failure._tag === "SandboxGone";
+}
+
 /** A resume past an answer tried again while its sandbox is still stopping or being snapshotted (`CODER.RESUME_WHILE_ENDING`). */
 const RESUME_WHILE_ENDING = {
   schedule: Schedule.spaced(CODER.RESUME_WHILE_ENDING.SPACING),
   times: CODER.RESUME_WHILE_ENDING.TRIES,
-  while: sessionEnding,
+  while: sandboxEnding,
 };
 
 /** The place found first under the account's session: the newest, which is listed first (`findPlaces`). */
@@ -687,7 +702,7 @@ function liveRunner(
   machine: MachineLifecycle,
   found: FoundPlace,
   within?: Duration.Duration,
-): Effect.Effect<RecordedRunner | undefined, SandboxUnavailable> {
+): Effect.Effect<RecordedRunner | undefined, SandboxError> {
   const runner = found.runner;
   if (runner === undefined) return Effect.succeed(undefined);
   return machine.runnerExit(runner.handle, within).pipe(
@@ -735,7 +750,7 @@ function deliveredTo(
   agentId: string,
   runner: RecordedRunner,
   lines: readonly InputLine[],
-): Effect.Effect<void, LaunchRefused | StoreFailure | SandboxUnavailable, DatabaseServices> {
+): Effect.Effect<void, LaunchRefused | StoreFailure | SandboxError, DatabaseServices> {
   return runner.mark.linesRead === true
     ? queuedFor(userId, agentId, runner.mark.firstSequence, lines)
     : machine.writeLine(runner.handle, stdinText(lines));
@@ -761,9 +776,7 @@ function failedStatus(failure: { readonly _tag: string }): number {
       : FAILED_STATUS.REFUSED;
   }
   if (failure instanceof AgentImageMissing) return FAILED_STATUS.REFUSED;
-  return failure instanceof SandboxUnavailable
-    ? (failure.status ?? FAILED_STATUS.UNAVAILABLE)
-    : FAILED_STATUS.UNAVAILABLE;
+  return FAILED_STATUS.UNAVAILABLE;
 }
 
 /** A launch past its Start's answer that died, or was interrupted, rather than failing: what ended it, by its kind alone. */
@@ -783,7 +796,7 @@ function launchFailureOf(cause: Cause.Cause<{ readonly _tag: string }>): { reado
 /**
  * A failure in the words a line and a turn's record keep: a refusal's
  * reason, with what the sandbox's run threw where it threw; a sandbox's own
- * words (Vercel's call, its status, and its error's code and message); what
+ * words (the call, and what its provider answered); what
  * cut a launch off; and the kind alone for any other.
  */
 function failureWords(failure: { readonly _tag: string }): string {
@@ -794,7 +807,7 @@ function failureWords(failure: { readonly _tag: string }): string {
   if (failure instanceof LaunchCut) {
     return failure.interrupted ? "the launch was interrupted" : `the launch died: ${failure.kind}`;
   }
-  return failure instanceof SandboxUnavailable ? failure.message : failureKind(failure);
+  return isSandboxError(failure) ? failure.message : failureKind(failure);
 }
 
 /** The failure's kind, as its line's `reason` annotation and its report name it. */
@@ -818,14 +831,11 @@ function namedOutcome(failure: { readonly _tag: string }): boolean {
   );
 }
 
-/** The statuses past which Vercel's answer says it may take the call another time: busy, or at fault. */
-const AGAIN_STATUS = { TOO_MANY_REQUESTS: 429, SERVER_ERROR: 500 } as const;
-
 /**
  * Whether a turn's hand-over that failed may succeed if the turn is
  * delivered again: the store unreached or refusing a statement, a checkout
  * that could not read the store or GitHub (`CODER_REFUSAL.GITHUB_UNAVAILABLE`),
- * or Vercel Sandbox answering that it is busy or at fault. Any other failure
+ * or the sandbox answering that it is busy or at fault (`retryable`). Any other failure
  * (a refusal, a repository no longer reached, a snapshot missing, a sandbox
  * that could not be readied, a row that does not decode) is the turn's, as
  * every launch's failure past a Start's answer is.
@@ -834,12 +844,7 @@ function mayTakeAgain(failure: { readonly _tag: string }): boolean {
   if (failure instanceof CheckoutRefused) {
     return failure.reason === CODER_REFUSAL.GITHUB_UNAVAILABLE;
   }
-  if (failure instanceof SandboxUnavailable) {
-    return (
-      failure.status === AGAIN_STATUS.TOO_MANY_REQUESTS ||
-      (failure.status !== undefined && failure.status >= AGAIN_STATUS.SERVER_ERROR)
-    );
-  }
+  if (failure instanceof SandboxUnavailable) return failure.retryable === true;
   return failure instanceof SqlError || failure instanceof EffectDrizzleQueryError;
 }
 
@@ -1624,14 +1629,14 @@ export const runnerSessions = <
               openedLine(agent, sessionId, sent, false),
               filesWritten(runnerPlace, sent).pipe(
                 Effect.as(true),
-                Effect.catchIf(sessionEnding, () => Effect.succeed(false)),
+                Effect.catchIf(sandboxEnding, () => Effect.succeed(false)),
               ),
-              // Note that an exit Vercel did not answer reads as a runner that runs, so an outage
+              // Note that an exit the sandbox did not answer reads as a runner that runs, so an outage
               // neither fails the message nor relaunches beside a runner still reading.
               reads
                 ? machine.runnerExit(running.handle, CODER.RUNNER_EXIT_READ).pipe(
                     Effect.tap(exitSaid),
-                    Effect.catchIf(sessionEnding, () => Effect.succeed(COMMAND_GONE)),
+                    Effect.catchIf(sandboxEnding, () => Effect.succeed(COMMAND_GONE)),
                     Effect.orElseSucceed(() => null),
                   )
                 : Effect.succeed(null),
@@ -1643,7 +1648,7 @@ export const runnerSessions = <
           // its exit read none, and one that ends before it takes them leaves them to the launch the
           // turn's delivery starts once its END republishes the turn (`deliverTurn`). A write to a
           // Mac's runner is its own liveness check: one whose launch line its Mac settled answers
-          // `NOT_FOUND_STATUS`, which relaunches below.
+          // as gone (`SandboxGone`), which relaunches below.
           const wrote =
             uploaded &&
             (reads
@@ -1652,10 +1657,7 @@ export const runnerSessions = <
               : yield* machine.writeLine(running.handle, lines.map(line).join("")).pipe(
                   Effect.as(true),
                   Effect.catchIf(
-                    (failure) =>
-                      (failure instanceof SandboxUnavailable &&
-                        failure.status === NOT_FOUND_STATUS) ||
-                      sessionEnding(failure),
+                    (failure) => sandboxGone(failure) || sandboxEnding(failure),
                     () => Effect.succeed(false),
                   ),
                 ));
@@ -1694,7 +1696,7 @@ export const runnerSessions = <
         const wasUp = found.value.running !== undefined;
         // Note that a place whose stop began as the send reached it (a launch's end or the sweep
         // stopped it a moment before) refuses every call until it has stopped, so it is resumed
-        // once more and the runner launched in the session that opens, as Vercel's SDK does.
+        // once more and the runner launched in the run that opens.
         const resumed = yield* Effect.gen(function* () {
           const place = yield* machine.resume(found.value, agent);
           if (place === PLACE_RESUME.GONE) return place;
@@ -1710,10 +1712,10 @@ export const runnerSessions = <
             restartLine,
           );
           return place;
-        }).pipe(Effect.retry({ times: 1, while: sessionEnding }));
+        }).pipe(Effect.retry({ times: 1, while: sandboxEnding }));
         if (resumed === PLACE_RESUME.GONE) {
           // Note that the snapshot of a sandbox opened before `getOrCreate` expired
-          // (`CODER.SANDBOX_SNAPSHOTS`), so it can never resume: the session goes on in a fresh one
+          // (`@repo/sandbox`'s retention), so it can never resume: the session goes on in a fresh one
           // under the session's tag, its checkout cloned again. The harness's own session files went
           // with the old filesystem, so its session resumes from the transcript the service keeps
           // (`resumedSessionOf`). The expired sandbox is deleted only once
@@ -1758,7 +1760,7 @@ export const runnerSessions = <
      * as it stands once the lease is held; answers the launch the stop line
      * was written to, which its force ends (`forcedStop`). A turn still
      * running whose runner is no longer up, or one that
-     * exited before the line reached it (Vercel's 404), is a Stop taken all
+     * exited before the line reached it (`SandboxGone`), is a Stop taken all
      * the same, with no line to write, which the force settles.
      */
     const cancelHolding = (sessionId: string, turnId: string, agent: Agent) =>
@@ -1776,11 +1778,7 @@ export const runnerSessions = <
         const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
         if (live === undefined) return { outcome: SESSION_CANCEL_OUTCOME.ACCEPTED } as const;
         yield* delivered(agent, live, [stopLine(live.mark.firstSequence)]).pipe(
-          Effect.catchIf(
-            (failure) =>
-              failure instanceof SandboxUnavailable && failure.status === NOT_FOUND_STATUS,
-            () => Effect.void,
-          ),
+          Effect.catchIf(sandboxGone, () => Effect.void),
         );
         return {
           outcome: SESSION_CANCEL_OUTCOME.ACCEPTED,
@@ -2030,7 +2028,7 @@ export const runnerSessions = <
           const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
           // The turn its first message queued is the one failed. The checkout's own sentence names GitHub or the sandbox (`status.ts`'s `FAILURE_WORDS`);
           // any other failure, a missing snapshot among them, reads as the sandbox's, with its reason,
-          // and a sandbox's failure with Vercel's own answer after the sentence the status reads it by.
+          // and a sandbox's failure with its own words after the sentence the status reads it by.
           const detail =
             failure instanceof CheckoutRefused
               ? words
@@ -2316,8 +2314,8 @@ export const runnerSessions = <
           // A session whose places are all another account's agents' is none of this account's to retire.
           if (retired === 0) return { outcome: SESSION_RESET_OUTCOME.NO_ACTIVE_SESSION } as const;
           // Note that each place found was deleted directly by its discard, and a sandbox opened under
-          // the session's tag while the reset ran is none of them, so it is left to expire on Vercel's
-          // own schedule (`CODER.SANDBOX_SNAPSHOTS`) rather than queued for a later delete.
+          // the session's tag while the reset ran is none of them, so it is left to lapse with its
+          // snapshot (`@repo/sandbox`'s retention) rather than queued for a later delete.
           return { outcome: SESSION_RESET_OUTCOME.RESET } as const;
         }).pipe(
           Effect.catch(unavailable("reset")),

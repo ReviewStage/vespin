@@ -1,17 +1,16 @@
 /**
- * agent-sandbox-open.ts -- the one way an agent's sandbox is opened, by whichever caller opens it: `Sandbox.getOrCreate` under its session's name, from the agents' image or a snapshot.
+ * agent-sandbox-open.ts -- the one way an agent's sandbox is opened, by whichever caller opens it: `Sandbox`'s `getOrCreate` under its session's name, from the agents' image or a snapshot.
  *
  * An agent's sandbox is named after its session (`agentSandboxName`) and
- * opened as Vercel's persistent sandboxes are
- * (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes): the one
- * standing under the name is resumed, one is created where none stands, and
- * one whose snapshot is gone is deleted and created again under the same
- * name: from the agents' image, or from the snapshot a launch names
- * (`machine/vercel-machine.ts`), whose disk already holds a checkout.
+ * opened by `getOrCreate` (`@repo/sandbox`): the one standing under the name
+ * is resumed, one is created where none stands, and one whose snapshot is
+ * gone is deleted and created again under the same name: from the agents'
+ * image, or from the snapshot a launch names
+ * (`machine/sandbox-machine.ts`), whose disk already holds a checkout.
  * Whichever caller opens it, a message's
- * launch (`machine/vercel-machine.ts`), the Terminal, or the agent's browser,
+ * launch (`machine/sandbox-machine.ts`), the Terminal, or the agent's browser,
  * opens it here, so a sandbox any of them creates is the same sandbox: the
- * `agent` user made in its `onCreate`, as the SDK makes one, beside what the
+ * `agent` user made in it as it is created, beside what the
  * caller's own `onCreate` adds, which only a launch adds (the checkout). A
  * sandbox created from a snapshot of another agent's sandbox has that user
  * already, so it is not made again.
@@ -19,12 +18,7 @@
 
 import { createHash } from "node:crypto";
 import { AGENT_USER, CODEX_PIN } from "@repo/agent-runner/pins";
-import {
-  IMAGE_NOT_READY,
-  type OpenedSandbox,
-  SandboxUnavailable,
-  type VercelSandboxApi,
-} from "@repo/sandbox";
+import { type OpenedSandbox, Sandbox, SandboxUnavailable } from "@repo/sandbox";
 import { Duration, Effect, Schedule } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
@@ -58,9 +52,9 @@ const AGENT_HOME_FOLDERS = [CODEX_PIN.HOME];
 
 /**
  * How a create on an image the registry is still preparing is asked again:
- * every `SPACED`, at most `TIMES` times, as Vercel's docs say to retry once
- * the preparation finishes. Note that CI pushes each image and waits for
- * Vercel to prepare it before the deploy that names it lands, so only a
+ * every `SPACED`, at most `TIMES` times, as the registry's preparation asks
+ * (`ImageNotReady`). Note that CI pushes each image and waits for
+ * the provider to prepare it before the deploy that names it lands, so only a
  * Preview opened as its image is pushed waits here, and that a member's
  * open waits past its answer instead (`openAgentSandboxPromptly`).
  */
@@ -96,7 +90,7 @@ export interface AgentSnapshotSource {
 
 /**
  * What an agent's sandbox is opened as: its session, its tags, how many
- * vCPUs it runs on, Vercel's default where unsaid, and the snapshot it is
+ * vCPUs it runs on, the provider's default where unsaid, and the snapshot it is
  * created from where it is created, the image where unsaid. A launch names
  * the agent's own (`agentSandboxTags`, `sandboxVcpus`); a caller that opens
  * one already standing again names those it stands with.
@@ -116,11 +110,7 @@ export interface AgentSandboxOf {
  * either fails the open, as does an image the build named none of, which
  * reads as the sandbox unavailable.
  */
-const openedOnce = (
-  api: Pick<VercelSandboxApi, "getOrCreate">,
-  of: AgentSandboxOf,
-  onCreate?: (created: OpenedSandbox) => Promise<void>,
-) =>
+const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => Promise<void>) =>
   Effect.gen(function* () {
     const from =
       of.snapshot === undefined
@@ -133,18 +123,13 @@ const openedOnce = (
           }
         : { snapshotId: of.snapshot.snapshotId };
     let created = false;
-    const sandbox = yield* api.getOrCreate(
+    const sandbox = yield* (yield* Sandbox).getOrCreate(
       {
         name: agentSandboxName(of.sessionId),
         from,
         tags: of.tags,
         timeoutMs: CODER.SANDBOX_TIMEOUT_MS,
         ...(of.vcpus === undefined ? undefined : { vcpus: of.vcpus }),
-        keepLastSnapshots: {
-          count: CODER.SANDBOX_SNAPSHOTS.count,
-          expiration: Duration.toMillis(CODER.SANDBOX_SNAPSHOTS.expiration),
-          deleteEvicted: CODER.SANDBOX_SNAPSHOTS.deleteEvicted,
-        },
         env: SANDBOX_ENV,
         ...(of.snapshot?.holdsUser === true
           ? undefined
@@ -164,15 +149,14 @@ const openedOnce = (
  * since its turn needs the sandbox before it can go on.
  */
 export const openAgentSandbox = (
-  api: Pick<VercelSandboxApi, "getOrCreate">,
   of: AgentSandboxOf,
   onCreate?: (created: OpenedSandbox) => Promise<void>,
 ) =>
-  openedOnce(api, of, onCreate).pipe(
+  openedOnce(of, onCreate).pipe(
     Effect.retry({
       schedule: Schedule.spaced(IMAGE_RETRY.SPACED),
       times: IMAGE_RETRY.TIMES,
-      while: (failure) => failure.code === IMAGE_NOT_READY,
+      while: (failure) => failure._tag === "ImageNotReady",
     }),
   );
 
@@ -185,14 +169,11 @@ export const openAgentSandbox = (
  * Terminal's and the Browser's panes ask again on their own wait meanwhile,
  * and find it running once the open after the answer made it.
  */
-export const openAgentSandboxPromptly = (
-  api: Pick<VercelSandboxApi, "getOrCreate">,
-  of: AgentSandboxOf,
-) =>
-  openedOnce(api, of).pipe(
+export const openAgentSandboxPromptly = (of: AgentSandboxOf) =>
+  openedOnce(of).pipe(
     Effect.tapError((failure) =>
-      failure.code === IMAGE_NOT_READY
-        ? afterResponse("an agent's sandbox opened on its image", openAgentSandbox(api, of))
+      failure._tag === "ImageNotReady"
+        ? afterResponse("an agent's sandbox opened on its image", openAgentSandbox(of))
         : Effect.void,
     ),
   );

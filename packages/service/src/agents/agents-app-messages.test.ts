@@ -74,11 +74,12 @@ import {
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { RUN_ON_MAC_OFF, workspaceToolsAnswerSchema } from "@repo/features/workspace-tools-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { noNetwork } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Option, Queue, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { AssistantMessageBuilder, isRecord, MESSAGE_ROLE, RUN_EVENT, sessionKey } from "../core.js";
@@ -124,7 +125,10 @@ import { receivedMessage } from "./attached-files.js";
 import { reconcileAgent } from "./coder-host/reconcile.js";
 import { SESSION_SEND_OUTCOME, SESSION_TURN } from "./sessions/agent-sessions.js";
 
-it.layer(getTestDB())("messaging a coding agent", (it) => {
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+
+it.layer(SUITE)("messaging a coding agent", (it) => {
   it.effect(
     "over a browser's session cookie a message reaches the agent as one over the bearer does, its harness acting for the agent's starter",
     () =>

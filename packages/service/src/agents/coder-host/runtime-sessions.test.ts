@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
   type Agent,
   createAgent,
@@ -19,7 +20,6 @@ import {
   setProviderKeyForAgents,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
-import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { keepRunsOnPick, readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { createTask } from "@repo/database/models/task-store";
@@ -44,6 +44,7 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
@@ -233,6 +234,9 @@ let installationsConnected = 0;
 /** GitHub, reaching the repository through each workspace's installation. */
 const GITHUB = githubReaching(INSTALLATIONS).layer;
 
+/** GitHub as the installations reach it, and sandboxes kept in memory. */
+const REACHED = Layer.merge(GITHUB, memorySandbox().layer);
+
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
 
 /** The deployment's environment: the key ring, and nothing else set. */
@@ -308,7 +312,7 @@ const everyCall = (sessions: AgentSessions, agent: Agent) =>
 /** Which calls each runtime heard, by kind. */
 const heard = (each: Recording) => each.calls.map((call) => call.split(":")[0]);
 
-it.layer(Layer.merge(getTestDB(), GITHUB))(
+it.layer(Layer.merge(getTestDB(), REACHED))(
   "a coding agent's sessions answered by its runtime",
   (it) => {
     it.effect(
@@ -1172,7 +1176,7 @@ const startIn = (workspaceId: string, model: string, key = randomUUID()) => ({
   choice: { model, effort: "high" },
 });
 
-it.layer(Layer.merge(getTestDB(), GITHUB))(
+it.layer(Layer.merge(getTestDB(), REACHED))(
   "a Start decides the runtime and the payer once",
   (it) => {
     it.effect(

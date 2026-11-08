@@ -101,6 +101,7 @@ import {
   TASK_STATUS,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
@@ -562,7 +563,16 @@ async function peerCaller(
   return (tool: ServedTool, input: WireBoundaryInput, callId = "call-1"): Promise<WireRecord> =>
     database.run(
       callAsAgent(host, agent, tool, input, callId).pipe(
-        Effect.provide(Layer.mergeAll(services, catalog, ANALYTICS.layer, sentry, UNREACHED)),
+        Effect.provide(
+          Layer.mergeAll(
+            services,
+            catalog,
+            ANALYTICS.layer,
+            sentry,
+            UNREACHED,
+            memorySandbox().layer,
+          ),
+        ),
       ),
     );
 }
@@ -596,6 +606,7 @@ async function directMessage(
           ANALYTICS.layer,
           SENTRY_CONFIGURED,
           UNREACHED,
+          memorySandbox().layer,
         ),
       ),
     ),

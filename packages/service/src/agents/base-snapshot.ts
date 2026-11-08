@@ -1,14 +1,13 @@
 /**
  * base-snapshot.ts -- a workspace's repository cloned once with its dependencies installed and snapshotted, which each new agent's sandbox is created from instead of cloning.
  *
- * Vercel's "Faster startups: skip dependency installation by snapshotting
- * after setup" (https://vercel.com/docs/sandbox/concepts/snapshots): a
- * sandbox from the agents' image clones the default branch and installs, then
- * is snapshotted, and every sandbox created from that snapshot starts with
- * both. A base snapshot is that, one per workspace and repository, recorded
- * by the sandbox that took it: named for the workspace and the repository
- * (`baseSnapshotName`), left stopped on it, its `currentSnapshotId` the base
- * snapshot. Its checkout stands as an agent's stands in its workspace
+ * A sandbox from the agents' image clones the default branch and installs,
+ * then is snapshotted, and every sandbox created from that snapshot starts
+ * with both, skipping the install. A base snapshot is that, one per
+ * workspace and repository, built by `@repo/sandbox`'s `buildSnapshot` and
+ * recorded by the sandbox that took it: named for the workspace and the
+ * repository (`baseSnapshotName`), left stopped on it, its `snapshotId` the
+ * base snapshot. Its checkout stands as an agent's stands in its workspace
  * (`repository-shell.ts`'s `cloneRepository`), cloned through the token at
  * the firewall for the clone alone, so the snapshot holds no credential.
  *
@@ -19,7 +18,7 @@
  * is ever created from on an image or branch it was not made of. Note that
  * the runner is left out of the key, because it changes with nearly every
  * deploy and each launch writes the deploy's own over the one the snapshot
- * holds (`machine/vercel-machine.ts`), so a runner's change alone leaves
+ * holds (`machine/sandbox-machine.ts`), so a runner's change alone leaves
  * every base standing. The key goes up before the snapshot is taken, so a
  * snapshot of a half-made checkout is never one a launch reads.
  *
@@ -29,21 +28,23 @@
  * sandbox created from it is a use, or where the agent's fast-forward from
  * it moved a lockfile (`lockfileMoved`), which a fresh install would no
  * longer match. The sandbox's name is the lock: of fills that find none at
- * once, Vercel lets one create it and refuses the rest with a 409, and a
- * fill replaces a standing base only where it is still the one read
- * (`deleteIfStill`). A fill that failed deletes its own sandbox, so agents
+ * once, one creates it and the rest find the name taken, and a fill
+ * replaces a standing base only where it is still the one read
+ * (`deletedIfStill`). A fill that failed deletes its own sandbox, so agents
  * clone as they would without one until the next fill.
  */
 
 import { createHash } from "node:crypto";
 import {
+  buildSnapshot,
+  deletedIfStill,
   type ListedSandbox,
-  type OpenedSandbox,
   SANDBOX_STATUS,
-  SandboxUnavailable,
-  type VercelSandboxApi,
+  Sandbox,
+  type SandboxRunning,
+  UP_STATUSES,
 } from "@repo/sandbox";
-import { Clock, Duration, Effect, Option, type Redacted } from "effect";
+import { Clock, Duration, Effect, type Redacted } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { CODER } from "./coder-host/bounds.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
@@ -60,19 +61,14 @@ import {
 export const BASE_SNAPSHOT = {
   /** Every base snapshot's sandbox is named with this, its digest after it. */
   NAME_PREFIX: "agent-base-",
-  /** How long a fill may take, its sandbox's own timeout included. */
-  FILL_TIMEOUT: Duration.minutes(10),
-  /** How long a fill's sandbox may run before it is taken for one left behind. */
+  /** How long a fill's sandbox may run before it is taken for one left behind: past the build's own bound (`SNAPSHOT_BUILD.TIMEOUT`). */
   FILL_GRACE: Duration.minutes(15),
-  /** How long after its last use Vercel keeps a base snapshot; each sandbox created from it is a use. */
+  /** How long after its last use a base snapshot is kept; each sandbox created from it is a use. */
   LAPSE: Duration.days(30),
 } as const;
 
 /** The tag a base's sandbox carries once its fill ended well: the key of what it was made of (`baseKey`). */
 const BASE_TAG = { KEY: "agentBaseKey" } as const;
-
-/** Vercel's refusal of a sandbox name already taken: another launch's fill. */
-const CONFLICT_STATUS = 409;
 
 /** How much of the end of a failed install's error output the log is told. */
 const INSTALL_ERROR_TAIL_CHARS = 500;
@@ -173,11 +169,7 @@ function baseKey(of: BaseSnapshotOf, imageBase: string): string {
 
 /** Whether a sandbox is a fill still within its grace: up, and created less than `FILL_GRACE` ago. */
 function stillFilling(found: ListedSandbox, now: number): boolean {
-  const up =
-    found.status === SANDBOX_STATUS.PENDING ||
-    found.status === SANDBOX_STATUS.RUNNING ||
-    found.status === SANDBOX_STATUS.SNAPSHOTTING ||
-    found.status === SANDBOX_STATUS.STOPPING;
+  const up = UP_STATUSES.has(found.status) || found.status === SANDBOX_STATUS.STOPPING;
   return (
     up &&
     found.createdAt !== undefined &&
@@ -189,8 +181,8 @@ function stillFilling(found: ListedSandbox, now: number): boolean {
 function readOf(found: ListedSandbox | undefined, key: string, now: number): BaseSnapshotRead {
   if (found === undefined) return { state: BASE_STATE.WANTED, reason: BASE_WANTED.MISSING };
   const keyed = found.tags?.[BASE_TAG.KEY] === key;
-  if (keyed && found.status === SANDBOX_STATUS.STOPPED && found.currentSnapshotId !== undefined) {
-    return { state: BASE_STATE.READY, snapshotId: found.currentSnapshotId };
+  if (keyed && found.status === SANDBOX_STATUS.STOPPED && found.snapshotId !== undefined) {
+    return { state: BASE_STATE.READY, snapshotId: found.snapshotId };
   }
   if (stillFilling(found, now)) return { state: BASE_STATE.FILLING };
   const reason = keyed ? BASE_WANTED.UNFINISHED : BASE_WANTED.STALE_KEY;
@@ -203,8 +195,11 @@ function baseSpanAttributes(state: BaseSnapshotRead["state"], reason: BaseWanted
 }
 
 /** The base snapshot as it stands for a launch on the image given, by its digest without the runner, which its span records. */
-export const readBaseSnapshot = (api: VercelSandboxApi, of: BaseSnapshotOf, imageBase: string) =>
-  Effect.all([api.getNamed(baseSnapshotName(of)), Clock.currentTimeMillis]).pipe(
+export const readBaseSnapshot = (of: BaseSnapshotOf, imageBase: string) =>
+  Effect.all([
+    Effect.flatMap(Sandbox, (sandbox) => sandbox.get(baseSnapshotName(of))),
+    Clock.currentTimeMillis,
+  ]).pipe(
     Effect.map(([found, now]) => readOf(found, baseKey(of, imageBase), now)),
     Effect.tap((read) =>
       Effect.annotateCurrentSpan(
@@ -213,25 +208,6 @@ export const readBaseSnapshot = (api: VercelSandboxApi, of: BaseSnapshotOf, imag
     ),
     Effect.withSpan("web/readBaseSnapshot"),
   );
-
-/** Whether two reads of a name are of one sandbox: the same creation and the same session. */
-function sameSandbox(one: ListedSandbox, other: ListedSandbox): boolean {
-  return one.createdAt === other.createdAt && one.currentSessionId === other.currentSessionId;
-}
-
-/**
- * The sandbox under the name deleted, where it is still the one given: read
- * again just before, so one another fill created under the name since is
- * left be. Whether the name now stands free.
- */
-const deleteIfStill = (api: VercelSandboxApi, read: ListedSandbox) =>
-  Effect.gen(function* () {
-    const now = yield* api.getNamed(read.name);
-    if (now === undefined) return true;
-    if (!sameSandbox(now, read)) return false;
-    yield* api.deleteSandbox(read.name);
-    return true;
-  });
 
 /** The dependencies installed in the checkout the sandbox holds, or the refusal in the installer's own words. */
 const installDependencies = Effect.fn("web/installCheckoutDependencies")(function* (
@@ -287,29 +263,28 @@ export const lockfileMoved = (sandbox: RepositorySandbox, since: string) =>
 /**
  * The workspace's repository's base snapshot filled, where a launch on the
  * image given wants one: whatever stale sandbox stands under the name
- * deleted where it is still the one read, the sandbox created from the image
- * under the name, the default branch cloned whole into it through the token
- * at the firewall for the clone alone, its dependencies installed, the key
- * tagged, and the snapshot taken, which stops it. A base that reads ready is
- * filled again only where its snapshot is the one `replacing` names: gone
- * under a launch, or with a lockfile its agent's fast-forward moved. Its
- * span records where the base stood and why it was filled. A name
- * another launch took first is that launch's fill, and this one does
- * nothing. A fill that failed or outlasted `FILL_TIMEOUT` deletes its
- * sandbox. `open` is the sandbox as the clone reaches it, over the caller's
- * runner.
+ * deleted where it is still the one read, then the snapshot built
+ * (`buildSnapshot`) from the image under the name: the default branch
+ * cloned whole into it through the token at the firewall for the clone
+ * alone, its dependencies installed, and the key tagged before the snapshot
+ * is taken. A base that reads ready is filled again only where its snapshot
+ * is the one `replacing` names: gone under a launch, or with a lockfile its
+ * agent's fast-forward moved. Its span records where the base stood and why
+ * it was filled. A name another launch took first is that launch's fill,
+ * and this one does nothing. `open` is the sandbox as the clone reaches it,
+ * over the caller's runner.
  */
 export const fillBaseSnapshot = Effect.fn("web/fillBaseSnapshot")(function* (
-  api: VercelSandboxApi,
   of: BaseSnapshotOf,
   image: BaseImage,
   credential: BaseSnapshotCredential,
-  open: (sandbox: { readonly name: string; readonly running: string }) => RepositorySandbox,
+  open: (sandbox: SandboxRunning) => RepositorySandbox,
   replacing?: BaseReplacing,
 ) {
+  const sandboxes = yield* Sandbox;
   const name = baseSnapshotName(of);
   const key = baseKey(of, image.base);
-  const found = yield* api.getNamed(name);
+  const found = yield* sandboxes.get(name);
   const read = readOf(found, key, yield* Clock.currentTimeMillis);
   const replaced = read.state === BASE_STATE.READY && read.snapshotId === replacing?.snapshotId;
   yield* Effect.annotateCurrentSpan(
@@ -320,54 +295,26 @@ export const fillBaseSnapshot = Effect.fn("web/fillBaseSnapshot")(function* (
   );
   const stale = replaced ? found : read.state === BASE_STATE.WANTED ? read.stale : undefined;
   if (read.state !== BASE_STATE.WANTED && stale === undefined) return;
-  if (stale !== undefined && !(yield* deleteIfStill(api, stale))) return;
-  const created = yield* api
-    .create({
-      name,
-      from: { image: image.reference },
-      tags: {},
-      timeoutMs: Duration.toMillis(BASE_SNAPSHOT.FILL_TIMEOUT),
-      vcpus: CODER.SANDBOX_VCPUS,
-      keepLastSnapshots: {
-        count: 1,
-        expiration: Duration.toMillis(BASE_SNAPSHOT.LAPSE),
-        deleteEvicted: true,
-      },
-      env: {},
-    })
-    .pipe(
-      Effect.map(Option.some),
-      // Note that a name another launch took first is that launch's fill, which this one leaves be.
-      Effect.catchIf(
-        (failure) => failure.status === CONFLICT_STATUS,
-        () => Effect.succeed(Option.none<OpenedSandbox>()),
-      ),
-    );
-  if (Option.isNone(created)) return;
-  const running = created.value.currentSessionId;
-  yield* Effect.gen(function* () {
-    const sandbox = open({ name, running });
-    yield* cloneRepository(
-      sandbox,
-      {
-        fullName: of.fullName,
-        defaultBranch: of.defaultBranch,
-        recordedAs: snapshotRecordOf(of.fullName),
-      },
-      credential.token,
-      { access: credential.access },
-    );
-    yield* installDependencies(sandbox);
-    // The key goes up before the snapshot, so the snapshot it leaves is known for a whole checkout.
-    yield* api.updateTags(name, { [BASE_TAG.KEY]: key });
-    yield* (yield* api.session({ name, sessionId: running })).snapshot(BASE_SNAPSHOT.LAPSE);
-    yield* Effect.logInfo(`the base snapshot ${name} is filled`);
-  }).pipe(
-    Effect.timeoutOrElse({
-      duration: BASE_SNAPSHOT.FILL_TIMEOUT,
-      orElse: () => Effect.fail(new SandboxUnavailable({ detail: "the fill timed out" })),
-    }),
-    // Only this fill's own sandbox goes, so a fill that failed after another replaced it leaves that one be.
-    Effect.tapError(() => Effect.ignore(deleteIfStill(api, created.value))),
+  if (stale !== undefined && !(yield* deletedIfStill(stale))) return;
+  const built = yield* buildSnapshot(
+    { name, image: image.reference, vcpus: CODER.SANDBOX_VCPUS, lapse: BASE_SNAPSHOT.LAPSE },
+    (running) =>
+      Effect.gen(function* () {
+        const sandbox = open(running);
+        yield* cloneRepository(
+          sandbox,
+          {
+            fullName: of.fullName,
+            defaultBranch: of.defaultBranch,
+            recordedAs: snapshotRecordOf(of.fullName),
+          },
+          credential.token,
+          { access: credential.access },
+        );
+        yield* installDependencies(sandbox);
+        // The key goes up before the snapshot, so the snapshot it leaves is known for a whole checkout.
+        yield* sandboxes.updateTags(name, { [BASE_TAG.KEY]: key });
+      }),
   );
+  if (built._tag === "Some") yield* Effect.logInfo(`the base snapshot ${name} is filled`);
 });

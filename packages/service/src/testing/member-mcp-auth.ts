@@ -24,6 +24,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { Database } from "@repo/database/core/query";
 import { oauthClient, oauthClientResource, oauthResource } from "@repo/database/schemas/auth";
 import { openMigratedPglite, sqlClientOverPglite } from "@repo/database/testing";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/pglite";
@@ -210,6 +211,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
     const auth = memberMcpTestAuth(client, options.fetchClientMetadataResource);
     const harness = recordingHarness();
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       Layer.succeedContext(yield* Layer.build(sqlClientOverPglite(client))),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       options.github ?? NO_GITHUB,

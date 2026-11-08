@@ -47,7 +47,7 @@ import {
   TERMINAL_RELAY_FRAME,
   terminalRelayResizeSchema,
 } from "@repo/features/terminal-wire";
-import type { InteractiveShell, SandboxUnavailable } from "@repo/sandbox";
+import type { InteractiveShell, SandboxError } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -127,7 +127,7 @@ export interface RelayDependencies {
   /** Opens the PTY's socket for the connection's scope. */
   readonly connect: (
     shell: InteractiveShell,
-  ) => Effect.Effect<RelaySocket, SandboxUnavailable, Scope.Scope>;
+  ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
   readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
   /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
   readonly keepAlive: (sessionId: string) => Effect.Effect<void>;

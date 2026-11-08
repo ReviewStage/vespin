@@ -19,7 +19,7 @@
  * which clears the row's copy. `writeLine`, `writeFiles`, and `kill` queue a
  * message, files, or stop line, files in as many lines as their size takes
  * (`DEVICE_AGENT_BOUNDS.MAX_FILES_LINE_BYTES`); a runner whose launch line
- * its Mac settled has ended, and a write to it answers `NOT_FOUND_STATUS`,
+ * its Mac settled has ended, and a write to it answers `SandboxGone`,
  * so a message relaunches it. `runnerExit` reads the exit code the Mac settled the
  * launch line with.
  *
@@ -95,8 +95,9 @@ import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
   COMMAND_GONE,
   type CommandExit,
-  NOT_FOUND_STATUS,
+  type SandboxError,
   type SandboxFile,
+  SandboxGone,
   SandboxUnavailable,
 } from "@repo/sandbox";
 import {
@@ -148,7 +149,7 @@ export const MAC_MACHINE = {
  * reads GitHub too, for who the agent's commits are by.
  */
 export interface DeviceMachineService extends AgentMachineService {
-  readonly owns: (session: string) => Effect.Effect<boolean, SandboxUnavailable>;
+  readonly owns: (session: string) => Effect.Effect<boolean, SandboxError>;
   readonly open: <A, E, R, B, EB, RB>(
     ask: MachineOpen<B, EB, RB>,
     use: (opened: OpenedPlace, beside: B) => Effect.Effect<A, E, R>,
@@ -158,7 +159,7 @@ export interface DeviceMachineService extends AgentMachineService {
     launch: RunnerLaunch<A, E, R, EL, RL>,
   ) => Effect.Effect<
     { readonly handle: RunnerHandle; readonly ready: A },
-    E | EL | SandboxUnavailable | { readonly _tag: string },
+    E | EL | SandboxError | { readonly _tag: string },
     R | RL | CheckoutServices
   >;
 }
@@ -593,7 +594,7 @@ function deviceMachineOver(
       Effect.gen(function* () {
         const pin = yield* pinOfPlace(handle);
         if (yield* runnerEnded(pin, handle)) {
-          return yield* new SandboxUnavailable({ status: NOT_FOUND_STATUS });
+          return yield* new SandboxGone({});
         }
         yield* refuseAway(pin);
         yield* queued(pin, stdinLine(text));

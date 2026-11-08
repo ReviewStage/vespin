@@ -39,15 +39,14 @@ import {
   type TerminalsAnswer,
 } from "@repo/features/terminal-wire";
 import {
-  deploymentOidcToken,
-  IMAGE_NOT_READY,
   type InteractiveShell,
   type ListedSandbox,
   SANDBOX_STATUS,
-  type SandboxSessionApi,
+  Sandbox,
+  type SandboxError,
+  type SandboxRunning,
+  type SandboxService,
   SandboxUnavailable,
-  type VercelSandboxApi,
-  vercelSandboxApi,
 } from "@repo/sandbox";
 import { Context, Effect, Layer, Result } from "effect";
 import { agentSandboxName, openAgentSandboxPromptly, SESSION_TAG } from "../agent-sandbox-open.js";
@@ -69,15 +68,12 @@ import {
   terminalsOf,
 } from "./tmux.js";
 
-/** Vercel's sandbox states, read as the tab reads them. */
-const STATE_OF_STATUS = new Map<string, SandboxState>([
+/** A sandbox's statuses, read as the tab reads them; one the provider named none of reads as stopped. */
+const STATE_OF_STATUS = new Map<string | undefined, SandboxState>([
   [SANDBOX_STATUS.RUNNING, SANDBOX_STATE.RUNNING],
-  [SANDBOX_STATUS.PENDING, SANDBOX_STATE.STARTING],
+  [SANDBOX_STATUS.STARTING, SANDBOX_STATE.STARTING],
   [SANDBOX_STATUS.STOPPING, SANDBOX_STATE.STOPPED],
-  [SANDBOX_STATUS.SNAPSHOTTING, SANDBOX_STATE.STOPPED],
   [SANDBOX_STATUS.STOPPED, SANDBOX_STATE.STOPPED],
-  ["failed", SANDBOX_STATE.STOPPED],
-  ["aborted", SANDBOX_STATE.STOPPED],
 ]);
 
 /** Why a shell could not be had: the sandbox is not running, as it stands, or the shell named is not there. */
@@ -90,7 +86,7 @@ export type ShellRefusal =
   | { readonly kind: typeof SHELL_REFUSAL.NOT_RUNNING; readonly sandbox: SandboxState }
   | { readonly kind: typeof SHELL_REFUSAL.NOT_FOUND };
 
-type ShellEffect<A> = Effect.Effect<Result.Result<A, ShellRefusal>, SandboxUnavailable>;
+type ShellEffect<A> = Effect.Effect<Result.Result<A, ShellRefusal>, SandboxError>;
 
 /** What an attach finds: a running sandbox's PTY, minted for one connection, with the sandbox's name and its session, where the sandbox stands instead, or no such shell in it. */
 type SandboxAttach =
@@ -110,22 +106,20 @@ export type SandboxOpen =
 
 export interface AgentSandboxService {
   /** The agent's shells and where its sandbox stands; none while it is not running. */
-  readonly terminals: (sessionId: string) => Effect.Effect<TerminalsAnswer, SandboxUnavailable>;
+  readonly terminals: (sessionId: string) => Effect.Effect<TerminalsAnswer, SandboxError>;
   /** Whether the agent's sandbox is running, and the ports a server listens on in it; none while it is not running, which a read never changes. */
-  readonly listeningPorts: (
-    sessionId: string,
-  ) => Effect.Effect<ListeningPortsAnswer, SandboxUnavailable>;
+  readonly listeningPorts: (sessionId: string) => Effect.Effect<ListeningPortsAnswer, SandboxError>;
   /** The port shared by a public link from the agent's running sandbox, answering the link; none where it is not running, which a share never changes. */
   readonly share: (
     sessionId: string,
     port: number,
-  ) => Effect.Effect<string | undefined, SandboxUnavailable>;
+  ) => Effect.Effect<string | undefined, SandboxError>;
   /** The agent's shared port's link closed; a sandbox never opened has none. */
-  readonly unshare: (sessionId: string) => Effect.Effect<void, SandboxUnavailable>;
+  readonly unshare: (sessionId: string) => Effect.Effect<void, SandboxError>;
   /** The port the agent's running sandbox shares now and its link; none while it is not running. */
   readonly shared: (
     sessionId: string,
-  ) => Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxUnavailable>;
+  ) => Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxError>;
   /** A new shell in the agent's running sandbox, under the id given, named where the developer named it. */
   readonly start: (
     sessionId: string,
@@ -137,14 +131,14 @@ export interface AgentSandboxService {
   /** A shell ended, with whatever it ran. */
   readonly kill: (sessionId: string, terminalId: string) => ShellEffect<void>;
   /** The agent's sandbox opened again, as its next turn opens it, answering where it stands after; one never opened stays starting, as does one made again on an image still being prepared, opened after the answer. */
-  readonly resume: (sessionId: string) => Effect.Effect<SandboxState, SandboxUnavailable>;
+  readonly resume: (sessionId: string) => Effect.Effect<SandboxState, SandboxError>;
   /** A connection to the running sandbox's PTY, or where the sandbox stands; a stopped sandbox is never woken here. */
   readonly attach: (
     sessionId: string,
     terminalId: string,
-  ) => Effect.Effect<SandboxAttach, SandboxUnavailable>;
+  ) => Effect.Effect<SandboxAttach, SandboxError>;
   /** A PTY minted on the running sandbox for a command of the caller's own, or where the sandbox stands; a stopped sandbox is never woken here. */
-  readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxUnavailable>;
+  readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxError>;
   /**
    * A fresh credential set at the running sandbox session's firewall, in the
    * shape the agent's own session sets it, so the shell reaches GitHub as
@@ -154,7 +148,7 @@ export interface AgentSandboxService {
   readonly setCredential: (
     session: FirewallSession,
     credential: RepositoryCredential,
-  ) => Effect.Effect<void, SandboxUnavailable>;
+  ) => Effect.Effect<void, SandboxError>;
 }
 
 export class AgentSandbox extends Context.Service<AgentSandbox, AgentSandboxService>()(
@@ -164,39 +158,36 @@ export class AgentSandbox extends Context.Service<AgentSandbox, AgentSandboxServ
 /** Where a listed sandbox stands; none listed is one the agent has not opened yet. */
 function stateOf(sandbox: ListedSandbox | undefined): SandboxState {
   if (sandbox === undefined) return SANDBOX_STATE.STARTING;
-  return STATE_OF_STATUS.get(sandbox.status ?? "") ?? SANDBOX_STATE.STOPPED;
+  return STATE_OF_STATUS.get(sandbox.status) ?? SANDBOX_STATE.STOPPED;
 }
 
-/** The service over the calls `@repo/sandbox` makes, the store its firewall's launch is read from, and the agents' image a sandbox is made again from. */
+/** The service over `Sandbox`, the store its firewall's launch is read from, and the agents' image a sandbox is made again from. */
 function agentSandboxOver(
-  api: VercelSandboxApi,
+  api: SandboxService,
   context: Context.Context<DatabaseServices>,
   image: AgentImageService,
 ): AgentSandboxService {
   const firewall = sandboxFirewall(api);
   /**
-   * The session's sandbox, where it stands, and while it is up the running
-   * session a command goes to, held for the operation's every call.
+   * The session's sandbox, where it stands, and while it is up the run a
+   * command goes to, fenced to it for the operation's every call.
    */
   const standing = (sessionId: string) =>
     Effect.gen(function* () {
       const [sandbox] = yield* api.listTagged(SESSION_TAG, sessionId);
       const state = stateOf(sandbox);
-      const sandboxSessionId =
-        state === SANDBOX_STATE.RUNNING ? sandbox?.currentSessionId : undefined;
-      const running =
+      const sandboxSessionId = state === SANDBOX_STATE.RUNNING ? sandbox?.running : undefined;
+      const running: SandboxRunning | undefined =
         sandbox === undefined || sandboxSessionId === undefined
           ? undefined
-          : yield* api.session({ name: sandbox.name, sessionId: sandboxSessionId });
+          : { name: sandbox.name, running: sandboxSessionId };
       return { sandbox, state, sandboxSessionId, running };
     });
 
   /** A command run in the running sandbox; a sandbox not running is refused as it stands. */
   const inRunning = <A>(
     sessionId: string,
-    then: (
-      running: SandboxSessionApi,
-    ) => Effect.Effect<Result.Result<A, ShellRefusal>, SandboxUnavailable>,
+    then: (running: SandboxRunning) => Effect.Effect<Result.Result<A, ShellRefusal>, SandboxError>,
   ): ShellEffect<A> =>
     Effect.flatMap(standing(sessionId), ({ state, running }) =>
       running === undefined
@@ -207,7 +198,7 @@ function agentSandboxOver(
   /** A command that names one shell: its nonzero exit is a shell that is not there. */
   const onShell = (sessionId: string, ask: ReturnType<typeof renameTerminal>): ShellEffect<void> =>
     inRunning(sessionId, (running) =>
-      Effect.map(running.run(ask), (run) =>
+      Effect.map(api.run(running, ask), (run) =>
         run.exitCode === 0
           ? Result.succeed(undefined)
           : Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND }),
@@ -219,7 +210,7 @@ function agentSandboxOver(
       Effect.gen(function* () {
         const { state, running } = yield* standing(sessionId);
         if (running === undefined) return { sandbox: state, terminals: [] };
-        const listed = terminalsOf(yield* running.run(listTerminals()));
+        const listed = terminalsOf(yield* api.run(running, listTerminals()));
         // A list tmux could not give is an outage, never a sandbox with no shells.
         if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
         return { sandbox: state, terminals: listed };
@@ -228,7 +219,7 @@ function agentSandboxOver(
       Effect.gen(function* () {
         const { running } = yield* standing(sessionId);
         if (running === undefined) return { running: false, ports: [] };
-        const ports = listeningPortsOf(yield* running.run(readSocketTables()));
+        const ports = listeningPortsOf(yield* api.run(running, readSocketTables()));
         // Tables the kernel could not be read for are an outage, never a sandbox with no servers.
         if (ports === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
         return { running: true, ports };
@@ -253,10 +244,10 @@ function agentSandboxOver(
     start: (sessionId, terminalId, title) =>
       inRunning(sessionId, (running) =>
         Effect.gen(function* () {
-          const started = yield* running.run(startTerminal(terminalId, title));
+          const started = yield* api.run(running, startTerminal(terminalId, title));
           // A shell tmux could not start, or could not list once started, is an outage: the id is the service's own, so it names nothing missing.
           if (started.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
-          const listed = terminalsOf(yield* running.run(listTerminals()));
+          const listed = terminalsOf(yield* api.run(running, listTerminals()));
           if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
           const shell = listed.find((terminal) => terminal.id === terminalId);
           return shell === undefined
@@ -276,14 +267,14 @@ function agentSandboxOver(
           };
         }
         // A shell that is not there was ended elsewhere, or never started: no PTY is minted for it.
-        const held = yield* running.run(holdsTerminal(terminalId));
+        const held = yield* api.run(running, holdsTerminal(terminalId));
         if (held.exitCode === TMUX_EXIT.NO_SESSION) {
           return { state: SANDBOX_STATE.RUNNING, gone: true } as const;
         }
         // A tmux that could not be started or asked is an outage the tab may retry, never a shell gone.
         if (held.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
-        // The running session's own PTY, never the sandbox's: a mint on the sandbox would resume it.
-        const shell = yield* running.openInteractive();
+        // The run's own PTY, which never resumes the sandbox.
+        const shell = yield* api.openInteractive(running);
         return { state: SANDBOX_STATE.RUNNING, sandboxName: sandbox.name, sandboxSessionId, shell };
       }),
     open: (sessionId) =>
@@ -295,8 +286,8 @@ function agentSandboxOver(
               state === SANDBOX_STATE.STARTING ? SANDBOX_STATE.STARTING : SANDBOX_STATE.STOPPED,
           };
         }
-        // The running session's own PTY, never the sandbox's: a mint on the sandbox would resume it.
-        const shell = yield* running.openInteractive();
+        // The run's own PTY, which never resumes the sandbox.
+        const shell = yield* api.openInteractive(running);
         return { state: SANDBOX_STATE.RUNNING, shell };
       }),
     setCredential: (session, credential) =>
@@ -309,28 +300,29 @@ function agentSandboxOver(
           return stateOf(yield* api.resume(sandbox.name));
         }
         // A sandbox made again on an image still being prepared is opened after the answer, which says it is starting.
-        const opened = yield* openAgentSandboxPromptly(api, {
+        const opened = yield* openAgentSandboxPromptly({
           sessionId,
           tags: { ...sandbox.tags },
           vcpus: sandbox.vcpus,
         }).pipe(
           Effect.provideService(AgentImage, image),
-          Effect.catchIf(
-            (failure) => failure.code === IMAGE_NOT_READY,
-            () => Effect.succeed(undefined),
-          ),
+          Effect.provideService(Sandbox, api),
+          Effect.catchTag("ImageNotReady", () => Effect.succeed(undefined)),
         );
         return opened === undefined ? SANDBOX_STATE.STARTING : stateOf(opened.sandbox);
       }),
   };
 }
 
-/** The service as the deployment runs it, on the function's own OIDC token and the agents' image its build names. */
-export const agentSandboxLayer: Layer.Layer<AgentSandbox, never, DatabaseServices | AgentImage> =
-  Layer.effect(
-    AgentSandbox,
-    Effect.gen(function* () {
-      const api = yield* vercelSandboxApi(deploymentOidcToken);
-      return agentSandboxOver(api, yield* Effect.context<DatabaseServices>(), yield* AgentImage);
-    }),
-  );
+/** The service over the runtime's `Sandbox` and the agents' image its build names. */
+export const agentSandboxLayer: Layer.Layer<
+  AgentSandbox,
+  never,
+  DatabaseServices | AgentImage | Sandbox
+> = Layer.effect(
+  AgentSandbox,
+  Effect.gen(function* () {
+    const api = yield* Sandbox;
+    return agentSandboxOver(api, yield* Effect.context<DatabaseServices>(), yield* AgentImage);
+  }),
+);

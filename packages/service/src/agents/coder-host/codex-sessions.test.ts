@@ -45,8 +45,9 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
-import { deploymentOidcToken } from "@repo/sandbox";
-import { fixtureToken, sandboxFetchOver } from "@repo/sandbox/testing";
+import type { Sandbox } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -71,7 +72,7 @@ import {
 } from "../../testing/runner-sandbox-fake.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
-import { vercelMachineLayer } from "../machine/vercel-machine.js";
+import { sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import {
   PLAN_REFUSAL,
   SESSION_CANCEL_OUTCOME,
@@ -83,6 +84,9 @@ import { AgentImage } from "./agent-image.js";
 import { type CodexSessionsOptions, codexSessions } from "./codex-sessions.js";
 import { RUNNER_ENDED, runnerEnded } from "./runner-sessions.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A coding agent's sessions on Codex, against a fake of Vercel Sandbox's
@@ -158,9 +162,8 @@ const NO_KEYS: HostedEnvironmentValues = {
 };
 
 /** The agent's machine over the fake Vercel the client given answers as, its checkout run on this test's own runner. */
-function machineOver<E, R>(http: Layer.Layer<HttpClient.HttpClient, E, R>) {
-  return vercelMachineLayer({
-    readToken: deploymentOidcToken,
+function machineOver<E, R>(http: Layer.Layer<HttpClient.HttpClient | Sandbox, E, R>) {
+  return sandboxMachineLayer({
     run: (effect) => Effect.runPromise(effect),
   }).pipe(Layer.provide(http));
 }
@@ -170,13 +173,13 @@ function services(
   api: ReturnType<typeof runnerSandboxApi>,
   openai: ReturnType<typeof openAi> = openAi(),
 ) {
-  const http = Layer.merge(
+  const http = Layer.provideMerge(
+    vercelSandboxOver(api.respond),
     fakeHttpClientLayer((url, init) =>
       new URL(url).origin === CHATGPT_OAUTH.ISSUER
         ? openai.respond(url, init)
         : api.respond(url, init),
     ),
-    sandboxFetchOver(api.respond),
   );
   return Layer.mergeAll(
     http,
@@ -321,7 +324,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
+it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
   it.effect(
     "a local agent's launch on its Mac runs the Codex the Mac checked in its folder, sealed in its line with no token in it, on the plan naming the token route",
     () =>
@@ -359,7 +362,6 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           );
         const http = fakeHttpClientLayer(() => assert.fail("a local launch reaches no network"));
         const machines = agentMachinesLayer({
-          readToken: deploymentOidcToken,
           run: (effect) => Effect.runPromise(effect),
         }).pipe(Layer.provide(http));
         /** The agent's launch, its line's row as stored and its secrets as the Mac's claim opens them. */
@@ -471,7 +473,6 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
             (started) => Option.getOrThrow(started).agent,
           );
         const machines = agentMachinesLayer({
-          readToken: deploymentOidcToken,
           run: (effect) => Effect.runPromise(effect),
         }).pipe(
           Layer.provide(

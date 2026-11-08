@@ -27,7 +27,7 @@ import {
  * A retire is a courtesy the delete does not wait on: a session that
  * cannot be reached or does not confirm is logged by its outcome and
  * status, and the delete goes on, since its sandbox's snapshots expire on
- * Vercel's own schedule all the same (`CODER.SANDBOX_SNAPSHOTS`). Only a
+ * their own lapse all the same (`@repo/sandbox`'s retention). Only a
  * coding agent's session is asked: a task's own session, from before every
  * turn was an agent's, ran on the retired runtime, which stands no more, and
  * its sandbox is left to expire.

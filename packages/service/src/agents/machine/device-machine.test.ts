@@ -46,6 +46,7 @@ import {
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { SandboxUnavailable } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect";
@@ -145,7 +146,10 @@ const untilAsked = (userId: string, deviceId: string) =>
     return Option.getOrThrow(Option.fromNullishOr(request));
   });
 
-it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_GITHUB))(
+/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
+const NO_REACH = Layer.merge(NO_GITHUB, memorySandbox().layer);
+
+it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_REACH))(
   "a local agent's machine",
   (it) => {
     it.effect(

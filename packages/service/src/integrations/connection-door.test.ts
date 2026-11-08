@@ -14,6 +14,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { isRecord, type WireRecord } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
@@ -61,6 +62,9 @@ import {
 import { INTEGRATION_GRANT_HOLDER, integrationUnavailable } from "./integration-token.js";
 import { storeTools } from "./integration-tool-store.js";
 import { INTEGRATION } from "./integrations.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A native agent's integration servers, listed and called through their
@@ -116,6 +120,7 @@ function doorServices(bearer: string, heard: Heard, logged: string[]) {
 const postEvents = (bearer: string, events: readonly RunnerEvent[]) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -197,7 +202,7 @@ function firstText(result: Result.Result<WireRecord, unknown>): unknown {
   return Array.isArray(content) && isRecord(content[0]) ? content[0].text : undefined;
 }
 
-it.layer(getTestDB())("the integrations' door", (it) => {
+it.layer(SUITE)("the integrations' door", (it) => {
   it.effect(
     "a native agent is handed a server for each integration offered it, but one switched off",
     () =>

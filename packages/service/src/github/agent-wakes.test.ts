@@ -29,6 +29,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import {
   type GitHubLineMetadata,
   TURN_ORIGIN,
@@ -37,7 +38,7 @@ import {
   type WireBoundaryInput,
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { test } from "vitest";
 import {
   type AgentSessions,
@@ -62,6 +63,9 @@ import {
   checksCompletedWakeOf,
   wakeAgents,
 } from "./agent-wakes.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * What happens on a coding agent's pull request after its turn ends, told
@@ -584,7 +588,7 @@ test("a person's review reaches an agent at work or not, Vespin's App's only an 
   );
 });
 
-it.layer(getTestDB())("a delivery told to the agents on its pull request", (it) => {
+it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
   it.effect(
     "a review on the branch of an agent's pull request in a repository it works in beside its own, and a comment on that pull request by its number, are told to the agent",
     () =>

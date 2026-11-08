@@ -22,6 +22,7 @@ import {
   agentQueueAnswerSchema,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import type { WireBoundaryInput } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { noNetwork } from "@repo/wire/testing";
@@ -62,6 +63,9 @@ import { canceledTurn } from "./coder-host/stop.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { SESSION_SEND_OUTCOME } from "./sessions/agent-sessions.js";
 
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+
 /**
  * An agent's queue over the agents routes: a message queued while a turn
  * runs waits for the turn's end and opens the next turn, one at a time; a
@@ -73,7 +77,7 @@ import { SESSION_SEND_OUTCOME } from "./sessions/agent-sessions.js";
  * and words throughout.
  */
 
-it.layer(getTestDB())("an agent's queue", (it) => {
+it.layer(SUITE)("an agent's queue", (it) => {
   /** Where a change to an agent's queue lands. */
   const AGENT_QUEUE = "/api/agents/queue";
   /** Where an open of the agent, its own page, lands. */
@@ -899,7 +903,7 @@ it.layer(getTestDB())("an agent's queue", (it) => {
             at: 0,
           }),
           queueAtTurnEnd(sessionsFor, stored).pipe(
-            Effect.provide(Layer.mergeAll(github.layer, noNetwork)),
+            Effect.provide(Layer.mergeAll(github.layer, noNetwork, memorySandbox().layer)),
           ),
         ).pipe(Effect.provideContext(database), Effect.orDie);
 

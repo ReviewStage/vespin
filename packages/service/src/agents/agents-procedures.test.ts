@@ -17,7 +17,8 @@ import {
   type SandboxState,
   type TerminalSummary,
 } from "@repo/features/terminal-wire";
-import { SandboxUnavailable } from "@repo/sandbox";
+import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -34,6 +35,9 @@ import { agentPortsProcedures } from "./agent-ports-procedures.js";
 import { agentsProcedures } from "./agents-procedures.js";
 import { type SandboxStopReach, SessionSandboxes } from "./session-sandboxes.js";
 import { AgentSandbox, type AgentSandboxService, SHELL_REFUSAL } from "./terminal/agent-sandbox.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A coding agent's terminals as its tab reaches them, through the hosted
@@ -265,7 +269,7 @@ const resumeOf = (agentId: string) => `/api/agents/${agentId}/sandbox/resume`;
 const portsOf = (agentId: string) => `/api/agents/${agentId}/ports`;
 const terminalOf = (agentId: string, terminalId: string) => `${terminalsOf(agentId)}/${terminalId}`;
 
-it.layer(getTestDB())("the agent terminals procedures", (it) => {
+it.layer(SUITE)("the agent terminals procedures", (it) => {
   it.effect(
     "the agent's member lists its shells and ports, and another account reads the agent as none",
     () =>
@@ -407,7 +411,7 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agent } = yield* openAgent;
-        const unanswered = new SandboxUnavailable({ status: 400 });
+        const unanswered = new SandboxUnavailable({});
         const sandbox = Layer.succeed(AgentSandbox, {
           ...scriptedSandbox(SANDBOX_STATE.RUNNING).service,
           terminals: () => Effect.fail(unanswered),
@@ -434,9 +438,9 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agent } = yield* openAgent;
-        const gone = new SandboxUnavailable({ status: 410, code: "snapshot_not_found" });
-        // Vercel answers 410 for a call to a sandbox that stopped under it too, which a resume mends.
-        const stopped = new SandboxUnavailable({ status: 410, code: "sandbox_stopped" });
+        const gone = new SnapshotGone({});
+        // A sandbox that stopped under a call answers unavailable, which a resume mends.
+        const stopped = new SandboxUnavailable({});
         const sandbox = Layer.succeed(AgentSandbox, {
           ...scriptedSandbox(SANDBOX_STATE.STOPPED).service,
           resume: () => Effect.fail(gone),
@@ -646,7 +650,9 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
           refused(409, HOSTED_API_ERROR.AGENT_RETIRED),
         );
         assert.deepEqual(
-          yield* call.bytes(terminalOf(agent.id, "no-uuid"), "Bearer owner", { method: "DELETE" }),
+          yield* call.bytes(terminalOf(agent.id, "no-uuid"), "Bearer owner", {
+            method: "DELETE",
+          }),
           refused(404, HOSTED_API_ERROR.NOT_FOUND),
         );
         assert.deepEqual(

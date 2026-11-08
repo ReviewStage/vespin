@@ -32,7 +32,7 @@
 
 import { TUNNEL_CLOSE, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { type InteractiveShell, ptyLinesOf, type SandboxUnavailable } from "@repo/sandbox";
+import { type InteractiveShell, ptyLinesOf, type SandboxError } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   Clock,
@@ -96,11 +96,11 @@ export interface TunnelDependencies {
     agentId: string,
   ) => Effect.Effect<Option.Option<TunnelAgent>, unknown>;
   /** A PTY minted on the running sandbox the session is tagged with, or where it stands; never a resume. */
-  readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxUnavailable>;
+  readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxError>;
   /** Opens the PTY's socket for the connection's scope. */
   readonly connect: (
     shell: InteractiveShell,
-  ) => Effect.Effect<RelaySocket, SandboxUnavailable, Scope.Scope>;
+  ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
   readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
   /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
   readonly keepAlive: (sessionId: string) => Effect.Effect<void>;

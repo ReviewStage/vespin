@@ -32,6 +32,7 @@ import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/feature
 import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, Effect, Option, Result } from "effect";
@@ -396,7 +397,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 ): Effect.fn.Return<
   SteerWritten,
   HostedRefusal,
-  DatabaseServices | HttpClient.HttpClient | GitHubApp
+  DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   // An agent on its starter's own GitHub token, or on its starter's Mac, takes words from its starter alone.
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);

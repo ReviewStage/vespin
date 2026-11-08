@@ -7,22 +7,22 @@
  * the developer's own close does; within it, the sandbox's lease is held
  * from that visit and the sandbox kept alive, as a forwarded port's traffic
  * holds it. A stopped one is left until it runs again, when its old visit
- * closes it. What is logged of a failure is its status alone.
+ * closes it. What is logged of a failure is the sandbox's own words.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { agentConversation } from "@repo/database/models/agent-store";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import {
-  deploymentOidcToken,
+  isSandboxError,
   type ListedSandbox,
   SANDBOX_STATUS,
-  type VercelSandboxApi,
-  vercelSandboxApi,
+  Sandbox,
+  type SandboxService,
 } from "@repo/sandbox";
 import { Duration, Effect, Option, Result } from "effect";
 import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
-import { agentTag } from "../agents/machine/vercel-machine.js";
+import { agentTag } from "../agents/machine/sandbox-machine.js";
 import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
 import {
   PORT_SHARE,
@@ -35,12 +35,11 @@ import {
 const CONCURRENCY = 5;
 
 /** One shared sandbox swept: its share closed where it went idle, answering whether it was, or its sandbox held. */
-const sweptShare = (api: VercelSandboxApi, sandbox: ListedSandbox, now: Date) =>
+const sweptShare = (api: SandboxService, sandbox: ListedSandbox, now: Date) =>
   Effect.gen(function* () {
-    const sandboxSessionId = sandbox.currentSessionId;
-    if (sandbox.status !== SANDBOX_STATUS.RUNNING || sandboxSessionId === undefined) return false;
-    const running = yield* api.session({ name: sandbox.name, sessionId: sandboxSessionId });
-    const visitedAt = (yield* readSharedPort(running))?.visitedAt ?? 0;
+    if (sandbox.status !== SANDBOX_STATUS.RUNNING || sandbox.running === undefined) return false;
+    const running = { name: sandbox.name, running: sandbox.running };
+    const visitedAt = (yield* readSharedPort(api, running))?.visitedAt ?? 0;
     if (now.getTime() - visitedAt >= Duration.toMillis(PORT_SHARE.IDLE)) {
       yield* unsharePort(api, sandbox, running);
       return true;
@@ -54,7 +53,7 @@ const sweptShare = (api: VercelSandboxApi, sandbox: ListedSandbox, now: Date) =>
     if (sessionId !== undefined) yield* keepSessionSandboxAlive(sessionId);
     return false;
   }).pipe(
-    Effect.catchTag("SandboxUnavailable", (failure) =>
+    Effect.catchIf(isSandboxError, (failure) =>
       Effect.as(Effect.logWarning(`a shared port was not swept: ${failure.message}`), false),
     ),
   );
@@ -62,9 +61,9 @@ const sweptShare = (api: VercelSandboxApi, sandbox: ListedSandbox, now: Date) =>
 /** Closes the shared ports' links idle past the bound and holds the rest, answering how many closed. */
 export const sweepPortShares = /* @__PURE__ */ Effect.fn("web/sweepPortShares")(function* (
   now: Date,
-): Effect.fn.Return<number, StoreFailure, DatabaseServices> {
-  const api = yield* vercelSandboxApi(deploymentOidcToken);
-  const listed = yield* Effect.result(api.listCarrying(PORT_SHARE.TAG, PORT_SHARE.TAG_ON));
+): Effect.fn.Return<number, StoreFailure, DatabaseServices | Sandbox> {
+  const api = yield* Sandbox;
+  const listed = yield* Effect.result(api.listTagged(PORT_SHARE.TAG, PORT_SHARE.TAG_ON));
   if (Result.isFailure(listed)) {
     yield* Effect.logWarning(`the shared sandboxes were not listed: ${listed.failure.message}`);
     return 0;

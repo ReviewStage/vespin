@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { CDP_FAILURE, type CdpFailure } from "@repo/features/browser-cdp";
-import { SANDBOX_STATUS } from "@repo/sandbox";
+import { ImageNotReady, SANDBOX_STATUS, SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { Duration, Effect, Exit, Fiber, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { keptAfterResponse } from "../../http/after-response.js";
@@ -45,7 +45,11 @@ function browserOver(
   scenario: Partial<FakeSandboxScenario> = {},
   bridge: FakeBridge = FAKE_BRIDGE.READY,
 ) {
-  const sandbox = fakeSandboxApi({ status: "running", sessionId: SESSION, ...scenario });
+  const sandbox = fakeSandboxApi({
+    status: SANDBOX_STATUS.RUNNING,
+    sessionId: SESSION,
+    ...scenario,
+  });
   return {
     service: agentBrowserOver(sandbox.api, fakeBridgePty(peer, bridge), FAKE_IMAGE),
     ran: sandbox.ran,
@@ -75,7 +79,7 @@ it.effect("the browser is started once in the running sandbox and attached to af
 it.effect("a stopped sandbox is resumed and waited for, and its browser started afresh", () =>
   Effect.gen(function* () {
     const peer = yield* fakeCdpPeer();
-    const { service } = browserOver(peer, { status: "stopped", pendingResumes: 2 });
+    const { service } = browserOver(peer, { status: SANDBOX_STATUS.STOPPED, pendingResumes: 2 });
 
     const ensuring = yield* Effect.forkChild(service.ensure(SESSION));
     yield* TestClock.adjust(Duration.seconds(10));
@@ -246,41 +250,42 @@ it.effect("a browser that cannot be reached says why", () =>
     const reasons = yield* Effect.forEach(
       [
         browserOver(peer, { status: undefined }),
-        browserOver(peer, { unavailable: 503 }),
+        browserOver(peer, { unavailable: true }),
         browserOver(peer, { startExit: BROWSER_START_EXIT.NO_CHROMIUM }),
         browserOver(peer, { startExit: BROWSER_START_EXIT.NOT_STARTED }),
       ],
       ({ service }) =>
         Effect.map(Effect.exit(Effect.scoped(service.connect(SESSION))), (exit) => {
           const error = reasonOf(exit);
-          return error === undefined || error._tag === "None"
-            ? undefined
-            : { reason: error.value.reason, status: error.value.status };
+          return error === undefined || error._tag === "None" ? undefined : error.value.reason;
         }),
     );
 
     assert.deepEqual(reasons, [
-      { reason: BROWSER_UNREACHABLE.NOT_OPENED, status: undefined },
-      { reason: BROWSER_UNREACHABLE.SANDBOX_UNAVAILABLE, status: 503 },
-      { reason: BROWSER_UNREACHABLE.NO_CHROMIUM, status: undefined },
-      { reason: BROWSER_UNREACHABLE.NOT_STARTED, status: undefined },
+      BROWSER_UNREACHABLE.NOT_OPENED,
+      BROWSER_UNREACHABLE.SANDBOX_UNAVAILABLE,
+      BROWSER_UNREACHABLE.NO_CHROMIUM,
+      BROWSER_UNREACHABLE.NOT_STARTED,
     ]);
   }),
 );
 
 it.effect(
-  "a sandbox that never comes up, Vercel refusing every resume, and a bridge that never says it is ready are each given up on, saying why",
+  "a sandbox that never comes up, every resume refused, and a bridge that never says it is ready are each given up on, saying why",
   () =>
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
       const stuck = browserOver(peer, {
-        status: "stopped",
+        status: SANDBOX_STATUS.STOPPED,
         pendingResumes: Number.POSITIVE_INFINITY,
       });
       const silent = browserOver(peer, {}, FAKE_BRIDGE.SILENT);
       const refusing = browserOver(peer, {}, FAKE_BRIDGE.ERROR);
 
-      const refused = browserOver(peer, { status: "stopped", resumeUnavailable: 503 });
+      const refused = browserOver(peer, {
+        status: SANDBOX_STATUS.STOPPED,
+        resumeRefusal: new SandboxUnavailable({}),
+      });
 
       const resuming = yield* Effect.forkChild(Effect.flip(stuck.service.ensure(SESSION)));
       const outage = yield* Effect.forkChild(Effect.flip(refused.service.ensure(SESSION)));
@@ -295,7 +300,6 @@ it.effect(
       assert.equal((yield* Fiber.join(resuming)).reason, BROWSER_UNREACHABLE.NOT_RESUMED);
       const unavailable = yield* Fiber.join(outage);
       assert.equal(unavailable.reason, BROWSER_UNREACHABLE.SANDBOX_UNAVAILABLE);
-      assert.equal(unavailable.status, 503);
       assert.equal((yield* Fiber.join(bridging)).reason, BROWSER_UNREACHABLE.BRIDGE_FAILED);
       assert.equal((yield* Fiber.join(unbridged)).reason, BROWSER_UNREACHABLE.BRIDGE_FAILED);
     }),
@@ -305,9 +309,8 @@ it.effect("a resume whose snapshot is gone is given up on at once, saying so", (
   Effect.gen(function* () {
     const peer = yield* fakeCdpPeer();
     const { service } = browserOver(peer, {
-      status: "stopped",
-      resumeUnavailable: 410,
-      resumeCode: "snapshot_not_found",
+      status: SANDBOX_STATUS.STOPPED,
+      resumeRefusal: new SnapshotGone({}),
     });
 
     // Note that the clock never moves, so a resume tried again would never answer.
@@ -323,10 +326,9 @@ it.effect(
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
       const { service, sandbox } = browserOver(peer, {
-        status: "stopped",
+        status: SANDBOX_STATUS.STOPPED,
         named: true,
-        resumeUnavailable: 400,
-        resumeCode: "image_not_ready",
+        resumeRefusal: new ImageNotReady({}),
         resumeRefusals: 2,
       });
       const kept = keptAfterResponse();
@@ -354,7 +356,7 @@ it.effect(
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
       const sandbox = fakeSandboxApi({
-        status: "stopped",
+        status: SANDBOX_STATUS.STOPPED,
         sessionId: SESSION,
         named: true,
         snapshotGone: true,

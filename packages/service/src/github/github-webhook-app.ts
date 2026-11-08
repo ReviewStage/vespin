@@ -9,6 +9,7 @@ import {
   noteGitHubRepository,
   type RepositorySighting,
 } from "@repo/database/models/github-repositories";
+import type { Sandbox } from "@repo/sandbox";
 import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Clock, Effect, Layer, Redacted, Result, Schema } from "effect";
@@ -352,7 +353,11 @@ function revokedAuthorization(payload: UnparsedWireValue): number | undefined {
 /** What the agents on the target's branches published, read again on each owner's token; answers how many reads landed. */
 const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgain")(function* (
   target: DeliveryTarget,
-): Effect.fn.Return<number, HostedRefusal, DatabaseServices | HttpClient.HttpClient | GitHubApp> {
+): Effect.fn.Return<
+  number,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
+> {
   const agents = yield* hostedStoreOrUnavailable(
     listAgentsOnBranches(target.repository, target.branches, MAXIMUM_AGENTS_PER_DELIVERY),
   );
@@ -386,6 +391,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
     | DatabaseServices
     | HttpClient.HttpClient
     | GitHubApp
+    | Sandbox
   > {
     const request = yield* HttpServerRequest.HttpServerRequest;
     if (request.method !== HTTP_METHOD.POST) {
@@ -451,7 +457,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
 
 /** The group: the one delivery path, and the hosted vocabulary's own refusal for any other. */
 export function githubWebhookApp(): WebRoutes<
-  HostedEnvironment | DatabaseServices | HttpClient.HttpClient | GitHubApp
+  HostedEnvironment | DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, GITHUB_WEBHOOK_PATH, hostedRefusing(deliveryEndpoint())),

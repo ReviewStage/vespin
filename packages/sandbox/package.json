@@ -3,10 +3,12 @@
   "version": "0.24.0",
   "private": true,
   "type": "module",
-  "description": "Every call we make of Vercel Sandbox, through its SDK under the deployment's own OIDC token: sandboxes, their sessions and commands, their PTY, and the vocabulary callers speak them in",
+  "description": "Every call we make of a sandbox, through the one Sandbox service: its provider-neutral interface and vocabulary at the root, Vercel Sandbox's adapter under vercel/, and an in-memory implementation for tests",
   "exports": {
     ".": "./src/index.js",
-    "./testing": "./src/testing/index.js"
+    "./testing": "./src/testing/index.js",
+    "./vercel": "./src/vercel/index.js",
+    "./vercel/testing": "./src/vercel/testing/index.js"
   },
   "types": "./src/index.ts",
   "scripts": {

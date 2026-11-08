@@ -21,6 +21,7 @@ import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automat
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Result } from "effect";
@@ -51,6 +52,9 @@ import {
 } from "../sessions/agent-sessions.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * coder-start.test.ts -- an agent started in a workspace with no task, as an automation's run starts one, and one started on a task.
@@ -177,7 +181,7 @@ const openedLineTaken = (
     return { lines, heard: yield* heardFromAnotherAccount(target) };
   });
 
-it.layer(getTestDB())("an agent started in a workspace with no plan", (it) => {
+it.layer(SUITE)("an agent started in a workspace with no plan", (it) => {
   it.effect(
     "a Start opens one agent on no plan in the workspace, on the repository, handed the task, and a retry under its key opens nothing again",
     () =>
@@ -383,7 +387,7 @@ it.layer(getTestDB())("an agent started in a workspace with no plan", (it) => {
   );
 });
 
-it.layer(getTestDB())("an agent started on a task", (it) => {
+it.layer(SUITE)("an agent started on a task", (it) => {
   /** A Start on the task, handed the description, under a fresh key. */
   const taskAsk = (taskId: string): StartAsk => ({
     taskId,
@@ -571,7 +575,7 @@ const refusedStart = (owner: string, ask: StartAsk) =>
     return refused;
   });
 
-it.layer(getTestDB())("an agent started in several repositories", (it) => {
+it.layer(SUITE)("an agent started in several repositories", (it) => {
   it.effect(
     "a Start naming repositories beside its own keeps them after it, as GitHub spells them",
     () =>

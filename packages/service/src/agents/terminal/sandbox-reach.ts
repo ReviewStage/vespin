@@ -10,7 +10,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
-import { type SandboxUnavailable, snapshotGone } from "@repo/sandbox";
+import type { SandboxError } from "@repo/sandbox";
 import { Effect } from "effect";
 import {
   HOSTED_REFUSAL,
@@ -51,21 +51,21 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * A sandbox Vercel could not be asked about, as the upstream's refusal a
+ * A sandbox that could not be asked about, as the upstream's refusal a
  * caller may retry, apart from the store's own unavailable, so the tab can
- * say it was the agent's sandbox that did not answer: Vercel Sandbox's API,
- * or a command in a sandbox that API answered for. A sandbox whose snapshot
- * is gone is refused as that, since no retry resumes it. The log names the
- * status Vercel answered, where it answered one.
+ * say it was the agent's sandbox that did not answer: the sandbox's
+ * provider, or a command in a sandbox it answered for. A sandbox whose
+ * snapshot is gone is refused as that, since no retry resumes it. The log
+ * names the failure in the sandbox's own words.
  */
 export function sandboxOrUpstream<A, R>(
-  effect: Effect.Effect<A, SandboxUnavailable, R>,
+  effect: Effect.Effect<A, SandboxError, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
   return Effect.catch(effect, (failure) =>
     Effect.andThen(
       Effect.logWarning(`an agent's sandbox call failed: ${failure.message}`),
       Effect.fail(
-        snapshotGone(failure)
+        failure._tag === "SnapshotGone"
           ? HOSTED_REFUSAL.SANDBOX_SNAPSHOT_GONE
           : HOSTED_REFUSAL.UPSTREAM_ERROR,
       ),

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { noDatabase } from "@repo/database/testing/no-database";
-import { Effect, Exit, Redacted } from "effect";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { Effect, Exit, Layer, Redacted } from "effect";
 import { HOSTED_API_ERROR } from "../http/http.js";
 import { MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import {
@@ -68,8 +69,10 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
 
 /** The sweep over a client that refuses every statement — the fakes above stand in for every query. */
 function sweep(options: MaintenanceSweepOptions) {
-  return Effect.flatMap(Effect.provide(handleMaintenanceSweep(options), noDatabase), (response) =>
-    Effect.promise(async () => ({ status: response.status, body: await response.json() })),
+  return Effect.flatMap(
+    Effect.provide(handleMaintenanceSweep(options), Layer.merge(noDatabase, memorySandbox().layer)),
+    (response) =>
+      Effect.promise(async () => ({ status: response.status, body: await response.json() })),
   );
 }
 

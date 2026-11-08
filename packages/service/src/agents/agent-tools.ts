@@ -83,6 +83,7 @@ import {
   taskStatusSchema,
 } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
+import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { isTextUIPart } from "ai";
@@ -620,7 +621,12 @@ export interface AgentCall {
 export type AgentReadCall = Pick<AgentCall, "caller">;
 
 /** What a message or a start reaches: the store, GitHub through the App on the member's standing, the network to the agents' sessions, and the catalog a start's choice is checked against. */
-export type AgentToolServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | ModelCatalog;
+export type AgentToolServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | ModelCatalog
+  | Sandbox;
 
 const AGENT_ID = describeWire(
   wireUuidSchema,

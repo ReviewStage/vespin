@@ -35,6 +35,7 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   Cause,
@@ -233,19 +234,19 @@ export interface RunnerEventsOptions<R = never> {
    * transaction: the sandbox's own lifecycle (P08's `runnerEnded`), which
    * stops nothing for a launch since replaced. Nothing where left out.
    */
-  readonly ended?: (ended: RunnerEnded) => Effect.Effect<void, never, DatabaseServices>;
+  readonly ended?: (ended: RunnerEnded) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
    * Told once a batch that holds a launch's IDLE, and no END after it, has
    * landed, after its transaction: the device's warm runner retired at once
    * where its device waits to update (`sandboxAtRunnerIdle`). Nothing where
    * left out.
    */
-  readonly idled?: (idled: RunnerEnded) => Effect.Effect<void, never, DatabaseServices>;
+  readonly idled?: (idled: RunnerEnded) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
    * Told once a batch due a keep-alive has landed, after its transaction:
    * the run's sandbox kept alive (`sandboxKeptAlive`). Nothing where left out.
    */
-  readonly alive?: (alive: RunnerAlive) => Effect.Effect<void, never, DatabaseServices>;
+  readonly alive?: (alive: RunnerAlive) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
    * Told once a batch that started or ended a turn has landed, after its
    * transaction: the agent's title asked for where none stands
@@ -260,18 +261,18 @@ export interface RunnerEventsOptions<R = never> {
 /**
  * A run's sandbox kept alive as a batch of its runner's events lands
  * (`../session-sandboxes.ts`'s `keepSessionSandboxAlive`), which logs a
- * keep-alive Vercel did not confirm, since the next due batch tries again.
+ * keep-alive the sandbox did not confirm, since the next due batch tries again.
  */
-export function sandboxKeptAlive(alive: RunnerAlive): Effect.Effect<void> {
+export function sandboxKeptAlive(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
   const { sessionId } = alive;
   if (sessionId === undefined) return Effect.void;
-  return keepSessionSandboxAlive(sessionId).pipe(Effect.provide(FetchHttpClient.layer));
+  return keepSessionSandboxAlive(sessionId);
 }
 
 /**
  * A launch's end as the sandbox hears it (`../coder-host/runner-sessions.ts`'s
  * `runnerEnded`), once the ended runner's last post has its answer, so that
- * post never waits on the runner lease or on Vercel's stop, which holds its
+ * post never waits on the runner lease or on the sandbox's stop, which holds its
  * call until the sandbox's snapshot is taken: stopped, unless a developer's
  * Terminal holds it or a newer launch replaced this one, or a message the
  * launch never took waits, whose queued turn is then published again for a
@@ -281,7 +282,7 @@ export function sandboxKeptAlive(alive: RunnerAlive): Effect.Effect<void> {
  */
 export function sandboxAtRunnerEnd(
   ended: RunnerEnded,
-): Effect.Effect<void, never, DatabaseServices> {
+): Effect.Effect<void, never, DatabaseServices | Sandbox> {
   const { sessionId } = ended;
   if (sessionId === undefined) return Effect.void;
   return afterResponse(
@@ -332,7 +333,7 @@ const waitingRepublished = (ended: RunnerEnded) =>
  */
 export function sandboxAtRunnerIdle(
   idled: RunnerEnded,
-): Effect.Effect<void, never, DatabaseServices> {
+): Effect.Effect<void, never, DatabaseServices | Sandbox> {
   const { sessionId } = idled;
   if (sessionId === undefined) return Effect.void;
   return runnerIdled({ target: idled.target, sessionId, sequence: idled.sequence }).pipe(
@@ -724,7 +725,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   HostedRefusal,
-  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | R
+  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | Sandbox | R
 > {
   const { read, ended, idled, alive, title } = options;
   const incoming = yield* HttpServerRequest.HttpServerRequest;
@@ -857,7 +858,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 /** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. */
 export function runnerEventsApp<R = never>(
   options: RunnerEventsOptions<R> = {},
-): WebRoutes<DatabaseServices | R> {
+): WebRoutes<DatabaseServices | Sandbox | R> {
   const endpoint = runnerEventsEndpoint(options);
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_EVENTS_PATH, hostedRefusing(endpoint)),

@@ -32,6 +32,7 @@ import {
   TASK_BROWSER_TABS_READ,
 } from "@repo/features/browser-tabs-live";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { SANDBOX_STATUS } from "@repo/sandbox";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { eq } from "drizzle-orm";
@@ -689,7 +690,11 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
         const unanswered = Layer.succeed(
           AgentBrowser,
           agentBrowserOver(
-            fakeSandboxApi({ status: "running", sessionId: SESSION, unavailable: 503 }).api,
+            fakeSandboxApi({
+              status: SANDBOX_STATUS.RUNNING,
+              sessionId: SESSION,
+              unavailable: true,
+            }).api,
             fakeBridgePty(peer),
             FAKE_IMAGE,
           ),

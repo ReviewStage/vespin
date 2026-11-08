@@ -32,6 +32,7 @@ import {
   type automationChangeRequestSchema,
   type automationCreateRequestSchema,
 } from "@repo/features/automation-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Clock, DateTime, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { acceptedAgentChoice } from "../agents/coder-host/start.js";
@@ -328,7 +329,7 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   { readonly changes: AutomationChanges; readonly webhookSecret: string | undefined },
   HostedRefusal,
-  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient
+  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const now = yield* Clock.currentTimeMillis;
   // A webhook sent again is no change, since a webhook names nothing but its kind, so its secret
@@ -419,7 +420,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   AutomationWritten,
   HostedRefusal,
-  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient
+  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const now = yield* Clock.currentTimeMillis;
   const nextRunAt = yield* firstDue(made.trigger, now);
@@ -497,7 +498,7 @@ export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   AutomationWritten,
   HostedRefusal,
-  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient
+  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const { changes, webhookSecret } = yield* changesOf(userId, standing, asked);
   // Turning it on or off alone is the toggle, which more of the workspace may do than change it.
@@ -571,7 +572,7 @@ export const runAutomationNowAs = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   AutomationRanNow,
   HostedRefusal,
-  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient
+  DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const firedAt = yield* DateTime.nowAsDate;
   const recorded = yield* hostedStoreOrUnavailable(

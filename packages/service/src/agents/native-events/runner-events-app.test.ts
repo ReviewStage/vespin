@@ -38,6 +38,7 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
@@ -71,6 +72,9 @@ import {
   runnerEventsApp,
 } from "./runner-events-app.js";
 
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+
 /**
  * The events route, answered by its group the way a function answers it,
  * over a real dialect: a runner's batches of Claude Code's SDK messages,
@@ -98,6 +102,7 @@ const standingWith = (
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -340,7 +345,7 @@ function drawn(part: StoredUIMessage["parts"][number]): readonly WireValue[] {
   return fields;
 }
 
-it.layer(getTestDB())("the runner events route", (it) => {
+it.layer(SUITE)("the runner events route", (it) => {
   it.effect(
     "P00's workflow turn lands as one turn: the line it took, each call settled, the words, and its cost",
     () =>
@@ -1194,7 +1199,7 @@ function notification(method: string, params: WireRecord): WireRecord {
   return { method, params: { threadId: THREAD, turnId: "turn-1", ...params } };
 }
 
-it.layer(getTestDB())("the runner events route, on Codex", (it) => {
+it.layer(SUITE)("the runner events route, on Codex", (it) => {
   it.effect(
     "P16's recorded launches land as three turns: each line taken, each call settled, the words, and the meter",
     () =>
@@ -1791,7 +1796,11 @@ it.layer(getTestDB())("the runner events route, on Codex", (it) => {
                 rateLimits: {
                   limitId: null,
                   limitName: null,
-                  primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: resetsAt / 1000 },
+                  primary: {
+                    usedPercent: 100,
+                    windowDurationMins: 300,
+                    resetsAt: resetsAt / 1000,
+                  },
                   secondary: null,
                   rateLimitReachedType: "rate_limit_reached",
                 },
@@ -2241,7 +2250,7 @@ function scriptedTitleModel(title: string) {
   return { model, asked };
 }
 
-it.layer(getTestDB())("the runner events route, as it keeps an agent", (it) => {
+it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
   const top = { parent_tool_use_id: null, session_id: SESSION };
   const numbered = (messagesOfLaunch: readonly unknown[], from = 0) =>
     // SAFETY: each message is one the pinned SDK, app-server, or the runner emits, written in its JSON shape.
