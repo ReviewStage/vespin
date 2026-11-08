@@ -421,11 +421,12 @@ const afterRecorded = (
       { discard: true },
     );
     // A merge first seen may have finished the task's work; the task is asked once the row says merged.
-    const merged = ended.includes(PULL_REQUEST_STATE.MERGED);
+    // Note that the write that first keeps a merge says so too, since the finish reads its rows.
+    const merged = firstMerged > 0 || ended.includes(PULL_REQUEST_STATE.MERGED);
     if (merged && agent.taskId !== null) yield* settleTaskIfFinished(userId, agent.taskId);
     // Note that a pull request ending wakes no agent, so no settle of its turn would archive its run.
-    if (ended.some((each) => each !== undefined) && agent.automationRunId !== null)
-      yield* reconsiderRunArchive(agent.id);
+    const endedAny = merged || ended.some((each) => each !== undefined);
+    if (endedAny && agent.automationRunId !== null) yield* reconsiderRunArchive(agent.id);
   });
 
 /**
