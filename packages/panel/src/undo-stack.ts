@@ -103,6 +103,8 @@ interface UndoEntry {
   readonly words: string;
   readonly undo: () => Promise<UndoRun>;
   readonly redo?: () => Promise<UndoRun>;
+  /** What taking it back claims as it is pressed, before its run's turn comes, as a held write's hold. */
+  readonly claim?: () => void;
   /** What it is about, by which its caller withdraws it with its toast (`withdrawUndo`); none for an entry that stays until it is run or pushed out. */
   readonly subject?: string | undefined;
 }
@@ -204,6 +206,7 @@ function ran(entry: UndoEntry, way: UndoWay, keyed: boolean): Promise<UndoRan | 
   const line = lineNow();
   const go = entry[way];
   if (go === undefined || !line[way].includes(entry)) return Promise.resolve(undefined);
+  if (way === UNDO_WAY.UNDO) entry.claim?.();
   undoLine.setState(() => ({ ...line, [way]: line[way].filter((each) => each !== entry) }));
   const asked = generation;
   const run = turn.then(go).then((answered) => {
@@ -623,7 +626,7 @@ export function pressHeld<Doors, Change, Answer, Released>(
     write.letGo(doors, change);
   };
   heldHere.add(letGo);
-  // Note that the hold is claimed as the take-back is pressed, because its toast is gone, and lets the hold go, before the run's turn comes.
+  // Note that the hold is claimed as the take-back is pressed, by ⌘Z or its toast's Undo, because its toast may be gone, and let the hold go, before the run's turn comes.
   const claim = () => {
     heldHere.delete(letGo);
     taken = true;
@@ -631,10 +634,8 @@ export function pressHeld<Doors, Change, Answer, Released>(
   const answered = write.act(doors, change);
   const entry: UndoEntry = {
     words: write.words(change),
-    undo: () => {
-      claim();
-      return takeBack(change);
-    },
+    claim,
+    undo: () => takeBack(change),
   };
   const takeBack = (among: Change): Promise<UndoRun> =>
     write.undo(doors, among).then((released): UndoRun => {
@@ -653,10 +654,7 @@ export function pressHeld<Doors, Change, Answer, Released>(
     });
   const undo = undoable(entry);
   showToast({
-    ...undoToast(entry.words, () => {
-      if (lineNow().undo.includes(entry)) claim();
-      undo();
-    }),
+    ...undoToast(entry.words, undo),
     glyph: write.glyph,
     replayUnmasked: write.unmasked(change),
     onGone: letGo,
