@@ -14,14 +14,10 @@ import {
   hasWordsOrFiles,
 } from "./agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
+import { commitShaSchema } from "./link-grammar.js";
 import { linkLabels } from "./mention-link.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
-import {
-  CODE_PATH_MAX_CHARS,
-  codeLineSchema,
-  commitShaSchema,
-  workspaceIdSchema,
-} from "./task-wire.js";
+import { CODE_PATH_MAX_CHARS, codeLineSchema, workspaceIdSchema } from "./task-wire.js";
 import { boundedText, filledText } from "./text-schema.js";
 import { WEBM_TYPE } from "./video-signature.js";
 

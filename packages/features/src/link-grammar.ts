@@ -280,6 +280,17 @@ export const GITHUB_REPOSITORY_PATTERN =
   /^[A-Za-z0-9](?:-?[A-Za-z0-9])*\/(?!\.{1,2}$)[A-Za-z0-9_.-]+$/u;
 
 /**
+ * A commit as GitHub names it: its whole SHA-1 in lowercase hex, and nothing
+ * a branch, a tag, or a path could spell, so a read pinned to one asks
+ * GitHub for exactly that commit.
+ */
+export const commitShaSchema = EffectSchema.String.check(
+  EffectSchema.isMinLength(40),
+  EffectSchema.isMaxLength(40),
+  EffectSchema.isPattern(/^[0-9a-f]{40}$/u),
+);
+
+/**
  * A repository's full name as the wire takes it: trimmed, and held to GitHub's
  * own shape and bounds. Note that it stands here beside its pattern, below
  * the agent's wire, because the start request names repositories and

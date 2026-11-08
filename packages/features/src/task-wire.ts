@@ -16,6 +16,7 @@ import {
 } from "./agent-wire.js";
 import { DEVICE_KIND, DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
+import { commitShaSchema } from "./link-grammar.js";
 import { modelProviderSchema } from "./models-wire.js";
 import { pinPositionSchema } from "./pin-order.js";
 import { type ReadMark, readMarkSchema } from "./read-mark.js";
@@ -1164,17 +1165,6 @@ export const CODE_PATH_MAX_CHARS = 1_024;
 
 /** A line of a file, counted from one. */
 export const codeLineSchema = EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(1));
-
-/**
- * A commit as GitHub names it: its whole SHA-1 in lowercase hex, and nothing
- * a branch, a tag, or a path could spell, so a read pinned to one asks
- * GitHub for exactly that commit.
- */
-export const commitShaSchema = EffectSchema.String.check(
-  EffectSchema.isMinLength(40),
-  EffectSchema.isMaxLength(40),
-  EffectSchema.isPattern(/^[0-9a-f]{40}$/u),
-);
 
 /** Whether a reference names both of its lines or neither, in order and within the bound. */
 function codeRangeIsReadable(ref: { startLine?: number; endLine?: number }): boolean {

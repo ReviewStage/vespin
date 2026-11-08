@@ -6,10 +6,10 @@ import { EXCESS_KEYS, unparsedWire, valueFromJsonText } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Result, Schema, Stream } from "effect";
 
-/** The PTY server's exit frame: what it ran ended. */
-const PtyExitSchema = Schema.Struct({ type: Schema.Literal("exit"), code: Schema.Int });
+/** The PTY server's exit frame: what it ran ended, the one text frame it sends of its own. */
+export const ptyExitSchema = Schema.Struct({ type: Schema.Literal("exit"), code: Schema.Int });
 
-const readPtyExit = readEither(PtyExitSchema, { excess: EXCESS_KEYS.DROP });
+const readPtyExit = readEither(ptyExitSchema, { excess: EXCESS_KEYS.DROP });
 
 /** One frame of the PTY's socket: text as text, binary as binary. */
 export type PtyFrame = { readonly text: string } | { readonly bytes: Uint8Array };

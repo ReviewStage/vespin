@@ -13,7 +13,7 @@ import { Schema as EffectSchema, Result, SchemaTransformation } from "effect";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
-import { githubRepositoryFullNameSchema } from "./link-grammar.js";
+import { commitShaSchema, githubRepositoryFullNameSchema } from "./link-grammar.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -1645,8 +1645,6 @@ export const CHANGES_BOUNDS = {
  * and removes; and its patch, every hunk of a unified diff from the first
  * `@@` header on, or null with why where it carries none.
  */
-/** A commit as GitHub names it: forty hex digits. */
-const commitShaSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9a-f]{40}$/u));
 
 /**
  * One changed file as GitHub lists it: its path, where it moved from, what
