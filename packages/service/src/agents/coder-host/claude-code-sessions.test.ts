@@ -2877,8 +2877,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           after: 0,
           limit: 10,
         });
-        // The developer's words close each message, the turn's own words ahead of them on the first
-        // alone, and the agent's model as it stands now goes ahead of each message queued behind.
+        // The developer's words close each message, the turn's own words ahead of them, and the
+        // agent's model as it stands now goes ahead of each message queued behind.
         const model = {
           type: INPUT_LINE.MODEL,
           model: "claude-sonnet-5-5",

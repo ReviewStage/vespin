@@ -2131,16 +2131,28 @@ export const runnerSessions = <
         }
         // The harness's lines are read as `sendHolding` reads them, so a plan refused now refuses
         // the message, and go ahead of it for a recorded runner's launch; with none recorded, the
-        // message alone is queued for whichever launch runs. Note that the credential is not renewed
-        // here, because the lease is another call's; it lives an hour, and the next message renews it.
-        // The turn's own words (`openedLine`) go ahead of the next message instead, since they are
-        // marked handed only once a runner took them. A runner the call holding the lease leaves
-        // up reads it, and where none is, the turn's delivery launches one (`deliverTurn`).
+        // message alone is queued for whichever launch runs, its words composed on whether that
+        // launch resumes the harness's session. Its words and what they hand ride on its line, as
+        // every queued line's do, so they compose against the lines still waiting and are kept as
+        // handed once a runner took it. Note that the credential is not renewed here, because the
+        // lease is another call's; it lives an hour, and the next message renews it. A runner the
+        // call holding the lease leaves up reads it, and where none is, the turn's delivery
+        // launches one (`deliverTurn`).
         const ahead = yield* harness.ahead(agent);
         const recorded = Option.isSome(found) ? found.value.runner : undefined;
+        const from =
+          recorded === undefined ? yield* resumedSessionOf(agent, layout, false) : undefined;
+        const opened = yield* openedLine(
+          agent,
+          sessionId,
+          sent,
+          from !== undefined && from.resume === undefined,
+          from?.replay === true,
+        );
+        const carried = { files: [], handed: opened.handed };
         yield* recorded === undefined
-          ? queued(agent, ANY_LAUNCH, [sent.line])
-          : queued(agent, recorded.mark.firstSequence, [...ahead.lines, sent.line]);
+          ? queued(agent, ANY_LAUNCH, [opened.line], carried)
+          : queued(agent, recorded.mark.firstSequence, [...ahead.lines, opened.line], carried);
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
