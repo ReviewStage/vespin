@@ -217,7 +217,7 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
-import { agentEntries } from "./agent-entries.jsx";
+import { agentEntries } from "./agent-entries.js";
 import { type AgentReadMarks, useAgentReadMarks } from "./agent-read-marks.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
 import { inboxEntries } from "./main-tabs.js";

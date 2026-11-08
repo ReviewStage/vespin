@@ -10,7 +10,7 @@ import { NEEDS_YOU, threadsWaitingWords } from "../tasks/inbox-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import type { MenuAction } from "./action-menu.js";
-import { agentEntries } from "./agent-entries.jsx";
+import { agentEntries } from "./agent-entries.js";
 import { AgentListRow } from "./agent-list-row.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 
