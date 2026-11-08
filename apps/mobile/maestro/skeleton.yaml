@@ -32,7 +32,11 @@ appId: dev.vespin.ios
 - tapOn:
     text: "Open"
     optional: true
-- assertVisible: "Sign in"
+# SpringBoard hands the link to the app in its own time, which on a loaded
+# CI simulator has been 20 seconds after the prompt, past a plain assertion's wait.
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 60000
 - takeScreenshot: signed-out
 - tapOn: "Sign in"
 - assertVisible: "Review the invite flow"
