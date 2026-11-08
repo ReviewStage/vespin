@@ -387,7 +387,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
 };
 
 /** Admin as a window not standing on it holds it, every door ignored. */
-export const ADMIN_AWAY: AdminViewControl = {
+const ADMIN_AWAY: AdminViewControl = {
   open: false,
   view: { kind: "dashboard" },
   onOpen: ignore,
