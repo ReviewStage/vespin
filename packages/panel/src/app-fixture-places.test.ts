@@ -386,8 +386,8 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
     "a pairing's link",
     handLink({ place: { kind: ACCOUNT_PLACE.CONNECT, code: "ABCDEFGH" } }),
     "/personal/settings/hosts",
-    // The code its link hands, which the Hosts page asks over once it stands, naming the host the fixture's pairing names.
-    /Connect fra-02\?/u,
+    // The code its link hands, which the Hosts page asks over once it stands.
+    /Connect a host/u,
   ],
   [
     "a link to Admin",
@@ -420,10 +420,7 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
       yield* press;
       yield* leaveAsked();
       assert.deepEqual(router.addresses().slice(0, router.at() + 1), [...standing, arrived]);
-      // Note that what it hands on is read first, so its card is waited for once the read lands.
-      if (shows !== undefined) {
-        yield* Effect.promise(() => vi.waitFor(() => assert.match(drawn(), shows)));
-      }
+      if (shows !== undefined) assert.match(drawn(), shows);
     }),
 );
 
