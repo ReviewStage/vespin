@@ -34,7 +34,7 @@ const MIRRORS_FOLDER = "mirrors";
 const MIRROR_MAKING_SUFFIX = ".making";
 
 /** Where every cloud agent's mirror on this Mac lives, each in a folder named by the agent's id. */
-export function mirrorsFolder(home: string): string {
+function mirrorsFolder(home: string): string {
   return path.join(worktreesRoot(home), MIRRORS_FOLDER);
 }
 
@@ -333,7 +333,7 @@ export function mirrorWorktreeScript(input: {
 }
 
 /** The script that prints a mirror's own files by git's rules, each path ended by a NUL. */
-export function mirrorListScript(worktree: string): string {
+function mirrorListScript(worktree: string): string {
   return [
     ...LOGIN_PATH,
     `git -C ${shellQuoted(worktree)} ls-files -co --exclude-standard -z`,
@@ -342,7 +342,7 @@ export function mirrorListScript(worktree: string): string {
 }
 
 /** The script that takes a mirror's worktree out of the shared clone it was made of, files and all. */
-export function mirrorRemovedScript(worktree: string): string {
+function mirrorRemovedScript(worktree: string): string {
   return [
     ...LOGIN_PATH,
     `worktree=${shellQuoted(worktree)}`,

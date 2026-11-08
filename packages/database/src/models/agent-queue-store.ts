@@ -95,7 +95,7 @@ const ROW_COLUMNS = {
  * (`readQueuedFile`). Note that a file an edit saves is minted a new id,
  * so a window that read the file it replaced reads it afresh.
  */
-export interface QueuedFile extends AgentAttachment {
+interface QueuedFile extends AgentAttachment {
   readonly id: string;
 }
 
@@ -110,7 +110,7 @@ export interface QueuedMessageRow {
 }
 
 /** Why a queue stands paused, and what refused a hand-off where one did. */
-export interface QueuePauseRow {
+interface QueuePauseRow {
   readonly because: QueuePause;
   readonly refusal: HostedApiError | undefined;
 }

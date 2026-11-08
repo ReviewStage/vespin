@@ -68,7 +68,7 @@ export class DispatchClaimHeld extends Data.TaggedError("DispatchClaimHeld")<
 > {}
 
 /** How a claimant asks again for a claim to clear: soon at first, then a little less often, for as long as the bound. */
-export function claimRetry(bound: Duration.Duration) {
+function claimRetry(bound: Duration.Duration) {
   return cappedExponential(DISPATCH_CLAIM.FIRST_RETRY, DISPATCH_CLAIM.LONGEST_RETRY).pipe(
     Schedule.upTo({ duration: bound }),
   );

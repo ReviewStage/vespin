@@ -156,7 +156,7 @@ type Told = { readonly items: readonly InboxItem[] } | { readonly failure: Agent
  * read the service did not answer is told unanswered, and it, or a follow
  * that stopped, is let go and read again after `LIVE_RESTART`.
  */
-export function followInbox(
+function followInbox(
   inboxes: ScopeInboxes,
   scope: InboxScopeKey,
   tell: (inbox: Told) => Effect.Effect<void>,

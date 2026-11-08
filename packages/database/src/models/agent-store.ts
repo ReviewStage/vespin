@@ -2881,7 +2881,7 @@ export function readAgentKeptPublished(
 }
 
 /** Which of an agent's repositories a delivery from GitHub found it on: its own, or one it works in beside it, as `owner/name` the agent keeps it, with that repository's pull request head branch, none before one opened. */
-export interface AgentFoundOn {
+interface AgentFoundOn {
   readonly repository: string;
   readonly branch: string | null;
   /** Whether it is a repository the agent works in beside its own (`agent-repositories.ts`). */
@@ -3765,7 +3765,7 @@ export function readNativeRunStanding(
 }
 
 /** Where the run of each agent under these ids stands, as `readNativeRunStanding` reads one, in two statements for the lot, keyed by agent id; an id it answers nothing for is absent. */
-export function readNativeRunStandings(
+function readNativeRunStandings(
   agentIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, NativeRunStanding>> {
   return Effect.gen(function* () {

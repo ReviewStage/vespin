@@ -345,13 +345,13 @@ export const OWN_TRANSCRIPT = "own";
  * new as, none from a service older than the queue and before the live read
  * first stood.
  */
-export type AppTranscriptWord = Omit<AgentMessagesAnswer, "messages" | "cursor"> & {
+type AppTranscriptWord = Omit<AgentMessagesAnswer, "messages" | "cursor"> & {
   readonly caughtUp: boolean;
   readonly queueRevision?: number;
 };
 
 /** A page that said a transcript could not be read, with what failed beneath it where it says. */
-export type AppTranscriptFailure = Extract<AgentTranscriptPage, { readonly failure: unknown }>;
+type AppTranscriptFailure = Extract<AgentTranscriptPage, { readonly failure: unknown }>;
 
 /**
  * One transcript as the host holds it for the windows
@@ -462,7 +462,7 @@ export const NO_BROWSER_TABS: AppBrowserTabs = {
 };
 
 /** One agent's pull request's newest chapters, as the host's read of them stands: with whether the reader can generate them, once it answered. */
-export type AppPullRequestChapters = AppHostRead<PullRequestChaptersAnswer>;
+type AppPullRequestChapters = AppHostRead<PullRequestChaptersAnswer>;
 
 /**
  * Each agent's pull request's chapters the host holds for the windows
@@ -525,7 +525,7 @@ export interface AppDevicePresence {
 export type AppDevicePresences = Readonly<Record<string, AppHostRead<AppDevicePresence>>>;
 
 /** The account's hosts as Settings › Hosts draws them, by name, with each removal still out drawn gone, and the install script's address its commands name. */
-export interface AppHostsHeld {
+interface AppHostsHeld {
   hosts: readonly HostLine[];
   installScriptUrl: string;
 }
@@ -587,7 +587,7 @@ export type AppWorkspaceIntegrations = AppHeldById<WorkspaceIntegrations>;
 export type AppSlackChannels = AppHeldById<readonly SlackListedChannel[]>;
 
 /** One workspace's photo as the host last fetched it: the version the workspaces named it by, and its bytes as a `data:` URL. */
-export interface AppWorkspacePhoto {
+interface AppWorkspacePhoto {
   version: string;
   url: string;
 }
@@ -631,7 +631,7 @@ export type AppAccountPreferences = Readonly<Record<string, AppHostRead<AccountP
 export type AppLinkStanding = GitHubRepositoryPullRequestAnswer | GitHubRepositoryIssueAnswer;
 
 /** Each link's standing the windows hold, by the workspace it is read through and then the link's own address, as the host's read of it stands. */
-export type AppLinkStandings = Readonly<
+type AppLinkStandings = Readonly<
   Record<string, Readonly<Record<string, AppHostRead<AppLinkStanding>>>>
 >;
 

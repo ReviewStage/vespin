@@ -72,7 +72,7 @@ const WORKSPACE_INVITATION = fieldKind((row: PooledInvitation) => row.id);
 type Unsealed = { readonly failure: string; readonly gone?: boolean };
 
 /** What a cancel's service answered: the caller's answer, or the caller's answer for a refusal. */
-export type InvitationCanceled<Answer> = { readonly answer: Answer } | { readonly refused: Answer };
+type InvitationCanceled<Answer> = { readonly answer: Answer } | { readonly refused: Answer };
 
 export interface WorkspaceInvitationsDependencies {
   /** Whether the account gate stands open, so a follow may read. */

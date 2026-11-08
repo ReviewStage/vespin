@@ -59,7 +59,7 @@ export const MEMORY_FORGET = {
   NOT_PERMITTED: "not_permitted",
 } as const;
 
-export type MemoryForget = (typeof MEMORY_FORGET)[keyof typeof MEMORY_FORGET];
+type MemoryForget = (typeof MEMORY_FORGET)[keyof typeof MEMORY_FORGET];
 
 /** What a forget came to, and the transaction its delete committed in where it deleted a row; none where nothing was deleted. */
 export interface MemoryForgot {

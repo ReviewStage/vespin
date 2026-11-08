@@ -113,7 +113,7 @@ import type { RunMode } from "./run-mode.js";
  */
 
 /** How long a mirror waits before it opens its tunnel again: from `FIRST`, twice as long each time, never longer than `LONGEST`. */
-export const MIRROR_RECONNECT = {
+const MIRROR_RECONNECT = {
   FIRST: Duration.seconds(1),
   LONGEST: Duration.seconds(30),
 } as const;
@@ -197,7 +197,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 /** The agent as the task list carries it, as far as a mirror reads it. */
-export interface MirroredAgent {
+interface MirroredAgent {
   readonly repository: string | null;
   readonly archivedAt?: number | undefined;
   /** Set only for a local agent on its starter's device, which has no mirror. */

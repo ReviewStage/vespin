@@ -436,7 +436,7 @@ function meets(
  * that could not be read beside what was held, and one the account no
  * longer reaches in place of all of it.
  */
-export function toldTranscript(
+function toldTranscript(
   was: AppTranscript | undefined,
   page: AgentTranscriptPage,
   queueRevision: number | undefined,

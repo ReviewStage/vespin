@@ -152,7 +152,7 @@ type ThisMacHostServices =
   | HttpClient.HttpClient;
 
 /** The one act This Mac's host answers, asked only to turn it on or off. */
-export type ThisMacHostActs = Pick<typeof AGENT_ACTS, "HOSTS_THIS_MAC_SET">;
+type ThisMacHostActs = Pick<typeof AGENT_ACTS, "HOSTS_THIS_MAC_SET">;
 
 export interface ThisMacHostComposer extends Composer {
   /** Run agents on this Mac turned on or off, as the panel's port asks it. */
