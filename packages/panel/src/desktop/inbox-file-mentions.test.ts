@@ -34,6 +34,7 @@ import { handInboxItems, handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
 /**
@@ -201,7 +202,7 @@ async function inbox() {
   }
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(createElement(Page))));
+  act(() => root?.render(windowRouter().provide(withQueryClient(createElement(Page)))));
   await settle();
   return { container, links, went };
 }

@@ -41,6 +41,7 @@ import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "./testing/tasks-control.js";
+import { windowRouter } from "./testing/window-router.js";
 
 /**
  * A read that did not land says so alike on every surface that reads: the
@@ -90,7 +91,7 @@ async function mount(surface: React.ReactElement): Promise<HTMLElement> {
   document.body.append(container);
   const root = createRoot(container);
   unmounts.push(() => root.unmount());
-  act(() => root.render(withQueryClient(surface)));
+  act(() => root.render(windowRouter().provide(withQueryClient(surface))));
   await settle();
   return container;
 }

@@ -30,6 +30,7 @@ import { handInboxItems } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
 /**
@@ -175,14 +176,16 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
   roots.push(root);
   act(() =>
     root.render(
-      withQueryClient(
-        createElement(OpenLinkProvider, {
-          value: onOpen,
-          children: createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: control,
+      windowRouter().provide(
+        withQueryClient(
+          createElement(OpenLinkProvider, {
+            value: onOpen,
+            children: createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: control,
+            }),
           }),
-        }),
+        ),
       ),
     ),
   );

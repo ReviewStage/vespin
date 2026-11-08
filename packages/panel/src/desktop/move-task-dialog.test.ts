@@ -18,6 +18,7 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
 /**
@@ -136,7 +137,13 @@ function openMenu(tasks: TasksControl): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks }))));
+  act(() =>
+    root.render(
+      windowRouter().provide(
+        withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
+      ),
+    ),
+  );
   openTaskMenu(container);
 }
 
@@ -288,7 +295,13 @@ function openTask(tasks: TasksControl): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks }))));
+  act(() =>
+    root.render(
+      windowRouter().provide(
+        withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
+      ),
+    ),
+  );
   return container;
 }
 

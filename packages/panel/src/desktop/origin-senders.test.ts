@@ -20,6 +20,7 @@ import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platfo
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
 /**
@@ -120,11 +121,13 @@ async function mount(input: {
   roots.push(root);
   act(() =>
     root.render(
-      withQueryClient(
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: control,
-        }),
+      windowRouter().provide(
+        withQueryClient(
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: control,
+          }),
+        ),
       ),
     ),
   );

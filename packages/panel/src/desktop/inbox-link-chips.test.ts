@@ -32,6 +32,7 @@ import { signedInAs } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
 /**
@@ -235,7 +236,7 @@ async function inbox(options: {
   }
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(createElement(Page))));
+  act(() => root?.render(windowRouter().provide(withQueryClient(createElement(Page)))));
   await act(async () => {
     for (let tick = 0; tick < 16; tick += 1) await Promise.resolve();
   });

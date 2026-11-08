@@ -36,6 +36,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { taskCardOf } from "./task-card.js";
 
@@ -186,12 +187,14 @@ async function mount(
   };
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(
-          ChipCards,
-          { value: chipCards },
-          createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(
+            ChipCards,
+            { value: chipCards },
+            createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+          ),
         ),
       ),
     ),

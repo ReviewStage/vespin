@@ -46,6 +46,7 @@ import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 // within the test's own ticks.
 import "../tasks/agent-pull-request-tab.js";
 import { openTaskMenu } from "../testing/task-menu.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
 /**
@@ -178,14 +179,16 @@ async function mountEveryTab(
   roots.push(root);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        onSideBundles(
-          unlandedBundles(),
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: control,
-          }),
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          onSideBundles(
+            unlandedBundles(),
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: control,
+            }),
+          ),
         ),
       ),
     ),

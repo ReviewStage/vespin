@@ -17,6 +17,7 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./use-side-panel.js";
 import { NO_LOOKS } from "./use-task-looks.js";
 
@@ -123,7 +124,13 @@ async function mount(
     },
     agents: agentsControl({ agents, agentIds: agents.map((agent) => agent.id) }),
   });
-  act(() => root.render(withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks }))));
+  act(() =>
+    root.render(
+      windowRouter().provide(
+        withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
+      ),
+    ),
+  );
   await settle();
   return { chosen };
 }
