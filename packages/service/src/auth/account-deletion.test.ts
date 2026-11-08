@@ -7,7 +7,12 @@ import {
 } from "@repo/database/github-installation-vocabulary";
 import { workspaceSeams } from "@repo/database/models/workspace-seams";
 import { agentTable } from "@repo/database/schemas/agent";
-import { organization as organizationTable, session, user } from "@repo/database/schemas/auth";
+import {
+  member,
+  organization as organizationTable,
+  session,
+  user,
+} from "@repo/database/schemas/auth";
 import { automation } from "@repo/database/schemas/automation";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { conversations } from "@repo/database/schemas/storage";
@@ -22,7 +27,7 @@ import { HTTP_METHOD } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { ConfigProvider, Effect, Layer, Schema } from "effect";
 import { HttpRouter } from "effect/http";
@@ -61,6 +66,17 @@ const decodeSignedUp = Schema.decodeUnknownSync(
 );
 
 const decodeRefusal = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }));
+
+/** The role the account holds in the workspace, as its member row stands. */
+const roleIn = (organizationId: string, userId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const rows = yield* db
+      .select({ role: member.role })
+      .from(member)
+      .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+    return rows.map((row) => row.role);
+  });
 
 /** The auth route over a Better Auth on the PGlite given, with our account deletion and organization policy. */
 const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =>
@@ -256,6 +272,8 @@ it.effect(
         assert.deepEqual(yield* db.select({ id: organizationTable.id }).from(organizationTable), [
           { id: shared },
         ]);
+        // Grace, the shared workspace's one other member, is handed it.
+        assert.deepEqual(yield* roleIn(shared, grace.id), ["owner"]);
         assert.deepEqual(yield* db.select().from(githubInstallation), []);
         assert.deepEqual(
           yield* db.select({ id: user.id }).from(user).where(eq(user.id, ada.id)),
@@ -275,6 +293,83 @@ it.effect(
           .filter((request) => request.method === HTTP_METHOD.DELETE)
           .map((request) => decodeURIComponent(request.pathname));
         assert.deepEqual(contactDeletes, ["/contacts/ada@example.com"]);
+      }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
+    }),
+);
+
+it.effect(
+  "an owner's account deletion hands a workspace others share to its longest-standing admin before a member who joined earlier",
+  () =>
+    Effect.gen(function* () {
+      const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
+        Effect.promise(() => opened.close()),
+      );
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        const route = yield* openAuthRoute(client);
+        const ada = yield* route.signUp("ada");
+        const grace = yield* route.signUp("grace");
+        const alan = yield* route.signUp("alan");
+        const barbara = yield* route.signUp("barbara");
+        const acme = yield* Effect.promise(() =>
+          route.auth.api.createOrganization({
+            body: { name: "Acme", slug: "acme", userId: ada.id },
+          }),
+        );
+        assert.ok(acme);
+        // Grace joined first, then Alan, then Barbara, a day apart.
+        for (const [day, userId, role] of [
+          [1, grace.id, "member"],
+          [2, alan.id, "admin"],
+          [3, barbara.id, "admin"],
+        ] as const) {
+          yield* Effect.promise(() =>
+            route.auth.api.addMember({ body: { userId, organizationId: acme.id, role } }),
+          );
+          yield* db
+            .update(member)
+            .set({ createdAt: new Date(Date.UTC(2099, 0, day)) })
+            .where(and(eq(member.organizationId, acme.id), eq(member.userId, userId)));
+        }
+
+        const deleted = yield* route.post("delete-user", {}, ada.cookie);
+
+        assert.equal(deleted.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(yield* roleIn(acme.id, alan.id), ["owner"]);
+        assert.deepEqual(yield* roleIn(acme.id, grace.id), ["member"]);
+        assert.deepEqual(yield* roleIn(acme.id, barbara.id), ["admin"]);
+      }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
+    }),
+);
+
+it.effect(
+  "a member left alone in a workspace with no owner deletes it with their own account",
+  () =>
+    Effect.gen(function* () {
+      const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
+        Effect.promise(() => opened.close()),
+      );
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        const route = yield* openAuthRoute(client);
+        const ada = yield* route.signUp("ada");
+        const grace = yield* route.signUp("grace");
+        const { shared } = yield* openWorkspaces(route, ada.id, grace.id);
+        // Ada's owner row went with her account before an heir was named.
+        yield* db
+          .delete(member)
+          .where(and(eq(member.organizationId, shared), eq(member.userId, ada.id)));
+
+        const deleted = yield* route.post("delete-user", {}, grace.cookie);
+
+        assert.equal(deleted.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(
+          yield* db
+            .select({ id: organizationTable.id })
+            .from(organizationTable)
+            .where(eq(organizationTable.id, shared)),
+          [],
+        );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
 );

@@ -15,7 +15,19 @@ import {
   type WorkspaceRole,
   workspacePhotoOfDataUrl,
 } from "@repo/features/workspace-wire";
-import { and, asc, eq, exists, inArray, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  inArray,
+  ne,
+  notExists,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { type Cause, DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import {
@@ -290,6 +302,35 @@ const findMemberWorkspace = SqlSchema.findOneOption({
         .from(organization)
         .where(
           and(eq(organization.id, organizationId), memberOfWorkspace(userId, organization.id)),
+        ),
+    ),
+});
+
+const otherMember = alias(member, "other_member");
+
+const updateSoleMemberToOwner = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
+  execute: ({ userId, organizationId }) =>
+    Database.use((db) =>
+      db
+        .update(member)
+        .set({ role: WORKSPACE_ROLE.OWNER })
+        .where(
+          and(
+            eq(member.userId, userId),
+            eq(member.organizationId, organizationId),
+            notExists(
+              queryBuilder
+                .select({ one: otherMember.id })
+                .from(otherMember)
+                .where(
+                  and(
+                    eq(otherMember.organizationId, organizationId),
+                    ne(otherMember.userId, userId),
+                  ),
+                ),
+            ),
+          ),
         ),
     ),
 });
@@ -831,6 +872,19 @@ export function isWorkspaceMember(
   organizationId: string,
 ): WorkspaceStoreEffect<boolean> {
   return Effect.map(findMemberWorkspace({ userId, organizationId }), Option.isSome);
+}
+
+/**
+ * Makes the account the owner of a workspace it is the only member of, so
+ * its account's deletion may delete the workspace through the plugin, which
+ * lets an owner alone delete one; a workspace anyone else is in is left as
+ * it is, in the same statement.
+ */
+export function claimSoleWorkspace(
+  userId: string,
+  organizationId: string,
+): WorkspaceStoreEffect<void> {
+  return updateSoleMemberToOwner({ userId, organizationId });
 }
 
 /** The ids of every workspace the account is a member of, in no order. */
