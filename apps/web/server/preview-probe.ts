@@ -17,7 +17,7 @@ import { checkApiCallers, PROBE_SEGMENT, RESOLUTION } from "./api-callers.js";
  * serves every `/api/` function; a preset without the key fails to build at
  * all — so this sends one the requests a hand probe would make: every
  * `/api/` path a client in the repository spells (`api-callers.ts` derives the
- * list; nothing here re-enumerates it), the cron's path, and the page, each
+ * list; nothing here re-enumerates it), the schedules' paths, and the page, each
  * cache-busted.
  *
  * What a probe asserts is a value, never prose. A handler that is present
@@ -138,8 +138,8 @@ interface ProbePaths {
    * route, and Vercel answers it with its own `NOT_FOUND`.
    */
   readonly callers: readonly string[];
-  /** The paths `vercel.json`'s `crons` call. */
-  readonly crons: readonly string[];
+  /** The paths `vercel.json`'s `schedules` call. */
+  readonly scheduled: readonly string[];
 }
 
 /** The requests for one door, each path once, every pinned path among them, in a fixed order so two reports of one deployment read alike. */
@@ -147,12 +147,7 @@ export function planProbes(door: ProbeDoor, paths: ProbePaths): readonly Planned
   const method = METHOD_BY_DOOR[door];
   const expected = EXPECTED_STATUS[door];
   const page = door === PROBE_DOOR.BYPASS_SECRET ? [SITE_ROOT_PATH] : [];
-  const unique = new Set([
-    ...page,
-    ...paths.callers,
-    ...paths.crons,
-    ...expected.keys(),
-  ]);
+  const unique = new Set([...page, ...paths.callers, ...paths.scheduled, ...expected.keys()]);
   return [...unique].sort().map((path) => ({
     method,
     path,
@@ -162,21 +157,21 @@ export function planProbes(door: ProbeDoor, paths: ProbePaths): readonly Planned
 }
 
 const VERCEL_CONFIG_FILE = "vercel.json";
-const VercelCrons = Schema.Struct({
-  crons: Schema.Array(Schema.Struct({ path: Schema.String })).pipe(
-    Schema.withDecodingDefaultType(Effect.succeed([])),
+const VercelSchedules = Schema.Struct({
+  schedules: Schema.Record(Schema.String, Schema.Struct({ path: Schema.String })).pipe(
+    Schema.withDecodingDefaultType(Effect.succeed({})),
   ),
 });
-const decodeVercelCrons = Schema.decodeUnknownEffect(Schema.fromJsonString(VercelCrons));
+const decodeVercelSchedules = Schema.decodeUnknownEffect(Schema.fromJsonString(VercelSchedules));
 
-/** The caller paths of the checkout, read the way the callers check reads them, and the cron paths of its `vercel.json`. */
+/** The caller paths of the checkout, read the way the callers check reads them, and the schedules' paths of its `vercel.json`. */
 export function readProbePaths(input: {
   readonly repoRoot: string;
   readonly web: string;
 }): Effect.Effect<ProbePaths, Schema.SchemaError> {
   return Effect.gen(function* () {
     const report = yield* Effect.promise(() => checkApiCallers(input));
-    const config = yield* decodeVercelCrons(
+    const config = yield* decodeVercelSchedules(
       yield* Effect.promise(() => readFile(join(input.repoRoot, VERCEL_CONFIG_FILE), "utf8")),
     );
     return {
@@ -185,7 +180,7 @@ export function readProbePaths(input: {
           ? `${withoutTrailingSlash(entry.caller.probe)}/${PROBE_SEGMENT}`
           : entry.caller.probe,
       ),
-      crons: config.crons.map((cron) => cron.path),
+      scheduled: Object.values(config.schedules).map((schedule) => schedule.path),
     };
   });
 }

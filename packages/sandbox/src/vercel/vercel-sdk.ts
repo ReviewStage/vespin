@@ -213,6 +213,7 @@ const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.KILL]: "web/sandboxKill",
   [SANDBOX_CALL.TAGS]: "web/sandboxUpdateTags",
   [SANDBOX_CALL.GET]: "web/sandboxGet",
+  [SANDBOX_CALL.DRIVE]: "web/sandboxDrive",
   [SANDBOX_CALL.LIST]: "web/sandboxList",
   [SANDBOX_CALL.DELETE]: "web/sandboxDelete",
   [SANDBOX_CALL.STOP]: "web/sandboxStop",
@@ -845,6 +846,13 @@ function vercelSandbox(
         found(SANDBOX_CALL.GET, name).pipe(
           Effect.map((sandbox): ListedSandbox | undefined => openedOf(sandbox)),
           Effect.catchIf(isGone, () => Effect.succeed(undefined)),
+        ),
+      ),
+    driveStands: (name) =>
+      said(
+        asked(SANDBOX_CALL.DRIVE, (signal, under) => Drive.get({ ...under, name, signal })).pipe(
+          Effect.as(true),
+          Effect.catchIf(isGone, () => Effect.succeed(false)),
         ),
       ),
     resume: (name) =>

@@ -26,6 +26,7 @@
     "./models/child-titles": "./src/models/child-titles.js",
     "./models/agent-store": "./src/models/agent-store.js",
     "./models/agent-repositories": "./src/models/agent-repositories.js",
+    "./models/base-drive-repositories": "./src/models/base-drive-repositories.js",
     "./models/columns": "./src/models/columns.js",
     "./models/conversation-pictures": "./src/models/conversation-pictures.js",
     "./models/github-connection-store": "./src/models/github-connection-store.js",

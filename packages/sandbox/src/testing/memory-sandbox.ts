@@ -344,6 +344,12 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           return record === undefined ? undefined : listedOf(record);
         }),
       ),
+    driveStands: (name) =>
+      scripted(
+        SANDBOX_CALL.DRIVE,
+        name,
+        Effect.sync(() => state.drives.has(name)),
+      ),
     resume: (name) =>
       scripted(
         SANDBOX_CALL.GET,

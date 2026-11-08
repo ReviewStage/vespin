@@ -308,7 +308,7 @@ builder the check cannot read is refused by name rather than
 skipped, because a path constant that outlives its route otherwise fails
 nothing until production answers 404. The same derived list is
 what `scripts/preview-probe.ts` (`server/preview-probe.ts`) sends to a
-deployment: every caller path, the cron's, and the page, failing
+deployment: every caller path, the schedules', and the page, failing
 on any answer that is Vercel's own rather than a handler's — the
 `x-vercel-error` header the platform puts on its `NOT_FOUND`, which a
 function's own 404 never carries — with the requests `EXPECTED_STATUS` names

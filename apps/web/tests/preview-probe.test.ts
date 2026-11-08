@@ -20,7 +20,7 @@ import {
 
 const ADDRESS = "https://preview.example";
 
-const PATHS = { callers: ["/api/models"], crons: ["/api/maintenance/sweep"] };
+const PATHS = { callers: ["/api/models"], scheduled: ["/api/maintenance/sweep"] };
 
 it.effect(
   "an unknown path is held to the router's JSON 404: the platform's NOT_FOUND, or another body, fails",

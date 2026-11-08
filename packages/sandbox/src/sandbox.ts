@@ -57,6 +57,8 @@ export interface SandboxService {
   ) => Effect.Effect<readonly ListedSandbox[], SandboxError>;
   /** The sandbox of that name, as it stands, without resuming it; none where there is no such sandbox. */
   readonly get: (name: string) => Effect.Effect<ListedSandbox | undefined, SandboxError>;
+  /** Whether a drive of that name stands, without making one. */
+  readonly driveStands: (name: string) => Effect.Effect<boolean, SandboxError>;
   /** The named sandbox, resumed from its snapshot first where it was stopped. */
   readonly resume: (name: string) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
