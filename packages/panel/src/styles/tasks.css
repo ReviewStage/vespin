@@ -107,9 +107,10 @@
    paragraph, so these give them the read view's box; a heading keeps the
    read view's class and level, and a section's heading the gap the drawn
    sections stand apart by. The margins are cleared at no weight of their
-   own (`:where`), so the spacing the two views share between a block's
-   children, a quote's paragraphs apart as the read view draws them, still
-   stands over the clearing. */
+   own (`:where`), in the components layer the read view's rules stand in, so
+   the spacing the two views share, a note's blocks a paragraph's gap apart
+   and a quote's paragraphs as the read view draws them, still stands over
+   the clearing. */
 .description-document-text {
   --description-section-gap: 1.5em;
   caret-color: var(--accent);
@@ -118,8 +119,10 @@
   word-wrap: break-word;
 }
 
-.description-document-text :where(h1, h2, h3, h4, h5, h6, p) {
-  margin: 0;
+@layer components {
+  .description-document-text :where(h1, h2, h3, h4, h5, h6, p) {
+    margin: 0;
+  }
 }
 
 /* Note that the first three levels keep prose's sizes (`@repo/ui`'s
@@ -207,16 +210,11 @@
   display: block;
 }
 
-/* Note that the caret between two dividers stands in their pair's gap
-   (`@repo/ui`'s prose.css), which it would otherwise close as it stands
-   between them, and in the middle of that gap rather than against the first:
-   below the first divider's own margin (prose.css's 0.3em), half a line down. */
-.description-document-text hr + .ProseMirror-gapcursor + hr {
-  margin-top: 1lh;
-}
-
+/* Note that the caret between two dividers stands where their collapsed gap
+   ends, against the second (`@repo/ui`'s prose.css, 1.5em), so it is drawn
+   half that gap up, in its middle. */
 .description-document-text hr + .ProseMirror-gapcursor:has(+ hr)::after {
-  top: calc(0.5lh - 0.3em);
+  top: -0.75em;
 }
 
 .description-document-text .ProseMirror-gapcursor::after {

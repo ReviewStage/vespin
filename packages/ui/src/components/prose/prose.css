@@ -78,7 +78,15 @@
     --ui-prose-tint: var(--ui-markdown-tint);
   }
 
-  .ui-markdown > * + *,
+  /* A note's blocks stand a paragraph's gap apart, and a divider a gap and
+     a half from what it divides (below), as a transcript's do (Streamdown's
+     own rhythm), so every rendered text reads with one look. Note that the
+     gap outranks the element resets below (a paragraph's, a list's, a
+     fence's) by its `:not()`, and leaves a divider to its own rule. */
+  .ui-markdown > :not(:first-child, hr) {
+    margin-top: 1em;
+  }
+
   .ui-markdown li > * + * {
     margin-top: 0.5em;
   }
@@ -266,16 +274,13 @@
     border-bottom: 0;
   }
 
+  /* Note that two dividers in a row stand the same gap and a half apart,
+     their margins collapsing, so they read as two, and an editor's caret
+     has room to stand between them. */
   .ui-markdown hr {
-    margin: 0.3em 0;
+    margin: 1.5em 0;
     border: 0;
     border-top: 1px solid var(--ui-markdown-edge);
-  }
-
-  /* Two dividers in a row stand a line apart rather than a hair apart, so
-     they read as two, and an editor's caret has room to stand between them. */
-  .ui-markdown hr + hr {
-    margin-top: 1lh;
   }
 
   /* A chip stands with the punctuation written against it as one box no line
@@ -413,11 +418,4 @@ blockquote.markdown-quote > * {
 
 blockquote.markdown-quote > * + * {
   margin-top: 0.5em;
-}
-
-/* Two dividers in a row in a quote stand a line apart, as they do outside one
-   (`.ui-markdown hr + hr`, above), which the quote's blocks' rule would
-   otherwise outrank. */
-blockquote.markdown-quote > hr + hr {
-  margin-top: 1lh;
 }
