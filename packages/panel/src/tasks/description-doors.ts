@@ -8,7 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { sendAct } from "../act.js";
 import { descriptionDocumentRetryMutation } from "../live-reads.js";
-import { appStateQuery, selectFixtureTasks } from "../use-app-state.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import {
   type DescriptionEditMutation,
   descriptionEditMutation,
@@ -23,7 +23,7 @@ import {
 export function useDescriptionEdit(
   taskId: string | undefined,
 ): DescriptionEditMutation | undefined {
-  const fixture = useQuery({ ...appStateQuery, select: selectFixtureTasks }).data === true;
+  const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   if (taskId === undefined) return undefined;
   return descriptionEditMutation(taskId, (request) =>
     fixture

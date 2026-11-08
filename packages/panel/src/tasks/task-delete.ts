@@ -6,7 +6,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useQuery } from "@tanstack/react-query";
 import { type ActedResult, askKept, sendAct } from "../act.js";
-import { appStateQuery, selectFixtureTasks } from "../use-app-state.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 
 /** Why a delete the service did not carry was refused. */
 const DELETE_REFUSED_NOTE = "The task could not be deleted. Try again.";
@@ -38,7 +38,7 @@ function tasksDeleteMutation(run: (taskId: string) => Promise<ActedResult>) {
  * (`use-refusal-heard.ts`).
  */
 function useDeleteSend(): (taskId: string) => Promise<ActedResult> {
-  const fixture = useQuery({ ...appStateQuery, select: selectFixtureTasks }).data === true;
+  const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   return async (taskId) => {
     if (fixture) return DELETE_REFUSED;
     const deleted = await askKept(sendAct(ACT_KIND.TASKS_DELETE, { taskId }));

@@ -7,7 +7,7 @@ import { mutationOptions, useQuery } from "@tanstack/react-query";
 import { sendAct } from "../act.js";
 import type { RenameShape } from "../rename-write.js";
 import { pressRows, ROW_WRITE, type RowDoors, type TaskRows } from "../undo-stack.js";
-import { appStateQuery, selectFixtureTasks } from "../use-app-state.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
 
 /** What ⌘Z's toast calls a task's rename it takes back or puts back. */
@@ -59,7 +59,7 @@ function taskRenameMutation(
  * they are read from nowhere.
  */
 export function useTaskRename(drawn: () => TasksView) {
-  const fixture = useQuery({ ...appStateQuery, select: selectFixtureTasks }).data === true;
+  const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const doors = useTaskRowDoors(ROW_WRITE.TASK_RENAME.kind, drawn);
   return fixture
     ? taskRenameMutation(() => Promise.resolve(false), undefined)
