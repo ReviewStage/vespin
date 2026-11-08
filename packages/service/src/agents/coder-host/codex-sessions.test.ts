@@ -773,6 +773,8 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         });
         assert.equal(lines[1]?.type, INPUT_LINE.MESSAGE);
         assert.deepEqual(lines[2], { type: INPUT_LINE.STOP, launch: 0 });
+        // The runner took its lines, so nothing of the session waits on a launch once it is reset.
+        yield* runnerTook(agent.id);
 
         const reset = yield* sessions.reset(opened.sessionId);
 

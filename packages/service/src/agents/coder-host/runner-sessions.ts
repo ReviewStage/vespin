@@ -181,6 +181,7 @@ import {
   DateTime,
   Duration,
   Effect,
+  Exit,
   Option,
   Redacted,
   Result,
@@ -1585,15 +1586,27 @@ export const runnerSessions = <
       handsOn: boolean,
     ) =>
       Effect.gen(function* () {
-        // The agent is read beside the place, and its read answers only for a place found.
+        // The agent is read beside the place, and its read answers only for a place found or opening.
         const [found, agentRead] = yield* Effect.all(
           [firstPlace(machine, userId, sessionId), Effect.exit(agentOf(message.conversationId))],
           { concurrency: "unbounded" },
         );
-        if (Option.isNone(found)) return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
+        const standing = Option.getOrUndefined(found);
+        // Note that a session whose first place its turn's delivery has yet to open, as a Start's has
+        // until then, is no session ended, because a line of its agent waits on that delivery, which
+        // opens the place (`deliveredHolding`): the message is queued beside it, as one to a place with
+        // no runner up is.
+        const opening =
+          standing === undefined &&
+          handsOn &&
+          Exit.isSuccess(agentRead) &&
+          (yield* runnerLinesWaiting(userId, agentRead.value.id));
+        if (standing === undefined && !opening) {
+          return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
+        }
         const agent = yield* agentRead;
         // The session must be the conversation's own agent's, which the account reaches.
-        if (found.value.agentId !== agent.id) {
+        if (standing !== undefined && standing.agentId !== agent.id) {
           return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         }
         const target = { userId, conversationId: agent.conversationId };
@@ -1643,8 +1656,8 @@ export const runnerSessions = <
           });
           return accepted;
         });
-        const running = found.value.runner;
-        if (running !== undefined) {
+        const running = standing?.runner;
+        if (standing !== undefined && running !== undefined) {
           const runnerPlace = placeOfHandle(running.handle);
           // A runner that would not take the message as it should is ended, and the message
           // relaunches it: one warm past its machine's window, which may end itself at its idle cap
@@ -1655,7 +1668,7 @@ export const runnerSessions = <
           if (
             restart ||
             (yield* pastWarmWindow(
-              found.value.machine,
+              standing.machine,
               agent.id,
               turnRunning,
               (yield* lastSettledTurnsOfReached([conversationId])).get(conversationId),
@@ -1669,7 +1682,7 @@ export const runnerSessions = <
               // Note that the ended runner is let go and its record cleared, as a halt leaves them,
               // so the turn's delivery reads no runner up rather than one still on its way down.
               yield* recordAgentRunnerToken(userId, agent.id, null);
-              yield* machine.recordRunner(recordOf(found.value, userId, agent.id), {
+              yield* machine.recordRunner(recordOf(standing, userId, agent.id), {
                 kind: RUNNER_RECORD.NONE,
               });
               return yield* queuedForDelivery;
@@ -1677,7 +1690,7 @@ export const runnerSessions = <
             yield* relaunched(
               agent,
               sessionId,
-              found.value.name,
+              standing.name,
               runnerPlace,
               layout,
               sent,
@@ -1758,16 +1771,16 @@ export const runnerSessions = <
           }
         }
         // The place stopped or the runner ended: resumed, its credential set again, and the runner relaunched on the harness's session.
-        if (handsOn) return yield* queuedForDelivery;
+        if (handsOn || standing === undefined) return yield* queuedForDelivery;
         // A runner fed on its stdin, as a Mac's is, is launched again here, its launch a line its
         // machine takes up (`device-machine.ts`), whose place is never lost the way a sandbox's is.
-        const wasUp = found.value.running !== undefined;
-        const place = yield* machine.resume(found.value, agent);
+        const wasUp = standing.running !== undefined;
+        const place = yield* machine.resume(standing, agent);
         if (place === PLACE_RESUME.GONE) return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         yield* relaunched(
           agent,
           sessionId,
-          found.value.name,
+          standing.name,
           place.place,
           layout,
           sent,

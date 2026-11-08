@@ -2634,7 +2634,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start's open answers before any sandbox is made, its turn's delivery opening the sandbox and launching the runner, and a plan signed out is refused at once with nothing to deliver",
+    "a Start's open answers before any sandbox is made, a message sent before its turn's delivery is queued beside its line rather than read as its session ended, that delivery opening the sandbox and launching the runner on both, and a plan signed out is refused at once with nothing to deliver",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -2649,10 +2649,20 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.deepEqual([api.sandboxes.length, api.commands.length], [0, 0]);
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const sent = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Now the emails."),
+        );
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.deepEqual([api.sandboxes.length, api.commands.length], [0, 0]);
         const handed = yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
         assert.equal(handed, TURN_HANDOVER.HANDED);
         assert.deepEqual([api.sandboxes.length, api.commands.length], [1, 1]);
         assert.equal(api.sandboxes[0]?.tags.sessionId, opened.sessionId);
+        assert.deepEqual((yield* handedLines(userId, api.commands[0])).map(developerContent), [
+          [{ type: "text", text: "Fix the invitations." }],
+          [{ type: "text", text: "Now the emails." }],
+        ]);
 
         const unplanned = yield* openAgentWithoutPlan;
         const refusedApi = runnerSandboxApi();
@@ -3136,6 +3146,8 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           yield* writtenLine(agent, "Fix the invitations."),
         );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        // The runner took its line, so nothing of the session waits on a launch once it is reset.
+        yield* runnerTook(agent.id);
 
         const reset = yield* sessions.reset(opened.sessionId);
 
