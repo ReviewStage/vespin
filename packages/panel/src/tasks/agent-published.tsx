@@ -28,12 +28,7 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction, rowMenu } from "../desktop/action-menu.js";
-import {
-  checkoutCommand,
-  type DockedPullRequest,
-  publishedUrl,
-  pullRequestStateWord,
-} from "./agent-model.js";
+import { checkoutCommand, publishedUrl, pullRequestStateWord } from "./agent-model.js";
 import { MentionChipCard } from "./mention-chip.js";
 import { holderTaskId } from "./mention-holder.js";
 import { PullRequestMark } from "./pull-request-mark.js";
@@ -42,7 +37,7 @@ import { useLinkStanding } from "./use-link-standing.js";
 import { linkPressOf } from "./use-open-link.js";
 
 /**
- * agent-published.tsx -- what an agent published, on its tab: a row for each pull request it opened pinned over the box, or the branch's chip at the box's foot while no pull request stands.
+ * agent-published.tsx -- what an agent published, on its tab: the pull request's row pinned over the box, or the branch's chip at the box's foot while no pull request stands.
  *
  * Once the agent has opened a pull request, its row stands over the box,
  * docked there the way the to-do list is (`agent-tab.tsx`), whether the
@@ -84,8 +79,6 @@ const MENU_LABEL = "Branch actions";
 const BRANCH_THING = "Branch";
 /** What the pull request's row is, which names its ⋯ and its menu. */
 const PUBLISHED_THING = "Pull request";
-/** What the card of several pull requests is, which names its list. */
-const PUBLISHED_THINGS = "Pull requests";
 const CHECKS_FAILING = "Checks failing";
 
 /** A pull request's state and lines, its mark first, a glyph's gap apart. */
@@ -202,7 +195,7 @@ export function LinesChanged({
   );
 }
 
-/** The pull request's row pinned over the box, a card of one row (`PublishedRows`). */
+/** The pull request's row pinned over the box, a card of one row: its number and title, that its checks failed where they did, where it stands if that matters, and the lines it adds and removes; a press opens its tab, or the page on GitHub, a right-click, a long press or the menu key offers the rest, a finger's row drawing no ⋯ so the title keeps its room, and the pointer resting on it hangs the pull request's chip's card, which names it whole. A phone's narrow row gives up its state's word, and any narrow row the checks', then the lines, before the number (tasks.css). */
 export function PublishedRow({
   pullRequest,
   branch,
@@ -213,45 +206,9 @@ export function PublishedRow({
   branch: string | null;
   doors: PublishedDoors;
 }): ReactNode {
-  return <PublishedRows docked={[{ pullRequest, branch, current: true }]} doors={doors} />;
-}
-
-/** Every pull request the agent opened, pinned over the box as one card (`dockedPullRequests`), a row each; nothing before it opened one. */
-export function PublishedRows({
-  docked,
-  doors,
-}: {
-  docked: readonly DockedPullRequest[];
-  doors: PublishedDoors;
-}): ReactNode {
-  if (docked.length === 0) return null;
-  return (
-    <div className="agent-published">
-      <List
-        label={docked.length === 1 ? PUBLISHED_THING : PUBLISHED_THINGS}
-        variant={LIST_VARIANT.CARD}
-        fingerTall
-      >
-        {docked.map((each) => (
-          <PublishedListRow key={each.pullRequest.url} docked={each} doors={doors} />
-        ))}
-      </List>
-    </div>
-  );
-}
-
-/** One pull request's row of the card: its number and title, that its checks failed where they did, where it stands if that matters, and the lines it adds and removes; a press opens its tab where it is the one the agent stands on and the view stands in a panel, or its page on GitHub, a right-click, a long press or the menu key offers the rest, a finger's row drawing no ⋯ so the title keeps its room, and the pointer resting on it hangs the pull request's chip's card, which names it whole. A phone's narrow row gives up its state's word, and any narrow row the checks', then the lines, before the number (tasks.css). */
-function PublishedListRow({
-  docked,
-  doors,
-}: {
-  docked: DockedPullRequest;
-  doors: PublishedDoors;
-}): ReactNode {
-  const { pullRequest, branch, current } = docked;
   const state = pullRequestStateWord(pullRequest);
   const coarse = useCoarsePointer();
-  const inPanel = current ? doors.openPullRequest : undefined;
+  const inPanel = doors.openPullRequest;
   // Note that Open on GitHub is offered only where a press opens the tab instead.
   const actions = branchActions(
     branch,
@@ -279,28 +236,34 @@ function PublishedListRow({
     />
   );
   return (
-    // Note that the card stands in the pill's place whatever the title's width, since it names the title whole, the published one where GitHub answered nothing.
-    <RowHintOptions card={card}>
-      <ListRow
-        leading={<PullRequestMark pullRequest={pullRequest} />}
-        title={pullRequestLabelOf(pullRequest)}
-        meta={
-          <span className={PUBLISHED_META_CLASS}>
-            {pullRequest.checks === CHECK_SUMMARY.FAILING ? (
-              <span className="agent-published-checks text-danger">{CHECKS_FAILING}</span>
-            ) : null}
-            {state === undefined ? null : <span className="agent-published-state">{state}</span>}
-            <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
-          </span>
-        }
-        hint={{ Hint: RowHint, label: pullRequest.title }}
-        onPress={() => {
-          if (inPanel === undefined) doors.openGitHub(pullRequest.url);
-          else inPanel();
-        }}
-        menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
-        more={!coarse}
-      />
-    </RowHintOptions>
+    <div className="agent-published">
+      <List label="Pull request" variant={LIST_VARIANT.CARD} fingerTall>
+        {/* Note that the card stands in the pill's place whatever the title's width, since it names the title whole, the published one where GitHub answered nothing. */}
+        <RowHintOptions card={card}>
+          <ListRow
+            leading={<PullRequestMark pullRequest={pullRequest} />}
+            title={pullRequestLabelOf(pullRequest)}
+            meta={
+              <span className={PUBLISHED_META_CLASS}>
+                {pullRequest.checks === CHECK_SUMMARY.FAILING ? (
+                  <span className="agent-published-checks text-danger">{CHECKS_FAILING}</span>
+                ) : null}
+                {state === undefined ? null : (
+                  <span className="agent-published-state">{state}</span>
+                )}
+                <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
+              </span>
+            }
+            hint={{ Hint: RowHint, label: pullRequest.title }}
+            onPress={() => {
+              if (inPanel === undefined) doors.openGitHub(pullRequest.url);
+              else inPanel();
+            }}
+            menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
+            more={!coarse}
+          />
+        </RowHintOptions>
+      </List>
+    </div>
   );
 }

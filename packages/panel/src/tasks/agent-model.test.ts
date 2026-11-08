@@ -33,7 +33,6 @@ import {
   choiceOn,
   continueFailureNote,
   delegates,
-  dockedPullRequests,
   effortFor,
   messageFailureNote,
   messageFailureWords,
@@ -266,29 +265,6 @@ const PULL_REQUEST: AgentPullRequest = {
   deletions: 14,
   changedFiles: 6,
 };
-
-test("the dock lists every pull request the agent opened, one still open before its newest merged one, and none of another agent's", () => {
-  const agentId = "8f1c3a52-6b0e-4d7a-9c21-5e4b7a0d2f10";
-  const merged = { ...PULL_REQUEST, state: PULL_REQUEST_STATE.MERGED };
-  const line = (number: number, opener: string) => ({
-    ...PULL_REQUEST,
-    number,
-    url: `https://github.com/acme/relay/pull/${number}`,
-    agentId: opener,
-  });
-  const docked = dockedPullRequests(
-    { repository: "acme/relay", branch: "luke/invites", pullRequest: merged },
-    [line(121, agentId), line(122, "2d6e9b1f-0c47-4a83-b5e2-7f19c4a6d830"), { ...merged, agentId }],
-    agentId,
-  );
-  assert.deepEqual(
-    docked.map(({ pullRequest, current }) => [pullRequest.number, current]),
-    [
-      [121, false],
-      [123, true],
-    ],
-  );
-});
 
 test("the checkout command fetches and switches to the branch, and the chip opens the pull request, else the branch compared, else nowhere", () => {
   assert.equal(
