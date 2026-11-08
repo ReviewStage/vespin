@@ -701,16 +701,6 @@ export interface GitHubAppService {
     HttpClient.HttpClient | DatabaseServices
   >;
   /**
-   * Whether a write token for the repository will read its pull requests'
-   * CI: the workspace's installation grants the App `CI_READ_PERMISSIONS`
-   * whole and reaches the repository, or the member's own token reaches it.
-   */
-  readonly repositoryCiReadable: (
-    organizationId: string,
-    fullName: string,
-    member: string | undefined,
-  ) => Effect.Effect<boolean, GitHubWorkspaceReadFailure, HttpClient.HttpClient | DatabaseServices>;
-  /**
    * The same mint with contents and pull requests write, which is what a
    * coding agent's push to its branch and its pull request need, and with CI
    * read beside them where the installation grants it.
@@ -1860,13 +1850,6 @@ function githubAppService(
       return yield* tokenReach(member, fullName, throughApp);
     });
 
-  /** The repository as `reach` reads it, and how, none where it does not reach it. */
-  const reachableRepository = (
-    organizationId: string,
-    fullName: string,
-    member: string | undefined,
-  ) => Effect.map(reach(organizationId, fullName, member), Result.getSuccess);
-
   /**
    * A token minted for the key's one repository, by its name, which is one
    * repository on the installation's one account, or for none named, and
@@ -2177,13 +2160,6 @@ function githubAppService(
       repositoryIssueToken: (organizationId, fullName, member) =>
         repositoryToken(organizationId, fullName, member, (on) =>
           on.issuesReadable ? INSTALLATION_TOKEN_PERMISSIONS.ISSUES : undefined,
-        ),
-      repositoryCiReadable: (organizationId, fullName, member) =>
-        Effect.map(reachableRepository(organizationId, fullName, member), (reached) =>
-          Option.match(reached, {
-            onNone: () => false,
-            onSome: (on) => on.access === GITHUB_ACCESS.TOKEN || on.installation.ciReadable,
-          }),
         ),
       repositoryWriteToken: (organizationId, fullName, member) =>
         repositoryToken(

@@ -38,7 +38,7 @@ import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { standingOfAgent } from "../tool-catalog/gates.js";
 import { WORKSPACE_MCP_PATH, workspaceIntegrationMcpUrl } from "../workspace-mcp/app.js";
 import { workspaceStepOf } from "../written-mentions.js";
-import { agentAuthorship, agentCiReadable } from "./checkout.js";
+import { agentAuthorship } from "./checkout.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { codexSessions } from "./codex-sessions.js";
 import {
@@ -89,8 +89,7 @@ const agentExtraCheckouts = (userId: string, agent: Agent) =>
 
 /**
  * Our coder instructions for an agent on the harness given, composed on
- * what its row names (`instructions.ts`'s `agentCoderInstructions`): whether
- * its token reads the repository's CI, whose its commits are and the
+ * what its row names (`instructions.ts`'s `agentCoderInstructions`): whose its commits are and the
  * co-author trailer where its starter's choice credits one, the workspace its links are written under, the number
  * its task goes by there, and where it stands against our tools' gates, read once (`standingOfAgent`).
  */
@@ -102,26 +101,23 @@ const nativeCoderInstructions = (
 ) =>
   Effect.gen(function* () {
     const target = { userId, conversationId: agent.conversationId };
-    // Note that we read these together, because none waits on another and the CI read alone takes over a second.
-    const [ciReadable, authorship, workspace, taskNumber, standing, extraRepositories] =
-      yield* Effect.all(
-        [
-          hasRepository(agent) ? agentCiReadable(target, agent) : Effect.succeed(false),
-          hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
-          workspaceStepOf(userId, agent.organizationId).pipe(
-            Effect.tapError(logStoreFailure),
-            Effect.orElseSucceed(() => agent.organizationId),
-          ),
-          agentTaskNumber(userId, agent),
-          standingOfAgent(Option.some(agent)),
-          hasRepository(agent)
-            ? agentExtraCheckouts(userId, agent)
-            : Effect.succeed<readonly ExtraCheckout[]>([]),
-        ],
-        { concurrency: "unbounded" },
-      );
+    // Note that we read these together, because none waits on another.
+    const [authorship, workspace, taskNumber, standing, extraRepositories] = yield* Effect.all(
+      [
+        hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
+        workspaceStepOf(userId, agent.organizationId).pipe(
+          Effect.tapError(logStoreFailure),
+          Effect.orElseSucceed(() => agent.organizationId),
+        ),
+        agentTaskNumber(userId, agent),
+        standingOfAgent(Option.some(agent)),
+        hasRepository(agent)
+          ? agentExtraCheckouts(userId, agent)
+          : Effect.succeed<readonly ExtraCheckout[]>([]),
+      ],
+      { concurrency: "unbounded" },
+    );
     return agentCoderInstructions(agent, {
-      ciReadable,
       authorship,
       workspace,
       taskNumber,

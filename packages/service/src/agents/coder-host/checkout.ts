@@ -273,34 +273,6 @@ export const agentAuthorship = /* @__PURE__ */ Effect.fn("web/agentAuthorship")(
 });
 
 /**
- * Whether the agent's token will read its pull request's CI: the
- * installation of its task's workspace grants the App the read (`github-app.ts`'s `CI_READ_PERMISSIONS`). Told to the session
- * as it starts, so a read that fails is logged and reads as not readable
- * rather than failing the start: the checkout refuses on its own terms when
- * the sandbox opens.
- */
-export const agentCiReadable = /* @__PURE__ */ Effect.fn("web/agentCiReadable")(function* (
-  target: ConversationTarget,
-  agent: WithRepository<Agent>,
-): Effect.fn.Return<boolean, never, CheckoutServices> {
-  const app = yield* GitHubApp;
-  return yield* Effect.gen(function* () {
-    const workspace = yield* agentWorkspace(target, agent);
-    if (Option.isNone(workspace)) return false;
-    return yield* app.repositoryCiReadable(workspace.value, agent.repository, agentMember(agent));
-  }).pipe(
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `Whether conversation ${target.conversationId} reads its CI was not read: ${failure._tag}`,
-        ),
-        false,
-      ),
-    ),
-  );
-});
-
-/**
  * A write token for the agent's repository, minted as the App where the
  * installation of its task's workspace still reaches the repository, with
  * the repository as GitHub spells it. An agent that works in other
