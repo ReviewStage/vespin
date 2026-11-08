@@ -23,7 +23,7 @@ type FindLeaks = (text: string, secrets: readonly never[]) => readonly string[];
 type Scrub = (value: unknown) => unknown;
 
 /** A fixture's values: each line of a JSON-lines file, or the one value of a JSON file. */
-export function fixtureValues(file: string, text: string): readonly unknown[] {
+function fixtureValues(file: string, text: string): readonly unknown[] {
   if (!file.endsWith(".jsonl")) return [JSON.parse(text)];
   return text
     .split("\n")

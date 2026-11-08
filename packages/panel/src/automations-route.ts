@@ -11,7 +11,7 @@
  * which takes that page's step, an automation's runs outside a narrow room,
  * which take its setup's, and its setup stood again from its runs,
  * which the window's history steps back to or takes in place
- * (`navigation-history.ts`'s `lists.runs`). An automation deleted is held
+ * (`places/narrow-backs.ts`). An automation deleted is held
  * for as long as the window lives, so Back passes over its steps for good.
  */
 
@@ -49,8 +49,8 @@ const AUTOMATIONS_LEAF = {
   },
 } as const;
 
-/** The Automations pages as the router stands them. */
-export interface AutomationsRoute {
+/** Which Automations page the router stands, read alone, as a surface that only draws it reads it. */
+export interface AutomationsStanding {
   readonly open: boolean;
   /** The page standing, the list while none does. */
   readonly place: AutomationsPlace;
@@ -58,12 +58,18 @@ export interface AutomationsRoute {
   readonly runs: boolean;
   /** The address step of the workspace whose pages stand, while one does. */
   readonly standingIn: string | undefined;
+}
+
+/** The Automations pages as the router stands them. */
+export interface AutomationsRoute extends AutomationsStanding {
   /** Whether the window has seen the automation `automationId` deleted, as it is asked. */
   readonly deletedNow: (automationId: string) => boolean;
   /** The address of the automation's setup while its runs stand alone over it, which a way back from them steps back to. */
   readonly setupAddress: string | undefined;
   /** Opens `to` under the workspace whose address step is `workspace`. */
   readonly onOpen: (to: AutomationsPlace, workspace: string) => void;
+  /** Whether the page `to` under `workspace` is the one standing, which opening it moves nothing to. */
+  readonly standsAt: (to: AutomationsPlace, workspace: string) => boolean;
   /** Stands the automation's runs alone as a step of their own, or its setup again in the step's place. */
   readonly onRuns: (shown: boolean) => void;
   readonly onClose: () => void;
@@ -110,24 +116,37 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
   }
 }
 
+/** Which Automations page the router stands, if any. */
+export function useAutomationsPlace(): AutomationsStanding {
+  const here = useWindowPlace();
+  const standing =
+    here.place === ROUTED_PLACE.AUTOMATIONS ? placeOf(here.leaf, here.params) : undefined;
+  return {
+    open: standing !== undefined,
+    place: standing?.place ?? AUTOMATIONS_LIST,
+    runs: standing?.runs ?? false,
+    standingIn: standing === undefined ? undefined : here.params.workspace,
+  };
+}
+
 /** The Automations pages as the router stands them, in a room `narrow` or not, left by the window's routed exit, and kept standing by its stay where a leave was asked of them before a door asked for the page standing. */
 export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRoute {
   const router = useRouter();
   const navigate = useNavigate();
-  const here = useWindowPlace();
+  const standing = useAutomationsPlace();
   const exits = useRoutedExits();
   // Only grows: every automation the window has seen deleted.
   const deleted = useRoutedMemory().deletedAutomations;
-  const standing =
-    here.place === ROUTED_PLACE.AUTOMATIONS ? placeOf(here.leaf, here.params) : undefined;
-  const standingIn = standing === undefined ? undefined : here.params.workspace;
+  const { standingIn } = standing;
+  const standsAt = (to: AutomationsPlace, workspace: string) =>
+    router.buildLocation(navigationTo(to, workspace)).href === router.history.location.href;
   const onOpen = (to: AutomationsPlace, workspace: string) => {
     const gone = to.kind === AUTOMATIONS_PAGE.LIST ? to.deleted : undefined;
     if (gone !== undefined) deleted.setState((held) => new Map(held).set(gone, true));
     const options = navigationTo(to, workspace);
     // Opening the page already standing moves nothing, as pressing the place standing always has,
-    // and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
-    if (router.buildLocation(options).href === router.history.location.href) {
+    // and keeps it standing where the door that asked for it left the routed place first, as ⌘K's does.
+    if (standsAt(to, workspace)) {
       exits.stay();
       return;
     }
@@ -136,7 +155,7 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
     void navigate({ ...options, replace });
   };
   const automation =
-    standing?.place.kind === AUTOMATIONS_PAGE.EDIT && standingIn !== undefined
+    standing.place.kind === AUTOMATIONS_PAGE.EDIT && standingIn !== undefined
       ? { workspace: standingIn, automationId: standing.place.automationId }
       : undefined;
   const setup =
@@ -145,7 +164,7 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
       : ({ to: "/$workspace/automation/$automationId", params: automation } as const);
   // Note that the runs alone are a step of their own in a narrow room alone, as a page of Settings is; a wide room's take the setup's step, as its setup takes theirs back.
   const onRuns = (shown: boolean) => {
-    if (setup === undefined || standing?.runs === shown) return;
+    if (setup === undefined || standing.runs === shown) return;
     if (shown) {
       void navigate({
         to: "/$workspace/automation/$automationId/runs",
@@ -160,14 +179,12 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
     void navigate({ href: pathUnder(pathname, workspace), replace: true });
   };
   return {
-    open: standing !== undefined,
-    place: standing?.place ?? AUTOMATIONS_LIST,
-    runs: standing?.runs ?? false,
-    standingIn,
+    ...standing,
     deletedNow: (automationId) => deleted.state.has(automationId),
     setupAddress:
-      setup === undefined || standing?.runs !== true ? undefined : router.buildLocation(setup).href,
+      setup === undefined || !standing.runs ? undefined : router.buildLocation(setup).href,
     onOpen,
+    standsAt,
     onRuns,
     onClose: () => exits.leave(),
     onTurn,

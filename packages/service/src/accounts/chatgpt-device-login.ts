@@ -47,6 +47,7 @@ import {
   CHATGPT_DEVICE_LOGIN,
   type ChatGptDeviceLoginOutcome,
   type ChatGptDeviceSettled,
+  type ChatGptDeviceStartAnswer,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
 } from "@repo/features/provider-key-wire";
@@ -105,17 +106,8 @@ const DeviceCodesJson = Schema.fromJsonString(
   Schema.Struct({ deviceAuthId: Schema.String, userCode: Schema.String }),
 );
 
-/** What a start answers: the login to poll and the code to enter, or nothing where OpenAI issued none. */
-export interface ChatGptDeviceStart {
-  readonly loginId: string;
-  readonly userCode: string;
-  readonly verificationUrl: string;
-  readonly intervalSeconds: number;
-  readonly expiresAt: number;
-}
-
 /** What a poll answers: how the login stands, and whether this poll is the one that connected it. */
-export interface ChatGptDevicePoll {
+interface ChatGptDevicePoll {
   readonly outcome: ChatGptDeviceLoginOutcome;
   readonly connectedNow: boolean;
 }
@@ -160,7 +152,7 @@ export const startChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(functio
   const now = yield* DateTime.nowAsDate;
   const expiresAt = new Date(now.getTime() + Duration.toMillis(DEVICE_CODE_LIFETIME));
   yield* beginChatGptDeviceLogin(owner, sealed, expiresAt, now);
-  const start: ChatGptDeviceStart = {
+  const start: ChatGptDeviceStartAnswer = {
     loginId: owner.loginId,
     userCode,
     verificationUrl: CODEX_DEVICE_OAUTH.VERIFICATION_URL,

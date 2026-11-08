@@ -3,6 +3,7 @@ import type { UnparsedWireValue } from "@repo/wire";
 import type { AppSettingId, DescribedSetting } from "@repo/wire/app-settings";
 import type { HostCapability } from "./capabilities.js";
 import type { ExperimentChoices } from "./experiments.js";
+import type { SoundWhen } from "./sound-when.js";
 
 export const SETTINGS_PAGE = {
   /** Who is signed in and the ways out, the page Settings opens on. */
@@ -124,8 +125,8 @@ export interface SettingGuardResult<Value> {
  * can no longer lead to a page without its row.
  */
 export interface SettingsVisibility {
-  /** The experiments the account has on, which a gated feature's row stands on. */
-  settings: { experiments: ExperimentChoices };
+  /** The experiments the account has on, which a gated feature's row stands on, and when a sound plays, which the sound's own row stands on; none stored reads as its default. */
+  settings: { experiments: ExperimentChoices; soundWhen?: SoundWhen | undefined };
   /** Whether the Account section stands. */
   accountDrawn: boolean;
   /** What the platform offers, which a platform feature's row stands on. */

@@ -30,12 +30,6 @@ import { STORE_WRITE_EFFECT, type StoreWriter } from "./writer.js";
  */
 
 export const LOST_TURNS = {
-  /**
-   * How long a withdrawn line no turn took is kept before the writer deletes
-   * it: a day and an hour, far past the longest a runner holds a line before
-   * it opens the turn that takes it.
-   */
-  WITHDRAWN_LINE_KEEP_MS: 25 * 60 * 60 * 1000,
   /** The most turns one read of an ended session takes; reads go on until none is left. */
   LIMIT: 50,
 } as const;

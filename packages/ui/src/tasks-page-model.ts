@@ -147,28 +147,6 @@ export const TASK_PROPERTY_ORDER: readonly TaskProperty[] = Object.values(TASK_P
 /** The properties a Board's card has a place for: every one a row has. */
 export const BOARD_PROPERTIES: readonly TaskProperty[] = TASK_PROPERTY_ORDER;
 
-/**
- * The properties a List's row offered before it offered the assignee, which a
- * List display kept by a build that did not say what it offered was chosen
- * among.
- */
-export const EARLIER_LIST_PROPERTIES: readonly TaskProperty[] = TASK_PROPERTY_ORDER.filter(
-  (property) => property !== TASK_PROPERTY.ASSIGNEE,
-);
-
-/**
- * The properties a Board's card offered before it offered every one, which a
- * Board display kept by an earlier build was chosen among: whatever it has
- * a place for since stands as the Board's own display draws it.
- */
-export const EARLIER_BOARD_PROPERTIES: readonly TaskProperty[] = [
-  TASK_PROPERTY.PRIORITY,
-  TASK_PROPERTY.KEY,
-  TASK_PROPERTY.STATUS,
-  TASK_PROPERTY.REPOSITORY,
-  TASK_PROPERTY.CREATOR,
-];
-
 /** Which of the settled tasks, Done and Canceled, stand: none, those finished within the past week or month, or every one. */
 export const COMPLETED_WINDOW = {
   NONE: "none",
@@ -203,14 +181,10 @@ export interface TasksDisplay {
 
 /**
  * A display as a view keeps it: each choice optional, so one kept by an
- * earlier build reads over the view's own for whatever it lacks; the Done
- * and Canceled switches an earlier build kept before the completed window
- * replaced them; and the properties the view offered when it was kept,
- * absent from a build before it said so.
+ * earlier build reads over the view's own for whatever it lacks; and the
+ * properties the view offered when it was kept, every one where it says none.
  */
 export type KeptTasksDisplay = Partial<TasksDisplay> & {
-  readonly done?: boolean;
-  readonly canceled?: boolean;
   readonly offered?: readonly TaskProperty[];
 };
 
@@ -231,31 +205,19 @@ function withPropertiesOffered(
 }
 
 /**
- * The display a view kept, over its own `initial` for whatever it lacks. A
- * display kept with the earlier switches and no window reads as the past
- * week where it showed either settled status, and as none where it showed
- * neither, so nobody's saved view loses or floods its finished work. Its
- * properties were chosen among those it says it was offered, else among
- * `earlier`, what its view offered before a display said so; one offered
+ * The display a view kept, over its own `initial` for whatever it lacks. Its
+ * properties were chosen among those it says it was offered; one offered
  * since stands as `initial` draws it (`withPropertiesOffered`).
  */
-export function keptTasksDisplay(
-  kept: KeptTasksDisplay,
-  initial: TasksDisplay,
-  earlier: readonly TaskProperty[],
-): TasksDisplay {
-  const { done, canceled, offered, properties, ...rest } = kept;
-  const switched = done !== undefined || canceled !== undefined;
-  const switchedWindow =
-    done === true || canceled === true ? COMPLETED_WINDOW.PAST_WEEK : COMPLETED_WINDOW.NONE;
+export function keptTasksDisplay(kept: KeptTasksDisplay, initial: TasksDisplay): TasksDisplay {
+  const { offered, properties, ...rest } = kept;
   return {
     ...initial,
     ...rest,
-    completed: kept.completed ?? (switched ? switchedWindow : initial.completed),
     properties:
       properties === undefined
         ? initial.properties
-        : withPropertiesOffered(properties, offered ?? earlier, initial.properties),
+        : withPropertiesOffered(properties, offered ?? TASK_PROPERTY_ORDER, initial.properties),
   };
 }
 

@@ -13,7 +13,7 @@ import { Schema as EffectSchema, Result, SchemaTransformation } from "effect";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
-import { githubRepositoryFullNameSchema } from "./link-grammar.js";
+import { commitShaSchema, githubRepositoryFullNameSchema } from "./link-grammar.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -365,7 +365,7 @@ export const MAC_PRESENCE = {
  * device that went quiet, and a window that cannot ask must not say a device
  * is away.
  */
-export const PRESENCE_READ_STANDS_MS = MAC_PRESENCE.POLL_MS + MAC_PRESENCE.READ_TIMEOUT_MS;
+const PRESENCE_READ_STANDS_MS = MAC_PRESENCE.POLL_MS + MAC_PRESENCE.READ_TIMEOUT_MS;
 
 /**
  * A device's lease on the runs it holds: its beat is the lease, renewed every
@@ -537,7 +537,7 @@ export function turnStatusOfWord(word: string): TurnStatus {
  * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
  * failed where it did, in the wire's word.
  */
-export const agentTurnSchema = EffectSchema.Struct({
+const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   queuedAt: countedNumber,
   status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
@@ -653,7 +653,7 @@ export const agentAttachmentsSchema = EffectSchema.Array(agentAttachmentSchema).
 );
 
 /** A message's words, trimmed and bounded, and empty where the files carry the message alone. */
-export const messageWordsSchema = EffectSchema.Trim.check(
+const messageWordsSchema = EffectSchema.Trim.check(
   EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_MESSAGE_CHARS),
 );
 
@@ -742,7 +742,7 @@ export const startBranchSchema = EffectSchema.String.check(
 );
 
 /** A repository a Start names beside the agent's own: `owner/name`, and the branch its checkout is cloned at, none for its default branch. */
-export const agentAlsoRepositorySchema = EffectSchema.Struct({
+const agentAlsoRepositorySchema = EffectSchema.Struct({
   repository: githubRepositoryFullNameSchema,
   branch: EffectSchema.optionalKey(startBranchSchema),
 });
@@ -750,7 +750,7 @@ export const agentAlsoRepositorySchema = EffectSchema.Struct({
 export type AgentAlsoRepository = typeof agentAlsoRepositorySchema.Type;
 
 /** The repositories a Start names beside the agent's own: at least one where the list is named, at most the bound, and each once, in any case. */
-export const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
+const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ALSO_REPOSITORIES),
   EffectSchema.makeFilter(
@@ -968,8 +968,6 @@ export type AgentQueueChange = typeof agentQueueChangeSchema.Type;
 /** What a change to the queue answers: the queue as it then stands. */
 export const agentQueueAnswerSchema = EffectSchema.Struct({ queue: agentQueueSchema });
 
-export type AgentQueueAnswer = typeof agentQueueAnswerSchema.Type;
-
 /**
  * Rewinding an agent (POST): the developer's line it goes back to just
  * before, by its message id, dropping that line and everything after it.
@@ -1055,7 +1053,7 @@ export const ADDED_REPOSITORY_CHECKOUT = {
 export type AddedRepositoryCheckout =
   (typeof ADDED_REPOSITORY_CHECKOUT)[keyof typeof ADDED_REPOSITORY_CHECKOUT];
 
-export const addedRepositoryCheckoutSchema = EffectSchema.Literals(
+const addedRepositoryCheckoutSchema = EffectSchema.Literals(
   Object.values(ADDED_REPOSITORY_CHECKOUT),
 );
 
@@ -1150,7 +1148,7 @@ export const AGENT_OWNER = {
  * neither, or whose owner is gone, carries none: the run of a deleted
  * automation goes with it, and no case stands for that.
  */
-export const agentOwnerSchema = EffectSchema.Union([
+const agentOwnerSchema = EffectSchema.Union([
   EffectSchema.Struct({ kind: EffectSchema.Literal(AGENT_OWNER.TASK), taskId: wireUuidSchema }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(AGENT_OWNER.RUN),
@@ -1379,14 +1377,6 @@ export const agentAnswerSchema = EffectSchema.Struct({
   txid: EffectSchema.optionalKey(agentTxidSchema),
   /** Where a repository a change added was checked out: in the place the agent runs now, or at its next turn; none for any other change. */
   addedCheckout: EffectSchema.optionalKey(addedRepositoryCheckoutSchema),
-  /**
-   * Retired: a service no longer sends it, since a Start on a teammate's
-   * device is refused (`LOCAL_AGENT_REFUSAL.NOT_OWNER`) and never runs in the
-   * cloud on its own. Kept optional so a build that still reads it decodes
-   * every answer, and so one from before the refusal reads an answer a
-   * service older than this still sends.
-   */
-  notice: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /**
@@ -1645,8 +1635,6 @@ export const CHANGES_BOUNDS = {
  * and removes; and its patch, every hunk of a unified diff from the first
  * `@@` header on, or null with why where it carries none.
  */
-/** A commit as GitHub names it: forty hex digits. */
-const commitShaSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9a-f]{40}$/u));
 
 /**
  * One changed file as GitHub lists it: its path, where it moved from, what
@@ -2795,12 +2783,6 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * before payers were recorded, and from a service older than it.
    */
   payer: EffectSchema.optionalKey(agentPayerSchema),
-  /**
-   * What the newest turn alone cost. No service sends it any more, since a
-   * price the window draws means the whole run's (`usage`); it stays an
-   * optional key so the answer's shape is the one older desktops read.
-   */
-  turnUsage: EffectSchema.optionalKey(agentUsageSchema),
   context: EffectSchema.optionalKey(agentContextSchema),
   /**
    * The journal revision the agent's transcript was last rewound at, on

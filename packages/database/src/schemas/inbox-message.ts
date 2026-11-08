@@ -19,7 +19,7 @@ import { inboxItem } from "./inbox.js";
  * it stands, and a member's may carry the answer to one; the item names
  * the message whose ask waits (`inbox.ts`).
  * The files a message carried are rows of the item's attachments of the
- * message kind, naming the message (`inbox-attachment.ts`). The key a
+ * message kind, naming the message (`attachment.ts`). The key a
  * member's client wrote it under is unique on the item, so a message sent
  * again after a lost reply is written once. A message goes with its item,
  * and with it the account, the task, and the agent the item goes with; a

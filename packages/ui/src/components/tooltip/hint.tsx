@@ -116,7 +116,7 @@ import { createPortal } from "react-dom";
 import { useDisclosure } from "../../use-disclosure.js";
 import { useStateWithRef } from "../../use-state-with-ref.js";
 import { makeWait, useWait, type Wait } from "../../wait.js";
-import type { ListRowHint } from "../list-row/list-row.js";
+import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
 import { Shortcut } from "../shortcut/shortcut.js";
@@ -417,7 +417,7 @@ function cardDoorAround(anchor: HTMLElement): CardDoor | undefined {
  * where it takes no focus and holds words.
  */
 function heardOver(element: HTMLElement, label: string): Heard {
-  const name = element.getAttribute("aria-label") ?? element.textContent ?? "";
+  const name = element.getAttribute("aria-label") ?? element.textContent;
   if (name.replace(SPACING, "").includes(label.replace(SPACING, ""))) return HEARD.NAMED;
   const spoken = !element.matches(TAKES_FOCUS) && !element.matches(HOLDS_NO_WORDS);
   return spoken ? HEARD.SPOKEN : HEARD.DESCRIBED;
@@ -750,7 +750,7 @@ export function Tooltip({
     },
     [],
   );
-  const ownRef = (children.props as AnchorProps).ref;
+  const ownRef = children.props.ref;
   const anchorRef = useCallback(
     (element: HTMLElement | null) => {
       handRef(ownRef, element);

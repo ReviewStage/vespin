@@ -11,13 +11,11 @@ import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
   commandKeyshortcuts,
-  ErrorState,
   GAP,
   ListMotion,
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
   SearchField,
-  SettingsLine,
   SettingsSection,
   type SettingsSectionSkeletonShape,
   SettingsSectionsSkeleton,
@@ -38,12 +36,12 @@ import { searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
-import { unreadShown } from "../failure-report.js";
 import { IntegrationRow } from "../integration-row.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useIntegrationToolReads } from "../integration-tools.js";
 import { focusSearchField } from "../search-field.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
+import { ReadFailed } from "./marks.js";
 
 /**
  * integrations-page.tsx -- Settings › Integrations: the services the account connects so our agents can use them.
@@ -296,14 +294,11 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
     <MovingSections found={found}>
       {statuses.readFailed ? (
         <SettingsSection>
-          <SettingsLine>
-            <ErrorState
-              failure={unreadShown(FAILURE_SURFACE.INTEGRATIONS_READ)}
-              onRetry={() => void statuses.read()}
-            >
-              {PAGE_LINE.READ_FAILED}
-            </ErrorState>
-          </SettingsLine>
+          <ReadFailed
+            line={PAGE_LINE.READ_FAILED}
+            surface={FAILURE_SURFACE.INTEGRATIONS_READ}
+            onRetry={() => void statuses.read()}
+          />
         </SettingsSection>
       ) : null}
       {rows.length === 0 ? <PageNote>{PAGE_LINE.NONE_OFFERED}</PageNote> : null}

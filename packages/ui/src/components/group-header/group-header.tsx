@@ -17,7 +17,7 @@ import {
   useDisclosureFold,
 } from "../disclosure/disclosure.js";
 import { INLINE_EDIT_FIELD, INLINE_EDIT_LOOK } from "../inline-edit/inline-edit.js";
-import { type ContextMenuProps, withContextMenu } from "../menu/menu.js";
+import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { NAV_COUNT_SHOWN, type NavCount } from "../nav-item/nav-item.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";

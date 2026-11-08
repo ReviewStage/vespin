@@ -32,7 +32,7 @@ const IMAGE_ARGS = {
 } as const;
 
 /** A host's own build of an agent CLI as the guard reads its pin: its name in `pins.ts`, its release, and its address. */
-export interface HostCliPin {
+interface HostCliPin {
   readonly name: string;
   readonly version: string;
   readonly archive: string;

@@ -153,7 +153,7 @@ export interface ShownTab {
  * menu or a field of the body's own where the ⋯ stood (`onAsk`), as a
  * phone's View options opens from its header's ⋯ (`phone-head.tsx`).
  */
-export type TabAction =
+type TabAction =
   | MenuEntry
   | (Omit<MenuAction, "onSelect"> & { readonly onAsk: (opener: HTMLElement) => void });
 
@@ -183,7 +183,7 @@ export function handedCommand(
 }
 
 /** The menu items a ⋯ drops for `groups`, an item opening a menu of the body's own opening it under `opener`. */
-export function tabActionItems(
+function tabActionItems(
   groups: readonly (readonly TabAction[])[],
   opener: HTMLElement,
 ): MenuEntry[][] {
@@ -236,7 +236,7 @@ function tabActionGroups(doors: TabDoors): TabActionGroups {
  * acted on as a task's is. Note that the tab's pin is not the agent's,
  * which a taskless agent's row has, so it is left out of the menu's doors.
  */
-export function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
+function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
   const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, copyLink, chosen } =
     doors;
   if (doors.document !== undefined) return doors.document.groups().map((group) => [...group]);
@@ -259,7 +259,7 @@ export function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[
  * that a tab's Copy link leads even what its body hands up, alone in its
  * group, because Copy link leads every menu that holds one.
  */
-export function tabContentGroups(doors: TabDoors): TabActionGroups {
+function tabContentGroups(doors: TabDoors): TabActionGroups {
   const { handed, copyLink } = doors;
   if (handed === undefined || copyLink === undefined) {
     return [...(handed ?? []), ...contentActionGroups(doors)].filter((group) => group.length > 0);

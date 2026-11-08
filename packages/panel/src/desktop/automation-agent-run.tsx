@@ -27,8 +27,8 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import type { AutomationsDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 
 /**
@@ -64,13 +64,12 @@ const RUN_NOUN = "Run";
 /** The trail an agent an automation started leads its bar with; none for any other agent. */
 export function automationTrail(
   agent: Pick<AgentSummary, "automationId" | "automationName">,
-  tasks: Pick<TasksControl, "automationsView">,
+  onOpen: AutomationsDoor["open"],
 ): readonly ToolbarPlace[] | undefined {
   // Note that a run from before its origin was kept has no name to lead with, so it draws none.
   const name = automationRun(agent)?.name;
   if (name === undefined) return undefined;
   const { automationId } = agent;
-  const { onOpen } = tasks.automationsView;
   const automations: ToolbarPlace = {
     label: AUTOMATIONS_PLACE,
     icon: <GLYPH.AUTOMATION />,

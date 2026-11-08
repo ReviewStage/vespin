@@ -324,8 +324,6 @@ export const chatGptDeviceLoginRequestSchema = EffectSchema.Struct({
   ),
 });
 
-export type ChatGptDeviceLoginRequest = typeof chatGptDeviceLoginRequestSchema.Type;
-
 /**
  * How a device-code connection stands (a poll's answer, and a cancel's):
  * its outcome, the fixed sentence of a failure, and the account's keys as

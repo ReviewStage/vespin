@@ -14,6 +14,7 @@ import { eventIterator, type } from "@orpc/contract";
 import { isAccountPlace, isLinkPlace, type ShownLink } from "@repo/features/link-grammar";
 import { type AppCommand, isAppCommand } from "@repo/settings/shortcuts";
 import { isRecord, isWireString } from "@repo/wire";
+import { COMPLETION_SOUNDS, type CompletionSound } from "@repo/wire/app-settings";
 import { wireResult as result, type WireGuard, type WireGuardValue } from "@repo/wire/wire-guard";
 import { type AppStateDelivery, isAppStateDelivery } from "../app-state.js";
 import { actProcedure } from "./base.js";
@@ -23,6 +24,7 @@ export const PUSH = {
   APP_STATE: "app:state",
   MENU_COMMAND: "app:menu-command",
   SHOW_LINK: "app:show-link",
+  CHIME: "app:chime",
 } as const;
 
 export type PushName = (typeof PUSH)[keyof typeof PUSH];
@@ -56,6 +58,14 @@ export const PUSH_GUARD = {
       ((isWireString(value.workspace) && isLinkPlace(value.place)) ||
         (value.workspace === undefined && isAccountPlace(value.place))),
   ),
+  /**
+   * A sound to play once, as news the developer turned a sound on for is
+   * heard (`agent-notices.ts`'s `heard`): pushed to one window alone, so two
+   * windows never play it twice.
+   */
+  [PUSH.CHIME]: result<CompletionSound>((value) =>
+    COMPLETION_SOUNDS.some((sound) => sound === value),
+  ),
 } as const satisfies { readonly [Name in PushName]: WireGuard<unknown> };
 
 /** What one push carries. */
@@ -71,6 +81,7 @@ export const PUSH_METHOD = {
   onAppState: PUSH.APP_STATE,
   onMenuCommand: PUSH.MENU_COMMAND,
   onShowLink: PUSH.SHOW_LINK,
+  onChime: PUSH.CHIME,
 } as const;
 
 export type PushMethod = keyof typeof PUSH_METHOD;

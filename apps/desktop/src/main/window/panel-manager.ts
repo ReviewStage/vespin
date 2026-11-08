@@ -1,5 +1,6 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { RunMode } from "@repo/host";
+import { WINDOW_MATERIAL, type WindowMaterial } from "@repo/host/appearance";
 import type { EventPushName, PushPayload } from "@repo/host/contract";
 import {
   app,
@@ -15,7 +16,6 @@ import { hardenedWebPreferences, refuseForeignNavigation } from "./hardened-wind
 import { askReloadPanel } from "./reload-dialog";
 import { onRendererDeath, RendererRevival } from "./renderer-revival";
 import { followSwipes } from "./swipe-navigation";
-import { WINDOW_MATERIAL, type WindowMaterial } from "./window-material";
 import {
   placementOf,
   placeWindow,
@@ -27,7 +27,7 @@ import { trafficLightsAt } from "./zoom";
 
 interface PanelManagerOptions {
   runMode: RunMode;
-  /** The native material its windows are drawn on (`window-material.ts`); the sidebar's where unset. */
+  /** The native material its windows are drawn on (`@repo/host/appearance`); the sidebar's where unset. */
   material?: WindowMaterial | undefined;
   /** The named development instance this run is, which every window's title then carries; none for the plain one. */
   instance?: string | undefined;
@@ -199,6 +199,17 @@ export class PanelManager {
     }
   }
 
+  /**
+   * Hands a payload to one living window, for what must happen once however
+   * many stand, a chime: the focused one, else the one an action aimed at
+   * the app lands on. Note that a closed window is only hidden, so its
+   * renderer still hears it.
+   */
+  pushToOne<Name extends EventPushName>(push: Name, payload: PushPayload<Name>): void {
+    const window = this.windows().find((each) => each.isFocused()) ?? this.primaryPanel();
+    if (window !== undefined) windowPushes.push(window.webContents, push, payload);
+  }
+
   /** The window an action aimed at the app lands on. */
   primaryPanel(): BrowserWindow | undefined {
     for (const window of this.#windows.values()) {
@@ -368,7 +379,7 @@ export class PanelManager {
       backgroundColor: DESKTOP_WINDOW.CLEAR,
       // On Tahoe the window is clear for the Liquid Glass laid behind its
       // page once it loads; before it, it is drawn on the sidebar material
-      // (`window-material.ts`). Note that the glass window still names the
+      // (`@repo/host/appearance`). Note that the glass window still names the
       // material's state, because Electron keeps it from construction and has
       // no setter: the sidebar material a failed lay falls back to then
       // follows the window too.

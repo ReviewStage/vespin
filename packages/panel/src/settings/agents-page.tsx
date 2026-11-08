@@ -65,7 +65,7 @@ import {
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
-import { SettingMarks } from "./marks.js";
+import { ReadFailed, SettingMarks } from "./marks.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
 import { SwitchRow } from "./switch-row.js";
@@ -428,14 +428,11 @@ function AgentsSection({
           onRetryModels={onRetryModels}
         />
       ) : drawn.failed ? (
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.AGENT_DEFAULTS_READ)}
-            onRetry={() => void drawn.retry()}
-          >
-            {PAGE_LINE.FAILED}
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line={PAGE_LINE.FAILED}
+          surface={FAILURE_SURFACE.AGENT_DEFAULTS_READ}
+          onRetry={() => void drawn.retry()}
+        />
       ) : (
         <SettingsRowsSkeleton label={readingWords("your default")} rows={DEFAULT_SKELETON} />
       )}

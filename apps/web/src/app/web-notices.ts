@@ -1,5 +1,5 @@
 /**
- * web-notices.ts -- the doors a notice leaves a browser tab through: a badge on the installed app or a count before the tab's title.
+ * web-notices.ts -- the doors a notice leaves a browser tab through: a badge on the installed app or a count before the tab's title, and a chime.
  *
  * A tab posts no notification. The one notification the app posts is a command
  * waiting on this Mac (`client-notices.ts`), and no command runs in a tab,
@@ -11,9 +11,14 @@
  * kept there as the panel names the tab again. Either counts what waits on
  * the account as the Inbox's Open lists it, every workspace's
  * (`agent-notices.ts`'s `countedOf`).
+ *
+ * A chime plays in the tab itself, which runs the host and is its one
+ * window, through `@repo/ui`'s player. A browser keeps the tab's sound
+ * suspended until its first press, so one heard before that waits for it.
  */
 
 import type { AgentNoticeDoorsSurface } from "@repo/host/agent-notices";
+import { playCompletionSound } from "@repo/ui/completion-sound";
 
 /** The display mode the site runs in once installed (`public/manifest.webmanifest`'s `display`). */
 const INSTALLED_DISPLAY = "(display-mode: standalone)";
@@ -95,12 +100,13 @@ export function onTabShownChanged(listener: (shown: boolean) => void): () => voi
   return () => document.removeEventListener("visibilitychange", said);
 }
 
-/** The tab's doors: the badge, and a post that drops what it is handed, since no command runs in a tab. */
+/** The tab's doors: the badge, the chime, and a post that drops what it is handed, since no command runs in a tab. */
 export function webNoticeDoors(): WebNoticeDoors {
   const badge = badgeDoor();
   return {
     post: () => undefined,
     badge: badge.set,
+    chime: playCompletionSound,
     close: badge.close,
   };
 }

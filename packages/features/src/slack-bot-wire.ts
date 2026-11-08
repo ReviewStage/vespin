@@ -66,7 +66,7 @@ export const workspaceSlackBotChannelRequestSchema = EffectSchema.Struct({
 });
 
 /** One channel of the team as Settings lists it: its name, whether it is private, whether the bot is in it, and its default repository where one is named. */
-export const slackBotChannelSchema = EffectSchema.Struct({
+const slackBotChannelSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   name: EffectSchema.String,
   private: EffectSchema.Boolean,

@@ -65,7 +65,7 @@ export const COMMAND_FILTER = {
   NONE: "none",
 } as const;
 
-export type CommandFilter = (typeof COMMAND_FILTER)[keyof typeof COMMAND_FILTER];
+type CommandFilter = (typeof COMMAND_FILTER)[keyof typeof COMMAND_FILTER];
 
 /** One command: a menu row, the words typing finds it by, and what choosing it does. */
 export interface CommandItem extends ComboboxOption {

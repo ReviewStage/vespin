@@ -16,12 +16,8 @@ import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress, SELECT_BOX_PLACE } from "../card-press/card-press.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
-import {
-  type ListRowFold,
-  type ListRowHint,
-  type ListRowNest,
-  nestedItem,
-} from "../list-row/list-row.js";
+import { type ListRowFold, type ListRowNest, nestedItem } from "../list-row/list-row.js";
+import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { OneLine } from "../one-line/one-line.js";
 import { useRovingKeys } from "../roving-keys/roving-keys.js";
 import { type ListRowMenu, useRowMenu } from "../row-menu/row-menu.js";

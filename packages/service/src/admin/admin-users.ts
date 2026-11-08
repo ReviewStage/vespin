@@ -48,7 +48,7 @@ export const ADMIN_USERS_LAST_ACTIVE_DAYS = 365;
  * and `\` are escaped before the wildcards wrap it — a searched "100%" must
  * match those four characters, never widen into a prefix scan.
  */
-export function searchLikePattern(term: string): string {
+function searchLikePattern(term: string): string {
   return `%${term.replace(/[\\%_]/g, "\\$&")}%`;
 }
 

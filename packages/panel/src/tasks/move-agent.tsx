@@ -41,7 +41,7 @@ import type { AgentsControl } from "./use-agents.js";
  */
 
 /** What Move to says beyond the places' names. */
-export const MOVE_WORDS = {
+const MOVE_WORDS = {
   PUSHED_ONLY: "Only pushed work comes along",
 } as const;
 

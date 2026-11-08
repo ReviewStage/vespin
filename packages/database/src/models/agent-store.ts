@@ -56,6 +56,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Exit, Option, Schema, SchemaTransformation } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import {
   agentDelegationTable,
   agentTable,
@@ -765,22 +766,11 @@ const insertAgentConversation = SqlSchema.findOne({
     ),
 });
 
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * task list waits for that transaction to arrive before it confirms the
- * write.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
-
 /** An agent's row as a write returned it, with the transaction it committed in. */
 const CommittedAgentRowSchema = Schema.Struct({
   ...AgentRowSchema.fields,
   txid: Schema.String,
 });
-
-/** The transaction a pin's write committed in; none where the pin stood as asked already. */
-const TxidRowSchema = Schema.Struct({ txid: Schema.String });
 
 /**
  * The task's pilot standing unarchived, any but the one named, by the task's
@@ -871,7 +861,7 @@ const insertAgent = SqlSchema.findOne({
           idempotencyKey: write.idempotencyKey,
           createdAt: write.now,
         })
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -911,7 +901,7 @@ const updateAgentChoiceRow = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ model, effort, contextWindow })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -928,7 +918,7 @@ const updateAgentServersRow = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ disabledServers })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1040,13 +1030,15 @@ const markTurnFastRefused = SqlSchema.void({
 /** The turn a reservation of description notes is held against, as the subquery of the update names it apart from the row it updates. */
 const runningTurn = alias(turns, "running_turn");
 
+const TurnDescriptionNotesSchema = Schema.Struct({ turnId: Schema.String, taken: Schema.Int });
+
 const reserveTurnNotes = SqlSchema.findOneOption({
   Request: Schema.Struct({
     userId: Schema.String,
     conversationId: Schema.String,
     requested: Schema.Int,
   }),
-  Result: Schema.Struct({ turnId: Schema.String, taken: Schema.Int }),
+  Result: TurnDescriptionNotesSchema,
   execute: ({ userId, conversationId, requested }) =>
     Database.use((db) =>
       db
@@ -1102,7 +1094,7 @@ const updateAgentTitle = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ title })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1209,7 +1201,7 @@ const updateAgentArchived = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ archivedAt, archivedBy })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1359,6 +1351,7 @@ const findRunnerTokenConversation = SqlSchema.findOneOption({
     userId: Schema.String,
     conversationId: Schema.String,
     runtimeSessionId: Schema.NullOr(Schema.String),
+    launch: Schema.Number,
   }),
   execute: ({ runnerTokenHash }) =>
     Database.use((db) =>
@@ -1367,6 +1360,7 @@ const findRunnerTokenConversation = SqlSchema.findOneOption({
           userId: conversations.userId,
           conversationId: conversations.id,
           runtimeSessionId: conversations.runtimeSessionId,
+          launch: agentTable.runnerLaunch,
         })
         .from(agentTable)
         .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -1466,12 +1460,15 @@ const findOpenSandboxes = SqlSchema.findAll({
     ),
 });
 
+const NativeRouteSchema = Schema.Struct({
+  runtime: Schema.Literals(NATIVE_RUNTIMES),
+  /** Null for an agent from before the column. */
+  payer: Schema.NullOr(PayerColumnSchema),
+});
+
 const findNativeRoute = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String }),
-  Result: Schema.Struct({
-    runtime: Schema.Literals(NATIVE_RUNTIMES),
-    payer: Schema.NullOr(PayerColumnSchema),
-  }),
+  Result: NativeRouteSchema,
   execute: ({ conversationId }) =>
     Database.use((db) =>
       db
@@ -1494,7 +1491,7 @@ const updateAgentRunnerToken = SqlSchema.findAll({
     agentId: Schema.String,
     runnerTokenHash: Schema.NullOr(Schema.String),
   }),
-  Result: IdRowSchema,
+  Result: Schema.Struct({ id: Schema.String, launch: Schema.Number }),
   execute: ({ userId, agentId, runnerTokenHash }) =>
     Database.use((db) =>
       db
@@ -1506,7 +1503,7 @@ const updateAgentRunnerToken = SqlSchema.findAll({
             : { runnerTokenHash, runnerLaunch: sql`${agentTable.runnerLaunch} + 1` },
         )
         .where(reachableAgent(userId, agentId))
-        .returning({ id: agentTable.id }),
+        .returning({ id: agentTable.id, launch: agentTable.runnerLaunch }),
     ),
 });
 
@@ -1555,14 +1552,16 @@ const updateAgentCompaction = SqlSchema.void({
     ),
 });
 
+const AgentContextRowSchema = Schema.Struct({
+  model: Schema.String,
+  contextWindow: contextWindowSchema,
+  lastStep: Schema.NullOr(AgentStepColumnSchema),
+  compactedAt: Schema.NullOr(InstantColumnSchema),
+});
+
 const findAgentContext = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({
-    model: Schema.String,
-    contextWindow: contextWindowSchema,
-    lastStep: Schema.NullOr(AgentStepColumnSchema),
-    compactedAt: Schema.NullOr(InstantColumnSchema),
-  }),
+  Result: AgentContextRowSchema,
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
@@ -2228,7 +2227,7 @@ const insertAgentPin = SqlSchema.findOneOption({
         .insert(agentPin)
         .values({ userId, agentId: agentId, pinnedAt: now })
         .onConflictDoNothing()
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2250,7 +2249,7 @@ const placeAgentPin = SqlSchema.findOneOption({
           target: [agentPin.userId, agentPin.agentId],
           set: { position },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2263,7 +2262,7 @@ const deleteAgentPin = SqlSchema.findOneOption({
       db
         .delete(agentPin)
         .where(and(eq(agentPin.userId, userId), eq(agentPin.agentId, agentId)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2280,7 +2279,7 @@ const markAgentRead = SqlSchema.findOneOption({
           target: [agentRead.userId, agentRead.agentId],
           set: { readThrough: now, markedUnread: false },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2297,7 +2296,7 @@ const markAgentSeen = SqlSchema.findOneOption({
           target: [agentRead.userId, agentRead.agentId],
           set: { readThrough: now },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2315,7 +2314,7 @@ const markAgentUnread = SqlSchema.findOneOption({
           set: { markedUnread: true },
           setWhere: sql`not ${agentRead.markedUnread}`,
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2380,7 +2379,7 @@ const deleteAgentRow = SqlSchema.findAll({
       db
         .delete(agentTable)
         .where(reachableAgent(userId, agentId))
-        .returning({ conversationId: agentTable.conversationId, txid: TXID }),
+        .returning({ conversationId: agentTable.conversationId, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2872,7 +2871,7 @@ export function readAgentKeptPublished(
 }
 
 /** Which of an agent's repositories a delivery from GitHub found it on: its own, or one it works in beside it, as `owner/name` the agent keeps it, with that repository's pull request head branch, none before one opened. */
-export interface AgentFoundOn {
+interface AgentFoundOn {
   readonly repository: string;
   readonly branch: string | null;
   /** Whether it is a repository the agent works in beside its own (`agent-repositories.ts`). */
@@ -3150,10 +3149,7 @@ export function recordTurnFastRefused(userId: string, turnId: string): AgentStor
 }
 
 /** A turn's count of description notes, as a reservation left it: the turn, and every note it has taken or holds reserved, the reservation's own among them. */
-export interface TurnDescriptionNotes {
-  readonly turnId: string;
-  readonly taken: number;
-}
+export type TurnDescriptionNotes = typeof TurnDescriptionNotesSchema.Type;
 
 /**
  * Reserves a call's description notes against the conversation's running turn
@@ -3606,11 +3602,7 @@ export function openSandboxesOfReached(
 }
 
 /** A native agent's runtime and who pays for it, which together decide the models it may move to (`runtimeModelRule`). */
-export interface NativeRoute {
-  readonly runtime: (typeof NATIVE_RUNTIMES)[number];
-  /** Null for an agent from before the column. */
-  readonly payer: AgentPayer | null;
-}
+export type NativeRoute = typeof NativeRouteSchema.Type;
 
 /**
  * The native runtime of the agent of the conversation named and its payer;
@@ -3632,6 +3624,22 @@ export function recordAgentNativeSession(
   return Effect.map(
     updateAgentNativeSession({ userId, agentId, nativeSession }),
     (rows) => rows.length > 0,
+  );
+}
+
+/**
+ * The digest of a launch's bearer recorded as `recordAgentRunnerToken`
+ * records it, answering the number the launch was recorded as
+ * (`agent.runner_launch`), which every post of its runner names; nothing
+ * where the account no longer reaches the agent.
+ */
+export function recordAgentRunnerLaunch(
+  userId: string,
+  agentId: string,
+  runnerTokenHash: string,
+): AgentStoreEffect<Option.Option<number>> {
+  return Effect.map(updateAgentRunnerToken({ userId, agentId, runnerTokenHash }), (rows) =>
+    Option.map(Option.fromNullishOr(rows[0]), (row) => row.launch),
   );
 }
 
@@ -3686,6 +3694,8 @@ export interface RunnerTokenConversation {
   readonly userId: string;
   readonly conversationId: string;
   readonly runtimeSessionId: string | null;
+  /** The launch the bearer was recorded as (`agent.runner_launch`), which a post that names its launch must name. */
+  readonly launch: number;
 }
 
 /**
@@ -3745,7 +3755,7 @@ export function readNativeRunStanding(
 }
 
 /** Where the run of each agent under these ids stands, as `readNativeRunStanding` reads one, in two statements for the lot, keyed by agent id; an id it answers nothing for is absent. */
-export function readNativeRunStandings(
+function readNativeRunStandings(
   agentIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, NativeRunStanding>> {
   return Effect.gen(function* () {
@@ -3793,12 +3803,7 @@ export function readAgentHeaderOfConversation(
 }
 
 /** What the agent's own conversation holds in its model's context: the model it runs on now, its newest step, and when its harness last compacted it; null for each of the last two before it happens. */
-export interface AgentContextRow {
-  readonly model: string;
-  readonly contextWindow: ContextWindow;
-  readonly lastStep: StoredAgentStep | null;
-  readonly compactedAt: Date | null;
-}
+export type AgentContextRow = typeof AgentContextRowSchema.Type;
 
 /** The newest model step of the agent's own conversation, which replaces the one before it; nothing written for an agent of a workspace the account is not in. */
 export function recordAgentStep(

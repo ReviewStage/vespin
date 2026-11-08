@@ -92,8 +92,6 @@ export type SyncChange = typeof SyncChangeSchema.Type;
 /** A listener's heartbeat: the nonce, `h`, it listens for to know it still hears the channel. */
 const SyncHeartbeatSchema = Schema.Struct({ h: Schema.String });
 
-export type SyncHeartbeat = typeof SyncHeartbeatSchema.Type;
-
 /** Whatever arrives on the channel, as its payload's JSON text. */
 export const SyncNotificationSchema = Schema.fromJsonString(
   Schema.Union([SyncChangeSchema, SyncHeartbeatSchema]),

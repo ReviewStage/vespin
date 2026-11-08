@@ -6,7 +6,7 @@
  * gate is therefore a predicate of its own, handed what it reads, which the
  * route's `beforeLoad` asks of the router's context (`panel-router.tsx`)
  * and the window's history asks of the window's state
- * (`navigation-history.ts`'s `reachable`), so the two never disagree. Each
+ * (`places/window-steps.ts`'s `useStepReach`), so the two never disagree. Each
  * routed place's declaration names its gate (`places/routed-places.ts`).
  */
 

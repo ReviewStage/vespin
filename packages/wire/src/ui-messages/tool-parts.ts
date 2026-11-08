@@ -59,10 +59,5 @@ export function storedToolName(part: StoredToolPart): string {
 export function isStoredToolPart(
   part: UIMessagePart<UIDataTypes, UITools>,
 ): part is StoredToolPart {
-  return (
-    toolPartName(part.type) !== undefined &&
-    "state" in part &&
-    part.state !== undefined &&
-    isToolPartState(part.state)
-  );
+  return toolPartName(part.type) !== undefined && "state" in part && isToolPartState(part.state);
 }

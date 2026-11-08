@@ -34,11 +34,12 @@ import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { CURRENT_TXID } from "../core/txid.js";
 import { attachment } from "../schemas/attachment.js";
 import { user } from "../schemas/auth.js";
 import { descriptionComment, descriptionCommentThread } from "../schemas/description-comment.js";
-import { taskPageVersion } from "../schemas/task-page.js";
 import { task } from "../schemas/task.js";
+import { taskPageVersion } from "../schemas/task-page.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
@@ -324,13 +325,6 @@ const findTaskPageVersion = SqlSchema.findOneOption({
         ),
     ),
 });
-
-/**
- * The transaction a write runs in, returned beside what it wrote, so a
- * reader following the thread waits for that transaction to arrive before
- * it takes the write as shown.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
 
 /** The task a thread of any task is on, by the thread's id alone: whether an id a start chose is free. */
 const findThreadTask = SqlSchema.findOneOption({
@@ -630,7 +624,7 @@ function movedOn(
         .update(descriptionCommentThread)
         .set({ ...set, revision: sql`${descriptionCommentThread.revision} + 1`, updatedAt: now })
         .where(eq(descriptionCommentThread.id, threadId))
-        .returning({ revision: descriptionCommentThread.revision, txid: TXID }),
+        .returning({ revision: descriptionCommentThread.revision, txid: CURRENT_TXID }),
     ),
     // A thread read under the plan's lock that the update then misses is the database breaking its own contract.
     ([row]) =>
@@ -958,7 +952,7 @@ function deletedThread(threadId: string): TaskStoreEffect<DescriptionCommentOutc
       db
         .delete(descriptionCommentThread)
         .where(eq(descriptionCommentThread.id, threadId))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
     ([row]) => ({
       status: DESCRIPTION_COMMENT_OUTCOME.DONE,

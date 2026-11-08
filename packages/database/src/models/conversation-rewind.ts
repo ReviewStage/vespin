@@ -307,7 +307,7 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const keepsFirst =
       first !== undefined && (yield* findTurnBefore({ conversationId, from })).length === 0;
     const dropped = keepsFirst ? later : turnIds;
-    if (keepsFirst && first !== undefined) yield* settleKeptTurn(conversationId, first);
+    if (keepsFirst) yield* settleKeptTurn(conversationId, first);
     if (dropped.length > 0) yield* deleteTurns({ conversationId, turnIds: dropped });
     // Note that a worker a dropped turn delegated is deleted with it, its own workers by the cascade.
     yield* deleteWorkersFrom({ conversationId, from });

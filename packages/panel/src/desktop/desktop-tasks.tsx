@@ -54,8 +54,9 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { HERE } from "../places/pressed-address.js";
+import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
-import { HERE } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { type SentLine, startsOwnAgents } from "../tasks/agent-model.js";
@@ -85,12 +86,13 @@ import {
 import { taskLinkPlace, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
+import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
-import { isOverviewTab, MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
+import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
-import { PULL_REQUEST_VIEW, type SidePanelTab } from "../tasks/use-side-panel.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
 import { type StartingTask, TASK_RENAME_SHAPE, type TasksControl } from "../tasks/use-tasks-tab.js";
@@ -99,10 +101,10 @@ import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { ArchivedAgents } from "./agent-archive.js";
+import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import { DesktopHome } from "./desktop-home.js";
 import {
-  AGENTS_SECTION,
   AgentPane,
   DETAILS_WORDS,
   MainTabBars,
@@ -485,7 +487,8 @@ function DescriptionDocument({
   const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   // The clock the plan's tab's card counts its update back from.
   const now = useMinute();
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
+  const historyDoor = useVersionHistoryDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
@@ -622,7 +625,7 @@ function DescriptionDocument({
   // thread a call names in the window's Inbox as it stands, where the task's
   // items hold it, posted by the agent whose row it was (`from`), else the
   // window's Inbox narrowed to the task,
-  // another task as a link to it opens (`route.ts`), the rest in the side panel.
+  // another task as a link to it opens (`use-open-link.ts`'s `throughWindow`), the rest in the side panel.
   const openPlace = useOpenPlace();
   const openTarget = (target: ToolTarget, from?: string) => {
     switch (target.kind) {
@@ -721,11 +724,11 @@ function DescriptionDocument({
     (draft) => openColumnTab(draftTab(draft)),
   );
   const showHistory = useSteadyDoor((save: number | undefined) => {
-    if (opened !== undefined) tasks.history.onOpen(opened.id, save);
+    if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
   });
   // The pointer on a way into the history reads its chunk ahead rather than at the press.
   const preloadHistory = useSteadyDoor(() => {
-    if (opened !== undefined) tasks.history.onPreload(opened.id);
+    if (opened !== undefined) historyDoor.preload(opened.id);
   });
   const descriptionEdit = opened === undefined ? undefined : tasks.descriptionEdit(opened.id);
   // Note that the plan's title reads its rename's answer, on the same mutation the header's field draws its refusal from.

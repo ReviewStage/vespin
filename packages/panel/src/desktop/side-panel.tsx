@@ -101,7 +101,7 @@ import { panelTabPlace } from "../links-at-hand.js";
 import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
-import { ADDRESS, type Address } from "../route.js";
+import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { centerWithin } from "../scroll-within.js";
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
@@ -151,6 +151,13 @@ import {
   TAB_KIND,
   tabLook,
 } from "../tasks/tab-look.js";
+import {
+  type FixedSidePanelTab,
+  PULL_REQUEST_VIEW,
+  type PullRequestView,
+  SIDE_PANEL_TAB,
+  SIDE_PANEL_WIDTH,
+} from "../tasks/task-tab-model.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
@@ -174,15 +181,10 @@ import {
   type FileHistoryStep,
   type FileReadPlace,
   type FileReads,
-  type FixedSidePanelTab,
   isPinnable,
   type OpenFile,
   type OpenPage,
   type PinHolder,
-  PULL_REQUEST_VIEW,
-  type PullRequestView,
-  SIDE_PANEL_TAB,
-  SIDE_PANEL_WIDTH,
   type SidePanelControl,
   type SidePanelTab,
   sameHolder,

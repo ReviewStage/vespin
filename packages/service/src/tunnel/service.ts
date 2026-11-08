@@ -50,7 +50,7 @@ const readKind = readEither(Schema.Literals(Object.values(TUNNEL_KIND)));
 const readPort = readEither(PortSchema);
 
 /** What an upgrade asks for before its credential is resolved: who it says it is, and the agent and bridge it names. */
-export type TunnelUpgrade =
+type TunnelUpgrade =
   | { readonly status: number }
   | { readonly credential: RelayCredential; readonly ask: Omit<TunnelAsk, "userId"> };
 
@@ -66,7 +66,7 @@ function bridgeOf(
 }
 
 /** Whether an upgrade is the tunnel's to take, read from its address and headers alone, against the deployment's own origins. */
-export function admitTunnelUpgrade(
+function admitTunnelUpgrade(
   url: string | undefined,
   headers: IncomingHttpHeaders,
   ownOrigins: ReadonlySet<string>,

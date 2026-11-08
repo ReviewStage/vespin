@@ -17,9 +17,8 @@ import {
 /**
  * workspaces-follow.ts -- the account's workspaces and sidebar, followed by the host over the service's held poll.
  *
- * The service answers each read's statements (`workspacesLiveStatements` in
- * the database's workspace store, `workspaceMembersLiveStatements` in the
- * service's accounts) with their rows inline. The host follows them
+ * The service answers each read's statements (`live/reads/workspaces.ts`
+ * and `live/reads/sidebar.ts` on the service) with their rows inline. The host follows them
  * (`live-follow.ts`) and answers each delivery as the held read would, in
  * its order. Only what is built from their rows leaves.
  */

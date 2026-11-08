@@ -1,3 +1,4 @@
+import { cappedExponential } from "@repo/wire/effect";
 import { Data, Duration, Effect, Schedule } from "effect";
 import { rendererFork } from "./renderer-runtime.js";
 
@@ -27,11 +28,7 @@ const STREAM_REOPEN = {
   LONGEST: Duration.seconds(30),
 } as const;
 
-const REOPEN_BACKOFF = Schedule.exponential(STREAM_REOPEN.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, STREAM_REOPEN.LONGEST)),
-  ),
-);
+const REOPEN_BACKOFF = cappedExponential(STREAM_REOPEN.FIRST, STREAM_REOPEN.LONGEST);
 
 /** A stream that broke before it was heard on: opened again after the backoff's next wait. */
 class StreamUnheard extends Data.TaggedError("StreamUnheard") {}

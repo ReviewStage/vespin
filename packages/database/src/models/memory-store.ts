@@ -1,9 +1,10 @@
 import { isWireUuid } from "@repo/features";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { organization } from "../schemas/auth.js";
 import { memory } from "../schemas/memory.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -59,7 +60,7 @@ export const MEMORY_FORGET = {
   NOT_PERMITTED: "not_permitted",
 } as const;
 
-export type MemoryForget = (typeof MEMORY_FORGET)[keyof typeof MEMORY_FORGET];
+type MemoryForget = (typeof MEMORY_FORGET)[keyof typeof MEMORY_FORGET];
 
 /** What a forget came to, and the transaction its delete committed in where it deleted a row; none where nothing was deleted. */
 export interface MemoryForgot {
@@ -191,23 +192,16 @@ const updateMemory = SqlSchema.findOneOption({
     ),
 });
 
-/**
- * The id of the transaction a delete committed in, read in its own
- * `RETURNING`, so a reader following the memories waits for that
- * transaction to arrive before it confirms the forget.
- */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
 /** A memory deleted, answering the transaction it was deleted in; none where no row was. */
 const deleteMemory = SqlSchema.findAll({
   Request: MemoryKeySchema,
-  Result: Schema.Struct({ txid: Schema.String }),
+  Result: TxidRowSchema,
   execute: (key) =>
     Database.use((db) =>
       db
         .delete(memory)
         .where(and(eq(memory.organizationId, key.organizationId), eq(memory.id, key.id)))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 

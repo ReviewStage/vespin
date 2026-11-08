@@ -301,9 +301,7 @@ function workspaceAnswered<const Field extends string>(field: Field) {
     answer: { readonly [Key in Field]: Value } | { readonly failure: WorkspaceCallFailure },
   ): Effect.Effect<Value, ActRefused> =>
     // SAFETY: an answer that carries no failure is the value under `field`, by its type.
-    "failure" in answer
-      ? workspaceRefused(answer.failure)
-      : Effect.succeed((answer as { readonly [Key in Field]: Value })[field]);
+    "failure" in answer ? workspaceRefused(answer.failure) : Effect.succeed(answer[field]);
 }
 
 /** A channel of a workspace's Slack team as the held list keeps it, with no repository, which is the workspace's held integrations'. */

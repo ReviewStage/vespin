@@ -29,6 +29,7 @@ import { Effect, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { ModelCatalog } from "../providers/model-catalog.js";
 import { isAdminRole } from "./admin-access.js";
+import { utcDay } from "./admin-activity-queries.js";
 import {
   type AdminCostSecondsRow,
   type AdminCostUsage,
@@ -61,11 +62,6 @@ function keptAccounts(filter: UsageFilter) {
     keptByScope(filter.scope),
     filter.userId === null ? undefined : eq(user.id, filter.userId),
   );
-}
-
-/** A UTC day key of an instant column, which the builder has no operator for. */
-function utcDayOf(instant: SQLWrapper) {
-  return sql<string>`to_char(${instant} at time zone 'UTC', 'YYYY-MM-DD')`;
 }
 
 /** A UTC day key of an epoch-milliseconds expression. */
@@ -114,7 +110,7 @@ const findTokenUsage = SqlSchema.findAll({
     Database.use((db) => {
       const shares = db
         .select({
-          day: utcDayOf(TURN_INSTANT).as("day"),
+          day: utcDay(TURN_INSTANT).as("day"),
           source: TURN_SOURCE.as("source"),
           userId: turns.userId,
           fastRefused: turns.fastRefused,

@@ -89,7 +89,7 @@ export const SHOW_IMAGE_TOOL = {
 } as const;
 
 /** A call that showed nothing, and why. */
-export function showImageRejected(reason: string): WireRecord {
+function showImageRejected(reason: string): WireRecord {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
 }
 

@@ -13,20 +13,28 @@ import {
   type AgentSummary,
   type TasklessAgent,
 } from "@repo/features/agent-wire";
+import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
+import type { CompletionSound } from "@repo/wire/app-settings";
 import { Clock, Context, Duration, Effect, FiberHandle, type Scope, Stream } from "effect";
 import type { AppInboxSlice, AppInboxWaitingItem } from "./app-state.js";
 
 /**
  * agent-notices.ts -- keeps where each coding agent stands and what waits across the account, for the window's marks and counts: the ledger of each agent's turn, fed by the plan list followed live, the follow of what waits, and the Dock's badge.
  *
- * Nothing here announces anything. An agent's turn ending, an Inbox item
- * posted, or an automation's run failing to start is said by the window's
- * own marks and counts, focused or behind, and by no toast and no
- * notification, since news the developer did not ask for interrupts more
- * than it tells: the agent's unseen dot, the Inbox's counts and the Dock's
- * badge, and the Automations failed mark. The
+ * Nothing here announces anything the developer did not ask for. An agent's
+ * turn ending, an Inbox item posted, or an automation's run failing to start
+ * is said by the window's own marks and counts, focused or behind, and by no
+ * toast and no notification, since news the developer did not ask for
+ * interrupts more than it tells: the agent's unseen dot, the Inbox's counts
+ * and the Dock's badge, and the Automations failed mark. The
  * one notification the app posts is a command waiting on this Mac
- * (`client/client-notices.ts`), through the same doors.
+ * (`client/client-notices.ts`), through the same doors. A sound plays only
+ * where the developer turned one on (`soundWhen`, Settings › Account ›
+ * Sounds): as a turn of an agent the account started ends, completed or
+ * failed and never a Stop, as an item asking the account something is
+ * posted, and as a command waits on this Mac; in the background only while
+ * the window is behind, and once for a burst. Each is heard in one place
+ * (`heard`), which chimes through the doors, in one window of the app.
  *
  * The panel reads an agent's status only while its tab is on screen, so
  * main keeps a ledger of its own, fed by every coding-agent answer that
@@ -83,14 +91,30 @@ const WRITING_STATUSES: ReadonlySet<AgentStatus> = new Set([
 /** How many pushes of the followed list in a row may leave out an agent only a Start answered before the ledger lets it go. */
 const UNNAMED_PUSHES_KEPT = 2;
 
+/** How long after a chime the news heard is told by that one chime rather than one of its own, so a burst of ends sounds once. */
+const CHIME_BURST = Duration.millis(1500);
+
 /** What kind of event a notice tells of. */
 export const NOTICE_KIND = {
   /** A command an agent asked to run on this Mac waits on the developer (`client/client-notices.ts`). */
   MAC_COMMAND_ASK: "mac-command-ask",
+  /** A turn of an agent the account started ended, completed or failed. */
+  AGENT_FINISHED: "agent-finished",
+  /** An inbox item asking the account something was posted. */
+  ITEM_ASKED: "item-asked",
 } as const;
 
 /** The event a notice tells of, by the identifiers that name it. */
-type NoticeSubject = { readonly kind: typeof NOTICE_KIND.MAC_COMMAND_ASK; readonly askId: string };
+export type NoticeSubject =
+  | { readonly kind: typeof NOTICE_KIND.MAC_COMMAND_ASK; readonly askId: string }
+  | { readonly kind: typeof NOTICE_KIND.AGENT_FINISHED; readonly agentId: string }
+  | { readonly kind: typeof NOTICE_KIND.ITEM_ASKED; readonly itemId: string };
+
+/** When a sound plays as news is heard, and which one, as the account's preferences hold them now. */
+export interface SoundChoice {
+  readonly when: SoundWhen;
+  readonly sound: CompletionSound;
+}
 
 /** The notification as the OS posts it: the event it tells of, what it says, and what its click does. */
 export interface AgentNotice {
@@ -103,14 +127,16 @@ export interface AgentNotice {
 /**
  * The doors a notice leaves this process through: the OS's notification,
  * which only a command waiting on this Mac posts (`client/client-notices.ts`),
- * and the Dock's badge. A service rather than a dependency handed in, because
- * it is this process's door to Electron, so a test stands a Layer of its
- * own on it.
+ * the Dock's badge, and the chime. A service rather than a dependency handed
+ * in, because it is this process's door to Electron, so a test stands a Layer
+ * of its own on it.
  */
 export interface AgentNoticeDoorsSurface {
   post(notice: AgentNotice): void;
   /** How many inbox items wait across the account as the Inbox's Open lists them, which the Dock's badge counts; none clears it. */
   badge(count: number): void;
+  /** Plays the sound once, in one window of the app: the desktop's focused panel or its main one, or the web's tab. */
+  chime(sound: CompletionSound): void;
 }
 
 export class AgentNoticeDoors extends Context.Service<AgentNoticeDoors, AgentNoticeDoorsSurface>()(
@@ -141,6 +167,7 @@ function guardedDoors(
   return {
     ...doors,
     badge: guarded("badge", (count: number) => doors.badge(count)),
+    chime: guarded("chime", (sound: CompletionSound) => doors.chime(sound)),
   };
 }
 
@@ -161,6 +188,8 @@ export interface AgentNoticesDependencies {
   accounts: Stream.Stream<string | undefined>;
   /** Where each task's waiting items, and every task holding an item, are written, for the window's Inbox. */
   onInboxChanged: (inbox: AppInboxSlice) => void;
+  /** When a sound plays as news is heard, and which, read as each piece of news lands. */
+  sound: () => SoundChoice;
   report: (line: string) => void;
 }
 
@@ -179,6 +208,8 @@ export interface AgentNotices {
   shown(agentId: string | null): void;
   /** The developer marked the agent as read by hand: its unseen dot goes, whichever page shows. */
   seen(agentId: string): void;
+  /** News heard outside the notices' own reads, a command waiting on this Mac: told as the notices tell their own. */
+  heard(subject: NoticeSubject): void;
 }
 
 /** What the ledger keeps of one agent: enough to tell one turn's end from the next's. */
@@ -190,6 +221,8 @@ interface HeldAgent {
   turnId: string | null;
   /** The turns the agent has left behind, which a list that landed late may still describe. */
   pastTurns: ReadonlySet<string>;
+  /** The id of the member who started it; none where no answer named them. */
+  startedBy: string | undefined;
 }
 
 function stillWriting(status: AgentStatus): boolean {
@@ -414,6 +447,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
   ): Effect.fn.Return<AgentNotices, never, Scope.Scope | AgentNoticeDoors> {
     const { onUnseenChanged, report } = dependencies;
     const doors = guardedDoors(yield* AgentNoticeDoors, report);
+    const clock = yield* Clock.Clock;
     const ledger = new Map<string, HeldAgent>();
     const unseen = new Set<string>();
     /** The agents on plans the followed list last named, so one it stops naming is known to have left it rather than not reached it yet. */
@@ -431,15 +465,41 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           readonly listed: readonly AccountTasklessEntry[];
         }
       | undefined;
+    /** The asking items waiting on the account as the inbox read last answered them; none before the first answer for the account signed in, which only seeds them. */
+    let asking: ReadonlySet<string> | undefined;
+    /** When the last chime played, by the Clock; none before the first. */
+    let chimedAt: number | undefined;
 
     function publishUnseen(): void {
       onUnseenChanged([...unseen]);
     }
 
-    /** A turn ended: dot its tab, unless the developer is looking at it. */
+    /**
+     * News the developer may want told of, heard once each: the one place an
+     * agent's finish, a new ask, and a command waiting on this Mac land. It
+     * chimes where the account turned a sound on, in the background only
+     * while the window is behind, and once for a burst: news within
+     * `CHIME_BURST` of the last chime is told by that chime. Note that the
+     * news is named by its subject though a chime reads none of it, because
+     * a notification of it would.
+     */
+    function heard(_subject: NoticeSubject): void {
+      const { when, sound } = dependencies.sound();
+      if (when === SOUND_WHEN.OFF || (when === SOUND_WHEN.BACKGROUND && focused)) return;
+      const now = clock.currentTimeMillisUnsafe();
+      if (chimedAt !== undefined && now - chimedAt < Duration.toMillis(CHIME_BURST)) return;
+      chimedAt = now;
+      doors.chime(sound);
+    }
+
+    /** A turn ended: dot its tab, unless the developer is looking at it, and tell of it where the account started the agent. */
     function ended(agentId: string, agent: HeldAgent): void {
       if (agent.status !== AGENT_STATUS.COMPLETED && agent.status !== AGENT_STATUS.FAILED) {
         return;
+      }
+      const accountId = dependencies.accountId();
+      if (accountId !== undefined && agent.startedBy === accountId) {
+        heard({ kind: NOTICE_KIND.AGENT_FINISHED, agentId });
       }
       if (focused && shownAgent === agentId) return;
       unseen.add(agentId);
@@ -523,6 +583,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     function observeWaiting(read: AccountInboxAnswer): Effect.Effect<void> {
       const answer = waitingOnAccount(read, dependencies.accountId());
       const listed = read.planless ?? [];
+      observeAsking(answer);
       const was = waiting;
       // Note that an answer at the same cursor holding fewer of the account's own items is written, because the account's id, which picks them, may have arrived since.
       if (
@@ -557,6 +618,25 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     }
 
     /**
+     * The asking items an answer holds waiting on the account, each new one
+     * told of once. The first answer for the account signed in only seeds
+     * them, since what already waited is no news, and a notice that asks
+     * nothing is told by the counts alone.
+     */
+    function observeAsking(answer: InboxAnswered): void {
+      const was = asking;
+      const now = new Set<string>();
+      for (const item of [...answer.items, ...(answer.planless ?? [])]) {
+        if (item.asking === true) now.add(item.id);
+      }
+      asking = now;
+      if (was === undefined) return;
+      for (const itemId of now) {
+        if (!was.has(itemId)) heard({ kind: NOTICE_KIND.ITEM_ASKED, itemId });
+      }
+    }
+
+    /**
      * What waits for one account, followed for as long as it stays signed in:
      * whatever the last account left is let go first, and nobody's is
      * nothing to follow. Note that an answer is let go where the account it
@@ -567,6 +647,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     const waitingOf = (reader: string | undefined): Effect.Effect<void> =>
       Effect.suspend(() => {
         waiting = undefined;
+        asking = undefined;
         const letGo = publishWaiting({ items: [], plans: [] }, []);
         if (reader === undefined) return letGo;
         // An answer that throws is reported rather than left to end the follow, which would never resume.
@@ -599,21 +680,25 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       // ledger on: one describing a turn the agent has left behind, or no
       // turn yet, says nothing newer and is let go whole.
       if (next.turnId === null ? was.turnId !== null : was.pastTurns.has(next.turnId)) return;
+      // Note that a read naming no starter keeps the one an earlier read named, because not every read carries it.
+      const startedBy = next.startedBy ?? was.startedBy;
       if (was.turnId === next.turnId) {
         // A turn that ended stays ended, so an end is never a second turn's,
         // and running again under the ended turn's id is a late read or a
         // message awaiting the next turn, which its own answer says.
         if (!stillWriting(was.status)) return;
-        ledger.set(agentId, { ...next, pastTurns: was.pastTurns });
+        const held = { ...next, pastTurns: was.pastTurns, startedBy };
+        ledger.set(agentId, held);
         if (stillWriting(next.status)) return;
-        ended(agentId, next);
+        ended(agentId, held);
         return;
       }
       // A new turn: the one before it is left behind, and its own end is the next dot.
       const pastTurns = new Set(was.pastTurns);
       if (was.turnId !== null) pastTurns.add(was.turnId);
-      ledger.set(agentId, { ...next, pastTurns });
-      if (!stillWriting(next.status)) ended(agentId, next);
+      const held = { ...next, pastTurns, startedBy };
+      ledger.set(agentId, held);
+      if (!stillWriting(next.status)) ended(agentId, held);
     }
 
     /** Lets go of every agent `keep` refuses, their dots with them, as a plan or an agent deleted or an account left has no tab to clear one. */
@@ -633,12 +718,15 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     }
 
     /** The agent as the ledger holds it, on a plan or with none. */
-    function heldOf(agent: Pick<AgentSummary, "planId" | "status" | "turnId">): HeldAgent {
+    function heldOf(
+      agent: Pick<AgentSummary, "planId" | "status" | "turnId" | "startedBy">,
+    ): HeldAgent {
       return {
         taskId: agent.planId,
         status: agent.status,
         turnId: agent.turnId,
         pastTurns: new Set(),
+        startedBy: agent.startedBy?.userId,
       };
     }
 
@@ -682,6 +770,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         seen(agentId);
       },
       seen,
+      heard,
     };
 
     // Each account's inbox followed in turn, the follow for the last one

@@ -5,18 +5,16 @@
  * this is the window whose start is timed.
  */
 
+import { PANEL_PATH } from "@repo/features/link-home";
 import { createPanelRouter, PanelRouterProvider } from "@repo/panel/panel-router";
 import { queryClient } from "@repo/panel/query-client";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { mountWindow } from "./window-root";
 
-/** The address a window opens at: the panel's own, which names no place, as a step with no link is held at. */
-const WINDOW_START_ADDRESS = "/app";
-
 // Note that the router keeps its history in memory, because the window is loaded from a file or a dev server rather than at an address of ours;
-// the panel's back and forward live there for as long as the window is open.
+// the panel's back and forward live there for as long as the window is open, from the panel's own path, which names no place.
 const router = createPanelRouter(
-  createMemoryHistory({ initialEntries: [WINDOW_START_ADDRESS] }),
+  createMemoryHistory({ initialEntries: [PANEL_PATH] }),
   queryClient,
 );
 

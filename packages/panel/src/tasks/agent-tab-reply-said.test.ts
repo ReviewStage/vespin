@@ -295,7 +295,7 @@ test("a worker's reply is said once whole, under the worker's name", async () =>
   assert.equal(announcedPolitely(), `Reply from ${WORKER_TASK}: The writers quote every field.`);
 });
 
-test("a failed turn's end line reports the service's word for why, and the agent and task it is about, once", async () => {
+test("a failed turn's end line reports the service's word for why, and the agent and task it is about, once, a refused own key as a refusal", async () => {
   const reported: Readonly<Record<string, unknown>>[] = [];
   const recording: ShownFailureSentry = {
     captureException: () => "",
@@ -331,10 +331,11 @@ test("a failed turn's end line reports the service's word for why, and the agent
   assert.deepEqual(
     reported.map((attributes) => [
       attributes["failure.surface"],
+      attributes["failure.kind"],
       attributes["failure.code"],
       attributes["agent.id"],
       attributes["task.id"],
     ]),
-    [["agent.turn", "provider_key", AGENT.id, "plan-1"]],
+    [["agent.turn", "refused", "provider_key", AGENT.id, "plan-1"]],
   );
 });

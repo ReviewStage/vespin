@@ -4,7 +4,6 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useRef } from "react";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 import { settingsViewOfPage } from "./route-gates.js";
-import { landOnSettingsRow } from "./settings-search.js";
 
 /**
  * settings-link.ts -- Settings as the router stands it: the page, whether its list stands, the workspace its address names, and the navigation a Settings link makes.
@@ -23,8 +22,8 @@ import { landOnSettingsRow } from "./settings-search.js";
  * opened from, and turning its page replaces the step standing, so Settings
  * is one step however many of its pages are turned; but a narrow room's
  * page opened from its list is a step after the list, which Back returns
- * to. Its section is then looked for once the page is drawn, and given up
- * on quietly where it is not.
+ * to. Its section is looked for by the door once its move lands
+ * (`app.tsx`'s `goSettings`), and given up on quietly where it is not drawn.
  */
 
 /** Settings as the router stands it, and the doors that move it. */
@@ -39,8 +38,8 @@ export interface SettingsRoute {
   readonly workspaceId: string | undefined;
   /** The address of its page list, while it stands. */
   readonly listAddress: string | undefined;
-  /** Goes to the place in Settings `link` names; answers how to give up the look for its section. */
-  readonly open: (link: SettingsLink) => () => void;
+  /** Goes to the page in Settings `link` names, under its workspace; its section is the door's to look for once the move lands. */
+  readonly open: (link: SettingsLink) => void;
   /** Stands its page list in the page's place. */
   readonly list: () => void;
 }
@@ -104,7 +103,6 @@ export function useSettingsRoute(input: {
     const fromPairing = here.leaf === PAIRING_ROUTE;
     const replace = (standing && !(narrow && listed && to !== undefined)) || fromPairing;
     go(to, slugFor(link.workspaceId ?? workspaceId ?? listedId), replace);
-    return link.section === undefined ? () => undefined : landOnSettingsRow(link.section);
   };
   const list = () => {
     if (standing) go(undefined, slug, true);

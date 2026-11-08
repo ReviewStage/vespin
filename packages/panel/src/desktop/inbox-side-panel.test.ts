@@ -29,14 +29,14 @@ import { NO_EXPERIMENTS } from "@repo/settings";
 import { changesTab, pageTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
-import { act, createElement, useState } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useAppKeymap } from "../app-commands.js";
+import { useInboxRoute } from "../inbox-route.js";
 import { useInboxTaskAgents } from "../tasks/use-inbox-task-agents.js";
 import { OpenLinkProvider } from "../tasks/use-open-link.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
-import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -58,6 +58,7 @@ import {
   tasksControl,
   waitingOf,
 } from "../testing/tasks-control.js";
+import { holdingInboxChoice } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
 /**
@@ -254,11 +255,8 @@ async function inbox(
   // The host lays the agent's transcript, which names a page of its task, once its tab holds it.
   pushedTranscripts(() => [TRANSCRIPT]);
   function Page() {
-    // Note that the item stands chosen, as a press on its row chooses it.
-    const [chosen, setChosen] = useState<InboxChoice | undefined>({
-      taskId: TASK.id,
-      itemId: ITEM.id,
-    });
+    // Note that the item stands chosen at its address, as a press on its row chooses it.
+    const { chosen } = useInboxRoute();
     const panelFor = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
     // The task's agents as the Inbox read them, which the window's own hook holds its panel to (`use-tasks-tab.ts`).
     const taskAgents = useInboxTaskAgents(panelFor);
@@ -292,19 +290,7 @@ async function inbox(
           })),
           inbox: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
           inboxTasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
-          inboxView: {
-            open: true,
-            chosen,
-            onOpen: () => undefined,
-            onClose: () => undefined,
-            onChoose: setChosen,
-            onOpenItem: () => undefined,
-            onClear: () => setChosen(undefined),
-            narrowed: undefined,
-            onWiden: () => undefined,
-            pages,
-            onTaskAgents: taskAgents.onRead,
-          },
+          inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
           sidePanel,
           onShowTask: (taskId) => left.tasks.push(taskId),
           onShowPanelTab: (taskId, tab) => left.went.push(`${taskId} ${JSON.stringify(tab)}`),
@@ -315,7 +301,9 @@ async function inbox(
   }
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(underWindowRouter(createElement(Page)))));
+  const held = holdingInboxChoice({ taskId: TASK.id, itemId: ITEM.id });
+  const page = createElement(Fragment, null, held, createElement(Page));
+  act(() => root?.render(withQueryClient(underWindowRouter(page, `/acme/inbox/${ITEM.id}`))));
   await settle();
   const panel = () => {
     assert.ok(control);

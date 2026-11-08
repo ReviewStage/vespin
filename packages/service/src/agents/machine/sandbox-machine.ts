@@ -348,12 +348,6 @@ function sandboxPlace(session: string, name: string, sandboxSessionId: string): 
   };
 }
 
-/** A sandbox the machine opened or found up: its name, and the run it is up in. */
-interface OpenedPlace {
-  readonly name: string;
-  readonly running: string;
-}
-
 /**
  * What a created sandbox was created from, which says how its checkout is
  * made: a snapshot of the sandbox of the agent it was started from, a fork
@@ -397,7 +391,7 @@ interface AgentCheckoutReads {
 }
 
 /** The run a place stands for as its firewall names it, with the account whose agent it is. */
-function firewallSessionOf(place: OpenedPlace, userId: string): FirewallSession {
+function firewallSessionOf(place: SandboxRunning, userId: string): FirewallSession {
   return { userId, name: place.name, sandboxSessionId: place.running };
 }
 
@@ -713,7 +707,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
   /** The sandbox run as the checkout reaches it, its firewall the account's given, with what stands beside the checkout's own, its launch read from the store given. */
   const checkoutOver = (
     context: Context.Context<DatabaseServices>,
-    sandbox: OpenedPlace,
+    sandbox: SandboxRunning,
     userId: string,
     beside: FirewallSources = {},
   ) =>
@@ -725,7 +719,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     );
 
   /** The same, its launch read from the caller's store. */
-  const checkoutIn = (sandbox: OpenedPlace, userId: string, beside: FirewallSources = {}) =>
+  const checkoutIn = (sandbox: SandboxRunning, userId: string, beside: FirewallSources = {}) =>
     Effect.map(Effect.context<DatabaseServices>(), (context) =>
       checkoutOver(context, sandbox, userId, beside),
     );
@@ -843,7 +837,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     context: Context.Context<DatabaseServices>,
     checkout: AgentCheckoutReads,
     from: CreatedFrom,
-    opened: OpenedPlace,
+    opened: SandboxRunning,
   ) =>
     Effect.suspend(() => {
       const sandbox = checkoutOver(context, opened, checkout.agent.userId);
@@ -1055,7 +1049,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * not there.
    */
   const ownCheckoutRestored = (
-    place: OpenedPlace,
+    place: SandboxRunning,
     target: ConversationTarget,
     agent: WithRepository<Agent>,
   ) =>

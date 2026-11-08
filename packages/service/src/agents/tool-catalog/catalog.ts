@@ -321,7 +321,7 @@ const isLooked = Schema.is(
  * A look's text block where it looked: its status alone, as JSON. Note that
  * the transcript keeps the text blocks of a tool of ours alone
  * (`../native-events/claude-code-moments.ts`), so this is what a look is
- * stored as, the same as the retired runtime's relay stored one (`storedPictureLookOutput`).
+ * stored as.
  */
 const LOOKED_TEXT: McpContent = {
   type: "text",

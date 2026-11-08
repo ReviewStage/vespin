@@ -19,7 +19,7 @@ import { runAppCommand } from "../app-commands.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { useStageRoom } from "../stage-room.js";
-import { MAIN_TAB } from "../tasks/use-main-tabs.js";
+import { MAIN_TAB } from "../tasks/task-tab-model.js";
 import { useSidePanel } from "../tasks/use-side-panel.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
@@ -177,8 +177,6 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
       steps: { back: [], forward: [] },
       onGoTo: ignore,
       onLeaveVersionHistory: ignore,
-      onLeaveRouted: ignore,
-      onStayRouted: ignore,
       away: undefined,
       onLeave: ignore,
     },

@@ -213,16 +213,18 @@ function openWindow() {
     );
     await act(async () =>
       root.render(
-        withQueryClient(
-          createElement(
-            Fragment,
-            null,
-            createElement(SignedIn, { account }),
-            createElement("ul", null, rows),
-            createElement(DesktopTasks, {
-              looks: NO_LOOKS,
-              tasks: tasks,
-            }),
+        windowRouter().provide(
+          withQueryClient(
+            createElement(
+              Fragment,
+              null,
+              createElement(SignedIn, { account }),
+              createElement("ul", null, rows),
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                tasks: tasks,
+              }),
+            ),
           ),
         ),
       ),
@@ -376,7 +378,7 @@ function signedIn(account: { readonly id: string; readonly email: string }): voi
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(Owner))));
+  act(() => root.render(windowRouter().provide(withQueryClient(createElement(Owner)))));
 }
 
 test("lines a window keeps for its account outlast a reload, but for what storage leaves out, and reach no other account", () => {
@@ -411,7 +413,9 @@ test("lines a window holds for an account are drawn for no other signing in to i
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const signIn = (account: typeof ada) =>
-    act(() => root.render(withQueryClient(createElement(Owner, { account }))));
+    act(() =>
+      root.render(windowRouter().provide(withQueryClient(createElement(Owner, { account })))),
+    );
 
   signIn(ada);
   lines.set(() => [{ id: "refused-1" }]);
@@ -432,7 +436,7 @@ test("lines a window holds for an account stay once the window draws itself agai
   const drawWindow = () => {
     const root = createRoot(document.body.appendChild(document.createElement("div")));
     roots.push(root);
-    act(() => root.render(withQueryClient(createElement(Owner))));
+    act(() => root.render(windowRouter().provide(withQueryClient(createElement(Owner)))));
     return root;
   };
 
@@ -609,7 +613,9 @@ test("the files attached to a draft while only the account's address was known s
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const show = (account: Identity) =>
-    act(async () => root.render(withQueryClient(createElement(Box, { account }))));
+    act(async () =>
+      root.render(windowRouter().provide(withQueryClient(createElement(Box, { account })))),
+    );
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() => box().update((was) => ({ ...was, text: "Like this", attachments: [picture] })));
@@ -640,7 +646,9 @@ test("an inbox answer's picture moves with it as the id lands before its words r
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const show = (account: Identity) =>
-    act(async () => root.render(withQueryClient(createElement(Box, { account }))));
+    act(async () =>
+      root.render(windowRouter().provide(withQueryClient(createElement(Box, { account })))),
+    );
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() =>
@@ -673,7 +681,9 @@ test("where the id's own later words win a place its address held a picture at, 
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   const show = (account: Identity) =>
-    act(async () => root.render(withQueryClient(createElement(Box, { account }))));
+    act(async () =>
+      root.render(windowRouter().provide(withQueryClient(createElement(Box, { account })))),
+    );
   await show({ email: DEAN.email });
   const box = () => held ?? assert.fail("the box is drawn");
   act(() =>
@@ -747,7 +757,11 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(withQueryClient(signedOut(drawnSidebar(sidebarProps(tasks))))));
+  await act(async () =>
+    root.render(
+      windowRouter().provide(withQueryClient(signedOut(drawnSidebar(sidebarProps(tasks))))),
+    ),
+  );
   await settle();
   return (name: string) =>
     (
@@ -903,23 +917,25 @@ async function columnOn(
   roots.push(root);
   await act(async () =>
     root.render(
-      withQueryClient(
-        createElement(
-          Fragment,
-          null,
+      windowRouter().provide(
+        withQueryClient(
           createElement(
-            "ul",
+            Fragment,
             null,
-            createElement(SidebarTask, {
-              tasks: tasks,
-              task: INVITES.plan,
-              current: true,
-              unread: false,
-              now: 3,
-              onOpen: () => undefined,
-            }),
+            createElement(
+              "ul",
+              null,
+              createElement(SidebarTask, {
+                tasks: tasks,
+                task: INVITES.plan,
+                current: true,
+                unread: false,
+                now: 3,
+                onOpen: () => undefined,
+              }),
+            ),
+            createElement(DesktopTasks, { looks: NO_LOOKS, tasks: tasks }),
           ),
-          createElement(DesktopTasks, { looks: NO_LOOKS, tasks: tasks }),
         ),
       ),
     ),
@@ -1049,7 +1065,7 @@ async function tasklessInbox(agentId: string, items: readonly InboxItem[]) {
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(Probe))));
+  await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Probe)))));
   await settle();
   return control ?? assert.fail("the inbox is held");
 }
@@ -1153,7 +1169,7 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(Probe))));
+  await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Probe)))));
   // Note that the feed draws once its rows reach its query.
   await vi.waitFor(() => assert.equal(control?.drawn, true));
   assert.equal(control?.draftOf(older).note, "Reply later", "the feed drawing first drops nothing");
@@ -1225,7 +1241,7 @@ test("words another window writes for a box this window let go a moment before s
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(Box))));
+  await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Box)))));
   const box = () => held ?? assert.fail("the box is drawn");
   act(() => box().box.update((was) => ({ ...was, text: "Fix login" })));
   leaveWindow();
@@ -1262,7 +1278,7 @@ test("files attached in this window stay as its draft when another window lets t
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(Box))));
+  await act(async () => root.render(windowRouter().provide(withQueryClient(createElement(Box)))));
   const box = () => composer ?? assert.fail("the box is drawn");
   act(() => box().setDraft("Review this"));
   act(() => box().setAttachments((held) => [...held, notes]));

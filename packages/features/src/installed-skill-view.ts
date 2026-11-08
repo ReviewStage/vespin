@@ -58,12 +58,8 @@ export const installedSkillFollowParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
 });
 
-export type InstalledSkillFollowParams = typeof installedSkillFollowParamsSchema.Type;
-
 /** A paste previewed in the workspace whose GitHub installation reaches its source. */
 export const installedSkillPreviewParamsSchema = installedSkillPreviewRequestSchema;
-
-export type InstalledSkillPreviewParams = typeof installedSkillPreviewParamsSchema.Type;
 
 /** A paste installed, as the service takes it. */
 export const installedSkillInstallParamsSchema = installedSkillInstallRequestSchema;
@@ -82,8 +78,6 @@ export const installedSkillContentViewSchema = answerView(installedSkillsContrac
   as: INSTALLED_SKILL_RENAMES,
 });
 
-export type InstalledSkillContentView = typeof installedSkillContentViewSchema.Type;
-
 /** What a paste would install, or why the service did not say. */
 export const installedSkillPreviewViewSchema = EffectSchema.Union([
   installedSkillPreviewSchema,
@@ -97,8 +91,6 @@ export const installedSkillInstallViewSchema = EffectSchema.Union([
   installedSkillInstallAnswerSchema,
   pasteFailed,
 ]);
-
-export type InstalledSkillInstallView = typeof installedSkillInstallViewSchema.Type;
 
 /** A skill removed, or why it stands. */
 export const installedSkillRemovedViewSchema = answerView(installedSkillsContract.remove, {

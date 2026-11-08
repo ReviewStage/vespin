@@ -4,6 +4,7 @@ import { HOST_RELEASE } from "@repo/features/host-release";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
 import { EXPERIMENT, type Experiment } from "@repo/settings";
+import { cappedExponential } from "@repo/wire/effect";
 import {
   Duration,
   Effect,
@@ -12,7 +13,6 @@ import {
   type Path,
   PubSub,
   Result,
-  Schedule,
   type Scope,
   Semaphore,
   Stream,
@@ -104,11 +104,7 @@ const RETRY_AFTER = {
   LONGEST: Duration.hours(1),
 } as const;
 
-const RETRY = Schedule.exponential(RETRY_AFTER.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, RETRY_AFTER.LONGEST)),
-  ),
-);
+const RETRY = cappedExponential(RETRY_AFTER.FIRST, RETRY_AFTER.LONGEST);
 
 /** What the app keeps This Mac's host at for the account signed in, and how many times it was turned on; none where it keeps it at nothing, and leaves it as it stands. */
 type Kept =
@@ -156,7 +152,7 @@ type ThisMacHostServices =
   | HttpClient.HttpClient;
 
 /** The one act This Mac's host answers, asked only to turn it on or off. */
-export type ThisMacHostActs = Pick<typeof AGENT_ACTS, "HOSTS_THIS_MAC_SET">;
+type ThisMacHostActs = Pick<typeof AGENT_ACTS, "HOSTS_THIS_MAC_SET">;
 
 export interface ThisMacHostComposer extends Composer {
   /** Run agents on this Mac turned on or off, as the panel's port asks it. */

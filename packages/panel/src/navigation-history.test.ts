@@ -11,7 +11,7 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { useAdminRoute } from "./admin/admin-route.js";
+import { type AdminRoute, useAdminRoute } from "./admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "./admin/routing.js";
 import { runAppCommand } from "./app-commands.js";
 import { type AutomationsRoute, useAutomationsRoute } from "./automations-route.js";
@@ -19,27 +19,26 @@ import { stepTitle } from "./history-titles.js";
 import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
 import { useCopyLink } from "./links-at-hand.js";
 import {
-  MOUSE_BUTTON,
-  type StepTitle,
-  sameHistoryPage,
-  savesStep,
-  throughHistory,
+  type HistoryBehind,
   useHistoryMouseButtons,
   useRoutedStanding,
   useWindowHistory,
-  type WindowHistoryLists,
+  type WindowHistory,
 } from "./navigation-history.js";
+import { type NarrowBacks, useNarrowBacks } from "./places/narrow-backs.js";
 import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-leave.js";
 import { useRoutedExits } from "./places/routed-exits.js";
 import type { RoutedPlace } from "./places/routed-places.js";
-import { taskOfAt } from "./places/task-step.js";
+import { taskAtOf, taskOfAt } from "./places/task-step.js";
+import { MOUSE_BUTTON, type StepTitle, sameHistoryPage, savesStep } from "./places/window-steps.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { useTaskRoute } from "./task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
+import { SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
 import { isOverviewTab } from "./tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
-import type { AdminViewControl, TasksControl } from "./tasks/use-tasks-tab.js";
+import type { SidePanelTab } from "./tasks/use-side-panel.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads } from "./testing/app-state.js";
@@ -61,9 +60,17 @@ import {
 const TASK_ID = "0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60";
 const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 
+/** The Tasks tab as a window stands it, and the Inbox standing over it, on the item `chosen` names or on its list, where it stands. */
+type Standing = TasksControl & {
+  readonly inboxStands?: { readonly chosen?: InboxChoice | undefined } | undefined;
+};
+
 /** The Tasks tab with Acme read and listed, `overrides` laid over it, as a window past its workspaces' read stands. */
-function listedTab(overrides: Partial<TasksControl> = {}): TasksControl {
-  return tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides });
+function listedTab({
+  inboxStands,
+  ...overrides
+}: Partial<TasksControl> & Pick<Standing, "inboxStands"> = {}): Standing {
+  return { ...tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides }), inboxStands };
 }
 
 const roots: Root[] = [];
@@ -82,7 +89,7 @@ afterEach(unmountAll);
 
 /** The window's history over the Tasks tab as `plans` stands, restood by the returned setter, kept in a memory history of its own under the window's router as a window's root mounts one, and its addresses written from the window's own Copy link, as the root wires it. */
 function mount(
-  initial: TasksControl,
+  initial: Standing,
   held: TestWindowRouter = windowRouter(),
   titled?: (
     tasks: TasksControl,
@@ -90,25 +97,35 @@ function mount(
     views: RoutedViews,
   ) => StepTitle | undefined,
 ) {
-  let history: WindowHistoryLists | undefined;
-  let shown: TasksControl | undefined;
+  let history: (WindowHistory & HistoryBehind) | undefined;
+  let open: TasksControl | undefined;
+  let backs: NarrowBacks | undefined;
   let restand: ((tasks: TasksControl) => void) | undefined;
-  let admin: AdminViewControl | undefined;
+  let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
   let person: PersonRoute | undefined;
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
   let placeLeave: PlaceLeave | undefined;
+  let openAutomationsAt: (to?: AutomationsPlace) => void = () => undefined;
+  // The Tasks tab as the window stands it or a test is about to stand it, which a routed place is left for.
+  let wanted = initial;
+  // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
+  let leaveTo: (to: TasksControl) => void = () => undefined;
   function Probe() {
     const [standing, setTasks] = useState(initial);
+    wanted = standing;
     // The window's leave guard, which a test stands a page's ask through.
     placeLeave = usePlaceLeave();
-    // The window's routed exits leave and stay through its history, as the window's root fills them in.
+    // The window's routed exits leave for the Tasks tab's place and stay through the leave guard, as the window's root fills them in.
     const exits = useRoutedExits();
-    exits.leave = () => history?.onLeaveRouted();
-    exits.stay = () => history?.onStayRouted();
-    restand = setTasks;
+    exits.leave = () => leaveTo(wanted);
+    exits.stay = placeLeave.stays;
+    restand = (tasks) => {
+      wanted = tasks;
+      setTasks(tasks);
+    };
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
     board = useBoardRoute();
     person = usePersonRoute();
@@ -138,7 +155,16 @@ function mount(
       }
     });
     // The task's own place stands where the router does, its task named by its address among those listed, as the Tasks tab reads it.
-    const taskAt = useTaskRoute().at;
+    const taskRoute = useTaskRoute();
+    const taskAt = taskRoute.at;
+    leaveTo = (to) => {
+      const at =
+        to.boundFor === undefined
+          ? undefined
+          : taskAtOf(to.boundFor, to.tasks, to.workspaces, to.workspace, undefined);
+      if (at === undefined) home.onOpen();
+      else taskRoute.onOpen(at, true);
+    };
     const tasks: TasksControl = {
       ...standing,
       placeLeave,
@@ -152,29 +178,14 @@ function mount(
         standing.onUnbindTask();
         setTasks((held) => ({ ...held, boundFor: undefined }));
       },
-      // The Inbox stands where the router does, as the window's root reads it, its doors the router's.
-      inboxView: {
-        ...standing.inboxView,
-        open: inbox.open,
-        chosen: inbox.chosen,
-        narrowed: inbox.narrowed,
-        onOpen: () => openInbox(undefined),
-        onClose: inbox.onClose,
-        onChoose: (chosen) => inbox?.onChoose(chosen),
-        onClear: inbox.onClear,
-        onWiden: inbox.onWiden,
-      },
+      // The Inbox stands where the router does, as the window's root reads it, its way back to its list the router's.
+      inboxView: { ...standing.inboxView, onClear: inbox.onClear },
       onShowInbox: ({ taskId }) => openInbox(taskId),
-      automationsView: {
-        open: automations.open,
-        place: automations.place,
-        runs: automations.runs,
-        onOpen: (to = { kind: AUTOMATIONS_PAGE.LIST }) => {
-          if (listedStep !== undefined) automations?.onOpen(to, listedStep);
-        },
-        onRuns: automations.onRuns,
-        onClose: automations.onClose,
-      },
+      onAutomationRuns: automations.onRuns,
+    };
+    // The Automations pages open under the workspace listed, as their own doors do.
+    openAutomationsAt = (to = { kind: AUTOMATIONS_PAGE.LIST }) => {
+      if (listedStep !== undefined) automations?.onOpen(to, listedStep);
     };
     // Admin stands where the router does, as the window's root reads it.
     admin = useAdminRoute({
@@ -194,12 +205,9 @@ function mount(
       known: true,
       link: copyLink.placed,
       routed,
-      settingsList: undefined,
-      onSettingsList: () => undefined,
       automations,
       versionHistory: versions,
       inbox,
-      home,
       room: SHELL_ROOM.WIDE,
       title: titled?.(tasks, routed?.place, views),
       tasks,
@@ -213,20 +221,22 @@ function mount(
       bound: tasks.boundFor,
       onUnbind: tasks.onUnbindTask,
       onSelect: tasks.onArriveTask,
-      onToBound: () => history?.onLeaveRouted(),
+      onToBound: () => leaveTo(wanted),
       onToUnbound: home.onOpen,
     });
+    // The ways back read the window's history, as the window's root hands it its routed exits.
+    exits.behind = history.behind;
     useHistoryMouseButtons(history, true);
-    // The Tasks tab as the shell hands it on, its Escape through the history.
-    shown = throughHistory(tasks, history.lists);
+    open = tasks;
+    backs = useNarrowBacks(false);
     return null;
   }
   // The Inbox `tasks` says stands, open or not and on the item it names, stood by the router as its own doors stand it.
-  const standInbox = (tasks: TasksControl) => {
-    const want = tasks.inboxView;
+  const standInbox = (tasks: Standing) => {
+    const want = tasks.inboxStands;
     const workspace = tasks.workspaces.find((each) => each.id === tasks.workspace?.id)?.slug;
     if (inbox === undefined) return;
-    if (!want.open) {
+    if (want === undefined) {
       if (inbox.open) inbox.onClose();
       return;
     }
@@ -237,8 +247,8 @@ function mount(
   };
   // A window opening on the Inbox opens at its address, as a reloaded one does.
   const initialStep = initial.workspaces.find((each) => each.id === initial.workspace?.id)?.slug;
-  if (initial.inboxView.open && initialStep !== undefined) {
-    const item = initial.inboxView.chosen?.itemId;
+  if (initial.inboxStands !== undefined && initialStep !== undefined) {
+    const item = initial.inboxStands.chosen?.itemId;
     held.history.replace(`/${initialStep}/inbox${item === undefined ? "" : `/${item}`}`);
   }
   const container = document.createElement("div");
@@ -253,7 +263,7 @@ function mount(
       return history;
     },
     /** Stands the window on `tasks`, its Inbox by the router, as the Inbox's own doors stand it. */
-    stand: (tasks: TasksControl) =>
+    stand: (tasks: Standing) =>
       act(() => {
         restand?.(tasks);
         standInbox(tasks);
@@ -272,25 +282,28 @@ function mount(
     openPerson: (userId: string, name: string | undefined, workspace: string) =>
       act(() => person?.onOpen(userId, name, workspace)),
     /** Opens an Automations page by the router, as its own doors do. */
-    openAutomations: (to?: AutomationsPlace) => act(() => shown?.automationsView.onOpen(to)),
+    openAutomations: (to?: AutomationsPlace) => act(() => openAutomationsAt(to)),
     /** Opens the version history of the task named `task` under `workspace` by the router, as its doors do. */
     openVersions: (workspace: string, task: string) => act(() => versions?.onOpen(workspace, task)),
     /** Stands the automation's runs alone, or its setup again, as its Runs and its way back do. */
-    automationRuns: (runs: boolean) => act(() => shown?.automationsView.onRuns(runs)),
+    automationRuns: (runs: boolean) => act(() => automations?.onRuns(runs)),
     /** The name the person's page standing was opened with. */
     personName: () => person?.name,
     /** Leaves the routed place standing for `tasks`, the place a door into the window's state opens, in one move as the door makes it. */
-    leaveFor: (tasks: TasksControl) =>
+    leaveFor: (tasks: Standing) =>
       act(() => {
-        history?.onLeaveRouted();
         restand?.(tasks);
+        leaveTo(tasks);
       }),
     /** Where the router's history stands. */
     at: () => held.history.location.pathname,
     /** Opens an Admin view by the router, as Admin's own doors do. */
     openAdmin: (view: AdminView) => act(() => admin?.onOpen(view)),
-    /** Presses Escape where it reaches the Tasks tab, as the window's own listener hands it on. */
-    escape: () => act(() => void shown?.back()),
+    /** Presses Escape on the open task, which takes the task's way out (`places/narrow-backs.ts`). */
+    escape: () =>
+      act(() => {
+        if (open !== undefined) backs?.task(open.onLeaveTask);
+      }),
     /** The address of every entry the router's history holds, oldest first. */
     addresses: () => held.addresses(),
     /** Moves the history by itself, as a browser's Back and Forward do, never through the window. */
@@ -380,14 +393,13 @@ test("a move landing on an entry holding no step at /app stands Home, which lets
 });
 
 /** The window on Acme's Inbox, which the router stands, or on the task `onTask` stands, each task left recorded in `left`. */
-function inboxOrTask(onTask: boolean, left: string[]): TasksControl {
-  const base = listedTab();
+function inboxOrTask(onTask: boolean, left: string[]): Standing {
   return listedTab({
     ...(onTask ? { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID } : {}),
     workspaces: [ACME],
     workspace: ACME,
     onLeaveTask: () => left.push(TASK_ID),
-    inboxView: { ...base.inboxView, open: !onTask },
+    inboxStands: onTask ? undefined : {},
   });
 }
 
@@ -619,10 +631,10 @@ test("each step's address is the path of the link ⇧⌘C copies there", async (
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const listed = { workspaces: [ACME], workspace: ACME };
-  const places: TasksControl[] = [
+  const places: Standing[] = [
     onTask([ACME], 42),
     listedTab(listed),
-    listedTab({ ...listed, inboxView: { ...tasksControl().inboxView, open: true } }),
+    listedTab({ ...listed, inboxStands: {} }),
   ];
   const addresses: string[] = [];
   for (const tasks of places) {
@@ -686,7 +698,7 @@ test("Copy link copies the Admin view while Admin stands over the Inbox, the pla
     listedTab({
       workspaces: [ACME],
       workspace: ACME,
-      inboxView: { ...tasksControl().inboxView, open: true },
+      inboxStands: {},
     }),
   );
   window.openAdmin({ kind: ADMIN_TAB.COST });
@@ -700,9 +712,7 @@ test("with no workspace listed, a place in a workspace has no link, so it stands
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const none = { workspaces: [], workspace: undefined };
-  const places: TasksControl[] = [
-    listedTab({ ...none, inboxView: { ...tasksControl().inboxView, open: true } }),
-  ];
+  const places: Standing[] = [listedTab({ ...none, inboxStands: {} })];
   const addresses: string[] = [];
   for (const tasks of places) {
     const window = mount(tasks);
@@ -980,7 +990,7 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
     return listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      inboxView: { ...base.inboxView, open: true, chosen: { itemId, taskId } },
+      inboxStands: { chosen: { itemId, taskId } },
       sidePanel: {
         ...base.sidePanel,
         open: side !== undefined,
@@ -1048,7 +1058,7 @@ test("an Inbox item chosen by a press where the Inbox splits is a step of its ow
     listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      inboxView: { ...tasksControl().inboxView, open: true, chosen: { itemId, taskId: TASK_ID } },
+      inboxStands: { chosen: { itemId, taskId: TASK_ID } },
     });
   const window = mount(onInbox("item-1"));
   press();
@@ -1172,12 +1182,11 @@ test("a task the Inbox is narrowed to is a step linked by it and named by the ta
     github: null,
   };
   const taskId = "a1000001-0000-4000-8000-0000000000b1";
-  const base = listedTab();
   const onInbox = listedTab({
     workspace,
     workspaces: [workspace],
     tasks: [{ ...DOCUMENT_TASK, id: taskId, name: "Auth refactor" }],
-    inboxView: { ...base.inboxView, open: true },
+    inboxStands: {},
   });
   const window = mount(onInbox, windowRouter(), stepTitleOf);
   await settle();
@@ -1223,7 +1232,7 @@ test("each surface the window opens is counted once, by its kind and layout alon
     listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      inboxView: { ...tasksControl().inboxView, open: true },
+      inboxStands: {},
     }),
   );
   assert.deepEqual(counted.slice(3), [opened("inbox")]);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * place-leave.test.ts -- the window's leave guard as a page and the shell hold it: a navigation asks while a page stands its ask, Stay keeps the window, Leave goes, a move within one draft asks nothing, and the browser's own Back and the shell's ways out ask too.
+ * place-leave.test.ts -- the window's leave guard as a page and the shell hold it: a navigation asks while a page stands its ask, Stay keeps the window, Leave goes, a move within one draft asks nothing, a move that stays keeps the ask, and the browser's own Back and the shell's ways out ask too.
  */
 
 import assert from "node:assert/strict";
@@ -17,9 +17,12 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { windowRouter } from "../testing/window-router.js";
 import { type PlaceLeave, type ShellLeaveAsk, usePlaceLeave } from "./place-leave.js";
+import { type AdminDoor, useAdminDoor } from "./routed-doors.js";
+import { useRoutedExits } from "./routed-exits.js";
 
 const AUTOMATION = "/acme/automation/5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 const LIST = "/acme/automations";
+const ADMIN = "/acme/admin";
 
 /** A door's landing that does nothing. */
 const NOTHING = (): void => undefined;
@@ -210,24 +213,73 @@ test.each<[string, (window: ReturnType<typeof mount>) => void]>([
   },
 );
 
-test.each<[string, (place: PlaceLeave) => void]>([
-  ["a door's move", (place) => place.arrive(() => place.stays(), NOTHING)],
-  // As a link to the automation being edited, which the window opens past an ask made up front (`app.tsx`'s `openAppLink`).
-  ["a link's leave asked up front", (place) => place.transitionalLeaveFirst(() => place.stays())()],
-])(
-  "Leave on %s to the place already standing keeps the page's ask, so the window's next move asks again",
-  async (_door, press) => {
-    const window = mount(memoryAt(AUTOMATION));
+test("Leave on a door's move to the place already standing keeps the page's ask, so the window's next move asks again", async () => {
+  const window = mount(memoryAt(AUTOMATION));
 
-    act(() => press(window.place()));
-    await settleQueries();
-    act(() => window.asked[0]?.leave());
-    await settleQueries();
-    assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
+  act(() => window.place().arrive(() => window.place().stays(), NOTHING));
+  await settleQueries();
+  act(() => window.asked[0]?.leave());
+  await settleQueries();
+  assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
 
-    act(() => window.history.push(LIST));
-    await settleQueries();
-    assert.equal(window.asked.length, 2, "the next move asks again");
-    assert.equal(window.history.location.pathname, AUTOMATION);
-  },
-);
+  act(() => window.history.push(LIST));
+  await settleQueries();
+  assert.equal(window.asked.length, 2, "the next move asks again");
+  assert.equal(window.history.location.pathname, AUTOMATION);
+});
+
+test("Leave on Admin's open of the view already standing keeps the page's ask, so the window's next move asks again", async () => {
+  const held = windowRouter(memoryAt(ADMIN));
+  const asked: Asked[] = [];
+  let leave: PlaceLeave | undefined;
+  let admin: AdminDoor | undefined;
+  function Probe() {
+    const place = usePlaceLeave();
+    leave = place;
+    // As the window's root fills it, a door asking for the place standing tells the leave guard its move stays.
+    useRoutedExits().stay = place.stays;
+    admin = useAdminDoor({ placeLeave: place, workspace: undefined });
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  roots.push(root);
+  act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
+  act(() => {
+    leave?.stand((go, stay) => void asked.push({ leave: go, stay }));
+  });
+
+  act(() => admin?.open());
+  await settleQueries();
+  act(() => asked[0]?.leave());
+  await settleQueries();
+  act(() => held.history.push(LIST));
+  await settleQueries();
+
+  assert.equal(asked.length, 2, "the next move asks again");
+  assert.equal(held.history.location.pathname, ADMIN);
+});
+
+test("Leave on a door's move held while an earlier held move to the same place waited lands only the move let go", async () => {
+  const window = mount(memoryAt(AUTOMATION));
+  const landed: string[] = [];
+
+  act(() =>
+    window.place().arrive(
+      () => window.history.push(ADMIN),
+      () => landed.push("first"),
+    ),
+  );
+  await settleQueries();
+  act(() =>
+    window.place().arrive(
+      () => window.history.push(ADMIN),
+      () => landed.push("second"),
+    ),
+  );
+  await settleQueries();
+  act(() => window.asked.at(-1)?.leave());
+  await settleQueries();
+
+  assert.equal(window.history.location.pathname, ADMIN);
+  assert.deepEqual(landed, ["second"]);
+});

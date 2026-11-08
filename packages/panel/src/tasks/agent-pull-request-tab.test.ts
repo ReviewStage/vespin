@@ -106,10 +106,10 @@ import { viewerPlace } from "../testing/viewer-place.js";
 import { ToastHost } from "../toast.js";
 import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
 import { RepositoryRemedyProvider } from "./repository-remedy.js";
+import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import { type ThreadReveal, ThreadRevealProvider } from "./thread-reveal.js";
 import type { AgentsControl } from "./use-agents.js";
 import { OpenLinkProvider } from "./use-open-link.js";
-import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
 
 /**
  * agent-pull-request-tab.test.ts -- an agent's Pull request tab draws its

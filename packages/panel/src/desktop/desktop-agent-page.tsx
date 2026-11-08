@@ -55,7 +55,8 @@ import { FindScope } from "../find-in-tab.js";
 import { usePageWorkspace } from "../links-at-hand.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { MemberDirectory } from "../member-directory.js";
-import { HERE } from "../route.js";
+import { HERE } from "../places/pressed-address.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
@@ -71,6 +72,7 @@ import {
   tasklessMentions,
   useMentionAgentsReader,
 } from "../tasks/task-mentions.js";
+import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
@@ -83,7 +85,7 @@ import {
   useOpenPlace,
   useReadLinkOpener,
 } from "../tasks/use-open-link.js";
-import { type PinHolder, PULL_REQUEST_VIEW } from "../tasks/use-side-panel.js";
+import type { PinHolder } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
@@ -394,7 +396,7 @@ const AGENT = "Agent";
 const SHOW_PANEL = "Show panel";
 
 /** What a phone's agent page heads itself with (`phone-head.tsx`): its way back, and the panel its ⋯ shows, while it is shut. */
-export interface AgentPagePhone {
+interface AgentPagePhone {
   readonly back: TaskHeadBack;
   readonly onShowPanel: (() => void) | undefined;
 }
@@ -423,7 +425,7 @@ export function AgentRoutePage({
 }
 
 /** One agent's page, in the plan's place: the agent read by its id, drawn as the task column's agent pane. */
-export function DesktopAgentPage({
+function DesktopAgentPage({
   tasks,
   agentId,
   away,
@@ -541,13 +543,13 @@ export function DesktopAgentPage({
     () => (draftShownHere === undefined ? tab : draftTab(draftShownHere)),
     [draftShownHere, tab],
   );
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
   );
   // Note that an inbox call and a page are the rows of a coding agent's own that open a tab, and a task's archive the one
-  // that opens another task, as a link to it opens (`route.ts`), a worker's opening through its delegation.
+  // that opens another task, as a link to it opens (`use-open-link.ts`'s `throughWindow`), a worker's opening through its delegation.
   const openPlace = useOpenPlace();
   const openTarget = useSteadyDoor((target: ToolTarget) => {
     // An inbox call's row opens the window's Inbox on the thread its answer names, as a link to it does, without narrowing it (`openInboxItemOn`); one naming no thread opens the Inbox narrowed to the agent's task where it has one.
@@ -773,7 +775,7 @@ export function DesktopAgentPage({
         terminals={terminalDoors}
         onClose={tasks.agentView.onClose}
         phone={phoneHead}
-        trail={automationTrail(agent, tasks) ?? slackTrail(agent)}
+        trail={automationTrail(agent, onOpenAutomations) ?? slackTrail(agent)}
         steps={
           runPlace === undefined ? null : (
             <AutomationRunSteps place={runPlace} onOpenAgent={tasks.agentView.onOpen} />

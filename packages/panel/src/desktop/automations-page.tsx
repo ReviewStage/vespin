@@ -71,12 +71,14 @@ import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
+import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, glyphStateWords, stateEndMark } from "../state-glyph.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -545,9 +547,9 @@ function AutomationsHead({
   tasks: TasksControl;
   room: ShellRoom;
 }): React.JSX.Element {
-  const view = tasks.automationsView;
+  const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
-  const openNew = () => view.onOpen({ kind: AUTOMATIONS_PAGE.NEW });
+  const openNew = () => door.open({ kind: AUTOMATIONS_PAGE.NEW });
   return room === SHELL_ROOM.NARROW ? (
     // A phone heads the list as it heads every place (`phone-head.tsx`): New automation, the title centered, and a ⋯.
     <PhoneHead
@@ -619,8 +621,8 @@ function ListPage({
   automations: ReturnType<typeof useAutomations>;
   room: ShellRoom;
 }): React.JSX.Element {
-  const view = tasks.automationsView;
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, view.onClose);
+  const door = useAutomationsDoor(tasks);
+  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
   const { read, reload, toggle } = automations;
@@ -628,7 +630,7 @@ function ListPage({
     read !== undefined && "automations" in read ? automationGroups(read.automations) : [];
   const workspacesUnread = workspace === undefined && tasks.workspacesFailed;
   const deletion = useRowDeletion(groups, (automationId) =>
-    view.onOpen({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
+    door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
   );
   return (
     <ReplayUnmask>
@@ -671,7 +673,7 @@ function ListPage({
             now={now}
             narrow={room === SHELL_ROOM.NARROW}
             onOpen={(automation) =>
-              view.onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
+              door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
             }
             onToggle={(automation, enabled) => toggle(automation.id, enabled)}
             onDelete={deletion.ask}
@@ -701,10 +703,11 @@ function AutomationsTabs({
   tasks: TasksControl;
   children?: React.ReactNode;
 }): React.JSX.Element {
-  const view = tasks.automationsView;
+  const door = useAutomationsDoor(tasks);
+  const standing = useAutomationsPlace();
   const { read } = useWorkspaceRuns(tasks.workspace?.id);
   const tab =
-    view.place.kind === AUTOMATIONS_PAGE.RUNS ? AUTOMATIONS_PAGE.RUNS : AUTOMATIONS_PAGE.LIST;
+    standing.place.kind === AUTOMATIONS_PAGE.RUNS ? AUTOMATIONS_PAGE.RUNS : AUTOMATIONS_PAGE.LIST;
   const tabs = [
     { value: AUTOMATIONS_PAGE.LIST, label: AUTOMATIONS },
     {
@@ -720,7 +723,7 @@ function AutomationsTabs({
         items={tabs}
         value={tab}
         look={CHOICE_BAR_LOOK.SEGMENTED}
-        onChange={(kind) => view.onOpen({ kind })}
+        onChange={(kind) => door.open({ kind })}
       />
       {children}
     </Inline>
@@ -749,8 +752,8 @@ function RunsPage({
   automations: ReturnType<typeof useAutomations>;
   room: ShellRoom;
 }): React.JSX.Element {
-  const view = tasks.automationsView;
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, view.onClose);
+  const door = useAutomationsDoor(tasks);
+  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
   const { read, reload } = useWorkspaceRuns(workspace?.id);
@@ -811,7 +814,7 @@ function RunsPage({
             now={now}
             onOpenAgent={(agentId) => tasks.agentView.onOpen(agentId)}
             onOpenAutomation={(automationId) =>
-              view.onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId })
+              door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId })
             }
           />
         ) : null}
@@ -994,7 +997,8 @@ function AutomationsPages({
   tasks: TasksControl;
   room: ShellRoom;
 }): React.JSX.Element {
-  const view = tasks.automationsView;
+  const door = useAutomationsDoor(tasks);
+  const standing = useAutomationsPlace();
   const workspace = tasks.workspace;
   // Note that no list is asked for while no workspace is listed, which is
   // while the workspaces are still read, so the pages stand as quiet blocks
@@ -1003,8 +1007,8 @@ function AutomationsPages({
   const automations = useAutomations(workspace?.id);
   // The automation the new page made, whose page is that same editor still, so what was typed while it was made stands.
   const [made, setMade] = useState<string | undefined>(undefined);
-  const back = () => view.onOpen({ kind: AUTOMATIONS_PAGE.LIST });
-  const { place } = view;
+  const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
+  const { place } = standing;
   if (place.kind === AUTOMATIONS_PAGE.LIST) {
     return <ListPage tasks={tasks} automations={automations} room={room} />;
   }
@@ -1060,16 +1064,16 @@ function AutomationsPages({
       linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
       placeLeave={tasks.placeLeave}
       room={room}
-      runsShown={view.runs}
-      onRuns={view.onRuns}
+      runsShown={standing.runs}
+      onRuns={tasks.onAutomationRuns}
       sentry={sentry}
       slackBot={slackBot}
       onDeleted={(automationId) =>
-        view.onOpen({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId })
+        door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId })
       }
       onCreated={(automationId) => {
         setMade(automationId);
-        view.onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId, created: true });
+        door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId, created: true });
       }}
     />
   );

@@ -2,6 +2,7 @@ import { List } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { type RefObject, useState } from "react";
 import { useInboxRowDrafts } from "../composer-drafts.js";
+import { useInboxDoor } from "../places/routed-doors.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useInboxResolver } from "./inbox-close.js";
 import { useInboxRowPresses } from "./inbox-columns.js";
@@ -67,7 +68,8 @@ export function InboxItemRows({
     shown: tasks.shown,
   });
   // Note that the press stands across draws, as the acts' doors do, so a row is drawn again only where its item moves.
-  const open = useSteadyDoor((each: InboxListed) => tasks.inboxView.onOpenItem(choiceOf(each)));
+  const inbox = useInboxDoor(tasks);
+  const open = useSteadyDoor((each: InboxListed) => inbox.openItem(choiceOf(each)));
   return (
     <>
       <ReplayMask>

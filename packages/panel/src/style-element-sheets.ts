@@ -29,7 +29,7 @@ export function styleElementSheets(root: ParentNode): () => CSSStyleSheet[] {
     const standing = new Set(root.querySelectorAll("style"));
     for (const style of sheets.keys()) if (!standing.has(style)) sheets.delete(style);
     for (const style of standing) {
-      const text = style.textContent ?? "";
+      const text = style.textContent;
       const held = sheets.get(style);
       if (held?.text === text) continue;
       const sheet = held?.sheet ?? new CSSStyleSheet();

@@ -244,7 +244,6 @@ export function appStateIn(client: QueryClient): AppStateSnapshot | undefined {
  * document moves, as the docs' Render Optimizations guide asks of `select`.
  */
 export const selectRun = (state: AppStateSnapshot) => state.run;
-export const selectSettings = (state: AppStateSnapshot) => state.settings;
 export const selectAccount = (state: AppStateSnapshot) => state.account;
 
 /** Who is signed in, by the id and the address main's document names; none while none is. */
@@ -274,10 +273,8 @@ export function sameAccount(
     : one.email === other.email;
 }
 export const selectAccess = (state: AppStateSnapshot) => state.access;
-export const selectUpdate = (state: AppStateSnapshot) => state.update;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
 export const selectTasks = (state: AppStateSnapshot) => state.tasks;
-export const selectAgents = (state: AppStateSnapshot) => state.agents;
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
@@ -285,7 +282,6 @@ export const selectMacCommands = (state: AppStateSnapshot) => state.macCommands;
 export const selectNotifications = (state: AppStateSnapshot) => state.notifications;
 export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
-export const selectWindow = (state: AppStateSnapshot) => state.window;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 

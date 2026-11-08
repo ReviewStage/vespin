@@ -1,3 +1,4 @@
+import { PANEL_PATH } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUTTON_SHAPE,
@@ -16,7 +17,6 @@ import {
   type TextLinkCurrent,
 } from "@repo/ui";
 import { captureSiteEvent, SITE_EVENT } from "./analytics";
-import { PANEL_PATH } from "./app/web-address";
 
 export const REPOSITORY_URL = "https://github.com/ReviewStage/vespin";
 /** The newest release's version-free DMG, named for the product as the Release workflow names it. */

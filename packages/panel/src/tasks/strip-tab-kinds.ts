@@ -16,16 +16,14 @@ import {
 import { GLYPH_STATE } from "../state-glyph.js";
 import { fileName } from "./file-ref-model.js";
 import { type PlanStanding, TAB_KIND, type TabSubject } from "./tab-look.js";
+import { type FixedSidePanelTab, SIDE_PANEL_TAB, SIDE_PANEL_TABS } from "./task-tab-model.js";
 import { isOverviewTab, type MainTab } from "./use-main-tabs.js";
 import {
   DRAWN_KINDS,
   type DrawnTabs,
   drawsChanges,
   drawsSubagent,
-  type FixedSidePanelTab,
-  SIDE_PANEL_TAB,
   SIDE_PANEL_TAB_KIND,
-  SIDE_PANEL_TABS,
   type SidePanelTab,
 } from "./use-side-panel.js";
 import type { ShellTab } from "./use-terminal-session.js";

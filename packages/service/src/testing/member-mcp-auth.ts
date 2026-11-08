@@ -128,7 +128,7 @@ const noMetadataDocument: ClientMetadataResourceFetch = (input) =>
   Promise.reject(new Error(`this test fetches no metadata document: ${String(input)}`));
 
 /** Better Auth as `auth.ts` configures what the server and a client reach, its metadata documents fetched through the transport given. */
-export function memberMcpTestAuth(
+function memberMcpTestAuth(
   client: Awaited<ReturnType<typeof openMigratedPglite>>,
   fetchClientMetadataResource: ClientMetadataResourceFetch = noMetadataDocument,
 ) {

@@ -349,10 +349,10 @@ export const APP_SETTING_SCHEMA = {
     visible: accountDrawn,
   }),
   /*
-   * When a sound plays as an agent finishes, and which one. Account
+   * When a sound plays as an agent finishes or asks, and which one. Account
    * preferences, as Enter's choice is, each riding a part of the snapshot
-   * of its own. Note that neither row is drawn yet, since nothing plays a
-   * sound until the trigger that reads them lands.
+   * of its own. The sound's row stands only while one plays at all, and
+   * Settings draws a Play beside it.
    */
   soundWhen: choiceSetting({
     field: "soundWhen",
@@ -368,7 +368,7 @@ export const APP_SETTING_SCHEMA = {
     order: 500,
     // Nothing to run per write: an agent's finish reads the choice as it lands.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
-    visible: () => false,
+    visible: accountDrawn,
   }),
   completionSound: choiceSetting({
     field: "completionSound",
@@ -384,7 +384,8 @@ export const APP_SETTING_SCHEMA = {
     order: 510,
     // Nothing to run per write: an agent's finish reads the choice as it plays.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
-    visible: () => false,
+    visible: (view) =>
+      view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
   }),
   /*
    * Whether the account finished its setup after sign-in, so setup stands

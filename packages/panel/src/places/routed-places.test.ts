@@ -7,10 +7,17 @@ import { test } from "vitest";
 import { stepTitle } from "../history-titles.js";
 import { createPanelRouter } from "../panel-router.js";
 import type { RouteAccess } from "../route-gates.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { tasksControl, VIEWS_AWAY } from "../testing/tasks-control.js";
 import type { RoutedViews } from "../workspace-routes.js";
-import { type PlaceThere, ROUTED_PLACE, routedPlaceOf, routedStepStands } from "./routed-places.js";
+import {
+  type PlaceThere,
+  ROUTED_PLACE,
+  routedPlaceOf,
+  routedStepStands,
+  sameDraftAt,
+} from "./routed-places.js";
 
 /**
  * routed-places.test.ts -- each routed place as the window reads it from an
@@ -154,7 +161,7 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     label: "Tasks",
   });
   assert.deepEqual(
-    titled({ automationsView: { ...base.automationsView, open: true } }, "AUTOMATIONS"),
+    titled({}, "AUTOMATIONS", { ...VIEWS_AWAY, automations: { kind: AUTOMATIONS_PAGE.LIST } }),
     { label: "Automations" },
   );
   assert.deepEqual(
@@ -165,7 +172,10 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     { label: "Ada" },
   );
   assert.deepEqual(
-    titled({ inboxView: { ...base.inboxView, open: true, narrowed: TASK_ID } }, "INBOX"),
+    titled({}, "INBOX", {
+      ...VIEWS_AWAY,
+      inbox: { open: true, chosen: undefined, narrowed: TASK_ID },
+    }),
     { label: "Inbox", detail: "Auth refactor" },
   );
   assert.deepEqual(titled({ agentView: { ...base.agentView, agentId: "agent-1" } }, "AGENT"), {
@@ -181,3 +191,14 @@ test("each place over the plan names its step for itself, and Admin's as the pla
 test("Back still reaches an agent's page once another workspace is listed than the one its address names", () => {
   assert.equal(stepStands("/acme/agent/a", ACCESS, { ...THERE, listed: () => false }), true);
 });
+
+test.each([
+  ["by its id", "/workspace-acme/automation/automation-1/runs", true],
+  ["under another workspace", "/beta/automation/automation-1/runs", false],
+])(
+  "an automation's setup and its runs addressed %s hold one draft only within one workspace",
+  (_way, runs, same) => {
+    const setup = matchesOf("/acme/automation/automation-1");
+    assert.equal(sameDraftAt(setup, matchesOf(runs), ACCESS), same);
+  },
+);

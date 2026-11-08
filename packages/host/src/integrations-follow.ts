@@ -214,7 +214,7 @@ function followIntegrations(
       txWait: () => txWait,
       github: askGithub,
     });
-    // Note that a window come forward settles a sign-in still pending and asks again for every account still to be named, as the statuses read did on focus before the rows were followed.
+    // Note that a window come forward settles a sign-in still pending and asks again for every account still to be named.
     const askAgain = Effect.sync(() => {
       labelAsked.clear();
       if (!taken) return;

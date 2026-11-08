@@ -67,7 +67,7 @@ export function ToastActions({
           variant={BUTTON_VARIANT.OUTLINE}
           onClick={() => {
             onDismiss();
-            onPress?.();
+            onPress();
           }}
         >
           <ReplayWords unmasked={replayUnmasked}>{label}</ReplayWords>
@@ -79,7 +79,7 @@ export function ToastActions({
           onClick={(event) => {
             event.preventDefault();
             onDismiss();
-            onPress?.();
+            onPress();
           }}
         >
           <ReplayWords unmasked={replayUnmasked}>{label}</ReplayWords>

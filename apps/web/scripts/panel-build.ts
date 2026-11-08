@@ -19,7 +19,6 @@ import {
 } from "@repo/panel/build-table";
 import { build } from "esbuild";
 import type { Plugin } from "vite";
-import { PANEL_ASSET_BASE } from "../src/app/web-address";
 
 // Rollup's name for the module this answers itself, `\0`-led so no other plugin loads it.
 const LUCIDE_WHOLE_ID = "\0lucide-whole";
@@ -83,11 +82,11 @@ function panelDefine(): Plugin {
   };
 }
 
-/** The panel's static files under `/app/`: served from where they stand in development, and emitted with the client build. */
-function panelStaticFiles(): Plugin {
+/** The panel's static files under `assetBase`, `/app/`: served from where they stand in development, and emitted with the client build. */
+function panelStaticFiles(assetBase: string): Plugin {
   const served = panelStaticDirectories().map(({ from, to }) => ({
     from,
-    prefix: `${PANEL_ASSET_BASE}${to}/`,
+    prefix: `${assetBase}${to}/`,
   }));
   let ssr = false;
   return {
@@ -128,7 +127,12 @@ function panelStaticFiles(): Plugin {
   };
 }
 
-/** Everything the web's build needs to bundle the panel. */
-export function panelBuild(): Plugin[] {
-  return [panelResolve(), panelDefine(), panelStaticFiles()];
+/**
+ * Everything the web's build needs to bundle the panel, its static files
+ * under `assetBase` (`@repo/features/link-home`'s `PANEL_ASSET_BASE`). Note
+ * that the base is handed in rather than imported, because knip loads this
+ * file through `vitest.config.ts`, whose loader resolves no package's door.
+ */
+export function panelBuild(assetBase: string): Plugin[] {
+  return [panelResolve(), panelDefine(), panelStaticFiles(assetBase)];
 }

@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -27,6 +27,7 @@ import {
   deleteTask,
   listTasks,
   readTask,
+  readTaskWorkspace,
   type StoredTask,
   setTaskParent,
   type TaskChanges,
@@ -102,9 +103,9 @@ import {
 } from "../core.js";
 import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
-import { ownAgentWorkspace, taskWorkspace } from "../github/workspace-repository.js";
+import { ownAgentWorkspace } from "../github/workspace-repository.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../http/http-effect.js";
-import { logStoreFailure, type StoreFailure } from "../http/store-failure.js";
+import { logStoreFailure } from "../http/store-failure.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,
@@ -1588,7 +1589,7 @@ const taskOfCallerWorkspace = (caller: AgentCaller, taskId: string) =>
   Effect.gen(function* () {
     const workspace = yield* callerWorkspace(caller);
     if (Option.isNone(workspace)) return false;
-    const owning = yield* taskWorkspace(callerUserId(caller), taskId);
+    const owning = yield* readTaskWorkspace(callerUserId(caller), taskId);
     return Option.isSome(owning) && owning.value === workspace.value;
   });
 

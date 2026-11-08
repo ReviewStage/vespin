@@ -13,6 +13,8 @@ import {
   type TasklessAgent,
 } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_REASON } from "@repo/features/automation-wire";
+import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
+import { COMPLETION_SOUND, type CompletionSound } from "@repo/wire/app-settings";
 import { Duration, Effect, Layer, Queue, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { type AgentNotice, AgentNoticeDoors, createAgentNotices } from "./agent-notices.js";
@@ -55,6 +57,9 @@ type InboxAnswerGiven =
 function fixture() {
   const posted: AgentNotice[] = [];
   const badges: number[] = [];
+  const chimes: CompletionSound[] = [];
+  /** When the account plays a sound, which no sound unless a test turns one on. */
+  let soundWhen: SoundWhen = SOUND_WHEN.OFF;
   /** Whether the badge door throws, as a platform that refuses one may. */
   let refusingBadges = false;
   const doors = Layer.succeed(AgentNoticeDoors, {
@@ -64,6 +69,9 @@ function fixture() {
     badge: (count) => {
       if (refusingBadges) throw new TypeError("Illegal invocation");
       badges.push(count);
+    },
+    chime: (sound) => {
+      chimes.push(sound);
     },
   });
   /** How many times the account's inbox was followed. */
@@ -114,12 +122,18 @@ function fixture() {
         agents.push(next.agents);
         failedRuns.push(next.failedRuns);
       },
+      sound: () => ({ when: soundWhen, sound: COMPLETION_SOUND.MARIMBA }),
       report: () => undefined,
     });
   }).pipe(Effect.provide(doors));
   return {
     notices,
     posted,
+    chimes,
+    /** When the account plays a sound, as its preference says now. */
+    playSound: (when: SoundWhen) => {
+      soundWhen = when;
+    },
     unseen,
     focus: (focused: boolean) => {
       assert.ok(focus, "the notices subscribe to the window's focus");
@@ -937,5 +951,102 @@ it.effect("a badge door that throws loses that count alone: the next answer stil
     yield* settled;
 
     assert.equal(f.badges.at(-1), 2);
+  }),
+);
+
+/** An agent on a plan the signed-in account started, at `status`. */
+function ownAgent(status: AgentStatus, patch: Partial<AgentSummary> = {}): AgentSummary {
+  return agent(status, { startedBy: { userId: ACCOUNT_ID, name: "Dana" }, ...patch });
+}
+
+it.effect(
+  "a turn of the account's own agent ending in the background chimes once, and the list read again after a reload chimes it no more",
+  () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const notices = yield* f.notices;
+      f.playSound(SOUND_WHEN.BACKGROUND);
+      f.focus(false);
+
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING)]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED)]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED)]);
+
+      assert.deepEqual(f.chimes, [COMPLETION_SOUND.MARIMBA]);
+    }),
+);
+
+it.effect.each([
+  {
+    what: "a Stop",
+    when: SOUND_WHEN.ALWAYS,
+    ended: ownAgent(AGENT_STATUS.CANCELED),
+  },
+  {
+    what: "a teammate's agent",
+    when: SOUND_WHEN.ALWAYS,
+    ended: agent(AGENT_STATUS.COMPLETED, { startedBy: { userId: "user-sam", name: "Sam" } }),
+  },
+  { what: "the sound off", when: SOUND_WHEN.OFF, ended: ownAgent(AGENT_STATUS.COMPLETED) },
+])("a turn's end under $what chimes nothing", ({ when, ended }) =>
+  Effect.gen(function* () {
+    const f = fixture();
+    const notices = yield* f.notices;
+    f.playSound(when);
+    f.focus(false);
+
+    notices.observeAgents([{ ...ended, status: AGENT_STATUS.RUNNING }]);
+    notices.observeAgents([ended]);
+
+    assert.deepEqual(f.chimes, []);
+  }),
+);
+
+it.effect(
+  "an item newly asking the account chimes, while what the first answer holds and a notice that asks nothing do not",
+  () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      yield* f.notices;
+      f.playSound(SOUND_WHEN.ALWAYS);
+      const waited = waitingItem(ITEM_A, { waitsOn: ACCOUNT_ID, asking: true });
+      const notice = waitingItem(ITEM_B, { waitsOn: ACCOUNT_ID, asking: false });
+
+      f.answerInbox({ items: [waited], cursor: "1", readAt: READ_AT });
+      yield* settled;
+      f.answerInbox({ items: [notice, waited], cursor: "2", readAt: READ_AT });
+      yield* settled;
+      const before = f.chimes.length;
+      f.answerInbox({
+        items: [waitingItem(ITEM_C, { waitsOn: ACCOUNT_ID, asking: true }), notice, waited],
+        cursor: "3",
+        readAt: READ_AT,
+      });
+      yield* settled;
+
+      assert.deepEqual([before, f.chimes.length], [0, 1]);
+    }),
+);
+
+it.effect("ends inside one burst chime once, and an end after it chimes again", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    const notices = yield* f.notices;
+    f.playSound(SOUND_WHEN.ALWAYS);
+    const end = (id: string) => {
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { id })]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED, { id })]);
+    };
+
+    end("a1b2c3d4-0000-4000-8000-000000000011");
+    yield* TestClock.adjust(Duration.millis(600));
+    end("a1b2c3d4-0000-4000-8000-000000000012");
+    yield* TestClock.adjust(Duration.millis(600));
+    end("a1b2c3d4-0000-4000-8000-000000000013");
+    const burst = f.chimes.length;
+    yield* TestClock.adjust(Duration.seconds(2));
+    end("a1b2c3d4-0000-4000-8000-000000000014");
+
+    assert.deepEqual([burst, f.chimes.length], [1, 2]);
   }),
 );

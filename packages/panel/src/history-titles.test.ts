@@ -4,8 +4,7 @@ import { TASKS_PAGE } from "@repo/ui/tasks-model";
 import { test } from "vitest";
 import { liveStepTitle, NAMED_STEP, stepTitle } from "./history-titles.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
-import { MAIN_TAB } from "./tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB } from "./tasks/use-side-panel.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
 import type { InboxChoice } from "./tasks/use-tasks-tab.js";
 import { tasksControl, VIEWS_AWAY } from "./testing/tasks-control.js";
 
@@ -80,11 +79,8 @@ test("a task's step listed later on its Overview is named by the task and its pa
 test("the Inbox's step names the task its item is of, Settings and Home are named alone, and Admin's step as the place under it", () => {
   const chosen: InboxChoice = { itemId: "item-1", taskId: TASK.id };
   const base = tasksControl({ tasks: [TASK] });
-  const inbox = tasksControl({
-    tasks: [TASK],
-    inboxView: { ...base.inboxView, open: true, chosen },
-  });
-  assert.deepEqual(stepTitle(ROUTED_PLACE.INBOX, inbox, VIEWS_AWAY), {
+  const inbox = { ...VIEWS_AWAY, inbox: { open: true, chosen, narrowed: undefined } };
+  assert.deepEqual(stepTitle(ROUTED_PLACE.INBOX, base, inbox), {
     label: "Inbox",
     detail: "Auth refactor",
   });

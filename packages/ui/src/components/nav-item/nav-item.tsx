@@ -10,7 +10,7 @@ import { middlePressOf } from "../../middle-press.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
 import { CountFigure } from "../count-figure/count-figure.js";
-import { type ContextMenuProps, withContextMenu } from "../menu/menu.js";
+import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
 import { rovingItem } from "../roving-keys/roving-keys.js";
 import { ListSelectionContext } from "../selection/list-selection.js";

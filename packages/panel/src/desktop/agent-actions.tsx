@@ -80,7 +80,7 @@ const COPY_TRANSCRIPT = "Copy transcript";
 const TRANSCRIPT_WAY = { CONCISE: "Concise", FULL: "Full" } as const;
 
 /** A pin as a menu offers it, Pin or Unpin: whether it stands, and the press that sets it or takes it away. */
-export interface PinDoor {
+interface PinDoor {
   pinned: boolean;
   onToggle: () => void;
 }
@@ -265,7 +265,7 @@ export type RowDoors = Omit<AgentDoors, keyof typeof NOT_ON_A_ROW>;
 /** The doors a row offers of those an agent offers, `NOT_ON_A_ROW`'s left out. */
 export function rowDoors(doors: AgentDoors): RowDoors {
   const offered = Object.entries(doors).filter(([door]) => !Object.hasOwn(NOT_ON_A_ROW, door));
-  return Object.fromEntries(offered) as RowDoors;
+  return Object.fromEntries(offered);
 }
 
 /** The doors a column opens an agent's terminals through, by the agent; each none where it is not offered. */

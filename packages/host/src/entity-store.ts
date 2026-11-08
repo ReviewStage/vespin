@@ -97,7 +97,7 @@ export const KEPT_READ = {
   AUTOMATIONS: "automations",
 } as const;
 
-export type KeptRead = (typeof KEPT_READ)[keyof typeof KEPT_READ];
+type KeptRead = (typeof KEPT_READ)[keyof typeof KEPT_READ];
 
 /** The kept reads held per workspace, each workspace's rows under its id. */
 type KeptByWorkspace =
@@ -409,7 +409,7 @@ export function openEntityStore(
           }
           const byWorkspace = { ...byWorkspaceOf<Read>(reads, kept), [workspaceId]: rows };
           // SAFETY: the read `kept` names is set to a record of its own rows, each workspace's `KeptRows[Read][string]`.
-          reads = { ...reads, [kept]: byWorkspace } as Partial<KeptRows>;
+          reads = { ...reads, [kept]: byWorkspace };
           dirty = true;
           return woken;
         }),

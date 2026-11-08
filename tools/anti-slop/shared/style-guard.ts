@@ -131,7 +131,7 @@ const CLASS_SOURCE_ROOTS = ["packages/ui/src/", "packages/panel/src/", "apps/"];
 const CLASS_SOURCE = /\.(?:tsx|ts|jsx|js|mjs)$/u;
 const TEST_SOURCE = /(?:\.test\.|\/testing\/|\/__tests__\/|\/tests\/|\/evals\/)/u;
 
-export const CSS_SOURCE = /\.css$/u;
+const CSS_SOURCE = /\.css$/u;
 
 export function isWatched(file: string): boolean {
   if (TOOLING.some((prefix) => file.startsWith(prefix))) return false;

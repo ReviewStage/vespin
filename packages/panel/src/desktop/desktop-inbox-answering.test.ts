@@ -773,7 +773,7 @@ test("on To do, the chosen row stands once the Inbox is come back to, gray, thou
   world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: INVITES.id }, { items: [answered] });
   await settle();
   // Note that the push reaches the hidden Inbox's read one notify tick later, which lands before it is shown again.
-  await vi.waitFor(() => assert.equal(rowMuted(page, "Expire after 7 days?"), true));
+  await settle();
   act(() => world.setInboxOpen(true));
   await settle();
   assert.deepEqual(

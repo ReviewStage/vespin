@@ -24,7 +24,7 @@ export interface SupportAccessApi {
 }
 
 /** One write of the session's grant, answering when it then runs out in epoch milliseconds, or null. */
-export type SupportAccessWrite = (headers: Headers) => Effect.Effect<number | null, MemberFailure>;
+type SupportAccessWrite = (headers: Headers) => Effect.Effect<number | null, MemberFailure>;
 
 /** The session's grant written each way. */
 export interface SupportAccessCalls {

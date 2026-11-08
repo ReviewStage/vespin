@@ -78,11 +78,15 @@ import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
-import { estimatedTokens } from "../coder-host/token-estimate.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
-import { admitRunnerBearer, presentedBearer, runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import {
+  admitRunnerBearer,
+  presentedBearer,
+  presentedLaunch,
+  runnerTokenDigest,
+} from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
 import type { NativeHeld, NativeMoment } from "./native-moments.js";
@@ -104,7 +108,10 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * numbered in order, in batches, under the bearer it was launched with, and
  * posts a batch again until we take it. A bearer no standing coding
  * agent's conversation holds, a retired one's among them, is refused before
- * the body is read (`../workspace-mcp/bearer.ts`). The batch is read as moments
+ * the body is read (`../workspace-mcp/bearer.ts`), as is a post naming a
+ * launch other than the one its bearer was recorded as, read again under
+ * the lock, so a runner a newer launch replaced applies nothing, even under
+ * the bearer its sandbox's firewall now swaps in. The batch is read as moments
  * by the reader of the harness the conversation runs on
  * (`claude-code-moments.ts`, `codex-moments.ts`), folded into the store
  * writer's events
@@ -154,6 +161,9 @@ export const RUNNER_EVENTS_PATH = "/api/agents/runner-events";
 /** The most a batch may hold: the runner's 256 events, a tool's whole answer among them, under the platform's own bound. */
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
+/** The bytes a token stands for in a step's estimate. */
+const BYTES_PER_TOKEN = 4;
+
 const RunnerEventBatchSchema = Schema.Struct({
   events: Schema.Array(
     Schema.Struct({
@@ -165,6 +175,14 @@ const RunnerEventBatchSchema = Schema.Struct({
 type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
+
+/**
+ * The tokens of a value's JSON as a step's estimate tells them: its bytes
+ * over four, rounded up, the rule the retired runtime's steps were estimated by.
+ */
+function estimatedTokens(json: string): number {
+  return Math.ceil(new TextEncoder().encode(json).byteLength / BYTES_PER_TOKEN);
+}
 
 /**
  * How a harness's messages are read: one message, as its runner posted it,
@@ -220,12 +238,13 @@ export interface RunnerAlive {
   readonly sessionId: string | undefined;
 }
 
-/** A launch's end the batch applied: the conversation, the session it ran under, the number of its END event, and why it ended where the END said. */
+/** A launch's end the batch applied: the conversation, the session it ran under, the number of its END event, why it ended where the END said, and the launch its post named, where it named one. */
 export interface RunnerEnded {
   readonly target: ConversationTarget;
   readonly sessionId: string | undefined;
   readonly sequence: number;
   readonly reason?: RunnerEnd | undefined;
+  readonly launch?: number | undefined;
 }
 
 /** What the route reads a batch with and tells of a launch's end. */
@@ -293,6 +312,7 @@ export function sandboxAtRunnerEnd(
       sessionId,
       sequence: ended.sequence,
       reason: ended.reason,
+      launch: ended.launch,
     }).pipe(
       Effect.provide(FetchHttpClient.layer),
       Effect.flatMap((left) =>
@@ -752,7 +772,9 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const bearer = presentedBearer(request);
   if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-  const admitted = yield* hostedStoreOrUnavailable(admitRunnerBearer(bearer));
+  const admitted = yield* hostedStoreOrUnavailable(
+    admitRunnerBearer(bearer, presentedLaunch(request)),
+  );
   if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const { target } = admitted.value;
   // Every line the batch writes, and every issue it raises, names the account the agent runs for.
@@ -810,8 +832,11 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     }),
   );
   const applied = yield* hostedStoreOrUnavailable(
-    withNativeProjection(target, runnerTokenDigest(bearer), (held) =>
-      applyBatch(applying, batch.value, held),
+    withNativeProjection(
+      target,
+      runnerTokenDigest(bearer),
+      (held) => applyBatch(applying, batch.value, held),
+      admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
   const listener = yield* Effect.serviceOption(SettledTurnListener);
@@ -859,6 +884,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
         sessionId: admitted.value.runtimeSessionId,
         sequence,
         reason,
+        launch: admitted.value.launch,
       });
     }
   }

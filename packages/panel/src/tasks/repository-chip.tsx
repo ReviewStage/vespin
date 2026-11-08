@@ -122,7 +122,7 @@ export const CHIP_PLACE = {
   FIELD: "field",
 } as const;
 
-export type ChipPlace = (typeof CHIP_PLACE)[keyof typeof CHIP_PLACE];
+type ChipPlace = (typeof CHIP_PLACE)[keyof typeof CHIP_PLACE];
 
 /** The chip's look in each place: the composer's pill, or a form row's field. */
 const PLACE_LOOK = {
@@ -305,7 +305,7 @@ function pickedRepositoriesWords(picked: readonly string[]): string {
 }
 
 /** The repositories a chip picks several of beside its one, and the press that checks or unchecks one. */
-export interface SeveralPicks {
+interface SeveralPicks {
   /** The repositories picked after `value`, in pick order. */
   readonly also: readonly string[];
   /** Hears a press on a row, which checks it where it stands unchecked and unchecks it where it stands checked. */
@@ -544,7 +544,7 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
       deadEnd(chooser.connected === true ? DEAD_END.LAPSED : DEAD_END.NOT_CONNECTED)
     ) : listed === undefined ? (
       <Spinner delay label={readingWords("repositories")} />
-    ) : rows.length === 0 && listed?.installed ? (
+    ) : rows.length === 0 && listed.installed ? (
       // Installed but giving us nothing: the repositories are chosen on GitHub, through the workspace's row.
       deadEnd(DEAD_END.NONE_REACHED)
     ) : undefined;

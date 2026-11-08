@@ -6,7 +6,7 @@ import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import type { Address } from "../route.js";
+import type { Address } from "../places/pressed-address.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";

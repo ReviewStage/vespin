@@ -86,7 +86,7 @@ import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
-import { usePersonDoor } from "../places/routed-doors.js";
+import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
 import { stateEndMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
@@ -590,6 +590,7 @@ function AutomationRows({
   now: number;
 }): React.JSX.Element {
   const drawn = useLeaving(automations, automationKey);
+  const door = useAutomationsDoor(tasks);
   return (
     <>
       {drawn.map(({ key, value: automation }) => (
@@ -599,7 +600,7 @@ function AutomationRows({
           workspaceName={tasks.workspace?.name}
           now={now}
           onOpen={() =>
-            tasks.automationsView.onOpen({
+            door.open({
               kind: AUTOMATIONS_PAGE.EDIT,
               automationId: automation.id,
             })

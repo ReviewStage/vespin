@@ -37,6 +37,7 @@ const SILENT_DOORS = Layer.succeed(AgentNoticeDoors, {
     posted.push(notice);
   },
   badge: () => undefined,
+  chime: () => undefined,
 });
 
 /**

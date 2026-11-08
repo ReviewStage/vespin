@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readAccountPreferences } from "@repo/database/models/account-store";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
@@ -32,7 +32,6 @@ import {
   agentMember,
   agentWorkspace as workspaceOfAgent,
 } from "../../github/workspace-repository.js";
-import type { StoreFailure } from "../../http/store-failure.js";
 import { extraCheckoutPaths, REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
   cloneExtraRepository,
@@ -196,7 +195,7 @@ export const COMMIT_BY = {
   APP: "app",
 } as const;
 
-export type CommitBy = (typeof COMMIT_BY)[keyof typeof COMMIT_BY];
+type CommitBy = (typeof COMMIT_BY)[keyof typeof COMMIT_BY];
 
 /** Whose the agent's commits are, and the trailer naming the other as co-author, where the starter's choice credits one. */
 export interface CommitAuthorship {

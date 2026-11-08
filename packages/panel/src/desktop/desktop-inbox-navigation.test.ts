@@ -487,7 +487,7 @@ test("an agent's row hangs a card naming the agent and the automation that start
     [STRAY_AGENT, [BUMP]],
     [TASKLESS_AGENT, [DOMAIN]],
   ]);
-  const { page, asked } = mount([
+  const { page, windowPath } = mount([
     { ...waitingTaskless(QUARANTINE), agentTitle: "Sweep the flaky tests" },
     { ...waitingTaskless(BUMP), automationId: null, automationName: null },
     tasklessItem(DOMAIN),
@@ -520,8 +520,10 @@ test("an agent's row hangs a card naming the agent and the automation that start
     "the crumb's card offers nothing to press, since the crumb opens the automation",
   );
   act(() => crumb.click());
-  assert.deepEqual(asked.shownAutomations, [SWEEP.id]);
+  // Note that the listed workspace has no slug, so its address names it by its id.
+  assert.equal(windowPath(), `/workspace-acme/automation/${SWEEP.id}`);
 
+  act(() => world.setInboxOpen(true));
   act(() => rowNamed(page, "Bump the Node image?").click());
   await settle();
   // Note that no automation stands behind its crumb, so the crumb is words, opening nothing.

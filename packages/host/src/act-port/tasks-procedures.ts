@@ -2,8 +2,7 @@
  * tasks-procedures.ts -- the addresses the Tasks tab opens in the browser, and its code colored.
  *
  * The one check these procedures make is who asked. Only a panel draws the
- * Tasks tab, and the takeover and any other window draw no task, so
- * every one refuses them, in its own sentence. The Tasks tab's plain asks
+ * Tasks tab, so every one refuses any other window, in its own sentence. The Tasks tab's plain asks
  * and live follows are declared (`contract/tasks.ts`) and answered by the
  * tasks composer; Connect GitHub is declared too, but opens here the page
  * the host names.

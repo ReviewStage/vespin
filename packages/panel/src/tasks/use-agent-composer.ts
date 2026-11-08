@@ -1,5 +1,5 @@
 import { newerTurn } from "@repo/features/agent-status";
-import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
   type AgentPayer,
@@ -331,9 +331,7 @@ export function useAgentComposer(input: {
   const { update } = kept;
   /** The agent taken back to just before the line named, answered as unanswered where the box was handed no rewind. */
   const rewindTo = (agentId: string, messageId: string): Promise<AgentActAnswer> =>
-    (latest.current.rewind?.(agentId, messageId) ?? Promise.resolve(UNANSWERED)).catch(
-      (): AgentActAnswer => UNANSWERED,
-    );
+    latest.current.rewind?.(agentId, messageId) ?? Promise.resolve(UNANSWERED);
   /** Sends one line once every line before it has answered, and takes its answer. */
   const deliver = (line: SentLine) => {
     // Note that the task is read as the line goes, because the tab may show another agent by the time it answers.
@@ -355,9 +353,7 @@ export function useAgentComposer(input: {
       const answer =
         rewound !== undefined && "failure" in rewound
           ? rewound
-          : await latest.current
-              .send(agentId, line.text, line.clientKey, line.attachments)
-              .catch((): AgentAgentAnswer => UNANSWERED);
+          : await latest.current.send(agentId, line.text, line.clientKey, line.attachments);
       // A refusal for now is kept past the tab before anything else, so the line stands wherever its tab is drawn next.
       if ("failure" in answer && !closesComposer(answer.failure)) {
         keepFailedLine(line, answer, rewound !== undefined && !("failure" in rewound), taskId);

@@ -118,16 +118,21 @@ export interface NativeProjectionApplied<A> {
  * lock is taken, where `apply` never runs. Note that the digest is read
  * again under the lock, on the agent's row, which is locked with the
  * conversation's, because a bearer retired after the caller admitted it
- * takes that row's lock and must leave its runner writing nothing.
+ * takes that row's lock and must leave its runner writing nothing. Nothing
+ * either where the post named a launch (`launch`) other than the one the
+ * row holds by then, since a newer launch recorded after the caller
+ * admitted the post replaced its runner.
  */
 export function withNativeProjection<A, E, R>(
   target: ConversationTarget,
   runnerTokenHash: string,
   apply: (held: NativeProjectionRow) => Effect.Effect<NativeProjectionApplied<A>, E, R>,
+  launch?: number,
 ): Effect.Effect<Option.Option<A>, E | StoreFailure, R | DatabaseServices> {
   const locked = Effect.gen(function* () {
     const held = yield* lockProjectionRow({ ...target, runnerTokenHash });
     if (Option.isNone(held)) return Option.none<A>();
+    if (launch !== undefined && held.value.launch !== launch) return Option.none<A>();
     const applied = yield* apply(held.value);
     if (applied.saved !== undefined) {
       yield* saveProjectionRow({ ...target, ...applied.saved });

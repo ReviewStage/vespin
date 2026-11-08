@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { agentTab, draftTab, fileTab } from "@repo/ui/tab-strip-model";
 import { describe, test } from "vitest";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB, type SidePanelTab } from "../tasks/use-side-panel.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import {
   forgotten,
   moved,

@@ -2,7 +2,6 @@ import { VIRTUAL_ROW_KEY_ATTRIBUTE, type VirtualRowsHandle } from "@repo/ui/virt
 import { type RefObject, useEffect, useState } from "react";
 import { type FIND_STEP, type FindSource, type FindTally, useFindSource } from "./find-in-tab.js";
 import {
-  type FindPainting,
   findRanges,
   NO_PAINTING,
   repaint,
@@ -166,7 +165,7 @@ export function useVirtualFind(input: {
       query: "",
       matches: [] as RowMatch[],
       at: -1,
-      painting: NO_PAINTING as FindPainting,
+      painting: NO_PAINTING,
       // Whether the match the find is at still waits to be brought into view, once drawn.
       pending: false,
       // Each row's count as it was last drawn under the query.

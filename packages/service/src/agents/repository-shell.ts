@@ -412,9 +412,3 @@ export const setCheckoutIdentity = /* @__PURE__ */ Effect.fn("web/setCheckoutIde
   );
   if (set.exitCode !== 0) return yield* gitRefusal(set);
 });
-
-/** The session's sandbox with a checkout standing in it, and which repository the checkout is of. */
-export interface CheckedOutSandbox {
-  readonly sandbox: RepositorySandbox;
-  readonly repository: string;
-}

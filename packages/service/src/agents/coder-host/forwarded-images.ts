@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -9,7 +9,6 @@ import {
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import type { InboxImageType } from "@repo/features/inbox-wire";
 import { Effect, Option, Result } from "effect";
-import type { StoreFailure } from "../../http/store-failure.js";
 
 /**
  * forwarded-images.ts -- pictures one agent hands another by their attachment ids, read as the forwarder may read them and made the files a Start or a steer carries.

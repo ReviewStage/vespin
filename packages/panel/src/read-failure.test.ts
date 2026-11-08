@@ -15,6 +15,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -41,6 +42,7 @@ import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "./testing/tasks-control.js";
+import { windowRouter } from "./testing/window-router.js";
 
 /**
  * A read that did not land says so alike on every surface that reads: the
@@ -84,13 +86,19 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** Draws a surface into the page and lets every read it asked for answer. */
-async function mount(surface: React.ReactElement): Promise<HTMLElement> {
+/** The Inbox's address, where it stands. */
+const INBOX_AT = "/personal/inbox";
+
+/** Draws a surface into the page under a window's router, standing at `at` where one is named, and lets every read it asked for answer. */
+async function mount(surface: React.ReactElement, at?: string): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   unmounts.push(() => root.unmount());
-  act(() => root.render(withQueryClient(surface)));
+  const router = windowRouter(
+    at === undefined ? undefined : createMemoryHistory({ initialEntries: [at] }),
+  );
+  act(() => root.render(router.provide(withQueryClient(surface))));
   await settle();
   return container;
 }
@@ -217,21 +225,9 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
       tasks: tasksControl({
         tasks: [TASK],
         inboxTasks: [{ taskId: TASK.id, items: 1, updatedAt: 2 }],
-        inboxView: {
-          open: true,
-          chosen: undefined,
-          onOpen: ignore,
-          onClose: ignore,
-          onChoose: ignore,
-          onOpenItem: () => undefined,
-          onClear: ignore,
-          narrowed: undefined,
-          onWiden: () => undefined,
-          pages: undefined,
-          onTaskAgents: () => undefined,
-        },
       }),
     }),
+    INBOX_AT,
   );
   // Note that the failure, and then the feed read again, stand once they reach the feed's query.
   const failure = await vi.waitFor(() => readFailure(page));
@@ -323,20 +319,6 @@ test("Settings says a page's failed read alike in its card's place, the keys and
 });
 
 /** The Inbox page as the tests draw it: open, nothing chosen. */
-const INBOX_VIEW = {
-  open: true,
-  chosen: undefined,
-  onOpen: ignore,
-  onClose: ignore,
-  onChoose: ignore,
-  onOpenItem: () => undefined,
-  onClear: ignore,
-  narrowed: undefined,
-  onWiden: () => undefined,
-  pages: undefined,
-  onTaskAgents: () => undefined,
-} as const;
-
 test("an Inbox whose task list could not be read says so, never that nothing needs you, and Retry reads the list again", async () => {
   let retried = 0;
   const tasks = tasksControl({
@@ -344,9 +326,8 @@ test("an Inbox whose task list could not be read says so, never that nothing nee
     onRetryList: () => {
       retried += 1;
     },
-    inboxView: INBOX_VIEW,
   });
-  const page = await mount(createElement(DesktopInbox, { tasks }));
+  const page = await mount(createElement(DesktopInbox, { tasks }), INBOX_AT);
   const failure = readFailure(page);
   assertSaidAlike(failure, "The inbox could not be read.");
   assert.doesNotMatch(page.textContent ?? "", /Nothing needs you/u);

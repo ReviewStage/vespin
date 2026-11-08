@@ -1,6 +1,6 @@
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
-import type { StepTitle } from "./navigation-history.js";
 import type { RoutedPlace } from "./places/routed-places.js";
+import type { StepTitle } from "./places/window-steps.js";
 import { agentName } from "./tasks/agent-model.js";
 import {
   stripTabTitle,
@@ -102,9 +102,8 @@ export type StepTitleTasks = Pick<
   | "pages"
   | "mainTabs"
   | "sidePanel"
-  | "inboxView"
+  | "workspace"
   | "agentView"
-  | "automationsView"
   | "history"
 >;
 

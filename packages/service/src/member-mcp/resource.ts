@@ -34,7 +34,7 @@ export const MEMBER_MCP_SCOPE = {
 } as const;
 
 /** How long a token for the server lives, in seconds; an access token as long as Settings tells a member a revoked client keeps one (`@repo/features/mcp-client-wire`). */
-export const MEMBER_MCP_TOKEN_TTL = {
+const MEMBER_MCP_TOKEN_TTL = {
   ACCESS: MCP_ACCESS_TOKEN_MINUTES * 60,
   REFRESH: 30 * 24 * 60 * 60,
 } as const;
@@ -45,7 +45,7 @@ export function memberMcpResourceUrl(baseURL: string): string {
 }
 
 /** The resource's policy, as the provider's own `OAuthResourceInput` states one. */
-export function memberMcpResource(baseURL: string): OAuthResourceInput {
+function memberMcpResource(baseURL: string): OAuthResourceInput {
   return {
     identifier: memberMcpResourceUrl(baseURL),
     name: `${PRODUCT_NAME} MCP`,

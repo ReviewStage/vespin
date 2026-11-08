@@ -14,8 +14,6 @@ import {
   COMPLETED_WINDOW,
   DEFAULT_BOARD_DISPLAY,
   DEFAULT_LIST_DISPLAY,
-  EARLIER_BOARD_PROPERTIES,
-  EARLIER_LIST_PROPERTIES,
   filteredFields,
   keptTasksDisplay,
   NO_TASKS_FILTER,
@@ -95,18 +93,16 @@ const storedFilters = Schema.fromJsonString(
   ),
 );
 
-/** A display as kept (`KeptTasksDisplay`): each choice optional, the Done and Canceled switches of an earlier build among them. */
+/** A display as kept (`KeptTasksDisplay`): each choice optional, and the properties its view offered. */
 const storedDisplay = Schema.fromJsonString(
   Schema.Struct({
     grouping: Schema.optionalKey(Schema.Literals(Object.values(TASKS_GROUPING))),
     order: Schema.optionalKey(Schema.Literals(Object.values(TASKS_ORDER))),
     emptyGroups: Schema.optionalKey(Schema.Boolean),
     completed: Schema.optionalKey(Schema.Literals(Object.values(COMPLETED_WINDOW))),
-    done: Schema.optionalKey(Schema.Boolean),
-    canceled: Schema.optionalKey(Schema.Boolean),
     pinnedFirst: Schema.optionalKey(Schema.Boolean),
     properties: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PROPERTY_ORDER))),
-    /** The properties the view offered when it was kept; absent from an earlier build, which offered `EARLIER_OFFERED`'s. */
+    /** The properties the view offered when it was kept. */
     offered: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PROPERTY_ORDER))),
   }),
 );
@@ -115,12 +111,6 @@ const storedDisplay = Schema.fromJsonString(
 const OFFERED = {
   [TASKS_VIEW.LIST]: TASK_PROPERTY_ORDER,
   [TASKS_VIEW.BOARD]: BOARD_PROPERTIES,
-} as const satisfies Record<TasksView, readonly TaskProperty[]>;
-
-/** The properties each view offered before a kept display said which it offered. */
-const EARLIER_OFFERED = {
-  [TASKS_VIEW.LIST]: EARLIER_LIST_PROPERTIES,
-  [TASKS_VIEW.BOARD]: EARLIER_BOARD_PROPERTIES,
 } as const satisfies Record<TasksView, readonly TaskProperty[]>;
 
 /** Each view's display until its reader changes it. */
@@ -137,7 +127,7 @@ function storedDisplayOf(view: TasksView) {
         (display): display is TasksDisplay => typeof display === "object" && display !== null,
       ),
       SchemaTransformation.transform({
-        decode: (kept) => keptTasksDisplay(kept, INITIAL_DISPLAY[view], EARLIER_OFFERED[view]),
+        decode: (kept) => keptTasksDisplay(kept, INITIAL_DISPLAY[view]),
         encode: (display) => ({ ...display, offered: OFFERED[view] }),
       }),
     ),

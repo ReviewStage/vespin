@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { onFontsSettled } from "../../fonts-settled.js";
-import { BREADCRUMB_SHOWN, type Crumb } from "./breadcrumbs.js";
+import { BREADCRUMB_SHOWN, type Crumb } from "./crumb.js";
 
 /**
  * crumb-fold.ts -- a path that does not fit its bar leaves its first crumbs out as one "…", the way a crumb squeezes to two letters never reads.

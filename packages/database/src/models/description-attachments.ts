@@ -23,7 +23,7 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * cannot be crossed by a second upload. Every read names the account beside the
  * plan and gates on its membership of the plan's workspace, so a member
  * reads a picture a teammate pasted and a plan of a workspace the account is
- * not in reads as no plan, exactly as in `plan-store.ts`. A save stamps the
+ * not in reads as no plan, exactly as in `task-store.ts`. A save stamps the
  * pictures its text names (`saveDescriptionText`). A picture stays until its
  * task is deleted, which cascades to it, whether or not a save named it.
  * Note that the stamp is still written though nothing here reads it, because

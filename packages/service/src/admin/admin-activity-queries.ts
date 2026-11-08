@@ -14,11 +14,21 @@ import { descriptionRevision } from "@repo/database/schemas/description-revision
 import { task } from "@repo/database/schemas/task";
 import { MEANINGFUL_ACTION, type MeaningfulAction } from "@repo/features/admin-overview-vocabulary";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
-import { type AnyColumn, and, eq, gte, isNotNull, lt, type SQL, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  eq,
+  gte,
+  isNotNull,
+  lt,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 /** The UTC day an instant falls on, as the YYYY-MM-DD key the builders zero-fill by. */
-export function utcDay(instant: SQL | SQL.Aliased): SQL<string> {
+export function utcDay(instant: SQLWrapper): SQL<string> {
   return sql<string>`to_char(${instant} at time zone 'UTC', 'YYYY-MM-DD')`;
 }
 

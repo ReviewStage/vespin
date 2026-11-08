@@ -10,7 +10,7 @@
  * where it has one (`taskLinkStep`). The history is one step of the window's
  * however its versions are chosen, each move replacing the step standing,
  * but for a narrow room's version or section opened from its list, a step
- * after it, which the window's history steps back from (`lists.versions`).
+ * after it, which the window's history steps back from (`places/narrow-backs.ts`).
  */
 
 import { type RegisteredRouter, useNavigate, useRouter } from "@tanstack/react-router";

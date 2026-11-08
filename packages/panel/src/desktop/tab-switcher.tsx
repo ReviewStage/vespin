@@ -58,10 +58,17 @@ import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
 import { liveStepTitle, memberName, NAMED_STEP, stepTitle } from "../history-titles.js";
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
-import type { StepTitle } from "../navigation-history.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
-import { type BoardDoor, useBoardDoor } from "../places/routed-doors.js";
+import {
+  type AutomationsDoor,
+  type BoardDoor,
+  type InboxDoor,
+  useAutomationsDoor,
+  useBoardDoor,
+  useInboxDoor,
+} from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
+import type { StepTitle } from "../places/window-steps.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
@@ -286,8 +293,8 @@ function standingOf(
   const { userId, name, workspace } = views.person;
   const column = mainTabs.tab;
   return shownStop({
-    over: tab === PANEL_TAB.SETTINGS || tasks.adminView.open || tasks.history.open,
-    inbox: tasks.inboxView.open,
+    over: tab === PANEL_TAB.SETTINGS || place === ROUTED_PLACE.ADMIN || tasks.history.open,
+    inbox: place === ROUTED_PLACE.INBOX,
     agentId: tasks.agentView.agentId,
     person:
       userId === undefined
@@ -301,7 +308,7 @@ function standingOf(
                 : workspaceOfSlug(tasks.workspaces, workspace)?.id,
           },
     board: views.board,
-    automations: tasks.automationsView.open,
+    automations: views.automations !== undefined,
     home: place === ROUTED_PLACE.HOME,
     boundFor: tasks.boundFor,
     openTaskId: tasks.activeTaskId,
@@ -374,10 +381,14 @@ export function TabSwitcher({
   const pressesMoved = useRef(0);
   // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
   const listed = useRef(new Set<string>());
-  const board = useBoardDoor(tasks);
+  const places = {
+    board: useBoardDoor(tasks),
+    automations: useAutomationsDoor(tasks),
+    inbox: useInboxDoor(tasks),
+  };
   const views = useRoutedViews();
-  const doors = useRef({ tab, tasks, onTabChange, board });
-  doors.current = { tab, tasks, onTabChange, board };
+  const doors = useRef({ tab, tasks, onTabChange, places });
+  doors.current = { tab, tasks, onTabChange, places };
   // The switcher's waits are called off as it leaves, since what they would do is draw it.
   useEffect(
     () => () => {
@@ -471,29 +482,23 @@ export function TabSwitcher({
     );
   });
 
-  // Goes to a stop through the window's own doors, as any move there would, all of it past one ask of the leave guard, so a leave canceled moves nothing, the stops' order included.
+  // Goes to a stop through the window's own doors, as any move there would: the stop's own door moves the window first,
+  // and the rest of its screen, and the stops' order, follow once that move lands, so a leave kept at the ask moves
+  // nothing, the stops' order included (`places/place-leave.ts`'s `arrive`). The routed place standing, Settings or
+  // Admin, is left as the move lands where the stop's door left it standing, as the sidebar's rows leave it (`app.tsx`'s
+  // `changeTab`). Note that where an ask holds the move, the stop's door moves over whatever place stands, so the one
+  // move held is the one the ask is about.
   const go = (stop: Stop) => {
-    const { tasks: control, onTabChange: changeTab, board: boardDoor } = doors.current;
-    control.placeLeave.transitionalLeaveFirst(() => {
-      // A routed place standing, Settings or Admin, is left for the stop.
-      changeTab(PANEL_TAB.TASKS);
-      switch (stop.kind) {
-        case STOP_KIND.TASK:
-          showTask(control, stop);
-          break;
-        case STOP_KIND.AGENT:
-          control.agentView.onOpen(stop.agentId);
-          break;
-        case STOP_KIND.PERSON:
-          control.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
-          break;
-        case STOP_KIND.PLACE:
-          openPlace(control, boardDoor, stop.place);
-          break;
-      }
-      // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
-      stops.current = [stop, ...stops.current.filter((each) => !sameStop(each, stop))];
-    })();
+    const { tasks: control, onTabChange: changeTab, places: placeDoors } = doors.current;
+    control.placeLeave.arrive(
+      (free) => openStop(control, placeDoors, stop, !free),
+      () => {
+        changeTab(PANEL_TAB.TASKS);
+        if (stop.kind === STOP_KIND.TASK) standScreen(doors.current.tasks, stop);
+        // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
+        stops.current = [stop, ...stops.current.filter((each) => !sameStop(each, stop))];
+      },
+    );
   };
 
   // The stops that still stand: no tab the open task no longer holds, as its strips' own state says, and no task the window no longer lists.
@@ -650,26 +655,53 @@ export function TabSwitcher({
 }
 
 /**
- * Opens a task on the screen a stop held: its column's tab and its side
- * panel's, through the doors that show a tab on a task, opening it first
- * where it is another; the panel shut where the stop had it shut, and
- * filling the window where it did. It is run whole past the leave guard's
- * ask (`go`), so a canceled leave changes neither pane.
+ * Opens a stop through its own door, which moves the window there: a task's
+ * on the screen's column tab where the screen had the column in sight, else
+ * on its panel's tab, else as it last stood; `over` a place standing beside
+ * the task's place too, as a move an ask holds is made (`go`).
  */
-function showTask(tasks: TasksControl, stop: Extract<Stop, { kind: typeof STOP_KIND.TASK }>): void {
+function openStop(
+  tasks: TasksControl,
+  doors: Parameters<typeof openPlace>[1],
+  stop: Stop,
+  over: boolean,
+): void {
+  switch (stop.kind) {
+    case STOP_KIND.TASK: {
+      const { taskId, column, panel, fullScreen } = stop;
+      // Note that the column's own door gives up a panel filling the window, so it is used only where the screen had the column in sight.
+      if (column !== undefined && !fullScreen) tasks.onShowColumnTab(taskId, column, over);
+      else if (panel !== undefined) tasks.onShowPanelTab(taskId, panel, over);
+      else tasks.onRestoreTask(taskId, over);
+      break;
+    }
+    case STOP_KIND.AGENT:
+      tasks.agentView.onOpen(stop.agentId);
+      break;
+    case STOP_KIND.PERSON:
+      tasks.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
+      break;
+    case STOP_KIND.PLACE:
+      openPlace(tasks, doors, stop.place);
+      break;
+  }
+}
+
+/**
+ * Stands the rest of the screen a task's stop held, once its door's move has
+ * landed (`openStop`): its side panel's tab beside the column's, the panel
+ * shut where the stop had it shut, and filling the window where it did.
+ */
+function standScreen(
+  tasks: TasksControl,
+  stop: Extract<Stop, { kind: typeof STOP_KIND.TASK }>,
+): void {
   const { taskId, column, panel, fullScreen } = stop;
   const { sidePanel, mainTabs } = tasks;
-  // Note that the column's own door gives up a panel filling the window, so it is used only where the screen had the column in sight.
   const columnShown = column !== undefined && !fullScreen;
-  if (columnShown) tasks.onShowColumnTab(taskId, column);
-  if (panel !== undefined) {
-    // Note that the panel's own door is used beside the column's, so the task is opened once.
-    if (columnShown) sidePanel.onShow(taskId, panel);
-    else tasks.onShowPanelTab(taskId, panel);
-  } else {
-    if (!columnShown) tasks.onRestoreTask(taskId);
-    if (sidePanel.open) sidePanel.onSetOpen(false);
-  }
+  // Note that the panel's own door is used beside the column's, so the task is opened once.
+  if (panel !== undefined && columnShown) sidePanel.onShow(taskId, panel);
+  if (panel === undefined && sidePanel.open) sidePanel.onSetOpen(false);
   if (column !== undefined && fullScreen) mainTabs.onShow(taskId, column);
   // Note that a narrow room's panel fills the window whenever it stands, and its toggle shuts it, so it is left as it opens.
   const filling = columnShown || !sidePanel.open ? false : sidePanel.fullScreen;
@@ -679,19 +711,27 @@ function showTask(tasks: TasksControl, stop: Extract<Stop, { kind: typeof STOP_K
 }
 
 /** Opens a place through its own door. */
-function openPlace(tasks: TasksControl, board: BoardDoor, place: SwitcherPlace): void {
+function openPlace(
+  tasks: TasksControl,
+  doors: {
+    readonly board: BoardDoor;
+    readonly automations: AutomationsDoor;
+    readonly inbox: InboxDoor;
+  },
+  place: SwitcherPlace,
+): void {
   switch (place) {
     case SWITCHER_PLACE.HOME:
       tasks.onGoHome();
       return;
     case SWITCHER_PLACE.INBOX:
-      tasks.inboxView.onOpen();
+      doors.inbox.open();
       return;
     case SWITCHER_PLACE.BOARD:
-      board.open();
+      doors.board.open();
       return;
     case SWITCHER_PLACE.AUTOMATIONS:
-      tasks.automationsView.onOpen();
+      doors.automations.open();
       return;
   }
 }

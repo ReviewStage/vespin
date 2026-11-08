@@ -2,6 +2,7 @@
  * connect-app-tab.ts -- the web app's tab as a landing page's test meets it: the real connect tabs, connects handed off to tabs of their own or none, listening on the channel a landing speaks on, and a landing come back in one of those tabs.
  */
 
+import { PANEL_PATH } from "@repo/features/link-home";
 import { ACT_KIND } from "@repo/host/acts";
 import type { ActPortClient } from "@repo/host/contract";
 import { type ConnectBrowser, type ConnectTab, connectTabs } from "../../src/app/connect-tab";
@@ -46,7 +47,7 @@ export async function appTab(connects: number): Promise<AppTab> {
     },
     navigate: () => undefined,
     leave: (go) => go(),
-    address: () => "/app",
+    address: () => PANEL_PATH,
     openLink: () => undefined,
   };
   const tabs = connectTabs(browser);

@@ -95,6 +95,7 @@ it.layer(getTestDB())("coding_agent_runner_token_hash over a database from befor
           userId: holding.userId,
           conversationId: holding.conversationId,
           runtimeSessionId: null,
+          launch: 0,
         });
       }),
   );

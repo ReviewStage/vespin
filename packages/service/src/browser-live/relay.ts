@@ -696,7 +696,7 @@ function steer(view: LiveView, message: SteerMessage, at: Date): Effect.Effect<v
 function resizes(view: LiveView, size: PixelSize): Effect.Effect<boolean> {
   return Effect.map(
     Ref.get(view.viewport),
-    (last) => last?.width !== size.width || last?.height !== size.height,
+    (last) => last?.width !== size.width || last.height !== size.height,
   );
 }
 

@@ -25,8 +25,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { MemberDirectory } from "../member-directory.js";
 import { OpenPersonProvider } from "../person-door.js";
-import { MAIN_TAB } from "../tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB } from "../tasks/use-side-panel.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { type TasksControl, taskRenameMutation } from "../tasks/use-tasks-tab.js";
 import { lineWords } from "../testing/actor-line.js";
@@ -39,6 +38,7 @@ import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { SidebarTask, taskOf } from "./task-actions.js";
@@ -151,7 +151,7 @@ function mount(element: ReactElement): HTMLElement {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(element));
+  act(() => root.render(windowRouter().provide(element)));
   return container;
 }
 
@@ -294,11 +294,13 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
   const draw = (control: TasksControl) =>
     act(() =>
       root.render(
-        withQueryClient(
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: control,
-          }),
+        windowRouter().provide(
+          withQueryClient(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: control,
+            }),
+          ),
         ),
       ),
     );
@@ -335,11 +337,13 @@ test("⌘K's Change repository shows Overview where an agent's tab hides the des
   const draw = (control: TasksControl) =>
     act(() =>
       root.render(
-        withQueryClient(
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: control,
-          }),
+        windowRouter().provide(
+          withQueryClient(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: control,
+            }),
+          ),
         ),
       ),
     );

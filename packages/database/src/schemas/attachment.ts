@@ -158,7 +158,7 @@ export const attachment = pgTable(
     index("attachment_description_comment")
       .on(table.descriptionCommentId)
       .where(sql`${table.descriptionCommentId} is not null`),
-    // A conversation's pictures are found by their hash and counted by the conversation. Not partial, so an old insert's conflict on the two columns finds it through the view; every other owner's null conversation conflicts with nothing.
+    // A conversation's pictures are found by their hash and counted by the conversation. Not partial, so the insert's conflict on the two columns (`conversation-pictures.ts`) needs no predicate; every other owner's null conversation conflicts with nothing.
     uniqueIndex("attachment_conversation_sha256").on(table.conversationId, table.sha256),
     // A task's attachments are moved with it, and a plan's pictures read, counted, and stamped by it.
     index("attachment_task").on(table.taskId).where(sql`${table.taskId} is not null`),

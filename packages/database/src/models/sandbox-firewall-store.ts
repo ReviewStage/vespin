@@ -29,18 +29,15 @@ import type { FirewallOwner } from "./provider-key-seal.js";
 
 type FirewallEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** What a session's row holds: the agent the launch runs and its swaps as the service sealed them. */
-export interface FirewallLaunchRow {
-  readonly agentId: string;
-  readonly sealedEntries: string;
-}
-
 const OwnerFields = { userId: Schema.String, sandboxSessionId: Schema.String };
 
 const LaunchSchema = Schema.Struct({
   agentId: Schema.String,
   sealedEntries: Schema.String,
 });
+
+/** What a session's row holds: the agent the launch runs and its swaps as the service sealed them. */
+export type FirewallLaunchRow = typeof LaunchSchema.Type;
 
 /** The row of the account's session given, where one stands. */
 const ownRow = (userId: string, sandboxSessionId: string) =>

@@ -243,7 +243,7 @@ export function sessionCookieOf(userId: string): string {
 }
 
 /** How the fake harness writes down the deployment acting for an account, apart from any bearer a request carried. */
-export function deploymentFor(account: string): string {
+function deploymentFor(account: string): string {
   return `deployment for ${account}`;
 }
 

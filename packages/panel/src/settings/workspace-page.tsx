@@ -5,7 +5,6 @@ import type {
   WorkspaceSentry,
   WorkspaceSentryInstallation,
 } from "@repo/features/sentry-install-wire";
-import type { FailureSurface } from "@repo/features/shown-failure";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
@@ -38,7 +37,6 @@ import {
   Dialog,
   DialogActions,
   type DialogQuestion,
-  ErrorState,
   FormField,
   GAP,
   INLINE_EDIT_LOOK,
@@ -51,7 +49,6 @@ import {
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
-  SettingsLine,
   SettingsRow,
   SettingsRowActSlot,
   SettingsRowMark,
@@ -98,7 +95,7 @@ import { ActionMenu } from "../desktop/action-menu.js";
 import { useFormDialog } from "../desktop/use-form-dialog.js";
 import { sharedWords } from "../desktop/workspace-ref.js";
 import { TILE_SIZE, useWorkspaceTileUrl, WorkspaceTile } from "../desktop/workspace-tile.js";
-import { confirmFailure, refusedShown, unreadShown } from "../failure-report.js";
+import { confirmFailure, refusedShown } from "../failure-report.js";
 import {
   automationsQuery,
   slackChannelsQuery,
@@ -114,7 +111,7 @@ import { useOpenPerson } from "../person-door.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
 import { useInviteDialog } from "./invite-dialog.js";
-import { replayMaskedError } from "./marks.js";
+import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { WORKSPACE_CONNECTIONS } from "./pages.js";
 import { refusalToast, rowWrite } from "./row-write.js";
@@ -382,26 +379,6 @@ const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonShape[] = [
 
 /** A list as the page reads it: still reading, read, or refused with a line. */
 type ListRead<Item> = { readonly items: readonly Item[] } | { readonly failed: string } | undefined;
-
-/** A card's line where the read of its rows did not land: the read failure, then Retry, in the rows' place. */
-function ReadFailed({
-  line,
-  surface,
-  onRetry,
-}: {
-  line: string;
-  /** Where the read failed, which its report names. */
-  surface: FailureSurface;
-  onRetry: () => void;
-}): React.JSX.Element {
-  return (
-    <SettingsLine>
-      <ErrorState failure={unreadShown(surface)} onRetry={onRetry}>
-        {line}
-      </ErrorState>
-    </SettingsLine>
-  );
-}
 
 /**
  * What the reader may do to another member, by both their roles, as the

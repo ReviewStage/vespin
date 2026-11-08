@@ -99,7 +99,7 @@ export interface FakeCommand {
 }
 
 /** A command as a read of its exit finds it: its id, the exit it has, and whether Vercel recorded it. */
-export interface ReadCommand {
+interface ReadCommand {
   readonly id: string;
   readonly exitCode: number | null;
   recorded?: boolean;
@@ -113,7 +113,7 @@ export interface ReadCommand {
  * command exits where `exits` tells its exits, and answers it at once with
  * no exit otherwise, as a hold past the reader's wait ends.
  */
-export async function commandRead(
+async function commandRead(
   command: ReadCommand,
   url: URL,
   init: RequestInit,

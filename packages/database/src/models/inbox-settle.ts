@@ -54,13 +54,13 @@ import { task } from "../schemas/task.js";
 type SettleEffect<A> = Effect.Effect<A, QueryError | Schema.SchemaError, DatabaseServices>;
 
 /** Why an item settled on its own, as its close and its withdrawn ask say it. */
-export const INBOX_SETTLED_REASON = {
+const INBOX_SETTLED_REASON = {
   TASK_DONE: "Its task is done.",
   TASK_CANCELED: "Its task was canceled.",
   AGENT_ARCHIVED: "Its agent was archived.",
 } as const;
 
-export type InboxSettledReason = (typeof INBOX_SETTLED_REASON)[keyof typeof INBOX_SETTLED_REASON];
+type InboxSettledReason = (typeof INBOX_SETTLED_REASON)[keyof typeof INBOX_SETTLED_REASON];
 
 /** Why a task standing in `status` settles its items: Done's or Canceled's reason, none for a status its work is open in. */
 function taskSettledReason(status: TaskStatus): InboxSettledReason | undefined {

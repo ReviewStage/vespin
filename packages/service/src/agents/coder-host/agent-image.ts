@@ -31,7 +31,7 @@ export const AGENT_RUNNER_FOLDER = "agent-runner";
 export class AgentImageMissing extends Data.TaggedError("AgentImageMissing") {}
 
 /** One file of the runner's unit: its name in the unit, and its bytes. */
-export interface RunnerFile {
+interface RunnerFile {
   readonly name: string;
   readonly contents: Uint8Array;
 }

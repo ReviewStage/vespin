@@ -96,7 +96,7 @@ function personOf(by: DescriptionEditor | undefined, reader: HistoryReader): Act
   if (!yours) return personActor(by, reader.members, undefined, reader.former);
   const you: PersonActor = {
     kind: ACTOR_KIND.PERSON,
-    userId: reader.id ?? "",
+    userId: reader.id,
     name: reader.name ?? "",
     you: true,
   };

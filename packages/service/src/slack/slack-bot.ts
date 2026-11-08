@@ -71,10 +71,10 @@ import { type ConnectorService, IntegrationConnect } from "../integrations/integ
 import { readIntegrationConnections } from "../integrations/integration-store.js";
 
 /** The variable this deployment names the bot's connector by; a blank value is absent. */
-export const SLACK_BOT_ENVIRONMENT = { CONNECTOR: "SLACK_BOT_CONNECTOR_UID" } as const;
+const SLACK_BOT_ENVIRONMENT = { CONNECTOR: "SLACK_BOT_CONNECTOR_UID" } as const;
 
 /** How long a member whose email matched no one in the team is written nothing before Slack is asked again. */
-export const SLACK_MEMBER_MISS_LIFETIME = Duration.days(1);
+const SLACK_MEMBER_MISS_LIFETIME = Duration.days(1);
 
 /** Where Slack's Web API answers. */
 const SLACK_API_ORIGIN = "https://slack.com";
@@ -120,7 +120,7 @@ export interface SlackMessage {
 }
 
 /** One message of a Slack thread as the bot reads it: who wrote it, a member by user id or a bot, and its words. */
-export interface SlackThreadMessage {
+interface SlackThreadMessage {
   readonly ts: string;
   readonly user?: string;
   readonly bot: boolean;
@@ -128,7 +128,7 @@ export interface SlackThreadMessage {
 }
 
 /** A channel of the team as the bot sees it: its name, whether it is private, and whether the bot is in it. */
-export interface SlackChannel {
+interface SlackChannel {
   readonly id: string;
   readonly name: string;
   readonly private: boolean;
@@ -143,7 +143,7 @@ export interface SlackUpload {
 }
 
 /** The Slack team the bot's token answers for. */
-export interface SlackTeam {
+interface SlackTeam {
   readonly id: string;
   readonly name: string;
 }
@@ -161,7 +161,7 @@ export class SlackBotFailure extends Data.TaggedError("SlackBotFailure")<{
 }
 
 /** Why a file's bytes did not move: its address was refused or no Slack file host's, or the bytes ran past their bound. */
-export class SlackFileFailure extends Data.TaggedError("SlackFileFailure") {
+class SlackFileFailure extends Data.TaggedError("SlackFileFailure") {
   override get message(): string {
     return "A Slack file's bytes could not be moved";
   }

@@ -115,6 +115,8 @@ const INSTRUCTIONS = "You are a Vespin coding agent.";
 const KEK = `1:${Buffer.alloc(32, 3).toString("base64")}`;
 const THREAD = "019a0b1c-2d3e-7f40-8a5b-6c7d8e9f0a1b";
 const TOKEN_URL = "https://app.test/api/agents/runner-token";
+/** The query every URL a runner is handed names its launch by, here the agent's first. */
+const FIRST_LAUNCH = "?runnerLaunch=1";
 const MINUTE = 60 * 1000;
 /** The ChatGPT workspace a device-code login's ID token names. */
 const WORKSPACE = "chatgpt-workspace-fixture";
@@ -429,7 +431,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           [RUNNER_ENV.BEARER]: plan.secrets.env[RUNNER_ENV.BEARER],
         });
         assert.equal(plan.config.executable, codexExecutable);
-        assert.equal(plan.config.tokenUrl, TOKEN_URL);
+        assert.equal(plan.config.tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
         const bearer = plan.secrets.env[RUNNER_ENV.BEARER] ?? "";
         // A Mac has no firewall of ours, so its runner is handed the bearer itself.
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, onPlan.id));
@@ -606,12 +608,12 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           effort: "xhigh",
           developerInstructions: INSTRUCTIONS,
           firstSequence: 0,
-          eventsUrl: EVENTS_URL,
-          linesUrl: LINES_URL,
+          eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
+          linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
-          transcriptsUrl: TRANSCRIPTS_URL,
+          transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
-          tokenUrl: TOKEN_URL,
+          tokenUrl: `${TOKEN_URL}${FIRST_LAUNCH}`,
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
         });
@@ -986,7 +988,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         const [command] = api.commands;
         assert.equal(command?.env.CODEX_HOME, "/home/agent/.codex");
         const lines = linesOf(command) as [CodexConfig, ...InputLine[]];
-        assert.equal(lines[0].tokenUrl, TOKEN_URL);
+        assert.equal(lines[0].tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
         const visible = JSON.stringify([command, api.sandboxes]);
         for (const secret of ["access-0", "access-1", "refresh-1"]) {
           assert.equal(visible.includes(secret), false, "a token handed to the runner");

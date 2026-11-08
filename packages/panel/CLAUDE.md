@@ -117,7 +117,7 @@ on the settings snapshot.
   the menu bar, the Keyboard shortcuts page, and the settings search agree.
 - While off, the feature stands nowhere: no row, no ⌘K entry (its
   `useAppCommand` offers `undefined`), no chord, no menu item, and no place
-  the history can reach (`navigation-history.ts`'s `reachable`).
+  the history can reach (`places/window-steps.ts`'s `useStepReach`).
 - Graduating one deletes its key, which makes every gate left behind fail to
   compile, so the one PR that graduates it deletes them all.
 

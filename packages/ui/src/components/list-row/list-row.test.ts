@@ -13,8 +13,8 @@ import {
   LIST_ROW_META,
   List,
   ListRow,
-  type ListRowHint,
 } from "./list-row.js";
+import type { ListRowHint } from "./list-row-hint.js";
 
 /**
  * list-row.test.ts -- a row's press and its acts are separate buttons, never

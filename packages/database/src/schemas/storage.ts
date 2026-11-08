@@ -132,8 +132,8 @@ export const conversations = pgTable(
 
 /**
  * That a row of `messages` is a user line no turn owns yet: the rows the
- * awaiting-line reads look among (`message-reads.ts`'s
- * `newestAwaitingLineAt`), and the predicate of the partial index they are
+ * delete of stale withdrawn lines looks among (`writer.ts`'s
+ * `deleteStaleWithdrawnLines`), and the predicate of the partial index they are
  * read through. The role is inlined rather than bound, because an index
  * predicate is DDL, which takes no bound parameter, and a read that bound it
  * would match the index only in a plan made for that one value, never in the

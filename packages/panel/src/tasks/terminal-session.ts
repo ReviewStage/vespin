@@ -65,7 +65,7 @@ export const SERVICE_UNREACHED: TerminalState = {
 type ShellOpened = { readonly terminalId: string } | { readonly state: TerminalState };
 
 /** What an attach answered: asked, so the port is on its way, or the state the tab is left in. */
-export type ShellAttached = { readonly asked: true } | { readonly state: TerminalState };
+type ShellAttached = { readonly asked: true } | { readonly state: TerminalState };
 
 /** How a session reaches its shell: where the shell runs, and what its host's words mean there. */
 export interface ShellLink {

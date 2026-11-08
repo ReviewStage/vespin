@@ -32,7 +32,7 @@ const PickRowSchema = Schema.Struct({
 
 const PickWriteSchema = Schema.Struct({
   userId: Schema.String,
-  machine: Schema.String,
+  machine: Schema.Literals(Object.values(AGENT_MACHINE)),
   deviceId: Schema.NullOr(Schema.String),
 });
 
@@ -58,13 +58,13 @@ const upsertPick = SqlSchema.void({
         .insert(accountPreference)
         .values({
           userId: write.userId,
-          runsOnMachine: write.machine as TaskRunsOnRequest["machine"],
+          runsOnMachine: write.machine,
           runsOnDeviceId: write.deviceId,
         })
         .onConflictDoUpdate({
           target: accountPreference.userId,
           set: {
-            runsOnMachine: write.machine as TaskRunsOnRequest["machine"],
+            runsOnMachine: write.machine,
             runsOnDeviceId: write.deviceId,
           },
         }),

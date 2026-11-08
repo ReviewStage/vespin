@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import { ADMIN_TAB } from "../admin/routing.js";
 import { ROUTED_PLACE } from "../places/routed-places.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import { tasksControl } from "../testing/tasks-control.js";
@@ -12,15 +13,17 @@ import { mobileBarShown } from "./mobile-bar.js";
 
 const CHOSEN = { taskId: "task-1", itemId: "item-1" } as const;
 
-/** A phone's window on the Inbox's place, with an item chosen or none. */
-function onInbox(chosen: typeof CHOSEN | undefined) {
-  const tasks = tasksControl();
-  return tasksControl({ inboxView: { ...tasks.inboxView, open: true, chosen } });
-}
-
 test.each([
   { on: "the list", chosen: undefined, shown: true },
   { on: "an item", chosen: CHOSEN, shown: false },
 ])("the bar on $on stands: $shown", ({ chosen, shown }) => {
-  assert.equal(mobileBarShown(SHELL_ROOM.NARROW, onInbox(chosen), ROUTED_PLACE.INBOX), shown);
+  assert.equal(
+    mobileBarShown(SHELL_ROOM.NARROW, tasksControl(), {
+      place: ROUTED_PLACE.INBOX,
+      inbox: { open: true, chosen },
+      automations: undefined,
+      admin: { kind: ADMIN_TAB.DASHBOARD },
+    }),
+    shown,
+  );
 });

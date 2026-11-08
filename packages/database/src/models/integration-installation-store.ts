@@ -4,6 +4,7 @@ import { and, asc, eq, gt, lte, sql } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { INTEGRATION_INSTALLATION_STATUS } from "../integration-vocabulary.js";
 import {
   integrationInstallation,
@@ -68,10 +69,7 @@ const InstallationRowSchema = Schema.Struct({
 export type IntegrationInstallation = typeof InstallationRowSchema.Type;
 
 /** The account and workspace an install intent was minted for. */
-export interface IntegrationInstallIntent {
-  readonly userId: string;
-  readonly organizationId: string;
-}
+export type IntegrationInstallIntent = typeof InstallIntentSchema.Type;
 
 /** A state's stored form. */
 function stateHashOf(state: string): string {
@@ -136,7 +134,7 @@ const writeDeleted = SqlSchema.findAll({
     organizationId: Schema.optionalKey(Schema.String),
     now: Schema.Date,
   }),
-  Result: Schema.Struct({ txid: Schema.String }),
+  Result: TxidRowSchema,
   execute: ({ provider, externalId, organizationId, now }) =>
     Database.use((db) =>
       db
@@ -152,7 +150,7 @@ const writeDeleted = SqlSchema.findAll({
               : eq(integrationInstallation.organizationId, organizationId),
           ),
         )
-        .returning({ txid: sql<string>`pg_current_xact_id()::text` }),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -233,9 +231,11 @@ const deleteExpiredIntents = SqlSchema.void({
     ),
 });
 
+const InstallIntentSchema = Schema.Struct({ userId: Schema.String, organizationId: Schema.String });
+
 const deleteIntent = SqlSchema.findOneOption({
   Request: Schema.Struct({ stateHash: Schema.String, provider: ProviderSchema, now: Schema.Date }),
-  Result: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
+  Result: InstallIntentSchema,
   execute: ({ stateHash, provider, now }) =>
     Database.use((db) =>
       db

@@ -165,7 +165,7 @@ function editChildren(parent: HastParent, edit: MarkdownEdit): void {
   }
   // SAFETY: every node kept is one of this parent's own children, or a run of
   // text or a mark cut from one, each a child any parent holds.
-  parent.children.splice(0, original.length, ...(kept as typeof parent.children));
+  parent.children.splice(0, original.length, ...kept);
 }
 
 /** The lines a fenced block opens on. */

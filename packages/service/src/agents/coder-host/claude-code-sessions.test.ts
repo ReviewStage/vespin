@@ -173,6 +173,8 @@ const RUNNER_FILES = [
 const EVENTS_URL = "https://app.test/api/agents/runner/events";
 const LINES_URL = "https://app.test/api/agents/runner-lines";
 const TRANSCRIPTS_URL = "https://app.test/api/agents/runner-transcripts";
+/** The query every URL a runner is handed names its launch by, here the agent's first. */
+const FIRST_LAUNCH = "?runnerLaunch=1";
 const MCP_URL = "https://app.test/api/agents/mcp";
 /** The host every address above names, which the firewall swaps the runner's bearer in on. */
 const SERVICE_HOST = "app.test";
@@ -833,10 +835,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           effort: "high",
           append: INSTRUCTIONS,
           firstSequence: 0,
-          eventsUrl: EVENTS_URL,
-          linesUrl: LINES_URL,
+          eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
+          linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
-          transcriptsUrl: TRANSCRIPTS_URL,
+          transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
           allowedDomains: [],
           installedSkills: "/opt/agent/installed-skills",

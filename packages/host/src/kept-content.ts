@@ -38,7 +38,7 @@ export const KEPT_CONTENT_CHARACTERS = 32 * 1024 * 1024;
 const KEPT_SHARE = 4;
 
 /** The kinds of content kept, one for each act that reads it. */
-export const KEPT_KIND = {
+const KEPT_KIND = {
   AGENT_PICTURE: "agent-picture",
   INBOX_ATTACHMENT: "inbox-attachment",
   DESCRIPTION_PICTURE: "description-picture",

@@ -89,7 +89,7 @@ import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
 import { agentRepositoryToken } from "../coder-host/checkout.js";
 import { CODEX_TOKEN_MARGIN } from "../coder-host/codex-sessions.js";
-import { admitRunnerBearer, presentedBearer } from "../workspace-mcp/bearer.js";
+import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
 
 /** The path a runner's token command, and a host asking for its agent's GitHub token, post to. */
 export const RUNNER_TOKEN_PATH = HOSTED_SERVICE_PATH.RUNNER_TOKEN;
@@ -217,7 +217,9 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const bearer = presentedBearer(request);
   if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-  const admitted = yield* hostedStoreOrUnavailable(admitRunnerBearer(bearer));
+  const admitted = yield* hostedStoreOrUnavailable(
+    admitRunnerBearer(bearer, presentedLaunch(request)),
+  );
   // Note that a runner's bearer is admitted first, so one whose random bearer happens to begin like a device secret still reads as a runner's.
   if (Option.isNone(admitted)) {
     return yield* deviceGithubToken(yield* deviceCallerOf(request), brake);

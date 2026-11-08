@@ -15,7 +15,8 @@ import { agentTab, changesTab } from "@repo/ui/tab-strip-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, test, vi } from "vitest";
-import { SIDE_PANEL_TAB, type SidebarPin } from "../tasks/use-side-panel.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import type { SidebarPin } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
   FAKE_ANSWER,

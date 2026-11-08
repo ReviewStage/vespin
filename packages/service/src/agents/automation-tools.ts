@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { INTEGRATION_INSTALLATION_STATUS } from "@repo/database/integration-vocabulary";
 import {
   AUTOMATION_ACCESS,
@@ -58,7 +58,6 @@ import {
 import { SERVER_AUTOMATION_SOURCE } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import {

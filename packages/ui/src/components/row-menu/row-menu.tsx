@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { BUTTON_LIGHT, type ButtonSize } from "../button/button.js";
+import { withContextMenu } from "../menu/context-menu.js";
 import {
   dropBelowStart,
   Menu,
@@ -14,7 +15,6 @@ import {
   type MenuSubject,
   opensMenu,
   useMenu,
-  withContextMenu,
 } from "../menu/menu.js";
 import { MoreButton, moreLabel } from "../more-button/more-button.js";
 

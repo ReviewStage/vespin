@@ -1,5 +1,5 @@
 /**
- * link-home.ts -- where a link of ours lives: the host its address is written on, the desktop's own scheme, and the earlier names every reader still takes.
+ * link-home.ts -- where a link of ours lives: the host its address is written on, the desktop's own scheme, the panel's own path, and the earlier names every reader still takes.
  *
  * A link of ours is the thing's address on the web, `https://<host>/<workspace>/…`,
  * and the desktop is handed the same address with its scheme swapped for the
@@ -38,6 +38,19 @@ const APP_LINK_PROTOCOL = `${LINK_HOME.APP_SCHEME}:`;
  * forward to take it: the link a page hands a Mac to open the app at all.
  */
 export const APP_HOME_LINK = `${APP_LINK_PROTOCOL}//${LINK_HOME.HOST}/`;
+
+/**
+ * The panel's own path on the home, which names no place: the web serves the
+ * panel there whatever link it was opened on (`vercel.json`), a desktop
+ * window opens at it, and the history writes it for a step whose own address
+ * is not the home's. Its step is a reserved slug below, so it is never read
+ * as a workspace's Home. The panel's routes spell it as the literals their
+ * types are read from, each held to this one (`@repo/panel/panel-router`).
+ */
+export const PANEL_PATH = "/app";
+
+/** Where the web build emits the panel's static files, the harness marks and the voice clips (`apps/web/scripts/panel-build.ts`). */
+export const PANEL_ASSET_BASE = `${PANEL_PATH}/`;
 
 const HOSTS: ReadonlySet<string> = new Set([LINK_HOME.HOST, ...LINK_HOST_ALIASES]);
 

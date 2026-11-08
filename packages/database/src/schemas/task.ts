@@ -1,5 +1,5 @@
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import type { DescriptionAgentEdit } from "@repo/features/description-notes";
+import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import {
   DESCRIPTION_ACTOR,
   TASK_MODE,
@@ -32,7 +32,7 @@ import { organization, user } from "./auth.js";
  * task.ts -- a named task and its plan, its one current document.
  *
  * One row per task, keyed by a UUID of the service's own and owned by the
- * account that started it, in the workspace it was started in: its name, where it stands (a pin is each member's own, `plan-pin.ts`), its
+ * account that started it, in the workspace it was started in: its name, where it stands (a pin is each member's own, `task-pin.ts`), its
  * one document, a free Markdown text, and the journal of the saves coding
  * agents made on it. A save replaces the
  * text in one statement, so none is left half-written: a save that failed
@@ -132,13 +132,6 @@ export const task = pgTable(
      * with none. Kept as written, like the document.
      */
     brief: text("brief"),
-    /**
-     * @deprecated A pin is its reader's own now, in `plan_pin`
-     * (`plan-pin.ts`), and nothing writes or reads this. It was the
-     * workspace's, so a pin one member made stood for every member. It stands
-     * until no running build reads it, then a later migration drops it.
-     */
-    pinnedAt: timestamptz("pinned_at"),
     /**
      * When the task was finished: the instant its status last moved to Done
      * or Canceled, which the Tasks page windows its finished work by; null

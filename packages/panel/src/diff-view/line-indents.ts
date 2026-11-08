@@ -56,7 +56,7 @@ export function markLineIndents(root: ParentNode): void {
   if (first === undefined) return;
   const tabSize = tabSizeOf(root, first);
   for (const line of lines) {
-    const columns = indentColumns(line.textContent ?? "", tabSize);
+    const columns = indentColumns(line.textContent, tabSize);
     const mark = columns === 0 ? "" : `${columns}ch`;
     if (line.style.getPropertyValue(LINE_INDENT_PROPERTY) === mark) continue;
     if (mark === "") line.style.removeProperty(LINE_INDENT_PROPERTY);
