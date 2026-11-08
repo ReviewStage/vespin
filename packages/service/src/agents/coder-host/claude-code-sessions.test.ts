@@ -3555,6 +3555,47 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message after a drive agent's stopped sandbox's snapshot expired mounts the drive its first open forked in the fresh sandbox from the image",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const kept = keptAfterResponse();
+        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
+          Effect.provide(kept.layer),
+        );
+        yield* kept.run;
+        yield* kept.run;
+        const next = yield* anotherAgent(userId, agent);
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(next, "Fix it again."),
+        ).pipe(Effect.provide(kept.layer));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const expired = sandboxOfAgent(api, next);
+        const drive = mountedDrive(api, expired);
+        assert.ok(expired !== undefined && drive !== undefined);
+        yield* runnerTook(next.id);
+        yield* runnerEnded({
+          target: { userId, conversationId: next.conversationId },
+          sessionId: opened.sessionId,
+          sequence: 0,
+        }).pipe(Effect.provide(api.layer));
+        api.idleStop();
+        expired.snapshotExpired = true;
+
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, next, "Now the emails.");
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const fresh = sandboxOfAgent(api, next);
+        assert.ok(fresh !== undefined && fresh !== expired);
+        assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [IMAGE, undefined]);
+        assert.equal(mountedDrive(api, fresh), drive);
+      }),
+  );
+
+  it.effect(
     "an agent whose fast-forward from the base drive moved a lockfile has the base filled again past the answer",
     () =>
       Effect.gen(function* () {

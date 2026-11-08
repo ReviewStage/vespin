@@ -266,15 +266,18 @@ export type DriveOrigin = { readonly base: string } | { readonly ownedBy: string
  * a base drive, by its name, made empty where none stands, mounted to be
  * filled (`fill`), which one sandbox fills at a time and many fork; or a
  * drive of the sandbox's own forked from a base drive or from another
- * sandbox's own (`fork`), copying its files as they stand. A sandbox owns
- * the drive it forked, which its delete deletes with it, so neither goes
- * without the other; it never owns a base drive, which no sandbox's delete
- * touches. A fork whose origin is missing, or was never filled, answers as
- * gone (`SandboxGone`).
+ * sandbox's own (`fork`), copying its files as they stand; or the drive an
+ * earlier create under the sandbox's name forked (`own`), mounted again as it
+ * stands, as after its kept snapshot lapsed, and none where it forked none.
+ * A sandbox owns the drive it forked, which its delete deletes with it, so
+ * neither goes without the other; it never owns a base drive, which no
+ * sandbox's delete touches. A fork whose origin is missing, or was never
+ * filled, answers as gone (`SandboxGone`).
  */
 export type SandboxDrive =
   | { readonly fill: string; readonly at: string }
-  | { readonly fork: DriveOrigin; readonly at: string };
+  | { readonly fork: DriveOrigin; readonly at: string }
+  | { readonly own: true; readonly at: string };
 
 /**
  * A user made in a sandbox, in the group of the sandbox's default user, who

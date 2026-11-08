@@ -24,7 +24,8 @@
  * mounted read-write at the path the ask names in the drive's region: a
  * base drive got or created by its name for a fill, or a sandbox's own drive,
  * named after the sandbox (`ownDriveName`), forked from its origin as the
- * sandbox is created and deleted with the sandbox.
+ * sandbox is created, mounted again by a later create under its name, and
+ * deleted with the sandbox.
  *
  * A sandbox is found by a tag its caller gave it, whose value names few
  * sandboxes, so the first page is all of them. What is sent is a tag, a
@@ -548,16 +549,19 @@ function absentIfNotFound(failure: unknown): undefined {
 
 /**
  * The drive a create opens with, ready to mount: for a fill, the base drive
- * got or created by its name; for a fork, the sandbox's own where it stands,
- * as after a create whose snapshot lapsed, else forked from its origin,
- * which Vercel answers as not found where it is missing.
+ * got or created by its name; for its own, the sandbox's own where it
+ * stands, as Vercel mounts the same drive in a later run to pick up where
+ * the last left off, and none where it forked none; for a fork, the
+ * sandbox's own where it stands, as after a create whose snapshot lapsed,
+ * else forked from its origin, which Vercel answers as not found where it is
+ * missing.
  */
 async function driveFor(
   name: string,
   asked: SandboxDrive,
   under: Under,
   signal: AbortSignal,
-): Promise<MountedDrive> {
+): Promise<MountedDrive | undefined> {
   if ("fill" in asked) {
     const drive = await Drive.getOrCreate({ ...under, name: asked.fill, signal });
     return { drive, at: asked.at, forked: false };
@@ -565,6 +569,7 @@ async function driveFor(
   const own = ownDriveName(name);
   const standing = await Drive.get({ ...under, name: own, signal }).catch(absentIfNotFound);
   if (standing !== undefined) return { drive: standing, at: asked.at, forked: false };
+  if ("own" in asked) return undefined;
   const origin = await Drive.get({
     ...under,
     name: "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy),

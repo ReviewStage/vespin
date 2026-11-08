@@ -1132,8 +1132,10 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       }),
 
     // The session's sandbox is run again as it was opened, through `getOrCreate` (`gotOn`): resumed
-    // where it stands, or made again from the image where its snapshot is gone, set up with nothing
-    // to check out, since the relaunch clones the checkout it finds missing (`ownCheckoutRestored`).
+    // where it stands, or made again from the image where its snapshot is gone, with the drive its
+    // first open forked mounted again where the agent has a repository, its checkout and unpushed
+    // work on it, and set up with nothing to check out, since the relaunch clones the checkout it
+    // finds missing (`ownCheckoutRestored`), as where it forked no drive.
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is used where it runs, and otherwise made anew
     // under the session's name from its last snapshot (`reopenedOf`), its disk kept, or from the
     // image where that snapshot is gone, so it is never resumed in place; it is read again on each
@@ -1147,9 +1149,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           : keptOf(found).sandbox;
         const { snapshot } = yield* reopenedOf(found.session, standing);
         const attempts: readonly CreateAttempt[] =
-          snapshot === undefined
-            ? [FROM_IMAGE]
-            : [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE];
+          snapshot !== undefined
+            ? [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE]
+            : hasRepository(agent)
+              ? [{ ...FROM_IMAGE, drive: { own: true, at: BASE_DRIVE.MOUNT } }, FROM_IMAGE]
+              : [FROM_IMAGE];
         const { opened } = yield* openedFromFirst(agent, found.session, attempts, undefined);
         if (Result.isFailure(opened)) return yield* opened.failure;
         const { name, running, created, from } = opened.success;

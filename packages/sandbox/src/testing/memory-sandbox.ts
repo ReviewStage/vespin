@@ -227,7 +227,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         : Effect.fail(new SandboxGone({ call })),
     );
 
-  /** The drive a create opens with: a base drive made where none stands, or the sandbox's own, forked where none stands from an origin that must. */
+  /** The drive a create opens with: a base drive made where none stands, or the sandbox's own, mounted again where it stands, else forked from an origin that must, or none where the ask forks none. */
   const driveFor = (name: string, asked: SandboxDrive) =>
     Effect.suspend(() => {
       if ("fill" in asked) {
@@ -238,6 +238,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
       }
       const own = ownDriveName(name);
       if (state.drives.has(own)) return Effect.succeed({ name: own, at: asked.at });
+      if ("own" in asked) return Effect.succeed(undefined);
       const origin = "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy);
       if (!state.drives.has(origin))
         return Effect.fail(new SandboxGone({ call: SANDBOX_CALL.CREATE }));
