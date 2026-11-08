@@ -42,7 +42,7 @@ const FIXTURE_IMAGE = {
   base: Effect.succeed("agent-image-base:fixture"),
   runner: Effect.succeed([]),
 };
-const SANDBOX = "agent-sandbox-fixture";
+const SANDBOX = agentSandboxName(SESSION);
 const RUNNING_SESSION = "sbs_running";
 const SHELL = "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d";
 const REPOSITORY = "Acme/Relay";

@@ -842,6 +842,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           agentBrowserOver(
             {
               ...api,
+              get: (name) => (opened ? api.get(name) : Effect.succeed(undefined)),
               listTagged: (tag, session) =>
                 opened ? api.listTagged(tag, session) : Effect.succeed([]),
             },

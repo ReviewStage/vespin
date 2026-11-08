@@ -435,10 +435,10 @@ function deviceMachineOver(
       }),
 
     // The session's pin names its account, so the account given is not needed to find it.
-    findPlaces: (_userId, session) =>
+    findPlace: (_userId, session) =>
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
-        if (Option.isNone(pin)) return [];
+        if (Option.isNone(pin)) return Option.none<FoundPlace>();
         const { userId, agentId } = pin.value;
         const launch = yield* stored(latestDeviceAgentLaunch(userId, agentId));
         const place = macPlace(session, agentId);
@@ -469,10 +469,10 @@ function deviceMachineOver(
           // SAFETY: the pin is this machine's own to read back; no caller reads it.
           kept: pin.value as unknown as MachineKept,
         };
-        return [found];
+        return Option.some(found);
       }),
 
-    // The record is the agent's launch and stop lines themselves, which `findPlaces` reads: a
+    // The record is the agent's launch and stop lines themselves, which `findPlace` reads: a
     // runner the record no longer tells of is stopped, and one it tells of was recorded by its launch.
     recordRunner: (place, record) =>
       Effect.gen(function* () {

@@ -40,7 +40,7 @@ import { SNAPSHOT, SNAPSHOT_MISS, type SnapshotOutcome, snapshotSource } from ".
  * account and a key ring of the suite's.
  */
 
-const SESSION = "wrun_fixture";
+const SESSION = SOURCE_SANDBOX.SESSION;
 /** The account whose agent the source is. */
 const SOURCE_OWNER = "user-snapshot-source";
 const BRANCH = "luke/fix-invites-continued-0a1b2c3d";

@@ -122,7 +122,7 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
-import { AGENT_TAG, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
+import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
 import { BASE_SNAPSHOT } from "../base-snapshot.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
@@ -2508,7 +2508,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an expired sandbox opened before getOrCreate whose delete failed stands beside its replacement, which later messages and the launch's END still reach",
+    "a stopped legacy sandbox's next launch opens the sandbox under the session's name from its snapshot, leaves the legacy one stopped, and a reset deletes both",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -2521,40 +2521,36 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           yield* writtenLine(agent, "Fix the invitations."),
         );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const target = { userId, conversationId: agent.conversationId };
         sequence.next = 42;
         yield* runnerTook(agent.id);
-        yield* runnerEnded({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
-          Effect.provide(api.layer),
-        );
+        yield* runnerEnded({
+          target: { userId, conversationId: agent.conversationId },
+          sessionId: opened.sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
         api.idleStop();
-        const [expired] = api.sandboxes;
-        assert.ok(expired !== undefined);
-        expired.snapshotExpired = true;
-        // A sandbox opened before `getOrCreate` is named by a UUID, so its replacement stands under the session's own name.
-        expired.name = `${SANDBOX_NAME}${randomUUID()}`;
-        api.failDelete.remaining = 1;
+        const [legacy] = api.sandboxes;
+        assert.ok(legacy !== undefined);
+        // A sandbox opened before sandboxes were named after their session stands under a UUID, its tags the session's.
+        legacy.name = `${SANDBOX_NAME}${randomUUID()}`;
+        legacy.currentSnapshotId = "snap_legacy";
 
-        const replaced = yield* sentAndDelivered(
-          sessions,
-          opened.sessionId,
-          agent,
-          "Now the emails.",
-        );
-        const later = yield* sentAndDelivered(sessions, opened.sessionId, agent, "And the docs.");
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const moved = api.sandboxes[1];
+        assert.ok(moved !== undefined);
         assert.deepEqual(
-          [replaced.outcome, later.outcome],
-          [SESSION_SEND_OUTCOME.ACCEPTED, SESSION_SEND_OUTCOME.ACCEPTED],
+          [moved.name, moved.sourceSnapshotId, moved.status],
+          [agentSandboxName(opened.sessionId), "snap_legacy", "running"],
         );
-        assert.equal(expired.deleted, false);
-        assert.equal(api.sandboxes.length, 2);
-        const fresh = api.sandboxes[1];
-        assert.ok(fresh !== undefined);
-        // The later message went to the running replacement's runner, not to a third sandbox.
-        assert.equal(api.commands.length, 2);
-        const [, relaunch] = api.commands;
-        assert.ok((yield* launchLines(relaunch)).length >= 3);
+        assert.deepEqual([legacy.status, legacy.deleted], ["stopped", false]);
+        const relaunch = api.commands.at(-1);
+        assert.equal(relaunch?.sandboxSessionId, moved.currentSessionId);
+        // A reset deletes the legacy sandbox with the session's own, so its disk never comes back.
+        const reset = yield* sessions.reset(opened.sessionId);
+        assert.equal(reset.outcome, SESSION_RESET_OUTCOME.RESET);
+        assert.deepEqual([moved.deleted, legacy.deleted], [true, true]);
       }),
   );
 

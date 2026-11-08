@@ -40,7 +40,7 @@ import {
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { Effect, Layer, Option } from "effect";
-import { agentTag } from "../agents/machine/sandbox-machine.js";
+import { agentTag } from "../agents/agent-sandbox-open.js";
 
 const TEAM = "team_fixture";
 const PROJECT = "prj_fixture";
@@ -190,13 +190,6 @@ export function runnerSandboxApi() {
   const sandboxes: FakeSandbox[] = [];
   /** How many stdin writes with data the API refuses next, and with what status: a passing outage by default. */
   const failStdin = { remaining: 0, status: 502 };
-  /**
-   * How many deletes the API refuses next. Note that the refusal is a 400
-   * rather than a passing outage's 503, because `@vercel/sandbox` tries a
-   * 5xx again on a real timer, so only a status it never retries fails the
-   * delete at once, as a test reads it.
-   */
-  const failDelete = { remaining: 0 };
   const commands: FakeCommand[] = [];
   const uploads: Map<string, string>[] = [];
   const policies: { readonly session: string; readonly policy: unknown }[] = [];
@@ -208,7 +201,9 @@ export function runnerSandboxApi() {
   /**
    * How many reads of a command, and how many network policy updates, the
    * API refuses next. Note that each refusal is a 400 rather than a passing
-   * outage's 503, for the reason `failDelete` gives.
+   * outage's 503, because `@vercel/sandbox` tries a 5xx again on a real
+   * timer, so only a status it never retries fails the call at once, as a
+   * test reads it.
    */
   const failCommandReads = { remaining: 0 };
   const failPolicy = { remaining: 0 };
@@ -341,10 +336,6 @@ export function runnerSandboxApi() {
         if (asked.tags !== undefined) sandbox.tags = asked.tags;
         if (asked.timeout !== undefined) sandbox.timeout = asked.timeout;
         return Response.json(sandboxDeleted(listed(sandbox)));
-      }
-      if (method === "DELETE" && failDelete.remaining > 0) {
-        failDelete.remaining -= 1;
-        return Response.json({ error: { code: "bad_request" } }, { status: 400 });
       }
       if (method === "DELETE") {
         sandbox.deleted = true;
@@ -554,7 +545,6 @@ export function runnerSandboxApi() {
     policies,
     runs,
     failStdin,
-    failDelete,
     failCommandReads,
     failPolicy,
     holdPolicy,

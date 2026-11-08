@@ -2,15 +2,16 @@
  * agent-browser.ts -- an agent's browser as the service reaches it: a Chromium kept running in the agent's own sandbox, and a DevTools protocol session with it over the sandbox's PTY.
  *
  * A sandbox is found as the Terminal tab finds it, by the session it is
- * tagged with (`../agent-sandbox-open.ts`): a root session's own id, which a
+ * named after (`../agent-sandbox-open.ts`): a root session's own id, which a
  * worker's session names as its root, since a worker works in its parent's
  * sandbox. The brain's
  * sandbox and a coding agent's are reached alike. Making sure of the
  * browser opens a stopped sandbox again as the agent's next turn does,
- * through the same `getOrCreate` (`../agent-sandbox-open.ts`), which makes
- * one standing under its session's name again on the session's drive, with
- * the tags and the size it stood with, where its snapshot is gone, or
- * resumes one opened before, under a UUID, by its own name; it waits for it
+ * through the same `getOrCreate` (`../agent-sandbox-open.ts`'s
+ * `reopenedOf`), which makes one standing under its session's name again
+ * from the image, with the tags and the size it stood with, where its
+ * snapshot is gone, or moves a legacy one, under a UUID, to its session's
+ * name from its last snapshot; it waits for it
  * to run, and runs the start (`sandbox-browser.ts`), which attaches to a
  * browser already running or starts one.
  *
@@ -42,7 +43,6 @@ import {
   type PageTarget,
 } from "@repo/features/browser-cdp";
 import {
-  type ListedSandbox,
   ptyLinesOf,
   SANDBOX_STATUS,
   Sandbox,
@@ -69,7 +69,7 @@ import {
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "../../core.js";
 import { jsonOf } from "../../http/http-effect.js";
 import type { RelaySocket } from "../../terminal/relay.js";
-import { agentSandboxName, openAgentSandboxPromptly, SESSION_TAG } from "../agent-sandbox-open.js";
+import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import { SandboxPty, type SandboxPtyService, sandboxPtyLayer } from "../sandbox-pty.js";
 import {
@@ -445,37 +445,34 @@ export function agentBrowserOver(
   pty: SandboxPtyService,
   image: AgentImageService,
 ): AgentBrowserService {
-  /** The sandbox opened again as the agent's next turn opens it, where it stands under its session's name, or resumed by its own name where it was opened before. */
-  const reopened = (sessionId: string, sandbox: ListedSandbox) =>
-    sandbox.name === agentSandboxName(sessionId)
-      ? openAgentSandboxPromptly({
-          sessionId,
-          tags: { ...sandbox.tags },
-          vcpus: sandbox.vcpus,
-        }).pipe(
-          Effect.provideService(AgentImage, image),
-          Effect.provideService(Sandbox, api),
-          Effect.map((opened) => opened.sandbox),
-        )
-      : api.resume(sandbox.name);
+  /** The session's sandbox read again and opened as the agent's next turn opens it (`reopenedOf`). */
+  const reopened = (sessionId: string) =>
+    Effect.gen(function* () {
+      const sandbox = yield* agentSandboxOf(api, sessionId);
+      if (sandbox === undefined) return yield* unreachable(BROWSER_UNREACHABLE.NOT_OPENED);
+      const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
+        openAgentSandboxPromptly(of),
+      ).pipe(Effect.provideService(AgentImage, image), Effect.provideService(Sandbox, api));
+      return opened.sandbox;
+    });
 
-  /** The run of the sandbox tagged with the session, opened again and waited for where it is not running. */
+  /** The run of the session's sandbox, opened again and waited for where it is not running. */
   const runningSession = (sessionId: string): Effect.Effect<SandboxRunning, BrowserUnreachable> =>
     Effect.gen(function* () {
-      const [sandbox] = yield* api
-        .listTagged(SESSION_TAG, sessionId)
-        .pipe(Effect.mapError(sandboxUnavailable));
+      const sandbox = yield* agentSandboxOf(api, sessionId).pipe(
+        Effect.mapError(sandboxUnavailable),
+      );
       if (sandbox === undefined) return yield* unreachable(BROWSER_UNREACHABLE.NOT_OPENED);
       if (sandbox.status === SANDBOX_STATUS.RUNNING && sandbox.running !== undefined) {
         return { name: sandbox.name, running: sandbox.running };
       }
-      // Note that each try opens it again, which answers a sandbox already coming up as it stands,
-      // and that a refusal is tried again too, since a sandbox still stopping may refuse its resume; the
-      // last try's failure is the answer, so an outage still says the sandbox was unavailable. A snapshot
-      // gone, which only a sandbox opened before `getOrCreate` answers, is answered at once, since no
-      // later try finds it again, as is an image still being prepared, which the open waits on after
-      // the answer, so the answer says the sandbox is starting.
-      const resumed = reopened(sessionId, sandbox).pipe(
+      // Note that each try reads the sandbox again and opens it, which answers a sandbox already
+      // coming up as it stands, and that a refusal is tried again too, since a sandbox still stopping
+      // may refuse its resume; the last try's failure is the answer, so an outage still says the
+      // sandbox was unavailable. A snapshot gone, which only a legacy sandbox's move answers, is
+      // answered at once, since no later try finds it again, as is an image still being prepared,
+      // which the open waits on after the answer, so the answer says the sandbox is starting.
+      const resumed = reopened(sessionId).pipe(
         Effect.flatMap((found) =>
           found.status === SANDBOX_STATUS.RUNNING
             ? Effect.succeed({ name: found.name, running: found.running })

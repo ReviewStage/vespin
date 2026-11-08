@@ -33,8 +33,8 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
     call: (machine: MachineLifecycle) => Effect.Effect<A, E, R>,
   ) => Effect.flatMap(mac.owns(session), (owned) => call(owned ? mac : cloud));
   return {
-    findPlaces: (userId, session) =>
-      bySession(session, (machine) => machine.findPlaces(userId, session)),
+    findPlace: (userId, session) =>
+      bySession(session, (machine) => machine.findPlace(userId, session)),
     recordRunner: (place, record) => of(place.machine).recordRunner(place, record),
     firewall: {
       write: (place, userId, sources) => of(place.machine).firewall.write(place, userId, sources),
