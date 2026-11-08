@@ -18,13 +18,19 @@
  * A door that changes the window's state as well as moving it navigates
  * first and changes the rest once its move lands (`arrive`): at once where
  * nothing asks, after Leave where the move asks, and never after Stay, so a
- * move kept at the ask leaves the window as it stood.
+ * move kept at the ask leaves the window as it stood. A door that moves the
+ * window nowhere the router sees, as the new workspace's screen, which has no
+ * address, asks up front before it changes anything (`askUpFront`).
  *
- * Transitional: a door that changes the window's state before it navigates
- * cannot be held by the router alone, because a blocked navigation leaves
- * what the door already changed. Each such door still asks up front through
- * `transitionalLeaveFirst` until it navigates first and lets its arrival
- * change the rest; the last one converted deletes it.
+ * A move along the router's history, the window's Back and Forward, a step
+ * of their lists, Escape, and the mouse's own buttons, goes through one door
+ * (`along`), because the router's history asks its blockers only of a push
+ * or a replace: `@tanstack/history`'s `tryNavigation` passes a `go`, `back`,
+ * or `forward` by, and its memory history, the desktop's, never asks of one,
+ * while its browser history, the web's, asks of a browser's own Back and
+ * Forward on their `popstate`. So `along` asks up front where its step
+ * leaves the draft standing, and then moves past the blocker, so the web
+ * asks no second time; a browser's own Back still asks through the blocker.
  */
 
 import { type ShouldBlockFn, useBlocker, useRouter } from "@tanstack/react-router";
@@ -66,15 +72,17 @@ export interface PlaceLeave {
    */
   readonly stayed: () => boolean;
   /**
-   * Transitional: a door that changes the window's state before it navigates,
-   * asking first while an ask stands, whose Leave lets go of the ask unless
-   * what it did `stays` where the window stands. Each door on it moves to a
-   * navigation the router's blocker holds, and the last one deletes it.
+   * Moves the window `delta` entries along its router's history, to the step
+   * at the path `to`: first asking, while an ask stands, where that step
+   * leaves the draft standing, whose Leave lets go of the ask, and then past
+   * the router's blocker, since that step has asked already. The window
+   * stands what the entry it lands on saved (`window-history.ts`).
    */
-  readonly transitionalLeaveFirst: <Args extends readonly unknown[]>(
-    leave: (...args: Args) => void,
-  ) => (...args: Args) => void;
+  readonly along: (delta: number, to: string) => void;
 }
+
+/** How `along` moves the router's history: past the blocker, since its own ask was made up front. */
+const PAST_BLOCKER = { ignoreBlocker: true } as const;
 
 /** A way of answering that does nothing. */
 const NOTHING = (): void => undefined;
@@ -112,6 +120,13 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
   heard.current = onStanding;
   const accessNow = useRef(access);
   accessNow.current = access;
+  // Whether a move from the path `from` to the path `to` leaves the draft standing: another path, holding no one draft with it.
+  const leavesDraft = useCallback(
+    (from: string, to: string) =>
+      from !== to &&
+      !sameDraftAt(router.matchRoutes(from), router.matchRoutes(to), accessNow.current),
+    [router],
+  );
   // Whether an ask stands, which keeps the blocker on only while one does, since a blocker makes every move wait on it.
   const [held, setHeld] = useState(false);
   const doors = useMemo(() => {
@@ -138,6 +153,23 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
       } finally {
         landingStays.current = outer;
       }
+    };
+    // A door that moves nowhere the router sees, as the new workspace's screen, which has no address, or a task the window
+    // holds no address for yet, asks before it lands. Note that a Leave of a move that stays where the window stands
+    // leaves no page, so the page's ask stands on; any other lets go of it, since its move may land only later, as a
+    // task's once it is bound.
+    const askUpFront = (ask: LeaveAsk, landed: () => void) => {
+      const due = [landed];
+      const stays = stayed.current;
+      waiting.current = due;
+      ask(() => {
+        if (!stays) release(ask);
+        pass(() =>
+          land(stays, () => {
+            for (const each of due) each();
+          }),
+        );
+      }, NOTHING);
     };
     const place: PlaceLeave = {
       stand: (ask) => {
@@ -179,60 +211,44 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
           waiting.current.push(landed);
           return;
         }
-        // A door that cannot move first, as to a task the window holds no address for yet, still asks before it acts.
-        // Note that a Leave of a move that stays where the window stands leaves no page, so the page's ask stands on;
-        // any other lets go of it, since its move may land only later, as a task's once it is bound.
-        const ask = standing.current;
-        const due = [landed];
-        const stays = stayed.current;
-        waiting.current = due;
-        ask(() => {
-          if (!stays) release(ask);
-          pass(() =>
-            land(stays, () => {
-              for (const each of due) each();
-            }),
-          );
-        }, NOTHING);
+        askUpFront(standing.current, landed);
       },
       stays: () => {
         stayed.current = true;
       },
       stayed: () => landingStays.current,
-      transitionalLeaveFirst:
-        (leave) =>
-        (...args) => {
-          const ask = standing.current;
-          if (ask === undefined || passing.current) {
-            leave(...args);
-            return;
-          }
-          // Note that a leave that opens the place already standing leaves no page, so the page's ask stands on.
-          ask(() => {
-            stayed.current = false;
-            pass(() => leave(...args));
-            if (!stayed.current) release(ask);
-          }, NOTHING);
-        },
+      along: (delta, to) => {
+        if (delta === 0) return;
+        const { history } = router;
+        // Note that what the window wrote before it is flushed first, so the move counts from the entry it stands on.
+        const go = () => {
+          history.flush();
+          history.go(delta, PAST_BLOCKER);
+        };
+        const ask = standing.current;
+        if (ask === undefined || passing.current || !leavesDraft(history.location.pathname, to)) {
+          go();
+          return;
+        }
+        ask(() => {
+          release(ask);
+          go();
+        }, NOTHING);
+      },
     };
     return { place, release };
-  }, []);
+  }, [router, leavesDraft]);
   // A move asks while an ask stands, unless it is passed, stays on its address, or stays within one draft.
   const shouldBlockFn = useCallback<ShouldBlockFn>(
     ({ current, next }) => {
       moves.current += 1;
       askedTo.current = next.pathname;
       if (standing.current === undefined || passing.current) return false;
-      if (current.pathname === next.pathname) return false;
-      const held = !sameDraftAt(
-        router.matchRoutes(current.pathname),
-        router.matchRoutes(next.pathname),
-        accessNow.current,
-      );
+      const held = leavesDraft(current.pathname, next.pathname);
       if (held) heldMove.current = moves.current;
       return held;
     },
-    [router],
+    [leavesDraft],
   );
   const blocker = useBlocker({
     shouldBlockFn,

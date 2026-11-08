@@ -40,6 +40,8 @@ function manager(options: {
   sessionUserId?: string;
   /** That session's account's address; the stored account's unless given. */
   sessionEmail?: string;
+  /** How the service answers a deletion; a deleted account unless given. */
+  deleteUser?: AccountClient["deleteUser"];
 }): Effect.Effect<
   {
     instance: AccountSessionManager;
@@ -93,6 +95,7 @@ function manager(options: {
         Effect.sync(() => {
           endedSessions.push(token);
         }),
+      deleteUser: options.deleteUser ?? (() => Effect.void),
     } as unknown as AccountClient;
     const instance = yield* AccountSessionManager.make({
       client: options.client ?? fixtureClient,
@@ -471,6 +474,30 @@ it.effect(
       assert.equal(Exit.isFailure(refused), true);
       assert.deepEqual(subject.stored(), STORED);
       assert.deepEqual(subject.endedSessions, ["signed-session"]);
+    }),
+);
+
+it.effect(
+  "a deletion refused under a session the service no longer takes signs out, and opens no sign-in",
+  () =>
+    Effect.gen(function* () {
+      // The service answers as after a deletion that went through but whose answer was lost.
+      const service = new AccountClient({
+        baseUrl: "https://accounts.example",
+        clientId: "client",
+        httpClient: fakeHttpClientLayer(() => jsonResponse({}, HTTP_STATUS.UNAUTHORIZED)),
+      });
+      const subject = yield* manager({
+        stored: { ...STORED, sessionToken: "signed-session" },
+        deleteUser: (token) => service.deleteUser(token),
+      });
+      subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
+      const account = yield* subject.instance.deleteEverywhere();
+
+      assert.equal(account.status, ACCOUNT_STATUS.SIGNED_OUT);
+      assert.equal(subject.stored(), undefined);
+      assert.deepEqual(subject.opened, []);
     }),
 );
 

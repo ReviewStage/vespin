@@ -46,7 +46,7 @@ import { type RoutedViews, useRoutedViews } from "./workspace-routes.js";
  * with no workspace would name a path of none.
  *
  * One of them names the step the window stands on, as its history counts
- * steps (`navigation-history.ts`): the task, or its version while its
+ * steps (`places/window-history.ts`): the task, or its version while its
  * version history stands, the home page, the Board, the Inbox, an agent's or
  * a person's page, an automation or the list, the Admin place's view, or a
  * page of Settings. The history writes that link as the step's address, so

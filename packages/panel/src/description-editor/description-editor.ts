@@ -33,6 +33,7 @@ import {
 import { descriptionMentions } from "./description-mentions.js";
 import { descriptionSlash } from "./description-slash.js";
 import { diagramPreview } from "./diagram-preview.js";
+import { dividerLines } from "./divider-lines.js";
 import {
   BLANK_ENDS,
   documentManager,
@@ -72,7 +73,8 @@ import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writin
  * document could not draw it. A heading wears the read view's own class and
  * level, so the editor's words stand where the drawn words stood and opening
  * the text moves nothing. Each untouched block keeps its exact source
- * (`./document-source.ts`). A format toolbar over the text hears its
+ * (`./document-source.ts`). A divider opens an empty line beside it on
+ * Enter or a press past it at the text's ends (`./divider-lines.ts`). A format toolbar over the text hears its
  * selection and acts on it (`./writing-format.ts`), and a `/` at a line's
  * start or after a space opens the panel's block menu (`./description-slash.ts`),
  * which an empty line under the caret offers in its placeholder, as an empty
@@ -327,6 +329,7 @@ export function markdownExtensions(
     mentionNode(drawMention),
     linkLook(namesMention),
     writingKeys,
+    dividerLines,
   ];
 }
 

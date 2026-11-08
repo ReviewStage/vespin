@@ -413,8 +413,8 @@ export interface AppShortcut {
  * ⌘K for the command palette as Linear, Slack, and
  * Raycast have it, ⌘J for the terminal as VS Code and Cursor have the
  * panel that holds it, ⌥⌘K to mention a File tab's selected lines in the
- * agent's message box, beside the palette's ⌘K, ⌥⌘M to comment on a description's
- * words selected as Google Docs has it, ⌘F to find, and ⌘G and ⇧⌘G to step through what it
+ * agent's message box, beside the palette's ⌘K, ⇧⌘M to comment on a description's
+ * words selected, or the block under the pointer, as Notion has it, ⌘F to find, and ⌘G and ⇧⌘G to step through what it
  * found, as every Mac app has them, ⌘+, ⌘−, and ⌘0 to zoom as every
  * browser has them, and ⌘Z and ⇧⌘Z to undo and redo as every Mac app has
  * them.
@@ -440,9 +440,10 @@ export const APP_SHORTCUTS = {
     label: "Copy full transcript",
     chord: { key: SHORTCUT_KEY.C, option: true, shift: true },
   },
+  // Note that Comment takes ⇧⌘M, as Notion has it, rather than Google Docs' ⌥⌘M, because ⌥⌘M is the Mac's own Minimize All, which a press no comment answers falls through to.
   [APP_COMMAND.COMMENT_ON_SELECTION]: {
-    label: "Comment on selection",
-    chord: { key: SHORTCUT_KEY.M, option: true },
+    label: "Comment",
+    chord: { key: SHORTCUT_KEY.M, shift: true },
     experiment: EXPERIMENT.DESCRIPTIONS,
   },
   // Note that U and P act on the focused sidebar row, and otherwise on what is open, answered only where the press is not typing, as the Inbox's U always has.

@@ -17,7 +17,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, onTestFinished, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
-import type { NavigationHistory } from "../navigation-history.js";
+import type { NavigationHistory } from "../places/window-history.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import type { WorkspaceSettingsControl } from "../settings/workspace-page.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -801,7 +801,9 @@ test("on a phone the page list is headed by its way out alone, named for the ste
         ...NO_HISTORY,
         canGoBack: true,
         steps: {
-          back: [{ at: 0, title: { label: "Inbox" }, page: { kind: "routed", of: "/acme/inbox" } }],
+          back: [
+            { number: 0, title: { label: "Inbox" }, page: { kind: "routed", of: "/acme/inbox" } },
+          ],
           forward: [],
         },
       },

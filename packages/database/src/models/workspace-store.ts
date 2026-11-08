@@ -32,6 +32,7 @@ import { githubInstallation } from "../schemas/github-installation.js";
 import { githubPersonalToken } from "../schemas/github-personal-token.js";
 import { githubRepositoryRead } from "../schemas/github-repository-read.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
+import { conversations } from "../schemas/storage.js";
 import { task } from "../schemas/task.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
@@ -302,6 +303,27 @@ const findMemberWorkspaceIds = SqlSchema.findAll({
         .select({ organizationId: member.organizationId })
         .from(member)
         .where(eq(member.userId, userId)),
+    ),
+});
+
+const WorkspaceAgentConversationSchema = Schema.Struct({
+  conversationId: Schema.String,
+  sessionId: Schema.NullOr(Schema.String),
+});
+
+const findWorkspaceAgentConversations = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: WorkspaceAgentConversationSchema,
+  execute: (organizationId) =>
+    Database.use((db) =>
+      db
+        .select({
+          conversationId: agentTable.conversationId,
+          sessionId: conversations.runtimeSessionId,
+        })
+        .from(agentTable)
+        .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
+        .where(eq(agentTable.organizationId, organizationId)),
     ),
 });
 
@@ -816,6 +838,22 @@ export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonl
   return Effect.map(findMemberWorkspaceIds(userId), (rows) =>
     rows.map((row) => row.organizationId),
   );
+}
+
+/** An agent's conversation as a workspace's delete reads it: its id, and the runtime session it last ran, where it ran one. */
+export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema.Type;
+
+/**
+ * The conversation of every agent of the workspace, whoever ran it, with
+ * the session it runs in. A conversation names the account that ran it
+ * rather than the workspace, so a workspace's delete reads these while its
+ * agents stand and, once they are gone, deletes the conversations, as a
+ * task's delete does its own, and the sessions' sandboxes.
+ */
+export function workspaceAgentConversations(
+  organizationId: string,
+): WorkspaceStoreEffect<readonly WorkspaceAgentConversation[]> {
+  return findWorkspaceAgentConversations(organizationId);
 }
 
 /**

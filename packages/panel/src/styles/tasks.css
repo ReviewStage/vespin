@@ -227,16 +227,45 @@
   line-height: var(--ui-type-reading-leading);
 }
 
-/* A divider ProseMirror holds selected whole, as a click on its line, an
-   arrow onto it, or a Backspace up to it leaves it: drawn in the accent, on a
-   wash outside its box so nothing moves, so the caret does not seem to vanish
-   and a Backspace or Delete is seen to take it. Note that TipTap's own base
-   rules are left out (`description-editor.ts`'s `injectCSS`), so nothing else
-   draws a selected node. */
-.description-document-text hr.ProseMirror-selectednode {
-  border-top-color: var(--accent);
+/* A divider is pressed anywhere in the gap around its line, as a Notion or
+   Linear divider is, rather than on its one-pixel line alone: a box over
+   half the gap on each side (`@repo/ui`'s prose.css, 1.5em), which a press
+   on lands on the divider itself, so ProseMirror selects it whole. Note that
+   two dividers' boxes meet in their collapsed gap rather than overlap, and
+   that the box is out of the flow, so the editor stands as the read view. */
+.description-document-text hr {
+  position: relative;
+  overflow: visible;
+}
+
+.description-document-text hr::before {
+  content: "";
+  position: absolute;
+  inset: -0.75em 0;
   border-radius: var(--ui-radius-6);
-  box-shadow: 0 0 0 0.3em var(--ui-color-fill-selected);
+}
+
+/* A divider ProseMirror holds selected whole, as a press on it, an arrow onto
+   it, or a Backspace up to it leaves it: its whole box washed, as a block
+   Notion or Linear holds selected is, so a Backspace or Delete is seen to
+   take it. Note that TipTap's own base rules are left out
+   (`description-editor.ts`'s `injectCSS`), so nothing else draws a selected
+   node, and that the wash stands only while the editor holds the focus, as
+   the gap cursor does. */
+.description-document-text.ProseMirror-focused hr.ProseMirror-selectednode::before {
+  background: var(--ui-color-fill-selected);
+}
+
+/* The browser's own caret and selection, hidden while ProseMirror draws the
+   selection itself, a divider held whole or the gap cursor, which TipTap's
+   left-out base rules hid: otherwise the browser's caret blinks in the next
+   block beside the one ProseMirror draws. */
+.description-document-text.ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+.description-document-text.ProseMirror-hideselection *::selection {
+  background: transparent;
 }
 
 /* The caret where no line stands to take one, between two dividers or past

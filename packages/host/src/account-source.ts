@@ -8,9 +8,18 @@
  */
 import type { AccountProvider, AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AccountToken, CallCredential } from "@repo/features";
-import type { Effect, Scope, Stream } from "effect";
+import { Data, type Effect, type Scope, type Stream } from "effect";
 import type { RunMode } from "./run-mode.js";
 import type { SecretCipher, SettingsStore } from "./settings-store.js";
+
+/**
+ * A deletion Better Auth refused because the session was signed in longer
+ * ago than it deletes an account under (`SESSION_EXPIRED`): a new sign-in
+ * answers it, where asking again under the same session never would.
+ */
+export class DeletionSessionExpired extends Data.TaggedError("DeletionSessionExpired")<{
+  readonly message: string;
+}> {}
 
 /** What the host hands a source as the account composer opens it. */
 export interface AccountSourceHost {
@@ -58,7 +67,10 @@ export interface AccountSession {
   readonly signOut: (options: {
     readonly revokeRemote?: boolean;
   }) => Effect.Effect<AccountSnapshot, Error>;
-  /** Deletes the account on the service, then signs out. */
+  /**
+   * Deletes the account on the service, then signs out; a session too old
+   * to delete under fails as `DeletionSessionExpired`.
+   */
   readonly deleteEverywhere: () => Effect.Effect<AccountSnapshot, Error>;
   /**
    * The launch's check of the account against the service: one check however

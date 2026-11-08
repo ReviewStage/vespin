@@ -8,8 +8,9 @@ import {
   Tooltip,
   useWait,
 } from "@repo/ui";
+import { clipsAround, cutTo as cutToClips } from "@repo/ui/clip-room";
 import { replyOf } from "@repo/ui/reply-quote";
-import { visibleViewport } from "@repo/ui/visible-viewport";
+import { type ViewportBox, visibleViewport } from "@repo/ui/visible-viewport";
 import { Duration, Effect } from "effect";
 import { ReplyIcon, XIcon } from "lucide-react";
 import {
@@ -43,8 +44,12 @@ import type { ComposerQuote } from "../description-editor/contract.js";
  * (`AgentComposer`'s `replyDoor`), whose editor lays them in (`insertQuote`), drawn here
  * (`ComposerQuoteView`), and sends them as a Markdown blockquote set apart
  * by a blank line (`@repo/ui/reply-quote`). The press is drawn over the window, not inside
- * the transcript, so the log's own clipping never cuts it, follows the
- * selection as the log scrolls, and goes as the selection does. Note that
+ * the transcript, but stands as though it were inside it, as ChatGPT's and
+ * Medium's do: it keeps the side it was offered on while the log scrolls,
+ * carried with the words, and is cut at the edges of what can be seen of
+ * the log (`roomAround`), so it slides under the pane's head with them
+ * rather than jumping under the words or standing over the window's own
+ * bars. It goes as the selection does. Note that
  * the press takes no focus and leaves the selection as it was until it is
  * pressed, because a press that took either would end what it answers.
  * While it stands, R does what the press does (`APP_COMMAND.REPLY_TO_SELECTION`),
@@ -161,8 +166,22 @@ function cutTo(words: Element, range: Range): Range | undefined {
   return cut;
 }
 
-/** The selection inside one run of words a reply may quote under `scope`, as Reply answers it; nothing for any other. */
-function pickedIn(scope: HTMLElement): Picked | undefined {
+/**
+ * What can be seen of the window around `element`: the visible viewport cut
+ * to each box that clips it, the log that scrolls it say, which Reply by its
+ * words keeps to.
+ */
+export function roomAround(element: Element): ViewportBox {
+  const seen = visibleViewport();
+  return element instanceof HTMLElement ? cutToClips(seen, clipsAround(element)) : seen;
+}
+
+/**
+ * The selection inside one run of words a reply may quote under `scope`, as
+ * Reply answers it, on the side `kept` where Reply already stands; nothing
+ * for any other.
+ */
+function pickedIn(scope: HTMLElement, kept?: Picked): Picked | undefined {
   const selection = window.getSelection();
   if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return undefined;
   const whole = selection.getRangeAt(0);
@@ -175,34 +194,49 @@ function pickedIn(scope: HTMLElement): Picked | undefined {
   if (reachesField(words, range)) return undefined;
   const reply = replyOf(selection.toString());
   if (reply === "") return undefined;
-  return { reply, words, ...pressPlace(range.getBoundingClientRect()) };
+  const box = range.getBoundingClientRect();
+  return { reply, words, ...pressPlace(box, roomAround(words), kept?.below) };
 }
 
-/** Where Reply stands by words drawn in a box of the window, the middle of its edge, kept in from the window's sides. */
+/** Where Reply stands by words drawn in a box of the window, the middle of its edge, kept in from the sides of what can be seen of them. */
 export interface PressPlace {
   readonly left: number;
   readonly top: number;
   /** Whether it stands under the words rather than over them. */
   readonly below: boolean;
+  /** What can be seen of the words, past whose top and bottom the press is cut as they are. */
+  readonly room: ViewportBox;
 }
 
-/** Where Reply stands by words drawn in `box`, in window coordinates: over them, or under where the room above runs short or a finger made the selection. */
-export function pressPlace(box: {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-}): PressPlace {
-  const seen = visibleViewport();
-  // Note that a finger's press stands under the words, clear of the system's menu over them, unless the window ends first.
-  const finger =
-    coarsePointerNow() && box.bottom + FINGER_SELECTION_GAP + PRESS_ROOM <= seen.bottom;
-  const below = finger || box.top - seen.top < PRESS_ROOM;
+/**
+ * Where Reply stands by words drawn in `box`, in window coordinates, inside
+ * `room`, what can be seen of them: over them, or under where the room above
+ * runs short or a finger made the selection. Note that a press already
+ * standing keeps its side (`kept`), as the log scrolls say, because a press
+ * that turned to the other side as the words neared the room's edge would
+ * jump across them; it is cut at the edge with them instead.
+ */
+export function pressPlace(
+  box: {
+    readonly left: number;
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+  },
+  room: ViewportBox,
+  kept?: boolean,
+): PressPlace {
+  // Note that a finger's press stands under the words, clear of the system's menu over them, unless the room ends first.
+  const touch = coarsePointerNow();
+  const finger = touch && box.bottom + FINGER_SELECTION_GAP + PRESS_ROOM <= room.bottom;
+  const below = kept ?? (finger || box.top - room.top < PRESS_ROOM);
+  const gap = touch ? FINGER_SELECTION_GAP : PRESS_GAP;
   const center = (box.left + box.right) / 2;
   return {
-    left: Math.min(Math.max(center, seen.left + PRESS_MARGIN), seen.right - PRESS_MARGIN),
-    top: below ? box.bottom + (finger ? FINGER_SELECTION_GAP : PRESS_GAP) : box.top - PRESS_GAP,
+    left: Math.min(Math.max(center, room.left + PRESS_MARGIN), room.right - PRESS_MARGIN),
+    top: below ? box.bottom + gap : box.top - PRESS_GAP,
     below,
+    room,
   };
 }
 
@@ -248,7 +282,7 @@ export function ReplyToSelection({
   useEffect(() => {
     const element = scope.current;
     if (!shown || element === null) return undefined;
-    const follow = () => setPicked(pickedIn(element));
+    const follow = () => setPicked((standing) => pickedIn(element, standing));
     // Note that hiding a pane changes no selection, so its `hidden` attribute is watched for itself.
     const hiding = new MutationObserver(follow);
     hiding.observe(document.body, { attributes: true, attributeFilter: ["hidden"], subtree: true });
@@ -277,7 +311,11 @@ export function ReplyToSelection({
   return <ReplyPress place={picked} onReply={reply} />;
 }
 
-/** Reply standing by words selected, where `pressPlace` put it, over everything in the window; a press hands the reply on. */
+/**
+ * Reply standing by words selected, where `pressPlace` put it, over
+ * everything in the window but cut at the top and bottom of what can be seen
+ * of the words, so it scrolls out of sight with them; a press hands the reply on.
+ */
 export function ReplyPress({
   place,
   onReply,
@@ -288,26 +326,32 @@ export function ReplyPress({
   /** The box it stands in, for an owner that hears a press away from it. */
   layer?: RefObject<HTMLDivElement | null> | undefined;
 }): React.JSX.Element {
+  const { room } = place;
   return createPortal(
-    <MenuSurface
-      ref={layer}
-      flow={MENU_SURFACE_FLOW.TOOLBAR}
-      className="reply-to-selection fixed z-menu -translate-x-1/2 -translate-y-full data-below:translate-y-0"
-      data-below={place.below ? "" : undefined}
-      style={{ left: place.left, top: place.top }}
+    <div
+      className="reply-to-selection-room pointer-events-none fixed inset-x-0 z-menu overflow-clip"
+      style={{ top: room.top, height: Math.max(0, room.bottom - room.top) }}
     >
-      <Tooltip label={REPLY_WORDS.REPLY} command={APP_COMMAND.REPLY_TO_SELECTION}>
-        <Button
-          icon={<ReplyIcon aria-hidden="true" />}
-          // Note that the press keeps the selection and the focus where they stand until it lands.
-          keepFocus
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={onReply}
-        >
-          {REPLY_WORDS.REPLY}
-        </Button>
-      </Tooltip>
-    </MenuSurface>,
+      <MenuSurface
+        ref={layer}
+        flow={MENU_SURFACE_FLOW.TOOLBAR}
+        className="reply-to-selection pointer-events-auto absolute -translate-x-1/2 -translate-y-full data-below:translate-y-0"
+        data-below={place.below ? "" : undefined}
+        style={{ left: place.left, top: place.top - room.top }}
+      >
+        <Tooltip label={REPLY_WORDS.REPLY} command={APP_COMMAND.REPLY_TO_SELECTION}>
+          <Button
+            icon={<ReplyIcon aria-hidden="true" />}
+            // Note that the press keeps the selection and the focus where they stand until it lands.
+            keepFocus
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={onReply}
+          >
+            {REPLY_WORDS.REPLY}
+          </Button>
+        </Tooltip>
+      </MenuSurface>
+    </div>,
     document.body,
   );
 }

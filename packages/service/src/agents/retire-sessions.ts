@@ -37,8 +37,9 @@ import {
  * The retires' bounds, held under the shortest deadline of a client that
  * waits on a delete: a task's or an agent's delete on the account call's
  * ten seconds (`@repo/features/account-call`'s `REQUEST_TIMEOUT_MS`), an
- * account's deletion on the desktop's fifteen
- * (`@repo/credentials/account/client`'s `DELETE_TIMEOUT_MS`). Note that a
+ * account's deletion on the desktop's fifteen, the deadline its account
+ * client gives every request (`@repo/credentials/account/client`'s
+ * `AccountClient`, `timeoutMs`). Note that a
  * native reset is a few store writes and one sandbox delete
  * (`runner-sessions.ts`'s `reset`, `machine.discard`), so a reset that has
  * not answered in seconds is one the snapshots' expiry finishes better than

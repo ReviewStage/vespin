@@ -852,6 +852,45 @@ const findGithubAutomations = SqlSchema.findAll({
     ),
 });
 
+const ScheduledAutomationNameSchema = Schema.Struct({
+  id: Schema.String,
+  organizationId: Schema.String,
+});
+
+const findWorkspaceScheduledAutomations = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: ScheduledAutomationNameSchema,
+  execute: (organizationId) =>
+    Database.use((db) =>
+      db
+        .select({ id: automation.id, organizationId: automation.organizationId })
+        .from(automation)
+        .where(
+          and(
+            eq(automation.organizationId, organizationId),
+            eq(automation.triggerKind, AUTOMATION_TRIGGER.SCHEDULE),
+          ),
+        ),
+    ),
+});
+
+const findAccountScheduledAutomations = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: ScheduledAutomationNameSchema,
+  execute: (userId) =>
+    Database.use((db) =>
+      db
+        .select({ id: automation.id, organizationId: automation.organizationId })
+        .from(automation)
+        .where(
+          and(
+            eq(automation.userId, userId),
+            eq(automation.triggerKind, AUTOMATION_TRIGGER.SCHEDULE),
+          ),
+        ),
+    ),
+});
+
 const findIntegrationAutomations = SqlSchema.findAll({
   Request: Schema.Struct({
     organizationId: Schema.String,
@@ -1531,6 +1570,30 @@ export function integrationAutomationsOn(
   limit: number,
 ): TaskStoreEffect<readonly ListeningAutomation[]> {
   return findIntegrationAutomations({ organizationId, provider, event, limit });
+}
+
+/**
+ * Every automation of the workspace that fires on a schedule, enabled or
+ * not, whoever owns it, named as its schedule is kept at Vercel: what a
+ * workspace's delete reads while the rows stand, since the schedules
+ * outlive the rows the delete cascades.
+ */
+export function workspaceScheduledAutomations(
+  organizationId: string,
+): TaskStoreEffect<readonly (typeof ScheduledAutomationNameSchema.Type)[]> {
+  return findWorkspaceScheduledAutomations(organizationId);
+}
+
+/**
+ * Every automation the account made that fires on a schedule, in any
+ * workspace, enabled or not, named as its schedule is kept at Vercel: what
+ * an account's delete reads while the rows stand, since the schedules
+ * outlive the rows its user row cascades.
+ */
+export function accountScheduledAutomations(
+  userId: string,
+): TaskStoreEffect<readonly (typeof ScheduledAutomationNameSchema.Type)[]> {
+  return findAccountScheduledAutomations(userId);
 }
 
 /**

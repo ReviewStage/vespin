@@ -43,7 +43,8 @@ import { type HeldComposer, type MessageSender, useAgentComposer } from "./use-a
  * screen, whose handles may let go with no pointerup, Reply stands under a
  * selection once it rests, and with a mouse only once the pointer lets it
  * go; and on the agent's own tab, Reply stands while a message is out;
- * and R does what Reply does while it stands, and nothing while it does not.
+ * and R does what Reply does while it stands, and nothing while it does not;
+ * and Reply keeps its side as the log scrolls.
  */
 
 const AGENT_WORDS = "Option A ships today. Option B waits for review.";
@@ -406,6 +407,20 @@ test("on a touch screen Reply stands under the selection, clear of the system's 
   assert.ok(pressAt(300, 320) > 320, "under the words");
   const end = window.innerHeight;
   assert.ok(pressAt(end - 30, end - 10) < end - 30, "no room under the words, it stands over them");
+});
+
+test("Reply keeps the side it was offered on as the log scrolls the words toward the top, rather than jumping under them", async () => {
+  const tab = await mounted();
+  Range.prototype.getBoundingClientRect = () => new DOMRect(40, 300, 120, 20);
+  tab.select(AGENT_WORDS, "Option B", "review.");
+  const press = () => document.body.querySelector<HTMLElement>(".reply-to-selection");
+  assert.equal(press()?.hasAttribute("data-below"), false, "over the words");
+
+  Range.prototype.getBoundingClientRect = () => new DOMRect(40, 10, 120, 20);
+  act(() => {
+    document.dispatchEvent(new Event("scroll"));
+  });
+  assert.equal(press()?.hasAttribute("data-below"), false, "still over the words");
 });
 
 test("with a mouse, a selection resting is offered nothing until the pointer lets it go", async () => {

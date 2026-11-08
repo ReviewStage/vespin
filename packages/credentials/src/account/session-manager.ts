@@ -29,7 +29,8 @@ import {
   type AccountIdentity,
   accessTokenNeedsRefresh,
   accountFailureAction,
-  deleteHostedAccount,
+  deletionNeedsNewSession,
+  deletionSessionGone,
   type StoredAccount,
   withIssuedAccountTokens,
 } from "./client.js";
@@ -291,13 +292,14 @@ export class AccountSessionManager {
           new NoStoredAccount({ message: "No stored account credential to delete with" }),
         );
       }
-      const deleted = yield* Effect.result(this.#deleteHosted(stored.accessToken));
+      // Note that Better Auth deletes the account under the Mac's own session, so one is asked for where none is held, and a fresh one where the service finds the one held too old, a sign-in through the browser's hand-off page each.
+      const held = stored.sessionToken ?? (yield* this.#freshSession());
+      const deleted = yield* Effect.result(this.#deleteHosted(held));
       if (Result.isFailure(deleted)) {
-        if (!accessTokenNeedsRefresh(deleted.failure)) return yield* Effect.fail(deleted.failure);
-        const generation = this.#generation;
-        const tokens = yield* this.#options.client.refresh(stored.refreshToken);
-        yield* this.#storeCurrent(generation, { ...stored, ...tokens });
-        yield* this.#deleteHosted(tokens.accessToken);
+        // A session the service no longer takes, as after a deletion whose answer was lost, signs out rather than in, where a sign-in could make a new account.
+        if (deletionSessionGone(deleted.failure)) return yield* this.signOut();
+        if (!deletionNeedsNewSession(deleted.failure)) return yield* Effect.fail(deleted.failure);
+        yield* this.#deleteHosted(yield* this.#freshSession());
       }
       return yield* this.signOut();
     });
@@ -746,10 +748,23 @@ export class AccountSessionManager {
     return generation === this.#generation;
   }
 
-  #deleteHosted(accessToken: string): Effect.Effect<void, AccountClientFailure> {
-    return deleteHostedAccount({
-      serviceBaseUrl: this.#options.hostedServiceBaseUrl,
-      accessToken,
+  #deleteHosted(sessionToken: string): Effect.Effect<void, AccountClientFailure> {
+    return this.#options.client.deleteUser(sessionToken);
+  }
+
+  /** A new session of the Mac's own, asked for through the browser and read back from the store; refused where none landed. */
+  #freshSession(): Effect.Effect<string, NoStoredAccount> {
+    return Effect.gen({ self: this }, function* () {
+      const landed = yield* this.obtainSession().pipe(Effect.orElseSucceed(() => false));
+      const stored = landed ? yield* this.#options.store.readAccount() : undefined;
+      if (stored?.sessionToken === undefined) {
+        return yield* Effect.fail(
+          new NoStoredAccount({
+            message: "No session of the Mac's own to delete the account with",
+          }),
+        );
+      }
+      return stored.sessionToken;
     });
   }
 }

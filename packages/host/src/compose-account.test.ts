@@ -15,11 +15,13 @@ import { jsonResponse } from "@repo/wire/testing";
 import { ConfigProvider, Effect, Fiber, Layer, Stream } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { vi } from "vitest";
+import { ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL } from "./acts.js";
 import { composeAccount } from "./compose-account.js";
 import { composeSettings } from "./compose-settings.js";
 import { type CookieSessionDoor, cookieAccountSourceLayer } from "./cookie-account-source.js";
 import { HostKernelTag } from "./effect/kernel.js";
 import { AppIdentity, Environment, SecretCipher, SignInConsent } from "./effect/seams.js";
+import { ActRefused } from "./host-acts.js";
 import { type HostKernel, hostKernelOver } from "./host-kernel.js";
 import { oauthAccountSourceLayer } from "./oauth-account-source.js";
 import { runModeFor } from "./run-mode.js";
@@ -51,8 +53,8 @@ const grantingConsent: OpenConsent = (options) => ({
 /** The account service, answered: the deletion, then the second sign-in's exchange and identity. */
 const accountService: typeof globalThis.fetch = async (input, init) => {
   const request = new Request(input, init);
-  if (request.url === `${SERVICE_BASE_URL}${HOSTED_SERVICE_PATH.ACCOUNT_DELETE}`)
-    return jsonResponse({ deleted: true });
+  if (request.url === `${ACCOUNT_BASE_URL}/delete-user`)
+    return jsonResponse({ success: true, message: "User deleted" });
   if (request.url === `${ACCOUNT_BASE_URL}/oauth2/token`)
     return jsonResponse({ access_token: "access-2", refresh_token: "refresh-2" });
   if (request.url === `${ACCOUNT_BASE_URL}/oauth2/userinfo`)
@@ -121,6 +123,8 @@ const desktopAccount = (input: {
         settings.store.setAccount({
           accessToken: "access-1",
           refreshToken: "refresh-1",
+          // The Mac's own session, which a deletion is made under.
+          sessionToken: "session-1",
           id: "user-1",
           email: "dev@example.com",
           provider: ACCOUNT_PROVIDER.GITHUB,
@@ -432,6 +436,8 @@ interface TabService {
   signedIn: boolean;
   /** Whether every account step (a sign-in, a sign-out, a deletion) meets an outage. */
   stepsDown: boolean;
+  /** Whether the session was signed in longer ago than Better Auth deletes an account under. */
+  sessionStale?: boolean;
   /** Holds the next session read's answer until this settles. */
   heldRead?: Promise<void> | undefined;
   /** Every request, by path, in the order sent. */
@@ -446,7 +452,7 @@ const ACCOUNT_STEPS: readonly string[] = [
   "/api/auth/sign-in/social",
   "/api/auth/link-social",
   "/api/auth/sign-out",
-  HOSTED_SERVICE_PATH.ACCOUNT_DELETE,
+  "/api/auth/delete-user",
 ];
 
 /** The scripted service behind the platform fetch, which the cookie source and the settings ride. */
@@ -459,6 +465,10 @@ const tabFetch =
     if (service.stepsDown && ACCOUNT_STEPS.includes(path))
       return new Response("upstream detail", { status: 503 });
     switch (path) {
+      case "/api/auth/delete-user":
+        return service.sessionStale === true
+          ? jsonResponse({ code: "SESSION_EXPIRED", message: "Session expired" }, 400)
+          : new Response(null, { status: 204 });
       case "/api/auth/get-session": {
         const held = service.heldRead;
         service.heldRead = undefined;
@@ -593,6 +603,24 @@ it.effect(
       }
       assert.deepEqual(sentry.reported, []);
     }).pipe(Effect.provide(sentry.layer), (body) => inTab(service, body));
+  },
+);
+
+it.effect(
+  "in a browser, a deletion refused because the session is too old is refused as that, in its own sentence, and leaves the account standing",
+  () => {
+    const service = tabService({ signedIn: true, sessionStale: true });
+    return Effect.gen(function* () {
+      const { account, launched } = yield* browserAccount(service);
+      yield* Fiber.join(launched);
+      const standing = account.snapshot();
+
+      const refused = yield* Effect.flip(account.acts.ACCOUNT_DELETE(undefined));
+
+      assert.ok(refused instanceof ActRefused);
+      assert.equal(refused.sentence, ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL);
+      assert.deepEqual(account.snapshot(), standing);
+    }).pipe((body) => inTab(service, body));
   },
 );
 

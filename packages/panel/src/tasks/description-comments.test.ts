@@ -61,7 +61,8 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
  * words were deleted saying so over its quote, a resolved thread marking
  * nothing and listed under Resolved in the Comments tab, where Reopen
  * brings it back, and no mark on a page that is not the plan's own; and
- * ⌥⌘M starts a thread on the words selected, as the bubble over them does.
+ * ⇧⌘M starts a thread on the words selected, as the bubble over them does,
+ * or on the block under the pointer with none selected, as its button does.
  * The margin is measured again as a card is resized, and never on a draw
  * that moves nothing it stands on. Synthetic description and threads.
  */
@@ -1481,7 +1482,7 @@ function Keymap(): null {
   return null;
 }
 
-test("⌥⌘M starts a thread on the words selected, as the bubble over them does, and nothing with none selected", async () => {
+test("⇧⌘M starts a thread on the words selected, as the bubble over them does, and nothing with none selected", async () => {
   const keys = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(keys);
   act(() => keys.render(withQueryClient(createElement(Keymap))));
@@ -1491,10 +1492,10 @@ test("⌥⌘M starts a thread on the words selected, as the bubble over them doe
     act(() => {
       document.body.dispatchEvent(
         new KeyboardEvent("keydown", {
-          key: "µ",
+          key: "M",
           code: "KeyM",
           metaKey: true,
-          altKey: true,
+          shiftKey: true,
           bubbles: true,
           cancelable: true,
         }),
@@ -1547,7 +1548,47 @@ test("⌥⌘M starts a thread on the words selected, as the bubble over them doe
   );
 });
 
-test("words selected in a description whose tab is then hidden take the bubble and ⌥⌘M with them, and bring them back as it is shown again", async () => {
+test("⇧⌘M with no words selected starts a thread on the block under the pointer, as its button does, and names its key there", async () => {
+  const keys = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(keys);
+  act(() => keys.render(withQueryClient(createElement(Keymap))));
+  const { container, started } = wide(() => drawn("page", []));
+  const paragraph = [...container.querySelectorAll("p")].find((p) =>
+    p.textContent?.startsWith("Admins can withdraw"),
+  );
+  assert.ok(paragraph);
+  act(() => paragraph.dispatchEvent(new Event("pointerover", { bubbles: true })));
+  const button = container.querySelector(".comment-block-button button");
+  assert.equal(
+    button?.getAttribute("aria-keyshortcuts"),
+    shortcutAria(APP_SHORTCUTS[APP_COMMAND.COMMENT_ON_SELECTION].chord),
+    "the block's button names its key",
+  );
+
+  act(() => {
+    document.body.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "M",
+        code: "KeyM",
+        metaKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  const field = container.querySelector<HTMLTextAreaElement>(
+    `.comment-card[data-thread="pending"] textarea`,
+  );
+  assert.ok(field, "the thread is being started");
+  await post(field, "Only admins?");
+  assert.deepEqual(
+    started.map((start) => [start.scope, start.quote]),
+    [[DESCRIPTION_COMMENT_SCOPE.BLOCK, paragraph.textContent]],
+  );
+});
+
+test("words selected, and the block under the pointer, in a description whose tab is then hidden take the bubble and ⇧⌘M with them, and bring them back as it is shown again", async () => {
   const keys = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(keys);
   act(() => keys.render(withQueryClient(createElement(Keymap))));
@@ -1575,6 +1616,8 @@ test("words selected in a description whose tab is then hidden take the bubble a
     answerMouse();
   }
   assert.ok(container.querySelector(".comment-bubble"), "the bubble stands by the selection");
+  // Note that the pointer rests on the words' block as the tab hides, as a key switching tabs leaves it.
+  act(() => text.parentElement?.dispatchEvent(new Event("pointerover", { bubbles: true })));
 
   await act(async () => {
     container.hidden = true;
@@ -1584,10 +1627,10 @@ test("words selected in a description whose tab is then hidden take the bubble a
   act(() => {
     document.body.dispatchEvent(
       new KeyboardEvent("keydown", {
-        key: "µ",
+        key: "M",
         code: "KeyM",
         metaKey: true,
-        altKey: true,
+        shiftKey: true,
         bubbles: true,
         cancelable: true,
       }),
@@ -1596,7 +1639,7 @@ test("words selected in a description whose tab is then hidden take the bubble a
   assert.equal(
     container.querySelector(`.comment-card[data-thread="pending"]`),
     null,
-    "⌥⌘M starts no thread on the hidden description",
+    "⇧⌘M starts no thread on the hidden description",
   );
 
   Range.prototype.getBoundingClientRect = () => new DOMRect(40, 100, 120, 20);

@@ -378,7 +378,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
   },
   stays: ignore,
   stayed: () => false,
-  transitionalLeaveFirst: (leave) => leave,
+  along: ignore,
 };
 
 /** The Board, a person's page, the Automations pages, and the Inbox standing nowhere, as a step's name and Copy link read them. */

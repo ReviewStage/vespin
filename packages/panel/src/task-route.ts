@@ -4,7 +4,7 @@
  * A task's own place is a routed place (`panel-router.tsx`) at the address
  * its links name it by, `/<workspace>/task/<number>`, or by its id where it
  * has no number (`places/task-step.ts`'s `taskAtOf`), as the history writes
- * its step (`navigation-history.ts`). Which task stands is read from the
+ * its step (`places/window-history.ts`). Which task stands is read from the
  * step the window saved in its entry, else from the address against the
  * tasks the window holds (`taskOfAt`), and the host is
  * asked to bind it as the window arrives there, by whichever door
@@ -35,7 +35,7 @@ export interface TaskRoute {
    * Opens a task's own place at `at`, a visit after the step standing; with
    * `takesStepless`, in the place of an entry holding no step the window
    * saved, as a launch's entry is, which the window's history takes in place
-   * of a step of its own (`navigation-history.ts`'s visit); with `inPlace`,
+   * of a step of its own (`places/window-history.ts`'s visit); with `inPlace`,
    * in the place of the step standing whatever it holds, as a task a start
    * lands on takes its page's (`TaskVisits.onLeaveStart`).
    */
@@ -69,7 +69,7 @@ export function useTaskRoute(): TaskRoute {
   const workspaceNow = () =>
     placeParamsOf(router.matchRoutes(router.history.location.pathname)).workspace;
   const onOpen = (to: TaskAt, takesStepless = false, inPlace = false) => {
-    // Note that the router writes its entry at once, which the history takes the task's step in the place of (`navigation-history.ts`).
+    // Note that the router writes its entry at once, which the history takes the task's step in the place of (`places/window-history.ts`).
     void router.navigate({
       to: "/$workspace/task/$taskId",
       params: { workspace: to.workspace, taskId: to.task },

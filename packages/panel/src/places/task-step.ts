@@ -3,7 +3,7 @@
  *
  * A task's own place (`ROUTED_PLACE.TASK`) is one page whatever its panes
  * show, its address naming the task alone, so its step holds the rest in its
- * entry's typed history state (`navigation-history.ts`): the column's tab,
+ * entry's typed history state (`window-history.ts`): the column's tab,
  * the side panel's, and, in a narrow room, which shows one pane at a time,
  * the panel as a pane of its own, its sub-step. An Inbox item's step and an
  * agent page's hold the side panel beside them the same way.

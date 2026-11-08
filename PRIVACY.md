@@ -306,8 +306,18 @@ made before default-branch drives expires thirty days after its last use. When y
   their checkouts; where that fails or does not finish in time, your account is
   deleted anyway and a drive may remain. Their snapshots otherwise expire and
   are removed seven days after they were last used.
-- **Workspaces you own**, and the memories, comments, and description text you left in
-  them, stay with the workspace without your name.
+- **Workspaces you own and are the only member of** are deleted at once with
+  their tasks, transcripts, and automations, as a deleted task is, and we ask
+  Vercel to delete every one of their agents' sandboxes and the drives holding
+  their checkouts, and to stop their scheduled automations; where that fails or
+  does not finish in time, the workspace is deleted anyway and a drive may
+  remain. The copy of each of their repositories' default branches on a drive
+  their agents start from is not deleted with them, and is kept until we remove
+  it, as said above. Their GitHub, Slack, and Sentry
+  connections are removed on our side; our apps stay installed at those
+  services until you uninstall them there.
+- **Workspaces with other members**, and the memories, comments, and
+  description text you left in them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it
   cannot be reached, your account is deleted anyway and PostHog keeps them.
 - **Error reports** already sent to Sentry are kept until Sentry's retention

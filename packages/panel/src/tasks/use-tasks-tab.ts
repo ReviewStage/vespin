@@ -1331,11 +1331,11 @@ export function useTasksTab(input: {
   arrivals: () => number;
   /** Begins a link's read of the service, answering whether it is still the window's to act on (`places/link-reads.ts`). */
   linkReads: LinkRead;
-  /** Writes the step a link opens on a task's own place before the window stands there, as one move (`navigation-history.ts`'s `onVisitTask`). */
+  /** Writes the step a link opens on a task's own place before the window stands there, as one move (`places/window-history.ts`'s `onVisitTask`). */
   visitTask: (at: TaskAt, step: LinkStep) => boolean;
-  /** Takes the step the window stands on as a start's page, which the task it starts takes in place (`navigation-history.ts`'s `onStartStands`). */
+  /** Takes the step the window stands on as a start's page, which the task it starts takes in place (`places/window-history.ts`'s `onStartStands`). */
   startStands: () => void;
-  /** Answers whether the window stands on a start's page, letting it go (`navigation-history.ts`'s `onLeaveStart`). */
+  /** Answers whether the window stands on a start's page, letting it go (`places/window-history.ts`'s `onLeaveStart`). */
   leaveStart: () => boolean;
 }): TasksControl {
   const { shown, placeLeave } = input;

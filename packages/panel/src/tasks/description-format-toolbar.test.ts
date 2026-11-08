@@ -128,7 +128,9 @@ async function opened() {
             children: createElement(DescriptionBody, {
               task: PLAN,
               sectionLinks: PAGE_LINKS,
-              edit: descriptionEditMutation(PLAN.id, () => Promise.resolve({ saved: true } as const)),
+              edit: descriptionEditMutation(PLAN.id, () =>
+                Promise.resolve({ saved: true } as const),
+              ),
             }),
           }),
         ),
@@ -437,17 +439,17 @@ test("Comment on the toolbar starts a thread on the words selected", async () =>
   );
 });
 
-test("⌥⌘M starts a thread on the words selected while the toolbar stands over them, as its Comment does", async () => {
+test("⇧⌘M starts a thread on the words selected while the toolbar stands over them, as its Comment does", async () => {
   const { container, element, editor } = await opened();
   const pending = () => container.querySelector(`.comment-card[data-thread="pending"]`);
   const commentKey = () =>
     act(() => {
       element.dispatchEvent(
         new KeyboardEvent("keydown", {
-          key: "µ",
+          key: "M",
           code: "KeyM",
           metaKey: true,
-          altKey: true,
+          shiftKey: true,
           bubbles: true,
           cancelable: true,
         }),

@@ -175,7 +175,7 @@ import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, useMentionPicker } from "./mention-picker.js";
 import { type HeldComment, PAGE_REVIEW_WORDS, type PageReviewControl } from "./page-review.js";
 import { PendingWords } from "./pending-comments.js";
-import { ComposerQuoteView, pressPlace, ReplyPress } from "./reply-to-selection.js";
+import { ComposerQuoteView, pressPlace, ReplyPress, roomAround } from "./reply-to-selection.js";
 import { type TaskMentionsValue, useMentionLink, useTaskMentions } from "./task-mentions.js";
 import { DICTATION_PHASE, type DictationControl, useDictation } from "./use-dictation.js";
 import { useKnownNames } from "./use-known-names.js";
@@ -208,8 +208,9 @@ import {
  * A thread is started from words selected in the read view, with the
  * bubble that rises over them, or from the button a block shows at its end
  * under the pointer, which comments on the whole block; while the bubble
- * stands, ⌥⌘M starts it as a press on the bubble does
- * (`APP_COMMAND.COMMENT_ON_SELECTION`). In the open editor the format
+ * stands, ⇧⌘M starts it as a press on the bubble does
+ * (`APP_COMMAND.COMMENT_ON_SELECTION`), and with no words selected it
+ * comments on the block under the pointer as the block's button does. In the open editor the format
  * toolbar over the words selected takes the bubble's place, its Comment
  * starting the thread (`useEditorComment`), so two surfaces never stand over
  * one selection; and in a description the reader may edit, words a press selects in
@@ -389,6 +390,12 @@ const REVEAL_ROOM = 96;
 
 /** What a mention's chip wears, whose press opens the thread at rest it stands in as well as what it names. */
 const MENTION_REF = "[data-mention-ref]";
+
+/** The button a block under the pointer shows at the column's end. */
+const BLOCK_BUTTON_CLASS = "comment-block-button";
+
+/** The `over` of the block under the pointer's comment command, which answers only where no words selected offer it. */
+const YIELDS_TO_SELECTION = (): boolean => false;
 
 /** How far apart two cards of the margin stand. */
 const CARD_GAP = 8;
@@ -2042,6 +2049,8 @@ export function DescriptionCommentLayer({
   const [hovered, setHovered] = useState<
     { top: number; middle: number; start: () => void } | undefined
   >(undefined);
+  // Whether the pointer is on a block or its button now, rather than the margin's cards or off the description, which the button stands on after.
+  const [onBlocks, setOnBlocks] = useState(false);
   // The thread whose words the pointer is on, whose card answers it before a press.
   const [pointed, setPointed] = useState<string | undefined>(undefined);
   // Whether the open thread was opened by the editor's caret standing in its words, which closes it as the caret leaves them.
@@ -2251,6 +2260,11 @@ export function DescriptionCommentLayer({
           ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
           : null;
       setPointed(marked?.dataset.threads?.split(" ")[0]);
+      // A divider holds no words for a thread to stand on, so it offers no button, and the block's it came from goes.
+      if (target instanceof HTMLHRElement) {
+        setHovered(undefined);
+        return;
+      }
       const found = blockAt(target, unitClass);
       if (found === undefined) return;
       // Note that a block whose words a thread already covers is commented on through that thread, so it offers no button.
@@ -2294,7 +2308,13 @@ export function DescriptionCommentLayer({
     // it, a link's in the block among them; its tap names the block once
     // the tap has gone where it leads.
     const over = (event: PointerEvent) => {
-      if (event.pointerType !== "touch") point(event.target);
+      if (event.pointerType === "touch") return;
+      point(event.target);
+      const { target } = event;
+      setOnBlocks(
+        blockAt(target, unitClass) !== undefined ||
+          (target instanceof Element && target.closest(`.${BLOCK_BUTTON_CLASS}`) !== null),
+      );
     };
     const tapped = (event: MouseEvent) => {
       if (touching.current) point(event.target);
@@ -2416,7 +2436,10 @@ export function DescriptionCommentLayer({
       setPending(undefined);
       onActive(thread);
     };
-    const left = () => setPointed(undefined);
+    const left = () => {
+      setPointed(undefined);
+      setOnBlocks(false);
+    };
     const down = (event: PointerEvent) => {
       pressing.current = true;
       touching.current = event.pointerType === "touch";
@@ -2436,9 +2459,10 @@ export function DescriptionCommentLayer({
     // Note that in the editor a press places the caret, so marked words there open no thread.
     if (editor === undefined) element.addEventListener("click", pressed);
     document.addEventListener("selectionchange", selected);
-    // Note that hiding the tab the description stands in changes no selection, so its `hidden` attribute is watched for itself.
+    // Note that hiding the tab the description stands in changes no selection and moves no pointer, so its `hidden` attribute is watched for itself.
     // Note that the tab shown again offers the words still selected there, though only a selection, not a caret, is read again, since a caret read opens and closes threads.
     const hiding = new MutationObserver(() => {
+      if (element.closest("[hidden]") !== null) setOnBlocks(false);
       if (element.closest("[hidden]") !== null || window.getSelection()?.isCollapsed === false) {
         selected();
       }
@@ -2461,6 +2485,12 @@ export function DescriptionCommentLayer({
 
   // While the bubble stands, its command starts the thread as a press on it does.
   useAppCommand(APP_COMMAND.COMMENT_ON_SELECTION, bubble?.start);
+  // While the pointer is on a block, the same command comments on it as its button does, giving way to words selected, the bubble's or the editor's toolbar's.
+  useAppCommand(
+    APP_COMMAND.COMMENT_ON_SELECTION,
+    descriptionShown && onBlocks ? hovered?.start : undefined,
+    YIELDS_TO_SELECTION,
+  );
 
   const cardRef = (id: string) => (element: HTMLDivElement | null) => {
     if (element === null) cards.current.delete(id);
@@ -2514,8 +2544,8 @@ export function DescriptionCommentLayer({
     // Note that folded, a line holding a count opens its threads there, a thread whose words were deleted counted at its section's top too, so its block shows no button over it.
     hovered === undefined ||
     (!wide && [...anchors.values()].some((top) => Math.abs(top - hovered.top) < 4)) ? null : (
-      <div className="comment-block-button" style={{ top: hovered.middle }}>
-        <Tooltip label={COMMENT_WORDS.COMMENT}>
+      <div className={BLOCK_BUTTON_CLASS} style={{ top: hovered.middle }}>
+        <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
           {/* Note that the press takes no focus, so an open editor stays to measure the block through. */}
           <IconButton
             keepFocus
@@ -3903,6 +3933,11 @@ function SelectedReply({
   onReply: (selected: PagePicked) => void;
 }): React.JSX.Element | null {
   const box = inWindow(room.current, selected.box);
-  if (box === undefined) return null;
-  return <ReplyPress place={pressPlace(box)} onReply={() => onReply(selected)} />;
+  if (box === undefined || room.current === null) return null;
+  return (
+    <ReplyPress
+      place={pressPlace(box, roomAround(room.current))}
+      onReply={() => onReply(selected)}
+    />
+  );
 }

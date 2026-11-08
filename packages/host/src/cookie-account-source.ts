@@ -22,7 +22,6 @@ import {
   accountCall,
   type CallCredential,
   callAnswered,
-  HOSTED_SERVICE_PATH,
   NO_CREDENTIAL,
 } from "@repo/features";
 import { pinnedPictureUrl } from "@repo/features/account-picture";
@@ -43,7 +42,11 @@ import {
   Stream,
 } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
-import type { AccountSession, AccountSourceHost } from "./account-source.js";
+import {
+  type AccountSession,
+  type AccountSourceHost,
+  DeletionSessionExpired,
+} from "./account-source.js";
 import { AccountSource } from "./effect/seams.js";
 
 /** Better Auth's own paths, under the account service's address (`<origin>/api/auth`). */
@@ -52,6 +55,7 @@ const AUTH_PATH = {
   SIGN_IN_SOCIAL: "/sign-in/social",
   LINK_SOCIAL: "/link-social",
   SIGN_OUT: "/sign-out",
+  DELETE_USER: "/delete-user",
 } as const;
 
 /**
@@ -92,11 +96,18 @@ const SessionAnswerSchema = Schema.fromJsonString(
   ),
 );
 
+/** Better Auth's refusal of a request: the code it names why by. */
+const RefusalAnswerSchema = Schema.fromJsonString(Schema.Struct({ code: Schema.String }));
+
+/** The code Better Auth refuses a delete under a session signed in longer ago than its `freshAge` with. */
+const SESSION_EXPIRED = "SESSION_EXPIRED";
+
 /** The answer a social sign-in or link gives: the provider's address to go to. */
 const RedirectAnswerSchema = Schema.fromJsonString(Schema.Struct({ url: Schema.NonEmptyString }));
 
 const decodeSessionAnswer = Schema.decodeUnknownResult(SessionAnswerSchema);
 const decodeRedirectAnswer = Schema.decodeUnknownResult(RedirectAnswerSchema);
+const decodeRefusalAnswer = Schema.decodeUnknownResult(RefusalAnswerSchema);
 
 /** One request and its answer, as the account call states them. */
 type CallRequest = Parameters<AccountCallEffects["send"]>[0];
@@ -218,10 +229,6 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<AccountSession, never, Scope.Scope> {
   const { runMode, report } = host;
   const authCall = accountCall({ baseUrl: host.accountBaseUrl, credential: NO_CREDENTIAL });
-  const serviceCall = accountCall({
-    baseUrl: host.hostedServiceBaseUrl,
-    credential: NO_CREDENTIAL,
-  });
   const changesPubSub = yield* PubSub.unbounded<AccountSnapshot>();
   let account: AccountSnapshot = SIGNED_OUT;
   /**
@@ -659,11 +666,24 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       }),
     deleteEverywhere: () =>
       Effect.gen(function* () {
-        const answer = yield* send(serviceCall, {
+        // Better Auth deletes the account at its own endpoint, as `authClient.deleteUser()` asks it.
+        const answer = yield* send(authCall, {
           method: HTTP_METHOD.POST,
-          path: HOSTED_SERVICE_PATH.ACCOUNT_DELETE,
+          path: AUTH_PATH.DELETE_USER,
+          body: "{}",
         });
-        if (!callAnswered(answer) || !answer.response.ok) {
+        if (!callAnswered(answer)) return yield* failed("Account deletion failed", answer);
+        if (!answer.response.ok) {
+          const body = yield* Effect.orElseSucceed(
+            Effect.tryPromise(() => answer.response.text()),
+            () => undefined,
+          );
+          const refusal = decodeRefusalAnswer(body);
+          if (Result.isSuccess(refusal) && refusal.success.code === SESSION_EXPIRED) {
+            return yield* new DeletionSessionExpired({
+              message: "Account deletion failed: the session is too old to delete under",
+            });
+          }
           return yield* failed("Account deletion failed", answer);
         }
         // The deletion ended the session with the account, so there is nothing left to sign out of remotely.

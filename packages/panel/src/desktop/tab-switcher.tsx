@@ -6,8 +6,8 @@
  * task with the tabs both its panes showed, or a place. It reads where the
  * window stands on each render: another page, or a tab chosen by a press or
  * a key, is a stop of its own, and a tab the window chose by itself takes
- * the stop standing in place, by the rule Back's trail keeps
- * (`navigation-history.ts`). A quick tap of ⌃Tab goes to the screen before
+ * the stop standing in place, by the rule Back's steps keep
+ * (`places/window-history.ts`). A quick tap of ⌃Tab goes to the screen before
  * this one without drawing anything, so two taps flip between two. Held a
  * beat, the cards show over the window: the screen here first and dimmed,
  * the one after it chosen. Tab and → step on, ⇧Tab and ← back, wrapping
@@ -400,7 +400,7 @@ export function TabSwitcher({
   const stills = useRef<readonly HeldStill[]>([]);
   // What Back's list called each stop while it stood, which its card says.
   const titles = useRef<readonly { readonly stop: Stop; readonly title: StepTitle }[]>([]);
-  // How many presses and keys the window has heard, and how many it had as the stops were last moved, as Back's trail counts them.
+  // How many presses and keys the window has heard, and how many it had as the stops were last moved, as Back's steps count them.
   const presses = useRef(0);
   const pressesMoved = useRef(0);
   // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
