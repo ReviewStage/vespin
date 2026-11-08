@@ -50,7 +50,9 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
  * wears a link glyph, and its submenu holds Open, Open link, Copy link, and
  * Stop sharing, as the host keeps the link beside the ports. The switch, a
  * setting, leaves the menu standing as every menu's switch does, so the
- * ports appear under it; every action in a port's submenu closes it. Every
+ * ports appear under it, and so does every action in a port's submenu, so
+ * it redraws with the link or with Share again; the menu closes only on a
+ * click outside it or Escape. Every
  * word drawn is the app's own, port numbers among them, and the link is
  * never drawn, so a screen recording shows them as they read.
  */
@@ -150,16 +152,19 @@ function sharedItems(
     {
       label: WORDS.OPEN_LINK,
       icon: <LinkIcon aria-hidden="true" />,
+      stays: true,
       onSelect: () => appPlatform().openWeb(url),
     },
     {
       label: WORDS.COPY_LINK,
       icon: <CopyIcon aria-hidden="true" />,
+      stays: true,
       onSelect: () => copy(url, LINK_COPY.COPIED),
     },
     {
       label: WORDS.STOP_SHARING,
       icon: <UnlinkIcon aria-hidden="true" />,
+      stays: true,
       onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port: null }),
     },
   ];
@@ -199,6 +204,7 @@ function portRows(
             ...(localPort === port
               ? {}
               : { detail: `from :${port}`, detailPlace: MENU_DETAIL.BESIDE }),
+            stays: true,
             onSelect: () => openLocal(localPort),
           },
         ]
@@ -217,6 +223,7 @@ function portRows(
                 {
                   label: WORDS.SHARE,
                   icon: <LinkIcon aria-hidden="true" />,
+                  stays: true,
                   onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
                 },
               ],
