@@ -78,14 +78,23 @@ export const LINK_OUTCOME = {
 export type LinkOutcome = (typeof LINK_OUTCOME)[keyof typeof LINK_OUTCOME];
 
 /** The intent a state stands for, once spent: the account that asked, the workspace it asked for, and what the Setup URL wrote on it. */
-export interface ConnectIntent {
-  readonly userId: string;
-  readonly organizationId: string;
-  readonly installationId: number | null;
-  readonly codeVerifier: string | null;
-}
+export type ConnectIntent = typeof ConnectIntentSchema.Type;
+
+const ConnectIntentSchema = Schema.Struct({
+  userId: Schema.String,
+  organizationId: Schema.String,
+  installationId: Schema.NullOr(Schema.Number),
+  codeVerifier: Schema.NullOr(Schema.String),
+});
 
 const InstallationStatusSchema = Schema.Literals(Object.values(GITHUB_INSTALLATION_STATUS));
+
+const WorkspaceInstallationSchema = Schema.Struct({
+  installationId: Schema.Number,
+  accountLogin: Schema.String,
+  status: InstallationStatusSchema,
+  updatedAt: Schema.Date,
+});
 
 /** A state's stored form. */
 function stateHashOf(state: string): string {
@@ -134,12 +143,7 @@ const recordAuthorization = SqlSchema.findOneOption({
 
 const deleteIntent = SqlSchema.findOneOption({
   Request: Schema.Struct({ stateHash: Schema.String, now: Schema.Date }),
-  Result: Schema.Struct({
-    userId: Schema.String,
-    organizationId: Schema.String,
-    installationId: Schema.NullOr(Schema.Number),
-    codeVerifier: Schema.NullOr(Schema.String),
-  }),
+  Result: ConnectIntentSchema,
   execute: ({ stateHash, now }) =>
     Database.use((db) =>
       db
@@ -257,12 +261,7 @@ const findMemberWorkspaceOnOwner = SqlSchema.findOneOption({
 
 const findInstallationsOfWorkspace = SqlSchema.findAll({
   Request: Schema.String,
-  Result: Schema.Struct({
-    installationId: Schema.Number,
-    accountLogin: Schema.String,
-    status: InstallationStatusSchema,
-    updatedAt: Schema.Date,
-  }),
+  Result: WorkspaceInstallationSchema,
   execute: (organizationId) =>
     Database.use((db) =>
       db
@@ -429,12 +428,7 @@ export function mendInstallationStatus(
 }
 
 /** One installation connected to the workspace as we last stored it: its account's login, its status, and when the row last moved. */
-export interface WorkspaceInstallation {
-  readonly installationId: number;
-  readonly accountLogin: string;
-  readonly status: GitHubInstallationStatus;
-  readonly updatedAt: Date;
-}
+export type WorkspaceInstallation = typeof WorkspaceInstallationSchema.Type;
 
 /** Every installation connected to the workspace, whatever its status, the first linked first; none for a workspace with none connected. */
 export function installationsOfWorkspace(
