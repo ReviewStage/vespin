@@ -84,13 +84,14 @@ import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
-import { useAutomationsDoor, usePersonDoor } from "./places/routed-doors.js";
+import { useAdminDoor, useAutomationsDoor, usePersonDoor } from "./places/routed-doors.js";
 import { RoutedExitsProvider, useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
 import { settingsRowsInput, shownSettingsView } from "./settings/settings-rows.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
+import { landOnSettingsRow } from "./settings-search.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext, useStageRoom } from "./stage-room.js";
 import { useSteadyDoor, useSteadyDoors } from "./steady-door.js";
@@ -138,6 +139,9 @@ const NO_UNSEEN_AGENTS: readonly string[] = [];
 
 /** Nothing waits on the developer, as the document reads before main has answered. */
 const NOTHING_WAITING: readonly AppInboxTask[] = [];
+
+/** A door's landing that does nothing more than its move. */
+const NOTHING_MORE = (): void => undefined;
 
 /** No task holds an inbox item, as the document reads before main has answered. */
 const NO_TASKS_HOLDING: readonly AppInboxTaskHolding[] = [];
@@ -326,52 +330,66 @@ function AppWindow(): React.JSX.Element {
   useEffect(() => {
     appPlatform().unsavedDescriptionWords?.(descriptionWordsUnsaved);
   }, [descriptionWordsUnsaved]);
-  const { transitionalLeaveFirst: leaveFirst } = placeLeave;
-  // Opens Settings at the place a link names (`settings-link.ts`), counted as the tab changed where it was not standing.
-  const goSettings = useCallback((link: SettingsLink) => {
-    const route = settingsRoute.current;
-    if (route === undefined) return;
-    if (!route.standing) {
-      appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
-        panel_tab: PANEL_TAB.SETTINGS,
-      });
-    }
-    route.open(link);
-  }, []);
+  const { arrive, transitionalLeaveFirst: leaveFirst } = placeLeave;
+  /**
+   * Opens Settings at the place a link names (`settings-link.ts`), and once
+   * the move lands, counts the tab changed where Settings was not standing,
+   * does what `landed` does, and looks for the link's section, so a move kept
+   * at a page's leave ask changes nothing.
+   */
+  const goSettings = useCallback(
+    (link: SettingsLink, landed: () => void = NOTHING_MORE) => {
+      const route = settingsRoute.current;
+      if (route === undefined) return;
+      const entering = !route.standing;
+      arrive(
+        () => route.open(link),
+        () => {
+          if (entering) {
+            appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
+              panel_tab: PANEL_TAB.SETTINGS,
+            });
+          }
+          landed();
+          if (link.section !== undefined) landOnSettingsRow(link.section);
+        },
+      );
+    },
+    [arrive],
+  );
   // Note that Home and the task's own place are the Tasks tab's own places, of no task bound and of the task bound, so neither is a routed place the tab leaves.
   const routedStanding =
     routedHere !== undefined &&
     routedHere.place !== ROUTED_PLACE.HOME &&
     routedHere.place !== ROUTED_PLACE.TASK;
   // Arriving at Settings is arriving at its page list and its first page, Profile; the Tasks tab is the place the window's
-  // state says, which a routed place standing is left for. Note that `PanelTab` and the counted tab are the same union:
-  // both are `APP_PANEL_TAB`'s own set, which `PanelTab` aliases.
+  // state says, which a routed place standing is left for. Note that the leave is the window's history's to write, past the
+  // router's blocker, so it asks up front while a page holds unsaved work, as a routed place's close does
+  // (`places/routed-doors.ts`). Note that `PanelTab` and the counted tab are the same union: both are `APP_PANEL_TAB`'s
+  // own set, which `PanelTab` aliases.
   const changeTab = useCallback(
     (next: PanelTab) => {
       if (next === PANEL_TAB.SETTINGS) {
-        leaveFirst(() => goSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true }))();
+        goSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true });
         return;
       }
       if (!routedStanding) return;
-      leaveFirst(() => {
+      arrive(NOTHING_MORE, () => {
         routedExits.leave();
         appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
           panel_tab: PANEL_TAB.TASKS,
         });
-      })();
+      });
     },
-    [leaveFirst, goSettings, routedStanding, routedExits],
+    [arrive, goSettings, routedStanding, routedExits],
   );
   /**
    * Opens Settings at the place a link names: the workspace it names, which
    * the Workspace page shows while Settings stays open; its page; and its
    * section, which is looked for once drawn and given up on by itself.
    */
-  // Note that the link asks once, as a whole, so its page, workspace, and section all wait on the ask.
-  const openSettings = useCallback(
-    (link: SettingsLink) => leaveFirst(() => goSettings(link))(),
-    [leaveFirst, goSettings],
-  );
+  // Note that the link is one move, so its page, workspace, and section all wait on the ask it makes.
+  const openSettings = useCallback((link: SettingsLink) => goSettings(link), [goSettings]);
   // A pairing's link opens Settings › Hosts with its code, for the page to ask over itself; while
   // Bring your own host is off, which stands nowhere then, it lands on that experiment's row alone.
   const openHostConnect = useOpenHostConnect();
@@ -384,11 +402,8 @@ function AppWindow(): React.JSX.Element {
       });
       return;
     }
-    // Note that the code is handed only once the leave is let go, so a page kept for a draft is not asked over later.
-    leaveFirst(() => {
-      openHostConnect(place.code);
-      goSettings({ page: SETTINGS_VIEW.HOSTS });
-    })();
+    // Note that the code is handed only once the move lands, so a page kept for a draft is not asked over later.
+    goSettings({ page: SETTINGS_VIEW.HOSTS }, () => openHostConnect(place.code));
   });
 
   const openIntegrations = useCallback(
@@ -515,11 +530,9 @@ function AppWindow(): React.JSX.Element {
     run?.capabilities ?? NO_CAPABILITIES,
     experiments,
   );
-  // A page chosen from outside Settings, as ⌘K chooses one, asks first while a page holds unsaved work, as entering Settings does; one turned within Settings asks nothing.
-  const chooseSettingsView = useSteadyDoor((view: SettingsView) => {
-    if (settingsPlace.standing) goSettings({ page: view });
-    else leaveFirst(() => goSettings({ page: view }))();
-  });
+  // A page chosen from outside Settings, as ⌘K chooses one, is a move the router's blocker holds while a page holds unsaved
+  // work, as entering Settings is; one turned within Settings leaves no page, so it asks nothing.
+  const chooseSettingsView = useSteadyDoor((view: SettingsView) => goSettings({ page: view }));
   // The links the window can copy now: ⌥⌘C copies the first, and ⌘K offers each (`links-at-hand.ts`).
   const copyLink = useCopyLink(
     tasks,
@@ -539,6 +552,7 @@ function AppWindow(): React.JSX.Element {
   const launchedOnce = useRef(false);
   const listedForLaunch = tasks.workspace !== undefined;
   const openAutomations = useAutomationsDoor(tasks).open;
+  const openAdmin = useAdminDoor(tasks).open;
   useEffect(() => {
     if (launchedOnce.current || launched === undefined) return;
     if ("automations" in launched && !listedForLaunch) return;
@@ -575,7 +589,7 @@ function AppWindow(): React.JSX.Element {
       openSettings(route.settings);
     } else if (place.kind === LINK_PLACE.ADMIN) {
       // Admin is the router's place, which its link opens as a navigation from wherever the window stands.
-      leaveFirst(() => adminView.onOpen(adminViewOfLink(place)))();
+      openAdmin(adminViewOfLink(place));
     } else {
       // Note that the Inbox, an agent's page, and a workspace not there are left by the door the link opens, as it stands what the link names,
       // rather than up front, because an agent's link reads where its agent stands first, and a leave before that read lands would write a

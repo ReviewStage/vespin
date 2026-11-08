@@ -10,7 +10,7 @@
  */
 
 import { ADMIN_LINK_SECTION, type AdminLinkSection } from "@repo/features/link-grammar";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import {
@@ -27,6 +27,30 @@ const ADMIN_OVERVIEW: AdminView = { kind: ADMIN_TAB.DASHBOARD };
 /** The section a segment names; none for one naming no section. */
 function sectionOf(segment: string | undefined): AdminLinkSection | undefined {
   return Object.values(ADMIN_LINK_SECTION).find((section) => section === segment);
+}
+
+/** The navigation that stands Admin's `view` under `workspace`. */
+function navigationTo(view: AdminView, workspace: string): NavigateOptions {
+  const fields = adminLinkFields(view);
+  if (fields.userId !== undefined) {
+    return {
+      to: "/$workspace/admin/user/$userId",
+      params: { workspace, userId: fields.userId },
+    };
+  }
+  if (fields.workspaceId !== undefined) {
+    return {
+      to: "/$workspace/admin/workspace/$workspaceId",
+      params: { workspace, workspaceId: fields.workspaceId },
+    };
+  }
+  if (fields.day !== undefined) {
+    return { to: "/$workspace/admin/day/$day", params: { workspace, day: fields.day } };
+  }
+  if (fields.section !== undefined) {
+    return { to: "/$workspace/admin/$section", params: { workspace, section: fields.section } };
+  }
+  return { to: "/$workspace/admin", params: { workspace } };
 }
 
 /** Admin as the router stands it: whether it takes the window, the view it stands on, and the navigation that opens and leaves it. */
@@ -68,36 +92,16 @@ export function useAdminRoute(input: { listedSlug: () => string | undefined }): 
   const onOpen = (to: AdminView = ADMIN_OVERVIEW) => {
     const workspace = (open ? params.workspace : undefined) ?? input.listedSlug();
     if (workspace === undefined) return;
+    const options = navigationTo(to, workspace);
+    // Opening the view already standing moves nothing, and keeps the place standing where the door that asked for it left
+    // the routed place first, as the Board's and the Automations pages' do (`places/routed-exits.ts`'s `stay`).
+    if (open && router.buildLocation(options).href === router.history.location.href) {
+      exits.stay();
+      return;
+    }
     // A section turned from another stands in its step's place; any other view is a step of its own.
     const replace = open && adminSection(view) && adminSection(to);
-    const fields = adminLinkFields(to);
-    if (fields.userId !== undefined) {
-      void navigate({
-        to: "/$workspace/admin/user/$userId",
-        params: { workspace, userId: fields.userId },
-        replace,
-      });
-    } else if (fields.workspaceId !== undefined) {
-      void navigate({
-        to: "/$workspace/admin/workspace/$workspaceId",
-        params: { workspace, workspaceId: fields.workspaceId },
-        replace,
-      });
-    } else if (fields.day !== undefined) {
-      void navigate({
-        to: "/$workspace/admin/day/$day",
-        params: { workspace, day: fields.day },
-        replace,
-      });
-    } else if (fields.section !== undefined) {
-      void navigate({
-        to: "/$workspace/admin/$section",
-        params: { workspace, section: fields.section },
-        replace,
-      });
-    } else {
-      void navigate({ to: "/$workspace/admin", params: { workspace }, replace });
-    }
+    void navigate({ ...options, replace });
   };
   const onPreload = () => {
     const workspace = input.listedSlug();

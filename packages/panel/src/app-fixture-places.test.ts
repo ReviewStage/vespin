@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { ACCOUNT_PLACE, LINK_PLACE, type ShownLink } from "@repo/features/link-grammar";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { type AppStateSnapshot, NO_ACCESS, RUN_PROFILE } from "@repo/host/app-state";
 import { type AppBridge, bridgeEntries } from "@repo/host/bridge";
@@ -42,6 +43,8 @@ declare global {
 }
 
 let root: Root | undefined;
+/** What the window hears a link the system hands it on, once it listens. */
+let showLink: ((link: ShownLink) => void) | undefined;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -60,6 +63,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
+  showLink = undefined;
   document.body.innerHTML = "";
 });
 
@@ -91,6 +95,12 @@ function handFixtureRun(profile: string): void {
     ...quiet,
     requestAppState: () => Promise.resolve(structuredClone(snapshot)),
     onAppState: () => () => undefined,
+    onShowLink: (listener: (link: ShownLink) => void) => {
+      showLink = listener;
+      return () => {
+        showLink = undefined;
+      };
+    },
   } satisfies Partial<AppBridge>);
 }
 
@@ -228,29 +238,6 @@ function typeInto(input: HTMLInputElement | null, words: string): void {
 }
 
 it.effect(
-  "a Settings page chosen from ⌘K over an automation's unsaved edit asks first, and Settings waits on the answer",
-  () =>
-    Effect.gen(function* () {
-      yield* drawWindow(RUN_PROFILE.AUTOMATIONS_EDITOR);
-      typeInto(document.querySelector("input[aria-label='Automation name']"), "Sweep anew");
-      act(() => {
-        assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
-      });
-      typeInto(document.querySelector('[role="dialog"] input[role="combobox"]'), "appearance");
-      const field = document.querySelector('[role="dialog"] input[role="combobox"]');
-      act(() => {
-        field?.dispatchEvent(
-          new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
-        );
-      });
-      yield* Effect.promise(settle);
-
-      assert.match(drawn(), /Leave with unsaved changes\?/u);
-      assert.equal(document.querySelector(".desktop-settings"), null, "Settings waits on the ask");
-    }),
-);
-
-it.effect(
   "on the tasks profile, Home pressed in the sidebar leaves the task the fixture binds for good where it stands",
   () =>
     Effect.gen(function* () {
@@ -348,5 +335,91 @@ it.effect(
 
       assert.notEqual(router.addresses()[router.at()], automation);
       assert.equal(document.body.textContent?.includes("Unsaved changes"), false);
+    }),
+);
+
+/** Chooses `words`' first result in ⌘K, as Return does. */
+function chooseInPalette(words: string): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    act(() => {
+      runAppCommand(APP_COMMAND.COMMAND_PALETTE);
+    });
+    const search = yield* Effect.promise(() =>
+      vi.waitFor(
+        () =>
+          document.querySelector<HTMLInputElement>('[role="dialog"] input[role="combobox"]') ??
+          assert.fail("the palette's search stands"),
+      ),
+    );
+    typeInto(search, words);
+    yield* Effect.promise(settle);
+    act(() => {
+      search.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    yield* Effect.promise(settle);
+  });
+}
+
+/** Hands the window `link` as the system does. */
+function handLink(link: ShownLink): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    act(() => (showLink ?? assert.fail("the window listens for links"))(link));
+    yield* Effect.promise(settle);
+  });
+}
+
+it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
+  [
+    "⌘, (Settings)",
+    Effect.sync(() => act(() => void runAppCommand(APP_COMMAND.SETTINGS))),
+    "/personal/settings",
+  ],
+  ["a Settings page chosen in ⌘K", chooseInPalette("appearance"), "/personal/settings/appearance"],
+  [
+    "a link to a Settings page",
+    handLink({ workspace: "personal", place: { kind: LINK_PLACE.SETTINGS, page: "appearance" } }),
+    "/personal/settings/appearance",
+  ],
+  [
+    "a pairing's link",
+    handLink({ place: { kind: ACCOUNT_PLACE.CONNECT, code: "ABCDEFGH" } }),
+    "/personal/settings/hosts",
+    // The code its link hands, which the Hosts page asks over once it stands.
+    /Connect a host/u,
+  ],
+  [
+    "a link to Admin",
+    handLink({ workspace: "personal", place: { kind: LINK_PLACE.ADMIN, section: "cost" } }),
+    "/personal/admin/cost",
+  ],
+])(
+  "%s over an edited automation asks, Cancel leaves the automation as it stood, and Leave arrives as the press does",
+  ([_door, press, arrived, shows]) =>
+    Effect.gen(function* () {
+      const router = yield* editedAutomation();
+      const standing = router.addresses().slice(0, router.at() + 1);
+
+      yield* press;
+      yield* Effect.promise(() => vi.waitFor(() => buttonSaying("Cancel")));
+      act(() => buttonSaying("Cancel").click());
+      yield* Effect.promise(settle);
+      assert.deepEqual(
+        router.addresses().slice(0, router.at() + 1),
+        standing,
+        "Cancel moves nothing",
+      );
+      assert.equal(
+        document.querySelector<HTMLInputElement>("input[aria-label='Automation name']")?.value,
+        "Check each deploy, edited",
+        "and keeps the edit",
+      );
+      if (shows !== undefined) assert.doesNotMatch(drawn(), shows, "and hands nothing on");
+
+      yield* press;
+      yield* leaveAsked();
+      assert.deepEqual(router.addresses().slice(0, router.at() + 1), [...standing, arrived]);
+      if (shows !== undefined) assert.match(drawn(), shows);
     }),
 );
