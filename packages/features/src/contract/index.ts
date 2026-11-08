@@ -38,6 +38,7 @@ import { tasksContract } from "./tasks.js";
 import { workspaceEnvironmentContract } from "./workspace-environment.js";
 import { workspaceGithubContract } from "./workspace-github.js";
 import { workspaceInvitationsContract } from "./workspace-invitations.js";
+import { workspaceSandboxSetupContract } from "./workspace-sandbox-setup.js";
 import { workspaceSentryContract } from "./workspace-sentry.js";
 import { workspaceSlackBotContract } from "./workspace-slack-bot.js";
 import { workspacesContract } from "./workspaces.js";
@@ -82,6 +83,7 @@ export const hostedContract = {
   taskFiles: taskFilesContract,
   taskSections: taskSectionsContract,
   workspaceEnvironment: workspaceEnvironmentContract,
+  workspaceSandboxSetup: workspaceSandboxSetupContract,
   workspaceGithub: workspaceGithubContract,
   workspaceInvitations: workspaceInvitationsContract,
   workspaceSentry: workspaceSentryContract,

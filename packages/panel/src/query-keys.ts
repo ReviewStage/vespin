@@ -28,6 +28,8 @@ export const QUERY_ROOT = {
   HOST_PAIRING: "host-pairing",
   /** Settings › Environment: a workspace's variables by name (`settings/environment-page.tsx`). */
   WORKSPACE_ENVIRONMENT: "workspace-environment",
+  /** Settings › Cloud setup: a workspace's install script and each repository's setup script (`settings/cloud-setup-page.tsx`). */
+  WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",

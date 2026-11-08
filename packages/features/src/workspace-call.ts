@@ -2,6 +2,7 @@ import { githubContract } from "./contract/github.js";
 import { workspaceEnvironmentContract } from "./contract/workspace-environment.js";
 import { workspaceGithubContract } from "./contract/workspace-github.js";
 import { workspaceInvitationsContract } from "./contract/workspace-invitations.js";
+import { workspaceSandboxSetupContract } from "./contract/workspace-sandbox-setup.js";
 import { workspaceSentryContract } from "./contract/workspace-sentry.js";
 import { workspaceSlackBotContract } from "./contract/workspace-slack-bot.js";
 import { workspacesContract } from "./contract/workspaces.js";
@@ -39,6 +40,7 @@ const WORKSPACE_CALLS = {
   workspaces: workspacesContract,
   workspaceInvitations: workspaceInvitationsContract,
   workspaceEnvironment: workspaceEnvironmentContract,
+  workspaceSandboxSetup: workspaceSandboxSetupContract,
   workspaceGithub: workspaceGithubContract,
   workspaceSentry: workspaceSentryContract,
   workspaceSlackBot: workspaceSlackBotContract,

@@ -144,6 +144,18 @@ const REFUSAL_ROWS: { readonly [Name in keyof typeof WORKSPACE_ACTS]: RefusalRow
     refusal: "Could not delete that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN" },
   },
+  WORKSPACE_SANDBOX_SETUP_READ: {
+    refusal: "Could not read that workspace's cloud setup on this system.",
+    payload: WORKSPACE,
+  },
+  WORKSPACE_INSTALL_SCRIPT_PUT: {
+    refusal: "Could not save that install script on this system.",
+    payload: { ...WORKSPACE, script: "sudo apt-get install -y redis-server" },
+  },
+  WORKSPACE_REPOSITORY_SETUP_PUT: {
+    refusal: "Could not save that setup script on this system.",
+    payload: { ...WORKSPACE, repository: "acme/relay", script: "pnpm install" },
+  },
   WORKSPACE_GITHUB_CONNECT: {
     refusal: "Could not connect GitHub to that workspace on this system.",
     payload: WORKSPACE,

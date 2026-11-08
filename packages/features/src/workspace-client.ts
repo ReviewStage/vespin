@@ -48,6 +48,11 @@ import {
   workspaceInviteRequestSchema,
 } from "./workspace-invitation-wire.js";
 import {
+  type WorkspaceSandboxSetupAnswer,
+  workspaceInstallScriptPutRequestSchema,
+  workspaceRepositorySetupPutRequestSchema,
+} from "./workspace-sandbox-setup-wire.js";
+import {
   type Workspace,
   type WorkspaceMember,
   type WorkspacePhotoType,
@@ -479,6 +484,47 @@ export class HostedWorkspaceClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
       hostedCall(this.#hosted.workspaceEnvironment.put, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** The workspace's cloud sandbox setup, its install script and each repository's setup script, as any member reads it. */
+  sandboxSetup(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSetup.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
+  /** The workspace's install script saved by an owner or admin, an empty one removing it, answering the setup as it then stands; a script the service would refuse by shape never travels. */
+  putInstallScript(
+    workspaceId: string,
+    script: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceInstallScriptPutRequestSchema)({ workspaceId, script }),
+    );
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSetup.putInstall, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** A repository's setup script saved by an owner or admin, an empty one removing it, answering the setup as it then stands; a script the service would refuse by shape never travels. */
+  putRepositorySetup(
+    workspaceId: string,
+    repository: string,
+    script: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceRepositorySetupPutRequestSchema)({ workspaceId, repository, script }),
+    );
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSetup.putRepository, admitted),
       (answer) => answer,
     );
   }
