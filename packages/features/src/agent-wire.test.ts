@@ -52,7 +52,7 @@ test("a page naming a failure this build does not know decodes, the failure read
     cursor: AGENT_CURSOR_START,
     status: AGENT_STATUS.FAILED,
     title: null,
-    failureReason: "runner_lost",
+    failureReason: "a_failure_from_a_later_service",
   });
 
   assert.equal(page.failureReason, AGENT_FAILURE.OTHER);

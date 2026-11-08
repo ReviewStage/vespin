@@ -466,7 +466,7 @@ export const AGENT_FAILURE = {
   CONTEXT_OVERFLOW: "context_overflow",
   /** The agent's session ended for good while its turn ran, and no runtime runs it any more: nothing reaches it again, and only a new agent, a continue of it among them, goes on. */
   SESSION_ENDED: "session_ended",
-  /** The agent's runner, or the machine it ran on, stopped before its turn ended; a message carries the agent on. */
+  /** The agent's runner stopped, or a newer launch replaced it, before its turn ended; a message carries the agent on. */
   RUNNER_LOST: "runner_lost",
   /** The agent's runner still ran but its turn made no progress before its deadline. */
   NO_PROGRESS: "no_progress",
