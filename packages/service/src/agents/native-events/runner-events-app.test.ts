@@ -12,6 +12,7 @@ import {
   recordAgentPublished,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
+import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
 import {
   listProviderKeyRows,
   type ProviderKeyRow,
@@ -518,6 +519,40 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "a Claude Code session the store held from its first entry is held no longer once the SDK says it dropped a batch of its transcript",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const { userId, conversationId } = agent.target;
+        const transcript = { projectKey: "-workspace-repository", sessionId: SESSION };
+        yield* appendSessionEntries(userId, conversationId, transcript, [
+          { type: "user", uuid: randomUUID(), parentUuid: null },
+        ]);
+        // The line taken and the CLI's init, which names the session.
+        yield* post(agent.bearer, workflowTurn(agent.lineId).slice(0, 2));
+        const before = yield* holdsSession(userId, conversationId, SESSION);
+
+        yield* post(agent.bearer, [
+          {
+            sequence: 2,
+            message: {
+              type: "system",
+              subtype: "mirror_error",
+              error: "The transcript store answered 503",
+              key: transcript,
+              uuid: randomUUID(),
+              session_id: SESSION,
+            },
+          },
+        ]);
+
+        assert.equal(before, true);
+        assert.equal(yield* holdsSession(userId, conversationId, SESSION), false);
+      }),
+  );
+
+  it.effect(
     "a plan's agent's transcript says its turns were the plan's, beside the tokens they took, and names its payer before any turn settled",
     () =>
       Effect.gen(function* () {
@@ -928,6 +963,93 @@ it.layer(SUITE)("the runner events route", (it) => {
       assert.deepEqual(
         ended.map((turn) => [turn.status, turn.failureDetail]),
         [[TURN_STATUS.FAILED, "success 529: API Error: 529 Overloaded"]],
+      );
+    }),
+  );
+
+  it.effect("a turn the model refused with no fallback ends as a refusal", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentWithBearer;
+      const top = { parent_tool_use_id: null, session_id: SESSION };
+      const messagesOfTurn = [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        {
+          type: "system",
+          subtype: "model_refusal_no_fallback",
+          original_model: "claude-opus-5-5",
+          request_id: null,
+          api_refusal_category: "cyber",
+          content: "Claude declined to answer.",
+          ...top,
+        },
+        // The CLI's result need not say the model turn failed.
+        { type: "result", subtype: "success", is_error: false, ...top },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ];
+      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+      yield* post(
+        agent.bearer,
+        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+      );
+      const db = yield* Database;
+      const ended = yield* db
+        .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+        .from(turns)
+        .where(eq(turns.conversationId, agent.target.conversationId));
+
+      assert.deepEqual(ended, [
+        {
+          status: TURN_STATUS.FAILED,
+          failure: "refusal",
+          detail: "model_refusal_no_fallback cyber",
+        },
+      ]);
+    }),
+  );
+
+  it.effect("a compaction that failed is why its failed turn says it failed", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentWithBearer;
+      const top = { parent_tool_use_id: null, session_id: SESSION };
+      const messagesOfTurn = [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        { type: "system", subtype: "init", ...top },
+        { type: "system", subtype: "status", status: "compacting", ...top },
+        {
+          type: "system",
+          subtype: "status",
+          status: null,
+          compact_result: "failed",
+          compact_error: "Conversation too long to summarize",
+          ...top,
+        },
+        {
+          type: "result",
+          subtype: "success",
+          is_error: true,
+          api_error_status: 400,
+          result: "Prompt is too long",
+          ...top,
+        },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ];
+      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+      yield* post(
+        agent.bearer,
+        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+      );
+      const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
+
+      assert.deepEqual(
+        ended.map((turn) => [turn.status, turn.failureDetail]),
+        [
+          [
+            TURN_STATUS.FAILED,
+            "compaction failed: Conversation too long to summarize; success 400: Prompt is too long",
+          ],
+        ],
       );
     }),
   );

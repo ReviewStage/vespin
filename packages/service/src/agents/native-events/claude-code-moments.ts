@@ -1,3 +1,4 @@
+import type { RunnerMessage } from "@repo/agent-runner/protocol";
 import { CLAUDE_CODE_TOOL, claudeCodeWorkspaceTool } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
@@ -85,6 +86,57 @@ const readEnvelope = Schema.decodeUnknownOption(
 );
 
 const readInit = Schema.decodeUnknownOption(Schema.Struct({ session_id: Schema.String }));
+
+/** The transcript a dropped mirror batch was of, as `SDKMirrorErrorMessage` keys it. */
+const readMirrorError = Schema.decodeUnknownOption(
+  Schema.Struct({ key: Schema.Struct({ sessionId: Schema.String }) }),
+);
+
+/** Why the model refused a model turn, as `SDKModelRefusalNoFallbackMessage` says it: its category and its explanation, where it named them. */
+const readRefusal = Schema.decodeUnknownOption(
+  Schema.Struct({
+    api_refusal_category: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    api_refusal_explanation: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  }),
+);
+
+/** The model a refused model turn was retried on, as `SDKModelRefusalFallbackMessage` names both. */
+const readRefusalFallback = Schema.decodeUnknownOption(
+  Schema.Struct({
+    original_model: Schema.String,
+    fallback_model: Schema.String,
+    scope: Schema.optionalKey(Schema.String),
+  }),
+);
+
+/** How a compaction ended, as `SDKStatusMessage` says it beside the CLI's status. */
+const readCompactResult = Schema.decodeUnknownOption(
+  Schema.Struct({
+    compact_result: Schema.optionalKey(Schema.String),
+    compact_error: Schema.optionalKey(Schema.String),
+  }),
+);
+
+/** The outcome a plugin's install or a hook's run says it ended with. */
+const readOutcome = Schema.decodeUnknownOption(
+  Schema.Struct({
+    status: Schema.optionalKey(Schema.String),
+    outcome: Schema.optionalKey(Schema.String),
+  }),
+);
+
+/** A notice's level, and whether it stopped the model from going on. */
+const readInformational = Schema.decodeUnknownOption(
+  Schema.Struct({
+    level: Schema.optionalKey(Schema.String),
+    prevent_continuation: Schema.optionalKey(Schema.Boolean),
+  }),
+);
+
+/** The files `SDKFilesPersistedEvent` says it could not persist. */
+const readFilesPersisted = Schema.decodeUnknownOption(
+  Schema.Struct({ failed: Schema.Array(Schema.Unknown) }),
+);
 
 const COUNT = Schema.optionalKey(Schema.NullOr(Schema.Number));
 
@@ -182,11 +234,67 @@ const SDK_MESSAGE = {
   RATE_LIMIT: "rate_limit_event",
 } as const;
 
+/** Every `system` subtype of the pinned SDK, as its message union spells them. */
+type SdkSystemSubtype = Extract<RunnerMessage, { type: "system" }>["subtype"];
+
+/** The `system` subtypes read here. */
 const SYSTEM_SUBTYPE = {
   INIT: "init",
   COMPACT_BOUNDARY: "compact_boundary",
   TASK_NOTIFICATION: "task_notification",
-} as const;
+  MIRROR_ERROR: "mirror_error",
+  MODEL_REFUSAL_NO_FALLBACK: "model_refusal_no_fallback",
+  MODEL_REFUSAL_FALLBACK: "model_refusal_fallback",
+  STATUS: "status",
+  PLUGIN_INSTALL: "plugin_install",
+  HOOK_RESPONSE: "hook_response",
+  INFORMATIONAL: "informational",
+  FILES_PERSISTED: "files_persisted",
+} as const satisfies Record<string, SdkSystemSubtype>;
+
+/**
+ * The pinned SDK's other `system` subtypes, which carry nothing the record
+ * keeps: progress, state, and notices. Note that this names every one of
+ * them, so a subtype a newer SDK adds fails to compile here until it is read
+ * above or named here, rather than passing over a failure it may carry; one
+ * the runner posts that this build does not know is still said in the log.
+ */
+const SYSTEM_PASSED_OVER = {
+  // A retry of a call that failed for now; a call that fails for good fails its answer or its result.
+  api_retry: true,
+  // Advisory: the result's `permission_denials` is the record of what was denied.
+  permission_denied: true,
+  // A task's end is read from its notification, which carries the same status.
+  task_updated: true,
+  task_started: true,
+  task_progress: true,
+  background_tasks_changed: true,
+  hook_started: true,
+  hook_progress: true,
+  control_request_progress: true,
+  local_command_output: true,
+  elicitation_complete: true,
+  commands_changed: true,
+  notification: true,
+  session_state_changed: true,
+  thinking_tokens: true,
+  memory_recall: true,
+  worker_shutting_down: true,
+} as const satisfies Record<
+  Exclude<SdkSystemSubtype, (typeof SYSTEM_SUBTYPE)[keyof typeof SYSTEM_SUBTYPE]>,
+  true
+>;
+
+const PASSED_OVER: ReadonlySet<string> = new Set(Object.keys(SYSTEM_PASSED_OVER));
+
+/** How a compaction that did not succeed is reported (`SDKStatusMessage`'s `compact_result`). */
+const COMPACT_FAILED = "failed";
+
+/** The outcome words a plugin's install or a hook's run fails with, as the SDK spells them. */
+const OUTCOME_FAILED: ReadonlySet<string> = new Set(["failed", "error"]);
+
+/** The notice level that is a warning rather than information. */
+const INFORMATIONAL_WARNING = "warning";
 
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
 const RATE_LIMIT_REFUSED = "rejected";
@@ -496,6 +604,91 @@ function taskNotificationMoments(message: WireValue): readonly NativeMoment[] {
   ];
 }
 
+/** Words the harness said, as the record keeps them: no credential, and no longer than a failure's. */
+function keptWords(words: readonly (string | null | undefined)[]): string {
+  const said = words.filter((word) => word !== undefined && word !== null && word.trim() !== "");
+  return redactCredentials(said.join(" ")).slice(0, FAILURE_CHARS);
+}
+
+/** A refusal no other model retried: it fails the model turn under way, with its category and explanation. */
+function refusalMoments(message: WireValue): readonly NativeMoment[] {
+  const read = Option.getOrUndefined(readRefusal(message));
+  const words = [SYSTEM_SUBTYPE.MODEL_REFUSAL_NO_FALLBACK, read?.api_refusal_category];
+  const explanation = read?.api_refusal_explanation;
+  const detail = keptWords(words);
+  return [
+    {
+      kind: NATIVE_MOMENT.REFUSED,
+      detail:
+        explanation === undefined || explanation === null || explanation.trim() === ""
+          ? detail
+          : keptWords([`${detail}:`, explanation]),
+    },
+  ];
+}
+
+/** A status that says a compaction failed, which is why its model turn failed where it did; any other status is nothing. */
+function statusMoments(message: WireValue): readonly NativeMoment[] {
+  const read = readCompactResult(message);
+  if (Option.isNone(read) || read.value.compact_result !== COMPACT_FAILED) return [];
+  return [
+    {
+      kind: NATIVE_MOMENT.COMPACTION_FAILED,
+      detail: keptWords(["compaction failed:", read.value.compact_error]),
+    },
+  ];
+}
+
+/** A notice for the log alone. */
+function noted(said: string): readonly NativeMoment[] {
+  return [{ kind: NATIVE_MOMENT.NOTED, said }];
+}
+
+/**
+ * A `system` message that carries a failure no turn holds: a model retried
+ * on another (whose usage is still priced as the agent's model), a plugin or
+ * hook that failed, a warning, or files not persisted. Each is said in the
+ * log by its subtype and outcome, never its words; any other is nothing.
+ */
+function failureNoticeMoments(
+  subtype: SdkSystemSubtype,
+  message: WireValue,
+): readonly NativeMoment[] {
+  switch (subtype) {
+    case SYSTEM_SUBTYPE.MODEL_REFUSAL_FALLBACK:
+      return Option.match(readRefusalFallback(message), {
+        onSome: ({ original_model, fallback_model, scope }) =>
+          noted(
+            `${subtype}: ${original_model} refused, retried on ${fallback_model} (scope ${scope ?? "session"})`,
+          ),
+        onNone: () => noted(subtype),
+      });
+    case SYSTEM_SUBTYPE.PLUGIN_INSTALL:
+    case SYSTEM_SUBTYPE.HOOK_RESPONSE: {
+      const read = Option.getOrUndefined(readOutcome(message));
+      const outcome = read?.status ?? read?.outcome;
+      return outcome !== undefined && OUTCOME_FAILED.has(outcome)
+        ? noted(`${subtype}: ${outcome}`)
+        : [];
+    }
+    case SYSTEM_SUBTYPE.INFORMATIONAL: {
+      const read = Option.getOrUndefined(readInformational(message));
+      const stopped = read?.prevent_continuation === true;
+      return read?.level === INFORMATIONAL_WARNING || stopped
+        ? noted(
+            `${subtype}: ${read?.level ?? "notice"}${stopped ? ", prevented continuation" : ""}`,
+          )
+        : [];
+    }
+    case SYSTEM_SUBTYPE.FILES_PERSISTED: {
+      const failed = Option.getOrUndefined(readFilesPersisted(message))?.failed.length ?? 0;
+      return failed > 0 ? noted(`${subtype}: ${failed} failed`) : [];
+    }
+    default:
+      return [];
+  }
+}
+
 function systemMoments(subtype: string | undefined, message: WireValue): readonly NativeMoment[] {
   switch (subtype) {
     case SYSTEM_SUBTYPE.INIT:
@@ -512,8 +705,29 @@ function systemMoments(subtype: string | undefined, message: WireValue): readonl
       return [{ kind: NATIVE_MOMENT.COMPACTED }];
     case SYSTEM_SUBTYPE.TASK_NOTIFICATION:
       return taskNotificationMoments(message);
+    case SYSTEM_SUBTYPE.MIRROR_ERROR:
+      // The SDK gave up on a batch of the transcript it mirrors to the store, which then holds a gap.
+      return Option.match(readMirrorError(message), {
+        onSome: ({ key }): readonly NativeMoment[] => [
+          { kind: NATIVE_MOMENT.TRANSCRIPT_BROKEN, sessionId: key.sessionId },
+        ],
+        onNone: () => [],
+      });
+    case SYSTEM_SUBTYPE.MODEL_REFUSAL_NO_FALLBACK:
+      return refusalMoments(message);
+    case SYSTEM_SUBTYPE.STATUS:
+      return statusMoments(message);
+    case SYSTEM_SUBTYPE.MODEL_REFUSAL_FALLBACK:
+    case SYSTEM_SUBTYPE.PLUGIN_INSTALL:
+    case SYSTEM_SUBTYPE.HOOK_RESPONSE:
+    case SYSTEM_SUBTYPE.INFORMATIONAL:
+    case SYSTEM_SUBTYPE.FILES_PERSISTED:
+      return failureNoticeMoments(subtype, message);
     default:
-      return [];
+      // Note that a subtype this build does not know is said by its name alone, so a failure it carries is never silent.
+      return subtype !== undefined && PASSED_OVER.has(subtype)
+        ? []
+        : noted(`an unread system message: ${subtype ?? "no subtype"}`);
   }
 }
 

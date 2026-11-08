@@ -21,6 +21,8 @@ export const NATIVE_MOMENT = {
   LINE_ACCEPTED: "line_accepted",
   /** The harness named its own session or thread, which a relaunch resumes. */
   SESSION: "session",
+  /** The store's copy of the session's transcript lost a batch the harness could not append, so it holds a gap and is never resumed from. */
+  TRANSCRIPT_BROKEN: "transcript_broken",
   /** The harness is at work: a turn opens here where none is open. */
   ACTIVE: "active",
   /** A model call answered: what follows belongs to its step. `key` is the harness's own id for the call's answer, where it names one. */
@@ -63,8 +65,14 @@ export const NATIVE_MOMENT = {
   USAGE_TOTAL: "usage_total",
   /** A model turn of the harness ended, failed where `failure` says why. */
   RESULT: "result",
+  /** The model refused the model turn under way and no other model retried it, which fails that turn whatever its result says. */
+  REFUSED: "refused",
   /** The harness folded its context. */
   COMPACTED: "compacted",
+  /** The harness could not fold its context, why in `detail`: why the model turn under way failed, where it did. */
+  COMPACTION_FAILED: "compaction_failed",
+  /** The harness said something the record keeps nothing of but the log should: a failure that changes no turn, or a message this build does not read. */
+  NOTED: "noted",
   /** The plan's limit refused the harness, until when where it says; `refused` false is the limit lifting. */
   RATE_LIMIT: "rate_limit",
   /**
@@ -101,6 +109,7 @@ export type PlanStatus = (typeof PLAN_STATUS)[keyof typeof PLAN_STATUS];
 export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.LINE_ACCEPTED; readonly clientId: string }
   | { readonly kind: typeof NATIVE_MOMENT.SESSION; readonly sessionId: string }
+  | { readonly kind: typeof NATIVE_MOMENT.TRANSCRIPT_BROKEN; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_MOMENT.ACTIVE }
   | { readonly kind: typeof NATIVE_MOMENT.STEP; readonly key?: string }
   | { readonly kind: typeof NATIVE_MOMENT.STEP_CLOSED }
@@ -136,7 +145,10 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.CONTEXT; readonly usage: NativeContextUsage }
   | { readonly kind: typeof NATIVE_MOMENT.USAGE_TOTAL; readonly total: RunUsage }
   | { readonly kind: typeof NATIVE_MOMENT.RESULT; readonly failure?: string }
+  | { readonly kind: typeof NATIVE_MOMENT.REFUSED; readonly detail: string }
   | { readonly kind: typeof NATIVE_MOMENT.COMPACTED }
+  | { readonly kind: typeof NATIVE_MOMENT.COMPACTION_FAILED; readonly detail: string }
+  | { readonly kind: typeof NATIVE_MOMENT.NOTED; readonly said: string }
   | {
       readonly kind: typeof NATIVE_MOMENT.RATE_LIMIT;
       readonly refused: boolean;

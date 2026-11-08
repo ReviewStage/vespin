@@ -61,6 +61,10 @@ export interface InboxRoute {
   readonly choiceOf: (itemId: string) => InboxChoice | undefined;
   /** Chooses `chosen` at `at`; where none is named, in the Inbox standing. Either way an item of another task than the one the list is narrowed to widens it. */
   readonly onChoose: (chosen: InboxChoice, at?: InboxAt) => void;
+  /** Goes to `chosen` at `at` as `onChoose` does, but holds nothing: a door that moves first holds it once it lands (`onHold`). */
+  readonly onGoTo: (chosen: InboxChoice, at?: InboxAt) => void;
+  /** Holds where `chosen` stands, by its item, as `onChoose` does before it goes there. */
+  readonly onHold: (chosen: InboxChoice) => void;
   /** Stands the list the item standing was chosen in, in the step's place. */
   readonly onClear: () => void;
   /** Lists every task's items again, where the list is narrowed to one. */
@@ -146,14 +150,21 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
     }
     void navigate({ ...options, replace });
   };
-  const onChoose = (chosen: InboxChoice, at?: InboxAt) => {
+  // Note that an item still being found by its address is no door's choice, so it is held nowhere and found again where it stands.
+  const onHold = (chosen: InboxChoice) => {
+    if (!beingFound(chosen)) choices.setState((map) => new Map(map).set(chosen.itemId, chosen));
+  };
+  const onGoTo = (chosen: InboxChoice, at?: InboxAt) => {
     const to = at ?? standingAt;
     if (to === undefined) return;
-    // Note that an item still being found by its address is no door's choice, so it is held nowhere and found again where it stands.
-    if (!beingFound(chosen)) choices.setState((map) => new Map(map).set(chosen.itemId, chosen));
     // An item of another task, or of an agent on no task, leaves the task the list is narrowed to, so the list it opens in holds it.
     const keeps = to.narrowed === undefined || to.narrowed === choiceTaskOf(chosen);
     visit(itemAt(chosen.itemId, keeps ? to : { ...to, narrowed: undefined }));
+  };
+  const onChoose = (chosen: InboxChoice, at?: InboxAt) => {
+    if (at === undefined && standingAt === undefined) return;
+    onHold(chosen);
+    onGoTo(chosen, at);
   };
   const list = standingAt === undefined ? undefined : listAt(standingAt);
   return {
@@ -171,6 +182,8 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
       return home === undefined || "failure" in home ? undefined : choiceAt(itemId, home);
     },
     onChoose,
+    onGoTo,
+    onHold,
     onClear: () => {
       if (list !== undefined && itemId !== undefined) void navigate({ ...list, replace: true });
     },

@@ -16,13 +16,15 @@
  * session, and from the store's entries alone, so a session the store holds
  * only a tail of, as one the CLI began before the store kept transcripts, is
  * never resumed (`../../../service/src/agents/coder-host/runner-sessions.ts`).
+ * Nor is a session the SDK dropped a batch of (`markSessionBroken`), whose
+ * entries hold a gap however they begin.
  */
 
 import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { claudeSessionEntries } from "../schemas/claude-session-entry.js";
+import { claudeBrokenSessions, claudeSessionEntries } from "../schemas/claude-session-entry.js";
 import { conversations } from "../schemas/storage.js";
 
 type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -199,6 +201,39 @@ const copyEntries = SqlSchema.void({
     ),
 });
 
+const copyBreaks = SqlSchema.void({
+  Request: Schema.Struct({
+    sourceUserId: Schema.String,
+    sourceConversationId: Schema.String,
+    conversationId: Schema.String,
+  }),
+  execute: ({ sourceUserId, sourceConversationId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .insert(claudeBrokenSessions)
+        .select((qb) =>
+          qb
+            .select({
+              conversationId: sql<string>`${conversationId}::uuid`.as("conversation_id"),
+              sessionId: claudeBrokenSessions.sessionId,
+              createdAt: claudeBrokenSessions.createdAt,
+            })
+            .from(claudeBrokenSessions)
+            .innerJoin(conversations, eq(conversations.id, claudeBrokenSessions.conversationId))
+            .where(ownConversation(sourceUserId, sourceConversationId)),
+        )
+        .onConflictDoNothing(),
+    ),
+});
+
+const insertBreak = SqlSchema.void({
+  Request: Schema.Struct({ conversationId: Schema.String, sessionId: Schema.String }),
+  execute: ({ conversationId, sessionId }) =>
+    Database.use((db) =>
+      db.insert(claudeBrokenSessions).values({ conversationId, sessionId }).onConflictDoNothing(),
+    ),
+});
+
 const findOpening = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...OwnerFields, sessionId: Schema.String }),
   Result: Schema.Struct({ id: Schema.Number }),
@@ -214,6 +249,11 @@ const findOpening = SqlSchema.findOneOption({
             eq(claudeSessionEntries.conversationId, conversationId),
             eq(claudeSessionEntries.sessionId, sessionId),
             eq(claudeSessionEntries.opens, true),
+            // Note that a session the SDK dropped a batch of holds a gap, however it begins.
+            sql`not exists (select 1 from ${claudeBrokenSessions} where ${and(
+              eq(claudeBrokenSessions.conversationId, conversationId),
+              eq(claudeBrokenSessions.sessionId, sessionId),
+            )})`,
           ),
         )
         .limit(1),
@@ -306,7 +346,25 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds the session given from its first entry, the entry that opens it among its own. */
+/**
+ * The session given marked broken in the account's conversation: the Agent
+ * SDK dropped a batch of its transcript, so the store holds it with a gap
+ * and it is never held again; nothing where the conversation is not the
+ * account's.
+ */
+export function markSessionBroken(
+  userId: string,
+  conversationId: string,
+  sessionId: string,
+): EntryEffect<void> {
+  return Effect.gen(function* () {
+    const own = yield* findConversation({ userId, conversationId });
+    if (Option.isNone(own)) return;
+    yield* insertBreak({ conversationId, sessionId });
+  });
+}
+
+/** Whether the account's conversation holds the session given whole: from its first entry, the entry that opens it among its own, and with no batch dropped since (`markSessionBroken`). */
 export function holdsSession(
   userId: string,
   conversationId: string,
@@ -315,14 +373,15 @@ export function holdsSession(
   return findOpening({ userId, conversationId, sessionId }).pipe(Effect.map(Option.isSome));
 }
 
-/** Every row of the source conversation, read as its own account, copied to the conversation given in their order. */
+/** Every row of the source conversation, read as its own account, copied to the conversation given in their order, its broken sessions marked broken there too. */
 export function copySessionEntries(
   source: { readonly userId: string; readonly conversationId: string },
   conversationId: string,
 ): EntryEffect<void> {
-  return copyEntries({
+  const request = {
     sourceUserId: source.userId,
     sourceConversationId: source.conversationId,
     conversationId,
-  });
+  };
+  return Effect.andThen(copyEntries(request), copyBreaks(request));
 }

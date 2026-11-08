@@ -362,10 +362,7 @@ the builder names one), since a tree deployed as it stands
 takes no trigger from `vercel.json`'s `functions`; it has no rewrite and no
 public path, and the queue alone invokes it. Every automation's schedule is
 kept in Vercel Schedules on production
-(`packages/service/src/automations/automation-cadence.ts`); the automations
-saved before that are given theirs once, after the deploy, by
-`scripts/backfill-automation-schedules.sh` against
-`/api/maintenance/automation-schedules` under the deployment's `CRON_SECRET`.
+(`packages/service/src/automations/automation-cadence.ts`).
 When that tree exists `@vercel/static-build` adopts it as the deployment's
 final form instead of serving `dist/`, so this build decides the deploy shape
 on every preset: under Vite today, and as the `web` service of a services

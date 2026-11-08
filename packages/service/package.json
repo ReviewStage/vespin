@@ -97,7 +97,6 @@
     "./automations/automation-run-bounds": "./src/automations/automation-run-bounds.js",
     "./automations/automation-run-consumer": "./src/automations/automation-run-consumer.js",
     "./automations/automation-runs": "./src/automations/automation-runs.js",
-    "./automations/automation-schedules-backfill": "./src/automations/automation-schedules-backfill.js",
     "./automations/automation-webhook-app": "./src/automations/automation-webhook-app.js",
     "./chapters/chapters-generator": "./src/chapters/chapters-generator.js",
     "./chapters/chapters-function": "./src/chapters/chapters-function.js",

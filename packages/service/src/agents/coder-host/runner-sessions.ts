@@ -158,7 +158,6 @@ import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/feat
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
-  COMMAND_GONE,
   type CommandExit,
   isSandboxError,
   type Sandbox,
@@ -1618,12 +1617,11 @@ export const runnerSessions = <
           // The harness's lines (the agent's model and effort as they stand) go ahead of the message,
           // which a change since the launch takes effect from. The choice read here stands until
           // the write: a change of it is handed to the runner by `retune`, which holds the same
-          // lease, so it is written after this line, never undone by it. A runner that reads its
-          // lines has its exit read beside them, at most `CODER.RUNNER_EXIT_READ`, as its liveness.
-          // A sandbox stopping under the files' upload, or the exit's read, is read as the runner
-          // gone, and relaunches below, which uploads the files again.
+          // lease, so it is written after this line, never undone by it. A sandbox stopping under
+          // the files' upload is read as the runner gone, and relaunches below, which uploads the
+          // files again.
           const reads = running.mark.linesRead === true;
-          const [ahead, opened, uploaded, exit] = yield* Effect.all(
+          const [ahead, opened, uploaded] = yield* Effect.all(
             [
               harness.ahead(agent),
               openedLine(agent, sessionId, sent, false),
@@ -1631,29 +1629,21 @@ export const runnerSessions = <
                 Effect.as(true),
                 Effect.catchIf(sandboxEnding, () => Effect.succeed(false)),
               ),
-              // Note that an exit the sandbox did not answer reads as a runner that runs, so an outage
-              // neither fails the message nor relaunches beside a runner still reading.
-              reads
-                ? machine.runnerExit(running.handle, CODER.RUNNER_EXIT_READ).pipe(
-                    Effect.tap(exitSaid),
-                    Effect.catchIf(sandboxEnding, () => Effect.succeed(COMMAND_GONE)),
-                    Effect.orElseSucceed(() => null),
-                  )
-                : Effect.succeed(null),
             ],
             { concurrency: "unbounded" },
           );
           const lines = [...ahead.lines, opened.line];
-          // Note that a runner that reads its lines, as a sandbox's does, is queued them only where
-          // its exit read none, and one that ends before it takes them leaves them to the launch the
-          // turn's delivery starts once its END republishes the turn (`deliverTurn`). A write to a
-          // Mac's runner is its own liveness check: one whose launch line its Mac settled answers
+          // Note that a runner that reads its lines, as a sandbox's does, is queued them with no
+          // read of its own liveness, since its place was found running in the runner's session:
+          // one that ends before it takes them leaves them to the launch the turn's delivery starts
+          // once its END republishes the turn (`deliverTurn`), and one lost with no END leaves its
+          // turn to the reap past its pickup deadline (`reconcile.ts`). A write to a Mac's runner
+          // is its own liveness check: one whose launch line its Mac settled answers
           // as gone (`SandboxGone`), which relaunches below.
           const wrote =
             uploaded &&
             (reads
-              ? exit === null &&
-                (yield* Effect.as(queued(agent, running.mark.firstSequence, lines), true))
+              ? yield* Effect.as(queued(agent, running.mark.firstSequence, lines), true)
               : yield* machine.writeLine(running.handle, lines.map(line).join("")).pipe(
                   Effect.as(true),
                   Effect.catchIf(
@@ -1663,30 +1653,22 @@ export const runnerSessions = <
                 ));
           if (wrote) {
             yield* opened.taken;
-            // The installation token lives an hour, so each message sets a fresh one, after the
-            // write rather than ahead of it: the model takes seconds to reach its first command, and
-            // the agent hears the message a GitHub mint and a policy update sooner. Note that a
-            // renewal that fails, or outlasts `CODER.CREDENTIAL_RENEWAL`, is logged and the message
-            // stands, since the runner already took it, and a send answered failed, or past the
-            // store's dispatch deadline, would record no line for it; the next message renews it.
-            yield* Effect.gen(function* () {
-              const renewed = yield* renewCredential(target, agent, runnerPlace).pipe(
-                Effect.timeoutOption(CODER.CREDENTIAL_RENEWAL),
+            // The installation token lives an hour, so each message sets a fresh one, past the
+            // answer (`after-response.ts`): the runner already holds a token that stands, so the
+            // message never waits on a GitHub mint and a policy write. Note that a renewal that
+            // fails is logged and the message stands, since the runner already took it; the next
+            // message renews it.
+            yield* afterResponse(
+              `A ${harness.name} runner's credential renewal`,
+              renewCredential(target, agent, runnerPlace).pipe(
                 Effect.catch((failure) =>
-                  Effect.as(
-                    Effect.logWarning(
-                      `A ${harness.name} runner's credential was not renewed: ${keptFailureWords(failureWords(failure))}`,
-                    ),
-                    Option.some(undefined),
+                  Effect.logWarning(
+                    `A ${harness.name} runner's credential was not renewed: ${keptFailureWords(failureWords(failure))}`,
                   ),
                 ),
-              );
-              if (Option.isNone(renewed)) {
-                yield* Effect.logWarning(
-                  `A ${harness.name} runner's credential renewal outlasted its bound and was given up`,
-                );
-              }
-            }).pipe(Effect.annotateLogs(runningLogId(runnerPlace.running)));
+                Effect.annotateLogs(runningLogId(runnerPlace.running)),
+              ),
+            );
             yield* handed(SERVER_HANDOFF_PATH.WARM);
             return accepted;
           }
@@ -1774,7 +1756,7 @@ export const runnerSessions = <
         if (turn?.id !== turnId || !RUNNING_TURN_STATUSES.has(turn.status)) {
           return { outcome: SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN } as const;
         }
-        // Note that its exit is read at most `CODER.RUNNER_EXIT_READ`, as a message reads it, so a Stop never waits out a live runner's exit.
+        // Note that its exit is read at most `CODER.RUNNER_EXIT_READ`, so a Stop never waits out a live runner's exit.
         const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
         if (live === undefined) return { outcome: SESSION_CANCEL_OUTCOME.ACCEPTED } as const;
         yield* delivered(agent, live, [stopLine(live.mark.firstSequence)]).pipe(
@@ -2246,16 +2228,21 @@ export const runnerSessions = <
       // the turn's delivery started could read first.
       send: (sessionId, message) =>
         Effect.gen(function* () {
-          const agent = yield* agentOf(message.conversationId);
-          return yield* sentTo(agent, sessionId, message).pipe(
+          const after = yield* Effect.serviceOption(AfterResponse);
+          return yield* Effect.gen(function* () {
+            const agent = yield* agentOf(message.conversationId);
+            return yield* sentTo(agent, sessionId, message).pipe(
+              Effect.catch(failed("send")),
+              Effect.annotateLogs(agentLogIds(agent, sessionId)),
+            );
+          }).pipe(
             Effect.catch(failed("send")),
-            Effect.annotateLogs(agentLogIds(agent, sessionId)),
+            Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
+            Effect.provideContext(
+              Option.isSome(after) ? Context.add(context, AfterResponse, after.value) : context,
+            ),
           );
-        }).pipe(
-          Effect.catch(failed("send")),
-          Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
-          Effect.provideContext(context),
-        ),
+        }),
 
       // The Stop is scoped to the turn it names: written only while that turn is the
       // conversation's turn under way, to the command of the launch running it, and naming that

@@ -10,6 +10,7 @@ import {
   recordAgentStep,
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
+import { markSessionBroken } from "@repo/database/models/claude-session-entries";
 import {
   type NativeProjectionRow,
   withNativeProjection,
@@ -504,6 +505,9 @@ function landWrite(
       return Effect.asVoid(
         recordAgentNativeSession(target.userId, applying.agentId, write.sessionId),
       );
+    case NATIVE_WRITE.TRANSCRIPT_BROKEN:
+      // A session whose stored transcript holds a gap is let go at the next launch, which replays the agent's steps.
+      return markSessionBroken(target.userId, target.conversationId, write.sessionId);
     case NATIVE_WRITE.COMPACTED:
       // The summary may have dropped what the turns' messages handed, so the next message hands it again.
       return Effect.andThen(
@@ -658,7 +662,12 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         state = withTurnServers(state, write.turnId, taken);
       }
     }
-    for (const said of reports) yield* Effect.logWarning(`runner-events: ${said}`);
+    // Each is said under the agent's ids, so what a harness said that no turn keeps is found by them.
+    for (const said of reports) {
+      yield* Effect.logWarning(`runner-events: ${said}`).pipe(
+        Effect.annotateLogs({ agentId: applying.agentId, conversationId }),
+      );
+    }
     yield* landWrites(applying, writes, now);
     const last = events.at(-1)?.sequence;
     const ends = runnerEndsOf(batch, held.sequence);
