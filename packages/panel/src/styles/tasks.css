@@ -1494,14 +1494,17 @@
    row, its edge the pill's. A hairline stands in the gap between each two
    groups; one that would lead a wrapped line falls outside the row's box,
    which clips it, while a focus ring or a face's badge at a line's start
-   stays within the room the clip leaves. */
+   stays within the room the clip leaves. Note that it clips its inline
+   axis alone, where such a hairline falls, because a picker's menu hangs
+   below the row and a clip on the block axis would leave it no room. */
 .changes-people.pull-request-people {
   --people-gap: var(--ui-space-16);
   gap: var(--ui-item-gap) var(--people-gap);
   padding-block: var(--ui-item-gap) 0;
   padding-inline: 0;
   border-bottom: 0;
-  overflow: clip;
+  overflow-x: clip;
+  overflow-y: visible;
   overflow-clip-margin: var(--ui-space-4);
 }
 
@@ -2306,6 +2309,13 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   width: var(--ui-icon-12);
   height: var(--ui-icon-12);
   flex: 0 0 auto;
+}
+
+/* A mark in a row of the stack's menu stands at a menu glyph's size, as the
+   rows' other glyphs do, rather than a row's 12px. */
+.pull-request-mark.pull-request-stack-mark {
+  width: var(--ui-control-icon);
+  height: var(--ui-control-icon);
 }
 
 /* Keyed on the mark's own attributes as well, so a place sizing it by a

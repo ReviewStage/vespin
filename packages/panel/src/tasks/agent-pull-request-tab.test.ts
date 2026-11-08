@@ -3655,9 +3655,10 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
   );
   const current = items()[2];
   assert.equal(current?.getAttribute("aria-checked"), "true");
-  assert.equal(current?.disabled, true, "this pull request is not opened again");
+  assert.equal(current?.disabled, false, "this pull request is drawn at full strength");
   act(() => button.click());
 
+  press(42);
   press(40);
   press(38);
   press(44);

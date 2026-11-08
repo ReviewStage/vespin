@@ -5,7 +5,7 @@ import {
 } from "@repo/features/agent-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUTTON_VARIANT, Button, dropBelowStart, Tooltip, useMenu } from "@repo/ui";
+import { CHIP_LOOK, Chip, ChipName, dropBelowStart, Tooltip, useMenu } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useMutation } from "@tanstack/react-query";
@@ -70,10 +70,11 @@ function useOpenEntry(): (entry: PullRequestStackEntry) => void {
 }
 
 /**
- * The stack the pull request numbered `number` stands in, as a button
- * saying where in it this one stands, whose menu lists the stack tip first,
- * each by its number and title wearing its state's mark, this one checked
- * and not pressable; nothing where it stands in no stack.
+ * The stack the pull request numbered `number` stands in, as an outline
+ * chip saying where in it this one stands, ending in the menu's chevron as
+ * every trigger of a menu in the header does, whose menu lists the stack tip
+ * first, each by its number and title wearing its state's mark at a menu
+ * glyph's size, this one checked; nothing where it stands in no stack.
  */
 export function PullRequestStack({
   stack,
@@ -94,26 +95,25 @@ export function PullRequestStack({
     return {
       label: pullRequestLabelOf(entry),
       replayMasked: true,
-      icon: <PullRequestMark pullRequest={markOf(entry)} />,
+      icon: <PullRequestMark pullRequest={markOf(entry)} className="pull-request-stack-mark" />,
       detail: entryDetail(entry, current),
-      ...(current ? { checked: true, disabled: true } : undefined),
-      onSelect: () => open(entry),
+      ...(current ? { checked: true } : undefined),
+      // Note that the one shown is checked at full strength rather than unavailable, so choosing it closes the menu and opens nothing.
+      onSelect: current ? () => undefined : () => open(entry),
     };
   });
   return (
     <>
       <Tooltip label={label}>
-        <Button
-          variant={BUTTON_VARIANT.OUTLINE}
-          icon={<LayersIcon aria-hidden="true" />}
-          label={label}
-          {...menu.trigger(dropBelowStart)}
-        >
-          Stack{" "}
-          <span className="text-muted-foreground tabular-nums">
-            {at + 1}/{stack.length}
-          </span>
-        </Button>
+        <Chip look={CHIP_LOOK.OUTLINE} chevron aria-label={label} {...menu.trigger(dropBelowStart)}>
+          <LayersIcon aria-hidden="true" />
+          <ChipName>
+            Stack{" "}
+            <span className="text-muted-foreground tabular-nums">
+              {at + 1}/{stack.length}
+            </span>
+          </ChipName>
+        </Chip>
       </Tooltip>
       {menu.drawn === undefined ? null : (
         <ActionMenu
