@@ -87,6 +87,45 @@ test("a title that opens what it names is its heading's one press, saying whethe
   assert.equal(open.querySelector("h1 button")?.getAttribute("aria-expanded"), "true");
 });
 
+test("a title holding the page's menu renamed in place hands the focus back to the menu's box once Return ends the edit", async () => {
+  const ended: (string | undefined)[] = [];
+  const titled = (editing: boolean): ToolbarProps => ({
+    title: "Triage overnight issues",
+    titleMenu: {
+      contextMenu: {
+        onContextMenu: () => undefined,
+        onPointerDown: () => undefined,
+        onTouchEnd: () => undefined,
+        "data-long-press": "",
+      },
+      keyMenu: () => undefined,
+    },
+    titleEdit: editing
+      ? {
+          label: "Agent name",
+          onEnd: (end) => {
+            ended.push(end.value);
+            act(() => root.render(createElement(Toolbar, titled(false))));
+          },
+        }
+      : undefined,
+  });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(createElement(Toolbar, titled(true))));
+  const field =
+    container.querySelector<HTMLInputElement>('input[aria-label="Agent name"]') ??
+    assert.fail("the title is its field");
+  field.value = "Triage the queue";
+  await act(async () => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  assert.deepEqual(ended, ["Triage the queue"]);
+  assert.equal(document.activeElement?.getAttribute("aria-haspopup"), "menu");
+});
+
 test("a bar draws only the slots that say something, and its actions end it with no title", () => {
   const banner = bar({
     lead: false,

@@ -28,8 +28,9 @@
  * - A title in words is renamed where it stands (`titleEdit`): while the
  *   caller says, a field over its words in their place and type, bare, the
  *   caret and the selection alone marking it, the press's mark kept before
- *   it and the trail giving way to it; once a key ends the edit, the focus
- *   goes back to the press.
+ *   it and the trail and the menu's box giving way to it; once a key ends
+ *   the edit, the focus goes back to whichever holds the title, the press or
+ *   the menu's box.
  * - `detail` follows the title on its last baseline: quiet words saying
  *   what the page is beside its name, on one line
  *   that gives way, cut short, before the title does.
@@ -172,6 +173,9 @@ const TITLE_EDIT =
   "ui-toolbar-title-edit flex min-w-0 items-center [&>.ui-inline-edit]:min-w-0 [&>.ui-inline-edit]:flex-auto";
 const TITLE_EDIT_PRESS = `${TITLE_EDIT} h-control gap-icon-gap px-ui-8 [&_svg]:size-control-icon`;
 
+/** What holds the title and takes the focus back from its rename: its press, or the box holding the page's menu. */
+const TITLE_FOCUS = ".ui-toolbar-title-press, .ui-toolbar-title-menu[tabindex]";
+
 /** Where a bar's heading stands its title on one row: the page's own name, its last words. */
 const HEADING_SEAT: TitleSeat = {
   room: ":scope > .ui-toolbar-heading",
@@ -287,14 +291,6 @@ function ToolbarTitle({
   /** The title's rename in place, while it stands (`titleEdit`). */
   edit?: ToolbarTitleEdit | undefined;
 }): React.JSX.Element {
-  const pressRef = useRef<HTMLButtonElement | null>(null);
-  const refocus = useRef(false);
-  // Note that an edit a key ended hands the focus back to the press once it is drawn again, as a tab's rename does.
-  useLayoutEffect(() => {
-    if (edit !== undefined || !refocus.current) return;
-    refocus.current = false;
-    pressRef.current?.focus();
-  });
   if (typeof title !== "string") return <>{title}</>;
   if (edit !== undefined) {
     const field = (
@@ -305,10 +301,7 @@ function ToolbarTitle({
           maxLength={edit.maxLength}
           look={INLINE_EDIT_LOOK.FIELD}
           editing
-          onEnd={(end) => {
-            refocus.current = end.byKey;
-            edit.onEnd(end);
-          }}
+          onEnd={edit.onEnd}
         />
       </ReplayWords>
     );
@@ -328,7 +321,6 @@ function ToolbarTitle({
       <h1 className={TITLE_PRESS_HEADING}>
         <Tooltip label={press.label} card={press.card}>
           <button
-            ref={pressRef}
             type="button"
             className={TITLE_PRESS}
             aria-expanded={press.open}
@@ -489,6 +481,24 @@ export function Toolbar({
   const frame = useRef<HTMLElement>(null);
   const barType = quiet || look === TOOLBAR_LOOK.PHONE;
   const wrapped = useWrapWhenCut(frame, HEADING_SEAT, wrapHeading === true);
+  const heading = useRef<HTMLDivElement>(null);
+  const refocus = useRef(false);
+  // Note that an edit a key ended hands the focus back to what holds the title once it is drawn again, as a tab's rename does, which is kept here because the title is drawn afresh as its menu's box comes back.
+  useLayoutEffect(() => {
+    if (titleEdit !== undefined || !refocus.current) return;
+    refocus.current = false;
+    heading.current?.querySelector<HTMLElement>(TITLE_FOCUS)?.focus();
+  });
+  const edit: ToolbarTitleEdit | undefined =
+    titleEdit === undefined
+      ? undefined
+      : {
+          ...titleEdit,
+          onEnd: (end) => {
+            refocus.current = end.byKey;
+            titleEdit.onEnd(end);
+          },
+        };
   // Note that a title being renamed stands alone, its trail and its menu giving way to its field.
   const crumbs = trail !== undefined && trail.length > 0 && titleEdit === undefined;
   return (
@@ -504,7 +514,7 @@ export function Toolbar({
       wrapHeading={wrapHeading}
     >
       {said(lead) ? <div className={LEAD}>{lead}</div> : null}
-      <div className="ui-toolbar-heading">
+      <div ref={heading} className="ui-toolbar-heading">
         <TitleMenu
           menu={titlePress === undefined && titleEdit === undefined ? titleMenu : undefined}
           crumbs={crumbs}
@@ -523,7 +533,7 @@ export function Toolbar({
               unmasked={titleReplayUnmasked}
               press={titlePress}
               menu={titleMenu}
-              edit={titleEdit}
+              edit={edit}
               barType={barType}
             />
           ) : pickUp !== undefined && pickUp.name !== "" ? (
