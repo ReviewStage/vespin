@@ -10,6 +10,8 @@ import {
 import { noMatchWords, readingWords } from "@repo/features/words";
 import {
   BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
   type ButtonSize,
   type ButtonVariant,
   CHOICE_BAR_LOOK,
@@ -21,11 +23,9 @@ import {
   ScrollArea,
   SearchField,
   Swatch,
-  TEXT_BUTTON_TONE,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
-  TextButton,
   VisuallyHidden,
 } from "@repo/ui";
 import { SmilePlusIcon } from "@repo/ui/icons";
@@ -78,7 +78,8 @@ import { QUERY_ROOT } from "../query-keys.js";
  * column nor a dialog's card cuts it. The picker opens on its search. With
  * nothing searched it shows the tab chosen: Icons offers Recent, the icons
  * this Mac chose last (kept in this window's storage, the newest first),
- * then Suggested, then every other glyph by name; Emoji offers every emoji
+ * each glyph among them in the color shown as every other glyph is, then
+ * Suggested, then every other glyph by name; Emoji offers every emoji
  * by category. A search finds glyphs and emoji alike, each under its kind,
  * and an emoji typed or picked into it (⌃⌘Space) is offered first, so one
  * newer than the grid's still can be chosen. Choosing one hands it on, and
@@ -314,6 +315,11 @@ function glyphIcon(glyph: string, color: TaskSectionIconColor | undefined): Task
   };
 }
 
+/** An icon in the color shown: a glyph recolored, an emoji as it is. */
+function inColor(icon: TaskSectionIcon, color: TaskSectionIconColor | undefined): TaskSectionIcon {
+  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon : glyphIcon(icon.glyph, color);
+}
+
 /** What an icon is called at the picker's foot. */
 function iconLabel(icon: TaskSectionIcon): string {
   return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : glyphLabel(icon.glyph);
@@ -426,8 +432,9 @@ function emojiChoice(
 
 /**
  * The Icons tab with nothing searched: Recent, Suggested, then every other
- * glyph by name, each glyph in the color shown and every recent icon in its
- * own; the one chosen, or the first, is the grid's tab stop.
+ * glyph by name, each glyph in the color shown, a recent one too, since the
+ * palette is a choice of its own; the one chosen, or the first, is the
+ * grid's tab stop.
  */
 const GlyphPanel = memo(function GlyphPanel(
   props: GridProps & { recent: readonly TaskSectionIcon[] },
@@ -450,16 +457,12 @@ const GlyphPanel = memo(function GlyphPanel(
         <ChoiceGroup name="Recent">
           {props.recent.map((one) => (
             <GridChoice
-              key={
-                one.kind === TASK_SECTION_ICON_KIND.EMOJI
-                  ? one.emoji
-                  : `${one.glyph} ${one.color ?? ""}`
-              }
+              key={one.kind === TASK_SECTION_ICON_KIND.EMOJI ? one.emoji : one.glyph}
               label={iconLabel(one)}
               pressed={chosenIcon(props.icon, one)}
               stop={stopAt(chosenIcon(props.icon, one), one === first)}
-              face={sectionGlyph(one)}
-              onPress={() => props.onIcon(one)}
+              face={sectionGlyph(inColor(one, props.color))}
+              onPress={() => props.onIcon(inColor(one, props.color))}
             />
           ))}
         </ChoiceGroup>
@@ -707,9 +710,9 @@ function SectionIconPicker({
               panels={(each) => ({ tab: tabIds[each], panel: panelId })}
             />
             {icon === undefined ? null : (
-              <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={() => onIcon(undefined)}>
+              <Button variant={BUTTON_VARIANT.SUBTLE} onClick={() => onIcon(undefined)}>
                 Remove icon
-              </TextButton>
+              </Button>
             )}
           </div>
         </div>

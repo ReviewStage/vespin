@@ -551,15 +551,15 @@ test("deleting the last section hands focus to the first, rather than letting it
   assert.ok(sectionHeader(sidebar, "Someday").contains(document.activeElement));
 });
 
-test("a section holding tasks offers Rename, its move, and Delete last, leaving what acts on all its tasks to the selection bar", async () => {
+test("a section holding tasks offers Rename, Change icon, its move, and Delete last, leaving what acts on all its tasks to the selection bar", async () => {
   const sidebar = await mountSidebar([], ICONLESS);
 
   openSectionMenu(sidebar, "Launch");
 
-  assert.deepEqual(menuLabels(), ["Rename", "Move up", "Delete section"]);
+  assert.deepEqual(menuLabels(), ["Rename", "Change icon", "Move up", "Delete section"]);
 });
 
-test("a section holding no task offers only Rename, its move, and Delete", async () => {
+test("a section holding no task offers only Rename, Add icon where it wears none, its move, and Delete", async () => {
   const sidebar = await mountSidebar([], {
     sections: ICONLESS.sections,
     entries: ICONLESS.entries.filter((entry) => entry.sectionId !== SOMEDAY),
@@ -568,7 +568,7 @@ test("a section holding no task offers only Rename, its move, and Delete", async
 
   openSectionMenu(sidebar, "Someday");
 
-  assert.deepEqual(menuLabels(), ["Rename", "Move down", "Delete section"]);
+  assert.deepEqual(menuLabels(), ["Rename", "Add icon", "Move down", "Delete section"]);
 });
 
 test("⌘-clicking a section's task and one under Tasks chooses both, opening neither, and a right-click on either offers Status for both, which S on the focused one opens", async () => {
@@ -1197,12 +1197,11 @@ test("an icon found by searching, in a color chosen, is the new section's", asyn
   });
 });
 
-test("Rename opens a section's head, whose icon well opens its picker, where a color chosen recolors the glyph it wears", async () => {
+test("Change icon opens a section's head with its picker open, where a color chosen recolors the glyph it wears", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes, GLYPHS);
 
-  sectionMenuChoose(sidebar, "Stars", "Rename");
-  act(() => dialogButton("Change icon").click());
+  sectionMenuChoose(sidebar, "Stars", "Change icon");
   await settleLoaded();
   assert.equal(dialogButton("Telescope").getAttribute("aria-pressed"), "true");
   act(() => dialogButton("No color").click());
@@ -1357,19 +1356,34 @@ test("an emoji typed into the search is offered first, one the grid leaves out i
   assert.deepEqual(made.icon, { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: "🫩" });
 });
 
-test("an icon chosen is offered first under Recent the next time the picker opens", async () => {
-  const sidebar = await mountSidebar([]);
+test("an icon chosen is offered first under Recent the next time the picker opens, a glyph in the color shown rather than the one it was chosen in", async () => {
+  const writes: TaskSectionWrite[] = [];
+  const sidebar = await mountSidebar(writes);
 
   await dialogPicker(sidebar);
+  act(() => dialogButton("Red").click());
   typeInto(dialogField("Search icons and emoji"), "telescope");
   await settleLoaded();
   act(() => dialogButton("Telescope").click());
   await settleLoaded();
   act(() => dialogButton("Change icon").click());
   await settleLoaded();
+  act(() => dialogButton("Teal").click());
 
   const recent = document.querySelector('section[aria-label="Recent"]') ?? assert.fail("no Recent");
-  assert.equal(recent.querySelector("button")?.getAttribute("aria-label"), "Telescope");
+  const first = recent.querySelector("button") ?? assert.fail("nothing under Recent");
+  assert.equal(first.getAttribute("aria-label"), "Telescope");
+  act(() => first.click());
+  typeInto(dialogField("Name"), "Stars");
+  await act(async () => dialogButton("Create section").click());
+
+  const made = writes[0];
+  assert.equal(made?.kind, TASK_SECTION_WRITE.CREATE);
+  assert.deepEqual(made.icon, {
+    kind: TASK_SECTION_ICON_KIND.GLYPH,
+    glyph: "telescope",
+    color: TASK_SECTION_ICON_COLOR.TEAL,
+  });
 });
 
 /** Answers the window's media queries as a phone does, its pointer a finger. */
