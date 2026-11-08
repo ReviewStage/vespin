@@ -213,6 +213,13 @@ const listNames = Effect.fnUntraced(function* (namespace: string) {
       Schedules.list({ namespace, limit: 100, ...(after === undefined ? {} : { cursor: after }) }),
     );
     for (const schedule of page.data) names.add(schedule.name);
+    // Note that a cursor answered unchanged fails the read, because walking it again would never end.
+    if (page.cursor !== null && page.cursor === after) {
+      return yield* new AutomationCadenceUnavailable({
+        operation: CADENCE_OPERATION.LIST,
+        code: undefined,
+      });
+    }
     cursor = page.cursor ?? undefined;
   } while (cursor !== undefined);
   return names;
