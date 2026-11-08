@@ -309,6 +309,7 @@ const findMemberWorkspaceIds = SqlSchema.findAll({
 const WorkspaceAgentConversationSchema = Schema.Struct({
   conversationId: Schema.String,
   sessionId: Schema.NullOr(Schema.String),
+  repository: Schema.NullOr(Schema.String),
 });
 
 const findWorkspaceAgentConversations = SqlSchema.findAll({
@@ -320,6 +321,7 @@ const findWorkspaceAgentConversations = SqlSchema.findAll({
         .select({
           conversationId: agentTable.conversationId,
           sessionId: conversations.runtimeSessionId,
+          repository: agentTable.repository,
         })
         .from(agentTable)
         .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -840,15 +842,16 @@ export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonl
   );
 }
 
-/** An agent's conversation as a workspace's delete reads it: its id, and the runtime session it last ran, where it ran one. */
+/** An agent's conversation as a workspace's delete reads it: its id, the runtime session it last ran, where it ran one, and the repository the agent started in, where it has one. */
 export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema.Type;
 
 /**
  * The conversation of every agent of the workspace, whoever ran it, with
- * the session it runs in. A conversation names the account that ran it
- * rather than the workspace, so a workspace's delete reads these while its
- * agents stand and, once they are gone, deletes the conversations, as a
- * task's delete does its own, and the sessions' sandboxes.
+ * the session it runs in and its repository. A conversation names the
+ * account that ran it rather than the workspace, so a workspace's delete
+ * reads these while its agents stand and, once they are gone, deletes the
+ * conversations, as a task's delete does its own, the sessions' sandboxes,
+ * and the repositories' base drives.
  */
 export function workspaceAgentConversations(
   organizationId: string,
