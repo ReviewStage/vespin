@@ -46,7 +46,14 @@ import {
   type VersionHistoryControl,
 } from "../tasks/use-tasks-tab.js";
 import type { HomeRoute, RoutedViews, UnknownWorkspaceRoute } from "../workspace-routes.js";
-import { handHostReads, holdTranscripts, type TranscriptsHeld } from "./app-state.js";
+import {
+  handHostReads,
+  handState,
+  holdTranscripts,
+  stateWith,
+  type TranscriptsHeld,
+} from "./app-state.js";
+import { writeAppState } from "./copy-feedback.js";
 
 const ignore = () => undefined;
 
@@ -368,6 +375,22 @@ export function agentHoldingsOf(
   return [...held.values()];
 }
 
+/**
+ * Hands the window main's document with its inbox read holding the open
+ * items of agents with no task given, and the agents holding items, where
+ * none are given, those the items name (`agentHoldingsOf`), as main lists
+ * both from one read; written into the test's Query client too, so a case
+ * that draws synchronously finds them in its first frame.
+ */
+export function handInboxTaskless(
+  taskless: readonly AppInboxTasklessItem[],
+  agents: readonly AppInboxAgentHolding[] = agentHoldingsOf(taskless),
+): void {
+  const patch = { inbox: { ...stateWith({}, {}).inbox, taskless, agents } };
+  handState({}, patch);
+  writeAppState(stateWith({}, patch));
+}
+
 /** A leave guard no page asks through, so every way out goes at once. */
 export const NO_LEAVE_ASK: PlaceLeave = {
   stand: () => () => undefined,
@@ -431,9 +454,7 @@ export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
 
 /**
  * A signed-in Tasks tab on screen on Home with no tasks, every
- * press ignored, bound for whichever task it is given as open; the agents
- * holding items, where none are given, those its open items of agents with
- * no task name (`agentHoldingsOf`), as main lists both from one read.
+ * press ignored, bound for whichever task it is given as open.
  */
 export function tasksControl(overrides: Partial<TasksControl> = {}): TasksControl {
   const onMoveTask: TasksControl["onMoveTask"] =
@@ -592,8 +613,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     agentView: { agentId: undefined, onOpen: ignore, onClose: ignore },
     onThreadsShown: ignore,
     onOpenPerson: ignore,
-    inboxTaskless: [],
-    failedRuns: [],
     atHome: false,
     taskPlaceStands: true,
     onAutomationRuns: ignore,
@@ -661,6 +680,5 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     back: () => false,
     placeLeave: NO_LEAVE_ASK,
     ...overrides,
-    inboxAgents: overrides.inboxAgents ?? agentHoldingsOf(overrides.inboxTaskless ?? []),
   };
 }

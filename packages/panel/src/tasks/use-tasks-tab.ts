@@ -1,4 +1,3 @@
-import type { AccountFailedRun } from "@repo/features/account-inbox-wire";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import type {
   AgentAttachment,
@@ -60,13 +59,7 @@ import {
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type {
-  AppInboxAgentHolding,
-  AppInboxTask,
-  AppInboxTaskHolding,
-  AppInboxTasklessItem,
-  AppStateSnapshot,
-} from "@repo/host/app-state";
+import type { AppInboxTask, AppInboxTaskHolding, AppStateSnapshot } from "@repo/host/app-state";
 import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn } from "@repo/settings";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
@@ -699,12 +692,6 @@ export interface TasksControl {
   inboxShown: string | null;
   /** Every task holding an inbox item, waiting or settled, the task whose item changed latest first: what the window's Inbox lists. */
   inboxTasks: readonly AppInboxTaskHolding[];
-  /** What waits on the developer from agents with no task, as main's read last answered: what the window's Inbox counts beside the tasks'. */
-  inboxTaskless: readonly AppInboxTasklessItem[];
-  /** Every agent with no task holding an inbox item, waiting or settled, the agent whose item changed latest first: what the window's Inbox lists beside the tasks. */
-  inboxAgents: readonly AppInboxAgentHolding[];
-  /** The newest run of each of the account's own automations that failed to start lately, every workspace's, which marks the sidebar's Automations of the run's workspace until that automation is opened. */
-  failedRuns: readonly AccountFailedRun[];
   /** The window's Inbox: whether it stands in the task's place, the task chosen in it, and its presses. */
   inboxView: InboxViewControl;
   /** Says which agent's card in the column shows its threads in its transcript's place (`agent-threads.tsx`), none while it shows its transcript, so main is not told that transcript is on screen. */
@@ -1301,12 +1288,6 @@ export function useTasksTab(input: {
   inboxWaiting: readonly AppInboxTask[];
   /** Every task main says holds an inbox item, waiting or settled. */
   inboxTasks: readonly AppInboxTaskHolding[];
-  /** What main says waits on the developer from agents with no task. */
-  inboxTaskless: readonly AppInboxTasklessItem[];
-  /** Every agent with no task main says holds an inbox item, waiting or settled. */
-  inboxAgents: readonly AppInboxAgentHolding[];
-  /** The newest run of each of the account's own automations main says failed to start lately. */
-  failedRuns: readonly AccountFailedRun[];
   /** Opens Settings on its Integrations page, where an agent's MCP server is connected. */
   onOpenIntegrations: () => void;
   /** Opens Settings on its Agents page at the provider's harness row, where the developer's key for it is. */
@@ -4548,9 +4529,6 @@ export function useTasksTab(input: {
     inbox: input.inboxWaiting,
     inboxShown: shownInbox,
     inboxTasks: input.inboxTasks,
-    inboxTaskless: input.inboxTaskless,
-    inboxAgents: input.inboxAgents,
-    failedRuns: input.failedRuns,
     onThreadsShown: setThreadsShown,
     // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {

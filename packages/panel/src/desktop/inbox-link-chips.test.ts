@@ -32,7 +32,7 @@ import {
 import { signedInAs } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { agentHoldingsOf, tasksControl, waitingOf } from "../testing/tasks-control.js";
 import { holdingInboxChoice, windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
@@ -160,8 +160,14 @@ async function inbox(options: {
   const asked: AnyAct[] = [];
   const workspaces = options.workspaces ?? [ACME, GLOBEX];
   // The account's feed holds the task's items, and the sweep agent's, which the Inbox draws from; the host holds each link's standing through every workspace.
+  const signedIn = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
+  const taskless =
+    options.sweep === undefined
+      ? []
+      : [waitingSweep(options.sweep.item, options.sweep.workspaceId)];
   const state = {
-    ...signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" }),
+    ...signedIn,
+    inbox: { ...signedIn.inbox, taskless, agents: agentHoldingsOf(taskless) },
     tasks: {
       ...IDLE_TASKS_VIEW,
       tasks: [TASK],
@@ -217,7 +223,6 @@ async function inbox(options: {
           options.taskItems.length === 0
             ? []
             : [{ taskId: TASK.id, items: options.taskItems.length, updatedAt: 2_000 }],
-        inboxTaskless: sweep === undefined ? [] : [waitingSweep(sweep.item, sweep.workspaceId)],
       }),
     });
   }

@@ -1,7 +1,13 @@
-import type { AppInboxTask, AppInboxTaskHolding, AppInboxWaitingItem } from "@repo/host/app-state";
+import type {
+  AppInboxTask,
+  AppInboxTaskHolding,
+  AppInboxTasklessItem,
+  AppInboxWaitingItem,
+} from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
 import { useMemo } from "react";
 import { listedIn, waitsOnReader } from "../tasks/inbox-model.js";
+import { useInboxTaskless } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
@@ -55,13 +61,17 @@ function toDoByTask(
  * count, and one the reader settles leaves main's read the moment it is
  * asked (`@repo/host`'s `account-inbox-follow.ts`).
  */
-function waitingThreads(tasks: TasksControl, now: number): readonly AppInboxWaitingItem[] {
+function waitingThreads(
+  tasks: TasksControl,
+  inboxTaskless: readonly AppInboxTasklessItem[],
+  now: number,
+): readonly AppInboxWaitingItem[] {
   // Note that only the standing tasks are counted, as To do lists them, so a task not listed yet counts nowhere.
   const standing = new Set(tasks.listed.tasks.map((task) => task.id));
   const ofTasks = tasks.inbox
     .filter((task) => standing.has(task.taskId))
     .flatMap((task) => task.items);
-  const taskless = tasks.inboxTaskless.filter(
+  const taskless = inboxTaskless.filter(
     (each) => waitsOnReader(each, tasks.me) && listedIn(each, tasks.workspace?.id),
   );
   return [...ofTasks, ...taskless].filter(
@@ -87,5 +97,6 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
  */
 export function useInboxWaiting(tasks: TasksControl): number {
   const now = useMinute();
-  return tasks.signedIn ? waitingThreads(tasks, now).length : 0;
+  const taskless = useInboxTaskless();
+  return tasks.signedIn ? waitingThreads(tasks, taskless, now).length : 0;
 }
