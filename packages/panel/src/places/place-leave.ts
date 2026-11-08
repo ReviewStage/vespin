@@ -49,9 +49,13 @@ export interface PlaceLeave {
    * move lands: at once where no ask stands or the move asks nothing, after
    * Leave where it asks, and never after Stay. Where `move` navigates nowhere
    * while an ask stands, as to a task the window holds no address for yet,
-   * `landed` asks first, since what it changes may still leave the page.
+   * `landed` asks first, since what it changes may still leave the page; its
+   * Leave lets go of the ask, unless the move `stays` where the window stands,
+   * whose Leave leaves no page.
    */
   readonly arrive: (move: () => void, landed: () => void) => void;
+  /** Says the move under way stays where the window stands, as a door asking for the place already standing does (`places/routed-exits.ts`'s `stay`). */
+  readonly stays: () => void;
   /**
    * Transitional: a door that changes the window's state before it navigates,
    * asking first while an ask stands. Each door on it moves to a navigation
@@ -79,6 +83,8 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
   const access = useRouteAccess();
   const standing = useRef<LeaveAsk | undefined>(undefined);
   const passing = useRef(false);
+  // Whether the move under way said it stays where the window stands, which a Leave of it then leaves nothing by.
+  const stayed = useRef(false);
   // The moves the blocker was asked about and where the last one went, and what is done once a move held lands, by
   // where it goes, in the order the doors were made.
   const moves = useRef(0);
@@ -129,6 +135,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         // Note that the blocker is asked within the router's navigation, so a move that asked nothing navigated nowhere.
         const asked = moves.current;
         const waitingBefore = waiting.current;
+        stayed.current = false;
         move();
         if (moves.current !== asked) {
           landings.current.push({ to: askedTo.current, landed });
@@ -140,15 +147,21 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
           return;
         }
         // A door that cannot move first, as to a task the window holds no address for yet, still asks before it acts.
+        // Note that a Leave of a move that stays where the window stands leaves no page, so the page's ask stands on;
+        // any other lets go of it, since its move may land only later, as a task's once it is bound.
         const ask = standing.current;
         const due = [landed];
+        const stays = stayed.current;
         waiting.current = due;
         ask(() => {
-          release(ask);
+          if (!stays) release(ask);
           pass(() => {
             for (const each of due) each();
           });
         }, NOTHING);
+      },
+      stays: () => {
+        stayed.current = true;
       },
       transitionalLeaveFirst:
         (leave) =>

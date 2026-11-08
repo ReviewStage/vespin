@@ -632,6 +632,7 @@ test("a screen picked past unsaved work is restored only once the leave is confi
       move();
       landed();
     },
+    stays: () => undefined,
     transitionalLeaveFirst:
       <Args extends readonly unknown[]>(leave: (...args: Args) => void) =>
       (...args: Args) =>

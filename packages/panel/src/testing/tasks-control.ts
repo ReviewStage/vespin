@@ -383,6 +383,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
     move();
     landed();
   },
+  stays: ignore,
   transitionalLeaveFirst: (leave) => leave,
 };
 

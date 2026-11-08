@@ -622,7 +622,11 @@ function AppWindow(): React.JSX.Element {
     tasks,
   });
   routedExits.leave = history.onLeaveRouted;
-  routedExits.stay = history.onStayRouted;
+  // Note that a door asking for the place already standing tells the leave guard its move stays, so a Leave of it keeps the page's ask.
+  routedExits.stay = () => {
+    history.onStayRouted();
+    placeLeave.stays();
+  };
   visitTask.current = history.onVisitTask;
   // The place standing and the task the host binds follow each other, each on the other's edge (`places/place-binding.ts`).
   usePlaceBinding({

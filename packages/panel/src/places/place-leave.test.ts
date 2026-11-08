@@ -206,3 +206,25 @@ test.each<[string, (window: ReturnType<typeof mount>) => void]>([
     assert.deepEqual(landed, [LIST]);
   },
 );
+
+test("Leave on a door to the place already standing keeps the page's ask, so the window's next move asks again", async () => {
+  const window = mount(memoryAt(AUTOMATION));
+  const landed: string[] = [];
+
+  act(() =>
+    window.place().arrive(
+      () => window.place().stays(),
+      () => landed.push(AUTOMATION),
+    ),
+  );
+  await settleQueries();
+  act(() => window.asked[0]?.leave());
+  await settleQueries();
+  assert.deepEqual(landed, [AUTOMATION], "the door's landing runs on Leave");
+  assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
+
+  act(() => window.history.push(LIST));
+  await settleQueries();
+  assert.equal(window.asked.length, 2, "the next move asks again");
+  assert.equal(window.history.location.pathname, AUTOMATION);
+});
