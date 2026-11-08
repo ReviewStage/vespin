@@ -484,21 +484,16 @@ export function TabSwitcher({
 
   // Goes to a stop through the window's own doors, as any move there would: the stop's own door moves the window first,
   // and the rest of its screen, and the stops' order, follow once that move lands, so a leave kept at the ask moves
-  // nothing, the stops' order included (`places/place-leave.ts`'s `arrive`). Note that where nothing holds the move it is
-  // made as it always was, a routed place standing, Settings or Admin, left first for the stop; where an ask holds it,
-  // only the stop's door moves, over whatever place stands, so the one move held is the one the ask is about, and the
-  // routed place is left as the move lands, as the sidebar's rows leave it.
+  // nothing, the stops' order included (`places/place-leave.ts`'s `arrive`). The routed place standing, Settings or
+  // Admin, is left as the move lands where the stop's door left it standing, as the sidebar's rows leave it (`app.tsx`'s
+  // `changeTab`). Note that where an ask holds the move, the stop's door moves over whatever place stands, so the one
+  // move held is the one the ask is about.
   const go = (stop: Stop) => {
     const { tasks: control, onTabChange: changeTab, places: placeDoors } = doors.current;
-    let held = false;
     control.placeLeave.arrive(
-      (free) => {
-        held = !free;
-        if (free) changeTab(PANEL_TAB.TASKS);
-        openStop(control, placeDoors, stop, held);
-      },
+      (free) => openStop(control, placeDoors, stop, !free),
       () => {
-        if (held) changeTab(PANEL_TAB.TASKS);
+        changeTab(PANEL_TAB.TASKS);
         if (stop.kind === STOP_KIND.TASK) standScreen(doors.current.tasks, stop);
         // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
         stops.current = [stop, ...stops.current.filter((each) => !sameStop(each, stop))];

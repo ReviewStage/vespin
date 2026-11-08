@@ -2065,14 +2065,15 @@ export function CommandPalette({
   const inboxStanding = useInboxView(tasks);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
+  const { placeLeave } = tasks;
   const onTasks = useCallback(
     (run: () => void) =>
-      choose(() => {
-        // A routed place standing, Settings or Admin, is left for what was chosen.
-        onTabChange(PANEL_TAB.TASKS);
-        run();
-      }),
-    [choose, onTabChange],
+      choose(() =>
+        // A routed place standing, Settings or Admin, is left for what was chosen once its move lands, where that move
+        // left it standing (`app.tsx`'s `changeTab`).
+        placeLeave.arrive(run, () => onTabChange(PANEL_TAB.TASKS)),
+      ),
+    [choose, onTabChange, placeLeave],
   );
   // The seek for a setting's row gives itself up once another is asked
   // for or Settings is left, so it never lands on a later visit's page.

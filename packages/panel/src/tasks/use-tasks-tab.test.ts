@@ -60,7 +60,7 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, SETTLED_STATUS, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
-import { createMemoryHistory, useRouter } from "@tanstack/react-router";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, useState } from "react";
@@ -135,7 +135,6 @@ import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
-  type HomeRoute,
   type RoutedViews,
   useHomeRoute,
   useRoutedViews,
@@ -300,6 +299,8 @@ let adminStanding: AdminView | undefined;
 let inboxDoor: InboxDoor | undefined;
 /** The Inbox as a surface of the window last mounted reads it. */
 let inboxStanding: InboxView | undefined;
+/** The Inbox's route in the window last mounted, whose close only the window's own leave calls now. */
+let inboxRoute: InboxRoute | undefined;
 
 /** The Inbox's doors in the window last mounted. */
 function inboxDoorNow(): InboxDoor {
@@ -357,14 +358,12 @@ function mount(
     automations,
     versionHistory,
     inbox,
-    home,
   }: {
     tasks: TasksControl;
     room: ShellRoom;
     automations: AutomationsRoute;
     versionHistory: VersionHistoryRoute;
     inbox: InboxRoute;
-    home: HomeRoute;
   }) {
     // The step's address is the link the window's Copy link places it at, as the window's root hands it.
     const placed = useCopyLink(tasks, undefined, true, room).placed;
@@ -377,7 +376,6 @@ function mount(
       automations,
       versionHistory,
       inbox,
-      home,
       room,
       tasks,
     });
@@ -414,18 +412,15 @@ function mount(
   const openLanded = (link: ReadLink) => control?.onOpenLink(link);
   function Probe() {
     const [held, setHeld] = useState(standing);
-    const router = useRouter();
-    // Note that the router here is drawn by no provider, which is what reads its history's moves, so its own last location stays where it was made, `/app`, and the leave is written to the history itself;
-    // where the window's history stands beside the tab, the leave is its own, as the window's root has it.
-    const leaveRouted = () => {
-      if (windowHistory !== undefined) windowHistory.onLeaveRouted();
-      else router.history.push("/app");
-    };
-    // The window's routed exits leave as the window's root's do, through its history where one stands.
-    useRoutedExits().leave = leaveRouted;
+    // The window's routed exits leave by the tab's own door and stay through the leave guard, as the window's root's do.
+    const exits = useRoutedExits();
+    exits.leave = () => control?.onLeaveRouted();
+    const placeLeave = usePlaceLeave();
+    exits.stay = placeLeave.stays;
     const automationsView = useAutomationsRoute({ narrow: held.room === SHELL_ROOM.NARROW });
     const versionHistoryView = useVersionHistoryRoute({ narrow: held.room === SHELL_ROOM.NARROW });
     const inboxView = useInboxRoute();
+    inboxRoute = inboxView;
     // Home is the listed workspace's, as the window's root opens it.
     const homeView = useHomeRoute({
       listed: () => control?.workspace?.slug ?? control?.workspace?.id,
@@ -448,7 +443,7 @@ function mount(
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: (link) => links.push(link),
-      placeLeave: usePlaceLeave(),
+      placeLeave,
       room: held.room,
       agentView: useAgentRoute(),
       unknownWorkspaceView: useUnknownWorkspaceRoute(),
@@ -472,8 +467,7 @@ function mount(
     adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
     // A link place the router lands on is read by its route and opened as its link is, as the window's root has it.
     useLinkPlaceLandings(openLanded);
-    // The place standing and the task bound follow each other, as the window's root keeps them; with no history beside
-    // the tab, the task bound's own place stands by its own door rather than as its step is written.
+    // The place standing and the task bound follow each other, as the window's root keeps them.
     const tasks = control;
     usePlaceBinding({
       known: true,
@@ -483,8 +477,7 @@ function mount(
       bound: tasks.boundFor,
       onUnbind: tasks.onUnbindTask,
       onSelect: tasks.onArriveTask,
-      onToBound: () =>
-        windowHistory === undefined ? control?.onStandTask() : windowHistory.onLeaveRouted(),
+      onToBound: () => placeLeave.pass(tasks.onLeaveRouted),
       onToUnbound: homeView.onOpen,
     });
     return held.history
@@ -494,7 +487,6 @@ function mount(
           automations: automationsView,
           versionHistory: versionHistoryView,
           inbox: inboxView,
-          home: homeView,
         })
       : null;
   }
@@ -3631,11 +3623,17 @@ const ROUTED_DOORS: [
     (control) => control.agentView.onOpen(AGENT_ID),
   ],
   ["Automations' close", () => automationsDoor?.close(), () => automationsDoor?.open()],
+  ["the Inbox's close", () => inboxRoute?.onClose()],
 ];
 
 test.each(ROUTED_DOORS)(
   "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
   async (_door, press, away) => askedOver(press, away),
+);
+
+test.each(ROUTED_DOORS.filter(([door]) => door.endsWith("close")))(
+  "%s with no task bound, over a page holding unsaved work, asks, Cancel leaves the window as it stood, and Leave arrives on Home as the press does with no ask",
+  async (_door, press, away) => askedOver(press, away, false),
 );
 
 test("Automations pressed over its own page holding unsaved work asks still, and Leave keeps the page standing", async () => {

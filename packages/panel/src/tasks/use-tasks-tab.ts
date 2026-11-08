@@ -818,6 +818,13 @@ export interface TasksControl {
   onLeaveTask: () => void;
   /** Goes to Home from wherever the tab stands, which lets go of the open task as it arrives. */
   onGoHome: () => void;
+  /**
+   * Leaves the place standing for the place the window's state says, as a
+   * navigation the router's blocker holds: the own place of the task bound
+   * for as the window stands at the call, or Home where none is
+   * (`places/routed-exits.ts`'s `leave`).
+   */
+  onLeaveRouted: () => void;
   /** Asks the host to bind no task, as arriving on Home does (`places/place-binding.ts`); no door of its own. */
   onUnbindTask: () => void;
   /** The options a surface renaming a task holds its own mutation over (`taskRenameMutation`). */
@@ -2002,7 +2009,7 @@ export function useTasksTab(input: {
   // is said at once, and a select that did not open the task takes its ask
   // back (`places/place-binding.ts`). A fixture's tasks are opened nowhere, so nothing is asked of them.
   const openTaskId = tasks.activeTaskId;
-  const { boundFor, ask, boundNow } = useTaskAsk(openTaskId);
+  const { boundFor, ask, boundNow, boundForNow } = useTaskAsk(openTaskId);
   // Home is the listed workspace's too, at `/app` while none is listed, so another listed, or the first one read, stands its
   // Home in the step's place. Note that Home with a task still bound is left as it is, since the binding moves it next
   // (`places/place-binding.ts`).
@@ -2180,10 +2187,15 @@ export function useTasksTab(input: {
   // Stands the own place of `taskId`, where a door opening it does, answering whether the window moved: not where it
   // stands already, read as the router stands at the call. Note that a fixture run binds its task for good, so its task's
   // place stands for any, and Home where it binds none. A door that leaves whatever place stands, `over` one standing
-  // beside the task's place too, stands it from there as well, as the sidebar's rows and ⌘K's do.
+  // beside the task's place too, stands it from there as well, as the sidebar's rows and ⌘K's do; one that `takesStepless`
+  // takes an entry holding no step in place (`TaskRoute.onOpen`), as the leave of a routed place does.
   // What the link opening now opens on its task's own place, which the window's move there holds (`places/link-places.ts`).
   const linking = useRef<LinkStep | undefined>(undefined);
-  const standTaskPlace = (taskId: string | undefined, over = false): boolean => {
+  const standTaskPlace = (
+    taskId: string | undefined,
+    over = false,
+    takesStepless = false,
+  ): boolean => {
     if (!opensTaskPlace && !over) return false;
     const toward = fixture === undefined ? taskId : openTaskId;
     if (toward === undefined) {
@@ -2211,7 +2223,7 @@ export function useTasksTab(input: {
     // Note that a link's door names what it opens there, so its step is written at once, at its address, with it.
     const step = linking.current;
     const visited = step !== undefined && step.taskId === toward && input.visitTask(at, step);
-    if (!visited) input.taskView.onOpen(at);
+    if (!visited) input.taskView.onOpen(at, takesStepless);
     return true;
   };
   const standTask = useRef(standTaskPlace);
@@ -3049,10 +3061,6 @@ export function useTasksTab(input: {
       also();
     });
   };
-  // A routed place's close is the window's history's to write, which leaves it for the place the window's state says
-  // (`navigation-history.ts`'s `onLeaveRouted`) past the router's blocker, so it asks up front while a page holds unsaved
-  // work, and closes once Leave is pressed.
-  const closeFirst = (close: () => void) => () => placeLeave.arrive(NOTHING, close);
   // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
   // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
@@ -3612,7 +3620,7 @@ export function useTasksTab(input: {
       return;
     }
     // Note that a number the account's list holds under the workspace named opens at once, so a link to the place
-    // already standing keeps it standing rather than leaving it while the service is asked (`onStayRouted`).
+    // already standing keeps it standing rather than leaving it while the service is asked (`RoutedExits.stay`).
     const home = workspaceOfSlug(viewed.workspaces, link.workspace);
     const listed = viewed.tasks.find(
       (task) => task.workspaceId === home?.id && taskLinkStep(task) === String(number),
@@ -4428,7 +4436,8 @@ export function useTasksTab(input: {
       pages: agentPages,
       // An agent's page is only the router's move there, which asks as it goes while a page holds unsaved work.
       onOpen: (agentId: string) => openAgentPage(agentId),
-      onClose: closeFirst(input.agentView.onClose),
+      // Note that its close is its route's move to the place the window's state says, which the router's blocker holds.
+      onClose: () => placeLeave.arrive(input.agentView.onClose, NOTHING),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
     onOpenPerson: (userId: string, name?: string, workspaceId?: string) => {
@@ -4566,6 +4575,12 @@ export function useTasksTab(input: {
     // Leaving the task is going Home, whose arrival lets go of the task (`places/place-binding.ts`).
     onLeaveTask: () => leaveTask(),
     onGoHome: goHome,
+    // Note that the task is read as the window stands at the call, so a door that asked for one in the same press leaves
+    // for it, and from any place, as the place standing is what is left; an entry holding no step, as the one a launch
+    // opens on Home with a task bound, is taken in place, as the history's own visit took it.
+    onLeaveRouted: () => {
+      standTaskPlace(boundForNow(), true, true);
+    },
     onUnbindTask: unbindTask,
     atHome: homeOpen && boundFor === undefined,
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,

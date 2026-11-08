@@ -231,6 +231,8 @@ export interface TaskAsking {
   readonly ask: (taskId: string | undefined) => () => void;
   /** Whether `taskId` is bound for as the window stands at the call, asked for or open. */
   readonly boundNow: (taskId: string) => boolean;
+  /** The task bound for as the window stands at the call, asked for or open; none where none is. */
+  readonly boundForNow: () => string | undefined;
 }
 
 /** The task the host binds the window to, `open`, as the window asks for another (see the module's head). */
@@ -252,11 +254,10 @@ export function useTaskAsk(open: string | undefined): TaskAsking {
       setAsked((held) => (held === made ? undefined : held));
     };
   }, []);
-  const boundNow = useCallback((taskId: string) => {
+  const boundForNow = useCallback(() => {
     const made = latest.current;
-    const standing =
-      made !== undefined && made.over === openNow.current ? made.taskId : openNow.current;
-    return standing === taskId;
+    return made !== undefined && made.over === openNow.current ? made.taskId : openNow.current;
   }, []);
-  return { boundFor, ask, boundNow };
+  const boundNow = useCallback((taskId: string) => boundForNow() === taskId, [boundForNow]);
+  return { boundFor, ask, boundNow, boundForNow };
 }

@@ -394,6 +394,18 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
     handLink({ workspace: "personal", place: { kind: LINK_PLACE.ADMIN, section: "cost" } }),
     "/personal/admin/cost",
   ],
+  ["⌘⇧H (Home)", Effect.sync(() => act(() => void runAppCommand(APP_COMMAND.HOME))), "/personal"],
+  [
+    "⌘⇧I (the Inbox)",
+    Effect.sync(() => act(() => void runAppCommand(APP_COMMAND.INBOX))),
+    "/personal/inbox",
+  ],
+  [
+    "⌘⇧B (the Board)",
+    Effect.sync(() => act(() => void runAppCommand(APP_COMMAND.TASKS))),
+    "/personal/tasks",
+  ],
+  ["a person chosen in ⌘K", chooseInPalette("Priya"), "/personal/person/user-priya"],
 ])(
   "%s over an edited automation asks, Cancel leaves the automation as it stood, and Leave arrives as the press does",
   ([_door, press, arrived, shows]) =>
@@ -424,6 +436,26 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
       if (shows !== undefined) {
         yield* Effect.promise(() => vi.waitFor(() => assert.match(drawn(), shows)));
       }
+    }),
+);
+
+it.effect(
+  "the automation being edited chosen in ⌘K over its own edit asks, and Leave keeps it standing, edit and all, rather than leaving it for the Tasks tab",
+  () =>
+    Effect.gen(function* () {
+      const router = yield* editedAutomation();
+      // Note that its setup is a move within the draft from the run the profile opens on, which asks nothing.
+      yield* chooseInPalette("Check each deploy");
+      const standing = router.addresses().slice(0, router.at() + 1);
+
+      yield* chooseInPalette("Check each deploy");
+      yield* leaveAsked();
+
+      assert.deepEqual(router.addresses().slice(0, router.at() + 1), standing);
+      assert.equal(
+        document.querySelector<HTMLInputElement>("input[aria-label='Automation name']")?.value,
+        "Check each deploy, edited",
+      );
     }),
 );
 

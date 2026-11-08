@@ -34,7 +34,7 @@ import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-leave.js";
 import { useRoutedExits } from "./places/routed-exits.js";
 import type { RoutedPlace } from "./places/routed-places.js";
-import { taskOfAt } from "./places/task-step.js";
+import { taskAtOf, taskOfAt } from "./places/task-step.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { useTaskRoute } from "./task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
@@ -112,15 +112,23 @@ function mount(
   let inbox: InboxRoute | undefined;
   let placeLeave: PlaceLeave | undefined;
   let openAutomationsAt: (to?: AutomationsPlace) => void = () => undefined;
+  // The Tasks tab as the window stands it or a test is about to stand it, which a routed place is left for.
+  let wanted = initial;
+  // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
+  let leaveTo: (to: TasksControl) => void = () => undefined;
   function Probe() {
     const [standing, setTasks] = useState(initial);
+    wanted = standing;
     // The window's leave guard, which a test stands a page's ask through.
     placeLeave = usePlaceLeave();
-    // The window's routed exits leave and stay through its history, as the window's root fills them in.
+    // The window's routed exits leave for the Tasks tab's place and stay through the leave guard, as the window's root fills them in.
     const exits = useRoutedExits();
-    exits.leave = () => history?.onLeaveRouted();
-    exits.stay = () => history?.onStayRouted();
-    restand = setTasks;
+    exits.leave = () => leaveTo(wanted);
+    exits.stay = placeLeave.stays;
+    restand = (tasks) => {
+      wanted = tasks;
+      setTasks(tasks);
+    };
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
     board = useBoardRoute();
     person = usePersonRoute();
@@ -150,7 +158,16 @@ function mount(
       }
     });
     // The task's own place stands where the router does, its task named by its address among those listed, as the Tasks tab reads it.
-    const taskAt = useTaskRoute().at;
+    const taskRoute = useTaskRoute();
+    const taskAt = taskRoute.at;
+    leaveTo = (to) => {
+      const at =
+        to.boundFor === undefined
+          ? undefined
+          : taskAtOf(to.boundFor, to.tasks, to.workspaces, to.workspace, undefined);
+      if (at === undefined) home.onOpen();
+      else taskRoute.onOpen(at, true);
+    };
     const tasks: TasksControl = {
       ...standing,
       placeLeave,
@@ -194,7 +211,6 @@ function mount(
       automations,
       versionHistory: versions,
       inbox,
-      home,
       room: SHELL_ROOM.WIDE,
       title: titled?.(tasks, routed?.place, views),
       tasks,
@@ -208,7 +224,7 @@ function mount(
       bound: tasks.boundFor,
       onUnbind: tasks.onUnbindTask,
       onSelect: tasks.onArriveTask,
-      onToBound: () => history?.onLeaveRouted(),
+      onToBound: () => leaveTo(wanted),
       onToUnbound: home.onOpen,
     });
     // The ways back read the window's history, as the window's root hands it its routed exits.
@@ -277,10 +293,10 @@ function mount(
     /** The name the person's page standing was opened with. */
     personName: () => person?.name,
     /** Leaves the routed place standing for `tasks`, the place a door into the window's state opens, in one move as the door makes it. */
-    leaveFor: (tasks: TasksControl) =>
+    leaveFor: (tasks: Standing) =>
       act(() => {
-        history?.onLeaveRouted();
         restand?.(tasks);
+        leaveTo(tasks);
       }),
     /** Where the router's history stands. */
     at: () => held.history.location.pathname,

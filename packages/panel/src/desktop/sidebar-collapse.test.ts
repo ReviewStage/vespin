@@ -157,8 +157,6 @@ function mount(width: number, at: string = SHELL_AT.INBOX): HTMLElement {
         steps: { back: [], forward: [] },
         onGoTo: ignore,
         onLeaveVersionHistory: ignore,
-        onLeaveRouted: ignore,
-        onStayRouted: ignore,
         away: undefined,
         onLeave: ignore,
       },

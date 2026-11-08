@@ -13,7 +13,7 @@
  */
 
 import { useRouter } from "@tanstack/react-router";
-import { savedTaskOf } from "./navigation-history.js";
+import { savedTaskOf, savesStep } from "./navigation-history.js";
 import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import type { TaskAt } from "./places/task-step.js";
@@ -31,8 +31,13 @@ export interface TaskRoute {
   readonly savedNow: () => string | undefined;
   /** The address step of the workspace the window stands under at the call, whichever place stands. */
   readonly workspaceNow: () => string | undefined;
-  /** Opens a task's own place at `at`, a visit after the step standing. */
-  readonly onOpen: (at: TaskAt) => void;
+  /**
+   * Opens a task's own place at `at`, a visit after the step standing; with
+   * `takesStepless`, in the place of an entry holding no step the window
+   * saved, as a launch's entry is, which the window's history takes in place
+   * of a step of its own (`navigation-history.ts`'s visit).
+   */
+  readonly onOpen: (at: TaskAt, takesStepless?: boolean) => void;
 }
 
 /** Where a task's own place stands by the params its address's routes read. */
@@ -61,11 +66,12 @@ export function useTaskRoute(): TaskRoute {
   const savedNow = () => savedTaskOf(router.history.location);
   const workspaceNow = () =>
     placeParamsOf(router.matchRoutes(router.history.location.pathname)).workspace;
-  const onOpen = (to: TaskAt) => {
+  const onOpen = (to: TaskAt, takesStepless = false) => {
     // Note that the router writes its entry at once, which the history takes the task's step in the place of (`navigation-history.ts`).
     void router.navigate({
       to: "/$workspace/task/$taskId",
       params: { workspace: to.workspace, taskId: to.task },
+      replace: takesStepless && !savesStep(router.history.location),
     });
   };
   return { at, saved, atNow, savedNow, workspaceNow, onOpen };

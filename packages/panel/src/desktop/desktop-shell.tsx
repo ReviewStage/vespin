@@ -526,6 +526,11 @@ function usePlaceCommands(
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
   const inbox = useInboxDoor(tasks);
+  // A chord's door moves the window first and the Tasks tab is brought forward once it lands, so the one move a page's
+  // leave ask holds is the door's, and a door that moved the window or kept the place standing is where the chord goes
+  // (`app.tsx`'s `changeTab`).
+  const overTasks = (door: () => void) =>
+    tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
   useAppCommand(APP_COMMAND.BACK, pastGate && history.canGoBack ? history.onBack : undefined);
   useAppCommand(
     APP_COMMAND.FORWARD,
@@ -544,30 +549,15 @@ function usePlaceCommands(
   useAppCommand(APP_COMMAND.SETTINGS, pastGate ? () => onTabChange(PANEL_TAB.SETTINGS) : undefined);
   useAppCommand(
     APP_COMMAND.HOME,
-    pastGate && tasks.signedIn
-      ? () => {
-          onTabChange(PANEL_TAB.TASKS);
-          tasks.onGoHome();
-        }
-      : undefined,
+    pastGate && tasks.signedIn ? () => overTasks(tasks.onGoHome) : undefined,
   );
   useAppCommand(
     APP_COMMAND.INBOX,
-    pastGate && tasks.signedIn
-      ? () => {
-          onTabChange(PANEL_TAB.TASKS);
-          inbox.open();
-        }
-      : undefined,
+    pastGate && tasks.signedIn ? () => overTasks(inbox.open) : undefined,
   );
   useAppCommand(
     APP_COMMAND.TASKS,
-    pastGate && tasks.signedIn
-      ? () => {
-          onTabChange(PANEL_TAB.TASKS);
-          board.open();
-        }
-      : undefined,
+    pastGate && tasks.signedIn ? () => overTasks(board.open) : undefined,
   );
   // The Admin place is an admin's alone, so ⌘K offers it only on the terms its sidebar row stands on.
   const adminOn = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
@@ -584,10 +574,7 @@ function usePlaceCommands(
   useAppCommand(
     APP_COMMAND.REOPEN_CLOSED_TAB,
     pastGate && tasks.signedIn && onReopenClosedTab !== undefined
-      ? () => {
-          onTabChange(PANEL_TAB.TASKS);
-          onReopenClosedTab();
-        }
+      ? () => overTasks(onReopenClosedTab)
       : undefined,
   );
   // The page lists an installed app's chords, and stands nowhere else (`pages.tsx`).
@@ -926,8 +913,7 @@ export function DesktopShell({
               onFinish={() => {
                 setFinishedHere(signedInId);
                 // Finishing setup lets the app in on Home, wherever the window stood before it.
-                onTabChange(PANEL_TAB.TASKS);
-                tasks.onGoHome();
+                tasks.placeLeave.arrive(tasks.onGoHome, () => onTabChange(PANEL_TAB.TASKS));
               }}
             />
           ) : null}
@@ -1191,7 +1177,7 @@ export function AgentPlace(): React.JSX.Element {
  * leaves it for the place the window's state says, the reader's own Home.
  */
 export function UnknownWorkspacePlace(): React.JSX.Element {
-  const { room, history } = useShellPlaces();
+  const { room, tasks } = useShellPlaces();
   return (
     <ReplayUnmask>
       <NotFound
@@ -1202,7 +1188,7 @@ export function UnknownWorkspacePlace(): React.JSX.Element {
             ? phoneBar({ place: UNKNOWN_WORKSPACE_PHONE_PLACE, start: null, end: null })
             : {}
         }
-        action={{ label: GO_HOME, onClick: history.onLeaveRouted }}
+        action={{ label: GO_HOME, onClick: tasks.onLeaveRouted }}
       />
     </ReplayUnmask>
   );

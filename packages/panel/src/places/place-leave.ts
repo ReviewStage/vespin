@@ -59,6 +59,13 @@ export interface PlaceLeave {
   /** Says the move under way stays where the window stands, as a door asking for the place already standing does (`places/routed-exits.ts`'s `stay`). */
   readonly stays: () => void;
   /**
+   * Whether the move whose landing runs now said it `stays` where the window
+   * stands, read from within `arrive`'s `landed`, so a landing that would
+   * leave the place standing leaves it standing where its move asked for it;
+   * false outside a landing.
+   */
+  readonly stayed: () => boolean;
+  /**
    * Transitional: a door that changes the window's state before it navigates,
    * asking first while an ask stands, whose Leave lets go of the ask unless
    * what it did `stays` where the window stands. Each door on it moves to a
@@ -88,6 +95,8 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
   const passing = useRef(false);
   // Whether the move under way said it stays where the window stands, which a Leave of it then leaves nothing by.
   const stayed = useRef(false);
+  // Whether the move whose landing runs now said it stays, which only a landing reads.
+  const landingStays = useRef(false);
   // The moves the blocker was asked about and where the last one went, and what is done once a move held lands, by
   // where it goes, in the order the doors were made.
   const moves = useRef(0);
@@ -120,6 +129,16 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         passing.current = false;
       }
     };
+    // Lands what a move does once there, telling it whether the move stayed where the window stands.
+    const land = (stays: boolean, landed: () => void) => {
+      const outer = landingStays.current;
+      landingStays.current = stays;
+      try {
+        landed();
+      } finally {
+        landingStays.current = outer;
+      }
+    };
     const place: PlaceLeave = {
       stand: (ask) => {
         standing.current = ask;
@@ -135,8 +154,9 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
       pass,
       arrive: (move, landed) => {
         if (standing.current === undefined || passing.current) {
+          stayed.current = false;
           move(true);
-          landed();
+          land(stayed.current, landed);
           return;
         }
         // Note that the blocker is asked within the router's navigation, so a move that asked nothing navigated nowhere.
@@ -168,14 +188,17 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         waiting.current = due;
         ask(() => {
           if (!stays) release(ask);
-          pass(() => {
-            for (const each of due) each();
-          });
+          pass(() =>
+            land(stays, () => {
+              for (const each of due) each();
+            }),
+          );
         }, NOTHING);
       },
       stays: () => {
         stayed.current = true;
       },
+      stayed: () => landingStays.current,
       transitionalLeaveFirst:
         (leave) =>
         (...args) => {

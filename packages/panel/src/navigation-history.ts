@@ -42,8 +42,8 @@
  * and Forward pass over it. Settings is one step
  * however many of its pages are turned, since each turn replaces its entry
  * (`settings-link.ts`), so Back from any page of it returns to wherever it
- * was opened from; leaving one for a place the window's state says is a
- * visit after it (`onLeaveRouted`). A description's version
+ * was opened from; leaving one for a place the window's state says is the
+ * router's move there, a visit after it (`TasksControl.onLeaveRouted`). A description's version
  * history is one step the same way, whichever version is chosen in it or
  * whichever revision's sections are open, since each choice replaces its
  * entry (`version-history-route.ts`), and its address is where it stands, so
@@ -172,7 +172,6 @@ import { useSteadyDoors } from "./steady-door.js";
 import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "./use-surface-open.js";
 import type { VersionHistoryRoute } from "./version-history-route.js";
-import type { HomeRoute } from "./workspace-routes.js";
 
 /** `MouseEvent.button` for the mouse's own back and forward buttons. */
 export const MOUSE_BUTTON = {
@@ -657,10 +656,6 @@ function sameReading(one: HistoryReading, other: HistoryReading): boolean {
 
 /** The window's history, with the way a restore leaves a description's version history and a page's way out. */
 export interface WindowHistory extends NavigationHistory {
-  /** Leaves the routed place standing, Settings, Admin, or a version history among them, for the place the window's state says, as a visit after it; nothing off one. */
-  onLeaveRouted: () => void;
-  /** Keeps the routed place standing that a leave was just asked of, as a door asked for the place standing does, which moves nothing. */
-  onStayRouted: () => void;
   /** Leaves the version history for its task: a step back where the task is the step behind, else a visit. */
   onLeaveVersionHistory: () => void;
   /** The step `onLeave` goes back to; none where no step behind stands on another page. */
@@ -1333,8 +1328,6 @@ export function useWindowHistory(input: {
   versionHistory: Pick<VersionHistoryRoute, "onClose">;
   /** What the history reads of the Inbox beyond where it stands: the item chosen, and the door that stands its list (`inbox-route.ts`). */
   inbox: Pick<InboxRoute, "open" | "chosen" | "choiceOf" | "onOpen">;
-  /** Home as the router stands it, which a routed place left with no task bound opens (`workspace-routes.ts`). */
-  home: Pick<HomeRoute, "onOpen">;
   /** The room the panel's stage gives, narrow where it shows one pane at a time. */
   room: ShellRoom;
   tasks: Pick<
@@ -1390,34 +1383,14 @@ export function useWindowHistory(input: {
   const listedWorkspace = tasks.workspace?.id;
   // A routed step is reachable as its route's gate would let the window stand there (`route-gates.ts`).
   const access = useRouteAccess();
-  // The routed place the window is leaving for the place its state says, which it stands on as a visit, by its address,
-  // so a move from it to another routed place, as from the Board to a person's page, stands that one; a task's own place
-  // among them, left for the task bound (`places/place-binding.ts`).
-  const [leaving, setLeaving] = useState<string>();
   const router = useRouter();
-  // Note that an address no routed place claims is where the router's history stands, as a narrow room's task step at its side panel's link.
-  const standingAddress = input.routed?.address ?? router.history.location.href;
-  const routedAddress = routed?.address === leaving ? undefined : routed?.address;
-  useEffect(() => {
-    if (standingAddress !== leaving) setLeaving(undefined);
-  }, [standingAddress, leaving]);
+  const routedAddress = routed?.address;
   // Note that a task's own place naming another task than the one bound for is no step, because the binding is about to
-  // move one or the other: the host asked for the task arrived on, or the window to the task bound, as it is left for it.
+  // move one or the other: the host asked for the task arrived on, or the window to the task bound (`places/place-binding.ts`).
   const taskAhead =
     (input.routed === undefined || input.routed.place === ROUTED_PLACE.TASK) &&
     tasks.taskView.taskId !== undefined &&
-    tasks.taskView.taskId !== boundFor &&
-    standingAddress !== leaving;
-  // A routed place left with no task bound is left for Home, the place of no task, as a visit after it; Home itself stays.
-  const leftForNone = routed !== undefined && routed.address === leaving && boundFor === undefined;
-  const leftHome = leftForNone && routed.place === ROUTED_PLACE.HOME;
-  // Note that Home's door is read as the leave lands, so a door drawn anew opens Home no second time.
-  const home = useRef(input.home);
-  home.current = input.home;
-  useEffect(() => {
-    if (leftHome) setLeaving(undefined);
-    else if (leftForNone) home.current.onOpen();
-  }, [leftForNone, leftHome]);
+    tasks.taskView.taskId !== boundFor;
   const known = input.known;
   // Only grows, so writing it as the list is drawn is the same on every render.
   const everListed = useRef(new Set<string>()).current;
@@ -1705,10 +1678,6 @@ export function useWindowHistory(input: {
   const { versionHistory } = input;
   return useSteadyDoors({
     ...history,
-    onLeaveRouted: () => {
-      if (standingAddress !== undefined) setLeaving(standingAddress);
-    },
-    onStayRouted: () => setLeaving(undefined),
     onLeaveVersionHistory: () => {
       const task =
         boundFor === undefined

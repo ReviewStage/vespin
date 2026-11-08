@@ -377,6 +377,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
     landed();
   },
   stays: ignore,
+  stayed: () => false,
   transitionalLeaveFirst: (leave) => leave,
 };
 
@@ -635,6 +636,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     },
     onLeaveTask: ignore,
     onGoHome: ignore,
+    onLeaveRouted: ignore,
     onUnbindTask: ignore,
     renameTask: taskRenameMutation(() => Promise.resolve(true), undefined),
     onDraftName: ignore,

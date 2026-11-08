@@ -30,8 +30,10 @@ import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
 import { usePlaceLeave } from "./places/place-leave.js";
 import { useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
+import { taskAtOf } from "./places/task-step.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
+import { useTaskRoute } from "./task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 import { SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
 import type { SidePanelTab } from "./tasks/use-side-panel.js";
@@ -228,10 +230,9 @@ function mount(
   function Probe() {
     const [at, setAt] = useState(start);
     standing = at;
-    // The window's routed exits leave and stay through its history, as the window's root fills them in.
+    // The window's routed exits leave for the Tasks tab's place and stay through the leave guard, as the window's root fills them in.
     const exits = useRoutedExits();
-    exits.leave = () => history?.onLeaveRouted();
-    exits.stay = () => history?.onStayRouted();
+    exits.leave = () => leave();
     restand = setAt;
     // Settings and Admin stand where the router does, as the window's root reads them.
     settings = useSettingsRoute({
@@ -251,6 +252,7 @@ function mount(
     const tab = tasksTab(at, setAt, room, versions, inbox, agent);
     // The window's leave guard, whose page holding unsaved work answers every ask with Stay, as Cancel would.
     const placeLeave = usePlaceLeave();
+    exits.stay = placeLeave.stays;
     const unsaved = at.unsaved === true;
     useEffect(
       () => (unsaved ? placeLeave.stand((_leave, stay) => stay()) : undefined),
@@ -258,11 +260,22 @@ function mount(
     );
     // Home stands where the router does, under the workspace listed, as the window's root reads it.
     const home = useHomeRoute({ listed: () => ACME.slug });
+    // Leaves the routed place standing for the task bound's own place, or Home, as the Tasks tab's door does.
+    const taskRoute = useTaskRoute();
+    const leave = () => {
+      const at =
+        tab.boundFor === undefined
+          ? undefined
+          : taskAtOf(tab.boundFor, tab.tasks, tab.workspaces, tab.workspace, undefined);
+      if (at === undefined) home.onOpen();
+      else taskRoute.onOpen(at, true);
+    };
     const tasks: TasksControl = {
       ...tab,
       placeLeave,
       atHome: home.open,
       onAutomationRuns: automations.onRuns,
+      onLeaveRouted: leave,
     };
     const routed = useRoutedStanding();
     const copyLink = useCopyLink(
@@ -282,7 +295,6 @@ function mount(
       automations,
       versionHistory: versions,
       inbox,
-      home,
       room,
       tasks,
     });
@@ -295,7 +307,7 @@ function mount(
       bound: tasks.boundFor,
       onUnbind: tasks.onUnbindTask,
       onSelect: tasks.onArriveTask,
-      onToBound: () => history?.onLeaveRouted(),
+      onToBound: leave,
       onToUnbound: home.onOpen,
     });
     // The ways back read the window's history, as the window's root hands it its routed exits.

@@ -33,6 +33,7 @@ import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actMutation } from "./act-mutations.js";
 import { useAdminRoute } from "./admin/admin-route.js";
@@ -369,10 +370,15 @@ function AppWindow(): React.JSX.Element {
     routedHere.place !== ROUTED_PLACE.HOME &&
     routedHere.place !== ROUTED_PLACE.TASK;
   // Arriving at Settings is arriving at its page list and its first page, Profile; the Tasks tab is the place the window's
-  // state says, which a routed place standing is left for. Note that the leave is the window's history's to write, past the
-  // router's blocker, so it asks up front while a page holds unsaved work, as a routed place's close does
-  // (`places/routed-doors.ts`). Note that `PanelTab` and the counted tab are the same union: both are `APP_PANEL_TAB`'s
-  // own set, which `PanelTab` aliases.
+  // state says, which a routed place standing is left for by the router's move there, held by its blocker as a routed
+  // place's close is (`places/routed-doors.ts`), and counted once it lands. Note that a door pressed with the tab moves
+  // first and brings the tab forward once it lands (`desktop-sidebar.tsx`'s `arriveFor`), so the leave is made only where
+  // the window still stands where this press found it and the door did not ask for the place standing, which moves
+  // nothing (`PlaceLeave.stayed`): a door that moved the window, or kept the place, is where the press goes, and the tab
+  // forward there is only counted. Note that `PanelTab` and the counted tab are the same union: both are
+  // `APP_PANEL_TAB`'s own set, which `PanelTab` aliases.
+  const { history: routerHistory } = useRouter();
+  const { stayed } = placeLeave;
   const changeTab = useCallback(
     (next: PanelTab) => {
       if (next === PANEL_TAB.SETTINGS) {
@@ -380,12 +386,22 @@ function AppWindow(): React.JSX.Element {
         return;
       }
       if (!routedStanding) return;
-      arrive(NOTHING_MORE, () => {
-        routedExits.leave();
-        countTasksTab();
-      });
+      const from = routedHere?.address;
+      const kept = stayed();
+      arrive(() => {
+        if (!kept && routerHistory.location.href === from) routedExits.leave();
+      }, countTasksTab);
     },
-    [arrive, goSettings, routedStanding, routedExits, countTasksTab],
+    [
+      arrive,
+      stayed,
+      goSettings,
+      routedStanding,
+      routedHere,
+      routerHistory,
+      routedExits,
+      countTasksTab,
+    ],
   );
   /**
    * Opens Settings at the place a link names: the workspace it names, which
@@ -501,7 +517,8 @@ function AppWindow(): React.JSX.Element {
     tasks.workspace === undefined ? undefined : (tasks.workspace.slug ?? tasks.workspace.id);
   // An account leaving, signed out, deleted, or switched, takes the window's place with it, so the
   // next account lands on Home rather than on the Settings page the last one left from. Note that
-  // the leave passes the guard, because the unsaved work it would ask about was the account's that left.
+  // the leave passes the guard, because the unsaved work it would ask about was the account's that left. Note that Home is
+  // the router's move from wherever the window stands, a routed place among them, so it is the one move made.
   const placeOwner = useRef(accountKey);
   const { pass: leavePast } = placeLeave;
   const { onGoHome } = tasks;
@@ -509,11 +526,8 @@ function AppWindow(): React.JSX.Element {
     const owner = placeOwner.current;
     placeOwner.current = accountKey;
     if (owner === undefined || owner === accountKey) return;
-    leavePast(() => {
-      routedExits.leave();
-      onGoHome();
-    });
-  }, [accountKey, leavePast, onGoHome, routedExits]);
+    leavePast(onGoHome);
+  }, [accountKey, leavePast, onGoHome]);
   // Session replay starts once the renderer is idle, filed under the workspace the sidebar lists.
   useSessionReplay(
     run,
@@ -633,18 +647,14 @@ function AppWindow(): React.JSX.Element {
     automations: automationsView,
     versionHistory: versionHistoryView,
     inbox: inboxView,
-    home: homeView,
     room,
     tasks,
   });
-  routedExits.leave = history.onLeaveRouted;
+  routedExits.leave = tasks.onLeaveRouted;
   // The narrow rooms' ways back read the history as they are pressed (`places/narrow-backs.ts`).
   routedExits.behind = history.behind;
   // Note that a door asking for the place already standing tells the leave guard its move stays, so a Leave of it keeps the page's ask.
-  routedExits.stay = () => {
-    history.onStayRouted();
-    placeLeave.stays();
-  };
+  routedExits.stay = placeLeave.stays;
   visitTask.current = history.onVisitTask;
   // The place standing and the task the host binds follow each other, each on the other's edge (`places/place-binding.ts`).
   usePlaceBinding({
@@ -655,7 +665,9 @@ function AppWindow(): React.JSX.Element {
     bound: tasks.boundFor,
     onUnbind: tasks.onUnbindTask,
     onSelect: tasks.onArriveTask,
-    onToBound: history.onLeaveRouted,
+    // Note that the binding's move follows the host, which no page's ask is about, so it passes the guard, as the history's
+    // write it was did.
+    onToBound: () => placeLeave.pass(tasks.onLeaveRouted),
     onToUnbound: homeView.onOpen,
   });
   // Escape reads the latest of the tab's doors as it lands, so its listener stays the same across renders.

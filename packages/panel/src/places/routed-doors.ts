@@ -5,8 +5,9 @@
  * `admin/admin-route.ts`, `automations-route.ts`, `inbox-route.ts`)
  * made through the window's leave guard (`PlaceLeave.arrive`): a move to the
  * place already standing, which navigates nowhere, still asks while a page
- * holds unsaved work, as a move away would, and a close, which the window's
- * history writes past the router's blocker, asks up front. Any surface calls
+ * holds unsaved work, as a move away would, and a close is the router's move
+ * to the place the window's state says (`routed-exits.ts`'s `leave`), which
+ * the router's blocker holds as it holds an open. Any surface calls
  * one with the Tasks tab's guard and the workspace it lists, and nothing else
  * threaded through. Opening a person's page lists their workspace first,
  * which only the Tasks tab can, so that door is the tab's (`onOpenPerson`).
@@ -87,7 +88,7 @@ export function useBoardDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
       placeLeave.arrive(() => {
         if (workspace !== undefined) route.onOpen(stepOf(workspace));
       }, NOTHING),
-    close: () => placeLeave.arrive(NOTHING, route.onClose),
+    close: () => placeLeave.arrive(route.onClose, NOTHING),
     preload: () => {
       if (workspace !== undefined) route.onPreload(stepOf(workspace));
     },
@@ -108,7 +109,7 @@ export function usePersonDoor(
   const route = usePersonRoute();
   const { placeLeave, workspace, workspaces } = tasks;
   return {
-    close: () => placeLeave.arrive(NOTHING, route.onClose),
+    close: () => placeLeave.arrive(route.onClose, NOTHING),
     preload: (userId, workspaceId) => {
       const home = workspaces.find((each) => each.id === workspaceId) ?? workspace;
       if (home !== undefined) route.onPreload(userId, stepOf(home));
@@ -157,7 +158,7 @@ export function useAutomationsDoor(
       placeLeave.arrive(() => {
         if (workspace !== undefined) route.onOpen(place, stepOf(workspace));
       }, NOTHING),
-    close: () => placeLeave.arrive(NOTHING, route.onClose),
+    close: () => placeLeave.arrive(route.onClose, NOTHING),
   };
 }
 
