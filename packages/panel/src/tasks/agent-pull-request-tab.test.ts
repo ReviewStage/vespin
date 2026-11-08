@@ -54,6 +54,7 @@ import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppWorkspaceMembers } from "@repo/host/app-state";
+import { COMMAND_KEY, installCommandKey } from "@repo/settings/shortcuts";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
@@ -2248,6 +2249,19 @@ test("a ⌘-click on the title opens the pull request on GitHub, and a plain one
   act(() => title.dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true })));
   await settle();
   assert.deepEqual(opened, [PAGE]);
+});
+
+test("off a Mac, the title's hint names the Ctrl-click that opens it", async () => {
+  onTestFinished(installCommandKey(COMMAND_KEY.CONTROL));
+  const tab = await draw(controlAnswering());
+  const number =
+    tab.querySelector(".pull-request-title-row .pull-request-number") ??
+    assert.fail("the number stands in the title row");
+  restOn(number);
+  assert.equal(
+    document.querySelector('[role="tooltip"]')?.textContent,
+    "Ctrl-click the title to open on GitHub",
+  );
 });
 
 test("a screen reader meets the title before the pill, which comes after it in the title row's markup", async () => {

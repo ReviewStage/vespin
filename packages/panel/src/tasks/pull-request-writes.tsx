@@ -22,6 +22,7 @@ import {
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
+import { COMMAND_KEY, type CommandKey, commandKeyNow } from "@repo/settings/shortcuts";
 import {
   Badge,
   BUTTON_SIZE,
@@ -636,7 +637,9 @@ export function PullRequestWriteNote({
 /** The title's own words. */
 const TITLE_WORDS = {
   EDIT: "Edit title",
-  OPEN: "⌘-click the title to open on GitHub",
+  /** The hint over the number, naming the window's command key: ⌘ on a Mac, Ctrl in a browser off one. */
+  open: (key: CommandKey) =>
+    `${key === COMMAND_KEY.CONTROL ? "Ctrl" : "⌘"}-click the title to open on GitHub`,
   FIELD: "Pull request title",
 } as const;
 
@@ -717,7 +720,7 @@ export function PullRequestTitle({
         {onOpen === undefined ? (
           numberWords
         ) : (
-          <Tooltip label={TITLE_WORDS.OPEN}>{numberWords}</Tooltip>
+          <Tooltip label={TITLE_WORDS.open(commandKeyNow())}>{numberWords}</Tooltip>
         )}
         <span className="pull-request-title-edit">
           <Tooltip label={TITLE_WORDS.EDIT}>
