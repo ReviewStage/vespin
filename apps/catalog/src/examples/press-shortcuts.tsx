@@ -3,8 +3,6 @@ import {
   Announcer,
   ArrowLeftIcon,
   BUTTON_VARIANT,
-  COMMAND_LINK_ELEMENT,
-  CommandLink,
   dropBelowStart,
   GAP,
   HoldPress,
@@ -152,15 +150,6 @@ function PressShortcuts(): React.JSX.Element {
           </div>
           {said}
         </Inline>
-      </CatalogSection>
-      <CatalogSection id="press-command" title="Words a ⌘-click opens">
-        <CommandLink
-          as={COMMAND_LINK_ELEMENT.SPAN}
-          onOpen={() => setDone("Opened the pull request on GitHub")}
-        >
-          Fix token refresh on wake #4635
-        </CommandLink>
-        {said}
       </CatalogSection>
     </>
   );

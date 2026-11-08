@@ -2317,12 +2317,12 @@ function ConversationPart({
   );
 }
 
-/** The fixed header's title and number, as the pull request's read says or, until it lands, as the app held them, ⌘-click opening it on GitHub; a skeleton where neither has. */
+/** The fixed header's title and number, as the pull request's read says or, until it lands, as the app held them; a skeleton where neither has. */
 function HeaderTitle({
   title,
   writes,
 }: {
-  title: Pick<AgentPullRequest, "title" | "number" | "url"> | undefined;
+  title: Pick<AgentPullRequest, "title" | "number"> | undefined;
   writes: PullRequestWrites;
 }): React.JSX.Element {
   if (title === undefined) {
@@ -2333,12 +2333,7 @@ function HeaderTitle({
     );
   }
   return (
-    <PullRequestTitle
-      title={title.title}
-      number={pullRequestNumberLabel(title)}
-      writes={writes}
-      onOpen={() => appPlatform().openGitHub(title.url)}
-    />
+    <PullRequestTitle title={title.title} number={pullRequestNumberLabel(title)} writes={writes} />
   );
 }
 

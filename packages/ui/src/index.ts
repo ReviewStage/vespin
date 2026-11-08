@@ -36,7 +36,6 @@ export * from "./components/collection-page/collection-page.js";
 export * from "./components/combobox/combobox.js";
 export * from "./components/combobox/use-combobox-field.js";
 export * from "./components/command-ask/command-ask.js";
-export * from "./components/command-link/command-link.js";
 export * from "./components/comment/comment.js";
 export * from "./components/comment/comment-pin.js";
 export * from "./components/composer-frame/composer-body.js";

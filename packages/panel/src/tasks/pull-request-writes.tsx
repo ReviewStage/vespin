@@ -22,7 +22,6 @@ import {
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
-import { COMMAND_KEY, type CommandKey, commandKeyNow } from "@repo/settings/shortcuts";
 import {
   Badge,
   BUTTON_SIZE,
@@ -30,10 +29,9 @@ import {
   CHIP_SIZE,
   Chip,
   ChipName,
-  COMMAND_LINK_ELEMENT,
   CONFIRM_LOSS,
-  CommandLink,
   ConfirmDialog,
+  cn,
   type DialogQuestion,
   ErrorState,
   FailureNote,
@@ -637,25 +635,28 @@ export function PullRequestWriteNote({
 /** The title's own words. */
 const TITLE_WORDS = {
   EDIT: "Edit title",
-  /** The hint over the number, naming the window's command key: ⌘ on a Mac, Ctrl in a browser off one. */
-  open: (key: CommandKey) =>
-    `${key === COMMAND_KEY.CONTROL ? "Ctrl" : "⌘"}-click the title to open on GitHub`,
   FIELD: "Pull request title",
 } as const;
 
-/** The title's line in the dialog's type, holding its field while it is edited, or the blocks of a title still being read. */
+/** The title's line in the dialog's type, holding its field while it is edited, its words and pencil while they may be, or the blocks of a title still being read. */
 export function PullRequestTitleLine({
   field = false,
+  editable = false,
   children,
 }: {
   field?: boolean;
+  editable?: boolean;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <Text
       as={TEXT_ELEMENT.H2}
       variant={TEXT_VARIANT.DIALOG}
-      className={field ? "pull-request-title pull-request-title-field" : "pull-request-title"}
+      className={cn(
+        "pull-request-title",
+        field && "pull-request-title-field",
+        editable && "pull-request-title-editable",
+      )}
     >
       {children}
     </Text>
@@ -674,14 +675,11 @@ export function PullRequestTitle({
   title,
   number,
   writes,
-  onOpen,
 }: {
   title: string;
   /** The pull request's number as the header says it. */
   number: string;
   writes: PullRequestWrites;
-  /** Opens the pull request on GitHub, which a ⌘-click on the title asks. */
-  onOpen?: (() => void) | undefined;
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const busy = writes.pending !== undefined;
@@ -704,24 +702,13 @@ export function PullRequestTitle({
       </PullRequestTitleLine>
     );
   }
-  const numberWords = <span className="pull-request-number">{number}</span>;
   return (
-    // Only a ⌘-click (Ctrl elsewhere) opens it, so a plain press still selects the title's words,
-    // and one on the pencil is the pencil's; the header's ⋯ offers Open on GitHub to the keyboard.
-    <CommandLink
-      as={COMMAND_LINK_ELEMENT.H2}
-      className="pull-request-title pull-request-title-editable"
-      onOpen={onOpen}
-    >
+    <PullRequestTitleLine editable>
       {title}
       {/* Note that the space before the number stands inside the end that never wraps, so the number and the pencil keep to the title's last word, and the number never stands alone on a line. */}
       <span className="pull-request-title-end">
         {" "}
-        {onOpen === undefined ? (
-          numberWords
-        ) : (
-          <Tooltip label={TITLE_WORDS.open(commandKeyNow())}>{numberWords}</Tooltip>
-        )}
+        <span className="pull-request-number">{number}</span>
         <span className="pull-request-title-edit">
           <Tooltip label={TITLE_WORDS.EDIT}>
             <IconButton
@@ -734,6 +721,6 @@ export function PullRequestTitle({
           </Tooltip>
         </span>
       </span>
-    </CommandLink>
+    </PullRequestTitleLine>
   );
 }
