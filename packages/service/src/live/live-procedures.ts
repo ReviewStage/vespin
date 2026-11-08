@@ -714,7 +714,10 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     past === undefined
       ? Option.none()
       : yield* heldUntil(look, moved, topics, LIVE_POLL_HOLD.WATCHED_LOOK, LIVE_POLL_HOLD.HOLD);
-  const { standing, narrowed } = Option.isSome(held) ? held.value.read : yield* look;
+  // Note that the look at a hold's end runs untraced, as every look after a hold's first does (`heldUntil`), and a read that held nothing looks once, traced.
+  const { standing, narrowed } = Option.isSome(held)
+    ? held.value.read
+    : yield* past === undefined ? look : Effect.withTracerEnabled(look, false);
   const next = String(standing.settled);
   if (standing.whole) {
     const statements = query.statements(params);
