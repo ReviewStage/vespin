@@ -72,6 +72,14 @@ import {
 
 const plan = taskSummarySchema.fields;
 
+/**
+ * The owner a task whose owner's account is gone is sent with: no account,
+ * since a released desktop decodes a row whose owner is null as no list at
+ * all. It goes, the owner sent as null, once the oldest supported desktop
+ * reads one.
+ */
+export const NO_TASK_OWNER = "";
+
 /** One plan as its row delivers it: the reader's own pin and the owner's name beside it, null where none stands. */
 const taskLiveRowSchema = EffectSchema.Struct({
   id: plan.id,
@@ -388,8 +396,8 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
     updatedAt: row.updatedAt,
     repository: row.repository,
     openedAt: row.createdAt,
-    ownerId: row.ownerId,
-    ...(row.ownerName === null
+    ...(row.ownerId === NO_TASK_OWNER ? undefined : { ownerId: row.ownerId }),
+    ...(row.ownerId === NO_TASK_OWNER || row.ownerName === null
       ? undefined
       : { createdBy: { userId: row.ownerId, name: row.ownerName } }),
     ...originOf(row),

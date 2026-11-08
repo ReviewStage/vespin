@@ -380,9 +380,10 @@ export interface AccountDeletionSteps<Pending> {
  * a workspace others belong to keeps them. Better Auth then deletes the
  * account's sessions, sign-in accounts, and user row, and its `afterDelete`
  * settles what the steps read. Note that a workspace others belong to loses
- * more than the account's member row: every row naming the account cascades
- * with its user row, so the tasks it created there (`task.user_id`) go, with
- * their agents, and the agents and automations it ran there.
+ * more than the account's member row: the agents and automations the account
+ * ran there cascade with its user row. The tasks it created there stay, with
+ * their teammates' agents, their creator (`task.user_id`) cleared, as its
+ * comments and memories stay without its name.
  * The email-verification callback is shut (`DISABLED_AUTH_PATHS`), since no
  * verification is configured.
  */

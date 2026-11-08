@@ -207,8 +207,8 @@ export interface LabeledAgentEdit extends DescriptionAgentEdit {
 /** A task as the service holds it: what the window reads, its text, and the saves coding agents made with their notes. */
 export interface StoredTask {
   readonly task: Task;
-  /** The account that started the task, the one that may move it to another workspace. */
-  readonly ownerId: string;
+  /** The account that started the task, the one that may move it to another workspace; null once that account is deleted, when no one may. */
+  readonly ownerId: string | null;
   /** How the task's repository was reached as it was named: the workspace's GitHub App, or its owner's own token. */
   readonly githubAccess: GitHubAccess;
   /** The description's whole text. */
@@ -342,7 +342,7 @@ const TASK_COLUMNS = {
 
 const TaskSummaryRowSchema = Schema.Struct({
   id: Schema.String,
-  userId: Schema.String,
+  userId: Schema.NullOr(Schema.String),
   organizationId: Schema.String,
   name: Schema.String,
   number: Schema.Number,
@@ -783,7 +783,7 @@ function summaryOf(
   devices: ReadonlyMap<string, Device>,
 ): TaskSummary {
   const createdAt = row.createdAt.getTime();
-  const owner = names.get(row.userId);
+  const owner = row.userId === null ? undefined : names.get(row.userId);
   const assignee = row.assigneeId === null ? undefined : names.get(row.assigneeId);
   return {
     id: row.id,
@@ -793,8 +793,10 @@ function summaryOf(
     updatedAt: row.updatedAt.getTime(),
     repository: row.repository,
     openedAt: createdAt,
-    ownerId: row.userId,
-    ...(owner === undefined ? undefined : { createdBy: { userId: row.userId, name: owner } }),
+    ...(row.userId === null ? undefined : { ownerId: row.userId }),
+    ...(row.userId === null || owner === undefined
+      ? undefined
+      : { createdBy: { userId: row.userId, name: owner } }),
     ...originOf(row),
     ...(pin === null ? undefined : { pinnedAt: pin.pinnedAt.getTime() }),
     ...(pin === null || pin.pinPosition === null ? undefined : { pinPosition: pin.pinPosition }),
@@ -981,7 +983,7 @@ const findTaskHeaders = SqlSchema.findAll({
   Result: Schema.Struct({
     id: Schema.String,
     organizationId: Schema.String,
-    userId: Schema.String,
+    userId: Schema.NullOr(Schema.String),
     name: Schema.String,
     repository: Schema.NullOr(Schema.String),
     status: taskStatusSchema,
@@ -1479,7 +1481,8 @@ export function readTaskWorkspace(
 /** A task as `readTaskHeader` reads it: where it stands and whose it is, without its description. */
 export interface TaskHeader {
   readonly workspaceId: string;
-  readonly ownerId: string;
+  /** The account that started it; null once that account is deleted. */
+  readonly ownerId: string | null;
   readonly name: string;
   readonly repository: string | null;
   /** Where the task stands. */

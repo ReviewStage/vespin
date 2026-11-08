@@ -41,7 +41,7 @@ import {
   userSync,
 } from "@repo/database/sync/tables";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
-import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
 import { and, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { SyncMoved } from "../../sync/live-query.js";
@@ -107,7 +107,7 @@ function tasksStatement(userId: string, narrowed: SQL = sql`true`) {
         workspaceId: task.organizationId,
         name: task.name,
         repository: task.repository,
-        ownerId: task.userId,
+        ownerId: sql<string>`coalesce(${task.userId}, ${NO_TASK_OWNER})`,
         ownerName: outerJoined(user.name),
         assigneeId: task.assigneeId,
         assigneeName: outerJoined(assignee.name),

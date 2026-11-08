@@ -1,5 +1,16 @@
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { and, eq, gte, isNotNull, ne, notExists, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  ne,
+  notExists,
+  or,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
@@ -49,7 +60,7 @@ function askedSince(userId: string, repository: SQLWrapper, since: Date) {
     );
 }
 
-/** The token tasks of the member's workspaces another member owns, whose repository the member's token was not answered for since. */
+/** The token tasks of the member's workspaces another member, or no one, owns, whose repository the member's token was not answered for since. */
 const findUnaskedTaskRepositories = SqlSchema.findAll({
   Request: UNASKED_REQUEST,
   Result: RepositoryRowSchema,
@@ -63,7 +74,8 @@ const findUnaskedTaskRepositories = SqlSchema.findAll({
           and(
             eq(member.userId, userId),
             eq(task.githubAccess, GITHUB_ACCESS.TOKEN),
-            ne(task.userId, userId),
+            // Note that a task whose owner's account is gone is no member's own, so every member's token is asked of it.
+            or(isNull(task.userId), ne(task.userId, userId)),
             isNotNull(task.repository),
             notExists(askedSince(userId, task.repository, since)),
           ),

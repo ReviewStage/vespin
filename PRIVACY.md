@@ -320,8 +320,9 @@ made before default-branch drives expires thirty days after its last use. When y
   preferences, integration records, and your phones' push tokens) is deleted
   at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
-  and we ask Vercel to delete your agents' sandboxes and the drives holding
-  their checkouts; where that fails or does not finish in time, your account is
+  but for the tasks in workspaces with other members (below), and we ask
+  Vercel to delete your agents' sandboxes and the drives holding their
+  checkouts; where that fails or does not finish in time, your account is
   deleted anyway and a drive may remain. Their snapshots otherwise expire and
   are removed seven days after they were last used.
 - **Workspaces you own and are the only member of** are deleted at once with
@@ -334,7 +335,7 @@ made before default-branch drives expires thirty days after its last use. When y
   it, as said above. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those
   services until you uninstall them there.
-- **Workspaces with other members**, and the memories, comments, and
+- **Workspaces with other members**, and the tasks, memories, comments, and
   description text you left in them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it
   cannot be reached, your account is deleted anyway and PostHog keeps them.

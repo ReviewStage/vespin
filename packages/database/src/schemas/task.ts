@@ -41,16 +41,20 @@ import { organization, user } from "./auth.js";
  * like the conversation, readable by an operator and kept the developer's
  * own by the account it is keyed by.
  *
- * The row cascades with its account, so deleting an account is still one
- * statement, and with its workspace.
+ * The row cascades with its workspace, so a workspace deleted with its
+ * last member's account takes its tasks along; a workspace that outlives
+ * the account keeps them, their creator cleared.
  */
 export const task = pgTable(
   "task",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    /**
+     * The account that started the task, its creator; null once that account
+     * is deleted, since a task in a workspace that outlives its creator stays
+     * with the workspace, attributed to no one, as the account's comments do.
+     */
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     /** The workspace the task belongs to: a Better Auth `organization`, the starter's personal one unless another was named. */
     organizationId: text("organization_id")
       .notNull()

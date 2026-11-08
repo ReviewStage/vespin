@@ -681,7 +681,7 @@ const taskSummaryFields = {
   markedUnread: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
    * The account that started the task, its owner, which alone may move it to
-   * another workspace; absent from a service before it was sent.
+   * another workspace; absent once their account is gone, when no one may.
    */
   ownerId: EffectSchema.optionalKey(EffectSchema.String),
   /**

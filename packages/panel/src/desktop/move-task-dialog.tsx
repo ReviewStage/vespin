@@ -60,9 +60,9 @@ function otherWorkspaces(
   return tasks.workspaces.filter((workspace) => workspace.id !== task.workspaceId);
 }
 
-/** Whether the reader may be the one to move the task: its owner, or nobody the window can tell is not. */
+/** Whether the reader may be the one to move the task: its owner, where the window cannot tell it is not; a task whose owner's account is gone is no one's to move. */
 function ownsTask(tasks: Pick<TasksControl, "me">, task: TaskSummary): boolean {
-  return task.ownerId === undefined || tasks.me === undefined || task.ownerId === tasks.me;
+  return task.ownerId !== undefined && (tasks.me === undefined || task.ownerId === tasks.me);
 }
 
 /** Whether the workspace's GitHub reaches the task's repository (`workspaceReaches`); a task with no repository goes anywhere. */
