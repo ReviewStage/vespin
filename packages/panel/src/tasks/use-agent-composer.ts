@@ -1,8 +1,10 @@
-import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
+import { newerTurn } from "@repo/features/agent-status";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
   type AgentPayer,
   type AgentTranscriptMessage,
+  type AgentTurn,
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
 import { type Failure, remedyLabel } from "@repo/features/failure-remedy";
@@ -145,6 +147,8 @@ interface Held {
   /** What the box held as it closed, newer than every line sent, which Continue carries after them. */
   behind: Draft;
   sent: readonly SentLine[];
+  /** The newest turn a send's answer named, the one its line awaits; none before a send answered. */
+  turn: AgentTurn | undefined;
 }
 
 /** A tab's composer as it opens on an agent: the lines not delivered to it, kept past the tab, where they went, and nothing else. */
@@ -158,6 +162,7 @@ function fresh(agentId: string, failed: readonly FailedLine[]): Held {
     remedied: undefined,
     revertFailed: undefined,
     closed: undefined,
+    turn: undefined,
     behind: EMPTY_DRAFT,
     sent: failed.map((each) => each.line),
   };
@@ -240,8 +245,12 @@ export interface HeldComposer extends AgentComposerControl {
   ) => void;
   /** Whether a rewind is out, an edit's or a revert's, until the service answers it. */
   readonly rewindOut: boolean;
-  /** Whether a rewind is out, or the line an edit sent in its place has not been read back yet. */
+  /** Whether a rewind is out, or the line an edit sent in its place has not been answered yet. */
   readonly rewinding: boolean;
+  /** Whether a line sent has not been answered yet, which only its own call's deadline bounds. */
+  readonly unanswered: boolean;
+  /** The newest turn a send's answer named, the one its line awaits, which the tab weighs against its summary's (`newerTurn`); none before a send answered. */
+  readonly turn: AgentTurn | undefined;
   /** When the newest edit or revert was pressed, in epoch milliseconds, which the working line counts from while it is rewinding; none before one was. */
   readonly rewoundAt: number | undefined;
   /** Takes the agent back to just before one of the developer's lines, sending nothing. */
@@ -322,9 +331,7 @@ export function useAgentComposer(input: {
   const { update } = kept;
   /** The agent taken back to just before the line named, answered as unanswered where the box was handed no rewind. */
   const rewindTo = (agentId: string, messageId: string): Promise<AgentActAnswer> =>
-    (latest.current.rewind?.(agentId, messageId) ?? Promise.resolve(UNANSWERED)).catch(
-      (): AgentActAnswer => UNANSWERED,
-    );
+    latest.current.rewind?.(agentId, messageId) ?? Promise.resolve(UNANSWERED);
   /** Sends one line once every line before it has answered, and takes its answer. */
   const deliver = (line: SentLine) => {
     // Note that the task is read as the line goes, because the tab may show another agent by the time it answers.
@@ -346,9 +353,7 @@ export function useAgentComposer(input: {
       const answer =
         rewound !== undefined && "failure" in rewound
           ? rewound
-          : await latest.current
-              .send(agentId, line.text, line.clientKey, line.attachments)
-              .catch((): AgentAgentAnswer => UNANSWERED);
+          : await latest.current.send(agentId, line.text, line.clientKey, line.attachments);
       // A refusal for now is kept past the tab before anything else, so the line stands wherever its tab is drawn next.
       if ("failure" in answer && !closesComposer(answer.failure)) {
         keepFailedLine(line, answer, rewound !== undefined && !("failure" in rewound), taskId);
@@ -363,6 +368,7 @@ export function useAgentComposer(input: {
       if (!("failure" in answer)) {
         ours((was) => ({
           ...was,
+          turn: newerTurn(answer.agent.turn, was.turn),
           sent: heldSentLines(
             was.sent.map((each) => (each.id === line.id ? { ...each, taken: true } : each)),
             latest.current.messages,
@@ -622,8 +628,15 @@ export function useAgentComposer(input: {
     rewinding:
       held.reverting !== undefined ||
       held.sent.some(
-        (line) => line.rewinds !== undefined && line.state === SENT_LINE_STATE.PENDING,
+        (line) =>
+          line.rewinds !== undefined &&
+          line.state === SENT_LINE_STATE.PENDING &&
+          line.taken !== true,
       ),
+    unanswered: held.sent.some(
+      (line) => line.state === SENT_LINE_STATE.PENDING && line.taken !== true,
+    ),
+    turn: held.turn,
     revert,
     cut: held.cut,
     going: new Set(held.sent.filter((line) => line.taken !== true).map((line) => line.id)),

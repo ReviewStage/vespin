@@ -44,21 +44,15 @@
  * only until the last write lapses, and the tab's screencast is stopped as
  * the view ends.
  *
- * A coding agent's sandbox stops at its turn's end, so while its tab is
- * watched the socket holds the sandbox through the lease every terminal of
- * it shares (`sandbox-terminal-lease.ts`), on the terminal's terms: the
- * connection holds it, and each message the panel sends moves it on,
- * written at most once a minute: the panel says it is watching while it is
- * shown, and a viewport moves it on only where it resizes the view, since
- * an older panel sends the same size again whether shown or not. The
- * socket closes as idle once the panel has sent nothing that counts for the
- * idle bound, or nothing but that it is watching for `INPUT_IDLE`, since a
- * pane left shown on a window nobody uses says it is watching for good;
- * the sweep stops the sandbox once the lease lapses. While
- * the browser is reached, the connection also keeps the sandbox alive past
- * its short timeout every keep-alive interval
- * (`CODER.SANDBOX_KEEP_ALIVE_EVERY`, `agents/sandbox-keep-alive.ts`), so a
- * member watching after the agent's turn ended is never cut off by it.
+ * While the browser is reached, the connection touches the sandbox
+ * (`@repo/sandbox`'s `touch`) every `SANDBOX_TOUCH_EVERY`, so a member
+ * watching after the agent's turn ended is never cut off by its idle stop.
+ * The panel says it is watching while it is shown, and a viewport counts
+ * only where it resizes the view, since an older panel sends the same size
+ * again whether shown or not. The socket closes as idle once the panel has
+ * sent nothing that counts for the idle bound, or nothing but that it is
+ * watching for `INPUT_IDLE`, since a pane left shown on a window nobody uses
+ * says it is watching for good; the sandbox then stops on its own idle stop.
  */
 
 import type { ReachedBrowserTab } from "@repo/database/models/agent-browser-tabs";
@@ -82,6 +76,7 @@ import {
   type BrowserLiveServerMessage,
   browserLiveClientMessageSchema,
 } from "@repo/features/browser-live-wire";
+import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -102,7 +97,6 @@ import {
 import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs-procedures.js";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { BROWSER_UNREACHABLE, type BrowserUnreachable } from "../agents/browser/agent-browser.js";
-import { CODER } from "../agents/coder-host/bounds.js";
 import { EXCESS_KEYS, type UnparsedWireValue } from "../core.js";
 import type { ServerAgentTool } from "../events/server-events.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
@@ -167,9 +161,8 @@ export interface BrowserLiveDependencies {
     targetId: string,
     page: { readonly address: string; readonly title: string },
   ) => Effect.Effect<void>;
-  readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
-  /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
-  readonly keepAlive: (sessionId: string) => Effect.Effect<void>;
+  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
+  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** The panel left: it is sent no close. */
@@ -239,12 +232,6 @@ const readHistory = read(
   }),
 );
 const readClientMessage = readEither(browserLiveClientMessageSchema);
-
-/** The instant the lease reaches to from a write at the instant given: the idle bound, and the minute until the next write. */
-function heldFrom(instant: Date): Date {
-  const reach = Duration.sum(BROWSER_LIVE_BOUNDS.IDLE, BROWSER_LIVE_BOUNDS.LEASE_WRITE_EVERY);
-  return new Date(instant.getTime() + Duration.toMillis(reach));
-}
 
 const shown = (text: string) => text.slice(0, BROWSER_SHOWN_MAX_CHARS);
 
@@ -399,7 +386,6 @@ interface LiveView {
   readonly lastActive: Ref.Ref<number>;
   /** The instant the member last acted on the view: anything that counts as watching but the panel saying it is. */
   readonly lastInput: Ref.Ref<number>;
-  readonly lastHeld: Ref.Ref<number>;
   readonly lastFrame: Ref.Ref<number | undefined>;
   readonly inputs: Queue.Queue<QueuedInput, Cause.Done>;
   /** How the browser's side ended, where an event ended it. */
@@ -448,7 +434,6 @@ function openView(
       targetId: yield* Ref.make(tab.targetId),
       lastActive: yield* Ref.make(startedAt.getTime()),
       lastInput: yield* Ref.make(startedAt.getTime()),
-      lastHeld: yield* Ref.make(startedAt.getTime()),
       lastFrame: yield* Ref.make<number | undefined>(undefined),
       inputs: yield* Queue.make<QueuedInput, Cause.Done>(),
       browserEnded: yield* Deferred.make<LiveEnd>(),
@@ -545,17 +530,6 @@ function watchTab(view: LiveView): Effect.Effect<LiveEnd> {
       }
     }),
   );
-}
-
-/** The panel's message noted as someone watching, moving a coding agent's lease on at most once a minute. */
-function noteActive(view: LiveView, at: Date): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    yield* Ref.set(view.lastActive, at.getTime());
-    const since = at.getTime() - (yield* Ref.get(view.lastHeld));
-    if (since < Duration.toMillis(BROWSER_LIVE_BOUNDS.LEASE_WRITE_EVERY)) return;
-    yield* Ref.set(view.lastHeld, at.getTime());
-    yield* view.deps.hold(view.reached.tab.conversationId, heldFrom(at));
-  });
 }
 
 /** The member takes the tab over for the hold, where they control its agent; a tab another member drives answers them as its driver. */
@@ -722,7 +696,7 @@ function steer(view: LiveView, message: SteerMessage, at: Date): Effect.Effect<v
 function resizes(view: LiveView, size: PixelSize): Effect.Effect<boolean> {
   return Effect.map(
     Ref.get(view.viewport),
-    (last) => last?.width !== size.width || last?.height !== size.height,
+    (last) => last?.width !== size.width || last.height !== size.height,
   );
 }
 
@@ -739,7 +713,7 @@ function onMessage(view: LiveView, message: BrowserLiveClientMessage): Effect.Ef
     const at = yield* DateTime.nowAsDate;
     const watching =
       message.type !== BROWSER_LIVE_CLIENT.VIEWPORT || (yield* resizes(view, message));
-    if (watching) yield* noteActive(view, at);
+    if (watching) yield* Ref.set(view.lastActive, at.getTime());
     if (watching && message.type !== BROWSER_LIVE_CLIENT.WATCHING)
       yield* Ref.set(view.lastInput, at.getTime());
     switch (message.type) {
@@ -974,10 +948,10 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
         : BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
     }
     const cdp = connected.success;
-    // The connect resumed the sandbox where it was stopped, so it is kept alive from here for as long as the view stands.
+    // The connect resumed the sandbox where it was stopped, so it is touched from here for as long as the view stands.
     yield* Effect.forkScoped(
-      Effect.repeat(deps.keepAlive(session.success.value), {
-        schedule: Schedule.spaced(CODER.SANDBOX_KEEP_ALIVE_EVERY),
+      Effect.repeat(deps.touch(session.success.value), {
+        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
       }),
     );
     // The tab is read again, since a browser that started afresh reopened it on a new target.
@@ -1018,8 +992,6 @@ export function relayBrowserTab(
     const view = yield* openView(viewer, ask, reached, deps, startedAt);
     // A takeover this socket took is handed back as it closes, however it closes.
     yield* Effect.addFinalizer(() => releaseOnClose(view));
-    // A watched coding agent's sandbox is held from the start, so the resume a connection makes is held too.
-    yield* deps.hold(reached.tab.conversationId, heldFrom(startedAt));
     const end = yield* Effect.raceAll([
       readViewer(view),
       watchBrowser(view),

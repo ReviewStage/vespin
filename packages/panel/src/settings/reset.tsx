@@ -62,9 +62,9 @@ function changedBy(
   return APP_SETTING_FIELDS.flatMap((field): HeldSetting[] => {
     if (APP_SETTING_SCHEMA[field].resetScope !== scope) return [];
     // SAFETY: the value is the one this field holds, read from the settings by the field.
-    const was = before[field] as AppSettingValue<AppSettingField>;
+    const was = before[field];
     // SAFETY: as above, from the settings the reset left.
-    const now = after[field] as AppSettingValue<AppSettingField>;
+    const now = after[field];
     return sameSetting(was, now) ? [] : [[field, was]];
   });
 }

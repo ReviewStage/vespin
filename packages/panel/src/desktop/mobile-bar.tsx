@@ -3,11 +3,17 @@ import { BarAction, BarItem, BarItems, MENU_KEEPS_CLEAR, PlusIcon, SearchIcon } 
 import { raiseKeyboard } from "@repo/ui/command";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { InboxIcon, ListTodoIcon } from "lucide-react";
-import { adminSection } from "../admin/routing.js";
+import { useAdminView } from "../admin/admin-route.js";
+import { type AdminView, adminSection } from "../admin/routing.js";
 import { runAppCommand } from "../app-commands.js";
+import { useAutomationsPlace } from "../automations-route.js";
+import { type InboxView, useInboxView } from "../inbox-route.js";
+import { useBoardDoor, useInboxDoor } from "../places/routed-doors.js";
+import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { type AutomationsPlace, automationsTab } from "../tasks/automations-place.js";
 import { NEEDS_YOU } from "../tasks/inbox-model.js";
-import { automationsTab, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useInboxWaiting } from "./places-waiting.js";
 import { groupCount } from "./sidebar-fold.js";
 
@@ -40,18 +46,46 @@ import { groupCount } from "./sidebar-fold.js";
  * sidebar's words.
  */
 
-/** Whether the bar stands: a narrow room, signed in, on one of the places' lists. */
-export function mobileBarShown(room: ShellRoom, tasks: TasksControl): boolean {
+/** The routed place the window stands on (`useWindowPlace`), with the Inbox, the Automations page, and Admin's view, which the bar stands over or not by. */
+export interface BarStanding {
+  readonly place: RoutedPlace | undefined;
+  /** The Inbox as a surface reads it: whether it stands, and the item chosen in it. */
+  readonly inbox: Pick<InboxView, "open" | "chosen">;
+  /** The Automations page standing, none while none does. */
+  readonly automations: AutomationsPlace | undefined;
+  /** Admin's view, the Overview while it does not stand. */
+  readonly admin: AdminView;
+}
+
+/** Where the window stands, as the bar reads it, the Inbox's choice as the listed workspace's list holds it. */
+export function useBarStanding(tasks: Pick<TasksControl, "tasks" | "workspace">): BarStanding {
+  const { place } = useWindowPlace();
+  const automations = useAutomationsPlace();
+  return {
+    place,
+    inbox: useInboxView(tasks),
+    automations: automations.open ? automations.place : undefined,
+    admin: useAdminView(),
+  };
+}
+
+/** Whether the bar stands: a narrow room, signed in, on one of the places' lists, by where the window stands (`standing`). */
+export function mobileBarShown(
+  room: ShellRoom,
+  tasks: TasksControl,
+  standing: BarStanding,
+): boolean {
   // Note that the open task's side panel is not asked: it is held behind every place, so it says nothing of the one on screen.
   if (room !== SHELL_ROOM.NARROW || !tasks.signedIn) return false;
-  const { inboxView, boardView, automationsView, adminView, agentView, personView } = tasks;
-  if (inboxView.open) return inboxView.chosen === undefined;
-  if (agentView.agentId !== undefined || personView.userId !== undefined) return false;
-  if (boardView.open) return true;
+  const { agentView } = tasks;
+  const { place, inbox, automations } = standing;
+  if (inbox.open) return inbox.chosen === undefined;
+  if (agentView.agentId !== undefined || place === ROUTED_PLACE.PERSON) return false;
+  if (place === ROUTED_PLACE.BOARD) return true;
   // Note that an automation's editor and its runs keep the whole screen, as an item does; only the list and the Runs tab stand over the bar.
-  if (automationsView.open) return automationsTab(automationsView.place);
+  if (automations !== undefined) return automationsTab(automations);
   // So does Admin: a section stands over the bar, an account's or a day's page under one keeps the whole screen.
-  if (adminView.open) return adminSection(adminView.view);
+  if (place === ROUTED_PLACE.ADMIN) return adminSection(standing.admin);
   return tasks.atHome;
 }
 
@@ -64,10 +98,13 @@ export function MobileBar({
   /** Leaves what stands over the places (Settings) before a press opens one; none where the bar stands among them. */
   leave?: (() => void) | undefined;
 }): React.JSX.Element {
-  const { inboxView, boardView } = tasks;
+  const board = useBoardDoor(tasks);
+  const inbox = useInboxDoor(tasks);
+  const { place } = useWindowPlace();
+  const boardOpen = place === ROUTED_PLACE.BOARD;
   const among = leave === undefined;
-  const inInbox = among && inboxView.open;
-  const inTasks = among && !inInbox && boardView.open;
+  const inInbox = among && place === ROUTED_PLACE.INBOX;
+  const inTasks = among && !inInbox && boardOpen;
   const waiting = useInboxWaiting(tasks);
   // Note that a press leaves what stands over the places first, so the place it opens is the one on screen.
   const go = (open: () => void) => () => {
@@ -86,11 +123,11 @@ export function MobileBar({
             icon={<InboxIcon />}
             current={inInbox}
             count={groupCount(waiting, NEEDS_YOU.COUNT)}
-            onPress={go(inboxView.onOpen)}
+            onPress={go(inbox.open)}
           >
             Inbox
           </BarItem>
-          <BarItem icon={<ListTodoIcon />} current={inTasks} onPress={go(boardView.onOpen)}>
+          <BarItem icon={<ListTodoIcon />} current={inTasks} onPress={go(board.open)}>
             Tasks
           </BarItem>
           <BarItem

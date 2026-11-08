@@ -3,16 +3,15 @@
 import assert from "node:assert/strict";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-held-order.test.ts -- the sidebar's tasks hold the places they
@@ -73,7 +72,7 @@ function mountSidebar(tasks: readonly TaskSummary[]) {
       tasksControl({ tasks: [...listed], workspaces: [WORKSPACE], workspace: WORKSPACE, ...rest }),
     );
     const sidebar = { ...props.sidebar, collapsed: folded };
-    act(() => root.render(withQueryClient(createElement(DesktopSidebar, { ...props, sidebar }))));
+    act(() => root.render(withQueryClient(drawnSidebar({ ...props, sidebar }))));
   };
   draw(tasks);
   const tasksNav = container.querySelector('nav[aria-label="My tasks"]');

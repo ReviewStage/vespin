@@ -28,7 +28,7 @@ import {
 } from "@repo/features/automation-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { type AppAutomationReads, type AppStateSnapshot, RUN_PROFILE } from "@repo/host/app-state";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 
 /** When the fixture stands, from which every instant here is counted: a fixed one, never the clock. */
 const NOW = Date.parse("2026-10-24T09:00:00Z");

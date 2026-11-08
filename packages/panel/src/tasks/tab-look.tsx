@@ -11,7 +11,8 @@ import { GLYPH_STATE, type GlyphState, StateGlyph, stateEndMark } from "../state
 import { agentGlyphState, providerOf } from "./agent-model.js";
 import { fileLook } from "./file-ref.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
-import { type FixedSidePanelTab, SIDE_PANEL_TAB, SIDE_PANEL_TAB_KIND } from "./use-side-panel.js";
+import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "./task-tab-model.js";
+import { SIDE_PANEL_TAB_KIND } from "./use-side-panel.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**

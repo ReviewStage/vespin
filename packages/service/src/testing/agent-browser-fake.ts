@@ -17,13 +17,24 @@
  */
 
 import type { CdpEvent, PageTarget } from "@repo/features/browser-cdp";
+import {
+  type CommandAsk,
+  type CommandRun,
+  type OpenedSandbox,
+  SANDBOX_STATUS,
+  type SandboxError,
+  type SandboxGetOrCreate,
+  type SandboxService,
+  type SandboxStatus,
+  SandboxUnavailable,
+} from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { type Cause, Effect, Layer, Queue, Redacted, Ref, Schema, Stream } from "effect";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import {
   AgentBrowser,
   agentBrowserOver,
   BROWSER_UNREACHABLE,
-  type BrowserSandboxApi,
   BrowserUnreachable,
 } from "../agents/browser/agent-browser.js";
 import {
@@ -40,12 +51,6 @@ import {
 } from "../agents/browser/sandbox-recorder.js";
 import type { AgentImageService } from "../agents/coder-host/agent-image.js";
 import type { SandboxPtyService } from "../agents/sandbox-pty.js";
-import {
-  type CommandAsk,
-  type CommandRun,
-  type OpenedSandbox,
-  SandboxUnavailable,
-} from "../agents/vercel-sandbox-api.js";
 import type { RelayFrame } from "../terminal/relay.js";
 
 /** Chrome's own refusal of a method it does not know, and of a target it does not hold. */
@@ -253,23 +258,21 @@ export function fakeBridgePty(
 /** What a fake sandbox has: its status, if it is listed at all, and what it does when asked. */
 export interface FakeSandboxScenario {
   /** The status the sandbox is listed in; none for a session that opened no sandbox. */
-  readonly status: string | undefined;
+  readonly status: SandboxStatus | undefined;
   /** The session tag it is listed under. */
   readonly sessionId: string;
-  /** How many resumes answer it still pending before one answers it running; one that never comes up is `Infinity`. */
+  /** How many resumes answer it still starting before one answers it running; one that never comes up is `Infinity`. */
   readonly pendingResumes?: number;
   /** The exit the browser's start ends on; 0 where it starts or attaches. */
   readonly startExit?: number;
-  /** Whether every call is unavailable, as Vercel answering the status given. */
-  readonly unavailable?: number;
-  /** Whether every resume is unavailable, as Vercel answering the status given, a reopen through `getOrCreate` among them. */
-  readonly resumeUnavailable?: number;
-  /** The error code Vercel's body names on that refusal, where it names one. */
-  readonly resumeCode?: string;
+  /** Whether every call is unavailable. */
+  readonly unavailable?: true;
+  /** The failure every resume answers, a reopen through `getOrCreate` among them. */
+  readonly resumeRefusal?: SandboxError;
   /** How many resumes are refused before one is answered, as an image whose preparation finishes; every one where unsaid. */
   readonly resumeRefusals?: number;
-  /** Whether the sandbox stands under its session's name (`agentSandboxName`), which a reopen goes through `getOrCreate` for; under a UUID where unsaid. */
-  readonly named?: true;
+  /** Whether the sandbox is a legacy one, under a UUID, which a reopen moves to its session's name from its snapshot; under its session's name (`agentSandboxName`) where unsaid. */
+  readonly legacy?: true;
   /** Whether its snapshot is gone, so a `getOrCreate` deletes it and makes it again. */
   readonly snapshotGone?: true;
   /** How many vCPUs it is listed with. */
@@ -291,12 +294,15 @@ export const FAKE_SANDBOX = {
 } as const;
 
 /** The agents' image the fake's browser makes a sandbox again from. */
-export const FAKE_IMAGE: AgentImageService = { reference: Effect.succeed("agent-image:fixture") };
+export const FAKE_IMAGE: AgentImageService = {
+  reference: Effect.succeed("agent-image:fixture"),
+  runner: Effect.succeed([]),
+};
 
-/** Vercel's REST API over one sandbox as the scenario has it, and the commands it ran, by the session each ran in. */
 /** Where the fake sandbox's recorder leaves its video, under the sandbox user's home, as a read prints it. */
 export const FAKE_RECORDING_PATH = `/home/vercel-sandbox/${SANDBOX_RECORDING.VIDEO}`;
 
+/** `Sandbox` over one sandbox as the scenario has it, and the commands it ran, by the run each ran in. */
 export function fakeSandboxApi(scenario: FakeSandboxScenario) {
   const ran: { readonly sandboxSessionId: string; readonly ask: CommandAsk }[] = [];
   let status = scenario.status;
@@ -304,110 +310,109 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
   let resumes = 0;
   let browserUp = false;
   /** Every `getOrCreate` that made the sandbox again, as it was asked. */
-  const creates: Parameters<BrowserSandboxApi["getOrCreate"]>[0][] = [];
-  const name = scenario.named === true ? agentSandboxName(scenario.sessionId) : FAKE_SANDBOX.NAME;
+  const creates: SandboxGetOrCreate[] = [];
+  let name = scenario.legacy === true ? FAKE_SANDBOX.NAME : agentSandboxName(scenario.sessionId);
   const refused = () =>
-    scenario.unavailable === undefined
-      ? undefined
-      : Effect.fail(new SandboxUnavailable({ status: scenario.unavailable }));
+    scenario.unavailable === undefined ? undefined : Effect.fail(new SandboxUnavailable({}));
   let refusedResumes = 0;
   const resumeRefused = () =>
-    scenario.resumeUnavailable === undefined ||
+    scenario.resumeRefusal === undefined ||
     refusedResumes++ >= (scenario.resumeRefusals ?? Number.POSITIVE_INFINITY)
       ? undefined
-      : Effect.fail(
-          new SandboxUnavailable({
-            status: scenario.resumeUnavailable,
-            ...(scenario.resumeCode === undefined ? undefined : { code: scenario.resumeCode }),
-          }),
-        );
+      : Effect.fail(scenario.resumeRefusal);
   const listed = (): OpenedSandbox => ({
     name,
     status,
-    currentSessionId: current,
+    running: current,
     tags: FAKE_SANDBOX.TAGS,
     ...(scenario.vcpus === undefined ? undefined : { vcpus: scenario.vcpus }),
   });
   /** The sandbox resumed: running at once where it runs, and otherwise after the pending resumes the scenario names. */
   const resumed = () =>
     Effect.sync(() => {
-      if (status === "running") return listed();
+      if (status === SANDBOX_STATUS.RUNNING) return listed();
       resumes += 1;
-      status = resumes > (scenario.pendingResumes ?? 0) ? "running" : "pending";
+      status =
+        resumes > (scenario.pendingResumes ?? 0) ? SANDBOX_STATUS.RUNNING : SANDBOX_STATUS.STARTING;
       current = FAKE_SANDBOX.RESUMED_SESSION;
       // A resume starts from the snapshot, where no browser runs.
       browserUp = false;
       return listed();
     });
-  const api: BrowserSandboxApi = {
-    listTagged: (sessionId) =>
+  const api: SandboxService = {
+    ...memorySandbox().service,
+    listTagged: (_tag, sessionId) =>
       refused() ??
       Effect.succeed(sessionId === scenario.sessionId && status !== undefined ? [listed()] : []),
-    resume: () => refused() ?? resumeRefused() ?? resumed(),
-    // A sandbox whose snapshot is gone is made again under its name, a fresh disk where no browser runs.
+    get: (asked) =>
+      refused() ?? Effect.succeed(asked === name && status !== undefined ? listed() : undefined),
+    // A sandbox whose snapshot is gone is made again under its name, a fresh disk where no browser
+    // runs; a legacy one is moved to the name asked, as a resume from its snapshot.
     getOrCreate: (ask, onCreate) =>
       refused() ??
       resumeRefused() ??
-      (scenario.snapshotGone === true && status !== "running"
+      (scenario.snapshotGone === true && status !== SANDBOX_STATUS.RUNNING
         ? Effect.promise(async () => {
             creates.push(ask);
-            status = "running";
+            status = SANDBOX_STATUS.RUNNING;
             current = FAKE_SANDBOX.CREATED_SESSION;
             browserUp = false;
             await onCreate?.(listed());
             return listed();
           })
-        : resumed()),
-    session: ({ sessionId: sandboxSessionId }) =>
+        : Effect.andThen(
+            Effect.sync(() => {
+              name = ask.name;
+            }),
+            resumed(),
+          )),
+    run: (target, ask) =>
+      refused() ??
+      Effect.sync((): CommandRun => {
+        const sandboxSessionId = typeof target === "string" ? current : target.running;
+        ran.push({ sandboxSessionId, ask });
+        if (ask.args.includes(RECORDER_SOURCE)) {
+          return (
+            scenario.recording?.start ?? {
+              exitCode: 0,
+              stdout: `${RECORDING_START_OUTPUT.STARTED}\n`,
+              stderr: "",
+            }
+          );
+        }
+        if (ask.args.includes(SANDBOX_RECORDING.VIDEO)) {
+          const video = scenario.recording?.video;
+          return video === undefined
+            ? { exitCode: RECORDING_READ_EXIT.NO_VIDEO, stdout: "", stderr: "" }
+            : {
+                exitCode: 0,
+                stdout: `${FAKE_RECORDING_PATH}\n${Buffer.from(video).toString("base64")}`,
+                stderr: "",
+              };
+        }
+        // The stop is the recording's other script, named as the start is.
+        if (ask.args.includes(RECORDING_SCRIPT_NAME)) {
+          const stop = scenario.recording?.stop ?? `{"ok":false,"reason":"none"}`;
+          return { exitCode: 0, stdout: `${stop}\n`, stderr: "" };
+        }
+        const exitCode = scenario.startExit ?? 0;
+        if (exitCode !== 0) return { exitCode, stdout: "", stderr: "Chromium did not start\n" };
+        const stdout = browserUp ? BROWSER_START_OUTPUT.ATTACHED : BROWSER_START_OUTPUT.STARTED;
+        browserUp = true;
+        return { exitCode, stdout: `${stdout}\n`, stderr: "" };
+      }),
+    openInteractive: () =>
       refused() ??
       Effect.succeed({
-        run: (ask: CommandAsk) =>
-          refused() ??
-          Effect.sync((): CommandRun => {
-            ran.push({ sandboxSessionId, ask });
-            if (ask.args.includes(RECORDER_SOURCE)) {
-              return (
-                scenario.recording?.start ?? {
-                  exitCode: 0,
-                  stdout: `${RECORDING_START_OUTPUT.STARTED}\n`,
-                  stderr: "",
-                }
-              );
-            }
-            if (ask.args.includes(SANDBOX_RECORDING.VIDEO)) {
-              const video = scenario.recording?.video;
-              return video === undefined
-                ? { exitCode: RECORDING_READ_EXIT.NO_VIDEO, stdout: "", stderr: "" }
-                : {
-                    exitCode: 0,
-                    stdout: `${FAKE_RECORDING_PATH}\n${Buffer.from(video).toString("base64")}`,
-                    stderr: "",
-                  };
-            }
-            // The stop is the recording's other script, named as the start is.
-            if (ask.args.includes(RECORDING_SCRIPT_NAME)) {
-              const stop = scenario.recording?.stop ?? `{"ok":false,"reason":"none"}`;
-              return { exitCode: 0, stdout: `${stop}\n`, stderr: "" };
-            }
-            const exitCode = scenario.startExit ?? 0;
-            if (exitCode !== 0) return { exitCode, stdout: "", stderr: "Chromium did not start\n" };
-            const stdout = browserUp ? BROWSER_START_OUTPUT.ATTACHED : BROWSER_START_OUTPUT.STARTED;
-            browserUp = true;
-            return { exitCode, stdout: `${stdout}\n`, stderr: "" };
-          }),
-        openInteractive: () =>
-          refused() ??
-          Effect.succeed({
-            url: "wss://sbx-fixture.vercel.run/ws",
-            token: Redacted.make("pty-token"),
-          }),
+        url: "wss://sbx-fixture.memory/ws",
+        token: Redacted.make("pty-token"),
       }),
   };
   return { api, ran, creates };
 }
 
 /**
- * `AgentBrowser` over a running sandbox tagged with the session given and a
+ * `AgentBrowser` over a running sandbox under the session given and a
  * ready bridge in front of the peer: the double a suite that drives a
  * browser provides.
  */
@@ -415,7 +420,7 @@ export function agentBrowserTestLayer(
   peer: FakeCdpPeer,
   sessionId: string,
 ): Layer.Layer<AgentBrowser> {
-  const { api } = fakeSandboxApi({ status: "running", sessionId });
+  const { api } = fakeSandboxApi({ status: SANDBOX_STATUS.RUNNING, sessionId });
   return Layer.succeed(AgentBrowser, agentBrowserOver(api, fakeBridgePty(peer), FAKE_IMAGE));
 }
 

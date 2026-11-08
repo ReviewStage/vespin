@@ -121,7 +121,7 @@ export const agentSync = defineSyncTable(agentTable, {
     { kind: TOPIC.TASK, column: agentTable.taskId },
     { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
   ],
-  ignore: [agentTable.lastStep, agentTable.publishedRead, agentTable.seenAt],
+  ignore: [agentTable.lastStep, agentTable.publishedRead],
   log: LOG.EVERY,
 });
 
@@ -345,8 +345,8 @@ export const accountPreferenceSync = defineSyncTable(accountPreference, {
  * One account's connection to an account at an integration, on the
  * account's integrations topic, which only its open integration reads are
  * woken on: the account's own topic would wake its task list and its inbox
- * on every sign-in. Note that a sign-in's one-time state, the retired
- * verifier, and the subject Connect holds the grant under are ignored,
+ * on every sign-in. Note that a sign-in's one-time state and the subject
+ * Connect holds the grant under are ignored,
  * since no view reads them and a sign-in begun or ended moves its issue
  * instant beside the state; and so are the tools a launch lists and their
  * instant, which every native agent's start rewrites, and the row's own
@@ -356,7 +356,6 @@ export const integrationConnectionSync = defineSyncTable(integrationConnection, 
   topics: [{ kind: TOPIC.ACCOUNT_INTEGRATIONS, column: integrationConnection.userId }],
   ignore: [
     integrationConnection.state,
-    integrationConnection.connectVerifier,
     integrationConnection.connectSubject,
     integrationConnection.tools,
     integrationConnection.toolsListedAt,

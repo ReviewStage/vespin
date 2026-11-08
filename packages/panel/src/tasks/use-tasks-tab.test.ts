@@ -60,22 +60,25 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, SETTLED_STATUS, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
-import { createMemoryHistory, useRouter } from "@tanstack/react-router";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { KEPT, type Kept } from "../act.js";
+import { useAdminView } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
-import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
+import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import {
+  type HistoryBehind,
   type TaskVisits,
+  useRoutedStanding,
   useWindowHistory,
-  type WindowHistoryLists,
+  type WindowHistory,
 } from "../navigation-history.js";
 import {
   installPanelSpanRecorder,
@@ -86,8 +89,22 @@ import {
 import { useLinkPlaceLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
-import { useWindowPlace } from "../places/routed-places.js";
-import { ADDRESS, addressOf } from "../route.js";
+import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
+import { ADDRESS, addressOf } from "../places/pressed-address.js";
+import {
+  type AdminDoor,
+  type AutomationsDoor,
+  type BoardDoor,
+  type InboxDoor,
+  type PersonDoor,
+  useAdminDoor,
+  useAutomationsDoor,
+  useBoardDoor,
+  useInboxDoor,
+  usePersonDoor,
+} from "../places/routed-doors.js";
+import { useRoutedExits } from "../places/routed-exits.js";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useTaskRoute } from "../task-route.js";
 import {
@@ -112,33 +129,27 @@ import {
 } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { ADMIN_AWAY, listedAgent } from "../testing/tasks-control.js";
+import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
-  type HomeRoute,
-  useBoardRoute,
+  type RoutedViews,
   useHomeRoute,
-  usePersonRoute,
+  useRoutedViews,
   useUnknownWorkspaceRoute,
 } from "../workspace-routes.js";
 import { FIXTURE_AGENT_ID } from "./agent-fixture.js";
+import { AUTOMATIONS_PAGE } from "./automations-place.js";
+import { REVISION_SOURCE } from "./description-history-model.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import { ofPullRequestTab } from "./pull-request-number.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
+import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
-import { MAIN_TAB } from "./use-main-tabs.js";
-import { PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./use-side-panel.js";
-import {
-  AUTOMATIONS_PAGE,
-  type LeaveAsk,
-  type TasksControl,
-  useLeaveGuard,
-  useTasksTab,
-} from "./use-tasks-tab.js";
+import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
 beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
@@ -272,6 +283,35 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.TASKS_REVISIONS,
 ];
 
+/** The Board's doors in the window last mounted, as a surface holds them. */
+let boardDoor: BoardDoor | undefined;
+/** A person's page's doors in the window last mounted, as a surface holds them. */
+let personDoor: PersonDoor | undefined;
+/** Admin's doors in the window last mounted, as a surface holds them. */
+let adminDoor: AdminDoor | undefined;
+/** The Automations pages' doors in the window last mounted, as a surface holds them. */
+let automationsDoor: AutomationsDoor | undefined;
+/** The Board, a person's page, and the Automations pages as the router of the window last mounted stands them. */
+let views: RoutedViews | undefined;
+/** Admin's view as the router of the window last mounted stands it, none while it does not stand. */
+let adminStanding: AdminView | undefined;
+/** The Inbox's doors in the window last mounted, as a surface holds them. */
+let inboxDoor: InboxDoor | undefined;
+/** The Inbox as a surface of the window last mounted reads it. */
+let inboxStanding: InboxView | undefined;
+/** The Inbox's route in the window last mounted, whose close only the window's own leave calls now. */
+let inboxRoute: InboxRoute | undefined;
+
+/** The Inbox's doors in the window last mounted. */
+function inboxDoorNow(): InboxDoor {
+  return inboxDoor ?? assert.fail("the Inbox's doors stand");
+}
+
+/** The Inbox as a surface of the window last mounted reads it now. */
+function inboxNow(): InboxView {
+  return inboxStanding ?? assert.fail("the Inbox's route stands");
+}
+
 function mount(
   initial: Partial<Standing> = {},
   answers: { [Kind in PortActKind]?: (...args: unknown[]) => Promise<PortActResult<Kind>> } = {},
@@ -282,7 +322,6 @@ function mount(
   /** Which agent's tab main was told is shown, each time it was told. */
   const shownAgents: (string | null)[] = [];
   /** Each time the tab opened Admin through its own door, by the view it named, none for its Overview. */
-  const adminOpens: (AdminView | undefined)[] = [];
   /** Each asked act's payload, unread until a test reads it as the act's schema would. */
   const payloads: { readonly kind: PortActKind; readonly payload: unknown }[] = [];
   const links: SettingsLink[] = [];
@@ -308,7 +347,7 @@ function mount(
     ...initial,
   };
   handDescriptions(standing.descriptions);
-  let windowHistory: (WindowHistoryLists & TaskVisits) | undefined;
+  let windowHistory: (WindowHistory & TaskVisits & HistoryBehind) | undefined;
   if (standing.history) {
     fakeAppPlatform(QUIET_PANEL);
   }
@@ -319,30 +358,29 @@ function mount(
     automations,
     versionHistory,
     inbox,
-    home,
   }: {
     tasks: TasksControl;
     room: ShellRoom;
     automations: AutomationsRoute;
     versionHistory: VersionHistoryRoute;
     inbox: InboxRoute;
-    home: HomeRoute;
   }) {
     // The step's address is the link the window's Copy link places it at, as the window's root hands it.
     const placed = useCopyLink(tasks, undefined, true, room).placed;
+    // The routed place standing is the router's, as the window's root reads it.
+    const routed = useRoutedStanding();
     windowHistory = useWindowHistory({
       known: true,
       link: placed,
-      routed: undefined,
-      settingsList: undefined,
-      onSettingsList: () => undefined,
+      routed,
       automations,
       versionHistory,
       inbox,
-      home,
       room,
       tasks,
     });
+    // The ways back read the history, as the window's root hands it its routed exits.
+    useRoutedExits().behind = windowHistory.behind;
     return null;
   }
   /** An act-port kind's answer as the test gives it, recorded, or a rejection where it gives none. */
@@ -374,24 +412,18 @@ function mount(
   const openLanded = (link: ReadLink) => control?.onOpenLink(link);
   function Probe() {
     const [held, setHeld] = useState(standing);
-    const router = useRouter();
-    // Note that the router here is drawn by no provider, which is what reads its history's moves, so its own last location stays where it was made, `/app`, and the leave is written to the history itself.
-    const leaveRouted = () => router.history.push("/app");
-    const automationsView = useAutomationsRoute({
-      narrow: held.room === SHELL_ROOM.NARROW,
-      onClose: leaveRouted,
-      onStay: () => undefined,
-    });
-    const versionHistoryView = useVersionHistoryRoute({
-      narrow: held.room === SHELL_ROOM.NARROW,
-      onClose: leaveRouted,
-      onStay: () => undefined,
-    });
-    const inboxView = useInboxRoute({ onClose: leaveRouted, onStay: () => undefined });
+    // The window's routed exits leave by the tab's own door and stay through the leave guard, as the window's root's do.
+    const exits = useRoutedExits();
+    exits.leave = () => control?.onLeaveRouted();
+    const placeLeave = usePlaceLeave();
+    exits.stay = placeLeave.stays;
+    const automationsView = useAutomationsRoute({ narrow: held.room === SHELL_ROOM.NARROW });
+    const versionHistoryView = useVersionHistoryRoute({ narrow: held.room === SHELL_ROOM.NARROW });
+    const inboxView = useInboxRoute();
+    inboxRoute = inboxView;
     // Home is the listed workspace's, as the window's root opens it.
     const homeView = useHomeRoute({
       listed: () => control?.workspace?.slug ?? control?.workspace?.id,
-      onClose: leaveRouted,
     });
     restand = setHeld;
     const here = useWindowPlace();
@@ -411,24 +443,10 @@ function mount(
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: (link) => links.push(link),
-      leaveGuard: useLeaveGuard(),
+      placeLeave,
       room: held.room,
-      adminView: {
-        ...ADMIN_AWAY,
-        open: held.admin === true,
-        onOpen: (view) => adminOpens.push(view),
-      },
-      // The Board and a person's page are the router's, which the test's window router stands, each left for a place with no link.
-      boardView: useBoardRoute({ onClose: leaveRouted, onStay: () => undefined }),
-      personView: usePersonRoute({ onClose: leaveRouted, onStay: () => undefined }),
-      agentView: useAgentRoute({ onClose: leaveRouted, onStay: () => undefined }),
-      automationsView,
-      versionHistoryView,
-      inboxView,
-      unknownWorkspaceView: useUnknownWorkspaceRoute({
-        onClose: leaveRouted,
-        onStay: () => undefined,
-      }),
+      agentView: useAgentRoute(),
+      unknownWorkspaceView: useUnknownWorkspaceRoute(),
       homeView,
       taskView,
       place: here.place,
@@ -436,11 +454,22 @@ function mount(
       linkReads: useLinkReads(),
       // A link's step is written by the window's history beside the tab, where one stands, else the task's place opens by its own door.
       visitTask: (at, step) => windowHistory?.onVisitTask(at, step) ?? false,
+      startStands: () => windowHistory?.onStartStands(),
+      leaveStart: () => windowHistory?.onLeaveStart() ?? false,
     });
+    // The routed places' doors, and how they stand, as the window's surfaces hold them.
+    boardDoor = useBoardDoor(control);
+    personDoor = usePersonDoor(control);
+    adminDoor = useAdminDoor(control);
+    automationsDoor = useAutomationsDoor(control);
+    inboxDoor = useInboxDoor(control);
+    inboxStanding = useInboxView(control);
+    views = useRoutedViews();
+    const adminView = useAdminView();
+    adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
     // A link place the router lands on is read by its route and opened as its link is, as the window's root has it.
     useLinkPlaceLandings(openLanded);
-    // The place standing and the task bound follow each other, as the window's root keeps them; with no history beside
-    // the tab, the task bound's own place stands by its own door rather than as its step is written.
+    // The place standing and the task bound follow each other, as the window's root keeps them.
     const tasks = control;
     usePlaceBinding({
       known: true,
@@ -450,8 +479,7 @@ function mount(
       bound: tasks.boundFor,
       onUnbind: tasks.onUnbindTask,
       onSelect: tasks.onArriveTask,
-      onToBound: () =>
-        windowHistory === undefined ? control?.onStandTask() : windowHistory.onLeaveRouted(),
+      onToBound: () => placeLeave.pass(tasks.onLeaveRouted),
       onToUnbound: homeView.onOpen,
     });
     return held.history
@@ -461,7 +489,6 @@ function mount(
           automations: automationsView,
           versionHistory: versionHistoryView,
           inbox: inboxView,
-          home: homeView,
         })
       : null;
   }
@@ -494,7 +521,6 @@ function mount(
     told,
     agentActs,
     shownAgents,
-    adminOpens,
     payloads,
     /** Every Settings link the tab followed, in order. */
     links,
@@ -742,10 +768,50 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   assert.equal(home.control().newTask.open, false, "no dialog over Home");
   assert.equal(home.control().newTask.homeAsks, 1, "Home's composer is asked for the caret");
 
-  act(() => home.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   act(() => home.control().onNewTask());
   assert.equal(home.control().newTask.open, true, "the Inbox gets the dialog");
   assert.equal(home.control().newTask.homeAsks, 1);
+});
+
+test("an agent's start pressed on Home's own composer and refused opens no dialog over Home, handing the composer the card it pressed with and why, which a page opened since lets go", async () => {
+  const tab = mount(
+    { shown: true, tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces } },
+    {
+      [ACT_KIND.TASKS_START]: () =>
+        Promise.resolve({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE }),
+    },
+  );
+  const { idempotencyKey: key, ...agent } = handedStart();
+  const ask = { repository: "acme/api", workspaceId: undefined, relations: [], agent };
+  const card = { relations: [], repository: "acme/api", choice: undefined, words: agent.prompt };
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/api", undefined, {
+      handed: { idempotencyKey: key, ...agent },
+      card: { ...card, press: { key, ask } },
+    });
+  });
+  const refused = tab.control().newTask.homeRefused?.refused;
+  const refusedOnHome = {
+    dialog: tab.control().newTask.open,
+    words: refused?.card.words,
+    repository: refused?.card.repository,
+    says: refused?.note.text.length !== 0,
+  };
+  act(() => inboxDoorNow().open());
+  act(() => tab.control().onGoHome());
+
+  assert.deepEqual(refusedOnHome, {
+    dialog: false,
+    words: "Sweep the tests.",
+    repository: "acme/api",
+    says: true,
+  });
+  assert.equal(
+    tab.control().newTask.homeRefused,
+    undefined,
+    "Home opened again after the Inbox opens on its draft alone",
+  );
 });
 
 /** A start's payload, read back for whether it asked to open nothing. */
@@ -794,7 +860,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
   };
   const asked: (() => void)[] = [];
   act(() => {
-    tab.control().leaveGuard.stand((leave) => asked.push(leave));
+    tab.control().placeLeave.stand((leave) => asked.push(leave));
   });
   act(() => (newestToastAction() ?? assert.fail("the toast offers Open")).click());
   await settle();
@@ -890,6 +956,41 @@ test("⇧⌘T opens the tabs closed again, the latest first, each in its strip a
   assert.equal(tab.control().onReopenClosedTab, undefined);
 });
 
+test("⇧⌘T passes over a closed tab opened again another way since, and opens the one closed before it", async () => {
+  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
+  await settle();
+  const panel = () => tab.control().sidePanel;
+  const column = () => tab.control().mainTabs;
+  const agent = agentTab(AGENT_ID);
+  act(() => panel().onChoose(PULLS));
+  act(() => panel().onClose(PULLS));
+  act(() => column().onClose(agent));
+  // The column's "+" opens the agent's tab again, which leaves the stack alone.
+  act(() => column().onChoose(agent));
+
+  act(() => tab.control().onReopenClosedTab?.());
+  assert.deepEqual(panel().strip, [PULLS], "the tab closed before the agent's opens");
+  assert.deepEqual(column().tab, agent, "and the agent's tab stays as it stands");
+  assert.equal(tab.control().onReopenClosedTab, undefined, "nothing closed is left to open");
+});
+
+test("⇧⌘T asks first while a page stands unsaved work, and reopens once the developer leaves", async () => {
+  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
+  await settle();
+  const panel = () => tab.control().sidePanel;
+  act(() => panel().onChoose(PULLS));
+  act(() => panel().onClose(PULLS));
+  const asked: (() => void)[] = [];
+  act(() => {
+    tab.control().placeLeave.stand((leave) => asked.push(leave));
+  });
+
+  act(() => tab.control().onReopenClosedTab?.());
+  assert.deepEqual(panel().strip, [], "nothing reopens while the ask stands");
+  act(() => asked[0]?.());
+  assert.deepEqual(panel().strip, [PULLS]);
+});
+
 test("a task none of whose tabs was viewed shows its agents' last tab, opens on its agents again across a launch though left on its details, and shows the tab viewed before its last agent's once that closes", async () => {
   const listed = withAgents([RUNNING_AGENT]);
   const tab = mount({ shown: true, tasks: listed });
@@ -932,49 +1033,6 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)] } });
   await settle();
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
-});
-
-test("a column kept while the plan, the Inbox, and the Call stood in it, and a side panel kept on its Plan and Comments tabs, read with each let go, the agents' order and the tab last viewed still standing", async () => {
-  window.localStorage.setItem(
-    "app.sidePanel",
-    JSON.stringify({
-      open: true,
-      tabs: ["plan", "inbox", "comments"],
-      tab: "plan",
-      width: 400,
-      tasks: {
-        [TASK.id]: {
-          opened: ["plan", "comments"],
-          closed: [],
-          recent: ["comments", "plan"],
-          order: ["plan", "comments"],
-        },
-      },
-    }),
-  );
-  window.localStorage.setItem(
-    "app.mainTabs",
-    JSON.stringify({
-      closedAgents: [],
-      tasks: {
-        [TASK.id]: {
-          recent: ["plan", { agent: AGENT_ID }, "inbox", "call"],
-          order: ["call", { agent: AGENT_ID }, "inbox"],
-          inboxOpen: true,
-          inboxSeen: ["item-1"],
-          planClosed: true,
-          callClosed: true,
-        },
-      },
-    }),
-  );
-  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
-  await settle();
-  const column = () => tab.control().mainTabs;
-  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, agentTab(AGENT_ID)]);
-  assert.deepEqual(column().tab, agentTab(AGENT_ID));
-  assert.deepEqual(tab.control().sidePanel.strip, [], "neither the Plan nor Comments tab stands");
-  assert.deepEqual(panelOf(tab), { open: false, tab: undefined });
 });
 
 test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
@@ -1163,7 +1221,7 @@ test("in a narrow room a task with no page behind it leaves for Home, not the Bo
   await settle();
   const left = {
     closed: tab.told.includes(ACT_KIND.TASKS_CLOSE),
-    board: tab.control().boardView.open,
+    board: views?.board,
   };
   act(() => tab.history().onBack());
 
@@ -1212,8 +1270,8 @@ test('Show panel on a plan whose strip holds no tab opens the tab last closed th
 
 test("Show panel beside the Inbox, its item's plan's strip holding no tab, asks for the \"+\" at the toggle rather than showing the panel empty, though another plan stands open behind it", () => {
   const tab = mount({ shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "billing" } });
-  act(() => tab.control().inboxView.onOpen());
-  act(() => tab.control().inboxView.onChoose({ taskId: "notes", itemId: "notes-item-0" }));
+  act(() => inboxDoorNow().open());
+  act(() => inboxDoorNow().choose({ taskId: "notes", itemId: "notes-item-0" }));
   assert.deepEqual(tab.control().sidePanel.strip, []);
 
   act(() => tab.control().sidePanel.onToggle());
@@ -1707,7 +1765,7 @@ async function agentOpenedBy(href: string) {
     panel: panelOf(tab),
     message: control.messageReveal?.messageId,
     thread: control.threadReveal?.threadId,
-    inbox: control.inboxView.open,
+    inbox: inboxNow().open,
   };
 }
 
@@ -1801,13 +1859,13 @@ async function placeOpenedBy(href: string) {
     listed: control.workspace?.slug,
     task: opensAsked(tab.payloads).at(-1),
     version: control.history.open ? control.history.spot?.revision : undefined,
-    board: control.boardView.open,
-    person: control.personView.userId,
-    inbox: control.inboxView.open
-      ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
+    board: views?.board,
+    person: views?.person.userId,
+    inbox: inboxNow().open
+      ? { chosen: inboxNow().chosen, narrowed: inboxNow().narrowed }
       : undefined,
-    automations: control.automationsView.open ? control.automationsView.place : undefined,
-    admin: tab.adminOpens,
+    automations: views?.automations,
+    admin: adminStanding,
   };
 }
 
@@ -1894,27 +1952,27 @@ test.each([
     `${ACME_AT}/automation/a1/run/r1`,
     { automations: { ...EDIT, runId: "r1" } },
   ],
-  ["Admin's link", `${ACME_AT}/admin`, { admin: [undefined] }],
-  ["an Admin section's link", `${ACME_AT}/admin/cost`, { admin: [{ kind: ADMIN_TAB.COST }] }],
+  ["Admin's link", `${ACME_AT}/admin`, { admin: { kind: ADMIN_TAB.DASHBOARD } }],
+  ["an Admin section's link", `${ACME_AT}/admin/cost`, { admin: { kind: ADMIN_TAB.COST } }],
   [
     "an Admin account's link",
     `${ACME_AT}/admin/user/user-charles`,
-    { admin: [{ kind: ADMIN_PAGE.ACCOUNT, id: "user-charles" }] },
+    { admin: { kind: ADMIN_PAGE.ACCOUNT, id: "user-charles" } },
   ],
   [
     "an Admin workspace's link",
     `${ACME_AT}/admin/workspace/w1`,
-    { admin: [{ kind: ADMIN_PAGE.WORKSPACE, id: "w1" }] },
+    { admin: { kind: ADMIN_PAGE.WORKSPACE, id: "w1" } },
   ],
   [
     "an Admin day's link",
     `${ACME_AT}/admin/day/2026-11-06`,
-    { admin: [{ kind: ADMIN_PAGE.DAY, day: "2026-11-06" }] },
+    { admin: { kind: ADMIN_PAGE.DAY, day: "2026-11-06" } },
   ],
   [
     "Settings' link, which the window opens rather than the tab",
     `${ACME_AT}/settings`,
-    { task: undefined, inbox: undefined, admin: [] },
+    { task: undefined, inbox: undefined, admin: undefined },
   ],
 ] as const)(
   "%s opens what it names, matched on the route tree",
@@ -1965,9 +2023,9 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
     },
   );
   const opened = () => ({
-    open: tab.control().inboxView.open,
-    chosen: tab.control().inboxView.chosen,
-    taskId: tab.control().inboxView.narrowed,
+    open: inboxNow().open,
+    chosen: inboxNow().chosen,
+    taskId: inboxNow().narrowed,
     panel: tab.control().sidePanel.tab,
   });
 
@@ -2008,8 +2066,8 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
     taskId: undefined,
     panel: undefined,
   });
-  assert.equal(tab.control().inboxView.open, false);
-  assert.deepEqual(tab.control().automationsView.place, {
+  assert.equal(inboxNow().open, false);
+  assert.deepEqual(views?.automations, {
     kind: AUTOMATIONS_PAGE.EDIT,
     automationId,
   });
@@ -2042,7 +2100,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
     }),
   );
   await settle();
-  const found = tab.control().inboxView.chosen;
+  const found = inboxNow().chosen;
   const listed = tab.control().workspace?.id;
   act(() =>
     tab.control().onOpenLink({
@@ -2054,8 +2112,8 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
 
   assert.deepEqual(found, { taskId: alerts, itemAgentId: AGENT_ID, itemId, opened: true });
   assert.equal(listed, ACME.id);
-  assert.equal(tab.control().inboxView.open, true);
-  assert.deepEqual(tab.control().inboxView.chosen, { itemId: unknownId, opened: true });
+  assert.equal(inboxNow().open, true);
+  assert.deepEqual(inboxNow().chosen, { itemId: unknownId, opened: true });
 
   act(() =>
     tab.control().onOpenLink({
@@ -2066,7 +2124,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   await settle();
 
   assert.deepEqual(
-    tab.control().inboxView.chosen,
+    inboxNow().chosen,
     { taskId: alerts, itemAgentId: AGENT_ID, itemId: unknownId, opened: true },
     "a link to the item standing missing asks the service again",
   );
@@ -2112,18 +2170,18 @@ test.each([
       },
     );
     await settle();
-    act(() => tab.control().inboxView.onOpen());
+    act(() => inboxDoorNow().open());
     act(() => tab.control().onOpenLink({ workspace: "acme", place }));
     const row = { taskId: "notes", itemId: "thread", opened: true } as const;
-    act(() => tab.control().inboxView.onChoose(row));
+    act(() => inboxDoorNow().choose(row));
     await act(async () => {
       await vi.waitFor(() => assert.ok(answers.length > 0));
       answers[0]?.();
     });
     await settle();
 
-    assert.equal(tab.control().inboxView.open, true);
-    assert.deepEqual(tab.control().inboxView.chosen, row);
+    assert.equal(inboxNow().open, true);
+    assert.deepEqual(inboxNow().chosen, row);
   },
 );
 
@@ -2161,7 +2219,7 @@ test.each([
       },
     );
     await settle();
-    act(() => tab.control().inboxView.onOpen());
+    act(() => inboxDoorNow().open());
     act(() => tab.control().onOpenLink(linkAt(href)));
     tab.replace("/personal/tasks");
     await act(async () => {
@@ -2171,7 +2229,7 @@ test.each([
     await settle();
 
     assert.equal(tab.at(), "/personal/tasks");
-    assert.equal(tab.control().inboxView.open, false);
+    assert.equal(inboxNow().open, false);
     assert.equal(tab.control().agentView.agentId, undefined);
   },
 );
@@ -2180,9 +2238,9 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, {});
   await settle();
   const narrowedTo = () => ({
-    open: tab.control().inboxView.open,
-    chosen: tab.control().inboxView.chosen,
-    taskId: tab.control().inboxView.narrowed,
+    open: inboxNow().open,
+    chosen: inboxNow().chosen,
+    taskId: inboxNow().narrowed,
   });
 
   act(() => tab.control().onShowInbox({ taskId: "notes" }));
@@ -2196,7 +2254,7 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
   const linked = narrowedTo();
   act(() => tab.control().onShowInbox({ taskId: "alerts", itemId: "thread" }));
   const thread = narrowedTo();
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
 
   assert.deepEqual(door, { open: true, chosen: undefined, taskId: "notes" });
   assert.deepEqual(linked, { open: true, chosen: undefined, taskId: "alerts" });
@@ -2210,7 +2268,7 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
 
 test("a Vespin link to a person opens their page in the workspace its slug names, in the place of the Inbox", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
 
   act(() =>
     tab.control().onOpenLink({
@@ -2220,9 +2278,9 @@ test("a Vespin link to a person opens their page in the workspace its slug names
   );
 
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
-  assert.equal(tab.control().inboxView.open, false);
-  assert.equal(tab.control().personView.userId, "user-charles");
-  assert.equal(tab.control().personView.workspaceId, PERSONAL.id);
+  assert.equal(inboxNow().open, false);
+  assert.equal(views?.person.userId, "user-charles");
+  assert.equal(views?.person.workspace, PERSONAL.slug);
 });
 
 test("a Vespin link whose slug names no workspace of the account's leaves the listed one, and opens its place all the same, whose read decides", () => {
@@ -2237,17 +2295,17 @@ test("a Vespin link whose slug names no workspace of the account's leaves the li
   );
 
   assert.equal(tab.control().workspace?.id, listed);
-  assert.equal(tab.control().automationsView.open, true);
+  assert.equal(views?.automations !== undefined, true);
 });
 
 test("an agent's page opened from the Automations pages leaves them for the page, as every door into a place of the window's state leaves a routed place", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-  act(() => tab.control().automationsView.onOpen());
-  assert.equal(tab.control().automationsView.open, true);
+  act(() => automationsDoor?.open());
+  assert.equal(views?.automations !== undefined, true);
 
   act(() => tab.control().agentView.onOpen("agent-run-1"));
 
-  assert.equal(tab.control().automationsView.open, false, "the Automations pages give way");
+  assert.equal(views?.automations, undefined, "the Automations pages give way");
   assert.equal(tab.control().agentView.agentId, "agent-run-1");
 });
 
@@ -2330,7 +2388,7 @@ test("a version history opened on a held task lists its versions in its first fr
   const tab = mount({ shown: true, tasks: OPEN });
   await settle();
 
-  act(() => tab.control().history.onOpen(TASK.id));
+  act(() => tab.control().onOpenHistory(TASK.id));
   await settle();
 
   assert.deepEqual(tab.control().history.list, {
@@ -2365,20 +2423,24 @@ test("the closed tabs kept are the latest twenty, the oldest let go past them", 
   const tab = mount({ shown: true, tasks: OPEN });
   const panel = () => tab.control().sidePanel;
   act(() => panel().onClose(SIDE_PANEL_TAB.DESCRIPTION));
-  for (let close = 0; close < 20; close += 1) {
-    act(() => panel().onOpenFile(FILE_REF));
-    act(() => panel().onClose(FILE));
+  // Note that each close is of a file of its own, since a tab standing open again is passed over.
+  const files = Array.from({ length: 20 }, (_, at) => ({ ...FILE_REF, path: `src/file-${at}.ts` }));
+  for (const ref of files) {
+    act(() => panel().onOpenFile(ref));
+    act(() => panel().onClose(fileTab(ref.path)));
   }
 
-  let reopened = 0;
+  const reopened: unknown[] = [];
   for (let reopen = tab.control().onReopenClosedTab; reopen !== undefined; ) {
     act(() => reopen?.());
-    assert.deepEqual(panel().tab, FILE);
-    reopened += 1;
+    reopened.push(panel().tab);
     reopen = tab.control().onReopenClosedTab;
   }
-  assert.equal(reopened, 20);
-  assert.deepEqual(panel().strip, [FILE], "the description's tab, closed first, is not kept");
+  assert.deepEqual(
+    reopened,
+    files.toReversed().map((ref) => fileTab(ref.path)),
+    "the latest first, the description's tab, closed first, not kept",
+  );
 });
 
 test("a file's tab opens again on the record it closed with, though another plan opened the same path since", () => {
@@ -2584,13 +2646,13 @@ test("the Inbox lists the chosen workspace's share of what waits, and a plan the
 test("an Inbox item chosen in one workspace gives way as another is listed, so its plan's Inbox no longer stands on screen", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
 
-  act(() => tab.control().inboxView.onOpen());
-  act(() => tab.control().inboxView.onChoose({ taskId: "notes", itemId: "notes-item-0" }));
-  const chosen = tab.control().inboxView.chosen;
+  act(() => inboxDoorNow().open());
+  act(() => inboxDoorNow().choose({ taskId: "notes", itemId: "notes-item-0" }));
+  const chosen = inboxNow().chosen;
   act(() => tab.control().onChooseWorkspace(ACME.id));
 
   assert.deepEqual(chosen, { taskId: "notes", itemId: "notes-item-0" });
-  assert.equal(tab.control().inboxView.chosen, undefined);
+  assert.equal(inboxNow().chosen, undefined);
   assert.equal(tab.control().inboxShown, null);
 });
 
@@ -2600,16 +2662,16 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
     { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
   );
   const choose = () => {
-    act(() => tab.control().inboxView.onOpenItem({ taskId: TASK.id, itemId: "item-1" }));
-    act(() => tab.control().boardView.onOpen());
+    act(() => inboxDoorNow().openItem({ taskId: TASK.id, itemId: "item-1" }));
+    act(() => boardDoor?.open());
   };
 
   choose();
-  act(() => tab.control().inboxView.onOpen());
-  const fromRow = tab.control().inboxView.chosen;
+  act(() => inboxDoorNow().open());
+  const fromRow = inboxNow().chosen;
   choose();
   act(() => tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_PLACE.INBOX } }));
-  const fromLink = tab.control().inboxView.chosen;
+  const fromLink = inboxNow().chosen;
 
   assert.equal(fromRow, undefined);
   assert.equal(fromLink, undefined);
@@ -2690,14 +2752,14 @@ test("a start refused after the Board was opened leaves the Board standing rathe
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed });
   });
-  act(() => tab.control().boardView.onOpen());
+  act(() => boardDoor?.open());
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
     answers[0]?.({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE });
     await note;
   });
 
-  assert.equal(tab.control().boardView.open, true);
+  assert.equal(views?.board, true);
   assert.equal(tab.control().agentView.agentId, undefined);
 });
 
@@ -2735,9 +2797,9 @@ test.each([
           new Promise((_resolve, reject) => refusals.push(() => reject(new Error("Refused.")))),
       },
     );
-    act(() => tab.control().inboxView.onOpen());
+    act(() => inboxDoorNow().open());
     act(() => press(tab));
-    act(() => tab.control().boardView.onOpen());
+    act(() => boardDoor?.open());
     await act(async () => {
       await vi.waitFor(() => assert.ok(refusals.length > 0));
       refusals[0]?.();
@@ -2745,7 +2807,7 @@ test.each([
     await settle();
 
     assert.deepEqual(
-      { board: tab.control().boardView.open, inbox: tab.control().inboxView.open },
+      { board: views?.board, inbox: inboxNow().open },
       { board: true, inbox: false },
     );
   },
@@ -2783,7 +2845,7 @@ test("a start refused while the Inbox item it was pressed over was still being f
   });
   await settle();
 
-  assert.deepEqual(tab.control().inboxView.chosen, {
+  assert.deepEqual(inboxNow().chosen, {
     taskId: "notes",
     itemAgentId: AGENT_ID,
     itemId,
@@ -2794,18 +2856,18 @@ test("a start refused while the Inbox item it was pressed over was still being f
 test("a person's page is theirs in the workspace it opened in: another listed in its place closes it, and one opened from another workspace lists that one first", async () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
 
-  act(() => tab.control().personView.onOpen("user-charles", "Charles Pan"));
-  const opened = tab.control().personView.userId;
+  act(() => tab.control().onOpenPerson("user-charles", "Charles Pan"));
+  const opened = views?.person.userId;
   act(() => tab.control().onChooseWorkspace(ACME.id));
   // The page gives way through the router, whose move lands once the page's own has.
   await act(async () => undefined);
-  const afterSwitch = tab.control().personView.userId;
-  act(() => tab.control().personView.onOpen("user-maya", "Maya Okafor", PERSONAL.id));
+  const afterSwitch = views?.person.userId;
+  act(() => tab.control().onOpenPerson("user-maya", "Maya Okafor", PERSONAL.id));
 
   assert.equal(opened, "user-charles");
   assert.equal(afterSwitch, undefined);
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
-  assert.equal(tab.control().personView.userId, "user-maya");
+  assert.equal(views?.person.userId, "user-maya");
 });
 
 test("a person's page opened in another workspace lists it without reopening its last plan, so no refused reopen takes the page with it", async () => {
@@ -2825,12 +2887,12 @@ test("a person's page opened in another workspace lists it without reopening its
   });
   const opensBefore = opensAsked(tab.payloads).length;
 
-  act(() => tab.control().personView.onOpen("user-maya", "Maya Okafor", ACME.id));
+  act(() => tab.control().onOpenPerson("user-maya", "Maya Okafor", ACME.id));
   await settle();
 
   assert.equal(tab.control().workspace?.id, ACME.id);
   assert.equal(opensAsked(tab.payloads).length, opensBefore);
-  assert.equal(tab.control().personView.userId, "user-maya");
+  assert.equal(views?.person.userId, "user-maya");
 });
 
 /** The tasks each open the tab asked of main named, in order. */
@@ -2864,12 +2926,12 @@ test("a person's page opened while a plan's open is still out stands when the op
   );
 
   act(() => tab.control().onSelect("alerts"));
-  act(() => tab.control().personView.onOpen("user-maya", "Maya Okafor", PERSONAL.id));
+  act(() => tab.control().onOpenPerson("user-maya", "Maya Okafor", PERSONAL.id));
   await act(async () => answer(true));
   await settle();
 
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
-  assert.equal(tab.control().personView.userId, "user-maya");
+  assert.equal(views?.person.userId, "user-maya");
 });
 
 test("a plan opened from another workspace says the window switched, and Back lists the workspace left with the plan that stood open there", async () => {
@@ -3482,38 +3544,454 @@ function listRead(tasks: TasksView["tasks"]): TasksView {
   return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, tasks };
 }
 
-test("while a page stands its ask, a way out asks instead of going, Leave goes where was asked, and once the ask is down the doors go at once", () => {
+test("while a page stands its ask, a way out asks instead of going, Leave goes where was asked, and once the ask is down the doors go at once", async () => {
   const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   const asked: (() => void)[] = [];
-  const ask: LeaveAsk = (leave) => asked.push(leave);
+  const ask: LeaveAsk = (leave) => void asked.push(leave);
   let down: () => void = () => undefined;
   act(() => {
-    down = tab.control().leaveGuard.stand(ask);
+    down = tab.control().placeLeave.stand(ask);
   });
 
-  act(() => tab.control().boardView.onOpen());
-  act(() => tab.control().automationsView.onOpen());
+  // Note that the router's move waits a turn on its blocker, which stands while the page holds its ask.
+  act(() => boardDoor?.open());
+  await settle();
   act(() => tab.control().onChooseWorkspace("workspace-other"));
-  assert.equal(tab.control().inboxView.open, true, "the page stands while it is asked about");
-  assert.equal(asked.length, 3, "the workspace switcher asks as the other doors do");
+  assert.equal(inboxNow().open, true, "the page stands while it is asked about");
+  assert.equal(asked.length, 2, "the workspace switcher asks as the Board's move does");
 
   act(() => asked[0]?.());
-  assert.equal(tab.control().boardView.open, true, "Leave goes where the first way out went");
+  await settle();
+  assert.equal(views?.board, true, "Leave goes where the first way out went");
 
   act(() => down());
-  act(() => tab.control().inboxView.onOpen());
-  assert.equal(tab.control().inboxView.open, true);
-  assert.equal(asked.length, 3, "nothing is asked once the ask is down");
+  act(() => inboxDoorNow().open());
+  await settle();
+  assert.equal(inboxNow().open, true);
+  assert.equal(asked.length, 2, "nothing is asked once the ask is down");
 });
 
-test("the Board stands in the plan's place over the Inbox, which it puts away", () => {
-  const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
-  act(() => tab.control().inboxView.onOpen());
-  act(() => tab.control().boardView.onOpen());
+/** The task the doors below go to, listed beside the open one in the open one's workspace. */
+const BILLING = row("billing", 2);
 
-  assert.equal(tab.control().boardView.open, true);
-  assert.equal(tab.control().inboxView.open, false);
+/** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead; over none where `bound` says so. */
+async function onInbox(
+  away: (control: TasksControl) => void = () => inboxDoorNow().open(),
+  bound = true,
+) {
+  const tab = mount(
+    {
+      shown: true,
+      // Note that the window's history stands beside the tab, since a door's step is written through it.
+      history: true,
+      tasks: {
+        ...TWO_WORKSPACES,
+        tasks: [row("notes", 4), BILLING],
+        ...(bound ? { activeTaskId: "notes" } : undefined),
+      },
+    },
+    {
+      [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
+      [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(),
+    },
+  );
+  await settle();
+  act(() => away(tab.control()));
+  await settle();
+  return tab;
+}
+
+/** What a press leaves the window on: its address and steps, the task bound and asked for, the place standing, the tab shown, and the section asked into view. */
+function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
+  const control = tab.control();
+  return {
+    at: tab.at(),
+    entries: tab.entries(),
+    bound: control.boundFor,
+    asked: opensAsked(tab.payloads),
+    inbox: inboxNow().open
+      ? { chosen: inboxNow().chosen, narrowed: inboxNow().narrowed }
+      : undefined,
+    agentPage: control.agentView.agentId,
+    automations: views?.automations !== undefined,
+    board: views?.board,
+    person: views?.person.userId,
+    admin: adminStanding !== undefined,
+    history: control.history.open,
+    listed: control.workspace?.id,
+    tab: control.mainTabs.tab,
+    side: control.sidePanel.open ? control.sidePanel.tab : undefined,
+    section:
+      control.sectionReveal === undefined
+        ? undefined
+        : { taskId: control.sectionReveal.taskId, anchor: control.sectionReveal.reveal.anchor },
+    pin: control.chosenPin,
+    founding: control.newWorkspace.open,
+  };
+}
+
+/** The doors that show a tab of a task, each pressed for the task the doors below go to. */
+const TAB_DOORS: [string, (control: TasksControl) => void][] = [
+  ["a column tab", (control) => control.onShowColumnTab(BILLING.id, agentTab(AGENT_ID))],
+  ["a side panel tab", (control) => control.onShowPanelTab(BILLING.id, PULLS)],
+  ["an agent", (control) => control.onShowAgent(BILLING.id, AGENT_ID)],
+  [
+    "a version's source",
+    (control) =>
+      control.onShowSource(BILLING.id, { kind: REVISION_SOURCE.AGENT, agentId: AGENT_ID }),
+  ],
+  [
+    "a task's mention",
+    (control) => control.onShowMention({ kind: MENTION_KIND.TASK, taskId: BILLING.id }),
+  ],
+  [
+    "a section's mention",
+    (control) =>
+      control.onShowMention({ kind: MENTION_KIND.SECTION, taskId: BILLING.id, anchor: "rollout" }),
+  ],
+  [
+    "a mention in New task's card",
+    (control) => control.newTask.onShowMention({ kind: MENTION_KIND.TASK, taskId: BILLING.id }),
+  ],
+];
+
+/** The window on the Board, as the Inbox's doors below are pressed from it. */
+const FROM_BOARD = () => boardDoor?.open();
+
+/** The doors of the router's places, each pressed from the Inbox over the open task, or from `away`'s place where named. */
+const ROUTED_DOORS: [
+  string,
+  (control: TasksControl) => void,
+  ((control: TasksControl) => void)?,
+][] = [
+  ["Admin", () => adminDoor?.open()],
+  ["the Board", () => boardDoor?.open()],
+  ["a person's page", (control) => control.onOpenPerson("user-ada", "Ada")],
+  [
+    "a person's page in another workspace, which it lists",
+    (control) => control.onOpenPerson("user-ada", "Ada", ACME.id),
+  ],
+  ["Automations", () => automationsDoor?.open()],
+  ["the Inbox", () => inboxDoorNow().open(), FROM_BOARD],
+  [
+    "an Inbox item",
+    () =>
+      inboxDoorNow().openItem({
+        taskId: BILLING.id,
+        itemAgentId: AGENT_ID,
+        itemId: ITEM_ID,
+        opened: true,
+      }),
+    FROM_BOARD,
+  ],
+  ["a task's Inbox", (control) => control.onShowInbox({ taskId: BILLING.id }), FROM_BOARD],
+  [
+    "a task's Inbox item",
+    (control) => control.onShowInbox({ taskId: BILLING.id, itemId: ITEM_ID }),
+    FROM_BOARD,
+  ],
+  ["the version history, sought to a version", (control) => control.onOpenHistory(BILLING.id, 1)],
+  ["the Board's close", () => boardDoor?.close(), FROM_BOARD],
+  [
+    "a person's page's close",
+    () => personDoor?.close(),
+    (control) => control.onOpenPerson("user-ada", "Ada"),
+  ],
+  [
+    "an agent's page's close",
+    (control) => control.agentView.onClose(),
+    (control) => control.agentView.onOpen(AGENT_ID),
+  ],
+  ["Automations' close", () => automationsDoor?.close(), () => automationsDoor?.open()],
+  ["the Inbox's close", () => inboxRoute?.onClose()],
+];
+
+test.each(ROUTED_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press, away) => askedOver(press, away),
+);
+
+test.each(ROUTED_DOORS.filter(([door]) => door.endsWith("close")))(
+  "%s with no task bound, over a page holding unsaved work, asks, Cancel leaves the window as it stood, and Leave arrives on Home as the press does with no ask",
+  async (_door, press, away) => askedOver(press, away, false),
+);
+
+test("Automations pressed over its own page holding unsaved work asks still, and Leave keeps the page standing", async () => {
+  const tab = await onInbox(() => automationsDoor?.open());
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  const stood = windowOf(tab);
+  act(() => automationsDoor?.open());
+  await settle();
+  act(() => asks[0]?.());
+  await settle();
+
+  assert.equal(asks.length, 1, "the press asks, as it does over any other page");
+  assert.deepEqual(windowOf(tab), stood);
+});
+
+test("an Inbox item kept at a page's leave ask holds nothing, so its address landed on later is found as the service says", async () => {
+  const tab = await onInbox(FROM_BOARD);
+  let down: () => void = () => undefined;
+  act(() => {
+    down = tab.control().placeLeave.stand((_leave, stay) => stay());
+  });
+  act(() =>
+    inboxDoorNow().openItem({
+      taskId: BILLING.id,
+      itemAgentId: AGENT_ID,
+      itemId: ITEM_ID,
+      opened: true,
+    }),
+  );
+  await settle();
+  act(() => down());
+  tab.arrive(`/personal/inbox/${ITEM_ID}`);
+  await settle();
+
+  assert.deepEqual(inboxNow().chosen, { itemId: ITEM_ID, opened: true });
+});
+
+test.each<[string, (control: TasksControl) => void]>([
+  ["a list's press", (control) => control.onSelect(BILLING.id)],
+  [
+    "a row gone back to, from the sidebar, ⌘K, or Recent",
+    (control) => control.onResume(BILLING.id),
+  ],
+  ["the tab switcher's task", (control) => control.onRestoreTask(BILLING.id)],
+  ["a task named by the Inbox or a chip", (control) => control.onShowTask(BILLING.id)],
+  ["Home", (control) => control.onGoHome()],
+  ["leaving the task", (control) => control.onLeaveTask()],
+  ["an agent's page", (control) => control.agentView.onOpen(AGENT_ID)],
+  [
+    "a pinned tab",
+    (control) => control.onOpenPinnedTab({ task: BILLING.id, tab: PULLS, label: "#1", at: 1 }),
+  ],
+  ...TAB_DOORS,
+])(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press) => askedOver(press),
+);
+
+test("the tab switcher's task, moved over an automation holding unsaved work, which its own place then stands in, asks once, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask", async () =>
+  askedOver(
+    (control) => control.onShowColumnTab(BILLING.id, agentTab(AGENT_ID), true),
+    () => automationsDoor?.open(),
+  ));
+
+test.each(TAB_DOORS)(
+  "%s over an automation holding unsaved work, which the task opens under, asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press) => askedOver(press, () => automationsDoor?.open()),
+);
+
+/** The workspace doors, each pressed from `away`'s place over Personal's open task, or over no task where `bound` is false. */
+const WORKSPACE_DOORS: [
+  string,
+  (control: TasksControl) => void,
+  ((control: TasksControl) => void) | undefined,
+  boolean?,
+][] = [
+  [
+    "another workspace chosen, which leaves the open task",
+    (control) => control.onChooseWorkspace(ACME.id),
+    () => undefined,
+  ],
+  [
+    "another workspace chosen over the Inbox",
+    (control) => control.onChooseWorkspace(ACME.id),
+    undefined,
+  ],
+  [
+    "another workspace chosen over the Inbox with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    undefined,
+    false,
+  ],
+  [
+    "another workspace chosen over an automation with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    () => automationsDoor?.open(EDIT),
+    false,
+  ],
+  [
+    "another workspace chosen over the Board with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    FROM_BOARD,
+    false,
+  ],
+  ["New workspace", (control) => control.newWorkspace.onOpen(), undefined],
+];
+
+test.each(WORKSPACE_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press, away, bound) => askedOver(press, away, bound),
+);
+
+/** A link to each family of places, opened in the Tasks tab as the window hands it one, each naming the task the doors above go to. */
+const ON_BILLING = `${LINK_ORIGIN}/personal/task/${BILLING.id}`;
+const LINK_DOORS: [string, string][] = [
+  ["a comment thread's link", `${ON_BILLING}?comment=thread-1`],
+  ["a section's link", `${ON_BILLING}#rollout`],
+  ["a page's link", `${ON_BILLING}/page/page-1`],
+  ["an agent's link", `${ON_BILLING}/agent/${AGENT_ID}`],
+  ["a message's link", `${ON_BILLING}/agent/${AGENT_ID}/message/msg-7`],
+  ["a worker's link", `${ON_BILLING}/agent/${AGENT_ID}/worker/toolu_1`],
+  ["a Changes link", `${ON_BILLING}/agent/${AGENT_ID}/changes`],
+  ["a review thread's link", `${ON_BILLING}/agent/${AGENT_ID}/changes/files/thread/PRRT_1`],
+  ["a task's link", ON_BILLING],
+  ["a version's link", `${ON_BILLING}/version/1`],
+  ["Home's link in another workspace", `${LINK_ORIGIN}/acme`],
+  ["the Board's link in another workspace", `${LINK_ORIGIN}/acme/tasks`],
+  ["a person's link in another workspace", `${LINK_ORIGIN}/acme/person/user-ada`],
+  ["the Automations link in another workspace", `${LINK_ORIGIN}/acme/automations`],
+  ["an automation's link in another workspace", `${LINK_ORIGIN}/acme/automation/a1`],
+  ["the Inbox's link in another workspace", `${LINK_ORIGIN}/acme/inbox`],
+  ["an Inbox item's link under its task", `${ON_BILLING}/inbox/${ITEM_ID}`],
+];
+
+test.each(LINK_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the link does with no ask",
+  async (_door, href) => askedOver((control) => control.onOpenLink(linkAt(href)), FROM_BOARD),
+);
+
+test("a link to a task number the service finds none for, over an automation holding unsaved work, keeps the page's ask once Leave leaves it standing", async () => {
+  const tab = mount(
+    {
+      shown: true,
+      history: true,
+      tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+    },
+    {
+      [ACT_KIND.TASKS_FIND]: () => Promise.resolve({ failure: TASK_CALL_FAILURE.UNANSWERED }),
+      [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false),
+    },
+  );
+  await settle();
+  act(() => automationsDoor?.open(EDIT));
+  await settle();
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  act(() => tab.control().onOpenLink(linkAt(`${LINK_ORIGIN}/personal/task/99`)));
+  await settle();
+  act(() => asks[0]?.());
+  await settle();
+  const stays = views?.automations !== undefined;
+  act(() => boardDoor?.open());
+  await settle();
+
+  assert.equal(stays, true, "the automation still stands, its work unsaved");
+  assert.equal(asks.length, 2, "leaving it later still asks");
+});
+
+test("a version's link from the Board, with Descriptions off, stands its task's own place on its Overview", async () => {
+  handState(experimentsOn());
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onOpenLink(linkAt(`${ON_BILLING}/version/1`)));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
+test("a task pressed on the Board leaves the Board for its task's own place", async () => {
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onSelect(BILLING.id));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
+test.each<[string, (control: TasksControl) => void, string]>([
+  ["the Board", FROM_BOARD, "/personal/tasks"],
+  [
+    "a person's page",
+    (control) => control.onOpenPerson("user-ada", "Ada"),
+    "/personal/person/user-ada",
+  ],
+])(
+  "a task pressed on %s that the host refuses to open stands that page again",
+  async (_page, away, at) => {
+    const tab = mount(
+      {
+        shown: true,
+        history: true,
+        tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+      },
+      { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false) },
+    );
+    await settle();
+    act(() => away(tab.control()));
+    await settle();
+    act(() => tab.control().onSelect(BILLING.id));
+    await settle();
+
+    assert.equal(tab.at(), at);
+  },
+);
+
+test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
+  const tab = await onInbox();
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  await settle();
+  act(() =>
+    tab
+      .control()
+      .onShowMention({ kind: MENTION_KIND.SECTION, taskId: BILLING.id, anchor: "rollout" }),
+  );
+  await settle();
+  const asked = windowOf(tab).section;
+  act(() => asks[0]?.());
+  await settle();
+
+  assert.equal(asked, undefined, "nothing is asked into view while the leave is asked");
+  assert.deepEqual(windowOf(tab).section, { taskId: BILLING.id, anchor: "rollout" });
+});
+
+/** A press made with no ask standing over `away`'s place, and again with one standing, kept with Cancel and let go with Leave. */
+async function askedOver(
+  press: (control: TasksControl) => void,
+  away?: (control: TasksControl) => void,
+  bound?: boolean,
+) {
+  const unasked = await onInbox(away, bound);
+  act(() => press(unasked.control()));
+  await settle();
+  const arrived = windowOf(unasked);
+  closeWindow();
+  // Note that the second window starts as the first did, with nothing the first chose kept for it.
+  window.localStorage.clear();
+
+  const tab = await onInbox(away, bound);
+  const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
+  act(() => void tab.control().placeLeave.stand((leave, stay) => asks.push({ leave, stay })));
+  await settle();
+  const stood = windowOf(tab);
+  act(() => press(tab.control()));
+  await settle();
+  act(() => asks[0]?.stay());
+  await settle();
+  const kept = windowOf(tab);
+  act(() => press(tab.control()));
+  await settle();
+  act(() => asks[1]?.leave());
+  await settle();
+
+  assert.equal(asks.length, 2, "each press asks once");
+  assert.deepEqual(kept, stood, "Cancel changes nothing");
+  assert.notDeepEqual(arrived, stood, "the press moves the window");
+  assert.deepEqual(windowOf(tab), arrived);
+}
+
+test("the Board stands in the plan's place over the Inbox, which it puts away", () => {
+  mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
+  act(() => inboxDoorNow().open());
+  act(() => boardDoor?.open());
+
+  assert.equal(views?.board, true);
+  assert.equal(inboxNow().open, false);
 });
 
 test("Home from an open plan leaves it, and from Home only puts the page in its place away, asking the host nothing", async () => {
@@ -3526,11 +4004,11 @@ test("Home from an open plan leaves it, and from Home only puts the page in its 
   assert.equal(tab.control().boundFor, undefined);
 
   const home = mount({ shown: true, tasks: listRead([]) });
-  act(() => home.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   const toldBefore = home.told.length;
   act(() => home.control().onGoHome());
   await settle();
-  assert.equal(home.control().inboxView.open, false);
+  assert.equal(inboxNow().open, false);
   assert.equal(home.control().page, TASKS_PAGE.HOME);
   assert.deepEqual(home.told.slice(toldBefore), [], "the host is asked nothing");
 });
@@ -3678,79 +4156,6 @@ test("a Plan tab an earlier version pinned to the sidebar becomes the task's own
     [TASK.id],
     "the refused task's tab stays pinned, the pinned task's goes",
   );
-});
-
-/** An agent pin's payload, read back as the act's own schema admits it. */
-const readAgentPin = Schema.decodeUnknownOption(
-  Schema.Struct({
-    agentId: Schema.String,
-    pinned: Schema.Boolean,
-    position: Schema.optionalKey(Schema.String),
-  }),
-);
-
-test("an agent's tab an earlier version pinned on this Mac becomes the agent's own pin on the account, where it was dragged, once the list followed live names its task, and leaves this Mac only once that pin landed or the account already pinned it", async () => {
-  const kept = () =>
-    window.localStorage.setItem(
-      "app.sidePanel",
-      JSON.stringify({
-        open: true,
-        tabs: ["plan"],
-        width: 320,
-        pins: [{ task: TASK.id, tab: { agent: AGENT_ID }, label: "Agent", at: 1, position: "a3" }],
-      }),
-    );
-  const storedPins = () =>
-    JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}").pins as unknown[];
-  const asked = (tab: ReturnType<typeof mount>) =>
-    tab.payloads
-      .filter((each) => each.kind === ACT_KIND.AGENTS_PIN)
-      .map((each) => Option.getOrUndefined(readAgentPin(each.payload)));
-  const live = { ...listRead([listed()]), taskAgents: [listedAgent(RUNNING_AGENT)] };
-  const carriedPin = [{ agent: AGENT_ID, task: TASK.id, position: "a3" }];
-  /** A launch over the kept pin, the service answering its pin as `answer` does. */
-  const launch = async (
-    tasks: TasksView,
-    answer: () => Promise<PortActResult<typeof ACT_KIND.AGENTS_PIN>>,
-  ) => {
-    kept();
-    const tab = mount({ shown: true, tasks }, { [ACT_KIND.AGENTS_PIN]: answer });
-    await settle();
-    return tab;
-  };
-
-  const pending = Promise.withResolvers<PortActResult<typeof ACT_KIND.AGENTS_PIN>>();
-  const landed = await launch(listRead([listed()]), () => pending.promise);
-  assert.deepEqual(asked(landed), [], "nothing is asked before the list is followed live");
-  landed.stand({ tasks: live });
-  await settle();
-  assert.deepEqual(asked(landed), [{ agentId: AGENT_ID, pinned: true, position: "a3" }]);
-  assert.deepEqual(landed.control().sidePanel.carried, carriedPin, "kept while its pin is out");
-  assert.equal(storedPins().length, 1);
-  await act(async () => pending.resolve({ agent: RUNNING_AGENT }));
-  assert.deepEqual(landed.control().sidePanel.carried, []);
-  assert.deepEqual(storedPins(), [], "nor does it stay on this Mac");
-  closeWindow();
-
-  // The service answers so as well for an agent the account cannot see just now.
-  const refused = await launch(live, () =>
-    Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
-  );
-  assert.equal(asked(refused).length, 1);
-  assert.deepEqual(
-    refused.control().sidePanel.carried,
-    carriedPin,
-    "a refused pin keeps the tab's for the next launch",
-  );
-  closeWindow();
-
-  const already = await launch(
-    { ...live, taskAgentPins: [{ agentId: AGENT_ID, taskId: TASK.id, pinnedAt: 5 }] },
-    () => Promise.resolve({ agent: RUNNING_AGENT }),
-  );
-  assert.deepEqual(asked(already), [], "an agent already pinned is asked nothing");
-  assert.deepEqual(already.control().sidePanel.carried, []);
-  assert.deepEqual(storedPins(), []);
 });
 
 /** A start's agent, read back where it names one. */
@@ -4054,7 +4459,7 @@ test("what the developer opened while New task's agent start was out, a page and
       },
     });
   });
-  act(() => tab.control().automationsView.onOpen());
+  act(() => automationsDoor?.open());
   act(() => tab.control().onNewTask());
 
   await act(async () => {
@@ -4062,7 +4467,7 @@ test("what the developer opened while New task's agent start was out, a page and
     answers[0]?.({ planId: OTHER_TASK_ID, agentStart: { agent: started } });
     await note;
   });
-  assert.equal(tab.control().automationsView.open, true, "the page stands");
+  assert.equal(views?.automations !== undefined, true, "the page stands");
   assert.equal(tab.control().newTask.open, true, "New task stands");
   assert.equal(tab.control().starting, undefined);
 });
@@ -4126,11 +4531,11 @@ test("Create with an agent opens New task's card for an automation's agent over 
     { shown: true, tasks: { ...OPEN, workspaces: [ACME] } },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
-  act(() => tab.control().automationsView.onOpen());
+  act(() => automationsDoor?.open());
   act(() => tab.control().onNewAutomationAgent());
   assert.equal(tab.control().newTask.open, true);
   assert.deepEqual(tab.control().newTask.preset, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
-  assert.equal(tab.control().automationsView.open, true, "the page stands behind the card");
+  assert.equal(views?.automations !== undefined, true, "the page stands behind the card");
 
   const handed = {
     idempotencyKey: AGENT_KEY,
@@ -4166,7 +4571,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
     NEW_TASK_PURPOSE.AUTOMATION,
     "for an automation's agent",
   );
-  assert.equal(tab.control().automationsView.open, true, "the page stands behind it again");
+  assert.equal(views?.automations !== undefined, true, "the page stands behind it again");
 });
 
 test("an agent refused as New task's Agent mode started its task opens the task on a draft holding the words, model, and why, whose Retry starts the agent on that task under the start's key", async () => {
@@ -4687,16 +5092,14 @@ it.effect(
       assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, agentTab(AGENT_ID), agentTab(UNSEEN_ID)]);
     }),
 );
-
-test("Admin opened while a page holds unsaved work waits on the leave question, and opens once it is answered", () => {
-  const tab = mount({ shown: true });
-  const asked: (() => void)[] = [];
-  act(() => void tab.control().leaveGuard.stand((leave) => asked.push(leave)));
-  act(() => tab.control().adminView.onOpen());
-  assert.deepEqual(tab.adminOpens, [], "Admin waits on the question");
-
-  act(() => asked[0]?.());
-  assert.deepEqual(tab.adminOpens, [undefined]);
+test("a pinned tab of one agent's opened while the column shows another shows its agent's column, whose strip alone draws it", async () => {
+  const tab = mount({ shown: true, tasks: withAgents(IDLE_AGENTS) });
+  await settle();
+  act(() => tab.control().mainTabs.onChoose(agentTab(FINISHED_ID)));
+  act(() => tab.control().onOpenPinnedTab({ task: TASK.id, tab: PULLS, label: "#1", at: 1 }));
+  await settle();
+  assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
+  assert.deepEqual(tab.control().sidePanel.tab, PULLS);
 });
 
 test("New task over Home under Admin opens its dialog, since Home's composer is not on screen", () => {

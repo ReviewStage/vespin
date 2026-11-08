@@ -2149,6 +2149,7 @@ it.layer(getTestDB())("the coding-agent store's routing of an agent", (it) => {
           userId: starter,
           conversationId: agent.conversationId,
           runtimeSessionId: null,
+          launch: 1,
         });
         assert.ok(Option.isNone(other));
         assert.ok(Option.isNone(retired));

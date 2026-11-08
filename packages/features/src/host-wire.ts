@@ -121,8 +121,6 @@ export const GITHUB_TOKEN_REFRESH = Duration.minutes(50);
  */
 export const hostGithubTokenRequestSchema = EffectSchema.Struct({ agentId: wireUuidSchema });
 
-export type HostGithubTokenRequest = typeof hostGithubTokenRequestSchema.Type;
-
 /**
  * What it answers: a GitHub App installation token cut to the agent's
  * repository, good for an hour from its mint, which the host signs the
@@ -269,8 +267,6 @@ export const hostPairingCodeRequestSchema = EffectSchema.Struct({
   ),
 });
 
-export type HostPairingCodeRequest = typeof hostPairingCodeRequestSchema.Type;
-
 /**
  * A pending pairing as the approve screen shows it, so a member sees what
  * they would let run their agents: the box's name, platform, and
@@ -290,8 +286,6 @@ export type HostPairingAnswer = typeof hostPairingAnswerSchema.Type;
 
 /** What an approve answers: the id of the host it made, listed among the member's hosts from now on. */
 export const hostPairingApproveAnswerSchema = EffectSchema.Struct({ deviceId: wireUuidSchema });
-
-export type HostPairingApproveAnswer = typeof hostPairingApproveAnswerSchema.Type;
 
 /** What a held refusal of a read, an approve, or a deny carries beside its slug: when the account's guesses are taken again, in epoch milliseconds. */
 export const hostPairingHeldDataSchema = EffectSchema.Struct({
@@ -362,8 +356,6 @@ export const hostsAnswerSchema = EffectSchema.Struct({
   hosts: EffectSchema.Array(hostSchema),
   installScriptUrl: EffectSchema.String,
 });
-
-export type HostsAnswer = typeof hostsAnswerSchema.Type;
 
 /**
  * How long ago each of the reader's own devices last beat, in milliseconds

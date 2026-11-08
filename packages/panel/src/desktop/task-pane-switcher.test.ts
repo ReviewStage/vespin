@@ -14,8 +14,8 @@ import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
 import { useTaskRenameOffer } from "../tasks/task-menu-items.js";
-import { MAIN_TAB } from "../tasks/use-main-tabs.js";
-import { SIDE_PANEL_TAB, type SidePanelTab } from "../tasks/use-side-panel.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { taskRenameMutation } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
@@ -24,6 +24,7 @@ import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { openTaskMenu, taskName } from "../testing/task-menu.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { TASK_PANE, taskPaneOf } from "./task-pane-switcher.js";
 
@@ -139,59 +140,65 @@ function mount(
   ) =>
     act(() =>
       root.render(
-        withQueryClient(
-          createElement(
-            ShellRoomContext.Provider,
-            { value: room },
-            createElement(RenameOfferProbe),
-            createElement(DesktopTasks, {
-              looks: NO_LOOKS,
-              room,
-              away: { label: "Inbox", onPress: () => told.push("away") },
-              tasks: tasksControl({
-                page: TASKS_PAGE.DOCUMENT,
-                activeTaskId: TASK.id,
-                region: { kind: DOCUMENT_REGION.READY, task: TASK },
-                pages: paged ? [PAGE] : undefined,
-                renameTask: taskRenameMutation(({ taskId, name }) => {
-                  told.push(`rename ${taskId} ${name}`);
-                  return Promise.resolve(true);
-                }, undefined),
-                repositoryMenu:
-                  repositoryAsk === undefined
-                    ? undefined
-                    : { taskId: TASK.id, request: repositoryAsk },
-                mainTabs: {
-                  ...tasksControl().mainTabs,
-                  tabs: [MAIN_TAB.OVERVIEW, agentTab(AGENT.id), ...(draft ? [DRAFT] : [])],
-                  tab: draft ? DRAFT : onAgent ? agentTab(AGENT.id) : MAIN_TAB.OVERVIEW,
-                  openAgents: [AGENT.id],
-                  onChoose: (chosen) => told.push(`column ${JSON.stringify(chosen)}`),
-                  onClose: (closed) => told.push(`close column ${JSON.stringify(closed)}`),
-                },
-                agents: agentsControl({
-                  agents: [...held],
-                  agentIds: held.map((each) => each.id),
-                  onDiscardDraft: (draftId) => told.push(`discard ${draftId}`),
+        windowRouter().provide(
+          withQueryClient(
+            createElement(
+              ShellRoomContext.Provider,
+              { value: room },
+              createElement(RenameOfferProbe),
+              createElement(DesktopTasks, {
+                looks: NO_LOOKS,
+                room,
+                away: { label: "Inbox", onPress: () => told.push("away") },
+                tasks: tasksControl({
+                  page: TASKS_PAGE.DOCUMENT,
+                  activeTaskId: TASK.id,
+                  region: { kind: DOCUMENT_REGION.READY, task: TASK },
+                  pages: paged ? [PAGE] : undefined,
+                  renameTask: taskRenameMutation(({ taskId, name }) => {
+                    told.push(`rename ${taskId} ${name}`);
+                    return Promise.resolve(true);
+                  }, undefined),
+                  repositoryMenu:
+                    repositoryAsk === undefined
+                      ? undefined
+                      : { taskId: TASK.id, request: repositoryAsk },
+                  mainTabs: {
+                    ...tasksControl().mainTabs,
+                    tabs: [MAIN_TAB.OVERVIEW, agentTab(AGENT.id), ...(draft ? [DRAFT] : [])],
+                    tab: draft ? DRAFT : onAgent ? agentTab(AGENT.id) : MAIN_TAB.OVERVIEW,
+                    openAgents: [AGENT.id],
+                    onChoose: (chosen) => told.push(`column ${JSON.stringify(chosen)}`),
+                    onClose: (closed) => told.push(`close column ${JSON.stringify(closed)}`),
+                  },
+                  agents: agentsControl({
+                    agents: [...held],
+                    agentIds: held.map((each) => each.id),
+                    onDiscardDraft: (draftId) => told.push(`discard ${draftId}`),
+                  }),
+                  sidePanel: {
+                    ...tasksControl().sidePanel,
+                    open: shown,
+                    fullScreen: shown && narrow,
+                    fullScreenOnly: shown && narrow,
+                    tabs: [SIDE_PANEL_TAB.INBOX, SIDE_PANEL_TAB.COMMENTS],
+                    strip: [SIDE_PANEL_TAB.INBOX, SIDE_PANEL_TAB.COMMENTS],
+                    pages: paged ? [pageTab(PAGE.id)] : [],
+                    tab: on,
+                    onChoose: (chosen) =>
+                      told.push(
+                        `choose ${typeof chosen === "string" ? chosen : JSON.stringify(chosen)}`,
+                      ),
+                    onOpen: (opened) =>
+                      told.push(
+                        `open ${typeof opened === "string" ? opened : JSON.stringify(opened)}`,
+                      ),
+                    onToggle: () => told.push("toggle"),
+                    onClose: (closed) => told.push(`close ${String(closed)}`),
+                  },
                 }),
-                sidePanel: {
-                  ...tasksControl().sidePanel,
-                  open: shown,
-                  fullScreen: shown && narrow,
-                  fullScreenOnly: shown && narrow,
-                  tabs: [SIDE_PANEL_TAB.INBOX, SIDE_PANEL_TAB.COMMENTS],
-                  strip: [SIDE_PANEL_TAB.INBOX, SIDE_PANEL_TAB.COMMENTS],
-                  pages: paged ? [pageTab(PAGE.id)] : [],
-                  tab: on,
-                  onChoose: (chosen) =>
-                    told.push(
-                      `choose ${typeof chosen === "string" ? chosen : JSON.stringify(chosen)}`,
-                    ),
-                  onToggle: () => told.push("toggle"),
-                  onClose: (closed) => told.push(`close ${String(closed)}`),
-                },
               }),
-            }),
+            ),
           ),
         ),
       ),
@@ -280,7 +287,7 @@ test("on a phone an agent's screen goes back to its task's plan, named for the t
 
   page.choose("Show browser");
   assert.ok(
-    page.told.some((each) => each.startsWith("choose ") && each.includes("cloudBrowser")),
+    page.told.some((each) => each.startsWith("open ") && each.includes("cloudBrowser")),
     "a tab of the agent's browser opens in the panel",
   );
   page.back();
@@ -376,13 +383,15 @@ test("on a phone a task still read, or one that cannot be, is headed by its way 
     const root = createRoot(container);
     act(() =>
       root.render(
-        withQueryClient(
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            room: SHELL_ROOM.NARROW,
-            away: { label: "Inbox", onPress: () => told.push("away") },
-            tasks: tasksControl({ page: TASKS_PAGE.DOCUMENT, region }),
-          }),
+        windowRouter().provide(
+          withQueryClient(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              room: SHELL_ROOM.NARROW,
+              away: { label: "Inbox", onPress: () => told.push("away") },
+              tasks: tasksControl({ page: TASKS_PAGE.DOCUMENT, region }),
+            }),
+          ),
         ),
       ),
     );
@@ -429,29 +438,37 @@ function descriptionTitle(container: HTMLElement): HTMLElement | null {
   return container.querySelector<HTMLElement>('[role="textbox"][aria-label="Task name"]');
 }
 
-test("on a wide window the topbar's ⋯ › Rename puts the caret in the description's own title, and draws no phone's field", () => {
+/** The title bar's field over the task's name, which a wide window renames the task in. */
+function titleBarField(container: HTMLElement): HTMLInputElement | null {
+  return container.querySelector<HTMLInputElement>(
+    '.ui-toolbar-title-edit input[aria-label="Task name"]',
+  );
+}
+
+test("on a wide window the topbar's ⋯ › Rename edits the task's name in the title bar, where Return renames it and hands the focus back to the name", async () => {
   const page = mount(SHELL_ROOM.WIDE);
   chooseOverviewRename(page.container);
 
-  assert.ok(descriptionTitle(page.container), "the description's title is drawn");
-  assert.ok(
-    document.activeElement === descriptionTitle(page.container),
-    "the caret is in the description's title",
-  );
-  assert.equal(page.container.querySelector('input[aria-label="Task name"]'), null);
+  const field = titleBarField(page.container);
+  assert.ok(field, "the title bar's name is its field");
+  assert.equal(field.value, TASK.name);
+  assert.equal(document.activeElement, field);
+  field.value = "Invite teammates";
+  await act(async () => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  assert.deepEqual(page.told, [`rename ${TASK.id} Invite teammates`]);
+  assert.equal(titleBarField(page.container), null);
+  assert.ok(document.activeElement?.closest(".ui-toolbar-title-press"), "the name has the focus");
 });
 
-test("on a wide window whose column shows an agent, the rename ⌘K asks shows Overview and puts the caret in the description's title once it stands", () => {
+test("on a wide window whose column shows an agent, the rename ⌘K asks edits the name in the title bar and leaves the agent shown", () => {
   const page = mount(SHELL_ROOM.WIDE, false, undefined, false, true);
   page.renameFromPalette();
-  assert.deepEqual(page.told, [`column "${MAIN_TAB.OVERVIEW}"`]);
 
-  page.draw(false, undefined, undefined, false);
-
-  assert.ok(
-    document.activeElement === descriptionTitle(page.container),
-    "the caret is in the description's title",
-  );
+  assert.deepEqual(page.told, []);
+  assert.equal(document.activeElement, titleBarField(page.container));
 });
 
 /** A wide window's task whose renames are all refused, its name drawn as the title's words are typed, as the window draws a draft. */
@@ -475,7 +492,7 @@ test("on a wide window a refused rename keeps the name typed in the description'
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(RefusingTask))));
+  act(() => root.render(windowRouter().provide(withQueryClient(createElement(RefusingTask)))));
   const title = descriptionTitle(container);
   assert.ok(title, "the description's title is drawn");
 

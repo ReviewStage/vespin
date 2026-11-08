@@ -115,7 +115,7 @@ export interface SettingsStoreOptions {
  * file, because a file this build half-understands still carries the
  * account an older or newer build wrote, and the next write must not lose it.
  * The one refusal is a file whose top level is not an object, which
- * `parsePersistedSettingsEither` below answers as `SettingsParseRefusal`. No
+ * `parsePersistedSettings` below reads as no file at all. No
  * model is ever shown this record, so the node a reader declares is a
  * placeholder and nothing draws it.
  */
@@ -370,7 +370,7 @@ function storedProductEventDays(value: UnparsedWireValue): ProductEventDays | un
 /**
  * The settings file's record: the version and the keys every file carries,
  * the sections a file holds only while something stands in them, and every
- * stored setting. Read by `parsePersistedSettingsEither` and written by
+ * stored setting. Read by `parsePersistedSettings` and written by
  * `#write`; a key beside these is carried through every write as the file
  * held it (`carriedSettingsFields`). `settledPersistedSettings` below is the
  * rule between two fields no one field's reader can hold.
@@ -483,46 +483,23 @@ export class EncryptedStorageUnavailable extends Data.TaggedError("EncryptedStor
   }
 }
 
-/** A stored file this build cannot read as settings; `reason` is the legacy message. */
-class SettingsParseRefusal extends Data.TaggedError("SettingsParseRefusal")<{
-  readonly reason: string;
-}> {
-  override get message(): string {
-    return this.reason;
-  }
-}
-
-const NOT_AN_OBJECT = "Settings file is not an object";
-
 const decodePersistedSettingsFile = Schema.decodeUnknownResult(
   Schema.fromJsonString(PersistedSettingsSchema),
 );
 
 /**
- * Why a file was refused, in the legacy words: text that is JSON but not an
- * object is the one refusal the record's own readers leave standing, since
- * each field reads to its fallback; anything else is text that is not JSON,
- * named as the parser names it.
+ * The settings file's shape, decoded once through `PersistedSettingsSchema`;
+ * nothing for a file that is not JSON or whose top level is not an object,
+ * which the caller reads as no file at all.
  */
-function refusalReason(source: string, error: Schema.SchemaError): string {
-  const parsed = Result.try(() => JSON.parse(source));
-  return Result.isSuccess(parsed) && !isRecord(parsed.success) ? NOT_AN_OBJECT : error.message;
-}
-
-/**
- * The settings file's shape, decoded once through `PersistedSettingsSchema`.
- * A malformed file answers a refusal rather than throwing; every caller today
- * still folds that refusal into `defaultPersistedSettings()`, so the
- * fallback is a caller's decision and not this function's.
- */
-function parsePersistedSettingsEither(
+function parsePersistedSettings(
   source: string,
   keepsOwnAccount: boolean,
-): Result.Result<PersistedSettings, SettingsParseRefusal> {
-  return decodePersistedSettingsFile(source).pipe(
-    Result.map((persisted) => settledPersistedSettings(persisted, keepsOwnAccount)),
-    Result.mapError((error) => new SettingsParseRefusal({ reason: refusalReason(source, error) })),
-  );
+): PersistedSettings | undefined {
+  const decoded = decodePersistedSettingsFile(source);
+  return Result.isSuccess(decoded)
+    ? settledPersistedSettings(decoded.success, keepsOwnAccount)
+    : undefined;
 }
 
 /**
@@ -1069,12 +1046,12 @@ export class SettingsStore {
       this.#carried = {};
       if (source === undefined) return defaultPersistedSettings();
       // A corrupt settings file is replaced by the next write rather than
-      // failing app start, so a refusal here falls back to defaults exactly
-      // as an absent file does, and carries nothing.
-      const parsed = parsePersistedSettingsEither(source, this.#cipher !== undefined);
-      if (Result.isFailure(parsed)) return defaultPersistedSettings();
+      // failing app start, so it falls back to defaults exactly as an absent
+      // file does, and carries nothing.
+      const parsed = parsePersistedSettings(source, this.#cipher !== undefined);
+      if (parsed === undefined) return defaultPersistedSettings();
       this.#carried = carriedSettingsFields(source);
-      return parsed.success;
+      return parsed;
     });
   }
 

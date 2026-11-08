@@ -41,7 +41,7 @@ export type AutomationCallFailure =
   (typeof AUTOMATION_CALL_FAILURE)[keyof typeof AUTOMATION_CALL_FAILURE];
 
 /** The list asked for: the account's automations, or one task's, or one workspace's. */
-export const automationListParamsSchema = EffectSchema.Struct({
+const automationListParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.optionalKey(wireUuidSchema),
   workspaceId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
 });
@@ -75,7 +75,7 @@ export const automationRunParamsSchema = EffectSchema.Struct({
 export type AutomationRunParams = typeof automationRunParamsSchema.Type;
 
 /** The account's automations as the window hears them. */
-export const automationListViewSchema = answerView(automationsContract.list, {
+const automationListViewSchema = answerView(automationsContract.list, {
   as: AUTOMATION_RENAMES,
 });
 
@@ -108,7 +108,7 @@ export const automationRunViewSchema = EffectSchema.Union([
 export type AutomationRunView = typeof automationRunViewSchema.Type;
 
 /** One automation's runs, as the window hears them. */
-export const automationRunsViewSchema = answerView(automationsContract.runs, {
+const automationRunsViewSchema = answerView(automationsContract.runs, {
   as: AUTOMATION_RENAMES,
 });
 

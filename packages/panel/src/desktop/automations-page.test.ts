@@ -40,18 +40,17 @@ import { type AppWorkspaceIntegrations, NO_KEYS_HELD } from "@repo/host/app-stat
 import type { Experiment } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { PROFILE } from "@repo/ui";
+import { createMemoryHistory, useRouter } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
+import { useAutomationsRoute } from "../automations-route.js";
 import { OpenFeedbackProvider } from "../open-feedback.js";
+import { type ShellLeaveAsk, usePlaceLeave } from "../places/place-leave.js";
+import { useBoardDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import {
-  AUTOMATIONS_PAGE,
-  type AutomationsPlace,
-  type LeaveAsk,
-  useLeaveGuard,
-} from "../tasks/use-tasks-tab.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -70,6 +69,7 @@ import { playMotions } from "../testing/pane-motion.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { appStateIn } from "../use-app-state.js";
 import { AutomationsPage } from "./automations-page.js";
@@ -351,7 +351,6 @@ beforeEach(() => {
   runHeld = false;
   runRefusal = undefined;
   agentsOpened = [];
-  boardOpens = [];
   defaultRefused = false;
   catalogReads = 0;
   catalogRefused = false;
@@ -538,29 +537,44 @@ afterEach(() => {
   document.head.innerHTML = "";
 });
 
-/** The page as drawn over the tasks control given, rendered again in place where one stands. */
+/** The window's router the mounted page stands under, which it is drawn again under. */
+let pageRouter: TestWindowRouter | undefined;
+
+/** The page as drawn over the tasks control given, under the mounted page's router, rendered again in place where one stands. */
 function render(tasks: ReturnType<typeof tasksControl>): void {
+  const router = pageRouter ?? assert.fail("a page is mounted");
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(
-          Fragment,
-          null,
-          createElement(AutomationsPage, { tasks, room: SHELL_ROOM.WIDE }),
-          createElement(ToastHost),
+        router.provide(
+          createElement(
+            Fragment,
+            null,
+            createElement(AutomationsPage, { tasks, room: SHELL_ROOM.WIDE }),
+            createElement(ToastHost),
+          ),
         ),
       ),
     ),
   );
 }
 
-/** The Automations page, standing in the task's place over the workspace listed. */
-function mount(tasks = tasksControl({ workspace: WORKSPACE })): HTMLElement {
+/** The window's router standing at `place`'s address. */
+function routerAt(place: AutomationsPlace): TestWindowRouter {
+  return windowRouter(createMemoryHistory({ initialEntries: [automationsAddress(place)] }));
+}
+
+/** The Automations page standing on `at`, the list unless said, in the task's place over the workspace listed. */
+function mount(
+  tasks = tasksControl({ workspace: WORKSPACE }),
+  at: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST },
+): HTMLElement {
   holdChoices();
   unlisted = tasks.workspace === undefined;
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  pageRouter = routerAt(at);
   render(tasks);
   return container;
 }
@@ -861,18 +875,10 @@ test("with no workspace listed the list and a linked automation stand as quiet b
 
   act(() => root?.unmount());
   root = undefined;
-  mount(
-    tasksControl({
-      workspace: undefined,
-      automationsView: {
-        ...tasksControl().automationsView,
-        open: true,
-        place: { kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id },
-        onOpen: () => undefined,
-        onClose: () => undefined,
-      },
-    }),
-  );
+  mount(tasksControl({ workspace: undefined }), {
+    kind: AUTOMATIONS_PAGE.EDIT,
+    automationId: SWEEP.id,
+  });
   await settle();
   const linked = document.body;
   assert.equal(
@@ -888,22 +894,56 @@ test("with no workspace listed the list and a linked automation stand as quiet b
 /** The workspace the account made first, its personal one, where everything is its own. */
 const PERSONAL: Workspace = { ...WORKSPACE, id: "workspace-personal", name: "Ada" };
 
-/** Each time the Board was opened past the page, as the sidebar's Tasks row opens it. */
-let boardOpens: number[] = [];
+/** The path the window's router stands at. */
+let windowPath: () => string = () => "";
 
 /** Opens the Board as the sidebar's Tasks row would, through the window's guarded door. */
 let openBoard: () => void = () => undefined;
 
-/** Every page the Automations pages stood on, in order, as the window moved them. */
+/** Every page the Automations pages stood on, in order, as the window's router moved them. */
 let places: AutomationsPlace[] = [];
 
+/** Whether the window has seen the automation deleted, as its history asks it. */
+let deletedNow: (automationId: string) => boolean = () => false;
+
 /** The ask the window's guard last told the shell of, as a browser tab's ways out hear it; nothing while no page holds unsaved work. */
-let shellAsk: LeaveAsk | undefined;
+let shellAsk: ShellLeaveAsk | undefined;
 
 /** Sends the window to a place among the automations, as a link opened there does. */
 let sendTo: (place: AutomationsPlace) => void = () => undefined;
 /** Lists another workspace under the mounted pages, as the switcher would. */
 let moveTo: (workspace: Workspace) => void = () => undefined;
+
+/** The address `place` stands at under the workspace, named by its id as it has no slug, as the Automations route writes it. */
+function automationsAddress(place: AutomationsPlace): string {
+  const under = `/${WORKSPACE.id}`;
+  switch (place.kind) {
+    case AUTOMATIONS_PAGE.LIST:
+      return `${under}/automations`;
+    case AUTOMATIONS_PAGE.RUNS:
+      return `${under}/automations/runs`;
+    case AUTOMATIONS_PAGE.NEW:
+      return `${under}/automations/new`;
+    case AUTOMATIONS_PAGE.EDIT:
+      return place.runId === undefined
+        ? `${under}/automation/${place.automationId}`
+        : `${under}/automation/${place.automationId}/run/${place.runId}`;
+  }
+}
+
+/** The page an address under the workspace stands, as `automationsAddress` writes it; none for one standing no Automations page. */
+function placeOfAddress(path: string): AutomationsPlace | undefined {
+  const [, , head, id, tail, runId] = path.split("/");
+  if (head === "automations") {
+    if (id === undefined) return { kind: AUTOMATIONS_PAGE.LIST };
+    if (id === "runs") return { kind: AUTOMATIONS_PAGE.RUNS };
+    return id === "new" ? { kind: AUTOMATIONS_PAGE.NEW } : undefined;
+  }
+  if (head !== "automation" || id === undefined) return undefined;
+  return tail === "run" && runId !== undefined
+    ? { kind: AUTOMATIONS_PAGE.EDIT, automationId: id, runId }
+    : { kind: AUTOMATIONS_PAGE.EDIT, automationId: id };
+}
 
 /**
  * The Automations pages as the window holds them, standing on `start` and
@@ -915,43 +955,40 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
   unlisted = false;
   places = [start];
   shellAsk = undefined;
+  const pagesRouter = routerAt(start);
+  // Each page the router moves to is recorded as it lands, as the window stands it.
+  pagesRouter.history.subscribe(({ location }) => {
+    const landed = placeOfAddress(location.pathname);
+    if (landed !== undefined) places.push(landed);
+  });
+  sendTo = (place) => pagesRouter.history.push(automationsAddress(place));
   function Pages() {
-    const [place, setPlace] = useState(start);
-    sendTo = setPlace;
+    deletedNow = useAutomationsRoute({ narrow: false }).deletedNow;
     const [listed, setListed] = useState(workspace);
     moveTo = setListed;
-    // The window's own guard, over doors guarded as the Plans tab guards its own.
-    const leaveGuard = useLeaveGuard((ask) => {
+    // The window's own guard, over doors that move the window first as the Plans tab's own do: each is the router's
+    // move, which asks as it goes while the page holds unsaved work, and what it opens is recorded once it lands.
+    const placeLeave = usePlaceLeave((ask) => {
       shellAsk = ask;
     });
+    const router = useRouter();
+    const arriveAt = (href: string, landed: () => void) =>
+      placeLeave.arrive(() => void router.navigate({ href }), landed);
     const tasks = tasksControl({
-      leaveGuard,
+      placeLeave,
       agentView: {
         agentId: undefined,
-        onOpen: leaveGuard.guard((agentId: string) => agentsOpened.push(agentId)),
+        onOpen: (agentId: string) =>
+          arriveAt(`/${WORKSPACE.slug}/agent/${agentId}`, () => agentsOpened.push(agentId)),
         onClose: () => undefined,
-      },
-      boardView: {
-        open: false,
-        onOpen: leaveGuard.guard(() => boardOpens.push(1)),
-        onClose: () => undefined,
-        onPreload: () => undefined,
       },
       workspace: listed,
       workspaces: [PERSONAL, WORKSPACE],
-      automationsView: {
-        ...tasksControl().automationsView,
-        open: true,
-        place,
-        onOpen: leaveGuard.guard((next: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) => {
-          places.push(next);
-          setPlace(next);
-        }),
-        onClose: () => undefined,
-      },
     });
     const base = tasks.newTask;
-    openBoard = tasks.boardView.onOpen;
+    const board = useBoardDoor(tasks);
+    windowPath = () => router.history.location.pathname;
+    openBoard = board.open;
     return createElement(AutomationsPage, {
       tasks: {
         ...tasks,
@@ -976,11 +1013,13 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
   root = createRoot(container);
   act(() =>
     root?.render(
-      withQueryClient(
-        createElement(
-          OpenFeedbackProvider,
-          { value: (about: Experiment) => feedbackAbout.push(about) },
-          createElement(Fragment, null, createElement(Pages), createElement(ToastHost)),
+      pagesRouter.provide(
+        withQueryClient(
+          createElement(
+            OpenFeedbackProvider,
+            { value: (about: Experiment) => feedbackAbout.push(about) },
+            createElement(Fragment, null, createElement(Pages), createElement(ToastHost)),
+          ),
         ),
       ),
     ),
@@ -1355,7 +1394,8 @@ test("a deletion asks first, then goes back to the list without the automation",
   await settle();
 
   assert.deepEqual(deletes, [SWEEP.id]);
-  assert.deepEqual(places.at(-1), { kind: AUTOMATIONS_PAGE.LIST, deleted: SWEEP.id });
+  assert.deepEqual(places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
+  assert.ok(deletedNow(SWEEP.id), "the history passes over its page");
   assert.ok(!rows(page).some(([name]) => name === SWEEP.name));
 });
 
@@ -1381,7 +1421,8 @@ test("a row's Delete asks first, and once confirmed the row leaves the list and 
 
   assert.deepEqual(deletes, [SWEEP.id]);
   assert.ok(!rows(page).some(([name]) => name === SWEEP.name));
-  assert.deepEqual(places.at(-1), { kind: AUTOMATIONS_PAGE.LIST, deleted: SWEEP.id });
+  assert.deepEqual(places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
+  assert.ok(deletedNow(SWEEP.id), "the history passes over its page");
 });
 
 test("a row's Delete withdrawn deletes nothing and leaves the row standing", async () => {
@@ -1413,6 +1454,8 @@ test("Escape leaves a page with nothing unsaved for the list, and asks first whe
 
   type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
   act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  // Note that the way out is the router's move, which asks a turn later, once its blocker holds it.
+  await settle();
   assert.equal(places.length, 1, "the unsaved draft stands");
   assert.match(leaveAsked() ?? "", /Your changes to this automation are lost\./u);
   act(() => button("Cancel").click());
@@ -1430,16 +1473,19 @@ test("a new automation with something written asks before any way out leaves it,
 
   type(page.querySelector("textarea[aria-label='Prompt']"), "Triage the issues opened overnight.");
   act(() => button("Automations").click());
+  await settle();
   assert.equal(places.length, 1, "the crumb waits on the question");
   assert.ok(leaveAsked(), "the leave question stands");
   act(() => button("Cancel").click());
   await settle();
 
+  const editing = windowPath();
   act(() => openBoard());
-  assert.deepEqual(boardOpens, [], "the sidebar's row waits on the question too");
+  await settle();
+  assert.equal(windowPath(), editing, "the sidebar's row waits on the question too");
   act(() => button("Leave").click());
   await settle();
-  assert.deepEqual(boardOpens, [1]);
+  assert.equal(windowPath(), `/${WORKSPACE.id}/tasks`);
 });
 
 test("the shell hears the page's ask only while an edit is unsaved, and asking through it waits on the page's question", async () => {
@@ -1835,16 +1881,15 @@ test("what is typed while a save is out stands, unsaved, once the save lands", a
 
 test("with no workspace listed because the workspaces could not be read, the list and a linked automation say so, and Retry reads them again", async () => {
   let retries = 0;
-  const unread = (place: AutomationsPlace) =>
+  const unread = () =>
     tasksControl({
       workspace: undefined,
       workspacesFailed: true,
       onRetryWorkspaces: () => {
         retries += 1;
       },
-      automationsView: { ...tasksControl().automationsView, open: true, place },
     });
-  const page = mount(unread({ kind: AUTOMATIONS_PAGE.LIST }));
+  const page = mount(unread());
   await settle();
   assert.match(page.textContent ?? "", /The workspaces could not be read\./u);
   assert.equal(page.querySelector("[role=status][aria-busy=true]") === null, true);
@@ -1860,7 +1905,7 @@ test("with no workspace listed because the workspaces could not be read, the lis
 
   act(() => root?.unmount());
   root = undefined;
-  const linked = mount(unread({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id }));
+  const linked = mount(unread(), { kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
   assert.match(linked.textContent ?? "", /The workspaces could not be read\./u);
   assert.doesNotMatch(linked.textContent ?? "", /Reading the automation/u);
@@ -2513,7 +2558,10 @@ test("an automation's runs stand on its page's right, newest first, a run that s
   );
   act(() => started?.querySelector("button")?.click());
   assert.deepEqual(agentsOpened, [CI_DIGEST.id]);
-  const unstarted = refused?.querySelector<HTMLButtonElement>(".ui-list-row-main");
+  // The window comes back to the automation from its agent's page, as Back takes it.
+  act(() => sendTo({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id }));
+  await settle();
+  const unstarted = runRows(page)[1]?.querySelector<HTMLButtonElement>(".ui-list-row-main");
   assert.equal(unstarted?.tagName, "BUTTON", "a run that started no agent is a press too");
   act(() => unstarted?.click());
   assert.ok(
@@ -3210,23 +3258,14 @@ test("a link to a run opens its automation's editor with that run marked current
  * screen shown and left by their own presses.
  */
 function mountNarrow(start: AutomationsPlace, room: ShellRoom = SHELL_ROOM.NARROW): HTMLElement {
+  const pagesRouter = routerAt(start);
   function Pages() {
-    const [place, setPlace] = useState(start);
-    // As the Plans tab does, a page opened on a run's link stands its runs.
-    const [runsShown, setRunsShown] = useState(
-      start.kind === AUTOMATIONS_PAGE.EDIT && start.runId !== undefined,
-    );
+    // As the Tasks tab does, the runs stand alone through the route, which a page opened on a run's link stands.
+    const route = useAutomationsRoute({ narrow: room === SHELL_ROOM.NARROW });
     const tasks = tasksControl({
       workspace: WORKSPACE,
       workspaces: [PERSONAL, WORKSPACE],
-      automationsView: {
-        ...tasksControl().automationsView,
-        open: true,
-        place,
-        runs: runsShown,
-        onOpen: (next: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) => setPlace(next),
-        onRuns: setRunsShown,
-      },
+      onAutomationRuns: route.onRuns,
     });
     return createElement(
       "div",
@@ -3237,7 +3276,7 @@ function mountNarrow(start: AutomationsPlace, room: ShellRoom = SHELL_ROOM.NARRO
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(createElement(Pages))));
+  act(() => root?.render(withQueryClient(pagesRouter.provide(createElement(Pages)))));
   return container;
 }
 

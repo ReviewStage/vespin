@@ -6,7 +6,7 @@ import { readAgent } from "@repo/database/models/agent-store";
 import { member as memberTable } from "@repo/database/schemas/auth";
 import { automation as automationTable } from "@repo/database/schemas/automation";
 import { personalWorkspace } from "@repo/database/schemas/personal-workspace";
-import { messages, turns } from "@repo/database/schemas/storage";
+import { turns } from "@repo/database/schemas/storage";
 import {
   getTestDB,
   joinWorkspace,
@@ -43,7 +43,6 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
-  MESSAGE_ROLE,
   TURN_ORIGIN,
   TURN_STATUS,
   type TurnStatus,
@@ -703,9 +702,8 @@ it.layer(getTestDB())("the automation routes", (it) => {
           }),
         );
         yield* runOnce();
-        // A run whose agent's session ended for good, a line written after it, and one whose
-        // settled turn a line of the developer's still awaits.
-        const turnThenLine = (name: string, status: TurnStatus, failure: string | null) =>
+        // A run whose agent's session ended for good, and one whose turn settled.
+        const endedOn = (name: string, status: TurnStatus, failure: string | null) =>
           Effect.gen(function* () {
             const automation = yield* made(name);
             const started = yield* runOnce(automation.id);
@@ -720,27 +718,14 @@ it.layer(getTestDB())("the automation routes", (it) => {
                 settledAt: new Date(),
               }),
             );
-            yield* Database.use((db) =>
-              db.insert(messages).values({
-                userId: owner,
-                conversationId: each.conversationId,
-                // After the run's own prompt, which its Start wrote first.
-                seq: 2,
-                clientId: randomUUID(),
-                role: MESSAGE_ROLE.USER,
-                parts: [{ type: "text", text: "Are you there?" }],
-                placedAt: new Date(),
-                turnId: null,
-              }),
-            );
             return automation.id;
           });
-        const ended = yield* turnThenLine(
+        const ended = yield* endedOn(
           "Session ended",
           TURN_STATUS.FAILED,
           TURN_FAILURE.SESSION_ENDED,
         );
-        const awaiting = yield* turnThenLine("Line awaits", TURN_STATUS.SETTLED, null);
+        const settled = yield* endedOn("Settled", TURN_STATUS.SETTLED, null);
 
         const now = yield* Clock.currentTimeMillis;
         const sql = yield* SqlClient.SqlClient;
@@ -786,14 +771,13 @@ it.layer(getTestDB())("the automation routes", (it) => {
           runs.map((each) => `${each.agent?.status}:${each.agent?.failureReason ?? ""}`).toSorted(),
           [
             `${AGENT_STATUS.FAILED}:${AGENT_FAILURE.GITHUB}`,
-            // A run with no turn yet reads running, its prompt awaiting the turn its harness opens on it.
+            // A run whose prompt's turn its harness has not opened yet reads running.
             `${AGENT_STATUS.RUNNING}:`,
           ],
         );
-        // A line after a session that ended for good awaits nothing; one after a settled turn awaits it.
         for (const [automationId, said] of [
           [ended, `${AGENT_STATUS.FAILED}:${AGENT_FAILURE.SESSION_ENDED}`],
-          [awaiting, `${AGENT_STATUS.RUNNING}:`],
+          [settled, `${AGENT_STATUS.COMPLETED}:`],
         ] as const) {
           const read = Option.getOrThrow(
             automationRunsRead.statements({

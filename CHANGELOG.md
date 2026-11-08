@@ -88,6 +88,8 @@ plug in the message box shows what is forwarded.
 [#7216](https://github.com/ReviewStage/vespin/pull/7216),
 [#7292](https://github.com/ReviewStage/vespin/pull/7292))
 
+![Vespin's window on the Add teammate invitations agent, which ran in the cloud and says relay's dev server is up on port 3000; its box's plug menu shows Forward to localhost switched on with localhost:3000, and the side panel's Local 1 terminal is a shell on the Mac in the agent's mirror, its curl of localhost:3000/invites listing three pending invites.](apps/web/public/changelog/0.28.0/cloud-agents-on-your-mac.png)
+
 ### Review a page in one message
 
 Comments on a page can wait in a review instead of reaching the agent one at
@@ -97,6 +99,8 @@ place, and send it all from Review as one message.
 [#7261](https://github.com/ReviewStage/vespin/pull/7261),
 [#7265](https://github.com/ReviewStage/vespin/pull/7265),
 [#7307](https://github.com/ReviewStage/vespin/pull/7307))
+
+![Relay's Invite teammates page with three of Dean's comments pinned on it, and the Finish your review panel listing them as pending above a summary box, Discard, Cancel, and Send review.](apps/web/public/changelog/0.28.0/review-a-page-in-one-message.png)
 
 ### The Vespin CLI
 
@@ -110,11 +114,15 @@ agents. Settings › Vespin CLI installs it from the Mac app and signs it in.
 [#6983](https://github.com/ReviewStage/vespin/pull/6983),
 [#7168](https://github.com/ReviewStage/vespin/pull/7168))
 
+![vespin cli in light monospace, its cli in copper, on Vespin's graphite, with the landing page's gray square dots gathering softly in the top-left and bottom-right corners.](apps/web/public/changelog/0.28.0/the-vespin-cli.png)
+
 ### Several repositories
 
 A cloud agent can work in other repositories beside its own, each checked out
 beside it and picked together in New task's repository chip.
 ([#7117](https://github.com/ReviewStage/vespin/pull/7117))
+
+![New task's repository chip reading relay, web, its menu open over the composer with relay ticked as Primary and web ticked beside it.](apps/web/public/changelog/0.28.0/several-repositories.png)
 
 ### Improvements
 

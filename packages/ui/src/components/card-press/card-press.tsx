@@ -11,7 +11,7 @@ import {
   useRef,
 } from "react";
 import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
-import { type ContextMenuProps, withContextMenu } from "../menu/menu.js";
+import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { rovingItem } from "../roving-keys/roving-keys.js";
 import { holdRun, ListSelectionContext, selectableRow } from "../selection/list-selection.js";
 import { SelectBox, type SelectBoxPlace } from "../selection/select-box.js";

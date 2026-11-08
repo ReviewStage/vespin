@@ -3,8 +3,8 @@
  *
  * The panel beside an item stands for what holds it, a task or an agent on
  * no task, so a place in the app opens there where that panel draws it, and
- * is otherwise the window's (`route.ts` states the table every surface
- * answers by).
+ * is otherwise the window's (`places/pressed-address.ts` states the choices
+ * every surface answers by).
  */
 
 import { LINK_PLACE, type LinkPlace, taskNumberOf } from "@repo/features/link-grammar";
@@ -14,15 +14,23 @@ import {
   ADDRESS,
   type Address,
   beside,
-  fileBeside,
   go,
-  type InboxItemHere,
+  type HERE,
   NOTHING,
   type PlaceAddress,
-  pullRequestBeside,
   type Route,
   THING,
-} from "./route.js";
+} from "./places/pressed-address.js";
+import { type Holding, ofRepository, pullRequestBeside } from "./places/pull-request-beside.js";
+
+/** An Inbox item a press comes from, and what holds it, which the panel beside it stands for. */
+export type InboxItemHere = {
+  readonly kind: typeof HERE.INBOX_ITEM;
+  /** The task that holds the item; none for an item of an agent on no task. */
+  readonly taskId: string | undefined;
+  /** The agent on no task that holds the item, whose own pages open beside it; none for an item of a task. */
+  readonly agentId: string | undefined;
+} & Holding;
 
 /** What a place of the app pressed on an Inbox item opens, read as its declaration reads it, under the link's workspace. */
 type ItemPlaceBeside = (place: LinkPlace, workspace: string, here: InboxItemHere) => Route;
@@ -69,14 +77,6 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
     holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)
       ? beside({ kind: THING.THREAD, agentId: at.agentId, threadId: at.threadId, view: at.view })
       : NOTHING,
-  // A message of an agent of the item's own task the panel draws reads beside it, at the message; an archived one's is the window's to open, in its tab on the task.
-  MESSAGE: (at, _workspace, here) =>
-    at.kind === LINK_PLACE.MESSAGE &&
-    here.taskId !== undefined &&
-    holdsAgent(at, here.taskId, here.agentIds) &&
-    here.agentIds?.includes(at.agentId) === true
-      ? beside({ kind: THING.TRANSCRIPT, agentId: at.agentId, messageId: at.messageId })
-      : NOTHING,
   // An Inbox item is chosen in the Inbox the item stands in: one under its task, or one under an agent the item's task
   // holds or the agent on no task that holds the item; any other the window finds by its agent, or by the item alone.
   INBOX_ITEM: (at, _workspace, here) => {
@@ -97,19 +97,35 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
       ? beside({ kind: THING.INBOX_ITEM, itemId, taskId: undefined, agentId })
       : NOTHING;
   },
-  // An agent of the item's own task reads beside it; one on no task, or another task's, is the window's to open.
+  // An agent of the item's own task, archived or not, opens in its own tab on the task, never in the panel
+  // beside the item, so a transcript reads in one place; one on no task, or another task's, is the window's to open.
   AGENT: (at, workspace, here) => {
     if (at.kind !== LINK_PLACE.AGENT) return NOTHING;
-    if (here.taskId === undefined || !holdsAgent(at, here.taskId, here.agentIds)) return NOTHING;
-    // An archived one, which the panel does not draw, is the window's, which opens its tab on the task.
-    return here.agentIds?.includes(at.agentId) === true
-      ? beside({ kind: THING.TRANSCRIPT, agentId: at.agentId })
-      : go({
-          workspace,
-          place: { kind: LINK_PLACE.AGENT, planId: here.taskId, agentId: at.agentId },
-        });
+    if (here.taskId === undefined || !holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)) {
+      return NOTHING;
+    }
+    return go({
+      workspace,
+      place: { kind: LINK_PLACE.AGENT, planId: here.taskId, agentId: at.agentId },
+    });
   },
 };
+
+/** A file pressed on an Inbox item, beside it: one of the item's repository, which the panel reads through what holds the item, and one of another repository, read through the item's workspace; an older link's, naming none, only where the item holds a repository. */
+function fileBeside(
+  address: Extract<Address, { readonly kind: typeof ADDRESS.FILE }>,
+  here: Holding,
+): Route {
+  const { path, lines, repository } = address;
+  if (repository === undefined) {
+    return here.repository !== null && here.repository !== undefined
+      ? beside({ kind: THING.FILE, path, lines })
+      : NOTHING;
+  }
+  return ofRepository(repository, here.repository)
+    ? beside({ kind: THING.FILE, path, lines })
+    : beside({ kind: THING.FILE, path, lines, repository });
+}
 
 /** A place in the app pressed on an Inbox item, by the declaration its route matched; one matching none is the window's. */
 function itemPlace(address: PlaceAddress, here: InboxItemHere): Route {

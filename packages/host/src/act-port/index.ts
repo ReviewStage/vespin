@@ -37,9 +37,10 @@ export { browserLiveProcedures } from "./browser-live-procedures.js";
 export { declaredActProcedures, declaredAnswer } from "./declared-acts.js";
 export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
 export { pushProcedures, WindowPushes } from "./push-procedures.js";
-export type {
-  ClientSettingSideEffects,
-  SettingsProceduresDependencies,
+export {
+  type ClientSettingSideEffects,
+  clientSettingSideEffects,
+  type SettingsProceduresDependencies,
 } from "./settings-procedures.js";
 export {
   type TerminalPortSeam,

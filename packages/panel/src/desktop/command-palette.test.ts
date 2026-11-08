@@ -37,6 +37,7 @@ import { experimentsOn, settingsView } from "@repo/settings/testing";
 import { agentTab, changesTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASK_MARK, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -55,14 +56,10 @@ import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
 import { fileLook } from "../tasks/file-ref.js";
-import { SIDE_PANEL_TAB, type SidePanelControl } from "../tasks/use-side-panel.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { NO_LOOKS, useTaskLooks } from "../tasks/use-task-looks.js";
-import {
-  AUTOMATIONS_PAGE,
-  type AutomationsPlace,
-  type InboxChoice,
-  type TasksControl,
-} from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -78,7 +75,7 @@ import {
   writeExperiments,
 } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -86,9 +83,13 @@ import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
+import {
+  holdingInboxChoice,
+  type TestWindowRouter,
+  windowRouter,
+} from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { CommandPalette } from "./command-palette.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { ListedAutomations } from "./listed-automations.js";
 
@@ -99,6 +100,9 @@ interface Sent {
 }
 
 const roots: Root[] = [];
+
+/** The router of the window each palette opened by `openPalette` stands under, the latest last. */
+const windows: TestWindowRouter[] = [];
 
 beforeEach(installScrollIntoView);
 
@@ -116,21 +120,40 @@ function AgentPageTelling(props: { agentId: string; workspaceId: string }): null
   return null;
 }
 
-/** The palette as the window draws it, offering the links at hand through the window's own Copy link, beside an agent's page where one tells its workspace. */
-function WindowPalette({
-  page,
-  place,
-  ...props
-}: Omit<Parameters<typeof CommandPalette>[0], "links"> & {
+/** The palette's props as the window hands them, beside an agent's page where one tells its workspace, and the routed place it stands on. */
+type WindowPaletteProps = Omit<Parameters<typeof CommandPalette>[0], "links"> & {
   page?: { agentId: string; workspaceId: string } | undefined;
   place?: RoutedPlace | undefined;
-}): React.JSX.Element {
+};
+
+/** The palette offering the links at hand through the window's own Copy link. */
+function LinkedPalette({ page, place, ...props }: WindowPaletteProps): React.JSX.Element {
   const links = useCopyLink(props.tasks, undefined, true, SHELL_ROOM.WIDE, undefined, place);
   return createElement(
     PageWorkspaceProvider,
     { value: links.onPageWorkspace },
     createElement(CommandPalette, { ...props, links }),
     page === undefined ? null : createElement(AgentPageTelling, page),
+  );
+}
+
+/** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read, an Inbox item there standing where `held` says. */
+function WindowPalette({
+  at = "/app",
+  held,
+  ...props
+}: WindowPaletteProps & {
+  at?: string | undefined;
+  held?: InboxChoice | undefined;
+}): React.JSX.Element {
+  const [router] = useState(() => {
+    const made = windowRouter(createMemoryHistory({ initialEntries: [at] }));
+    windows.push(made);
+    return made;
+  });
+  const holding = held === undefined ? null : holdingInboxChoice(held);
+  return router.provide(
+    createElement(Fragment, null, holding, createElement(LinkedPalette, props)),
   );
 }
 
@@ -144,6 +167,10 @@ function openPalette(
   tab: PanelTab = PANEL_TAB.TASKS,
   /** The routed place the window stands on, which offers its own links. */
   place?: RoutedPlace,
+  /** The address the window's router stands at, which a place the router alone stands, a person's page, is read from. */
+  at = "/app",
+  /** Where the Inbox item its address names stands, as the door that chose it held it. */
+  held?: InboxChoice,
 ): Sent {
   const sent: Sent = { tabs: [], views: [] };
   const host = document.createElement("div");
@@ -166,6 +193,8 @@ function openPalette(
     },
     page,
     place,
+    at,
+    held,
   });
   // The repository's files are read whole through the act port, by the plan they stand on.
   fakeActPort({
@@ -952,7 +981,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
       root.render(
         withExperiments(
           experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          createElement(ListedAutomations, { tasks, children: palette }),
+          windowRouter().provide(createElement(ListedAutomations, { tasks, children: palette })),
         ),
       ),
     );
@@ -1137,7 +1166,6 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
       },
     ],
     region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
-    inboxView: { ...base.inboxView, open: inbox !== undefined, chosen: inbox?.chosen },
     sidePanel: { ...base.sidePanel, onOpenFile: (ref) => opened.push(ref.path) },
     agents: agentsControl({
       agents: [agent],
@@ -1176,6 +1204,11 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
     undefined,
     DESKTOP_CAPABILITIES,
     PANEL_TAB.TASKS,
+    inbox === undefined ? undefined : ROUTED_PLACE.INBOX,
+    inbox === undefined
+      ? undefined
+      : `/acme/inbox${inbox.chosen === undefined ? "" : `/${inbox.chosen.itemId}`}`,
+    inbox?.chosen,
   );
   type("#42");
   const pulls = rows().filter((row) => row.startsWith("#42"));
@@ -1734,7 +1767,13 @@ test("a task's command wears the same chord in ⌘K as in the open task's Plan t
   roots.push(root);
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
-  act(() => root.render(withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks }))));
+  act(() =>
+    root.render(
+      withQueryClient(
+        windowRouter().provide(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
+      ),
+    ),
+  );
   // The document arrives a few microtasks after the window first draws.
   await settle();
   openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
@@ -1776,7 +1815,7 @@ test("an agent tab's right-click words and keys Close and Show terminal as ⌘K 
     root.render(
       withExperiments(
         experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+        windowRouter().provide(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
       ),
     ),
   );
@@ -1874,32 +1913,13 @@ test("⇧⌘C copies the link of what is open, the most specific first: the Inbo
   const automationId = "6e2f3a4b-5c6d-4e7f-8a91-92a3b4c5d6e7";
   const itemId = "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
   const listed = { workspaces: ON_AGENT_TAB.workspaces, workspace: ON_AGENT_TAB.workspaces[0] };
-  for (const [tasks, place] of [
-    [ON_AGENT_TAB, undefined],
-    [
-      tasksControl({
-        ...listed,
-        inboxView: {
-          ...tasksControl().inboxView,
-          open: true,
-          chosen: { agentId: LINKED_AGENT, itemId },
-        },
-      }),
-      ROUTED_PLACE.INBOX,
-    ],
-    [
-      tasksControl({
-        ...listed,
-        automationsView: {
-          ...tasksControl().automationsView,
-          open: true,
-          place: { kind: AUTOMATIONS_PAGE.EDIT, automationId },
-        },
-      }),
-      ROUTED_PLACE.AUTOMATIONS,
-    ],
+  for (const [tasks, place, at] of [
+    [ON_AGENT_TAB, undefined, undefined],
+    [tasksControl(listed), ROUTED_PLACE.INBOX, `/acme/inbox/${itemId}`],
+    [tasksControl(listed), ROUTED_PLACE.AUTOMATIONS, `/acme/automation/${automationId}`],
   ] as const) {
-    openPalette(tasks, undefined, undefined, undefined, undefined, place);
+    const held = place === ROUTED_PLACE.INBOX ? { agentId: LINKED_AGENT, itemId } : undefined;
+    openPalette(tasks, undefined, undefined, undefined, undefined, place, at, held);
     act(() => {
       runAppCommand(APP_COMMAND.COMMAND_PALETTE);
       runAppCommand(APP_COMMAND.COPY_LINK);
@@ -1955,17 +1975,13 @@ test("on a person's page ⌘K offers Copy link to profile and ⇧⌘C copies the
     tasksControl({
       workspaces: ON_AGENT_TAB.workspaces,
       workspace: acme,
-      personView: {
-        ...tasksControl().personView,
-        userId: "user-charles",
-        workspaceId: acme?.id,
-      },
     }),
     undefined,
     undefined,
     undefined,
     undefined,
     ROUTED_PLACE.PERSON,
+    "/acme/person/user-charles",
   );
   type("copy link");
   const listed = rows().filter((row) => row.startsWith("Copy link to "));
@@ -2088,13 +2104,12 @@ test("People lists the listed workspace's members as every people menu does, the
   ];
   membersAnswer(members);
   const opened: string[] = [];
-  const base = tasksControl();
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const sent = openPalette(
     tasksControl({
       me: "user-dean",
       workspace: { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null },
-      personView: { ...base.personView, onOpen: (userId) => opened.push(userId) },
+      onOpenPerson: (userId) => opened.push(userId),
     }),
     undefined,
     undefined,
@@ -2493,7 +2508,7 @@ function PinnableTask(): React.JSX.Element {
     Fragment,
     null,
     createElement(Looker, { looked: listed }),
-    createElement(DesktopSidebar, sidebarProps(tasks)),
+    drawnSidebar(sidebarProps(tasks)),
     createElement(WindowPalette, {
       available: true,
       tab: PANEL_TAB.TASKS,
@@ -2556,31 +2571,43 @@ test("with a task open, ⌘K offers Pin task, which pins it under Pinned and tur
   assert.deepEqual(pinRows(), ["Pin task"]);
 });
 
-/** The palette over the task given, on the test's Query client holding the window's state as handed. */
-async function paletteUnderState(tasks: TasksControl): Promise<void> {
+/** The palette over the task given, on the test's Query client holding the window's state as handed, under a window's router standing at `at`, `/app` unless said, an Inbox item there standing where `held` says, whose path it answers. */
+async function paletteUnderState(
+  tasks: TasksControl,
+  at = "/app",
+  held?: InboxChoice,
+): Promise<() => string> {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
+  const router = windowRouter(createMemoryHistory({ initialEntries: [at] }));
   act(() =>
     root.render(
       withExperiments(
         experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(WindowPalette, {
-          available: true,
-          tab: PANEL_TAB.TASKS,
-          onTabChange: () => undefined,
-          tasks,
-          settings: {
-            rows: {
-              settings: settingsView(),
-              accountDrawn: true,
-              capabilities: DESKTOP_CAPABILITIES,
-            },
-            capabilities: DESKTOP_CAPABILITIES,
-            onViewChange: () => undefined,
-          },
-        }),
+        router.provide(
+          createElement(
+            Fragment,
+            null,
+            held === undefined ? null : holdingInboxChoice(held),
+            createElement(LinkedPalette, {
+              available: true,
+              tab: PANEL_TAB.TASKS,
+              onTabChange: () => undefined,
+              tasks,
+              settings: {
+                rows: {
+                  settings: settingsView(),
+                  accountDrawn: true,
+                  capabilities: DESKTOP_CAPABILITIES,
+                },
+                capabilities: DESKTOP_CAPABILITIES,
+                onViewChange: () => undefined,
+              },
+            }),
+          ),
+        ),
       ),
     ),
   );
@@ -2590,6 +2617,7 @@ async function paletteUnderState(tasks: TasksControl): Promise<void> {
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
   });
+  return () => router.history.location.pathname;
 }
 
 test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for each agent, as the side panel\'s "+" offers them, and each opens as the "+" opens it', async () => {
@@ -2662,12 +2690,13 @@ test('over an Inbox item of the open task, ⌘K\'s "This task" lists the pages t
     pages: [],
     inboxView: {
       ...base.inboxView,
-      open: true,
-      chosen: { taskId: DOCUMENT_TASK.id, itemId: "item-1" },
       pages: [{ id: "page-2", title: "Review notes", version: 1, at: 1 }],
     },
   });
-  await paletteUnderState(tasks);
+  await paletteUnderState(tasks, "/acme/inbox/item-1", {
+    taskId: DOCUMENT_TASK.id,
+    itemId: "item-1",
+  });
   chooseFilter("This task");
   const listed = rows();
   assert.ok(listed.includes(`Review notes · ${DOCUMENT_TASK.name}`), "the Inbox's page is listed");
@@ -2676,12 +2705,11 @@ test('over an Inbox item of the open task, ⌘K\'s "This task" lists the pages t
 test("with a task on screen, ⌘K offers its Version history, Cancel task, and Change repository, each running on it what its ⋯ item runs", async () => {
   const task = { ...DOCUMENT_TASK, repository: "acme/relay" };
   const ran: string[] = [];
-  const base = tasksControl();
   const tasks = tasksControl({
     tasks: [task],
     region: { kind: DOCUMENT_REGION.READY, task },
     activeTaskId: task.id,
-    history: { ...base.history, onOpen: (taskId) => ran.push(`history:${taskId}`) },
+    onOpenHistory: (taskId) => ran.push(`history:${taskId}`),
     onSettleTasks: (taskIds, status) => ran.push(`settle:${taskIds.join()}:${status}`),
     onChangeRepository: (taskId) => ran.push(`repository:${taskId}`),
   });
@@ -2759,12 +2787,14 @@ function paletteBesideTask(room: ShellRoom): HTMLElement {
           ShellRoomContext.Provider,
           { value: room },
           createElement(Looker, { looked: DOCUMENT_TASK }),
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            room,
-            away: { label: "Tasks", onPress: () => undefined },
-            tasks,
-          }),
+          windowRouter().provide(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              room,
+              away: { label: "Tasks", onPress: () => undefined },
+              tasks,
+            }),
+          ),
           createElement(WindowPalette, {
             available: true,
             tab: PANEL_TAB.TASKS,
@@ -2792,12 +2822,12 @@ function paletteBesideTask(room: ShellRoom): HTMLElement {
   return host;
 }
 
-test("on a wide window ⌘K's Rename task puts the caret in the description's own title", () => {
+test("on a wide window ⌘K's Rename task opens the task's name in the title bar's field", () => {
   const host = paletteBesideTask(SHELL_ROOM.WIDE);
 
-  const title = host.querySelector('[role="textbox"][aria-label="Task name"]');
-  assert.ok(title, "the description's title is drawn");
-  assert.ok(document.activeElement === title, "the caret is in the description's title");
+  const field = host.querySelector('.ui-toolbar-title-edit input[aria-label="Task name"]');
+  assert.ok(field, "the title bar's name is its field");
+  assert.ok(document.activeElement === field, "the caret is in the title bar's field");
 });
 
 test("on a phone ⌘K's Rename task opens the task's name in the head's field", () => {
@@ -2932,14 +2962,7 @@ test("⌘K's Automations lists the workspace's automations by name and what fire
   } as const;
   fakeActPort({});
   handState({}, { [LIVE_READ.AUTOMATIONS]: { [ACME.id]: { rows: [automation] } } });
-  const opened: (AutomationsPlace | undefined)[] = [];
-  const base = tasksControl({ workspace: ACME });
-  await paletteUnderState(
-    tasksControl({
-      workspace: ACME,
-      automationsView: { ...base.automationsView, onOpen: (place) => opened.push(place) },
-    }),
-  );
+  const windowPath = await paletteUnderState(tasksControl({ workspace: ACME }));
   await settle();
   chooseFilter("Automations");
   await settle();
@@ -2949,7 +2972,7 @@ test("⌘K's Automations lists the workspace's automations by name and what fire
   await settle();
   press("Deploy notes · When its webhook is called · Billing usage alerts");
   await settle();
-  assert.deepEqual(opened, [{ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id }]);
+  assert.equal(windowPath(), `/${ACME.id}/automation/${automation.id}`);
 });
 
 /** The agent asking the Inbox's questions below, as its task's list sums it up. */
@@ -2962,6 +2985,15 @@ const ASKER = {
 } as const;
 
 /** A task holding Inbox items, its agent summed up so each item's tile names it. */
+/** The listed workspace the Inbox's task is in. */
+const ROTATION_HOME = {
+  id: "workspace-personal",
+  name: "Personal",
+  slug: "personal",
+  role: WORKSPACE_ROLE.OWNER,
+  github: null,
+} as const;
+
 const ROTATION: TaskSummary = {
   id: "7e4f0a9b-0000-4000-8000-0000000000b2",
   workspaceId: "workspace-personal",
@@ -3026,23 +3058,22 @@ function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   };
 }
 
-/** The palette over a window whose listed workspace's task holds the items the account's feed holds as `inbox` says, main's word of it last changed at `changed`, every Inbox item it opens recorded; and how the feed moves. */
+/** The palette over a window whose listed workspace's task holds the items the account's feed holds as `inbox` says, main's word of it last changed at `changed`; how the feed moves, and where the window stands, which an Inbox item it opens takes it. */
 function paletteOverInbox(inbox: FedInbox, changed = 9_000) {
   const deliver = handInboxItems(fedOf(inbox));
-  const opened: InboxChoice[] = [];
   const tasks = tasksControl({
     tasks: [ROTATION],
+    workspace: ROTATION_HOME,
     inboxTasks: [{ taskId: ROTATION.id, items: 2, updatedAt: changed }],
   });
   writeExperiments({});
-  openPalette(
-    { ...tasks, inboxView: { ...tasks.inboxView, onOpenItem: (choice) => opened.push(choice) } },
-    undefined,
-    undefined,
-    DESKTOP_CAPABILITIES,
-    PANEL_TAB.TASKS,
-  );
-  return { deliver: (next: FedInbox) => deliver(fedOf(next)), opened };
+  openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
+  const window = windows.at(-1);
+  assert.ok(window, "the palette stands under a window's router");
+  return {
+    deliver: (next: FedInbox) => deliver(fedOf(next)),
+    at: () => window.history.location.pathname,
+  };
 }
 
 test("the Inbox searched lists what needs you first, each item beside its task", async () => {
@@ -3099,7 +3130,7 @@ test("an Inbox item is found under All by words its thread says, which its row s
 });
 
 test("choosing an Inbox item opens it in the Inbox, as a notification's would", async () => {
-  const { opened } = paletteOverInbox({ items: [PREVIEWS, ROTATE] });
+  const { at } = paletteOverInbox({ items: [PREVIEWS, ROTATE] });
   chooseFilter("Inbox");
   await settle();
 
@@ -3108,9 +3139,7 @@ test("choosing an Inbox item opens it in the Inbox, as a notification's would", 
   );
   press("Use acme.dev for previews? · Billing usage alerts");
 
-  assert.deepEqual(opened, [
-    { taskId: ROTATION.id, itemAgentId: PREVIEWS.agentId, itemId: PREVIEWS.id, opened: true },
-  ]);
+  assert.equal(at(), `/${ROTATION_HOME.slug}/inbox/${PREVIEWS.id}`);
   assert.equal(paletteShown(), false, "the palette closed");
 });
 

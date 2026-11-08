@@ -10,6 +10,10 @@
  * by the host itself is one more place visited all the same, and a move
  * through the history is the window arriving where the history already
  * stands. It lives as long as the window does, the way a browser tab's does.
+ * The page a task New task starts stands on while its start is out, the task
+ * bound or Home, is no step of its own: the task it lands on takes that step
+ * in place (`onStartStands`, `onLeaveStart`), so Back from it returns to
+ * where New task was pressed, the Inbox among them.
  *
  * The history is written into the router history the window's root mounts
  * (`panel-router.tsx`), each place saved in its entry's state as what a step
@@ -24,7 +28,11 @@
  * behind takes it when the window is back on it. The desktop's router keeps
  * its history in memory, and nothing there reads an address; the web's is
  * the tab's own. The router's history names only the entry standing, so the
- * trail of steps around it is kept here beside it (`WindowTrail`).
+ * trail of steps around it is kept here beside it (`WindowTrail`). What a
+ * step holds, how it is saved and read back, and the rules that read the
+ * trail, which visit is a step of its own, which steps can still be gone to,
+ * and how Back and Forward list and name them, are the steps' own
+ * (`places/window-steps.ts`).
  *
  * Every place is the router's (`panel-router.tsx`), declared in the place
  * module (`places/routed-places.ts`): Home, Settings, Admin, the Board, a
@@ -42,8 +50,8 @@
  * and Forward pass over it. Settings is one step
  * however many of its pages are turned, since each turn replaces its entry
  * (`settings-link.ts`), so Back from any page of it returns to wherever it
- * was opened from; leaving one for a place the window's state says is a
- * visit after it (`onLeaveRouted`). A description's version
+ * was opened from; leaving one for a place the window's state says is the
+ * router's move there, a visit after it (`TasksControl.onLeaveRouted`). A description's version
  * history is one step the same way, whichever version is chosen in it or
  * whichever revision's sections are open, since each choice replaces its
  * entry (`version-history-route.ts`), and its address is where it stands, so
@@ -95,33 +103,27 @@
  * to the other takes the step standing in place. Going to a step stands its
  * sub-step from the step alone, so a move the history makes by itself, as a
  * browser's Back does, lands on the screen the step was. The screens' own
- * ways back to their lists step back where the list is the step behind, and
- * otherwise take the step standing in place, as a link opened on an item
- * leaves no list behind it to go back to. The side panel's ways out do the
- * same, so shutting a panel opened over the plan steps back to the plan
- * rather than adding a step that Back would open the panel again from. A
+ * ways back to their lists, the side panel's ways out among them, are each
+ * place's own (`places/narrow-backs.ts`), which read this history through
+ * `behind`: a step back where the list is the step behind, and otherwise
+ * the list taking the step standing in place, which a list a narrow screen
+ * went up to takes (`upTo`), so shutting a panel opened over the plan steps
+ * back to the plan rather than adding a step that Back would open the panel
+ * again from. A
  * step between two such panes of one page leaves no page, so it never asks
  * first, as leaving an automation with unsaved changes does. A phone's way
  * out of a task goes back past all of the task's own steps at once, to the
  * nearest step on another page, the list it was opened from, and is named
- * as that step is (`WindowHistory`'s `away` and `onLeave`). A phone has no
- * Home: where the window would stand on it, the Inbox's list takes its step
- * in place, so a phone opens on the Inbox and Back never lands on Home.
+ * as that step is (`WindowHistory`'s `away` and `onLeave`). A place a
+ * narrow room stands another in the place of stands it as its declaration
+ * says (`narrowInstead`): a phone has no Home, so where the window would
+ * stand on it, the Inbox's list takes its step in place, so a phone opens on
+ * the Inbox and Back never lands on Home.
  */
 
-import {
-  LINK_PLACE,
-  linkOf,
-  type ReadLink,
-  taskLinkStep,
-  withTaskId,
-} from "@repo/features/link-grammar";
-import { workspaceOfSlug } from "@repo/features/workspace-wire";
-import { type StripTab, sameTab, tabKey, taggedStripTab } from "@repo/ui/tab-strip-model";
-import { TASKS_PAGE } from "@repo/ui/tasks-model";
-import { useQuery } from "@tanstack/react-query";
+import { LINK_PLACE, type ReadLink, taskLinkStep, withTaskId } from "@repo/features/link-grammar";
+import { PANEL_PATH } from "@repo/features/link-home";
 import { type HistoryLocation, type RouterHistory, useRouter } from "@tanstack/react-router";
-import { Schema } from "effect";
 import {
   useCallback,
   useEffect,
@@ -132,86 +134,56 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { AutomationsRoute } from "./automations-route.js";
-import { liveStepTitle, type NamedStep } from "./history-titles.js";
 import type { InboxRoute } from "./inbox-route.js";
-import { workspaceMembersQuery } from "./live-reads.js";
+import type { BackStep, StepsBehind } from "./places/narrow-backs.js";
+import type { PlaceLeave } from "./places/place-leave.js";
 import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import {
-  type PlaceThere,
   ROUTED_PLACE,
   type RoutedPlace,
   routedPlaceOf,
-  routedStepStands,
-  stepPlaceOf,
+  sameDraftAt,
   tabSurface,
   useWindowPlace,
 } from "./places/routed-places.js";
+import type { LinkStep, PanelStep, SideStep, TaskAt, TaskStep } from "./places/task-step.js";
 import {
-  type LinkStep,
-  type PanelStep,
-  type SideStep,
-  STEP_WITHIN,
-  type StepShown,
-  sameStepShown,
-  sameSubStep,
-  stepWithin,
-  stoodAlike,
-  type TaskAt,
-  type TaskStep,
-} from "./places/task-step.js";
+  type AwayStep,
+  addressOf,
+  awayFrom,
+  type HistoryReading,
+  isTaskPlace,
+  type ListedSteps,
+  MOUSE_BUTTON,
+  nearest,
+  type Place,
+  pathOf,
+  readingOf,
+  routedPlace,
+  type SavedStep,
+  type StepTitle,
+  samePage,
+  samePlaceSubStep,
+  sameReading,
+  sameStep,
+  savedStepOf,
+  type Titled,
+  TRAIL_WRITE,
+  type Trail,
+  type TrailEntry,
+  type TrailWrite,
+  type TrailWriteKind,
+  taskPlace,
+  useStepNames,
+  useStepReach,
+  visitWrite,
+} from "./places/window-steps.js";
 import { useRouteAccess } from "./route-gates.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
-import { useSteadyDoorSet, useSteadyDoors } from "./steady-door.js";
-import type { SidePanelTab } from "./tasks/use-side-panel.js";
-import type { InboxChoice, LeaveGuard, TasksControl } from "./tasks/use-tasks-tab.js";
+import { useSteadyDoors } from "./steady-door.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "./use-surface-open.js";
 import type { VersionHistoryRoute } from "./version-history-route.js";
-import type { HomeRoute } from "./workspace-routes.js";
-
-/** `MouseEvent.button` for the mouse's own back and forward buttons. */
-export const MOUSE_BUTTON = {
-  BACK: 3,
-  FORWARD: 4,
-} as const;
-
-/** The kind every step is saved under: a place the router says the window stands on, which its route draws and its own history moves (`ROUTED_PLACE`). */
-const ROUTED_KIND = "routed";
-
-/** The kind Home's step was saved under before Home was the router's, which a tab's entries may still hold across a deploy, read back as the routed step at its entry's address. */
-const SAVED_HOME_KIND = "home";
-
-/** The kind a task's step was saved under before the task was the router's, which a tab's entries may still hold across a deploy, read back as the task's routed step at its entry's address. */
-const SAVED_TASK_KIND = "plan";
-
-/**
- * A place the window can stand on: the routed place at an address, which
- * alone tells one routed step from another, but for a task's own place
- * (`ROUTED_PLACE.TASK`), which is told by the task its typed history state
- * holds (`TaskStep`), so a rename, and the tab its column shows, leave it
- * the same page.
- */
-interface Place {
-  readonly kind: typeof ROUTED_KIND;
-  /** The address the router stood on, which its entry is held at. */
-  readonly address: string;
-  /** The side panel beside an Inbox item or an agent's own page standing, as a task's step holds it, saved in the entry's state beside its address; none on any other routed place. */
-  readonly side?: SideStep;
-  /** What a step on a task's own place holds beside its address; none on any other place. */
-  readonly task?: TaskStep | undefined;
-}
-
-/** A place with a task's step, on that task's own place. */
-type TaskPlace = Place & { readonly task: TaskStep };
-
-/** Whether a place is a task's own, holding its task's step. */
-function isTaskPlace(place: Place | undefined): place is TaskPlace {
-  return place?.task !== undefined;
-}
-
-/** A step on the task's own place at `address`, holding `task`. */
-function taskPlace(address: string, task: TaskStep): TaskPlace {
-  return { kind: ROUTED_KIND, address, task };
-}
 
 /** Where the router says the window stands, while it stands on a routed place: the place, the address it stands at, and the params its routes read there. */
 export interface RoutedStanding {
@@ -229,238 +201,21 @@ export function useRoutedStanding(): RoutedStanding | undefined {
   );
 }
 
-/** What a step is called where the trail is listed: what stood in the window, and what it showed there, such as a task and its tabs. */
-export interface StepTitle {
-  readonly label: string;
-  readonly detail?: string | undefined;
-  /** What a task's step called each of its panes' tabs, which one is named by again where nothing names it now; none on any other step. */
-  readonly panes?: StepPanes | undefined;
-}
-
-/** What a task's step called the tab its column showed and the one its side panel showed, where each showed one. */
-export interface StepPanes {
-  readonly column?: string | undefined;
-  readonly side?: string | undefined;
-}
-
-/** A place with what it was called as the window stood on it, which no comparison of steps reads. */
-type Titled = Place & { readonly title?: StepTitle | undefined };
-
-/** One step the window has stood on: the address its entry is held at, and the place it reopens. */
-interface TrailEntry {
-  readonly address: string;
-  readonly state: Place;
-}
-
-/** The steps the window has stood on, oldest first, and the one standing; `at` is -1 while none is. */
-interface Trail {
-  readonly entries: readonly TrailEntry[];
-  readonly at: number;
-}
-
 /** The most steps a window's trail holds, dropping the oldest first. */
 const TRAIL_LIMIT = 50;
 
 const EMPTY_TRAIL: Trail = { entries: [], at: -1 };
 
-/** How a step is written into the trail: a visit after the step standing, or in its place. */
-const TRAIL_WRITE = {
-  PUSH: "push",
-  REPLACE: "replace",
-} as const;
-
-type TrailWriteKind = (typeof TRAIL_WRITE)[keyof typeof TRAIL_WRITE];
-
-/** A write of the trail: `entry` after the step standing, or in its place. */
-interface TrailWrite {
-  readonly kind: TrailWriteKind;
-  readonly entry: TrailEntry;
-}
-
-/** What a window saves in each entry of its router's history: the place the step reopens, and the step's number among the window's own. */
-interface SavedStep {
-  readonly place: Place;
-  readonly index: number;
-}
-
-/** A task's step as a build before the task was the router's saved it: its task and tabs where a task's typed state holds them now. */
-interface SavedTaskPlace extends TaskStep {
-  readonly kind: typeof SAVED_TASK_KIND;
-}
-
-/** A step as an entry may hold it: as this build saves one, or a task's as a build before saved it. */
-interface HeldStep {
-  readonly place: Place | SavedTaskPlace;
-  readonly index: number;
-}
-
-declare module "@tanstack/react-router" {
-  interface HistoryState {
-    /** The window's step saved in this entry (`navigation-history.ts`); none in an entry no window wrote. */
-    readonly step?: HeldStep;
-  }
-}
-
-/** A saved step as a window writes one, read back from a browser that may hold anything in an entry. */
-const isSavedStep = Schema.is(
-  Schema.Struct({ index: Schema.Int, place: Schema.Struct({ kind: Schema.String }) }),
-);
-
-/** What a place was called as the window stood on it, where it was told. */
-function titleOf(place: Place | undefined): StepTitle | undefined {
-  return place === undefined ? undefined : (place as Titled).title;
-}
-
-/** Whether two places were called the same. */
-function sameTitle(one: Place, other: Place): boolean {
-  const mine = titleOf(one);
-  const theirs = titleOf(other);
-  return mine?.label === theirs?.label && mine?.detail === theirs?.detail;
-}
-
-/** The task an Inbox item stands on; none for one on an agent with no task, or named by its id alone. */
-function choiceTask(choice: InboxChoice): string | undefined {
-  return "taskId" in choice ? choice.taskId : undefined;
-}
+/**
+ * The address the window is handed while it stands on no place, at which no
+ * step is written: Home's while no workspace is listed (`ROUTED_PLACE.HOME`).
+ */
+const NO_LINK_ADDRESS = PANEL_PATH;
 
 /** The task an Inbox item stands on, or for an agent with no task its agent, whose side panel stands beside it. */
 function choiceHolder(choice: InboxChoice): string | undefined {
   if ("taskId" in choice) return choice.taskId;
   return "agentId" in choice ? choice.agentId : undefined;
-}
-
-/** Whether two places are one page, whichever of its narrow sub-steps each stands on: the same task's own place, or another routed place at the same address. */
-function samePage(one: Place, other: Place): boolean {
-  if (one.task === undefined && other.task === undefined) return one.address === other.address;
-  return (
-    one.task !== undefined && other.task !== undefined && one.task.taskId === other.task.taskId
-  );
-}
-
-/** What a place shows within its page, which its step holds beside its address: a task's panes, or the side panel beside an Inbox item or an agent's page. */
-function shownOf(place: Place): StepShown {
-  return place.task ?? { side: place.side };
-}
-
-/** Whether two places are one step of the history: one page, on one sub-step, since a narrow room's pane opened over another is a step of its own, showing one thing in it, since a tab chosen is a step of its own too (`places/task-step.ts`). */
-function sameStep(one: Place | undefined, other: Place): boolean {
-  return one !== undefined && samePage(one, other) && sameStepShown(shownOf(one), shownOf(other));
-}
-
-/** Whether two places of one page stand on one sub-step, whatever each shows on it. */
-function samePlaceSubStep(one: Place, other: Place): boolean {
-  return sameSubStep(shownOf(one), shownOf(other));
-}
-
-/** A step on the routed place at `address`. */
-function routedPlace(address: string): Place {
-  return { kind: ROUTED_KIND, address };
-}
-
-/** The query of an address, as its routes read it. */
-function searchOf(address: string): URLSearchParams {
-  return new URL(address, "https://panel.invalid").searchParams;
-}
-
-/** The path of an address a step is held at, which the router matches routes by. */
-function pathOf(address: string): string {
-  return new URL(address, "https://panel.invalid").pathname;
-}
-
-/** The step of an automation's address (`panel-router.tsx`), after its workspace's. */
-const AUTOMATION_STEP = "automation";
-
-/** The step of a task's address, after its workspace's, which its version history's stands under. */
-const TASK_STEP = "task";
-
-/** The steps of a task's version history's addresses, after its task's (`version-history-route.ts`). */
-const VERSION_STEPS: ReadonlySet<string | undefined> = new Set(["versions", "version"]);
-
-/**
- * Whether two places hold one draft: one page, or two routed steps of one
- * automation's, its setup, its runs, or a run, which share its editor and
- * what is written in it, since the path names the automation by its id
- * after the step of its own; or two of one task's version history, one
- * history however its versions are chosen.
- */
-function sameDraft(one: Place, other: Place): boolean {
-  if (samePage(one, other)) return true;
-  if (one.task !== undefined || other.task !== undefined) return false;
-  const mine = pathOf(one.address).split("/");
-  const theirs = pathOf(other.address).split("/");
-  const sameStart = (steps: number) =>
-    mine.slice(0, steps).every((step, at) => step === theirs[at]);
-  if (mine[2] === AUTOMATION_STEP) return mine[3] !== undefined && sameStart(4);
-  return (
-    mine[2] === TASK_STEP &&
-    VERSION_STEPS.has(mine[4]) &&
-    VERSION_STEPS.has(theirs[4]) &&
-    sameStart(4)
-  );
-}
-
-/**
- * The address the window is handed while it stands on no place, at which no
- * step is written: Home's while no workspace is listed (`ROUTED_PLACE.HOME`).
- */
-const NO_LINK_ADDRESS = "/app";
-
-/** The address a step is held at: its link's path, with the query and fragment it carries, since a browser holds a same-origin path. */
-function addressOf(link: ReadLink): string {
-  const url = new URL(linkOf(link.place, link.workspace));
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-/**
- * The write recording the window standing on `place`, at `address`. A step already
- * standing is left as it is, but for an address changed under it, which the
- * standing step takes in place, as a router's place moved within writes, and so does
- * the automation a new automation's page made, and an address changed under
- * it, and so does `up`, a list a narrow screen went up to from its item where
- * the list was no step behind. A tab or an Inbox item chosen
- * within the page standing is a visit only where a press or a key led to it
- * (`pressed`), and the side panel standing otherwise only where a door
- * naming a thing opened it (`opened`): one the window chose by itself, as a
- * task's tabs arriving after it opens, an agent's tab shown as it starts, or
- * the tab chosen in place of one closed, takes the standing step in place,
- * and so does a tab chosen in the panel's strip or its toggle. Any other
- * place is a visit, whichever door opened it.
- */
-function visitWrite(
-  trail: Trail,
-  place: Place,
-  address: string,
-  up: Place | undefined,
-  pressed: boolean,
-  opened: boolean,
-  onTaskRoute: (address: string) => boolean,
-): TrailWrite | undefined {
-  const standing = trail.entries[trail.at];
-  const entry: TrailEntry = { address, state: place };
-  const wentUp = up !== undefined && sameStep(up, place);
-  // An entry the router wrote on a task's own place, as a door's navigation or a gate's redirect writes one, holding none of
-  // the task's step, is that task's step, which the window writes only once the task bound for is the one its address names.
-  const routedHere =
-    standing !== undefined &&
-    standing.state.task === undefined &&
-    place.task !== undefined &&
-    (standing.address === address || onTaskRoute(standing.address));
-  // What the place shows within the page standing, as a step of its own, the window settling, or the step standing (`places/task-step.ts`).
-  const within =
-    standing !== undefined && samePage(standing.state, place)
-      ? stepWithin(shownOf(standing.state), shownOf(place), { pressed, opened })
-      : STEP_WITHIN.VISIT;
-  if (standing !== undefined && (wentUp || within === STEP_WITHIN.SETTLE || routedHere)) {
-    return { kind: TRAIL_WRITE.REPLACE, entry };
-  }
-  if (standing !== undefined && within === STEP_WITHIN.SAME) {
-    const moved =
-      !stoodAlike(shownOf(standing.state), shownOf(place)) ||
-      !sameTitle(standing.state, place) ||
-      standing.address !== address;
-    return moved ? { kind: TRAIL_WRITE.REPLACE, entry } : undefined;
-  }
-  return { kind: TRAIL_WRITE.PUSH, entry };
 }
 
 /** The trail as `write` leaves it: a push clearing the steps ahead and dropping the oldest past the bound, a replace in the standing step's place, either the trail's one step where none stands. */
@@ -488,75 +243,24 @@ function afterVisit(
 }
 
 /**
- * The nearest step one way along the trail the window can still go to,
- * skipping any it cannot reach and any that is the step it already stands
- * on, so a deleted task between two visits of one page is passed over whole.
- */
-function nearest(
-  trail: Trail,
-  step: -1 | 1,
-  reachable: (place: Place) => boolean,
-): number | undefined {
-  const standing = trail.entries[trail.at]?.state;
-  for (let at = trail.at + step; at >= 0 && at < trail.entries.length; at += step) {
-    const place = trail.entries[at]?.state;
-    if (place !== undefined && reachable(place) && !sameStep(standing, place)) return at;
-  }
-  return undefined;
-}
-
-/**
- * The nearest step behind the one standing that stands on another page and
- * can still be gone to, passing over the standing page's own steps, its
- * narrow panes and its tabs among them; none where no such step stands.
- */
-function awayFrom(trail: Trail, reachable: (place: Place) => boolean): number | undefined {
-  const standing = trail.entries[trail.at]?.state;
-  for (let at = trail.at - 1; at >= 0; at -= 1) {
-    const place = trail.entries[at]?.state;
-    if (place === undefined || !reachable(place)) continue;
-    if (standing === undefined || !samePage(standing, place)) return at;
-  }
-  return undefined;
-}
-
-/**
- * How a step to `to` asks: as the window's guard asks, unless it moves only
- * within the draft standing, between a narrow room's sub-steps or within one
- * automation, between its setup, its runs, and a run (`sameDraft`), which
- * leaves no page and so loses nothing written on it; that way out is taken as it is.
+ * How a step to `to` asks: as the window's leave guard asks up front, unless
+ * it moves only within the draft standing, between a narrow room's sub-steps
+ * or within one automation, between its setup, its runs, and a run
+ * (`sameDraft`), which leaves no page and so loses nothing written on it;
+ * that way out is taken as it is.
  */
 function asking(
-  latest: { readonly place: Place | undefined; readonly guard: LeaveGuard["guard"] },
+  latest: {
+    readonly place: Place | undefined;
+    readonly leaveFirst: PlaceLeave["transitionalLeaveFirst"];
+    readonly sameDraft: (one: Place, other: Place) => boolean;
+  },
   to: Place | undefined,
-): LeaveGuard["guard"] {
+): PlaceLeave["transitionalLeaveFirst"] {
   const { place } = latest;
-  return place !== undefined && to !== undefined && sameDraft(place, to)
+  return place !== undefined && to !== undefined && latest.sameDraft(place, to)
     ? (leave) => leave
-    : latest.guard;
-}
-
-/** Which kind of page a step stood on: a task's own, told by its task, or another routed place, told by its address. */
-const HISTORY_PAGE = {
-  TASK: "task",
-  ROUTED: "routed",
-} as const;
-
-/**
- * The page a step stood on: its kind, and which of that kind's pages it
- * was, a task by its id, any other place by its address.
- */
-export interface HistoryPage {
-  readonly kind: (typeof HISTORY_PAGE)[keyof typeof HISTORY_PAGE];
-  readonly of: string | undefined;
-}
-
-/** One step of the trail as Back's and Forward's lists draw it: where it stands on the trail, what it is called now, and which page it was. */
-export interface HistoryStep {
-  readonly at: number;
-  readonly title: StepTitle | undefined;
-  /** The page it stood on, so the list can gather a page's steps together (`sameHistoryPage`). */
-  readonly page: HistoryPage;
+    : latest.leaveFirst;
 }
 
 /** The window's history as its buttons and keys use it. */
@@ -566,141 +270,13 @@ export interface NavigationHistory {
   onBack: () => void;
   onForward: () => void;
   /** The steps Back and Forward can still go to, nearest first, as their lists draw them. */
-  steps: { readonly back: readonly HistoryStep[]; readonly forward: readonly HistoryStep[] };
+  steps: ListedSteps;
   /** Goes straight to a step of the lists, asking first as any step does. */
   onGoTo: (at: number) => void;
 }
 
-/** How many steps each way Back's and Forward's lists draw. */
-const LISTED_STEPS = 15;
-
-/** The page a place stands on, the same for every step on one page (`sameHistoryPage`). */
-function pageOf(place: Place): HistoryPage {
-  return place.task === undefined
-    ? { kind: HISTORY_PAGE.ROUTED, of: place.address }
-    : { kind: HISTORY_PAGE.TASK, of: place.task.taskId };
-}
-
-/** Whether two steps stood on one page, so the list gathers them together. */
-export function sameHistoryPage(one: HistoryPage, other: HistoryPage): boolean {
-  return one.kind === other.kind && one.of === other.of;
-}
-
-/**
- * The steps one way along the trail the window can go to, nearest first, as
- * Back's or Forward's list draws them: each one Back or Forward would reach
- * pressed again and again, so a step it cannot reach and a run of one step
- * held twice are passed over, as `nearest` passes over them.
- */
-function listedSteps(
-  trail: Trail,
-  way: -1 | 1,
-  reachable: (place: Place) => boolean,
-  named: (place: Place) => StepTitle | undefined,
-): HistoryStep[] {
-  const listed: HistoryStep[] = [];
-  let from = trail.at;
-  while (listed.length < LISTED_STEPS) {
-    const at = nearest({ entries: trail.entries, at: from }, way, reachable);
-    const place = at === undefined ? undefined : trail.entries[at]?.state;
-    if (at === undefined || place === undefined) break;
-    listed.push({ at, title: named(place), page: pageOf(place) });
-    from = at;
-  }
-  return listed;
-}
-
-/**
- * The ways back from a narrow screen's item to its list, through the
- * history: a step back where the list is the step behind, else the list
- * taking the item's step in place. A wide room holds no such step, so there
- * each only stands the list.
- */
-export interface ListBacks {
-  readonly settings: () => void;
-  readonly versions: () => void;
-  /** Stands an automation's setup again from its runs. */
-  readonly runs: () => void;
-  /** Chooses no item in the Inbox, which stands its list alone where it shows one column. */
-  readonly inbox: () => void;
-  /** Shuts the side panel standing over the plan, the whole pane. */
-  readonly panel: () => void;
-  /** Leaves the open task for the step behind it, or, where none stands behind it, for Home. */
-  readonly task: () => void;
-}
-
-/** The step a page's way out goes back to, the nearest behind it on another page, as Back's list names it. */
-export interface AwayStep {
-  readonly title: StepTitle | undefined;
-}
-
-/** What Back and Forward draw of a trail: whether each can go, the steps each lists, and the step a page's way out goes back to. */
-interface HistoryReading {
-  readonly canGoBack: boolean;
-  readonly canGoForward: boolean;
-  readonly steps: NavigationHistory["steps"];
-  readonly away: AwayStep | undefined;
-}
-
-function readingOf(
-  trail: Trail,
-  reachable: (place: Place) => boolean,
-  named: (place: Place) => StepTitle | undefined,
-): HistoryReading {
-  return {
-    canGoBack: nearest(trail, -1, reachable) !== undefined,
-    canGoForward: nearest(trail, 1, reachable) !== undefined,
-    steps: {
-      back: listedSteps(trail, -1, reachable, named),
-      forward: listedSteps(trail, 1, reachable, named),
-    },
-    away: awayStep(trail, reachable, named),
-  };
-}
-
-/** Whether two titles read alike, their panes' tabs among them. */
-function sameStepTitle(one: StepTitle | undefined, other: StepTitle | undefined): boolean {
-  return (
-    one?.label === other?.label &&
-    one?.detail === other?.detail &&
-    one?.panes?.column === other?.panes?.column &&
-    one?.panes?.side === other?.panes?.side
-  );
-}
-
-function sameSteps(one: readonly HistoryStep[], other: readonly HistoryStep[]): boolean {
-  return (
-    one.length === other.length &&
-    one.every((step, index) => {
-      const theirs = other[index];
-      return (
-        theirs !== undefined &&
-        step.at === theirs.at &&
-        sameHistoryPage(step.page, theirs.page) &&
-        sameStepTitle(step.title, theirs.title)
-      );
-    })
-  );
-}
-
-/** Whether two readings draw the same buttons, lists, and way out. */
-function sameReading(one: HistoryReading, other: HistoryReading): boolean {
-  return (
-    one.canGoBack === other.canGoBack &&
-    one.canGoForward === other.canGoForward &&
-    sameSteps(one.steps.back, other.steps.back) &&
-    sameSteps(one.steps.forward, other.steps.forward) &&
-    (one.away === undefined) === (other.away === undefined) &&
-    sameStepTitle(one.away?.title, other.away?.title)
-  );
-}
-
 /** The window's history, with the way a restore leaves a description's version history and a page's way out. */
 export interface WindowHistory extends NavigationHistory {
-  /** Leaves the routed place standing, Settings, Admin, or a version history among them, for the place the window's state says, as a visit after it; nothing off one. */
-  onLeaveRouted: () => void;
-  /** Keeps the routed place standing that a leave was just asked of, as a door asked for the place standing does, which moves nothing. */
-  onStayRouted: () => void;
   /** Leaves the version history for its task: a step back where the task is the step behind, else a visit. */
   onLeaveVersionHistory: () => void;
   /** The step `onLeave` goes back to; none where no step behind stands on another page. */
@@ -714,6 +290,11 @@ export interface WindowHistory extends NavigationHistory {
   onLeave: () => void;
 }
 
+/** The history as the narrow rooms' ways back read it (`places/narrow-backs.ts`), which the root hands the window's routed exits. */
+export interface HistoryBehind {
+  behind: StepsBehind;
+}
+
 /** The window's door for a link's step on a task's own place, which the root hands the Tasks tab. */
 export interface TaskVisits {
   /**
@@ -725,52 +306,16 @@ export interface TaskVisits {
    * writes none, and the door goes to the task as any other door does.
    */
   onVisitTask: (at: TaskAt, step: LinkStep) => boolean;
-}
-
-/** The window's history with the narrow screens' ways back to their lists, which the root hands the screens. */
-export interface WindowHistoryLists extends WindowHistory {
-  readonly lists: ListBacks;
-}
-
-/**
- * The Tasks tab with its screens' ways back to their lists through the
- * history, as the shell draws them. A side panel standing only full screen,
- * a narrow room's, is shut the same way by each of its ways out: its
- * toggle, which reads Close panel, leaving full screen, the window's Escape,
- * and closing the last tab its strip draws, which closes the tab as ever and
- * then shuts the panel through the history rather than as a step of its own.
- * The window's Escape on an open task, past a panel filling the window, is
- * the toolbar's Back: one step back, to the page the task was opened from,
- * and the task is left as ever only where no step stands behind it.
- */
-export function throughHistory(tasks: TasksControl, lists: ListBacks): TasksControl {
-  const { sidePanel } = tasks;
-  const shutsWhole = sidePanel.fullScreenOnly;
-  const onClose = (tab: SidePanelTab) => {
-    const last = sidePanel.strip.length === 1 && sidePanel.strip.some((one) => sameTab(one, tab));
-    sidePanel.onClose(tab);
-    if (last) lists.panel();
-  };
-  return {
-    ...tasks,
-    sidePanel: shutsWhole
-      ? { ...sidePanel, onToggle: lists.panel, onToggleFullScreen: lists.panel, onClose }
-      : sidePanel,
-    back: () => {
-      if (tasks.page !== TASKS_PAGE.DOCUMENT || (!shutsWhole && sidePanel.fullScreen)) {
-        return tasks.back();
-      }
-      if (shutsWhole) lists.panel();
-      else lists.task();
-      return true;
-    },
-    history: { ...tasks.history, onList: lists.versions },
-    inboxView: { ...tasks.inboxView, onClear: lists.inbox },
-    automationsView: {
-      ...tasks.automationsView,
-      onRuns: (shown) => (shown ? tasks.automationsView.onRuns(true) : lists.runs()),
-    },
-  };
+  /**
+   * Takes the step the window stands on as the page of a task New task is
+   * starting, which a door moved it to as the start was pressed: the task
+   * the start lands on takes that step in place (`onLeaveStart`), so Back
+   * from it returns to where New task was pressed, as the Inbox, rather than
+   * to the task or Home the start's page stood on.
+   */
+  onStartStands: () => void;
+  /** Answers whether the window stands on a start's page, which a move to a task's own place then takes in place, letting it go. */
+  onLeaveStart: () => boolean;
 }
 
 /**
@@ -798,6 +343,8 @@ interface WindowTrail {
   writing: boolean;
   /** Whether the trail is following a write the router made of its own, which the window already stands on. */
   routing: boolean;
+  /** The number of the step a task's start moved the window to for its page, which the move to the task it starts takes in place (`TaskVisits.onLeaveStart`); none once the trail stands elsewhere. */
+  standIn: number | undefined;
   readonly listeners: Set<() => void>;
 }
 
@@ -807,67 +354,22 @@ type HistoryMove = Parameters<Parameters<RouterHistory["subscribe"]>[0]>[0]["act
 /** Each router history's trail, kept for as long as the history is. */
 const trails = new WeakMap<RouterHistory, WindowTrail>();
 
-/** A side panel's step with its tab tagged with its kind (`taggedStripTab`); none for a tab it cannot tell. */
-function taggedSide(side: SideStep): SideStep {
-  return side === null || side === undefined ? side : taggedStripTab(side);
-}
-
-/**
- * A saved place with each of its tabs tagged with its kind: one a build
- * before tabs carried their kind saved holds its tabs untagged, which the
- * web tab keeps in its entries across a reload and a deploy. A place whose
- * tabs were already tagged is the place itself.
- */
-function taggedPlace(place: Place): Place {
-  const { task } = place;
-  if (task === undefined) {
-    const side = taggedSide(place.side);
-    return side === place.side ? place : { ...place, side };
-  }
-  const column = task.column === undefined ? undefined : taggedStripTab(task.column);
-  const side = taggedSide(task.side);
-  const panelTab = task.panel?.tab === undefined ? undefined : taggedStripTab(task.panel.tab);
-  if (column === task.column && side === task.side && panelTab === task.panel?.tab) return place;
-  const panel = task.panel === undefined ? undefined : { ...task.panel, tab: panelTab };
-  return { ...place, task: { ...task, column, side, panel } };
-}
-
-/** The step saved in `location`'s entry, its tabs tagged with their kind; none in an entry no window wrote, or wrote before the router held its history. */
-function savedStepOf(location: HistoryLocation): SavedStep | undefined {
-  const { step } = location.state;
-  if (!isSavedStep(step)) return undefined;
-  // Note that the kind is read as any string a browser held, since an entry may hold one this build no longer writes.
-  const kind: string = step.place.kind;
-  if (kind === SAVED_HOME_KIND) return { ...step, place: routedPlace(location.href) };
-  const held = step.place;
-  // Note that a task's step saved before the task was the router's held its task and tabs where its typed state holds them now.
-  if (held.kind === SAVED_TASK_KIND) {
-    const { taskId, panel, column, side } = held;
-    return {
-      ...step,
-      place: taggedPlace(taskPlace(location.href, { taskId, panel, column, side })),
-    };
-  }
-  const place = taggedPlace(held);
-  return place === held ? { ...step, place: held } : { ...step, place };
-}
-
-/** Whether `location`'s entry holds a step a window saved, which a page loaded or landed there reopens rather than opening its address as a link. */
-export function savesStep(location: HistoryLocation): boolean {
-  return savedStepOf(location) !== undefined;
-}
-
-/** The task the step saved in `location`'s entry holds, where it is a task's own step; none in an entry no window wrote one in. */
-export function savedTaskOf(location: HistoryLocation): string | undefined {
-  return savedStepOf(location)?.place.task?.taskId;
-}
-
 /** Stands the trail on `next`, telling every listener, unless it is the trail standing. */
 function standTrail(held: WindowTrail, next: Trail): void {
   if (next.entries === held.trail.entries && next.at === held.trail.at) return;
   held.trail = next;
+  // Note that a start's page stands in only while the trail stands on it, so any move off it, Back among them, lets it go.
+  if (held.standIn !== held.base + next.at) held.standIn = undefined;
   for (const listener of [...held.listeners]) listener();
 }
+
+/**
+ * How the trail writes and moves the router's history: past the leave's
+ * blocker (`places/place-leave.ts`), because each write records a move the
+ * window already made, or one its ask already let go, so a blocker asking
+ * there would ask after the fact.
+ */
+const PAST_BLOCKER = { ignoreBlocker: true } as const;
 
 /** Runs what waits on the router's history, in order, until a move travels. */
 function drainTrail(held: WindowTrail): void {
@@ -896,8 +398,8 @@ function writeThrough(
   inTurn(held, () => {
     held.writing = true;
     try {
-      if (kind === TRAIL_WRITE.PUSH) held.history.push(entry.address, { step });
-      else held.history.replace(entry.address, { step });
+      if (kind === TRAIL_WRITE.PUSH) held.history.push(entry.address, { step }, PAST_BLOCKER);
+      else held.history.replace(entry.address, { step }, PAST_BLOCKER);
     } finally {
       held.writing = false;
     }
@@ -1016,6 +518,7 @@ function trailOf(history: RouterHistory): WindowTrail {
     waiting: [],
     writing: false,
     routing: false,
+    standIn: undefined,
     listeners: new Set(),
   };
   held.trail = aloneOn(held, history.location);
@@ -1052,7 +555,7 @@ function goAlong(held: WindowTrail, delta: number): void {
   inTurn(held, () => {
     held.traveling = target;
     held.history.flush();
-    held.history.go(delta);
+    held.history.go(delta, PAST_BLOCKER);
   });
   standTrail(held, { entries: held.trail.entries, at });
 }
@@ -1075,12 +578,9 @@ function standingOf(trail: Trail): TrailEntry | undefined {
  * arrival records nothing and the steps ahead are kept. A step it cannot
  * reach is passed over the way the move went, as the window's own step
  * passes over one, and an entry holding no step at all is a page loaded
- * there, which opens on Home. Note that such a move has already happened
- * when the window hears it and cannot be refused, so while a page holds
- * unsaved work the trail is stood back on the window's step first, along
- * the trail or, where the trail no longer holds it, written again after
- * where the trail stands, and the move is made again only once the
- * developer says to leave. A window whose trail
+ * there, which opens on Home. Note that such a move has already asked
+ * before the window hears it, while a page holds unsaved work, because the
+ * leave's blocker holds the router's history (`places/place-leave.ts`). A window whose trail
  * already stands on a step when it first knows where it is, as a reloaded
  * tab's does, goes there rather than recording where it first stood.
  */
@@ -1095,7 +595,9 @@ function useHistory(input: {
   named: (place: Place) => StepTitle | undefined;
   go: (place: Place) => void;
   /** Asks first, while a page holds unsaved work, before a step moves the trail at all. */
-  guard: LeaveGuard["guard"];
+  leaveFirst: PlaceLeave["transitionalLeaveFirst"];
+  /** Whether two places hold one draft, which a step between asks nothing for. */
+  sameDraft: (one: Place, other: Place) => boolean;
   /** How many times a door naming a thing opened it in the side panel (`SidePanelControl.opened`). */
   opened: number;
   /** Whether an address is on a task's own place. */
@@ -1111,15 +613,36 @@ function useHistory(input: {
   stepAway: () => boolean;
   /** Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`), answering whether the window held a step to write it after; it writes none where it holds none yet. */
   visit: (to: Place) => boolean;
+  /** Takes the step standing as a task's start's page (`WindowTrail.standIn`). */
+  standIn: () => void;
+  /** Answers whether the window stands on a task's start's page, letting it go. */
+  leaveStandIn: () => boolean;
 } {
-  const { held, place, address, reachable, named, guard, opened, onTaskRoute } = input;
+  const { held, place, address, reachable, named, leaveFirst, sameDraft, opened, onTaskRoute } =
+    input;
   // Note that the presses read the trail as they land, because a
   // key can land between a move and the render that shows it, and the latest
-  // `place`, `reachable`, `go`, and `guard` through a ref, so a press stays the same
+  // `place`, `reachable`, `go`, and the leave's ask through a ref, so a press stays the same
   // function across renders.
-  const latest = useRef({ place, reachable, go: input.go, guard, opened, onTaskRoute });
+  const latest = useRef({
+    place,
+    reachable,
+    go: input.go,
+    leaveFirst,
+    sameDraft,
+    opened,
+    onTaskRoute,
+  });
   useLayoutEffect(() => {
-    latest.current = { place, reachable, go: input.go, guard, opened, onTaskRoute };
+    latest.current = {
+      place,
+      reachable,
+      go: input.go,
+      leaveFirst,
+      sameDraft,
+      opened,
+      onTaskRoute,
+    };
   });
   // The list a narrow screen went up to with no step behind, which the next visit takes in place.
   const wentUp = useRef<Place | undefined>(undefined);
@@ -1222,7 +745,7 @@ function useHistory(input: {
       if (was.address !== held.history.location.href) return;
       own(() => recordTrail(held, { kind: TRAIL_WRITE.PUSH, entry: was }));
     };
-    // The window following the trail where the router's history moved it, asking first, or standing it back on the window's step where it may not go.
+    // The window following the trail where the router's history moved it, or standing it back on the window's step where it may not go.
     const follow = (moved: Trail, was: TrailEntry) => {
       const from = moved.entries.indexOf(was);
       const arrived = standingOf(moved);
@@ -1242,23 +765,16 @@ function useHistory(input: {
         back();
         return;
       }
-      let followed = false;
-      asking(
-        latest.current,
-        target?.state,
-      )(() => {
-        followed = true;
-        if (target === undefined) {
-          arriveNowhere(was);
-          return;
-        }
-        const now = held.trail;
-        const to = now.entries.indexOf(target);
-        if (to >= 0 && to !== now.at) own(() => goAlong(held, to - now.at));
-        else standing.current = target;
-        latest.current.go(target.state);
-      })();
-      if (!followed) back();
+      // Note that the router's own move asked already, as its blocker holds every move of its history while a page holds unsaved work.
+      if (target === undefined) {
+        arriveNowhere(was);
+        return;
+      }
+      const now = held.trail;
+      const to = now.entries.indexOf(target);
+      if (to >= 0 && to !== now.at) own(() => goAlong(held, to - now.at));
+      else standing.current = target;
+      latest.current.go(target.state);
     };
     return listenTo(held, () => {
       const moved = held.trail;
@@ -1355,18 +871,15 @@ function useHistory(input: {
     away: reading.away,
     stepAway: () => goTo(awayFrom(held.trail, latest.current.reachable)),
     visit,
+    standIn: () => {
+      held.standIn = standingOf(held.trail) === undefined ? undefined : held.base + held.trail.at;
+    },
+    leaveStandIn: () => {
+      const standsIn = held.standIn !== undefined && held.standIn === held.base + held.trail.at;
+      held.standIn = undefined;
+      return standsIn;
+    },
   };
-}
-
-/** The step behind on another page (`awayFrom`), as a way out names it now. */
-function awayStep(
-  trail: Trail,
-  reachable: (place: Place) => boolean,
-  named: (place: Place) => StepTitle | undefined,
-): AwayStep | undefined {
-  const at = awayFrom(trail, reachable);
-  const place = at === undefined ? undefined : trail.entries[at]?.state;
-  return place === undefined ? undefined : { title: named(place) };
 }
 
 /**
@@ -1391,18 +904,12 @@ export function useWindowHistory(input: {
   title?: StepTitle | undefined;
   /** The routed place the router stands the window on, Settings or Admin; none while the window's state says where it stands. */
   routed: RoutedStanding | undefined;
-  /** The address of Settings' page list, while Settings stands. */
-  settingsList: string | undefined;
-  /** Stands Settings on its page list, in the page's place. */
-  onSettingsList: () => void;
-  /** What the history reads of the Automations pages beyond where they stand: the automations deleted, and an automation's setup under its runs (`automations-route.ts`). */
-  automations: Pick<AutomationsRoute, "deleted" | "setupAddress">;
-  /** What the history reads of a version history beyond where it stands: the list under a narrow room's version (`version-history-route.ts`). */
-  versionHistory: Pick<VersionHistoryRoute, "listAddress">;
-  /** What the history reads of the Inbox beyond where it stands: the list under its item, the item chosen, and the doors that stand its list (`inbox-route.ts`). */
-  inbox: Pick<InboxRoute, "listAddress" | "chosen" | "choiceOf" | "onOpen" | "onClear">;
-  /** Home as the router stands it, which a routed place left with no task bound opens (`workspace-routes.ts`). */
-  home: Pick<HomeRoute, "onOpen">;
+  /** What the history reads of the Automations pages beyond where they stand: the automations deleted (`automations-route.ts`). */
+  automations: Pick<AutomationsRoute, "deletedNow">;
+  /** What the history reads of a version history beyond where it stands: its way out to its task (`version-history-route.ts`). */
+  versionHistory: Pick<VersionHistoryRoute, "onClose">;
+  /** What the history reads of the Inbox beyond where it stands: the item chosen, and the door that stands its list (`inbox-route.ts`). */
+  inbox: Pick<InboxRoute, "open" | "chosen" | "choiceOf" | "onOpen">;
   /** The room the panel's stage gives, narrow where it shows one pane at a time. */
   room: ShellRoom;
   tasks: Pick<
@@ -1415,13 +922,9 @@ export function useWindowHistory(input: {
     | "onGoHome"
     | "history"
     | "signedIn"
-    | "inboxView"
     | "agentView"
-    | "personView"
     | "workspace"
-    | "automationsView"
-    | "boardView"
-    | "leaveGuard"
+    | "placeLeave"
     | "sidePanel"
     | "mainTabs"
     | "activeTaskId"
@@ -1430,14 +933,14 @@ export function useWindowHistory(input: {
     | "pages"
     | "workspaces"
   >;
-}): WindowHistoryLists & TaskVisits {
+}): WindowHistory & TaskVisits & HistoryBehind {
   const { tasks } = input;
   // The routed place standing over the task's own place, none on the task's own place itself, which the window stands as the task bound for.
   const routed = input.routed?.place === ROUTED_PLACE.TASK ? undefined : input.routed;
   const narrow = input.room === SHELL_ROOM.NARROW;
   const { boundFor } = tasks;
   const historyOpen = tasks.history.open;
-  const inboxOpen = tasks.inboxView.open;
+  const inboxOpen = input.inbox.open;
   // The item chosen in the Inbox, whose side panel its step holds beside its address.
   const inboxChosen = input.inbox.chosen;
   const panelOpen = tasks.sidePanel.open;
@@ -1452,55 +955,25 @@ export function useWindowHistory(input: {
   // The side panel as the stop standing holds it: its tab while open, and shut otherwise.
   const sideHeld = panelTab ?? null;
   const taskSide = stripsKnown && !narrow ? sideHeld : undefined;
-  // The tabs each task's column stood with as the window last stood on it, so a step on a tab since closed is passed over.
-  // Note that a task reopened before its agents are read keeps the column it was last seen with.
-  const knownColumns = useRef(new Map<string, ReadonlySet<string>>()).current;
-  if (columnKnown && !inboxOpen && !historyOpen) {
-    knownColumns.set(boundFor, new Set(tasks.mainTabs.tabs.map(tabKey)));
-  }
   const pageAgent = tasks.agentView.agentId;
-  const listedWorkspace = tasks.workspace?.id;
   // A routed step is reachable as its route's gate would let the window stand there (`route-gates.ts`).
   const access = useRouteAccess();
-  // The routed place the window is leaving for the place its state says, which it stands on as a visit, by its address,
-  // so a move from it to another routed place, as from the Board to a person's page, stands that one; a task's own place
-  // among them, left for the task bound (`places/place-binding.ts`).
-  const [leaving, setLeaving] = useState<string>();
   const router = useRouter();
-  // Note that an address no routed place claims is where the router's history stands, as a narrow room's task step at its side panel's link.
-  const standingAddress = input.routed?.address ?? router.history.location.href;
-  const routedAddress = routed?.address === leaving ? undefined : routed?.address;
-  useEffect(() => {
-    if (standingAddress !== leaving) setLeaving(undefined);
-  }, [standingAddress, leaving]);
+  const { automations, inbox } = input;
+  const { reachable, historyTaskOf } = useStepReach({
+    access,
+    tasks,
+    columnSeen: columnKnown && !inboxOpen && !historyOpen,
+    automations,
+  });
+  const routedAddress = routed?.address;
   // Note that a task's own place naming another task than the one bound for is no step, because the binding is about to
-  // move one or the other: the host asked for the task arrived on, or the window to the task bound, as it is left for it.
+  // move one or the other: the host asked for the task arrived on, or the window to the task bound (`places/place-binding.ts`).
   const taskAhead =
     (input.routed === undefined || input.routed.place === ROUTED_PLACE.TASK) &&
     tasks.taskView.taskId !== undefined &&
-    tasks.taskView.taskId !== boundFor &&
-    standingAddress !== leaving;
-  // A routed place left with no task bound is left for Home, the place of no task, as a visit after it; Home itself stays.
-  const leftForNone = routed !== undefined && routed.address === leaving && boundFor === undefined;
-  const leftHome = leftForNone && routed.place === ROUTED_PLACE.HOME;
-  // Note that Home's door is read as the leave lands, so a door drawn anew opens Home no second time.
-  const home = useRef(input.home);
-  home.current = input.home;
-  useEffect(() => {
-    if (leftHome) setLeaving(undefined);
-    else if (leftForNone) home.current.onOpen();
-  }, [leftForNone, leftHome]);
+    tasks.taskView.taskId !== boundFor;
   const known = input.known;
-  // Only grows, so writing it as the list is drawn is the same on every render.
-  const everListed = useRef(new Set<string>()).current;
-  // Each task ever listed by the step its links name it by, under its workspace, so a version history's address finds its task once it is deleted.
-  const everStepped = useRef(new Map<string, Map<string, string>>()).current;
-  for (const task of tasks.tasks) {
-    everListed.add(task.id);
-    const stepped = everStepped.get(task.workspaceId) ?? new Map<string, string>();
-    stepped.set(taskLinkStep(task), task.id);
-    everStepped.set(task.workspaceId, stepped);
-  }
   // A task whose link is not drawn yet, as one the host is still opening, stands at the address its links name it by, under its
   // workspace, else the one listed; none while no workspace of it is known, since every other address is another place's.
   // The address a link's step was written at on the task it opens (`onVisitTask`), which that task's step stands at until
@@ -1512,7 +985,7 @@ export function useWindowHistory(input: {
     linked.taskId === boundFor &&
     (openNow !== boundFor || input.link === undefined);
   const taskAddress = useMemo(() => {
-    if (linkedStands) return linked?.address;
+    if (linkedStands) return linked.address;
     if (input.link !== undefined) return addressOf(input.link);
     const task = tasks.tasks.find((each) => each.id === boundFor);
     const home =
@@ -1584,15 +1057,6 @@ export function useWindowHistory(input: {
     linkedStands,
     openNow,
   ]);
-  // The task a version history's address names, by the step its links name it by under the workspace named, or by its id.
-  const historyTaskOf = (matches: ReturnType<typeof router.matchRoutes>) => {
-    if (routedPlaceOf(matches, access) !== ROUTED_PLACE.VERSION_HISTORY) return undefined;
-    const params: Readonly<Record<string, string | undefined>> = matches.at(-1)?.params ?? {};
-    const { workspace, taskId } = params;
-    if (workspace === undefined || taskId === undefined) return undefined;
-    const home = workspaceOfSlug(tasks.workspaces, workspace)?.id;
-    return (home === undefined ? undefined : everStepped.get(home)?.get(taskId)) ?? taskId;
-  };
   // The task the version history standing is of, by its address, which it is counted as from the moment it stands, before that task opens under it.
   const routedHistory =
     routed === undefined ? undefined : historyTaskOf(router.matchRoutes(pathOf(routed.address)));
@@ -1624,38 +1088,6 @@ export function useWindowHistory(input: {
     const unnamed = titleColumn === undefined && titleSide === undefined;
     return { ...untitled, title: unnamed ? label : { ...label, panes } };
   }, [untitled, titleLabel, titleDetail, titleColumn, titleSide]);
-  // Whether the column's tab a task's step showed still stands on its strip, as far as the window last saw it; a task not seen since is taken to.
-  // Note that the side panel's tab is not asked after, because going to the step opens it again, as a link opens a preview another took the place of.
-  const columnStands = (taskId: string, tab: StripTab | undefined) => {
-    const column = knownColumns.get(taskId);
-    return tab === undefined || column === undefined || column.has(tabKey(tab));
-  };
-  // What a routed step's declaration reads to say whether it is still there (`routedStepStands`), a task's by what its step holds.
-  const { automations, inbox } = input;
-  const thereOf = (
-    matches: ReturnType<typeof router.matchRoutes>,
-    taskStep: TaskStep | undefined,
-  ): PlaceThere => ({
-    historyTask: historyTaskOf(matches),
-    taskStep,
-    taskStands,
-    columnStands,
-    automationStands: (automationId: string) => !automations.deleted.has(automationId),
-    listed: (workspace: string) =>
-      workspaceOfSlug(tasks.workspaces, workspace)?.id === listedWorkspace,
-  });
-  // Whether a task a step stands on is still there: the one bound for, one no list held yet, or one the list holds, unless the list could not be read.
-  const taskStands = (taskId: string) =>
-    taskId === boundFor ||
-    tasks.listFailed ||
-    !everListed.has(taskId) ||
-    tasks.tasks.some((task) => task.id === taskId);
-  // A step stands as its place's declaration says: where its gate lets it, what it names is still there, a task's step by
-  // its task and its column's tab, and its workspace is still the one listed.
-  const reachable = (to: Place) => {
-    const matches = router.matchRoutes(pathOf(to.address));
-    return routedStepStands(matches, searchOf(to.address), access, thereOf(matches, to.task));
-  };
   const go = (to: Place) => {
     // Note that a routed place is the router's to draw, which follows its history to it by itself, and a task's step stands
     // the task it holds, with its tabs, as the host binds it; the Board, a person's page, and the Automations pages stand
@@ -1693,134 +1125,78 @@ export function useWindowHistory(input: {
     if (panel.open && panel.tab !== undefined) sidePanel.onShow(taskId, panel.tab);
     else if (taskId === sidePanel.stop) sidePanel.onSetOpen(panel.open);
   };
-  // The workspace's members, read only while a person's page stands on the trail.
-  // Note that the place standing counts as on the trail already, so its visit, written after it draws, draws the window no second time.
-  const personStanding = routed?.place === ROUTED_PLACE.PERSON;
   const held = trailOf(router.history);
   const subscribeTrail = useCallback((listener: () => void) => listenTo(held, listener), [held]);
-  const personListed = useSyncExternalStore(
-    subscribeTrail,
-    () =>
-      personStanding ||
-      held.trail.entries.some(
-        (entry) =>
-          routedPlaceOf(router.matchRoutes(pathOf(entry.address)), access) === ROUTED_PLACE.PERSON,
-      ),
+  const named = useStepNames({
+    access,
+    tasks,
+    inbox,
+    historyTaskOf,
+    personStanding: routed?.place === ROUTED_PLACE.PERSON,
+    subscribe: subscribeTrail,
+    entries: () => held.trail.entries,
+  });
+  // Whether two places hold one draft: one page, or two steps of one routed place's draft, as its declaration says (`sameDraftAt`).
+  const sameDraft = useCallback(
+    (one: Place, other: Place) =>
+      samePage(one, other) ||
+      (!isTaskPlace(one) &&
+        !isTaskPlace(other) &&
+        sameDraftAt(
+          router.matchRoutes(pathOf(one.address)),
+          router.matchRoutes(pathOf(other.address)),
+          access,
+        )),
+    [router, access],
   );
-  const members = useQuery(workspaceMembersQuery(personListed ? tasks.workspace?.id : undefined))
-    .data?.members;
-  // The task an Inbox item is of, by the item's id, where a door chose it.
-  const itemTask = (itemId: string) => {
-    const chosen = inbox.choiceOf(itemId);
-    return chosen === undefined ? undefined : choiceTask(chosen);
-  };
-  // A step is named again as its place's declaration says, by the ids its address names, a task's by what its step holds.
-  const routedNamed = (to: Place): NamedStep | undefined => {
-    const matches = router.matchRoutes(pathOf(to.address));
-    const naming = { historyTask: historyTaskOf(matches), itemTask, taskStep: to.task };
-    return stepPlaceOf(matches, access, to.task)?.named(
-      placeParamsOf(matches),
-      searchOf(to.address),
-      naming,
-    );
-  };
-  const named = (to: Place) => liveStepTitle(routedNamed(to), titleOf(to), tasks, members);
   // Whether an address is on a task's own place, whose entry the router wrote before the window wrote the task's step in it.
   const onTaskRoute = useCallback(
     (address: string) =>
       routedPlaceOf(router.matchRoutes(pathOf(address)), access) === ROUTED_PLACE.TASK,
     [router, access],
   );
-  const { backTo, upTo, stepBack, stepAway, visit, ...history } = useHistory({
-    held,
-    place,
-    address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
-    reachable,
-    named,
-    go,
-    guard: tasks.leaveGuard.guard,
-    opened: tasks.sidePanel.opened,
-    onTaskRoute,
-  });
-  // A phone has no Home: wherever the window would stand on it, it stands on
-  // the Inbox's list (`mobile-bar.tsx`), which takes Home's step in place, so
-  // Back never lands on a Home that would only leave again.
-  const homeOnPhone =
-    narrow &&
-    tasks.signedIn &&
-    untitled !== undefined &&
-    !isTaskPlace(untitled) &&
-    routed?.place === ROUTED_PLACE.HOME;
+  const { backTo, upTo, stepBack, stepAway, visit, standIn, leaveStandIn, ...history } = useHistory(
+    {
+      held,
+      place,
+      address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
+      reachable,
+      named,
+      go,
+      leaveFirst: tasks.placeLeave.transitionalLeaveFirst,
+      sameDraft,
+      opened: tasks.sidePanel.opened,
+      onTaskRoute,
+    },
+  );
+  // A place a narrow room stands another in the place of, as a phone has no Home, stands that one as its declaration says.
+  const instead =
+    narrow && tasks.signedIn && untitled !== undefined && !isTaskPlace(untitled)
+      ? routed?.place.narrowInstead
+      : undefined;
   const phoneWorkspace = tasks.workspace;
   const openInbox = inbox.onOpen;
   useEffect(() => {
-    if (!homeOnPhone || phoneWorkspace === undefined) return;
-    const workspace = phoneWorkspace.slug ?? phoneWorkspace.id;
-    openInbox({ workspace, narrowed: undefined }, true);
-  }, [homeOnPhone, phoneWorkspace, openInbox]);
-  // Note that only a narrow room holds a list as a step of its own, so a wide one only stands it.
-  const up = (to: Place, stand: () => void) => (narrow ? upTo(to, stand) : stand());
-  // Note that the history is handed back steady, its ways back among it, so the screens it is handed hold while nothing they read moves.
-  const { settingsList, onSettingsList, versionHistory } = input;
-  const lists = useSteadyDoorSet<ListBacks>({
-    // Note that a narrow room's page of Settings is a step after its list, which a wide room's turns in place.
-    settings: () => {
-      const list = settingsList === undefined ? undefined : routedPlace(settingsList);
-      if (!narrow || list === undefined || !backTo(list)) onSettingsList();
-    },
-    // Note that a narrow room's version is a step after the versions, as a page of Settings is after its list.
-    versions: () => {
-      const { listAddress } = versionHistory;
-      const list = listAddress === undefined ? undefined : routedPlace(listAddress);
-      if (!narrow || list === undefined || !backTo(list)) tasks.history.onList();
-    },
-    // Note that an automation's runs alone are a narrow room's step after its setup, as a page of Settings is after its list.
-    runs: () => {
-      const setup =
-        automations.setupAddress === undefined ? undefined : routedPlace(automations.setupAddress);
-      if (!narrow || setup === undefined || !backTo(setup)) tasks.automationsView.onRuns(false);
-    },
-    // Note that an Inbox item is a step after the list it was chosen in, in every room, as its address is its own.
-    inbox: () => {
-      const list = inbox.listAddress === undefined ? undefined : routedPlace(inbox.listAddress);
-      if (list === undefined || !backTo(list)) inbox.onClear();
-    },
-    panel: () => {
-      const shut = () => tasks.sidePanel.onSetOpen(false);
-      // Note that a phone's panel a link opened over an Inbox item or an agent's page steps back to it shut, where that is the step behind.
-      if (
-        untitled !== undefined &&
-        !isTaskPlace(untitled) &&
-        (inboxOpen || pageAgent !== undefined)
-      ) {
-        if (!narrow || !backTo({ ...untitled, side: null })) shut();
-        return;
-      }
-      if (boundFor === undefined) {
-        shut();
-        return;
-      }
-      const plan = { taskId: boundFor, panel: { open: false, tab: undefined } };
-      up(taskPlace(taskAddress ?? NO_LINK_ADDRESS, plan), shut);
-    },
-    // Note that a task with no step behind it, as one a reloaded tab or a link loaded, is left as ever.
-    task: () => {
-      if (!stepBack()) tasks.onLeaveTask();
-    },
-  });
+    if (instead === undefined || phoneWorkspace === undefined) return;
+    instead({ workspace: phoneWorkspace.slug ?? phoneWorkspace.id, openInbox });
+  }, [instead, phoneWorkspace, openInbox]);
+  // A step a way back names, as the history holds it: a task's at the address its own place stands at, since its step is told by its task.
+  const placeOf = (to: BackStep): Place => {
+    if ("task" in to) return taskPlace(taskAddress ?? NO_LINK_ADDRESS, to.task);
+    return to.side === undefined
+      ? routedPlace(to.address)
+      : { ...routedPlace(to.address), side: to.side };
+  };
+  const { versionHistory } = input;
   return useSteadyDoors({
     ...history,
-    onLeaveRouted: () => {
-      if (standingAddress !== undefined) setLeaving(standingAddress);
-    },
-    onStayRouted: () => setLeaving(undefined),
     onLeaveVersionHistory: () => {
       const task =
         boundFor === undefined
           ? undefined
           : taskPlace(taskAddress ?? NO_LINK_ADDRESS, { taskId: boundFor });
       if (task !== undefined && backTo(task)) return;
-      tasks.history.onClose();
+      versionHistory.onClose();
     },
     onLeave: () => {
       if (!stepAway()) tasks.onGoHome();
@@ -1843,7 +1219,13 @@ export function useWindowHistory(input: {
       if (wrote) setLinked({ taskId: step.taskId, address });
       return wrote;
     },
-    lists,
+    behind: {
+      backTo: (to) => backTo(placeOf(to)),
+      upTo: (to, stand) => upTo(placeOf(to), stand),
+      stepBack,
+    },
+    onStartStands: standIn,
+    onLeaveStart: leaveStandIn,
   });
 }
 

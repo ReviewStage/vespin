@@ -6,6 +6,9 @@ import { searchTokens } from "@repo/ui/search-tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
+import { useInboxView } from "../inbox-route.js";
+import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
+import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import {
   EVERYONES,
@@ -30,7 +33,7 @@ import {
 } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
-import { AUTOMATIONS_PAGE, type InboxChoice, type TasksControl } from "./use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
 /**
  * use-inbox-listing.ts -- the window's Inbox read once: every item of every
@@ -164,8 +167,10 @@ function useChoiceFirst(
  */
 export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const view = tasks.inboxView;
+  const inbox = useInboxView(tasks);
+  const { choose: onChoose } = useInboxDoor(tasks);
   const choices = useInboxViewChoices();
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
   // Note that the Inbox reads the automations whenever it stands, because the items of agents with no task it lists are every one an automation's.
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
@@ -191,14 +196,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     readTasks.has(id) && !read.feedHoldsNothing[INBOX_SCOPE_KIND.PLAN].has(id);
   const settlesAgent = (id: string) =>
     readAgents.has(id) && !read.feedHoldsNothing[INBOX_SCOPE_KIND.AGENT].has(id);
-  const { onChoose, onClear } = view;
+  const { onClear } = view;
   // Note that the item chosen here is drawn before the window holds it (`useChoiceFirst`).
   const {
     chosen: asked,
     settling,
     choose: chooseFirst,
     clear,
-  } = useChoiceFirst(view.chosen, onChoose, onClear);
+  } = useChoiceFirst(inbox.chosen, onChoose, onClear);
   const chosenTask =
     asked !== undefined && "taskId" in asked
       ? tasks.tasks.find((task) => task.id === asked.taskId)
@@ -269,11 +274,13 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [readItems, liveKind, liveId, liveItems],
   );
   // An agent with no plan that a link names, which main does not list as holding items yet, is grouped by its own read, in its own workspace's list alone.
+  // Note that an agent whose plan the list holds is not, though a link names its item by the agent, because the plan's group lists its items already, and an item listed twice is counted and stepped through twice.
   const pageAgent = agents.agents?.[0] ?? agents.archived?.[0];
   const settles =
     chosenAgentId !== undefined &&
     holdsLive &&
     pageAgent !== undefined &&
+    !holdings.some((each) => each.taskId === pageAgent.planId) &&
     !agentsHolding.some((each) => each.agentId === chosenAgentId);
   const { agentRepository, workspaceId: agentWorkspace } = agents;
   const holdingAgents = useMemo(
@@ -326,7 +333,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     standing,
     filter,
     asked?.itemId,
-    view.open && tasks.shown,
+    inbox.open && tasks.shown,
   );
   const listedRows = useMemo(() => listedItems(list), [list]);
   const askedId = asked?.itemId;

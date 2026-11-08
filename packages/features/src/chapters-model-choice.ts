@@ -33,7 +33,7 @@ export const CHAPTERS_MODEL = {
 export type ChaptersModelId = (typeof CHAPTERS_MODEL)[keyof typeof CHAPTERS_MODEL];
 
 /** Every choice, in the order a control offers them: fastest first. */
-export const CHAPTERS_MODEL_LIST: readonly ChaptersModelId[] = [
+const CHAPTERS_MODEL_LIST: readonly ChaptersModelId[] = [
   CHAPTERS_MODEL.HAIKU,
   CHAPTERS_MODEL.SONNET,
   CHAPTERS_MODEL.OPUS,

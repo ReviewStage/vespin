@@ -1,11 +1,11 @@
 /**
- * agent-machines.ts -- the two agent machines behind one: each call answered by the machine its agent's row names, Vercel Sandbox or the starter's Mac.
+ * agent-machines.ts -- the two agent machines behind one: each call answered by the machine its agent's row names, a cloud sandbox or the starter's Mac.
  *
  * A call that holds an agent asks the machine its row names
  * (`agent.machine`), and one that holds a place or a runner asks the
  * machine that place names. A call that holds a session alone, as a door
  * and a later call's find do, asks the Mac first whether the session is a
- * local agent's, and Vercel Sandbox otherwise, so a sandbox's session costs
+ * local agent's, and a cloud sandbox otherwise, so a sandbox's session costs
  * one read of the store before its own call.
  *
  * The deployment composes it once for the native harnesses and the doors
@@ -17,12 +17,12 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { Sandbox } from "@repo/sandbox";
 import { Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
-import { deploymentOidcToken, vercelSandboxApi } from "../vercel-sandbox-api.js";
 import { AgentMachine, type AgentMachineService, type MachineLifecycle } from "./agent-machine.js";
 import { type DeviceMachineService, deviceMachine } from "./device-machine.js";
-import { type VercelMachineOptions, vercelLifecycle, vercelMachine } from "./vercel-machine.js";
+import { type SandboxMachineOptions, sandboxLifecycle, sandboxMachine } from "./sandbox-machine.js";
 
 /** The lifecycle of whichever machine answers for the session, or for the place or runner named. */
 function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): MachineLifecycle {
@@ -33,8 +33,8 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
     call: (machine: MachineLifecycle) => Effect.Effect<A, E, R>,
   ) => Effect.flatMap(mac.owns(session), (owned) => call(owned ? mac : cloud));
   return {
-    findPlaces: (userId, session) =>
-      bySession(session, (machine) => machine.findPlaces(userId, session)),
+    findPlace: (userId, session) =>
+      bySession(session, (machine) => machine.findPlace(userId, session)),
     recordRunner: (place, record) => of(place.machine).recordRunner(place, record),
     firewall: {
       write: (place, userId, sources) => of(place.machine).firewall.write(place, userId, sources),
@@ -70,25 +70,23 @@ function routedMachine(cloud: AgentMachineService, mac: DeviceMachineService): A
   };
 }
 
-/** The deployment's machines' lifecycle, Vercel asked under the function's own OIDC token. */
+/** The deployment's machines' lifecycle, over the runtime's `Sandbox`. */
 export const deploymentLifecycle: Effect.Effect<
   MachineLifecycle,
   never,
-  HttpClient.HttpClient | DatabaseServices
+  HttpClient.HttpClient | DatabaseServices | Sandbox
 > = Effect.gen(function* () {
-  const api = yield* vercelSandboxApi(deploymentOidcToken);
-  return routedLifecycle(vercelLifecycle(api), yield* deviceMachine);
+  return routedLifecycle(sandboxLifecycle(yield* Sandbox), yield* deviceMachine);
 });
 
-/** The deployment's machines behind one, Vercel asked under the token given and its checkout run through the edge's runner. */
+/** The deployment's machines behind one, over the runtime's `Sandbox`, its checkout run through the edge's runner. */
 export function agentMachinesLayer(
-  options: VercelMachineOptions,
-): Layer.Layer<AgentMachine, never, HttpClient.HttpClient | DatabaseServices> {
+  options: SandboxMachineOptions,
+): Layer.Layer<AgentMachine, never, HttpClient.HttpClient | DatabaseServices | Sandbox> {
   return Layer.effect(
     AgentMachine,
     Effect.gen(function* () {
-      const api = yield* vercelSandboxApi(options.readToken);
-      return routedMachine(vercelMachine(api, options.run), yield* deviceMachine);
+      return routedMachine(sandboxMachine(yield* Sandbox, options.run), yield* deviceMachine);
     }),
   );
 }

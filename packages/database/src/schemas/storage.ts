@@ -132,8 +132,8 @@ export const conversations = pgTable(
 
 /**
  * That a row of `messages` is a user line no turn owns yet: the rows the
- * awaiting-line reads look among (`message-reads.ts`'s
- * `newestAwaitingLineAt`), and the predicate of the partial index they are
+ * delete of stale withdrawn lines looks among (`writer.ts`'s
+ * `deleteStaleWithdrawnLines`), and the predicate of the partial index they are
  * read through. The role is inlined rather than bound, because an index
  * predicate is DDL, which takes no bound parameter, and a read that bound it
  * would match the index only in a plan made for that one value, never in the
@@ -258,6 +258,17 @@ export const messages = pgTable(
      * `deleteStaleWithdrawnLines`).
      */
     withdrawnAt: timestamptz("withdrawn_at"),
+    /**
+     * The turn a developer's line to a coding agent awaits until a turn takes
+     * it: the turn its send queued, or the open turn it joined
+     * (`../models/turn-state.ts`), moved to the turn queued for it where that
+     * turn ended without taking it. So a line awaiting a turn that failed is
+     * that turn's to resend, and one awaiting a turn a Stop ended awaits
+     * nothing. Null on every other row, and on a line from before it was
+     * kept. Named by id and held to nothing, as a rewind deletes turns
+     * whatever awaits them.
+     */
+    awaitsTurnId: uuid("awaits_turn_id"),
   },
   (table) => [
     unique("messages_conversation_client").on(table.conversationId, table.clientId),
@@ -330,14 +341,23 @@ export const turns = pgTable(
     failureDetail: text("failure_detail"),
     cancelRequestedAt: timestamptz("cancel_requested_at"),
     /**
-     * Until when the turn's runner is held to be at work, while the turn is
-     * queued or runs: set as it is queued or started and pushed on by every
-     * post its runner makes (`../models/turn-lease.ts`). Past it, every
-     * reader takes the runner as lost, and the next touch of the agent
-     * settles the turn so. Null for a turn from before the column, which only
-     * that settle reads as lapsed, once a lease has passed since its queueing.
+     * The deadline of the state the turn stands in while it is open
+     * (`@repo/features/turn-deadline`): its pickup while queued, its progress
+     * deadline while it runs, pulled in by a Stop; the minute sweep fails a
+     * turn still open past it (`../models/turn-state.ts`). Null for a turn
+     * from before the column. Note that it keeps the name it shipped with,
+     * from when it was the runner's lease, because instances older than the
+     * deadline still write it while a deploy rolls out; it is renamed once
+     * none serves.
      */
     leaseUntil: timestamptz("lease_until"),
+    /**
+     * The attempt the turn runs under: the launch of the runner that took it
+     * (`agent.runner_launch`), set as it starts, 0 until then and for a turn
+     * no launch runs. Every move of an open turn compares it, so a runner a
+     * newer launch replaced, or one whose turn was failed, moves nothing.
+     */
+    attempt: bigint("attempt", { mode: "number" }).notNull().default(0),
     /**
      * The key of the tool call whose Stop stamped `cancel_requested_at`,
      * where an agent's `stop_agent` made it: the call run again finds the turn
@@ -366,6 +386,10 @@ export const turns = pgTable(
       table.queuedAt.desc().nullsFirst(),
       table.id.desc().nullsFirst(),
     ),
+    // The minute sweep finds the open turns past their deadline among every account's, a few among all.
+    index("turns_open_deadline")
+      .on(table.leaseUntil)
+      .where(sql`${table.status} in ('queued', 'running')`),
   ],
 );
 

@@ -1,14 +1,13 @@
 import { RUN_EVENT, RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_STATUS } from "@repo/wire";
-import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { Effect, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
 import { conversations, turns } from "../schemas/storage.js";
 import { CONVERSATION_KIND } from "../storage-vocabulary.js";
 import { dropNativeProjectionTurns } from "./native-projection-store.js";
-import { TURN_LEASE } from "./turn-lease.js";
 import { STORE_WRITE_EFFECT, type StoreWriter } from "./writer.js";
 
 /**
@@ -16,34 +15,21 @@ import { STORE_WRITE_EFFECT, type StoreWriter } from "./writer.js";
  *
  * A turn moves to running when its runner opens it and settles when its
  * runner's end lands; a runner gone without its end (its sandbox stopped, its
- * Mac asleep or gone, a post refused for good) leaves the row running and its
- * journal open. Nothing sweeps for that: the turn's lease
- * (`./turn-lease.ts`) runs out once the runner stops posting, every reader
- * takes it as lost from then, and the next touch of the agent reads the
- * lapsed turns here (`lapsedTurnIds`) and settles them failed as a runner
- * lost (`settleRunnerLostTurns`), or canceled where a Stop was asked of them.
- * A coding agent's turn whose session the runtime says no longer runs is
- * settled on the same write at once, failed for its session's end
+ * Mac asleep or gone, a post refused for good) leaves the row open and its
+ * journal open. The minute sweep's reconcile settles such a turn once it
+ * stands past its deadline (`./turn-state.ts`), failed with the word for
+ * why, or canceled where a Stop was asked of it (`settleLapsedTurns`); a
+ * runner whose end the service knows of first, a launch that failed or a Mac
+ * that settled its run, settles its turns at once (`settleRunnerLostTurns`),
+ * as a coding agent's turn whose session the runtime says no longer runs is
  * (`settleEndedSessionTurn`, `settleEndedSession`). Each settle goes through
- * the store writer's own end, so its journal is finished and its unanswered
- * parts settled exactly as a failed turn's are, and an end that lands later
- * finds the row terminal and is repeated, not written.
+ * the store writer's own end, naming the attempt the turn was read under, so
+ * its journal is finished and its unanswered parts settled exactly as a
+ * failed turn's are, a turn a newer launch took since is left to it, and an
+ * end that lands later finds the row terminal and is repeated, not written.
  */
 
 export const LOST_TURNS = {
-  /**
-   * How long a turn may stand open after a Stop was asked of it before it is
-   * read as lapsed whatever its lease: a runner ends a turn within seconds of
-   * its Stop, and the Stop's own force ends it ten seconds on, so one still
-   * open this long has a runner that heard neither, even one still beating.
-   */
-  STOP_CONFIRM_MS: 5 * 60 * 1000,
-  /**
-   * How long a withdrawn line no turn took is kept before the writer deletes
-   * it: a day and an hour, far past the longest a runner holds a line before
-   * it opens the turn that takes it.
-   */
-  WITHDRAWN_LINE_KEEP_MS: 25 * 60 * 60 * 1000,
   /** The most turns one read of an ended session takes; reads go on until none is left. */
   LIMIT: 50,
 } as const;
@@ -52,65 +38,29 @@ const LostTurnSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
   conversationId: Schema.String,
+  attempt: Schema.Number,
 });
 
 const AbandonedTurnRowSchema = Schema.Struct({
   ...LostTurnSchema.fields,
+  status: Schema.String,
   cancelRequestedAt: Schema.NullOr(Schema.Date),
-  startedAt: Schema.NullOr(Schema.Date),
 });
 
-/** What every read of turns to settle selects: a lost turn, when a Stop was asked of it, and when it started. */
+/** What every read of turns to settle selects: a lost turn and the attempt it runs under, where it stands, and when a Stop was asked of it. */
 const ABANDONED_TURN_COLUMNS = {
   id: turns.id,
   userId: turns.userId,
   conversationId: turns.conversationId,
+  attempt: turns.attempt,
+  status: turns.status,
   cancelRequestedAt: turns.cancelRequestedAt,
-  startedAt: turns.startedAt,
 };
 
 /** A turn joined to the conversation it stands in. */
 const TURN_CONVERSATION = eq(conversations.id, turns.conversationId);
 
-/**
- * The ids of the conversation's turns still queued or running whose lease
- * ran out before the instant, oldest first. Note that a turn with no lease,
- * which a writer from before the lease may still queue while a deploy rolls
- * out, is read as though its lease ran from its queueing, because a runner
- * still posting gives it one at its next post (`turn-lease.ts`); and a turn
- * whose Stop went unconfirmed past `LOST_TURNS.STOP_CONFIRM_MS` is read as
- * lapsed whatever its lease, since a runner that heard neither the Stop nor
- * its force may beat on for good.
- */
-const findLapsedTurns = SqlSchema.findAll({
-  Request: Schema.Struct({
-    conversationId: Schema.String,
-    before: Schema.Date,
-    queuedBefore: Schema.Date,
-    stoppedBefore: Schema.Date,
-  }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: (request) =>
-    Database.use((db) =>
-      db
-        .select({ id: turns.id })
-        .from(turns)
-        .where(
-          and(
-            eq(turns.conversationId, request.conversationId),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
-            or(
-              lt(turns.leaseUntil, request.before),
-              and(isNull(turns.leaseUntil), lt(turns.queuedAt, request.queuedBefore)),
-              lt(turns.cancelRequestedAt, request.stoppedBefore),
-            ),
-          ),
-        )
-        .orderBy(asc(turns.queuedAt), asc(turns.id)),
-    ),
-});
-
-/** A turn whose end is not coming: its id, and the conversation and account it stands in. */
+/** A turn whose end is not coming: its id, the conversation and account it stands in, and the attempt it was read under. */
 export type LostTurn = typeof LostTurnSchema.Type;
 
 /**
@@ -142,7 +92,7 @@ const endedSessionTurns = SqlSchema.findAll({
 });
 
 /** How a lost turn ends: canceled where its Stop went unconfirmed, failed for the reason given otherwise. */
-type LostTurnEnd =
+export type LostTurnEnd =
   | { readonly status: typeof RUN_STATUS.CANCELED }
   | {
       readonly status: typeof RUN_STATUS.FAILED;
@@ -151,9 +101,17 @@ type LostTurnEnd =
     }
   | {
       readonly status: typeof RUN_STATUS.FAILED;
-      readonly failure: typeof TURN_FAILURE.MODEL;
+      readonly failure: LostRunnerFailure;
       readonly failureDetail: string;
     };
+
+/** The words a turn whose runner went away fails with: lost, past its deadline as its state, or as a run its launch said failed. */
+export type LostRunnerFailure =
+  | typeof TURN_FAILURE.MODEL
+  | typeof TURN_FAILURE.LINE_UNTAKEN
+  | typeof TURN_FAILURE.NO_PROGRESS
+  | typeof TURN_FAILURE.RUNNER_LOST
+  | typeof TURN_FAILURE.DEADLINE;
 
 /** What a native agent's turn whose runner went away says it failed of, as a runner's own failed end says why; a caller that knows how the runner ended appends that after it. */
 export const RUNNER_LOST_DETAIL = "the agent's runner stopped before its turn ended";
@@ -181,17 +139,20 @@ const agentRunningTurns = SqlSchema.findAll({
 
 /**
  * The turn settled as the end given, through the write the
- * relay's own end takes; whether this write settled it, a turn already
- * ended being a repeat. The end stands alone in the turn's sequence: the
- * relay's count of what it told is not known here, and the writer settles
- * the row by the turn's id. A write the writer refused is logged by its
- * word, since the turn it leaves running would otherwise say nothing of why.
+ * relay's own end takes, under the attempt it was read under, and, for a
+ * reap, only while it still stands lapsed at the instant it was read so;
+ * whether this write settled it, a turn already ended, or moved on since,
+ * being a repeat. The end stands alone in the turn's sequence: the relay's
+ * count of what it told is not known here, and the writer settles the row by
+ * the turn's id. A write the writer refused is logged by its word, since the
+ * turn it leaves running would otherwise say nothing of why.
  */
 const settledLost = (
   writer: Pick<StoreWriter, "consume">,
   turn: LostTurn,
   end: LostTurnEnd,
   now: number,
+  lapsedAt?: number,
 ) =>
   Effect.gen(function* () {
     const written = yield* writer.consume(
@@ -204,6 +165,8 @@ const settledLost = (
         ...end,
         responseIds: [],
         at: now,
+        attempt: turn.attempt,
+        ...(lapsedAt === undefined ? undefined : { lapsedAt }),
       },
     );
     if (Result.isFailure(written)) {
@@ -215,36 +178,27 @@ const settledLost = (
     return written.success === STORE_WRITE_EFFECT.WRITTEN;
   });
 
-/** The ids of the conversation's turns still queued or running whose lease ran out before `now`, oldest first: the turns whose runner is lost, for a settle of just those (`settleRunnerLostTurns`'s `only`). */
-export function lapsedTurnIds(
-  conversationId: string,
-  now: number,
-): Effect.Effect<readonly string[], QueryError | Schema.SchemaError, DatabaseServices> {
-  const lapsed = {
-    conversationId,
-    before: new Date(now),
-    queuedBefore: new Date(now - TURN_LEASE.MS),
-    stoppedBefore: new Date(now - LOST_TURNS.STOP_CONFIRM_MS),
-  };
-  return Effect.map(findLapsedTurns(lapsed), (rows) => rows.map((row) => row.id));
-}
-
 /**
  * Settles the coding agent's turn named as failed because its session ended
  * for good, as eve answered a message to it, at `now`; answers whether this
  * call settled it. Only the turn named is settled, and only while it still
- * stands queued or running, so a turn that ended meanwhile keeps its own end
- * and a newer turn is never touched.
+ * stands queued or running, under the attempt it is read under now, so a
+ * turn that ended meanwhile keeps its own end and a newer turn is never
+ * touched.
  */
 export const settleEndedSessionTurn = /* @__PURE__ */ Effect.fn("web/settleEndedSessionTurn")(
   function* (
     writer: Pick<StoreWriter, "consume">,
-    turn: LostTurn,
+    named: Omit<LostTurn, "attempt">,
     now: number,
   ): Effect.fn.Return<boolean, QueryError | Schema.SchemaError, DatabaseServices> {
+    const open = (yield* agentRunningTurns({ conversationId: named.conversationId })).find(
+      (turn) => turn.id === named.id,
+    );
+    if (open === undefined) return false;
     return yield* settledLost(
       writer,
-      turn,
+      { ...named, attempt: open.attempt },
       { status: RUN_STATUS.FAILED, failure: TURN_FAILURE.SESSION_ENDED },
       now,
     );
@@ -287,7 +241,7 @@ export const settleEndedSession = /* @__PURE__ */ Effect.fn("web/settleEndedSess
   for (;;) {
     const lost = yield* endedSessionTurns({ runtimeSessionId, limit });
     if (lost.every((turn) => read.has(turn.id))) return settled;
-    for (const { cancelRequestedAt, startedAt: _startedAt, ...turn } of lost) {
+    for (const { cancelRequestedAt, status: _status, ...turn } of lost) {
       read.add(turn.id);
       const { failureDetail } = options;
       const written = yield* settledLost(
@@ -343,12 +297,12 @@ export const settleRunnerLostTurns = /* @__PURE__ */ Effect.fn("web/settleRunner
     now: number,
     detail: string = RUNNER_LOST_DETAIL,
     only?: ReadonlySet<string>,
-    failure: typeof TURN_FAILURE.MODEL | typeof TURN_FAILURE.SESSION_ENDED = TURN_FAILURE.MODEL,
+    failure: LostRunnerFailure | typeof TURN_FAILURE.SESSION_ENDED = TURN_FAILURE.MODEL,
   ): Effect.fn.Return<readonly string[], QueryError | Schema.SchemaError, DatabaseServices> {
     const running = yield* agentRunningTurns({ conversationId });
     const lost = only === undefined ? running : running.filter((turn) => only.has(turn.id));
     const failed: string[] = [];
-    for (const { cancelRequestedAt, ...turn } of lost) {
+    for (const { cancelRequestedAt, status: _status, ...turn } of lost) {
       const written = yield* settledLost(
         writer,
         turn,
@@ -366,6 +320,36 @@ export const settleRunnerLostTurns = /* @__PURE__ */ Effect.fn("web/settleRunner
     return failed;
   },
 );
+
+/** A turn read lapsed at an instant, and how it ends. */
+export interface LapsedTurnEnd {
+  readonly turn: LostTurn;
+  readonly end: LostTurnEnd;
+}
+
+/**
+ * Settles the conversation's turns read lapsed at `lapsedAt`, each as its
+ * end says, at `now`: a compare-and-set on each turn's status, its attempt,
+ * and its standing lapsed at that instant still, so a turn its runner moved
+ * on since, or a newer launch took, keeps running. The turn the native
+ * projection holds is dropped with each one settled, so the next launch's
+ * events open a turn of their own. Answers the ids of the turns this call
+ * settled.
+ */
+export const settleLapsedTurns = /* @__PURE__ */ Effect.fn("web/settleLapsedTurns")(function* (
+  writer: Pick<StoreWriter, "consume">,
+  conversationId: string,
+  lapsed: readonly LapsedTurnEnd[],
+  lapsedAt: number,
+  now: number,
+): Effect.fn.Return<readonly string[], QueryError | Schema.SchemaError, DatabaseServices> {
+  const settled: string[] = [];
+  for (const { turn, end } of lapsed) {
+    if (yield* settledLost(writer, turn, end, now, lapsedAt)) settled.push(turn.id);
+  }
+  yield* dropNativeProjectionTurns(conversationId, settled);
+  return settled;
+});
 
 /** The ids of the turns still queued or running of the coding agent's conversation named, for a later settle of just those (`settleRunnerLostTurns`'s `only`). */
 export function runningTurnIds(

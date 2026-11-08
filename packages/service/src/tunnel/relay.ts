@@ -1,13 +1,12 @@
 /**
- * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, holding the sandbox while bytes cross it and closing when none have for ten minutes.
+ * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, touching the sandbox while it stands and closing when no bytes have crossed it for ten minutes.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, as a Terminal's does, then opens a PTY only on a sandbox that is
- * running: a stopped one is never woken here, since whatever the tunnel
- * would reach stopped with it, but for a mirror that asks to wake, which
- * the Mac asks only while its copy has no worktree to open in yet: that
- * sandbox is resumed as the Terminal's resume wakes it, the same named
- * sandbox the agent's next turn resumes. One never opened is not running.
+ * running: a stopped one is never woken here, whatever the kind, since
+ * whatever the tunnel would reach stopped with it. The mirror follows a
+ * sandbox something else keeps running and waits while it is stopped. One
+ * never opened is not running.
  * The bridge the socket asked for starts in that PTY (`bridge.ts`), and
  * once it says it is ready each channel frame the desktop sends goes to it
  * as one line and each line it writes comes back as one frame. A frame is
@@ -15,13 +14,10 @@
  * counted, here or anywhere the relay writes.
  *
  * Where the bridge's kind holds the sandbox (`TUNNEL_HOLDS_SANDBOX`), the
- * connection keeps the sandbox alive past its timeout every keep-alive
- * interval (`CODER.SANDBOX_KEEP_ALIVE_EVERY`) for as long as it stands, and
- * writes the lease every terminal shares (`sandbox-terminal-lease.ts`) as
- * the sign the turn-end stop reads that someone is using the sandbox: at
- * the open, and as bytes cross, at most once a minute. A connection closes
+ * connection touches the sandbox (`@repo/sandbox`'s `touch`) every
+ * `SANDBOX_TOUCH_EVERY` for as long as it stands. A connection closes
  * as idle once no byte has crossed it either way for the idle bound, which
- * ends its keep-alive, so the sandbox's own timeout stops it from there.
+ * ends its touches, so the sandbox's idle stop takes it from there.
  *
  * How the connection ended is the close code the desktop reads as the
  * tunnel's state (`@repo/features/sandbox-tunnel-wire`'s `TUNNEL_CLOSE`).
@@ -31,8 +27,14 @@
  * bytes the tunnel carries never are, nor a path.
  */
 
-import { TUNNEL_CLOSE, TUNNEL_KIND, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
+import { TUNNEL_CLOSE, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
+import {
+  type InteractiveShell,
+  ptyLinesOf,
+  SANDBOX_TOUCH_EVERY,
+  type SandboxError,
+} from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   Clock,
@@ -49,10 +51,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
-import { CODER } from "../agents/coder-host/bounds.js";
-import { ptyLinesOf } from "../agents/sandbox-pty.js";
 import type { SandboxOpen } from "../agents/terminal/agent-sandbox.js";
-import type { InteractiveShell, SandboxUnavailable } from "../agents/vercel-sandbox-api.js";
 import { EXCESS_KEYS } from "../core.js";
 import { jsonOf } from "../http/http-effect.js";
 import type { RelaySocket } from "../terminal/relay.js";
@@ -64,11 +63,9 @@ import {
 } from "./bridge.js";
 import { MIRROR_BRIDGE_STEP, type MirrorBridgeStep } from "./mirror-bridge.js";
 
-export const TUNNEL_RELAY_BOUNDS = {
+const TUNNEL_RELAY_BOUNDS = {
   /** How long a tunnel stays connected past the last byte that crossed it either way. */
   IDLE: Duration.minutes(10),
-  /** How often traffic moves the lease on, so a byte is not a write. */
-  LEASE_WRITE_EVERY: Duration.minutes(1),
   /** How often a connection asks whether it has gone the idle bound without traffic. */
   IDLE_CHECK_EVERY: Duration.seconds(30),
   /** How long the bridge may take to say it is ready once its PTY is open. */
@@ -84,9 +81,8 @@ export interface TunnelAsk {
   readonly bridge: TunnelBridge;
 }
 
-/** The agent a connection reached: its conversation, whose lease it holds, and the session its sandbox is tagged with, none before it ran. */
-export interface TunnelAgent {
-  readonly conversationId: string;
+/** The agent a connection reached: the session its sandbox is tagged with, none before it ran. */
+interface TunnelAgent {
   readonly sessionId: string | undefined;
 }
 
@@ -98,16 +94,13 @@ export interface TunnelDependencies {
     agentId: string,
   ) => Effect.Effect<Option.Option<TunnelAgent>, unknown>;
   /** A PTY minted on the running sandbox the session is tagged with, or where it stands; never a resume. */
-  readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxUnavailable>;
-  /** The stopped sandbox the session is tagged with resumed, as the Terminal's resume wakes it; one running is left as it is. */
-  readonly resume: (sessionId: string) => Effect.Effect<unknown, SandboxUnavailable>;
+  readonly open: (sessionId: string) => Effect.Effect<SandboxOpen, SandboxError>;
   /** Opens the PTY's socket for the connection's scope. */
   readonly connect: (
     shell: InteractiveShell,
-  ) => Effect.Effect<RelaySocket, SandboxUnavailable, Scope.Scope>;
-  readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
-  /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
-  readonly keepAlive: (sessionId: string) => Effect.Effect<void>;
+  ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
+  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
+  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** How the relay ends its own socket to the PTY, whatever ended the pipe: the bridge ends with its input. */
@@ -133,7 +126,6 @@ const CLOSE_WHY = {
   REACH_FAILED: "reach-failed",
   GONE: "gone",
   NO_SESSION: "no-session",
-  RESUME_FAILED: "resume-failed",
   OPEN_FAILED: "open-failed",
   NOT_RUNNING: "not-running",
   CONNECT_FAILED: "connect-failed",
@@ -157,7 +149,6 @@ const EXPECTED_CLOSES: ReadonlySet<CloseWhy> = new Set([
 const TUNNEL_SPAN = {
   RELAY: "tunnel.relay",
   REACH: "tunnel.reach",
-  RESUME: "tunnel.resume",
   OPEN: "tunnel.open",
   CONNECT: "tunnel.connectPty",
   READY: "tunnel.bridgeReady",
@@ -205,29 +196,9 @@ function closeFor(
   });
 }
 
-/** The instant the lease reaches to from a write at the instant given: the idle bound, and the minute traffic after this write may wait for the next. */
-function heldFrom(instant: Date): Date {
-  const reach = Duration.sum(TUNNEL_RELAY_BOUNDS.IDLE, TUNNEL_RELAY_BOUNDS.LEASE_WRITE_EVERY);
-  return new Date(instant.getTime() + Duration.toMillis(reach));
-}
-
-/** Notes a byte crossing at the instant now, moving the lease on at most once a minute where the bridge's kind holds the sandbox. */
-function crossed(
-  deps: TunnelDependencies,
-  agent: TunnelAgent,
-  holds: boolean,
-  lastCrossed: Ref.Ref<number>,
-  lastHeld: Ref.Ref<number>,
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    const at = yield* DateTime.nowAsDate;
-    yield* Ref.set(lastCrossed, at.getTime());
-    if (!holds) return;
-    const since = at.getTime() - (yield* Ref.get(lastHeld));
-    if (since < Duration.toMillis(TUNNEL_RELAY_BOUNDS.LEASE_WRITE_EVERY)) return;
-    yield* Ref.set(lastHeld, at.getTime());
-    yield* deps.hold(agent.conversationId, heldFrom(at));
-  });
+/** Notes a byte crossing at the instant now. */
+function crossed(lastCrossed: Ref.Ref<number>): Effect.Effect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (at) => Ref.set(lastCrossed, at.getTime()));
 }
 
 /** The desktop's frames to the bridge, one line each, a frame of no tunnel shape dropped. */
@@ -291,7 +262,6 @@ export function relayTunnel(
   ask: TunnelAsk,
   deps: TunnelDependencies,
 ): Effect.Effect<void, never, Scope.Scope> {
-  const wakes = ask.bridge.kind === TUNNEL_KIND.MIRROR && ask.bridge.wake;
   const close = (code: number, why: CloseWhy, failedStep?: MirrorBridgeStep) =>
     closeFor(device, ask, code, why, failedStep);
   return Effect.gen(function* () {
@@ -307,14 +277,6 @@ export function relayTunnel(
     if (sessionId === undefined) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NO_SESSION);
     }
-    if (wakes) {
-      const resumed = yield* Effect.result(
-        deps.resume(sessionId).pipe(Effect.withSpan(TUNNEL_SPAN.RESUME)),
-      );
-      if (Result.isFailure(resumed)) {
-        return yield* close(TUNNEL_CLOSE.UNAVAILABLE, CLOSE_WHY.RESUME_FAILED);
-      }
-    }
     const opened = yield* Effect.result(
       deps.open(sessionId).pipe(Effect.withSpan(TUNNEL_SPAN.OPEN)),
     );
@@ -325,16 +287,13 @@ export function relayTunnel(
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NOT_RUNNING);
     }
-    // An open is the developer using the sandbox: where the kind holds it, it is held and kept alive from here.
-    const holds = TUNNEL_HOLDS_SANDBOX[ask.bridge.kind];
+    // An open is the developer using the sandbox: where the kind holds it, it is touched from here.
     const openedAt = yield* DateTime.nowAsDate;
     const lastCrossed = yield* Ref.make(openedAt.getTime());
-    const lastHeld = yield* Ref.make(openedAt.getTime());
-    if (holds) {
-      yield* deps.hold(agent.conversationId, heldFrom(openedAt));
+    if (TUNNEL_HOLDS_SANDBOX[ask.bridge.kind]) {
       yield* Effect.forkScoped(
-        Effect.repeat(deps.keepAlive(sessionId), {
-          schedule: Schedule.spaced(CODER.SANDBOX_KEEP_ALIVE_EVERY),
+        Effect.repeat(deps.touch(sessionId), {
+          schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
         }),
       );
     }
@@ -356,7 +315,7 @@ export function relayTunnel(
         rows: TUNNEL_RELAY_BOUNDS.PTY.ROWS,
       }),
     });
-    const noteCrossed = crossed(deps, agent, holds, lastCrossed, lastHeld);
+    const noteCrossed = crossed(lastCrossed);
     // Note that the bridge's lines are read from its start, so its ready word is caught by the reader that then carries its frames.
     const ready = yield* Deferred.make<void>();
     const failedStep = yield* Ref.make<MirrorBridgeStep | undefined>(undefined);
@@ -393,7 +352,6 @@ export function relayTunnel(
         "agent.id": ask.agentId,
         "user.id": ask.userId,
         "tunnel.kind": ask.bridge.kind,
-        "tunnel.wake": wakes,
       },
     }),
   );

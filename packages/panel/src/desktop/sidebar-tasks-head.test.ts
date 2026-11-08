@@ -3,14 +3,13 @@
 import assert from "node:assert/strict";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-tasks-head.test.ts -- the Tasks head carries New section and View
@@ -71,7 +70,7 @@ function mountTasks(): HTMLElement {
       workspace: WORKSPACE,
     }),
   );
-  act(() => root.render(withQueryClient(createElement(DesktopSidebar, props))));
+  act(() => root.render(withQueryClient(drawnSidebar(props))));
   return (
     container.querySelector<HTMLElement>('nav[aria-label="My tasks"]') ??
     assert.fail("no Tasks section")

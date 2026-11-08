@@ -272,6 +272,12 @@
     border-top: 1px solid var(--ui-markdown-edge);
   }
 
+  /* Two dividers in a row stand a line apart rather than a hair apart, so
+     they read as two, and an editor's caret has room to stand between them. */
+  .ui-markdown hr + hr {
+    margin-top: 1lh;
+  }
+
   /* A chip stands with the punctuation written against it as one box no line
      breaks inside (`link-glue.ts`), in a note's words and a transcript's
      alike, so a comma never starts a line alone after a chip and an opening
@@ -407,4 +413,11 @@ blockquote.markdown-quote > * {
 
 blockquote.markdown-quote > * + * {
   margin-top: 0.5em;
+}
+
+/* Two dividers in a row in a quote stand a line apart, as they do outside one
+   (`.ui-markdown hr + hr`, above), which the quote's blocks' rule would
+   otherwise outrank. */
+blockquote.markdown-quote > hr + hr {
+  margin-top: 1lh;
 }

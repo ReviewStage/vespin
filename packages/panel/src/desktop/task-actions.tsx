@@ -133,22 +133,19 @@ import { ChosenTasksContext, chosenRowMenu } from "./tasks-selection.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
 
 /**
- * task-actions.tsx -- one task's menu, built once (`taskActionGroups`) for the two surfaces that offer it: the Plan tab, which shows the task, from the ⋯ in the side panel's bar and the tab's right-click, and a row of the task, in the sidebar, the Tasks list, the Board, and the Recent list, from its ⋯, a right-click, and the menu key.
+ * task-actions.tsx -- one task's menu, built once (`taskActionGroups`) for every door that offers it: the task's topbar, from a right-click on its name, and a row of the task, in the sidebar, the Tasks list, the Board, and the Recent list, from its ⋯, a right-click, and the menu key.
  *
- * Both surfaces draw the same items in the one order every menu of the
+ * Every door draws the same items in the one order every menu of the
  * window keeps, Copy, then name and read, then organize, then open
  * elsewhere, and Delete last and alone, so a task in a list can be acted on
- * without being opened first. The Plan tab's is the task's document menu
- * (`TASK_MENU_SURFACE.DOCUMENT`): it leaves out the task's status, priority,
- * and assignee, because the plan draws chips for them under its title, yet
- * keeps Change repository, since the repository under the title is words
- * whose menu opens only on that ask, and its Pin is the task's own, since
- * the tab showing the task is what stands for the task in the sidebar. A
- * row's menu (`TASK_MENU_SURFACE.ROW`) keeps them where the row draws no chip
- * for them, as a sidebar row draws none: Status, Priority, and Assignee as
- * submenus listing what the chips list (`standing-submenus.tsx`), as Linear's
- * right-click has them, and Change repository. The menu is the window's own (`action-menu.tsx`), so every door
- * draws it the same way and Permanently delete can be drawn red.
+ * without being opened first, and the open task's topbar and its sidebar row
+ * offer the one menu. Status, Priority, and Assignee stand as submenus
+ * listing what the chips list (`standing-submenus.tsx`), as Linear's
+ * right-click has them, but for those whose chips a list row or a Board
+ * card draws beside them (`StandingChips`). Copy description stands only on
+ * the open task's menu, since it copies the open description. The menu is
+ * the window's own (`action-menu.tsx`), so every door draws it the same
+ * way and Permanently delete can be drawn red.
  * Each item is worded, marked, and keyed as the window's one list has it
  * (`command-items.tsx`), as ⌘K offers the same command; the open task's menu
  * prints the chords of Copy description, Version history, and Permanently delete, which act on the open task, and another task's prints
@@ -247,7 +244,7 @@ export interface TaskRowTab
   readonly tasksNow: () => readonly TaskSummary[];
   /** Copies the open description, as Copy description does. */
   readonly onCopyDescription: () => void;
-  readonly onOpenHistory: TasksControl["history"]["onOpen"];
+  readonly onOpenHistory: TasksControl["onOpenHistory"];
   /** Opens a repository's page on GitHub. */
   readonly onOpenGitHub: TasksControl["repositories"]["openGitHub"];
   /** Whether a repository is drawn by its owner's picture. */
@@ -281,7 +278,7 @@ export function taskRowTab(
     onWriteSections: tasks.onWriteSections,
     tasksNow,
     onCopyDescription: tasks.copy.onPress,
-    onOpenHistory: tasks.history.onOpen,
+    onOpenHistory: tasks.onOpenHistory,
     onOpenGitHub: tasks.repositories.openGitHub,
     pictures: tasks.repositories.pictures,
   };
@@ -560,6 +557,9 @@ function relationDoor(tasks: TaskRowTab, task: TaskSummary): TaskRelationDoor {
   };
 }
 
+/** What the task's menu is named, wherever a right-click on what names the task opens it. */
+export const TASK_MENU_LABEL = "Task actions";
+
 /** What a task's one Move to is called, and what it names the move out of its workspace, at the foot of its sections. */
 const MOVE_TO = "Move to";
 const ANOTHER_WORKSPACE = "Another workspace";
@@ -587,30 +587,18 @@ function moveToEntries(
   return [{ ...section, label: MOVE_TO, items: [...section.items, ...another] }];
 }
 
-/** Which surface offers a task's menu, which decides what the menu holds (`taskActionGroups`). */
-export const TASK_MENU_SURFACE = {
-  /** A row of the task, whose menu keeps Change repository, and Status, Priority, and Assignee but for the chips the row draws (`StandingChips`). */
-  ROW: "row",
-  /** The Plan tab, which shows the task under chips for its status, priority, and assignee, so its menu leaves those out, and its repository as words, so its menu keeps Change repository. */
-  DOCUMENT: "document",
-} as const;
-
-export type TaskMenuSurface = (typeof TASK_MENU_SURFACE)[keyof typeof TASK_MENU_SURFACE];
-
 /**
  * One task's actions in the groups a rule divides, offering only those that
- * apply to it now, for the surface that offers them. A row's menu holds
- * Copy link; then Rename, Version history, and Mark as unread or read; then
- * Status, Priority, and Assignee; then Task relation, the add menu as the
- * menu's panel, and Remove parent where the task has one, New sub-task being the
- * add menu's and ⌘K's; then Pin, Move to section, and Move to
- * workspace where the task may be moved; then the repository changed from
- * any row. The Plan tab's document menu leads with Copy description, since Copy
- * formats the document drawn, and holds the same but for Status, Priority,
- * and Assignee, which the plan's chips stand for. Change repository says
- * Choose a repository on a task with none, on either.
- * Permanently delete is last and alone on both. Only the open task's items
- * print their chords, since a chord acts on the open task alone.
+ * apply to it now, the same from every door: Copy description, on the open
+ * task alone, since Copy formats the document drawn, and Copy link; then
+ * Rename, Version history, and Mark as unread or read; then Status,
+ * Priority, and Assignee; then Task relation, the add menu as the menu's
+ * panel, and Remove parent where the task has one, New sub-task being the
+ * add menu's and ⌘K's; then Pin, Move to section, and Move to workspace
+ * where the task may be moved; then Change repository, which says Choose a
+ * repository on a task with none. Permanently delete is last and alone.
+ * Only the open task's items print their chords, since a chord acts on the
+ * open task alone.
  */
 function taskActionGroups(
   tasks: TaskRowTab,
@@ -637,7 +625,6 @@ function taskActionGroups(
     /** Whether the account has Descriptions on, without which there is no description to copy and no version history. */
     descriptions: boolean;
   },
-  surface: TaskMenuSurface,
 ): MenuEntry[][] {
   const { opened, descriptions } = doors;
   const drawn = opened !== undefined;
@@ -679,24 +666,15 @@ function taskActionGroups(
     ...commandAction(PANEL_COMMAND.DELETE_TASK, doors.askDelete, drawn),
     danger: true,
   };
-  const groups: MenuEntry[][] =
-    surface === TASK_MENU_SURFACE.DOCUMENT
-      ? [
-          [...copy, ...link],
-          [rename, ...versions, ...read],
-          [...relate, ...unparent],
-          [...pinAction(tasks, task, lettered), ...move],
-          [repository],
-          [remove],
-        ]
-      : [
-          link,
-          [rename, ...read],
-          [...doors.standing],
-          [...relate, ...unparent],
-          [...pinAction(tasks, task, lettered), ...move],
-          [remove],
-        ];
+  const groups: MenuEntry[][] = [
+    [...copy, ...link],
+    [rename, ...versions, ...read],
+    [...doors.standing],
+    [...relate, ...unparent],
+    [...pinAction(tasks, task, lettered), ...move],
+    [repository],
+    [remove],
+  ];
   return groups.filter((group) => group.length > 0);
 }
 
@@ -821,8 +799,6 @@ export function useTaskMenuItems(
     unread: boolean;
     /** Whether U and P act on this task from its row, a sidebar row's, so its menu prints them; none elsewhere. */
     rowKeys?: boolean;
-    /** Which surface offers the items, which decides what they hold. */
-    surface: TaskMenuSurface;
     /** The standing chips a row draws, whose submenus its menu leaves out; none on a sidebar row, which draws none. */
     chips?: StandingChips | undefined;
     /** The task the window has open (`openedTaskOf`), which the items read only where it is this one. */
@@ -867,36 +843,30 @@ export function useTaskMenuItems(
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
   const standing =
-    doors.surface === TASK_MENU_SURFACE.ROW && task !== undefined
+    task !== undefined
       ? standingSubmenus(tasks, task, assignees, setStanding, doors.rowKeys === true, doors.chips)
       : [];
   const groups = (): readonly (readonly MenuEntry[])[] => [
     ...withRowMoves(
-      taskActionGroups(
-        tasks,
-        task,
-        taskId,
-        {
-          rename: doors.rename,
-          askDelete: deletion.ask,
-          askMove: moving.ask,
-          copy,
-          chord,
-          rowKeys: doors.rowKeys === true,
-          section,
-          standing,
-          relationId,
-          opened,
-          descriptions,
-          read: {
-            unread: doors.unread,
-            onMark: (unread) => {
-              if (task !== undefined) markRead(task, unread);
-            },
+      taskActionGroups(tasks, task, taskId, {
+        rename: doors.rename,
+        askDelete: deletion.ask,
+        askMove: moving.ask,
+        copy,
+        chord,
+        rowKeys: doors.rowKeys === true,
+        section,
+        standing,
+        relationId,
+        opened,
+        descriptions,
+        read: {
+          unread: doors.unread,
+          onMark: (unread) => {
+            if (task !== undefined) markRead(task, unread);
           },
         },
-        doors.surface,
-      ),
+      }),
       place,
     ),
   ];
@@ -960,7 +930,6 @@ export function TaskActions({
     rename: onRename,
     drawn: true,
     unread: useReadMarks().markedUnread(task.id),
-    surface: TASK_MENU_SURFACE.DOCUMENT,
     opened: openedTaskOf(tasks),
   });
   hand.current = actions;
@@ -971,7 +940,7 @@ export function TaskActions({
   useAppCommand(
     APP_COMMAND.VERSION_HISTORY,
     useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS)
-      ? () => tasks.history.onOpen(task.id)
+      ? () => tasks.onOpenHistory(task.id)
       : undefined,
   );
   return actions.dialog;
@@ -1105,7 +1074,6 @@ export function SidebarTask({
     drawn: true,
     unread,
     rowKeys: true,
-    surface: TASK_MENU_SURFACE.ROW,
     opened: openedTaskOf(tasks),
   });
   const reads = useReadMarks();

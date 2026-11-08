@@ -11,18 +11,15 @@ import { getTestDB } from "../../testing/index.js";
 import {
   claimCredentialRenewal,
   credentialRenewedAt,
-  holdSandbox,
   releaseCredentialRenewal,
-  sandboxHeld,
 } from "../sandbox-terminal-lease.js";
 
 /**
- * The lease a developer's typing holds on a coding agent's sandbox, over a
- * real dialect: it moves on and never back and holds until its instant, it
- * goes with its conversation, and the GitHub token's renewal at its
- * firewall is claimed once while due and read back on its own session. Every conversation is minted per test and every
- * read is of its ids, since the lease is the deployment's and not an
- * account's.
+ * The renewal claim of the GitHub token at a coding agent's sandbox's
+ * firewall, over a real dialect: it is claimed once while due, read back on
+ * its own session, and goes with its conversation. Every conversation is
+ * minted per test and every read is of its ids, since the claim is the
+ * deployment's and not an account's.
  *
  * Synthetic accounts, conversations, and sessions throughout.
  */
@@ -44,56 +41,29 @@ const openAgent = () =>
     return { userId, conversationId: row.id };
   });
 
-it.layer(getTestDB())("the sandbox terminal lease", (it) => {
-  it.effect("a lease holds until its instant, and a slower writer never moves it back", () =>
-    Effect.gen(function* () {
-      const { conversationId } = yield* openAgent();
-      const unheld = yield* sandboxHeld(conversationId, at(0));
-      yield* holdSandbox(conversationId, at(5));
-      yield* holdSandbox(conversationId, at(3));
-
-      assert.equal(unheld, false, "no lease, no hold");
-      assert.equal(yield* sandboxHeld(conversationId, at(4)), true);
-      assert.equal(
-        yield* sandboxHeld(conversationId, at(5)),
-        false,
-        "the lease ends at its instant",
-      );
-      yield* holdSandbox(conversationId, at(9));
-      assert.equal(yield* sandboxHeld(conversationId, at(8)), true, "typing moves it on");
-    }),
-  );
-
-  it.effect("a lease goes with its conversation", () =>
+it.layer(getTestDB())("the sandbox terminal credential claim", (it) => {
+  it.effect("a claim goes with its conversation", () =>
     Effect.gen(function* () {
       const db = yield* Database;
       const { conversationId } = yield* openAgent();
-      yield* holdSandbox(conversationId, at(5));
+      yield* claimCredentialRenewal(conversationId, "sbs_1", at(0), at(-50));
       yield* db.delete(conversations).where(eq(conversations.id, conversationId));
 
-      assert.equal(yield* sandboxHeld(conversationId, at(0)), false);
+      assert.deepEqual(yield* credentialRenewedAt(conversationId, "sbs_1"), Option.none());
     }),
   );
 
   it.effect(
-    "the GitHub token's renewal is claimed once per lease while due, so two windows mint one token",
+    "the GitHub token's renewal is claimed once per conversation while due, so two windows mint one token",
     () =>
       Effect.gen(function* () {
         const { conversationId } = yield* openAgent();
-        const unleased = yield* openAgent();
-        yield* holdSandbox(conversationId, at(5));
 
         const first = yield* claimCredentialRenewal(conversationId, "sbs_1", at(0), at(-50));
         const second = yield* claimCredentialRenewal(conversationId, "sbs_1", at(1), at(-49));
         const due = yield* claimCredentialRenewal(conversationId, "sbs_1", at(51), at(1));
-        const none = yield* claimCredentialRenewal(
-          unleased.conversationId,
-          "sbs_1",
-          at(0),
-          at(-50),
-        );
 
-        assert.deepEqual([first, second, due, none], [true, false, true, false]);
+        assert.deepEqual([first, second, due], [true, false, true]);
       }),
   );
 
@@ -102,8 +72,6 @@ it.layer(getTestDB())("the sandbox terminal lease", (it) => {
     () =>
       Effect.gen(function* () {
         const { conversationId } = yield* openAgent();
-        yield* holdSandbox(conversationId, at(5));
-
         yield* claimCredentialRenewal(conversationId, "sbs_1", at(0), at(-50));
         yield* releaseCredentialRenewal(conversationId, "sbs_1", at(0));
         const retried = yield* claimCredentialRenewal(conversationId, "sbs_1", at(5), at(-45));
@@ -125,8 +93,6 @@ it.layer(getTestDB())("the sandbox terminal lease", (it) => {
     () =>
       Effect.gen(function* () {
         const { conversationId } = yield* openAgent();
-        yield* holdSandbox(conversationId, at(5));
-
         yield* claimCredentialRenewal(conversationId, "sbs_before_stop", at(0), at(-50));
         const sameSession = yield* claimCredentialRenewal(
           conversationId,
@@ -154,8 +120,6 @@ it.layer(getTestDB())("the sandbox terminal lease", (it) => {
   it.effect("a give-back from another session at the same instant leaves the standing claim", () =>
     Effect.gen(function* () {
       const { conversationId } = yield* openAgent();
-      yield* holdSandbox(conversationId, at(5));
-
       yield* claimCredentialRenewal(conversationId, "sbs_resumed", at(0), at(-50));
       yield* releaseCredentialRenewal(conversationId, "sbs_before_stop", at(0));
       const claimedAgain = yield* claimCredentialRenewal(
@@ -174,8 +138,6 @@ it.layer(getTestDB())("the sandbox terminal lease", (it) => {
     () =>
       Effect.gen(function* () {
         const { conversationId } = yield* openAgent();
-        yield* holdSandbox(conversationId, at(5));
-
         const never = yield* credentialRenewedAt(conversationId, "sbs_1");
         yield* claimCredentialRenewal(conversationId, "sbs_1", at(0), at(-50));
         const renewed = yield* credentialRenewedAt(conversationId, "sbs_1");

@@ -1,9 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import {
-  awaitingLinesOfReached,
-  latestTurnsOfReached,
-  readVisibleAgent,
-} from "@repo/database/models/agent-store";
+import { latestTurnsOfReached, readVisibleAgent } from "@repo/database/models/agent-store";
 import {
   type Automation,
   type AutomationRun,
@@ -508,14 +504,9 @@ const workingAgents = Effect.fnUntraced(function* (automation: Automation, now: 
   ];
   const conversations = agents.map((agent) => agent.conversationId);
   const turns = yield* latestTurnsOfReached(conversations);
-  const awaiting = yield* awaitingLinesOfReached(conversations);
   return agents.filter((agent) =>
     WORKING.has(
-      agentStatusOf(turns.get(agent.conversationId), {
-        createdAt: agent.createdAt,
-        now,
-        awaitingLineAt: awaiting.get(agent.conversationId),
-      }),
+      agentStatusOf(turns.get(agent.conversationId), { createdAt: agent.createdAt, now }),
     ),
   ).length;
 });
@@ -581,8 +572,8 @@ type Decision =
  * room for one more agent: a run held back is settled skipped there, and
  * one let through is claimed, started with no agent yet, which the next
  * act's concurrency counts. Note that the automation is read again under
- * the lock, because a pause or a task's move committed while this act
- * waited for it must hold the run back.
+ * the lock, because a pause, or a change of repositories that drops a GitHub
+ * firing's repository, committed while this act waited must hold the run back.
  */
 const decide = (automationId: string, run: ActedRun) =>
   withAutomationLocked(

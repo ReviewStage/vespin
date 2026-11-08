@@ -1,9 +1,9 @@
 /**
- * port-share.ts -- one port of an agent's running sandbox shared by a public link: the helper that serves it, the route Vercel opens to the helper, and the tag that marks the sandbox shared.
+ * port-share.ts -- one port of an agent's running sandbox shared by a public link: the helper that serves it, the public route opened to the helper, and the row that keeps the share.
  *
- * Vercel serves a sandbox's port on a public route, which anyone holding its
+ * A sandbox serves a port on a public route, which anyone holding its
  * address may open. Only the helper's own fixed port is ever routed: the
- * helper, one small Node process started detached in the running session,
+ * helper, one small Node process started detached in the running sandbox,
  * pipes each connection to `127.0.0.1` at the port shared, and rewrites the
  * `Host` and `Origin` request headers to `localhost` at that port as they
  * pass, so a dev server that answers only on localhost still answers. A
@@ -15,37 +15,38 @@
  * which the sweep reads to close a link no one has visited lately
  * (`maintenance/port-share-sweep.ts`); starting the helper counts as one.
  *
- * The share is marked on the sandbox by a tag, which the sweep lists by.
- * Closing it closes the route, drops the tag, and removes the folder, which
- * the helper notices and leaves. Nothing here reads a byte the link carries.
+ * The share is kept in the store by the agent's session
+ * (`@repo/database/models/sandbox-port-shares`), which the sweep lists, and
+ * never on the sandbox, whose tags are left as they stand. Closing it closes
+ * the route, removes the folder, which the helper notices and leaves, and
+ * forgets the row. A row the store could not write or forget fails the call
+ * as the sandbox unavailable, so a caller retries it as any other. Nothing
+ * here reads a byte the link carries.
  */
 
-import { Duration, Effect } from "effect";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
-import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { forgetPortShare, recordPortShare } from "@repo/database/models/sandbox-port-shares";
 import {
   type CommandAsk,
   type ListedSandbox,
   SANDBOX_CALL,
-  type SandboxSessionApi,
+  type SandboxError,
+  type SandboxRunning,
+  type SandboxService,
   SandboxUnavailable,
-  type VercelSandboxApi,
-} from "../vercel-sandbox-api.js";
+} from "@repo/sandbox";
+import { DateTime, Duration, Effect } from "effect";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
 export const PORT_SHARE = {
   /** The one port routed publicly: the helper's, which no dev server is likely to take. */
   HELPER_PORT: 48_211,
   /** How long a link stays open past its last visit. */
   IDLE: Duration.minutes(10),
-  /** The tag a shared sandbox carries, and its one value. */
-  TAG: "portShare",
-  TAG_ON: "on",
   /** The folder the port shared and the last visit are written in. */
   FOLDER: `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}/share`,
 } as const;
-
-/** How often the sweep reads a share's last visit, which the lease must outlast. */
-const SWEEP_EVERY = Duration.minutes(1);
 
 /** The files in the folder: the port shared, and the last visit in epoch milliseconds. */
 const SHARE_FILE = { PORT: "port", VISIT: "visit" } as const;
@@ -112,25 +113,22 @@ function readShare(): CommandAsk {
   };
 }
 
-/** The sandbox's tags with the share's mark set or dropped. */
-function tagsOf(sandbox: ListedSandbox, shared: boolean): Record<string, string> {
-  const { [PORT_SHARE.TAG]: _mark, ...rest } = sandbox.tags ?? {};
-  return shared ? { ...rest, [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON } : rest;
-}
-
-/** The instant a share last visited at the instant given holds its sandbox's lease to: the idle bound, and the minute the sweep may wait to move it on. */
-export function shareHeldUntil(visitedAt: number): Date {
-  return new Date(visitedAt + Duration.toMillis(Duration.sum(PORT_SHARE.IDLE, SWEEP_EVERY)));
+/** A store failure keeping the share's row, as the sandbox unavailable, in words naming no value. */
+function kept<A>(
+  effect: Effect.Effect<A, StoreFailure, DatabaseServices>,
+): Effect.Effect<A, SandboxError, DatabaseServices> {
+  return Effect.mapError(
+    effect,
+    () => new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "the share's row" }),
+  );
 }
 
 /** The share as the folder holds it: the port shared and its last visit; none where it holds no port. */
 export function readSharedPort(
-  running: SandboxSessionApi,
-): Effect.Effect<
-  { readonly port: number; readonly visitedAt: number } | undefined,
-  SandboxUnavailable
-> {
-  return Effect.map(running.run(readShare()), (run) => {
+  api: SandboxService,
+  running: SandboxRunning,
+): Effect.Effect<{ readonly port: number; readonly visitedAt: number } | undefined, SandboxError> {
+  return Effect.map(api.run(running, readShare()), (run) => {
     const [port, visitedAt] = run.stdout.split("\n").map(Number);
     return port === undefined || !Number.isInteger(port) || port <= 0
       ? undefined
@@ -138,20 +136,24 @@ export function readSharedPort(
   });
 }
 
-/** Shares the port from the running sandbox, replacing any shared before, answering its public link. */
+/**
+ * Shares the port from the session's running sandbox, replacing any shared
+ * before, answering its public link. Note that the row is kept before the
+ * helper starts, because a share the sweep cannot list stays open for as
+ * long as its sandbox, while a row whose share never opened is only closed
+ * again by the sweep.
+ */
 export function sharePort(
-  api: VercelSandboxApi,
+  api: SandboxService,
+  sessionId: string,
   sandbox: ListedSandbox,
-  running: SandboxSessionApi,
+  running: SandboxRunning,
   port: number,
-): Effect.Effect<string, SandboxUnavailable> {
+): Effect.Effect<string, SandboxError, DatabaseServices> {
   return Effect.gen(function* () {
-    yield* running.start({ ...startHelper(port), env: {}, sudo: false });
-    const routes = yield* api.updatePorts(
-      sandbox.name,
-      [PORT_SHARE.HELPER_PORT],
-      tagsOf(sandbox, true),
-    );
+    yield* kept(recordPortShare(sessionId, port, yield* DateTime.nowAsDate));
+    yield* api.start(running, { ...startHelper(port), env: {}, sudo: false });
+    const routes = yield* api.updatePorts(sandbox.name, [PORT_SHARE.HELPER_PORT]);
     const route = routes.find((each) => each.port === PORT_SHARE.HELPER_PORT);
     if (route === undefined) {
       return yield* new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "no route" });
@@ -160,30 +162,32 @@ export function sharePort(
   });
 }
 
-/** Closes the sandbox's share: no public route, no mark, and, while it runs, the helper gone with its folder. */
+/** Closes the session's share: no public route, and, while the sandbox runs, the helper gone with its folder, then its row forgotten. */
 export function unsharePort(
-  api: VercelSandboxApi,
+  api: SandboxService,
+  sessionId: string,
   sandbox: ListedSandbox,
-  running: SandboxSessionApi | undefined,
-): Effect.Effect<void, SandboxUnavailable> {
+  running: SandboxRunning | undefined,
+): Effect.Effect<void, SandboxError, DatabaseServices> {
   return Effect.gen(function* () {
-    yield* api.updatePorts(sandbox.name, [], tagsOf(sandbox, false));
+    yield* api.updatePorts(sandbox.name, []);
     if (running !== undefined)
-      yield* running.run({ command: "rm", args: ["-rf", PORT_SHARE.FOLDER] });
+      yield* api.run(running, { command: "rm", args: ["-rf", PORT_SHARE.FOLDER] });
+    yield* kept(forgetPortShare(sessionId));
   });
 }
 
 /** The port the running sandbox shares now and its link: its helper's route and the port the helper serves. */
 export function sharedPortOf(
-  api: VercelSandboxApi,
+  api: SandboxService,
   sandbox: ListedSandbox,
-  running: SandboxSessionApi,
-): Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxUnavailable> {
+  running: SandboxRunning,
+): Effect.Effect<{ readonly port: number; readonly url: string } | null, SandboxError> {
   return Effect.gen(function* () {
-    const named = yield* api.getNamed(sandbox.name);
+    const named = yield* api.get(sandbox.name);
     const route = named?.routes?.find((each) => each.port === PORT_SHARE.HELPER_PORT);
     if (route === undefined) return null;
-    const share = yield* readSharedPort(running);
+    const share = yield* readSharedPort(api, running);
     return share === undefined ? null : { port: share.port, url: route.url };
   });
 }

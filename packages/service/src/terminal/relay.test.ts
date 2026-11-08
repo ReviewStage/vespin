@@ -7,6 +7,7 @@ import {
   TERMINAL_RELAY_CLOSE,
   TERMINAL_RELAY_FRAME,
 } from "@repo/features/terminal-wire";
+import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import {
   type Cause,
   Clock,
@@ -36,8 +37,8 @@ import {
  * reach is gone, one with no sandbox yet is starting, a stopped sandbox is
  * never woken, and a running one is attached through tmux, typing and
  * resizes reaching the PTY and its output reaching the desktop; the shell's
- * exit ends the connection as exited; an open connection holds and keeps
- * alive its sandbox, typed in or not; and the GitHub token at the firewall is
+ * exit ends the connection as exited; an open connection touches its
+ * sandbox, typed in or not; and the GitHub token at the firewall is
  * set when due, once between two connections, and claimed again only at its
  * deadline, or, where it is a member's own, once as the terminal attaches.
  */
@@ -93,10 +94,9 @@ function world(options: {
   /** Whether the agent's credential is its starter's own token. */
   readonly memberToken?: boolean;
 }) {
-  let heldUntil = 0;
   let credentialAt: number | undefined;
   const policies: string[] = [];
-  const keptAlive: { readonly sessionId: string; readonly at: number }[] = [];
+  const touched: { readonly sessionId: string; readonly at: number }[] = [];
   const asked = {
     attached: 0,
     resumed: 0,
@@ -104,7 +104,7 @@ function world(options: {
     released: 0,
     claims: [] as number[],
     policies,
-    keptAlive,
+    touched,
   };
   const sandbox: AgentSandboxService = {
     terminals: () => Effect.die("the relay lists nothing"),
@@ -160,10 +160,6 @@ function world(options: {
     reach: () => Effect.succeed(options.agent ?? Option.some(agent)),
     sandbox,
     connect: () => Effect.succeed(options.pty.socket),
-    hold: (_conversation, until) =>
-      Effect.sync(() => {
-        heldUntil = Math.max(heldUntil, until.getTime());
-      }),
     claimRenewal: (_conversation, _session, now, renewedBefore) =>
       Effect.sync(() => {
         asked.claims.push(now.getTime());
@@ -178,9 +174,9 @@ function world(options: {
         asked.released += 1;
         if (credentialAt === claimedAt.getTime()) credentialAt = undefined;
       }),
-    keepAlive: (sessionId) =>
+    touch: (sessionId) =>
       Effect.flatMap(Clock.currentTimeMillis, (at) =>
-        Effect.sync(() => void keptAlive.push({ sessionId, at })),
+        Effect.sync(() => void touched.push({ sessionId, at })),
       ),
   };
   /** Another window's renewal of the token, at the instant given. */
@@ -188,7 +184,7 @@ function world(options: {
     Effect.sync(() => {
       credentialAt = at;
     });
-  return { deps, asked, heldUntil: () => heldUntil, renewElsewhere };
+  return { deps, asked, renewElsewhere };
 }
 
 /** Lets every fiber the last step woke, the relay's own renewals among them, run to its next wait. */
@@ -259,7 +255,7 @@ it.effect("a shell tmux does not hold closes as gone, and is never started by an
   }),
 );
 
-it.effect("a stopped sandbox closes as stopped, is never woken, and is not held", () =>
+it.effect("a stopped sandbox closes as stopped, is never woken, and is not touched", () =>
   Effect.gen(function* () {
     const pty = yield* scriptedSocket;
     const device = yield* scriptedSocket;
@@ -269,7 +265,7 @@ it.effect("a stopped sandbox closes as stopped, is never woken, and is not held"
 
     assert.deepEqual(device.closed, [TERMINAL_RELAY_CLOSE.STOPPED]);
     assert.equal(stopped.asked.resumed, 0);
-    assert.equal(stopped.heldUntil(), 0);
+    assert.deepEqual(stopped.asked.touched, []);
     assert.deepEqual(pty.sent, []);
   }),
 );
@@ -319,7 +315,6 @@ it.effect(
           (frame) => "bytes" in frame && new TextDecoder().decode(frame.bytes) === "README.md\r\n",
         ),
       );
-      assert.ok(running.heldUntil() > 0, "an attach holds the sandbox");
       assert.deepEqual(device.closed, [], "a desktop that left is sent no close");
     }),
 );
@@ -342,42 +337,38 @@ it.effect("the shell's exit reaches the desktop as exited, and ends the connecti
 );
 
 it.effect(
-  "a connected terminal holds and keeps alive the agent's sandbox from its attach for as long as it stands, typed in or not, and no longer once it closes",
+  "a connected terminal touches the agent's sandbox from its attach for as long as it stands, typed in or not, and no longer once it closes",
   () =>
     Effect.gen(function* () {
       const pty = yield* scriptedSocket;
       const device = yield* scriptedSocket;
       const open = world({ pty });
-      const every = Duration.toMillis(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+      const every = Duration.toMillis(SANDBOX_TOUCH_EVERY);
 
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
       );
       yield* settle;
-      // Nobody types for two keep-alive intervals.
+      // Nobody types for two touch intervals.
       for (let minute = 0; minute < 2 * every; minute += 60_000) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* settle;
       }
       const closedWhileOpen = [...device.closed];
-      const heldPastNow = open.heldUntil() > 2 * every;
       yield* device.leave;
       yield* Fiber.join(relay);
-      const heldAtClose = open.heldUntil();
-      yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+      yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
       yield* settle;
 
       assert.deepEqual(closedWhileOpen, [], "nobody typing never closes the terminal");
-      assert.equal(heldPastNow, true, "the lease reaches past now while the terminal is open");
-      assert.equal(open.heldUntil(), heldAtClose, "a closed terminal moves the lease on no more");
       assert.deepEqual(
-        open.asked.keptAlive,
+        open.asked.touched,
         [0, every, 2 * every].map((at) => ({ sessionId: "wrun_1", at })),
       );
     }),
 );
 
-it.effect("a stopped sandbox is never kept alive by a terminal", () =>
+it.effect("a stopped sandbox is never touched by a terminal", () =>
   Effect.gen(function* () {
     const pty = yield* scriptedSocket;
     const device = yield* scriptedSocket;
@@ -385,7 +376,7 @@ it.effect("a stopped sandbox is never kept alive by a terminal", () =>
 
     yield* Effect.scoped(relayTerminal(device.socket, ASK, stopped.deps));
 
-    assert.deepEqual(stopped.asked.keptAlive, []);
+    assert.deepEqual(stopped.asked.touched, []);
   }),
 );
 

@@ -14,6 +14,7 @@ import {
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { saveDescriptionText, updateTask } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { conversations } from "@repo/database/schemas/storage";
@@ -563,11 +564,11 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
     }),
   );
 
-  /** The agent's one turn run to its end, as the relay writes a turn that settled: the agent stopped, and waits on nothing. */
+  /** The agent's one turn, the one its Start's line queued, run to its end as the relay writes a turn that settled: the agent stopped, and waits on nothing. */
   const turnEnded = (target: { readonly userId: string; readonly conversationId: string }) =>
     Effect.gen(function* () {
       const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-      const turnId = randomUUID();
+      const turnId = Option.getOrThrow(yield* queuedTurnOf(target.conversationId));
       const turn = { conversationId: sessionKey(target.conversationId), turnId };
       yield* writer.enqueueTurn(target, {
         turnId,
@@ -582,6 +583,8 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
         trigger: TURN_TRIGGER.ASK,
         at: 0,
       });
+      // The turn takes the Start's line, so its end leaves no line to queue another for.
+      yield* writer.takeAwaitingLine(target, { text: SNAPSHOT, turnId });
       yield* writer.consume(target, {
         ...turn,
         kind: RUN_EVENT.MESSAGE_COMPLETED,
@@ -596,6 +599,8 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
         responseIds: [],
         at: 0,
       });
+      // Note that the clock moves past the turn, so the turn a later message queues is the newer.
+      yield* TestClock.adjust(Duration.millis(1));
     });
 
   it.effect(

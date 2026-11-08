@@ -26,6 +26,7 @@ import { AGENT_MESSAGE_LEAD, agentMessageReplyLine } from "@repo/features/agent-
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { TURN_STATUS } from "@repo/wire";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
 import { isTextUIPart } from "ai";
@@ -110,7 +111,7 @@ const starterOf = (agent: Agent) =>
 export function reportToStarter(
   sessionsFor: SessionsForAccount,
   turn: SettledAgentTurn,
-): Effect.Effect<void, never, DatabaseServices | HttpClient.HttpClient | GitHubApp> {
+): Effect.Effect<void, never, DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox> {
   return Effect.gen(function* () {
     const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
     if (Option.isNone(agent)) return;

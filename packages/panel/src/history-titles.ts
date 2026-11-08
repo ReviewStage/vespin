@@ -1,6 +1,6 @@
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
-import type { StepTitle } from "./navigation-history.js";
 import type { RoutedPlace } from "./places/routed-places.js";
+import type { StepTitle } from "./places/window-steps.js";
 import { agentName } from "./tasks/agent-model.js";
 import {
   stripTabTitle,
@@ -11,6 +11,7 @@ import {
 import { isOverviewTab, type MainTab } from "./tasks/use-main-tabs.js";
 import type { SidePanelTab } from "./tasks/use-side-panel.js";
 import type { TasksControl } from "./tasks/use-tasks-tab.js";
+import type { RoutedViews } from "./workspace-routes.js";
 
 /**
  * history-titles.ts -- what each step of the window's history is called, as Back's and Forward's menus and ⌃Tab's cards list it.
@@ -101,11 +102,8 @@ export type StepTitleTasks = Pick<
   | "pages"
   | "mainTabs"
   | "sidePanel"
-  | "inboxView"
+  | "workspace"
   | "agentView"
-  | "personView"
-  | "automationsView"
-  | "boardView"
   | "history"
 >;
 
@@ -119,9 +117,10 @@ export function taskName(tasks: StepNameTasks, taskId: string | undefined): stri
 export function stepTitle(
   routed: RoutedPlace | undefined,
   tasks: StepTitleTasks,
+  views: RoutedViews,
 ): StepTitle | undefined {
   const under = () => stateStepTitle(tasks);
-  return routed === undefined ? under() : routed.title(tasks, under);
+  return routed === undefined ? under() : routed.title(tasks, under, views);
 }
 
 /** What the step of the place the window's state says is called. */

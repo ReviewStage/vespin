@@ -1992,31 +1992,27 @@ const startTurn = (userId: string, agentId: string) =>
     });
   });
 
-/** A line of the developer's to the agent no turn has taken yet, as a send queues one; its id. */
-const queueLine = (userId: string, agentId: string) =>
+/** A message of the developer's to the agent, written as its row alone. */
+const messageWritten = (userId: string, agentId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const now = new Date(yield* Clock.currentTimeMillis);
-    const [line] = yield* db
-      .insert(messages)
-      .values({
-        userId,
-        conversationId: yield* conversationOf(agentId),
-        seq: 1,
-        clientId: randomUUID(),
-        role: MESSAGE_ROLE.USER,
-        parts: [{ type: "text", text: "Rebase on main" }],
-        createdAt: now,
-        placedAt: now,
-      })
-      .returning({ id: messages.id });
-    return line?.id ?? assert.fail("the line was not queued");
+    yield* db.insert(messages).values({
+      userId,
+      conversationId: yield* conversationOf(agentId),
+      seq: 1,
+      clientId: randomUUID(),
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text", text: "Rebase on main" }],
+      createdAt: now,
+      placedAt: now,
+    });
   });
 
-/** The agent's row among a part's rows, as the task list reads its awaiting line. */
+/** The agent's row among a part's rows, as the task list reads it. */
 const agentRowOf = (part: { readonly rows?: readonly unknown[] }, agentId: string) =>
   (part.rows ?? []).find((row) => (row as { readonly id: string }).id === agentId) as
-    | { readonly awaitingLineAt: number | null; readonly sandboxOpen?: boolean }
+    | { readonly sandboxOpen?: boolean }
     | undefined;
 
 it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
@@ -2065,32 +2061,6 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
   );
 
   it.effect(
-    "a line withdrawn moves its agent in the next delta, which reads it awaiting nothing",
-    () =>
-      Effect.gen(function* () {
-        const dana = yield* openUser;
-        const started = yield* startTask(dana, { name: "Teammate invitations" });
-        const agentId = yield* openTaskAgent(dana, started.workspaceId, started.id);
-        const lineId = yield* queueLine(dana, agentId);
-        const whole = yield* askTasks(dana, "");
-        const past = whole.agents.sync?.next;
-        assert.ok(past !== undefined);
-        assert.ok(agentRowOf(whole.agents, agentId)?.awaitingLineAt != null, "the line awaits");
-
-        yield* Effect.flatMap(Database, (db) =>
-          db.update(messages).set({ withdrawnAt: new Date() }).where(eq(messages.id, lineId)),
-        );
-        // Note that the hold is let run to its end, so a withdrawal no log row records answers nothing moved rather than holding the test.
-        const asked = yield* Effect.forkChild(askTasks(dana, past));
-        yield* TestClock.adjust(Duration.seconds(25));
-        const moved = yield* Fiber.join(asked);
-
-        assert.deepEqual(idsOf(moved.agents), [agentId]);
-        assert.equal(agentRowOf(moved.agents, agentId)?.awaitingLineAt, null);
-      }),
-  );
-
-  it.effect(
     "a runtime session claimed moves its agent in the next delta, which reads its sandbox open",
     () =>
       Effect.gen(function* () {
@@ -2135,7 +2105,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         });
         yield* Queue.take(looking);
 
-        yield* queueLine(erin, erinsAgent);
+        yield* messageWritten(erin, erinsAgent);
         yield* TestClock.adjust(Duration.seconds(1));
         const answered = yield* Effect.raceFirst(
           Effect.as(Fiber.await(asked), true),

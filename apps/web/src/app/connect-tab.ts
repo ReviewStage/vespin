@@ -35,6 +35,7 @@ import {
   TASKS_ACT_KIND,
   WORKSPACE_ACT_KIND,
 } from "@repo/host/contract";
+import type { RouterHistory } from "@tanstack/react-router";
 import {
   CONNECT_BOUND_MS,
   CONNECT_CHANNEL,
@@ -44,7 +45,6 @@ import {
   rememberReturn,
   saying,
 } from "../connect-return";
-import { addressHere } from "./web-address";
 
 /** What a connect reaches of a tab it opened: whether it is still open, its close, its address replaced, and its own session storage, which it keeps through the provider and back. */
 export interface ConnectTab {
@@ -189,6 +189,7 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
 export function tabBrowser(
   openLink: (url: string) => void,
   leave: (go: () => void) => void,
+  history: RouterHistory,
 ): ConnectBrowser {
   return {
     openEmptyTab: () => {
@@ -198,7 +199,7 @@ export function tabBrowser(
     },
     navigate: (url) => location.assign(url),
     leave,
-    address: addressHere,
+    address: () => history.location.href,
     openLink,
   };
 }

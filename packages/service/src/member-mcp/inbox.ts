@@ -39,12 +39,7 @@ import {
 import { LINK_PLACE, linkOf, mentionMarkdownLink } from "@repo/features/link-grammar";
 import { Effect } from "effect";
 import { agentToolRejected, orStoreRefusal } from "../agents/agent-tools.js";
-import {
-  type AgentAskLine,
-  answersLineOf,
-  askLineOf,
-  settledMessages,
-} from "../agents/coder-host/inbox.js";
+import { settledMessages, threadLineOf } from "../agents/coder-host/inbox.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { workspaceStepOf } from "../agents/written-mentions.js";
 import { ACTION_RESULT_STATUS, HOSTED_API_ERROR, type WireRecord } from "../core.js";
@@ -85,32 +80,11 @@ const THREAD_ORDER = {
 
 type ThreadOrder = (typeof THREAD_ORDER)[keyof typeof THREAD_ORDER];
 
-/** One message of a thread as the outside agent reads it: who wrote it, its words, its files by name, its ask, and the answer it carries. Note that it is a type rather than an interface, because the record a thread answers as (`WireRecord`) takes an object type's keys and no interface's. */
-type MemberThreadLine = {
-  readonly from: string;
-  readonly text: string;
-  readonly files?: readonly string[];
-  readonly ask?: AgentAskLine;
-  readonly answers?: Omit<InboxAnswers, "ask">;
-};
-
 /** Who wrote a message, as the outside agent reads it: the thread's agent, `you` for the member it acts for, another member by name, or a former member whose account is gone. */
 function writerOf(message: InboxMessage, userId: string): string {
   if (message.author === INBOX_MESSAGE_AUTHOR.AGENT) return "agent";
   if (message.member === undefined) return "a former member";
   return message.member.userId === userId ? "you" : message.member.name;
-}
-
-function threadLineOf(message: InboxMessage, userId: string): MemberThreadLine {
-  return {
-    from: writerOf(message, userId),
-    text: message.text,
-    ...(message.files === undefined
-      ? undefined
-      : { files: message.files.map((file) => file.name) }),
-    ...(message.ask === undefined ? undefined : { ask: askLineOf(message.ask) }),
-    ...(message.answers === undefined ? undefined : { answers: answersLineOf(message.answers) }),
-  };
 }
 
 /** Where a thread stands in what waits on the member. */
@@ -146,7 +120,7 @@ function threadOf(item: InboxItem, userId: string): WireRecord {
     unread: item.unread === true,
     ...(asking === undefined ? undefined : { askId: asking.message.id }),
     ...(earlier > 0 ? { earlier } : undefined),
-    thread: told.map((message) => threadLineOf(message, userId)),
+    thread: told.map((message) => threadLineOf(message, writerOf(message, userId))),
     ...(item.answeredBy === undefined ? undefined : { answeredBy: item.answeredBy.name }),
     ...(item.closedBy === undefined ? undefined : { closedBy: item.closedBy.name }),
     ...(item.closedReason === undefined ? undefined : { closedReason: item.closedReason }),

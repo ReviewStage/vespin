@@ -4,7 +4,7 @@
  * A render that throws, or a chunk of code that could not be read, takes
  * down everything up to the nearest boundary above it, and with none, the
  * whole window, which React then leaves empty. So every window's root and
- * every surface drawn on demand (`@repo/panel`'s `lazyRoute`) stands under
+ * every surface drawn on demand (`@repo/ui/lazy-boundary`) stands under
  * one of these: what failed beneath it is replaced by `ReloadState`, and the
  * rest of the window keeps going. Reload runs `onReload` where one is given,
  * the window's own reload at a root or a route's forgetting of its failed

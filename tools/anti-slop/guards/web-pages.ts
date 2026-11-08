@@ -143,7 +143,7 @@ export function pngSize(png: Buffer): string | undefined {
 }
 
 /** Where the manifest would not install the app full screen at /app, with the icons a browser asks for. */
-export function manifestProblems(
+function manifestProblems(
   html: string,
   manifest: Record<string, unknown>,
   sizeOf: (src: string) => string | undefined,

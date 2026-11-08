@@ -1,8 +1,7 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   type AgentLatestTurn,
-  awaitingLinesOfReached,
   continuationsOf,
   latestTurnsOfReached,
   type NativeRoute,
@@ -28,6 +27,7 @@ import {
   deleteTask,
   listTasks,
   readTask,
+  readTaskWorkspace,
   type StoredTask,
   setTaskParent,
   type TaskChanges,
@@ -84,6 +84,7 @@ import {
   taskStatusSchema,
 } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
+import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { isTextUIPart } from "ai";
@@ -102,9 +103,9 @@ import {
 } from "../core.js";
 import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
-import { ownAgentWorkspace, taskWorkspace } from "../github/workspace-repository.js";
+import { ownAgentWorkspace } from "../github/workspace-repository.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../http/http-effect.js";
-import { logStoreFailure, type StoreFailure } from "../http/store-failure.js";
+import { logStoreFailure } from "../http/store-failure.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,
@@ -134,7 +135,7 @@ import {
 import { agentFailureOf, agentStatusOf, startedBlank } from "./coder-host/status.js";
 import { stoppedAgent, standingsOf as turnStandingsOf } from "./coder-host/stop.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
-import { deploymentSandboxStops } from "./session-sandboxes.js";
+import { deploymentSandboxDeletes } from "./session-sandboxes.js";
 import type { AgentSessions } from "./sessions/agent-sessions.js";
 import {
   assigneeIdOf,
@@ -621,7 +622,12 @@ export interface AgentCall {
 export type AgentReadCall = Pick<AgentCall, "caller">;
 
 /** What a message or a start reaches: the store, GitHub through the App on the member's standing, the network to the agents' sessions, and the catalog a start's choice is checked against. */
-export type AgentToolServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | ModelCatalog;
+export type AgentToolServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | ModelCatalog
+  | Sandbox;
 
 const AGENT_ID = describeWire(
   wireUuidSchema,
@@ -1437,22 +1443,20 @@ const journalsOf = (agent: Agent, limit: number) =>
     (read): readonly StoredMessageRecord[] => (read.ok ? read.value : []),
   );
 
-/** The agents' standings, read once for the lot: each one's newest turn, and whether a line of the developer's awaits one. The agents were read through their workspace's gate, so their conversations are read by id. */
+/** The agents' standings, read once for the lot: each one's newest turn. The agents were read through their workspace's gate, so their conversations are read by id. */
 const standingsOf = (agents: readonly Agent[]) =>
   Effect.gen(function* () {
     const ids = agents.map((agent) => agent.conversationId);
     const turns = yield* latestTurnsOfReached(ids);
-    const awaiting = yield* awaitingLinesOfReached(ids);
     const now = yield* Clock.currentTimeMillis;
     return (agent: Agent) => {
       const turn = turns.get(agent.conversationId);
       const status = agentStatusOf(turn, {
         createdAt: agent.createdAt,
         now,
-        awaitingLineAt: awaiting.get(agent.conversationId),
         blank: startedBlank(agent),
       });
-      // Why the newest turn failed is said only while the agent reads as failed: a line awaiting the next turn makes it running again.
+      // Why the newest turn failed is said only while the agent reads as failed.
       return {
         status,
         failureReason: status === AGENT_STATUS.FAILED ? agentFailureOf(turn) : undefined,
@@ -1585,7 +1589,7 @@ const taskOfCallerWorkspace = (caller: AgentCaller, taskId: string) =>
   Effect.gen(function* () {
     const workspace = yield* callerWorkspace(caller);
     if (Option.isNone(workspace)) return false;
-    const owning = yield* taskWorkspace(callerUserId(caller), taskId);
+    const owning = yield* readTaskWorkspace(callerUserId(caller), taskId);
     return Option.isSome(owning) && owning.value === workspace.value;
   });
 
@@ -2548,7 +2552,8 @@ export function runUpdateTask(
       if (Result.isFailure(changed)) return agentToolRejected(changed.failure);
       const { updated, task, parentChanged, blocksChanged } = changed.success;
       // The agents its Done archived are let go of once it commits, and a finish counted, as the app's change does.
-      if (updated !== undefined) yield* taskChangeSettled(deploymentSandboxStops, userId, updated);
+      if (updated !== undefined)
+        yield* taskChangeSettled(deploymentSandboxDeletes, userId, updated);
       return yield* taskUpdateAnswer(userId, task, {
         already: stands && !parentChanged && !blocksChanged,
         section: placing?.success.section,
@@ -2607,7 +2612,6 @@ const stopOf = (call: AgentCall, agent: Agent) =>
     const status = agentStatusOf(after.turn, {
       createdAt: agent.createdAt,
       now: yield* Clock.currentTimeMillis,
-      awaitingLineAt: after.awaitingLineAt,
       blank: startedBlank(agent),
     });
     const standing = stopStands(before.turn) && after.turn?.id === before.turn?.id;
@@ -2731,7 +2735,7 @@ export function runUpdateAgent(
       if (archived !== undefined) {
         const archive = yield* Effect.result(
           archivedAgent(
-            deploymentSandboxStops,
+            deploymentSandboxDeletes,
             call.writer,
             userId,
             agent,

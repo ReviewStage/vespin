@@ -54,14 +54,16 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { HERE } from "../places/pressed-address.js";
+import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
-import { HERE } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { type SentLine, startsOwnAgents } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { StartingAgentTab } from "../tasks/agent-tab.js";
 import { AgentTabSkeleton, type ComposerModel } from "../tasks/agent-tab-skeleton.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { startCloudDraft, useCloudBrowserTabs } from "../tasks/cloud-browser-tabs.js";
 import {
@@ -75,6 +77,7 @@ import { keyedItem, NO_ITEMS, waitingByAgent } from "../tasks/inbox-model.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
+import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
   heldTaskMentions,
   TaskMentions,
@@ -84,29 +87,25 @@ import {
 import { taskLinkPlace, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
+import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
-import { isOverviewTab, MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
+import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
-import { PULL_REQUEST_VIEW, type SidePanelTab } from "../tasks/use-side-panel.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
-import {
-  AUTOMATIONS_PAGE,
-  type StartingTask,
-  TASK_RENAME_SHAPE,
-  type TasksControl,
-} from "../tasks/use-tasks-tab.js";
+import { type StartingTask, TASK_RENAME_SHAPE, type TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { ArchivedAgents } from "./agent-archive.js";
+import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import { DesktopHome } from "./desktop-home.js";
 import {
-  AGENTS_SECTION,
   AgentPane,
   DETAILS_WORDS,
   MainTabBars,
@@ -120,7 +119,6 @@ import { PlanAgents } from "./plan-agents.js";
 import { PlanPages } from "./plan-pages.js";
 import { PlanRelations } from "./plan-relations.js";
 import {
-  COLUMN,
   changesTabOf,
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -182,8 +180,11 @@ import { useStandingDoor } from "./task-row-parts.js";
  *
  * ⌘T opens the "+" of the column holding the window's focus, ⌘W closes
  * its chosen tab, and ⌘F finds in that tab (`../find-in-tab.tsx`): the side
- * panel's once the pointer or the focus went into it, else this column's,
- * which a panel shut hands them back to.
+ * panel's once the pointer or the focus went into it, or a press opened a
+ * tab in it, else this column's, which a panel shut hands them back to. A
+ * row, a link, or a chip opens what it names through the window's one door
+ * for a press (`../tasks/tab-press.ts`), which hands the keys to the column
+ * it opened in, so ⌘W closes the tab it just opened.
  *
  * A skill named in a message to a coding agent, in either column, opens
  * its `SKILL.md` in a File tab of the side panel (`../tasks/skill-chip.tsx`).
@@ -209,6 +210,7 @@ function TaskPage({
   panelOpen,
   fullScreen,
   barless = false,
+  tabs,
   column,
   children,
 }: {
@@ -218,6 +220,8 @@ function TaskPage({
   fullScreen: boolean;
   /** Whether the column stands with no bar of its own, its sheet starting under the topbar: the task's details. */
   barless?: boolean;
+  /** The agents' row, across the column and the panel under it alike, whose sheet holds them both. */
+  tabs?: React.ReactNode;
   column: React.ReactNode;
   children?: React.ReactNode;
 }): React.JSX.Element {
@@ -228,6 +232,7 @@ function TaskPage({
       data-panel-open={String(panelOpen)}
       data-barless={barless ? "true" : undefined}
     >
+      {tabs}
       <Fill ref={columnRef} className="desktop-task-main" hidden={fullScreen}>
         {column}
       </Fill>
@@ -292,14 +297,16 @@ function TaskPageSkeleton({
       <TaskPage
         panelOpen={panel !== undefined}
         fullScreen={panel?.fullScreen === true}
+        tabs={
+          // The tabs' row stands as the loaded one does, so nothing moves as the task lands.
+          head === undefined ? (
+            <TaskTabsRow hidden={false}>
+              <Toolbar start={TOOLBAR_INSET.COLUMN} look={TOOLBAR_LOOK.TABS} measure />
+            </TaskTabsRow>
+          ) : null
+        }
         column={
           <>
-            {/* The tabs' row stands as the loaded one does, so nothing moves as the task lands. */}
-            {head === undefined ? (
-              <TaskTabsRow hidden={false}>
-                <Toolbar start={TOOLBAR_INSET.COLUMN} look={TOOLBAR_LOOK.TABS} measure />
-              </TaskTabsRow>
-            ) : null}
             <TaskBody>
               <Fill className="desktop-task-column">
                 <AgentColumn>
@@ -469,7 +476,7 @@ function DescriptionDocument({
     if (commentAsk === undefined || inboxTaskId === undefined || !commentsRead) return;
     onCommentRevealed(commentAsk.ask);
   }, [commentAsk, inboxTaskId, commentsRead, onCommentRevealed]);
-  const { onArea: setArea, focus, setFocus } = useColumnFocus();
+  const { onArea: setArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
   const [column, setColumn] = useState<HTMLElement | null>(null);
   // The description in the column, whose heading a phone's row picks up once it scrolls away under the row (`useHeadingAway`).
   // Note that each box is handed afresh as it mounts, and the document's for each task, because the document stands only once the task is read, and the heading watched is that task's.
@@ -483,7 +490,8 @@ function DescriptionDocument({
   const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   // The clock the plan's tab's card counts its update back from.
   const now = useMinute();
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
+  const historyDoor = useVersionHistoryDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
@@ -491,33 +499,21 @@ function DescriptionDocument({
   const taskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
   const renaming = useMutation(tasks.renameTask);
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
-  // The open task's one rename door, which its toolbar's ⋯, its title's ⋯,
-  // and ⌘K all ask. On a phone it opens the head's field; wider, it puts the
-  // caret in the description's own title, showing the description first where the panel
-  // hides it. Note that the title is asked once the description stands, because a
-  // title drawn afresh takes only the asks that come after it.
-  const [titleAsked, setTitleAsked] = useState(false);
-  const [titleAsks, setTitleAsks] = useState(0);
+  // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
+  const barRenaming = useMutation(tasks.renameTask);
+  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
   // The description is shown while the column is on Overview, with no panel filling the window over it.
   const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
   const { onChoose: chooseColumnTab } = tasks.mainTabs;
-  useEffect(() => {
-    if (!titleAsked || !descriptionShown) return;
-    setTitleAsked(false);
-    setTitleAsks((count) => count + 1);
-  }, [titleAsked, descriptionShown]);
   // Overview shown, a panel filling the window over the column giving way, as a row opening a tab of the column does.
   const showOverview = useSteadyDoor(() => {
     if (tasks.sidePanel.fullScreen) tasks.sidePanel.onToggleFullScreen();
     chooseColumnTab(MAIN_TAB.OVERVIEW);
   });
+  // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
   const beginRename = useSteadyDoor(() => {
-    if (room === SHELL_ROOM.NARROW) {
-      rename.begin();
-      return;
-    }
-    if (!descriptionShown) showOverview();
-    setTitleAsked(true);
+    if (room === SHELL_ROOM.NARROW) rename.begin();
+    else barRename.begin();
   });
   useOfferTaskRename(taskId, beginRename);
   // A terminal shown hands the keys to the side panel, where it stands; an
@@ -548,15 +544,22 @@ function DescriptionDocument({
   );
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
+  const { mainTabs, sidePanel, agents } = tasks;
+  // What a row, a link, or a chip on the page names opens through the window's one door for a press,
+  // which hands the keys to the column it opened in, so ⌘W closes the tab it opened (`tab-press.ts`).
+  const onPressTab = (pressed: TabPressed) =>
+    pressTab({ sidePanel, mainTabs, onKeys: setFocus }, pressed);
   // A file a mention names opens in its tab, its lines at the commit the mention pins them to.
   const openMentionedFile = (path: string, lines: MentionLines | undefined) =>
-    lines === undefined
-      ? tasks.sidePanel.onOpenFile({ path })
-      : tasks.sidePanel.onOpenFile(
-          { path, startLine: lines.startLine, endLine: lines.endLine },
-          lines.commit,
-        );
-  const { mainTabs, sidePanel, agents } = tasks;
+    onPressTab(
+      lines === undefined
+        ? { kind: TAB_PRESS.FILE, ref: { path } }
+        : {
+            kind: TAB_PRESS.FILE,
+            ref: { path, startLine: lines.startLine, endLine: lines.endLine },
+            commit: lines.commit,
+          },
+    );
   const { tab } = mainTabs;
   const home =
     opened === undefined
@@ -568,11 +571,7 @@ function DescriptionDocument({
   // A row that opens a tab of this column, as a coding agent's start in an
   // agent's tab opens the agent's, first has a panel filling the window over it
   // give way, and hands the keys to this column, so ⌘W closes the tab it opened.
-  const openColumnTab = (opened: MainTab) => {
-    if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-    mainTabs.onChoose(opened);
-    setFocus(COLUMN.MAIN);
-  };
+  const openColumnTab = (opened: MainTab) => onPressTab({ kind: TAB_PRESS.COLUMN, tab: opened });
   // An agent's tab is in this column, an archived agent's among them, which stands once it is opened.
   const openAgentColumn = (agent: string) => openColumnTab(agentTab(agent));
   // The description stands in the column's Overview, so a row that opens it chooses that tab.
@@ -609,18 +608,16 @@ function DescriptionDocument({
     panelWasOpen.current = sidePanel.open;
     if (opened && detailsOver) leaveDetailsDoor();
   }, [sidePanel.open, detailsOver, leaveDetailsDoor]);
-  // A row that opens the comments, which stand in the side panel, shows the
-  // panel on them and hands it the keys, as a terminal shown does.
-  const openPanelTab = (opened: SidePanelTab) => {
-    sidePanel.onChoose(opened);
-    showSide();
-  };
+  // A row, a link, or a chip that opens a tab of the side panel, a transcript's among them, hands
+  // the panel the keys, as a terminal shown does, so ⌘W closes the tab it opened.
+  const openPanelTab = (opened: SidePanelTab, place?: PagePlace) =>
+    onPressTab({ kind: TAB_PRESS.PANEL, tab: opened, place });
   // A call's row in a transcript opens what the call is about where the
   // window already draws it: an agent or the plan in this column, the
   // thread a call names in the window's Inbox as it stands, where the task's
   // items hold it, posted by the agent whose row it was (`from`), else the
   // window's Inbox narrowed to the task,
-  // another task as a link to it opens (`route.ts`), the rest in the side panel.
+  // another task as a link to it opens (`use-open-link.ts`'s `throughWindow`), the rest in the side panel.
   const openPlace = useOpenPlace();
   const openTarget = (target: ToolTarget, from?: string) => {
     switch (target.kind) {
@@ -640,7 +637,7 @@ function DescriptionDocument({
         );
       }
       case TOOL_TARGET.PAGE:
-        return sidePanel.onOpen(pageTab(target.page));
+        return openPanelTab(pageTab(target.page));
       case TOOL_TARGET.TASK:
         // A call that named this very task opens its plan in the column, as one on its own plan does.
         if (target.agent === undefined && target.task === taskId) return openOverview();
@@ -651,12 +648,18 @@ function DescriptionDocument({
   // panel, where every subagent stands; where the worker stands seeds its glyph.
   const openDelegation = (agent: string, callId: string, task: string, status: AgentStatus) => {
     views.onWorkerStatus(callId, status);
-    sidePanel.onOpen(subagentTab(callId, { agent, task }));
+    openPanelTab(subagentTab(callId, { agent, task }));
   };
   // An agent's pull request chip opens its pull request in the side panel, beside its tab, in
   // the one Pull request tab the "+" offers for that pull request (`showPullRequest`), on its conversation.
   const openPullRequest = (agentId: string, number?: number) =>
-    showPullRequest(sidePanel, agents, agentId, PULL_REQUEST_VIEW.CONVERSATION, number);
+    showPullRequest(
+      { ...sidePanel, onOpen: openPanelTab },
+      agents,
+      agentId,
+      PULL_REQUEST_VIEW.CONVERSATION,
+      number,
+    );
   // An agent a mention names wears its tab's tile and hangs its tab's card, read as its tab reads them.
   // An agent the task lists not has no tab here, so a link to it, which names no task, wears what the window reads of it.
   const agentLook = (agentId: string) => {
@@ -706,7 +709,7 @@ function DescriptionDocument({
   const openPullRequestDoor = useSteadyDoor(openPullRequest);
   // A page of another task, a subtask's among them, opens beside this one, read on its own task, so the reader stays here.
   const openPageBeside = useSteadyDoor((page: string, place: PagePlace) =>
-    sidePanel.onOpen(pageTab(page), place),
+    openPanelTab(pageTab(page), place),
   );
   const openAgent = useSteadyDoor(openAgentColumn);
   const openAgentTab = useSteadyDoor(openColumnTab);
@@ -719,11 +722,11 @@ function DescriptionDocument({
     (draft) => openColumnTab(draftTab(draft)),
   );
   const showHistory = useSteadyDoor((save: number | undefined) => {
-    if (opened !== undefined) tasks.history.onOpen(opened.id, save);
+    if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
   });
   // The pointer on a way into the history reads its chunk ahead rather than at the press.
   const preloadHistory = useSteadyDoor(() => {
-    if (opened !== undefined) tasks.history.onPreload(opened.id);
+    if (opened !== undefined) historyDoor.preload(opened.id);
   });
   const descriptionEdit = opened === undefined ? undefined : tasks.descriptionEdit(opened.id);
   // Note that the plan's title reads its rename's answer, on the same mutation the header's field draws its refusal from.
@@ -733,10 +736,7 @@ function DescriptionDocument({
         ? Promise.resolve(true)
         : renaming.mutateAsync(TASK_RENAME_SHAPE.ask(taskId, name)).catch(() => false),
   );
-  const titleRename = useMemo<TitleRename>(
-    () => ({ asks: titleAsks, asked: rename.asked, onBegin: beginRename }),
-    [titleAsks, rename.asked, beginRename],
-  );
+  const titleRename = useMemo<TitleRename>(() => ({ asked: rename.asked }), [rename.asked]);
   const draftNameDoor = useSteadyDoor(
     opened === undefined
       ? undefined
@@ -1331,10 +1331,11 @@ function DescriptionDocument({
                         phone ? undefined : { shown: overviewShown, onToggle: toggleDetails }
                       }
                       descriptionMenu={phone ? undefined : descriptionMenu}
+                      rename={phone ? undefined : barRename}
                       shown={tasks.shown}
                       actions={
                         <>
-                          {rename.refused ? (
+                          {rename.refused || barRename.refused ? (
                             <FailureNote
                               failure={failureShown({
                                 surface: FAILURE_SURFACE.TASK_RENAME,
@@ -1379,7 +1380,7 @@ function DescriptionDocument({
                     panelOpen={sidePanel.open && !detailsWide}
                     fullScreen={sidePanel.fullScreen}
                     barless={detailsWide}
-                    column={
+                    tabs={
                       <>
                         {/* On a phone no strip stands, its details listing the agents instead, the strip drawn hidden so its shown agent's tab still hands the header's ⋯ its menu (`onShown`); wider, the task's details stand in place of the strip and the panel alike. */}
                         <TaskTabsRow hidden={phone || detailsWide}>
@@ -1404,6 +1405,10 @@ function DescriptionDocument({
                             waiting={waitingOf}
                           />
                         </TaskTabsRow>
+                      </>
+                    }
+                    column={
+                      <>
                         {/* The plan's banner is the whole plan's, so it stands over every
             tab of the column, and over the panel's while that fills the window. */}
                         {sidePanel.fullScreen ? null : stranded.banner}
@@ -1601,9 +1606,14 @@ export const DesktopTasks = memo(function DesktopTasks({
   return (
     <SkillFiles
       source={tasks.agents.readSkills}
-      // Note that a skill's file opens as a file the palette finds does, whole,
-      // so its tab stands on this task though the app never showed it.
-      onOpen={(skill) => tasks.sidePanel.onOpenFile({ path: skill.path })}
+      // Note that a skill's file opens as a file a chip names does, whole, through the window's
+      // one door for a press (`tab-press.ts`), so its tab stands on this task though the app never showed it.
+      onOpen={(skill) =>
+        pressTab(
+          { ...tasks, onKeys: tasks.onTabKeys },
+          { kind: TAB_PRESS.FILE, ref: { path: skill.path } },
+        )
+      }
     >
       <DescriptionDocument
         tasks={tasks}

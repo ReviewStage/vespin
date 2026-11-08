@@ -18,8 +18,7 @@
  * text, which it counts as changing no line, or for one whose patch is too
  * large to send, and the file says which rather than reading as unchanged.
  * Who a pull request names is read beside its files: who opened it, its
- * reviewers and where each stands, who authored its commits, and its
- * reviews that said something, each the first page GitHub answers. And a
+ * reviewers and where each stands, and its reviews that said something. And a
  * review's inline comments are read, by file and line, for the message
  * that tells the agent on the pull request of that review (`agent-wakes.ts`).
  * A pull request's overview, which its Pull request tab draws, is read in
@@ -310,15 +309,13 @@ const GITHUB_BOT_TYPE = "Bot";
 /** The suffix GitHub gives an App's bot's login. */
 const BOT_LOGIN_SUFFIX = "[bot]";
 
-/** How many reviews a page asks for: GitHub's most. */
+/** How many entries a page of a listing asks for: GitHub's most. */
 const PEOPLE_PER_PAGE = 100;
 
 /**
- * The most pages each listing is read to. GitHub lists a pull request's
- * reviews oldest first, and a reviewer stands by their newest, so its
- * reviews are read to their end, bounded only where no pull request goes,
- * three thousand reviews, rather than holding the changes on a history that
- * does not end.
+ * The most pages of a pull request's reviews read. Note that they are read
+ * to the end, because GitHub lists them oldest first and a reviewer stands by
+ * their newest; three thousand reviews is a bound no pull request reaches.
  */
 const PEOPLE_MAX_PAGES = { REVIEWS: 30 } as const;
 
@@ -890,7 +887,7 @@ const NOBODY: PullRequestPeople = {
   comments: [],
 };
 
-/** Every page of a listing, oldest first, until one comes back short or the bound is reached; none where the pull request is not found. */
+/** Every page of a listing, in GitHub's order, until one comes back short or the bound is reached; none where GitHub finds no such listing. */
 const everyPage = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
   token: Redacted.Redacted,
   path: string,
@@ -940,11 +937,12 @@ export const pullRequestPeople = /* @__PURE__ */ Effect.fn("web/pullRequestPeopl
   };
 });
 
-/** One inline comment of a review: the file and the line it is on, where GitHub still places it, its words, and its page. */
+/** One inline comment of a review: the file and the line it is on, where GitHub still places it, its words, GitHub's rendering of them where it answered one, and its page. */
 export interface GitHubReviewLineComment {
   readonly path: string;
   readonly line: number | undefined;
   readonly body: string;
+  readonly html: string | undefined;
   readonly url: string;
 }
 
@@ -955,6 +953,7 @@ const ReviewLineCommentsSchema = Schema.Array(
     line: Schema.optionalKey(Schema.NullOr(Schema.Number)),
     original_line: Schema.optionalKey(Schema.NullOr(Schema.Number)),
     body: Schema.String,
+    body_html: Schema.optionalKey(Schema.NullOr(Schema.String)),
     html_url: Schema.String,
   }),
 );
@@ -986,13 +985,78 @@ export const reviewLineComments = /* @__PURE__ */ Effect.fn("web/reviewLineComme
     `${repositoryPath(fullName)}/pulls/${number}/reviews/${reviewId}/comments`,
     ReviewLineCommentsSchema,
     REVIEW_COMMENTS_MAX_PAGES,
+    true,
   );
   return comments.map((comment) => ({
     path: comment.path,
     line: comment.line ?? comment.original_line ?? undefined,
     body: comment.body,
+    html: renderingOf(comment.body_html),
     url: comment.html_url,
   }));
+});
+
+/** A comment or a review as read for GitHub's rendering of its words alone. */
+const RenderedBodySchema = Schema.Struct({
+  body_html: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
+
+/** A private upload's address as GitHub's rendering spells it, its path apart from the query that signs it. */
+const SIGNED_UPLOAD =
+  /(https:\/\/private-user-images\.githubusercontent\.com\/[^"'\s?#<>]*)\?[^"'\s#<>]*/gu;
+
+/**
+ * GitHub's rendering of a body, trimmed, for a line that keeps it; none
+ * where it answered none, or an empty one. Note that a private upload's
+ * address loses the query that signs it, because the line outlives the
+ * signature by far and the window reads an upload by its asset's id alone
+ * (`githubImageOf`), so a token GitHub minted is never kept.
+ */
+function renderingOf(html: string | null | undefined): string | undefined {
+  const rendered = html?.trim().replace(SIGNED_UPLOAD, "$1") ?? "";
+  return rendered === "" ? undefined : rendered;
+}
+
+/** Where GitHub answers one comment or review whose rendering a wake reads. */
+export const RENDERED_BODY = {
+  /** A comment on a pull request's conversation, by its id. */
+  ISSUE_COMMENT: "issue-comment",
+  /** A review of a pull request, by the pull request's number and the review's id. */
+  REVIEW: "review",
+} as const;
+
+/** One comment or review whose rendering a wake reads. */
+export type RenderedBody =
+  | { readonly kind: typeof RENDERED_BODY.ISSUE_COMMENT; readonly commentId: number }
+  | {
+      readonly kind: typeof RENDERED_BODY.REVIEW;
+      readonly number: number;
+      readonly reviewId: number;
+    };
+
+/** The path GitHub answers a comment or a review at, under its repository. */
+function renderedBodyPath(fullName: string, body: RenderedBody): string {
+  const repository = repositoryPath(fullName);
+  return body.kind === RENDERED_BODY.ISSUE_COMMENT
+    ? `${repository}/issues/comments/${body.commentId}`
+    : `${repository}/pulls/${body.number}/reviews/${body.reviewId}`;
+}
+
+/**
+ * GitHub's own rendering of one comment's or review's words (`body_html`),
+ * as github.com draws them, read on the token; none where the repository
+ * holds no such comment or review, or GitHub rendered nothing.
+ */
+export const renderedBody = /* @__PURE__ */ Effect.fn("web/renderedBody")(function* (
+  token: Redacted.Redacted,
+  fullName: string,
+  body: RenderedBody,
+): Effect.fn.Return<Option.Option<string>, PullRequestReadFailure, HttpClient.HttpClient> {
+  const read = yield* readOptional(
+    withRendering(githubRead(renderedBodyPath(fullName, body), token)),
+    RenderedBodySchema,
+  );
+  return Option.flatMap(read, (each) => Option.fromNullishOr(renderingOf(each.body_html)));
 });
 
 /**
@@ -1013,10 +1077,7 @@ function withRendering(
 const TeamSchema = Schema.Struct({ slug: Schema.String, name: Schema.String });
 
 /** A team as the overview and the pickers hold one. */
-interface GitHubTeam {
-  readonly slug: string;
-  readonly name: string;
-}
+type GitHubTeam = typeof TeamSchema.Type;
 
 /** A pull request read whole for its overview: what its pill says, and its description, branches, times, mergeability, and people. */
 const OverviewPullSchema = Schema.Struct({
@@ -1262,7 +1323,6 @@ function runStateOf(status: string, conclusion: string | null): CheckState {
   return SKIPPED_CONCLUSIONS.has(conclusion) ? CHECK_STATE.SKIPPED : CHECK_STATE.FAILED;
 }
 
-/** Where a commit status stands. */
 function statusStateOf(state: string): CheckState {
   if (state === SUCCESS) return CHECK_STATE.PASSED;
   return FAILING_STATUS_STATES.has(state) ? CHECK_STATE.FAILED : CHECK_STATE.PENDING;
@@ -1278,7 +1338,6 @@ function checkAvatarOf(spelled: string | null | undefined): string | undefined {
   return githubAvatarUrl(spelled) ?? (githubImageOf(spelled) === undefined ? undefined : spelled);
 }
 
-/** A check wearing its avatar, where it has one. */
 function withAvatar(check: PullRequestCheck, avatarUrl: string | undefined): PullRequestCheck {
   return avatarUrl === undefined ? check : { ...check, avatarUrl };
 }
@@ -1385,11 +1444,9 @@ function readListed<A>(
 interface EntryWords {
   readonly html: string | null;
   readonly body: string;
-  /** Whether the entry said anything at all. */
   readonly said: boolean;
 }
 
-/** An entry's words, whole: GitHub's rendering where it sent one, else the markdown. */
 function wordsOf(body: string | null | undefined, html: string | null | undefined): EntryWords {
   const words = body?.trim() ?? "";
   const rendered = html?.trim() ?? "";
@@ -1856,7 +1913,7 @@ function conversationOf(
         at: timeOf(comment.created_at) ?? 0,
         url: comment.html_url,
         threads: [],
-        // Note that a comment past the GraphQL read's newest hundred, which counts the empty ones the conversation leaves out, is counted by its REST rollup instead.
+        // Note that a comment past the GraphQL read's newest hundred is counted by its REST rollup instead.
         reactions:
           comment.id !== undefined && read.commentReactions.has(comment.id)
             ? reactionsAt(read.commentReactions, comment.id)
@@ -2103,9 +2160,9 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
  * reviewer stands and join its comments as its conversation, and its review
  * threads, each under its review, with the reactions its description and
  * every entry wear, read in the threads' one ask rather than one per
- * comment. `pageUrl` is the pull request's own page,
- * which an entry GitHub names no page of opens. A pull request the
- * repository does not hold reads as nobody having said anything.
+ * comment. `pullRequest.url` is the pull request's own page, which an entry
+ * GitHub names no page of opens. A pull request the repository does not hold
+ * reads as nobody having said anything.
  */
 export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullRequestConversation")(
   function* <R = never>(
@@ -2320,13 +2377,10 @@ export function viewerReactionsOf(
 }
 
 /**
- * How many deployments of the head one read asks GitHub for, the newest
- * first: a whole page, GitHub's most, so an environment deployed again and
- * again on the same commit leaves room for the others once each keeps its
- * newest. Note that it is one page and never more, because paging until
- * ten environments stood would make the checks read's requests grow with
- * how often one environment redeployed; a head with more than a hundred
- * deployments lists the environments of its newest hundred.
+ * How many deployments of the head one read asks for, newest first: GitHub's
+ * most, so a redeployed environment leaves room for the others. Note that it
+ * is one page and never more, because paging would make the read's requests
+ * grow with how often one environment redeployed.
  */
 const DEPLOYMENTS_ASKED = 100;
 
@@ -2449,11 +2503,10 @@ function newestOfEach(
 /**
  * A pull request's head's deployments, such as its Vercel Previews: the
  * newest of each environment, newest first, up to the bound, each with
- * where its newest status left it and the https address it serves. It is
- * one request whatever their number (`DEPLOYMENTS_QUERY`). A pull request
- * the repository does not hold, or a repository where the App may not read
- * deployments, lists none, said once in the log, rather than failing the
- * checks read it stands beside.
+ * where its newest status left it and the https address it serves. A pull
+ * request the repository does not hold, or a repository where the App may
+ * not read deployments, lists none, said once in the log, rather than
+ * failing the checks read it stands beside.
  */
 export function pullRequestDeployments(
   token: Redacted.Redacted,
@@ -2520,12 +2573,10 @@ export interface ViewerPendingReview {
 const VIEWER_PENDING_READ = 10;
 
 /**
- * Note that a pending comment's lines are read off its thread: GitHub keeps
- * the side a comment counts on on the thread alone, and its REST reads of a
- * pending comment answer no line at all; the member's own pending threads
- * stand among the pull request's threads on their own token, the newest
- * last; each thread's first comment is read beside its last ones, which
- * says whether it was published before the member's pending replies.
+ * Note that a pending comment's lines are read off its thread, because GitHub
+ * keeps the side a comment counts on on the thread alone, and its REST reads
+ * of a pending comment answer no line at all. The member's own pending threads
+ * stand among the pull request's threads on their own token, the newest last.
  */
 const VIEWER_PENDING_QUERY = `query ViewerPendingReview($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {

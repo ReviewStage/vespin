@@ -12,6 +12,7 @@ import {
   type ProviderKeyStatus,
   type ProviderKeySummary,
   type ProviderKeysAnswer,
+  pastedKeyFits,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -41,7 +42,6 @@ import {
   DialogActions,
   type DialogConfirm,
   type DialogQuestion,
-  ErrorState,
   FootQuestion,
   GAP,
   Inline,
@@ -83,7 +83,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { confirmFailure, refusedShown, unreadShown } from "../failure-report.js";
+import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
@@ -91,6 +91,7 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { useHeldThroughExit } from "../use-held-through-exit.js";
 import { ConnectCodexDialog } from "./connect-codex-dialog.js";
+import { ReadFailed } from "./marks.js";
 
 /**
  * agent-auth-section.tsx -- Settings › Agents' harnesses: one row each for Claude and Codex, saying how it is connected, and the dialog that connects it; setup's same rows, connecting in place.
@@ -629,7 +630,8 @@ interface PastedSecret {
  * A pasted secret's save, a Claude token's and an API key's alike: the
  * field stands until one is held, or on Replace with the focus in it; Save
  * sends the paste once, trimmed, and clears it as soon as the service keeps
- * it, and a refusal stands under the field saying why, the paste kept.
+ * it, and a refusal stands under the field saying why, the paste kept. A
+ * paste no key could be is refused as the provider's invalid one, unsent.
  */
 function usePastedSecret({
   held,
@@ -666,6 +668,10 @@ function usePastedSecret({
   const save = (value = pasted) => {
     const key = value.trim();
     if (key === "" || saving) return;
+    if (!pastedKeyFits(key)) {
+      setRejection(refused(PROVIDER_KEY_REJECTION.INVALID));
+      return;
+    }
     setSaving(true);
     setRejection(undefined);
     void sendProviderKeysSave(payload(key))
@@ -1657,11 +1663,11 @@ function HarnessList({
       ) : answer !== undefined ? (
         children(answer)
       ) : readFailed ? (
-        <SettingsLine>
-          <ErrorState failure={unreadShown(FAILURE_SURFACE.AGENT_KEYS_READ)} onRetry={retry}>
-            {WORDS.READ_FAILED}
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line={WORDS.READ_FAILED}
+          surface={FAILURE_SURFACE.AGENT_KEYS_READ}
+          onRetry={retry}
+        />
       ) : (
         <SettingsRowsSkeleton
           label={readingWords("your keys")}

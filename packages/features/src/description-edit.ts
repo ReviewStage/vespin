@@ -47,7 +47,7 @@ export const descriptionEditRequestSchema = EffectSchema.Struct({
 export type DescriptionEditRequest = typeof descriptionEditRequestSchema.Type;
 
 /** The description's text as a conflict answers it. */
-export const descriptionEditValueSchema = DOCUMENT_TEXT;
+const descriptionEditValueSchema = DOCUMENT_TEXT;
 
 export type DescriptionEditValue = typeof descriptionEditValueSchema.Type;
 

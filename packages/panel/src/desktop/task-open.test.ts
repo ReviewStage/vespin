@@ -19,6 +19,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, tasksControl, tellingTranscripts } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
 /**
@@ -129,11 +130,13 @@ function mount(tasks: TasksControl) {
   const draw = (next: TasksControl) =>
     act(() =>
       root.render(
-        withQueryClient(
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: next,
-          }),
+        windowRouter().provide(
+          withQueryClient(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: next,
+            }),
+          ),
         ),
       ),
     );

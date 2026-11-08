@@ -88,7 +88,7 @@ export const mirrorFrameSchema = EffectSchema.Union([
 export type MirrorFrame = typeof mirrorFrameSchema.Type;
 
 /** The Mac's ask for files by path, answered in order, each by its `file`, `skipped`, or `delete`. */
-export const mirrorRequestSchema = EffectSchema.Struct({
+const mirrorRequestSchema = EffectSchema.Struct({
   type: EffectSchema.Literal(MIRROR_FRAME.REQUEST),
   paths: EffectSchema.Array(path).check(EffectSchema.isMaxLength(MIRROR_BOUNDS.REQUEST_PATHS)),
 });

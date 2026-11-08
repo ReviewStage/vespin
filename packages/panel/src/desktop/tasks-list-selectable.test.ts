@@ -14,25 +14,21 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
 import { SHELL_ROOM } from "../shell-room.js";
-import { useLeaveGuard, useTasksTab } from "../tasks/use-tasks-tab.js";
+import { useTasksTab } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import {
-  ADMIN_AWAY,
   AGENT_AWAY,
-  AUTOMATIONS_AWAY,
-  BOARD_AWAY,
   HOME_AWAY,
-  INBOX_AWAY,
   NO_ARRIVALS,
-  PERSON_AWAY,
+  NO_LEAVE_ASK,
   TASK_AWAY,
   UNKNOWN_WORKSPACE_AWAY,
   UNMOVED_LINK_READS,
-  VERSION_HISTORY_AWAY,
 } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { TasksPage } from "./tasks-page.js";
 
 /**
@@ -116,15 +112,9 @@ async function mount() {
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: () => undefined,
-      leaveGuard: useLeaveGuard(),
+      placeLeave: NO_LEAVE_ASK,
       room: SHELL_ROOM.WIDE,
-      adminView: ADMIN_AWAY,
-      boardView: BOARD_AWAY,
-      personView: PERSON_AWAY,
       agentView: AGENT_AWAY,
-      automationsView: AUTOMATIONS_AWAY,
-      versionHistoryView: VERSION_HISTORY_AWAY,
-      inboxView: INBOX_AWAY,
       unknownWorkspaceView: UNKNOWN_WORKSPACE_AWAY,
       homeView: HOME_AWAY,
       taskView: TASK_AWAY,
@@ -132,6 +122,8 @@ async function mount() {
       arrivals: NO_ARRIVALS,
       linkReads: UNMOVED_LINK_READS,
       visitTask: () => false,
+      startStands: () => undefined,
+      leaveStart: () => false,
     });
     return createElement(TasksPage, {
       tasks: { ...control, onSelect: (taskId: string) => opened.push(taskId) },
@@ -140,7 +132,7 @@ async function mount() {
   }
   const container = document.body.appendChild(document.createElement("div"));
   const root: Root = createRoot(container);
-  act(() => root.render(withQueryClient(createElement(Page))));
+  act(() => root.render(windowRouter().provide(withQueryClient(createElement(Page)))));
   // Note that the members and the list land after the first paint.
   await act(async () => undefined);
   await act(async () => undefined);

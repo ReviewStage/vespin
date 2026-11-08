@@ -16,6 +16,7 @@ import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-reposito
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   index,
   jsonb,
   pgTable,
@@ -141,7 +142,7 @@ import { task } from "./task.js";
  * prefix cache read or wrote, and the estimates of what the step read that
  * the provider does not count apart, the instructions, the tool
  * definitions, and the plan or task the agent was handed, each estimated
- * as its JSON's bytes over four (`coder-host/token-estimate.ts`); a
+ * as its JSON's bytes over four (`native-events/runner-events-app.ts`); a
  * native step estimates the plan or task alone and tells the rest as 0.
  * `at` is the epoch milliseconds the step's end was relayed.
  */
@@ -326,10 +327,13 @@ export const agentTable = pgTable(
      */
     runnerTokenHash: text("runner_token_hash"),
     /**
-     * When a client last said a cloud agent was on screen, which keeps its runner warm for
-     * `CODER.RUNNER_WARM` past it (`coder-host/runner-sessions.ts`'s `warm`); null where none has.
+     * How many launches have recorded a bearer for the agent's runner, counted
+     * up in the statement that records each one, so a launch is numbered
+     * apart from every launch before it: the attempt a turn its runner takes
+     * runs under (`turns.attempt`), which a launch the agent's runner no
+     * longer is moves nothing of. 0 before the first.
      */
-    seenAt: timestamptz("seen_at"),
+    runnerLaunch: bigint("runner_launch", { mode: "number" }).notNull().default(0),
     /** What the agent is (`AGENT_KIND`): a coder, or a task's pilot; a coder for every row from before the column. */
     kind: text("kind").$type<AgentKind>().notNull().default(AGENT_KIND.CODER),
     /** Where the agent's runner and checkout live; a Vercel Sandbox for every row from before the column. */

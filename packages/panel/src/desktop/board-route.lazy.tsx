@@ -10,13 +10,14 @@
 
 import { createLazyRoute } from "@tanstack/react-router";
 import { useShellPlaces } from "./desktop-shell.js";
-import { mobileBarShown } from "./mobile-bar.js";
+import { mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { TasksPage } from "./tasks-page.js";
 
 /** The Tasks page in the task's place beside the sidebar; nothing on a phone, whose Tasks page is the sidebar's tree pinned in the work's place (`mobile-bar.tsx`). */
 function BoardRoutePlace(): React.JSX.Element | null {
   const { tasks, room, tasksPagesHeld } = useShellPlaces();
-  if (mobileBarShown(room, tasks)) return null;
+  const bar = useBarStanding(tasks);
+  if (mobileBarShown(room, tasks, bar)) return null;
   const workspaceId = tasks.workspace?.id;
   const held = workspaceId === undefined ? undefined : tasksPagesHeld.of(workspaceId);
   return <TasksPage tasks={tasks} room={room} held={held} />;

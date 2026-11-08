@@ -16,7 +16,6 @@ import {
   DIALOG_TONE,
   Dialog,
   DialogActions,
-  ErrorState,
   FormField,
   PlusIcon,
   SETTINGS_SKELETON_CONTROL,
@@ -46,9 +45,9 @@ import { useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { useFormDialog } from "../desktop/use-form-dialog.js";
-import { confirmFailure, unreadShown } from "../failure-report.js";
+import { confirmFailure } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { replayMaskedError } from "./marks.js";
+import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
@@ -272,14 +271,11 @@ function ShownEnvironment({ workspace }: { workspace: Workspace }): React.JSX.El
       ) : null}
       <SettingsSection title="Variables">
         {environment.isError ? (
-          <SettingsLine>
-            <ErrorState
-              failure={unreadShown(FAILURE_SURFACE.WORKSPACE_ENVIRONMENT_READ)}
-              onRetry={() => void environment.refetch()}
-            >
-              The variables could not be read.
-            </ErrorState>
-          </SettingsLine>
+          <ReadFailed
+            line="The variables could not be read."
+            surface={FAILURE_SURFACE.WORKSPACE_ENVIRONMENT_READ}
+            onRetry={() => void environment.refetch()}
+          />
         ) : variables === undefined ? (
           <SettingsRowsSkeleton
             label={readingWords("the variables")}
@@ -315,14 +311,11 @@ export function EnvironmentPage({
   if (workspace === undefined) {
     return control.listFailed ? (
       <SettingsSection>
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.WORKSPACES_READ)}
-            onRetry={control.onRetryList}
-          >
-            Your workspaces could not be read.
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line="Your workspaces could not be read."
+          surface={FAILURE_SURFACE.WORKSPACES_READ}
+          onRetry={control.onRetryList}
+        />
       </SettingsSection>
     ) : (
       <SettingsRowsSkeleton label={readingWords("the variables")} rows={[VARIABLE_ROW_SKELETON]} />

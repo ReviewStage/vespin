@@ -13,8 +13,8 @@
  * the integration grants among it, since an added account's subject is no id
  * the account still names after it. After the delete, every grant is
  * revoked at Vercel Connect, as a Disconnect revokes one, a revoke that fails
- * logged by its word. A sandbox left behind expires on Vercel's own schedule
- * (`CODER.SANDBOX_SNAPSHOTS`), and a deleted workspace's agents'
+ * logged by its word. A sandbox left behind expires with its snapshot
+ * (`@repo/sandbox`'s retention), and a deleted workspace's agents'
  * conversations are deleted by its own delete's hooks
  * (`workspace-deletion.ts`).
  */

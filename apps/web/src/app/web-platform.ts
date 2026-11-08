@@ -10,7 +10,7 @@
  */
 
 import { ADMIN_PAGE_PATH } from "@repo/features/admin-wire";
-import { APP_HOME_LINK } from "@repo/features/link-home";
+import { APP_HOME_LINK, PANEL_ASSET_BASE } from "@repo/features/link-home";
 import { LINK_PLATFORM, type LinkPlatform } from "@repo/features/link-open";
 import { openTargetOf } from "@repo/features/open-address";
 import { hostedPageFramePath } from "@repo/features/page-frame";
@@ -19,7 +19,6 @@ import type { AppPlatform } from "@repo/panel/app-platform";
 import { COMMAND_KEY, type CommandKey } from "@repo/settings/shortcuts";
 import { stopImpersonating } from "../auth-client";
 import { browserLinkPlatform } from "../link-platform";
-import { PANEL_ASSET_BASE } from "./web-address";
 import { openBrowserLiveOverWebSocket } from "./web-browser-live";
 
 const ignore = (): void => undefined;
@@ -155,7 +154,10 @@ export function browserCommandKey(browser: SystemNaming = navigator): CommandKey
  * admin plugin (`auth-client.ts`).
  */
 export function webPlatform(
-  shell: Pick<AppPlatform, "recordSurfaceEvent" | "unsavedWork" | "unsavedDescriptionWords">,
+  shell: Pick<
+    AppPlatform,
+    "recordSurfaceEvent" | "unsavedWork" | "unsavedDescriptionWords" | "askForNotifications"
+  >,
   linkPlatform: LinkPlatform = browserLinkPlatform(),
   commandKey: CommandKey = browserCommandKey(),
 ): AppPlatform {
@@ -183,5 +185,7 @@ export function webPlatform(
   if (shell.unsavedWork !== undefined) platform.unsavedWork = shell.unsavedWork;
   if (shell.unsavedDescriptionWords !== undefined)
     platform.unsavedDescriptionWords = shell.unsavedDescriptionWords;
+  if (shell.askForNotifications !== undefined)
+    platform.askForNotifications = shell.askForNotifications;
   return platform;
 }

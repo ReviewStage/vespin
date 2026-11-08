@@ -1,7 +1,9 @@
 import { type ReactNode, useCallback } from "react";
 import { AutomationDirectory } from "../automation-directory.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { listedIn } from "../tasks/inbox-model.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
  * listed-automations.tsx -- the listed workspace's automations, read around the whole window, so an agent's card on Home's rows or in ⌘K names the automation that started it as the task's own does.
@@ -36,7 +38,7 @@ export function ListedAutomations({
   tasks: TasksControl;
   children: ReactNode;
 }): React.JSX.Element {
-  const { onOpen } = tasks.automationsView;
+  const { open: onOpen } = useAutomationsDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpen],

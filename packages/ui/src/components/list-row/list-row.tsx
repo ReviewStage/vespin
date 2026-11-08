@@ -1,13 +1,10 @@
 import { SELECTION_WORDS } from "@repo/features/words";
 import {
-  type ComponentType,
   type CSSProperties,
   createContext,
-  type FocusEventHandler,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEventHandler,
-  type ReactElement,
   type ReactNode,
   type RefCallback,
   type RefObject,
@@ -25,8 +22,8 @@ import { ReplayWords } from "../../session-replay-marks.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
+import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
-import { withContextMenu } from "../menu/menu.js";
 import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { type ListRowMenu, useRowMenu } from "../row-menu/row-menu.js";
 import {
@@ -46,6 +43,7 @@ import {
   type VirtualRowsHandle,
 } from "../virtual-rows/virtual-rows.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import type { ListRowHint } from "./list-row-hint.js";
 
 export type { ListRowMenu } from "../row-menu/row-menu.js";
 export type { ListSelection } from "../selection/list-selection.js";
@@ -273,24 +271,6 @@ export interface ListRowLead {
   readonly icon: ReactNode;
   readonly label: ReactNode;
 }
-
-/** What a hint hands the press it wraps: when to show and go, and what it says of the press. */
-interface ListRowHintProps {
-  "aria-describedby"?: string | undefined;
-  "aria-keyshortcuts"?: string | undefined;
-  onPointerEnter?: PointerEventHandler<HTMLElement> | undefined;
-  onPointerLeave?: PointerEventHandler<HTMLElement> | undefined;
-  onPointerDown?: PointerEventHandler<HTMLElement> | undefined;
-  onFocus?: FocusEventHandler<HTMLElement> | undefined;
-  onBlur?: FocusEventHandler<HTMLElement> | undefined;
-}
-
-/** The app's hint a row's press hangs: its words, the row the press stands in, and the press it wraps. */
-export type ListRowHint = ComponentType<{
-  label: string | undefined;
-  row: RefObject<HTMLElement | null>;
-  children: ReactElement<ListRowHintProps>;
-}>;
 
 /** The rows nested under a row, which it folds: whether they stand open, what hears a press asking for the other, and the words its chevron is named by. */
 export interface ListRowFold {

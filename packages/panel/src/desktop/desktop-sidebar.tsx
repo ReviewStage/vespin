@@ -86,7 +86,6 @@ import {
   childTaskCounts,
   type DrawnTaskRow,
   drawnTaskRows,
-  hiddenStatuses,
   homedTaskRows,
   NO_REPOSITORY,
   openParentIds,
@@ -118,6 +117,7 @@ import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows
 import { useQuery } from "@tanstack/react-query";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
+import { useAutomationsPlace } from "../automations-route.js";
 import { useNewTaskDrafted } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -125,12 +125,7 @@ import { DraftMark } from "../draft-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
-import {
-  type HistoryPage,
-  type HistoryStep,
-  type NavigationHistory,
-  sameHistoryPage,
-} from "../navigation-history.js";
+import type { NavigationHistory } from "../navigation-history.js";
 import {
   endWindowSpan,
   leaveWindowSpan,
@@ -138,21 +133,30 @@ import {
   PANEL_SPAN_ATTRIBUTE,
 } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import {
+  useAdminDoor,
+  useAutomationsDoor,
+  useBoardDoor,
+  useInboxDoor,
+} from "../places/routed-doors.js";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
+import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
 import {
   type AgentPin,
   isAgentPin,
   type PinnedTab,
-  SIDE_PANEL_TAB,
   type SidebarPin,
   samePin,
 } from "../tasks/use-side-panel.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
@@ -195,7 +199,6 @@ import {
   useSectionEdits,
 } from "./sidebar-sections.js";
 import {
-  HiddenStatusesLine,
   NONE_MATCH,
   TaskViewOptions,
   tasksHeadWords,
@@ -1656,9 +1659,9 @@ function sectionedTasks(
  * A section as the view leaves it: its tasks to do and in progress, any
  * with no status, an agent's among them, and any parent a child task keeps
  * open, of those Assigned to holds, each with its entry, in its order; and
- * the rest of those it holds counted by status, so the section says what it
- * holds where the view hides it. Note that a row Assigned to leaves out is
- * counted in no status, because Show all, not the Tasks page, brings it back.
+ * whether Assigned to leaves any out. Note that a row only the statuses
+ * shown leave out counts for nothing, because the section still reads as
+ * one to drag tasks into.
  */
 function sectionInView(
   drawn: DrawnSection,
@@ -1678,7 +1681,6 @@ function sectionInView(
     ...drawn,
     entries: kept.map(({ entry }) => entry),
     rows: kept.map(({ row }) => row),
-    hidden: hiddenStatuses(people, SHOWN_STATUSES, openParents),
     othersHeld: people.length < drawn.rows.length,
   };
 }
@@ -1847,13 +1849,19 @@ function SidebarColumn({
   const bodyRef = useMemo(() => joinRefs(body, roving.ref), [roving.ref]);
   // The window's Inbox, an agent's or a person's page, the Automations page, the Board, and Admin stand in the task's place, so while one does no task is the place shown.
   // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
-  const inAdmin = tasks.adminView.open;
-  const inInbox = onTasks && !inAdmin && tasks.inboxView.open;
-  const inAutomations = onTasks && tasks.automationsView.open;
-  const inBoard = onTasks && !inAdmin && tasks.boardView.open;
-  const inPerson = onTasks && !inAdmin && tasks.personView.userId !== undefined;
+  const { place } = useWindowPlace();
+  const board = useBoardDoor(tasks);
+  const admin = useAdminDoor(tasks);
+  const automations = useAutomationsDoor(tasks);
+  const inbox = useInboxDoor(tasks);
+  const automationsStanding = useAutomationsPlace();
+  const inAdmin = place === ROUTED_PLACE.ADMIN;
+  const inInbox = onTasks && !inAdmin && place === ROUTED_PLACE.INBOX;
+  const inAutomations = onTasks && automationsStanding.open;
+  const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
+  const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
   // Opening an automation sees its failed run, which the Automations row is marked for until then.
-  const { place: automationsPlace } = tasks.automationsView;
+  const { place: automationsPlace } = automationsStanding;
   // The workspace's runs, followed while the sidebar stands, as the Runs tab follows them, for the row to count the ones still at work.
   const { read: workspaceRuns } = useWorkspaceRuns(
     tasks.signedIn ? tasks.workspace?.id : undefined,
@@ -1879,23 +1887,24 @@ function SidebarColumn({
   // forward from Settings as well as choosing; a task's row goes back to work
   // on it, on the agent waiting on the developer where one does (`onResume`).
   // A press for a place of the window's state leaves a routed place standing for it, Settings or Admin (`panel-router.tsx`).
-  // Note that the leave and the door are one way out, asked once, because a page holding unsaved work holds one question, which a second ask would take the place of.
-  const leaveFor = (door: () => void) =>
-    tasks.leaveGuard.guard(() => {
-      onTabChange(PANEL_TAB.TASKS);
-      door();
-    })();
-  const openTask = (taskId: string) => leaveFor(() => tasks.onResume(taskId));
-  // Note that New task's card stands over whatever place stands, so it leaves only Settings, which takes the window, for it.
-  const newTaskOver = (door: () => void) => (onTasks ? door() : leaveFor(door));
+  // Note that the row's door moves the window first, which asks while a page holds unsaved work, and the Tasks tab is
+  // brought forward once it lands there, so a move kept at the ask changes nothing (`places/place-leave.ts`'s `arrive`).
+  const arriveFor = (door: () => void) =>
+    tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
+  const openTask = (taskId: string) => arriveFor(() => tasks.onResume(taskId));
+  // Note that New task's card stands over whatever place stands, so it leaves only Settings, which takes the window, for
+  // it: the leave is the move, and the card is opened once it lands, so a leave kept at the ask opens no card. The two
+  // are asked once, because a page holding unsaved work holds one question (`places/place-leave.ts`'s `arrive`).
+  const newTaskOver = (door: () => void) =>
+    onTasks ? door() : tasks.placeLeave.arrive(() => onTabChange(PANEL_TAB.TASKS), door);
   const newTask = () => newTaskOver(() => tasks.onNewTask());
-  const openPinnedTab = (pin: SidebarPin) => leaveFor(() => tasks.onOpenPinnedTab(pin));
+  const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
-  const openInbox = () => tasks.inboxView.onOpen();
-  const openBoard = () => tasks.boardView.onOpen();
-  const openAutomations = () => tasks.automationsView.onOpen();
-  const openAdmin = () => tasks.adminView.onOpen();
-  const goHome = () => leaveFor(() => tasks.onGoHome());
+  const openInbox = () => inbox.open();
+  const openBoard = () => board.open();
+  const openAutomations = () => automations.open();
+  const openAdmin = () => admin.open();
+  const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
   // composer is on it, so its row draws no Draft pencil for the words shown there.
   const atHome = onTasks && tasks.atHome;
@@ -1925,7 +1934,7 @@ function SidebarColumn({
   const agentShown = onTasks && !inAdmin ? tasks.agentView.agentId : undefined;
   const currentRow = (row: TaskRow) =>
     row.kind === TASK_ROW.TASK ? current(row.task.id) : row.agent.id === agentShown;
-  const openAgent = (agentId: string) => leaveFor(() => tasks.agentView.onOpen(agentId));
+  const openAgent = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   // The list is the chosen workspace's; the unread marks above read every task.
   const { listed: listedRows, listedAgents } = tasks;
   const pinned = tasks.listed.tasks.filter((task) => task.pinnedAt !== undefined);
@@ -2113,8 +2122,7 @@ function SidebarColumn({
     unpinnedAgents.length === 0;
   const unpinned = [...unpinnedTasks.map(taskRow), ...unpinnedAgents.map(agentRow)];
   const rows = taskRowsAssignedTo(unpinned, assignedTo, tasks.me);
-  // The list holds the tasks to do and in progress, and says how many more the Tasks page holds; a section says its own (`sectionInView`).
-  const hidden = hiddenStatuses(rows, SHOWN_STATUSES, openParents);
+  // The list holds the tasks to do and in progress; the Tasks page holds the rest.
   const statusRows = taskRowsInStatuses(rows, SHOWN_STATUSES, openParents);
   const orderView: TaskOrderView = {
     workspaceId: tasks.workspace?.id,
@@ -2216,8 +2224,7 @@ function SidebarColumn({
               tasks={tasks}
               // A person's page stands in Home's place without leaving its page, and draws no composer.
               shown={
-                tasks.newTask.open ||
-                (atHome && tasks.signedIn && tasks.personView.userId === undefined)
+                tasks.newTask.open || (atHome && tasks.signedIn && place !== ROUTED_PLACE.PERSON)
               }
               onNewTask={chosen(newTask)}
             />
@@ -2245,7 +2252,7 @@ function SidebarColumn({
             current={inBoard}
             disabled={!tasks.signedIn}
             onOpen={chosen(openBoard)}
-            onPreload={tasks.boardView.onPreload}
+            onPreload={board.preload}
           />
         )}
         <SidebarAutomationsRow
@@ -2255,11 +2262,7 @@ function SidebarColumn({
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
         />
-        <SidebarAdminRow
-          current={inAdmin}
-          onOpen={chosen(openAdmin)}
-          onPreload={tasks.adminView.onPreload}
-        />
+        <SidebarAdminRow current={inAdmin} onOpen={chosen(openAdmin)} onPreload={admin.preload} />
       </SidebarPlaces>
       <SidebarRule />
     </>
@@ -2410,7 +2413,6 @@ function SidebarColumn({
                         },
                         onDropRow: dropRow,
                         runs: runsPlace,
-                        onOpenBoard: chosen(openBoard),
                         onCarried: setCarrying,
                       }}
                     />
@@ -2496,7 +2498,6 @@ function SidebarColumn({
                         onNewTaskIn={chosen(newTaskIn)}
                         context={context}
                       />
-                      <HiddenStatusesLine hidden={hidden} onOpen={chosen(openBoard)} />
                     </nav>
                   </div>
                 </SelectionRegion>

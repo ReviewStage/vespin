@@ -7,12 +7,14 @@
  * `ManagedRuntime` over this layer.
  */
 
+import { Sandbox } from "@repo/sandbox";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { invitationMailFromEnvironment } from "./accounts/invitation-mail.js";
 import { onboardingEventsFromEnvironment } from "./accounts/onboarding-events.js";
 import { welcomeMailFromEnvironment } from "./accounts/welcome-mail.js";
 import { settledTurnListener } from "./agents/coder-host/settled-turns.js";
+import { queuedTurnListener, turnQueueFromEnvironment } from "./agents/coder-host/turn-delivery.js";
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
 import { webSqlClient } from "./db/sql-client.js";
@@ -89,6 +91,12 @@ const slackBot = slackBotFromEnvironment.pipe(
  * started it, sends an automation run's result on Slack, and hands on the
  * agent's queue (`agents/coder-host/settled-turns.ts`).
  *
+ * `QueuedTurnListener` is here on the same terms: the store writer tells it
+ * of every coding agent turn it leaves queued for a runner, which it
+ * publishes on the `TurnQueue` beside it, Vercel Queues on production and on
+ * a Preview, and this process's own anywhere else
+ * (`agents/coder-host/turn-delivery.ts`).
+ *
  * `ModelCatalog` is here for the same reason: its read of AI Gateway's
  * public catalog is cached on the service, so one instance reads the catalog
  * once an hour for every route that offers or checks a model.
@@ -135,6 +143,8 @@ const slackBot = slackBotFromEnvironment.pipe(
  * that re-export a bundle stand, rather than out of the bundle itself.
  */
 export const webServices = Layer.mergeAll(
+  // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
+  Layer.effect(Sandbox, Effect.service(Sandbox)),
   gatedGitHubClient,
   webSqlClient,
   hostedEnvironment,
@@ -150,6 +160,8 @@ export const webServices = Layer.mergeAll(
   bearerCallersLayer,
   pageLinksFromEnvironment,
   automationCadenceFromEnvironment,
+  queuedTurnListener,
+  turnQueueFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(

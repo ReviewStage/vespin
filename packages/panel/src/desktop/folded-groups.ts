@@ -49,8 +49,6 @@ const STORAGE_KEY = {
   SECTIONS: "app.sidebarFoldedSections",
   OPENED_TASKS: "app.sidebarOpenedTasks",
   INBOX_SHOW: "app.inboxShow",
-  /** Where the Inbox's Needs you button kept its press, before its tabs, which stood before its scopes. */
-  INBOX_WAITING_ONLY: "app.inboxWaitingOnly",
   INBOX_WHOSE: "app.inboxWhose",
   INBOX_LIST_WIDTH: "app.inboxListWidth",
   RUNS_PANEL: "app.automationRunsPanel",
@@ -131,49 +129,16 @@ const storedWhose = Schema.fromJsonString(
   ]),
 );
 
-/** The tabs an earlier version kept, before the scopes: Needs you, Unread, and All open; Everything was kept as All is; and the scope Reminders was kept under while it was named Snoozed. */
-const EARLIER_SHOW = {
-  NEEDS_YOU: "needs-you",
-  UNREAD: "unread",
-  OPEN: "open",
-  SNOOZED: "snoozed",
-} as const;
+/** The scope Reminders was kept under while it was named Snoozed. */
+const EARLIER_SNOOZED = "snoozed";
 
-/** The scope each kept value now stands for: a tab before the scopes as the scope listing what it did, and Snoozed as Reminders. */
-const SHOW_OF_KEPT = {
-  [INBOX_SHOW.NEEDS_ME]: INBOX_SHOW.NEEDS_ME,
-  [INBOX_SHOW.OPEN]: INBOX_SHOW.OPEN,
-  [INBOX_SHOW.ALL]: INBOX_SHOW.ALL,
-  [INBOX_SHOW.REMINDERS]: INBOX_SHOW.REMINDERS,
-  [EARLIER_SHOW.NEEDS_YOU]: INBOX_SHOW.OPEN,
-  [EARLIER_SHOW.UNREAD]: INBOX_SHOW.OPEN,
-  [EARLIER_SHOW.OPEN]: INBOX_SHOW.ALL,
-  [EARLIER_SHOW.SNOOZED]: INBOX_SHOW.REMINDERS,
-} as const satisfies Record<
-  InboxShow | (typeof EARLIER_SHOW)[keyof typeof EARLIER_SHOW],
-  InboxShow
->;
-
-/**
- * Which scope the Inbox shows, as any version kept it: a scope; a tab
- * before the scopes, read as the scope that lists what it did
- * (`SHOW_OF_KEPT`); or, as the key the Needs you button kept its press
- * under is read, whether it was pressed, Open where it was and All, all it
- * then listed, where it was not. Note that a `null`, which an earlier build
- * kept where nothing was chosen, reads as none, so the key beside it is read.
- */
+/** Which scope the Inbox shows: a scope, or Snoozed read as Reminders. */
 const storedShow = Schema.fromJsonString(
-  Schema.Union([
-    Schema.Literals([...Object.values(INBOX_SHOW), ...Object.values(EARLIER_SHOW)]),
-    Schema.Boolean,
-  ]).pipe(
+  Schema.Literals([...Object.values(INBOX_SHOW), EARLIER_SNOOZED]).pipe(
     Schema.decodeTo(
       Schema.Literals(Object.values(INBOX_SHOW)),
       SchemaTransformation.transform({
-        decode: (kept) => {
-          if (typeof kept === "boolean") return kept ? INBOX_SHOW.OPEN : INBOX_SHOW.ALL;
-          return SHOW_OF_KEPT[kept];
-        },
+        decode: (kept) => (kept === EARLIER_SNOOZED ? INBOX_SHOW.REMINDERS : kept),
         encode: (show) => show,
       }),
     ),
@@ -182,11 +147,7 @@ const storedShow = Schema.fromJsonString(
 
 /** The Inbox's view choices, each kept on this Mac under its own key. */
 const KEPT = {
-  INBOX_SHOW: keptKey<InboxShow>(
-    STORAGE_KEY.INBOX_SHOW,
-    storedShow,
-    STORAGE_KEY.INBOX_WAITING_ONLY,
-  ),
+  INBOX_SHOW: keptKey<InboxShow>(STORAGE_KEY.INBOX_SHOW, storedShow),
   WHOSE: keptKey<InboxWhose>(STORAGE_KEY.INBOX_WHOSE, storedWhose),
   FOLDED_GROUPS: keptKey(STORAGE_KEY.GROUPS, storedFolds),
   PINNED_FOLDED: keptKey(STORAGE_KEY.PINNED, storedFlag),

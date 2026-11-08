@@ -5,6 +5,7 @@ import {
   type GitHubTokenRejection,
   type GitHubTokenStatus,
   type GitHubTokenSummary,
+  pastedTokenFits,
 } from "@repo/features/github-token-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -284,13 +285,16 @@ export function GitHubTokenDialog({
     wasHeld.current = held;
   }, [open, held]);
 
+  // Note that a paste no token could be is answered as GitHub's invalid one, unsent.
   const save = (pasted: string): Promise<ReactNode> =>
-    sendGithubTokenSave({ token: pasted })
-      .catch(() => undefined)
-      .then((answer) => {
-        if (answer === undefined || "failure" in answer) return LINE.SAVE_FAILED;
-        return answer.rejected === undefined ? undefined : rejectionLabel(answer.rejected);
-      });
+    !pastedTokenFits(pasted)
+      ? Promise.resolve(rejectionLabel(GITHUB_TOKEN_REJECTION.INVALID))
+      : sendGithubTokenSave({ token: pasted })
+          .catch(() => undefined)
+          .then((answer) => {
+            if (answer === undefined || "failure" in answer) return LINE.SAVE_FAILED;
+            return answer.rejected === undefined ? undefined : rejectionLabel(answer.rejected);
+          });
 
   return (
     <Dialog

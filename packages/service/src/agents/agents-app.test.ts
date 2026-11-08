@@ -17,8 +17,8 @@ import {
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { saveDescriptionText } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
@@ -54,7 +54,7 @@ import type { WireBoundaryInput } from "@repo/wire";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
 import { eq } from "drizzle-orm";
-import { Deferred, Effect, Option } from "effect";
+import { Effect, Option } from "effect";
 import { afterEach, type TestContext, vi } from "vitest";
 import {
   MESSAGE_AUTHOR,
@@ -250,13 +250,46 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   /** A source whose session its harness opened is claimed, with a turn under way its harness knows as `turn_0`; answers the session. */
+  /** The source's first turn, which its Start queued, run and ended, so the source stands idle with its sandbox asleep. */
+  const sourceIdle = (stored: Agent) =>
+    Effect.gen(function* () {
+      const target = { userId: stored.userId, conversationId: stored.conversationId };
+      const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+      const turnId = Option.getOrThrow(yield* queuedTurnOf(stored.conversationId));
+      const turn = { conversationId: sessionKey(target.conversationId), turnId };
+      yield* writer.consume(target, {
+        ...turn,
+        kind: RUN_EVENT.TURN_STARTED,
+        sequence: 1,
+        origin: RUN_TURN_ORIGIN.TYPED,
+        trigger: TURN_TRIGGER.ASK,
+        at: 0,
+      });
+      // The source's lines are the turn's, so none is left for a turn of its own.
+      yield* Database.use((db) =>
+        db
+          .update(messages)
+          .set({ turnId })
+          .where(eq(messages.conversationId, stored.conversationId)),
+      );
+      yield* writer.consume(target, {
+        ...turn,
+        kind: RUN_EVENT.TURN_ENDED,
+        sequence: 2,
+        status: RUN_STATUS.SUCCEEDED,
+        responseIds: [],
+        at: 0,
+      });
+    });
+
   const sourceRunning = (stored: Agent, agentSessions: ReturnType<typeof fakeAgentSessions>) =>
     Effect.gen(function* () {
       const target = { userId: stored.userId, conversationId: stored.conversationId };
       const sessionId = agentSessions.opened[0]?.sessionId ?? "";
       assert.equal(yield* claimRuntimeSession(target, sessionId, new Date()), true);
       const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-      const turnId = randomUUID();
+      // The Start's first line queued the turn its runner opens (`turn-state.ts`).
+      const turnId = Option.getOrThrow(yield* queuedTurnOf(stored.conversationId));
       yield* writer.enqueueTurn(target, {
         turnId,
         origin: TURN_ORIGIN.TYPED,
@@ -526,15 +559,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
-      const sandbox = sourceSandbox(
-        checkout,
-        "stopped",
-        snapshotted ? agentSandboxName("wrun_source") : undefined,
-      );
+      const sandbox = sourceSandbox(checkout, "stopped", snapshotted);
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
       );
-      yield* claimRuntimeSession(opened.stored, "wrun_source", new Date());
+      yield* claimRuntimeSession(opened.stored, SOURCE_SANDBOX.SESSION, new Date());
+      yield* sourceIdle(opened.stored);
       const continued = Effect.gen(function* () {
         const started = readAnswer(
           agentAnswerSchema,
@@ -574,7 +604,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   };
 
   it.effect(
-    "a continue copies the source's checkout, what it had not committed included, to a branch of its own from the sandbox it wakes and stops again, names that branch and how a fresh checkout fetches it, and keeps it on its record",
+    "a continue copies the source's checkout, what it had not committed included, to a branch of its own from the sandbox it wakes, names that branch and how a fresh checkout fetches it, and keeps it on its record",
     (t) =>
       Effect.gen(function* () {
         const { checkout, sandbox, continued } = yield* copyScenario(t);
@@ -593,12 +623,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         const fresh = fetchedAsHanded(checkout, preamble);
         assert.equal(checkout.sh(fresh, "git", "branch", "--show-current"), branch);
         assert.equal(readFileSync(join(fresh, "invites.ts"), "utf8"), "export const ttl = 7;\n");
-        // The stop runs behind the Start, which answered without waiting on it.
-        yield* Deferred.await(sandbox.stopAsked);
-        assert.deepEqual(
-          [sandbox.ran, sandbox.stops],
-          [[SOURCE_SANDBOX.WOKEN], [SOURCE_SANDBOX.WOKEN]],
-        );
+        assert.deepEqual(sandbox.ran, [SOURCE_SANDBOX.WOKEN]);
       }),
   );
 
@@ -619,7 +644,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             .from(agentTable)
             .where(eq(agentTable.id, started.id)),
         );
-        assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName("wrun_source"));
+        assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName(SOURCE_SANDBOX.SESSION));
       }),
   );
 
@@ -720,20 +745,6 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
 
         assert.ok(preamble.includes("open your pull request from it as usual"), preamble);
         assert.ok(!preamble.includes("open no new pull request"), preamble);
-      }),
-  );
-
-  it.effect(
-    "a sandbox held past the copy's own hold, by a developer's terminal or another Start's copy, is woken for the copy and left up",
-    (t) =>
-      Effect.gen(function* () {
-        const { stored, sandbox, continued } = yield* copyScenario(t);
-        yield* holdSandbox(stored.conversationId, new Date(Date.now() + 10 * 60_000));
-
-        const { started } = yield* continued;
-
-        assert.ok(started.from?.branch !== undefined);
-        assert.deepEqual([sandbox.ran, sandbox.stops], [[SOURCE_SANDBOX.WOKEN], []]);
       }),
   );
 

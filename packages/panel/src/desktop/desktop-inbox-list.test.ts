@@ -44,7 +44,6 @@ import {
   EXPIRY_ASK,
   headTitle,
   heardOf,
-  hoveredCard,
   INVITES,
   inOrder,
   item,
@@ -105,9 +104,6 @@ beforeAll(() => Effect.runPromise(editorBundleLanded));
 
 // The parser an answer's note is drawn through, landed as the panel lands it.
 beforeAll(() => Effect.runPromise(markdownHtmlParserLanded));
-
-/** Where the window's Inbox kept its Needs you button's press before the tabs that stood before its scopes. */
-const EARLIER_SHOW_KEY = "app.inboxWaitingOnly";
 
 /** What the row of the item so titled says of its task's status; none where it wears no status. */
 function rowStatus(page: HTMLElement, title: string): string | undefined {
@@ -585,32 +581,8 @@ test("a task done or canceled keeps its items listed and counted as any other's,
   );
 });
 
-// Note that this test mounts the Inbox eight times, about 1 s on an idle machine but near 5 s on a
-// CI runner whose other workers run the shard's other files, so it is given 10 s.
-test("a tab kept before the scopes opens the Inbox on the scope that lists what it did, Needs you and Unread on Open and All open and Everything on All, and the Needs you press kept before the tabs on Open where pressed and All where not; a scope chosen since is kept in its place", async () => {
-  const kept = [
-    [SHOW_KEY, "needs-you", "[Open]"],
-    [SHOW_KEY, "unread", "[Open]"],
-    [SHOW_KEY, "open", "[All]"],
-    [SHOW_KEY, "all", "[All]"],
-    [EARLIER_SHOW_KEY, true, "[Open]"],
-    [EARLIER_SHOW_KEY, false, "[All]"],
-  ] as const;
-  const opened: (string | undefined)[] = [];
-  for (const [key, value] of kept) {
-    window.localStorage.clear();
-    window.localStorage.setItem(key, JSON.stringify(value));
-    const { page } = mount();
-    await settle();
-    opened.push(scopes(page).find((each) => each.startsWith("[")));
-    act(() => world.root?.unmount());
-    world.root = undefined;
-  }
-  assert.deepEqual(
-    opened,
-    kept.map(([, , scope]) => scope),
-  );
-
+test("a scope chosen is kept in its place", async () => {
+  window.localStorage.setItem(SHOW_KEY, JSON.stringify("all"));
   let { page } = mount();
   await settle();
   showScope(page, "Open");
@@ -619,7 +591,7 @@ test("a tab kept before the scopes opens the Inbox on the scope that lists what 
   ({ page } = mount());
   await settle();
   assert.deepEqual(scopes(page), ["Inbox", "Questions", "[Open]", "All"]);
-}, 10_000);
+});
 
 test("each row names its task on its first line with its time at that line's end, then its title on a line of its own, then its preview", async () => {
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, startedBy: TEAMMATE }, RETRY]);
@@ -1494,48 +1466,6 @@ test("Me chosen in Addressed to with nothing of the reader's in the scope shown 
   chooseView(page, "Addressed to", "Me");
   assert.deepEqual(listed(page), []);
   assert.deepEqual(listEmpty(page), [undefined, "Nothing addressed to you", "Show anyone's"]);
-});
-
-test("an item its agent withdrew wears Withdrawn's own mark on its row's card where an answered item's card wears a check", async () => {
-  const [asking] = EXPIRY.thread ?? [];
-  assert.ok(asking?.ask !== undefined, "the item opens with its ask");
-  const withdrawn: InboxItem = {
-    ...EXPIRY,
-    status: INBOX_STATUS.CLOSED,
-    closedReason: "Product picked 14 days.",
-    settledAt: 4_500,
-    thread: [
-      {
-        ...asking,
-        ask: {
-          ...asking.ask,
-          status: INBOX_ASK_STATUS.WITHDRAWN,
-          withdrawnReason: "Product picked 14 days.",
-        },
-      },
-    ],
-  };
-  world.inboxes.set(BILLING.id, [THRESHOLD, RETRY]);
-  world.inboxes.set(INVITES.id, [withdrawn]);
-  const { page } = mount();
-  await settle();
-
-  const settledGlyph = (title: string) => {
-    hoveredCard(rowNamed(page, title), "[data-inbox-item-card]");
-    const card =
-      document.querySelector<HTMLElement>(".ui-tooltip-card [data-inbox-item-card]") ??
-      assert.fail("the row's card is hung");
-    return [
-      card.querySelector("svg.lucide-circle-arrow-out-up-left") !== null,
-      card.querySelector("svg.lucide-check") !== null,
-    ];
-  };
-  assert.deepEqual(settledGlyph("Expire after 7 days?"), [true, false], "withdrawn: its own mark");
-  assert.deepEqual(
-    settledGlyph("How is a failed email retried?"),
-    [false, true],
-    "answered: check",
-  );
 });
 
 test("an item marked read as it opened stays read once another plan's item is chosen, though the list's read of its plan, which a mark never moves, still holds it unread", async () => {

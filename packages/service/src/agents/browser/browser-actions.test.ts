@@ -106,10 +106,9 @@ function run(
 const base64Of = (bytes: number) => "A".repeat(Math.ceil(bytes / 3) * 4);
 
 /** A cursor that writes each move it hears into the browser's own record, so the order of moves and commands reads as one. */
-function cursorInto(sent: FakeCdpCommand[], watched: boolean) {
+function cursorInto(sent: FakeCdpCommand[]) {
   const moves: BrowserCursorMove[] = [];
   const cursor: BrowserCursor = {
-    watched,
     report: (move) =>
       Effect.sync(() => {
         moves.push(move);
@@ -834,7 +833,7 @@ it.effect(
         },
         [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
       );
-      const { cursor, moves } = cursorInto(sent, false);
+      const { cursor, moves } = cursorInto(sent);
       const tab = "page-shop";
 
       const ran = yield* run(
@@ -893,7 +892,7 @@ it.effect("typing nowhere the page can point to moves no cursor, and the text st
         command.method === "Runtime.evaluate" ? { result: { result: { value: null } } } : undefined,
       [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
     );
-    const { cursor, moves } = cursorInto(sent, false);
+    const { cursor, moves } = cursorInto(sent);
 
     const ran = yield* run(
       peer,
@@ -907,36 +906,8 @@ it.effect("typing nowhere the page can point to moves no cursor, and the text st
   }),
 );
 
-it.effect("while someone watches, a click waits the cursor's beat after its move is heard", () =>
-  Effect.gen(function* () {
-    const { peer, sent } = yield* browser(undefined, [
-      { targetId: "page-shop", url: "https://shop.example/", title: "Shop" },
-    ]);
-    const { cursor, moves } = cursorInto(sent, true);
-    const pressed = () =>
-      sent.some(
-        (command) =>
-          command.method === "Input.dispatchMouseEvent" && command.params.type === "mousePressed",
-      );
-
-    const clicking = yield* Effect.forkChild(
-      run(peer, [{ action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", x: 40, y: 60 }], cursor),
-    );
-    yield* TestClock.adjust(Duration.subtract(BROWSER_CURSOR_BEAT, Duration.millis(1)));
-    const heardBeforeBeat = moves.length;
-    const pressedBeforeBeat = pressed();
-    yield* TestClock.adjust(Duration.millis(1));
-    const clicked = yield* Fiber.join(clicking);
-
-    assert.equal(heardBeforeBeat, 1);
-    assert.equal(pressedBeforeBeat, false);
-    assert.deepEqual(clicked.steps, [{ action: "click", status: "done", tab: "page-shop" }]);
-    assert.ok(pressed());
-  }),
-);
-
 it.effect(
-  "on a page drawing a recording's pointer, a click moves it there and waits the beat before it presses, though no one watches",
+  "on a page drawing a recording's pointer, a click moves it there and waits the beat before it presses",
   () =>
     Effect.gen(function* () {
       const { peer, sent } = yield* browser(
@@ -947,7 +918,7 @@ it.effect(
             : undefined,
         [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
       );
-      const { cursor } = cursorInto(sent, false);
+      const { cursor } = cursorInto(sent);
       const mouse = () =>
         sent
           .filter((command) => command.method === "Input.dispatchMouseEvent")
@@ -1147,7 +1118,6 @@ it.effect(
       ] as const;
       const reported: BrowserCursorMove[] = [];
       const hearing: BrowserCursor = {
-        watched: true,
         report: (move) => Effect.sync(() => void reported.push(move)),
       };
 
@@ -1158,7 +1128,7 @@ it.effect(
       const { peer: answering, sent: answered } = yield* browser(undefined, [
         { targetId: "page-shop", url: "https://shop.example/", title: "Shop" },
       ]);
-      const stalled: BrowserCursor = { watched: true, report: () => Effect.never };
+      const stalled: BrowserCursor = { report: () => Effect.never };
       const stalling = yield* Effect.forkChild(run(answering, click, stalled));
       yield* advance(Duration.seconds(2));
       const reportless = yield* Fiber.join(stalling);
@@ -1450,7 +1420,7 @@ it.effect("a select moves the cursor to the dropdown's middle as a click, before
       ["Option 2", "2"],
     ]);
     const { peer, sent } = yield* dropdownBrowser(select);
-    const { cursor, moves } = cursorInto(sent, false);
+    const { cursor, moves } = cursorInto(sent);
     const tab = "page-drop";
 
     const ran = yield* run(

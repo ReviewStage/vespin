@@ -10,7 +10,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Effect } from "effect";
 import { act, createElement } from "react";
@@ -199,6 +199,12 @@ async function drawnTab(
     },
     /** Opens the tab again in the same window. */
     open: async () => {
+      await draw(true);
+      await settle();
+    },
+    /** Draws the agent as its task's list next carries it. */
+    row: async (next: AgentSummary) => {
+      drawn = next;
       await draw(true);
       await settle();
     },
@@ -456,22 +462,35 @@ test("a refusal that lands while the tab is closed is drawn where the line went 
   assert.equal(composerEditor(tab.container).textContent, "");
 });
 
-test("a line another hand sent after a stopped turn, its page saying the agent runs, puts the tab to work: no Stopped under it, and ⌘ turns Send into Queue", async () => {
+test("a line another hand sent after a stopped turn puts the tab to work once the list names the turn it queued: no Stopped under it, and ⌘ turns Send into Queue", async () => {
   const handedOn: AgentTranscriptMessage = {
     id: "row-queued",
     role: MESSAGE_ROLE.USER,
     parts: [{ type: "text", text: "Open the pull request." }],
     sentAt: 90_000,
   };
-  // The tab's summary still says the turn was stopped; the page the line lands on says the agent runs.
-  const tab = await drawnTab(
-    [handedOn],
-    { ...AGENT_SUMMARY, status: AGENT_STATUS.CANCELED, runtime: AGENT_RUNTIME.CLAUDE_CODE },
-    [AGENT_STATUS.CANCELED, AGENT_STATUS.RUNNING],
-  );
+  const stopped: AgentSummary = {
+    ...AGENT_SUMMARY,
+    status: AGENT_STATUS.CANCELED,
+    runtime: AGENT_RUNTIME.CLAUDE_CODE,
+    turnId: "7a1c3e5b-2d4f-4b6a-8c0e-1f3a5b7c9d21",
+    turn: {
+      id: "7a1c3e5b-2d4f-4b6a-8c0e-1f3a5b7c9d21",
+      queuedAt: 10_000,
+      status: TURN_STATUS.CANCELED,
+    },
+  };
+  const tab = await drawnTab([handedOn], stopped, [AGENT_STATUS.CANCELED, AGENT_STATUS.RUNNING]);
   assert.match(tab.container.textContent ?? "", /Stopped/u, "the stopped turn ends on Stopped");
 
   await tab.landRow();
+  // The list names the turn the line queued, which is what puts the tab to work, whatever the page says.
+  const queued = {
+    id: "9b2d4f6a-3e5c-4d7b-9f1a-2c4e6a8b0d32",
+    queuedAt: 90_000,
+    status: TURN_STATUS.QUEUED,
+  };
+  await tab.row({ ...stopped, status: AGENT_STATUS.RUNNING, turnId: queued.id, turn: queued });
   typeInComposer(tab.container, "Then run the tests.");
   await settle();
 

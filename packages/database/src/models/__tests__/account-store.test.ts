@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
-import { AGENT_ENTER, COMMIT_AUTHOR, EXPERIMENT } from "@repo/settings";
+import { AGENT_ENTER, COMMIT_AUTHOR, EXPERIMENT, SOUND_WHEN } from "@repo/settings";
+import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
@@ -144,6 +145,9 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
         yield* writeAccountPreferences(userId, { setupFinished: true });
         // Note that the place is written by one machine and read by another, as setup resumed elsewhere reads it.
         yield* writeAccountPreferences(userId, { setupPlace: SETUP_PLACE });
+        yield* writeAccountPreferences(userId, { soundWhen: SOUND_WHEN.BACKGROUND });
+        yield* writeAccountPreferences(userId, { completionSound: COMPLETION_SOUND.QUACK });
+        yield* writeAccountPreferences(userId, { turnNotifications: true });
 
         yield* writeAccountPreferences(userId, { preferences: {} });
         const read = yield* readAccountPreferences(userId);
@@ -153,6 +157,9 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
           commitAuthor: COMMIT_AUTHOR.APP,
           setupFinished: true,
           setupPlace: SETUP_PLACE,
+          soundWhen: SOUND_WHEN.BACKGROUND,
+          completionSound: COMPLETION_SOUND.QUACK,
+          turnNotifications: true,
         });
         assert.deepEqual(
           (yield* readAccountPreferences(yield* openAccount))?.preferences,

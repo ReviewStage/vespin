@@ -6,15 +6,8 @@ import {
   settingRowsForPage,
 } from "@repo/settings";
 import { NOTIFICATIONS_STATUS, type NotificationsControl } from "@repo/settings/settings-controls";
-import {
-  BUTTON_VARIANT,
-  Button,
-  ExternalIcon,
-  SETTINGS_ROW_STATE,
-  SettingsRow,
-  SettingsRowStateLine,
-  SettingsSection,
-} from "@repo/ui";
+import { SettingsSection } from "@repo/ui";
+import { NotificationsOff } from "./notifications-off.js";
 import { SchemaSettingRows } from "./schema-rows.js";
 import type { SettingsWrites } from "./writes.js";
 
@@ -24,40 +17,14 @@ const NOTIFICATIONS_OFF_WORDS = {
   development: `macOS has notifications off for Electron, which is how the dev build appears to macOS, so a command waiting while ${PRODUCT_NAME} is behind won't say so.`,
 } as const;
 
-/** The line under the choice where macOS refused the app's last notification, and the way to turn them back on. Note that it has no name of its own, because the choice above it is what it is about. */
-function NotificationsOff({ control }: { control: NotificationsControl }): React.JSX.Element {
-  return (
-    <SettingsRow
-      label={null}
-      description={
-        <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-          {control.packaged
-            ? NOTIFICATIONS_OFF_WORDS.packaged
-            : NOTIFICATIONS_OFF_WORDS.development}
-        </SettingsRowStateLine>
-      }
-    >
-      {() => (
-        <Button
-          variant={BUTTON_VARIANT.OUTLINE}
-          icon={<ExternalIcon />}
-          onClick={control.onOpenSettings}
-        >
-          Open System Settings
-        </Button>
-      )}
-    </SettingsRow>
-  );
-}
-
 /**
  * mac-commands-section.tsx -- the This Mac page's groups: whether the app and coding agents may run shell commands here, then Startup.
  *
  * One choice, Ask every time by default: each command is put to the
  * developer before it runs, or every command runs unasked, or none at all
  * (`compose-mac-commands.ts` in the host stops reading for commands under
- * Never). A command waiting while the app is behind is the one notification
- * the app posts, so where macOS refused its last one a line under the choice
+ * Never). A command waiting while the app is behind is always posted as a
+ * notification, so where macOS refused the app's last one a line under the choice
  * says so and opens System Settings, where they are turned back on; a
  * development build runs inside Electron's own app, which macOS lists it
  * as, and the line names it so. Startup holds whether the app opens at login, since it is the Mac
@@ -80,7 +47,14 @@ export function MacCommandsSection({
       <SettingsSection>
         <SchemaSettingRows page={SCHEMA_SETTINGS_PAGE.THIS_MAC} view={view} />
         {notifications.status === NOTIFICATIONS_STATUS.OFF ? (
-          <NotificationsOff control={notifications} />
+          <NotificationsOff
+            words={
+              notifications.packaged
+                ? NOTIFICATIONS_OFF_WORDS.packaged
+                : NOTIFICATIONS_OFF_WORDS.development
+            }
+            onOpenSettings={notifications.onOpenSettings}
+          />
         ) : null}
       </SettingsSection>
       {startup ? (

@@ -3,7 +3,7 @@
  *
  * It keeps every sandbox, command, stdin, upload, network policy, and run it
  * was asked for, opens and resumes sandboxes as Vercel does, and answers a
- * list and a stop only where Vercel would (`vercel-sandbox-fake.ts`). A
+ * list and a stop only where Vercel would (`@repo/sandbox/testing`). A
  * command `@vercel/sandbox` starts as a user (`asUser`) is kept as that user's
  * command, its environment read back off `sudo`'s command line, where the SDK
  * writes it.
@@ -19,26 +19,29 @@ import { EventEmitter, once } from "node:events";
 import { gunzipSync } from "node:zlib";
 import { RUNNER_ENV, type RunnerConfig } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { recordNativeHanded } from "@repo/database/models/agent-store";
+import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { runnerLine } from "@repo/database/schemas/runner-line";
-import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { Effect, Layer } from "effect";
-import { agentTag } from "../agents/machine/vercel-machine.js";
-import type { NetworkPolicy } from "../agents/vercel-sandbox-api.js";
 import {
   commandAnswered,
   commandLogsStreamed,
   commandRunStreamed,
+  fakeDrives,
   sandboxDeleted,
   sandboxesListed,
-  sandboxFetchOver,
   sandboxFound,
   sandboxListRefusal,
   sandboxStopRefusal,
   sandboxTagsRefusal,
   sessionAnswered,
   snapshotOf,
-} from "./vercel-sandbox-fake.js";
+  vercelSandboxOver,
+} from "@repo/sandbox/vercel/testing";
+import { fakeHttpClientLayer } from "@repo/wire/testing";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { Effect, Layer, Option } from "effect";
+import { agentTag } from "../agents/agent-sandbox-open.js";
 
 const TEAM = "team_fixture";
 const PROJECT = "prj_fixture";
@@ -69,6 +72,8 @@ export interface FakeSandbox {
   createdAt: number;
   /** The snapshot it resumes from, which its last snapshot made; none before one is taken. */
   currentSnapshotId?: string;
+  /** What its create mounted, as the create sent it, which the drives read back (`fakeDrives`). */
+  mounted?: unknown;
 }
 
 export interface FakeCommand {
@@ -94,7 +99,7 @@ export interface FakeCommand {
 }
 
 /** A command as a read of its exit finds it: its id, the exit it has, and whether Vercel recorded it. */
-export interface ReadCommand {
+interface ReadCommand {
   readonly id: string;
   readonly exitCode: number | null;
   recorded?: boolean;
@@ -108,7 +113,7 @@ export interface ReadCommand {
  * command exits where `exits` tells its exits, and answers it at once with
  * no exit otherwise, as a hold past the reader's wait ends.
  */
-export async function commandRead(
+async function commandRead(
   command: ReadCommand,
   url: URL,
   init: RequestInit,
@@ -186,15 +191,12 @@ function asUserCommand(command: string, args: readonly string[]) {
 /** Vercel Sandbox's REST API, as a store of the sandboxes and commands it was asked for. */
 export function runnerSandboxApi() {
   const sandboxes: FakeSandbox[] = [];
+  // A drive a running sandbox mounts is one Vercel refuses to delete.
+  const drives = fakeDrives((mountsIt) =>
+    sandboxes.some((each) => !each.deleted && each.status === "running" && mountsIt(each.mounted)),
+  );
   /** How many stdin writes with data the API refuses next, and with what status: a passing outage by default. */
   const failStdin = { remaining: 0, status: 502 };
-  /**
-   * How many deletes the API refuses next. Note that the refusal is a 400
-   * rather than a passing outage's 503, because `@vercel/sandbox` tries a
-   * 5xx again on a real timer, so only a status it never retries fails the
-   * delete at once, as a test reads it.
-   */
-  const failDelete = { remaining: 0 };
   const commands: FakeCommand[] = [];
   const uploads: Map<string, string>[] = [];
   const policies: { readonly session: string; readonly policy: unknown }[] = [];
@@ -206,7 +208,9 @@ export function runnerSandboxApi() {
   /**
    * How many reads of a command, and how many network policy updates, the
    * API refuses next. Note that each refusal is a 400 rather than a passing
-   * outage's 503, for the reason `failDelete` gives.
+   * outage's 503, because `@vercel/sandbox` tries a 5xx again on a real
+   * timer, so only a status it never retries fails the call at once, as a
+   * test reads it.
    */
   const failCommandReads = { remaining: 0 };
   const failPolicy = { remaining: 0 };
@@ -219,6 +223,17 @@ export function runnerSandboxApi() {
   const exit = (command: FakeCommand, code: number) => {
     command.exitCode = command.exitCode ?? code;
     exits.emit(command.id);
+  };
+  /** Vercel's own idle stop, `SANDBOX_IDLE` past the last touch: every running sandbox stopped, and its commands ended. */
+  const idleStop = () => {
+    for (const sandbox of sandboxes.filter((each) => each.status === "running")) {
+      sandbox.status = "stopped";
+      for (const command of commands.filter(
+        (each) => each.sandboxSessionId === sandbox.currentSessionId,
+      )) {
+        command.exitCode = command.exitCode ?? 143;
+      }
+    }
   };
   /**
    * The call to a session at which its sandbox begins to stop, as a launch's
@@ -283,6 +298,11 @@ export function runnerSandboxApi() {
       }
       const tagsRefused = sandboxTagsRefusal(asked.tags);
       if (tagsRefused !== undefined) return tagsRefused;
+      const mounted = drives.mountsSent(asked);
+      // A drive mounted must stand, as Vercel mounts only a drive it holds.
+      if (!drives.mountable(mounted)) {
+        return Response.json({ error: { code: "not_found" } }, { status: 404 });
+      }
       const source: string | undefined = asked.source?.snapshotId;
       // A snapshot that lapsed or was deleted is refused as Vercel refuses it.
       if (source !== undefined && goneSnapshots.has(source)) {
@@ -295,6 +315,7 @@ export function runnerSandboxApi() {
         tags: asked.tags,
         image: asked.image,
         ...(source === undefined ? undefined : { sourceSnapshotId: source }),
+        ...(mounted === undefined ? undefined : { mounted }),
         deleted: false,
         createdAt: sandboxes.length + 1,
         timeout: asked.timeout,
@@ -312,6 +333,8 @@ export function runnerSandboxApi() {
       );
       return Response.json(sandboxesListed(found.map(listed)));
     }
+    const onDrive = await drives.answer(path, method, body);
+    if (onDrive !== undefined) return onDrive;
     const named = /^\/api\/v2\/sandboxes\/([^/]+)$/u.exec(path);
     if (named !== null) {
       // A name deleted and taken again is the new sandbox's, as Vercel holds one sandbox per name.
@@ -328,10 +351,6 @@ export function runnerSandboxApi() {
         if (asked.tags !== undefined) sandbox.tags = asked.tags;
         if (asked.timeout !== undefined) sandbox.timeout = asked.timeout;
         return Response.json(sandboxDeleted(listed(sandbox)));
-      }
-      if (method === "DELETE" && failDelete.remaining > 0) {
-        failDelete.remaining -= 1;
-        return Response.json({ error: { code: "bad_request" } }, { status: 400 });
       }
       if (method === "DELETE") {
         sandbox.deleted = true;
@@ -388,6 +407,17 @@ export function runnerSandboxApi() {
           },
         },
         { status: 422 },
+      );
+    }
+    if (current?.status === "stopped") {
+      return Response.json(
+        {
+          error: {
+            code: "sandbox_stopped",
+            message: "Sandbox has stopped execution and is no longer available",
+          },
+        },
+        { status: 410 },
       );
     }
     if (rest === "snapshot") {
@@ -518,10 +548,13 @@ export function runnerSandboxApi() {
           .slice(0, command.policiesBefore)
           .findLast((each) => each.session === command.sandboxSessionId)?.policy;
   return {
-    layer: Layer.merge(fakeHttpClientLayer(respond), sandboxFetchOver(respond)),
+    layer: Layer.provideMerge(vercelSandboxOver(respond), fakeHttpClientLayer(respond)),
     respond,
     policyAtStart,
     sandboxes,
+    drives: drives.drives,
+    mountedAt: (sandbox: FakeSandbox | undefined, at: string) =>
+      drives.mountedAt(sandbox?.mounted, at),
     commands,
     snapshots,
     goneSnapshots,
@@ -530,12 +563,12 @@ export function runnerSandboxApi() {
     policies,
     runs,
     failStdin,
-    failDelete,
     failCommandReads,
     failPolicy,
     holdPolicy,
     waits,
     exit,
+    idleStop,
     stopsAt,
     snapshotting,
     hooks,
@@ -570,28 +603,65 @@ export const launchLines = (command: FakeCommand | undefined) =>
     return [config, ...stdin, ...queued.map((row): unknown => JSON.parse(row.text))];
   });
 
-/** Every message queued for the agent's runner stamped taken, as each one's ACCEPTED would, which the fake runner never posts. */
+/** Every message queued for the agent's runner stamped taken, what its words handed kept, as each one's ACCEPTED would, which the fake runner never posts. */
 export const runnerTook = (agentId: string) =>
-  Effect.flatMap(Database, (db) =>
-    db
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const waiting = yield* db
+      .select({
+        lineId: runnerLine.lineId,
+        userId: runnerLine.userId,
+        conversationId: agentTable.conversationId,
+      })
+      .from(runnerLine)
+      .innerJoin(agentTable, eq(agentTable.id, runnerLine.agentId))
+      .where(and(eq(runnerLine.agentId, agentId), isNull(runnerLine.acceptedAt)))
+      .orderBy(asc(runnerLine.seq));
+    // Each message as its ACCEPTED takes it: stamped taken, and what its words handed kept.
+    for (const line of waiting) {
+      if (line.lineId === null) continue;
+      const handed = yield* acceptRunnerLine(line.userId, agentId, line.lineId);
+      if (Option.isSome(handed)) yield* recordNativeHanded(line, handed.value);
+    }
+    yield* db
       .update(runnerLine)
       .set({ acceptedAt: new Date(0) })
-      .where(and(eq(runnerLine.agentId, agentId), isNull(runnerLine.acceptedAt))),
-  );
+      .where(and(eq(runnerLine.agentId, agentId), isNull(runnerLine.acceptedAt)));
+  });
+
+/** A network policy as Vercel's API is sent one: the open internet by name, or each host's matchers and transforms. */
+type SentPolicy =
+  | string
+  | {
+      readonly allow: Readonly<
+        Record<
+          string,
+          readonly {
+            readonly match?: {
+              readonly headers?: readonly {
+                readonly key: { readonly exact: string };
+                readonly value: { readonly exact: string };
+              }[];
+            };
+            readonly transform: readonly { readonly headers: Readonly<Record<string, string>> }[];
+          }[]
+        >
+      >;
+    };
 
 /**
  * The bearer a network policy swaps in on the host given for a request that
  * presents the placeholder as its bearer, as the firewall would set it on
  * the way out; none where the policy carries no such swap.
  */
-export function swappedBearer(
+function swappedBearer(
   policy: unknown,
   host: string,
   placeholder: string | undefined,
 ): string | undefined {
-  // SAFETY: the policy is the body the API was sent, a `NetworkPolicy` as `updateNetworkPolicy` spells it.
-  const sent = policy as NetworkPolicy | undefined;
-  if (sent === undefined || !("allow" in sent) || placeholder === undefined) return undefined;
+  // SAFETY: the policy is the body the API was sent, Vercel's network policy as the adapter spells it.
+  const sent = policy as SentPolicy | undefined;
+  if (sent === undefined || typeof sent === "string" || placeholder === undefined) return undefined;
   const swap = (sent.allow[host] ?? []).find((rule) =>
     (rule.match?.headers ?? []).some(
       (header) =>

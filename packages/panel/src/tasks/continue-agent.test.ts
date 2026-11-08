@@ -18,6 +18,7 @@ import {
   type AgentStatus,
   type AgentSummary,
   type AgentTranscriptMessage,
+  type AgentTurn,
 } from "@repo/features/agent-wire";
 import {
   DEVICE_LAUNCH_UNSTARTED,
@@ -29,7 +30,7 @@ import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
-import { ACTION_RESULT_STATUS, MESSAGE_ROLE } from "@repo/wire";
+import { ACTION_RESULT_STATUS, MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -99,6 +100,25 @@ function agentOf(id: string, overrides: Partial<AgentSummary> = {}): AgentSummar
     turnId: null,
     brief: AGENT_BRIEF.DESCRIPTION,
     ...overrides,
+  };
+}
+
+/** The turn word each status the tab is drawn at reads from. */
+const TURN_STATUS_OF = {
+  [AGENT_STATUS.RUNNING]: TURN_STATUS.RUNNING,
+  [AGENT_STATUS.COMPLETED]: TURN_STATUS.SETTLED,
+  [AGENT_STATUS.FAILED]: TURN_STATUS.FAILED,
+  [AGENT_STATUS.CANCELED]: TURN_STATUS.CANCELED,
+} as const;
+
+/** The agent's newest turn as its summary carries it at the status given, failed on the word given; none before its first turn, or for one that never started. */
+function turnOf(status: AgentStatus, failure: AgentFailure | undefined): AgentTurn | undefined {
+  if (status === AGENT_STATUS.STARTING || failure === AGENT_FAILURE.NOT_STARTED) return undefined;
+  return {
+    id: "3f6b8d2a-1c4e-4a7b-9e5d-0b2c4d6e8f10",
+    queuedAt: 1_000,
+    status: TURN_STATUS_OF[status],
+    ...(failure === undefined ? undefined : { failure }),
   };
 }
 
@@ -188,8 +208,8 @@ async function drawnTab(input: {
   messages?: readonly AgentTranscriptMessage[];
   /** Whether the tab's place opens the continue as a draft, as the task's column does. */
   drafts?: boolean;
-  /** What the first page says the agent and its newest turn cost, the latter as a service older than this window sent it. */
-  usage?: Pick<AgentMessagesAnswer, "usage" | "turnUsage">;
+  /** What the first page says the agent cost. */
+  usage?: Pick<AgentMessagesAnswer, "usage">;
   /** Where the first page says the agent's launch stands, or stopped once it failed. */
   launch?: AgentLaunch;
   /** Where the end line's key press turns, by the provider it names. */
@@ -200,6 +220,8 @@ async function drawnTab(input: {
   repository?: string;
   /** Takes each message the tab sends, by its words, answering as the service does; none answers it as unanswered. */
   onMessage?: (text: string) => Promise<AgentAgentAnswer>;
+  /** Takes each Try again the tab asks of the service, by the words it carries, answering whether the service took it; none answers it refused. */
+  onRetry?: (words: string) => Promise<boolean>;
   /** Whether Bring your own host is on, which Move to stands behind. */
   ownHost?: boolean;
   /** Takes each copy the tab makes, by its words. */
@@ -208,7 +230,12 @@ async function drawnTab(input: {
   fakeAppBridge({});
   if (input.ownHost === true) handState(experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST));
   if (input.copied !== undefined) fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(input.copied) });
-  const source = agentOf(SOURCE, { status: input.status, ...input.source });
+  const turn = turnOf(input.status, input.failure);
+  const source = agentOf(SOURCE, {
+    status: input.status,
+    ...(turn === undefined ? undefined : { turnId: turn.id, turn }),
+    ...input.source,
+  });
   const continued: {
     agentId: string;
     note: string | undefined;
@@ -254,6 +281,7 @@ async function drawnTab(input: {
     onMessage: (_agentId, text) =>
       input.onMessage?.(text) ??
       Promise.resolve(input.message ?? { failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    onRetry: (_agentId, words) => input.onRetry?.(words) ?? Promise.resolve(false),
   });
   // Note that what the agent published is laid over the transcripts' host, which it hands everything else on to.
   const parts = handHostReads({});
@@ -412,17 +440,21 @@ function signInCard(container: ParentNode): HTMLElement | null {
   return container.querySelector<HTMLElement>(".agent-end .ui-banner");
 }
 
-test("a launch its Mac's GitHub sign-in could not start ends on a card naming the Mac and the repository, whose Copy copies the sign-in command and whose Retry sends one line of the developer's own however often pressed", async () => {
+test("a launch its Mac's GitHub sign-in could not start ends on a card naming the Mac and the repository, whose Copy copies the sign-in command and whose Retry asks the service to send again once however often pressed, writing no line of its own", async () => {
   const copied: string[] = [];
   const sent: string[] = [];
+  const retried: string[] = [];
   const tab = await drawnTab({
     ...SIGN_IN_REFUSED,
     repository: "acme/web",
     copied,
-    // Note that the line is never answered, so it stays going, as a launch that takes its time does.
     onMessage: (text) => {
       sent.push(text);
       return new Promise(() => undefined);
+    },
+    onRetry: (words) => {
+      retried.push(words);
+      return Promise.resolve(true);
     },
   });
   const card = signInCard(tab.container) ?? assert.fail("the transcript ends on the card");
@@ -446,9 +478,10 @@ test("a launch its Mac's GitHub sign-in could not start ends on a card naming th
     retry.click();
   });
   await settle();
-  assert.deepEqual(sent, ["Try again"]);
-  assert.equal(tab.lines("Try again").length, 1);
-  assert.equal(signInCard(tab.container), null);
+  assert.deepEqual(retried, ["Try again"]);
+  assert.deepEqual(sent, []);
+  assert.equal(tab.lines("Try again").length, 0);
+  assert.equal(retry.disabled, true, "a Retry the service took is not offered again");
 });
 
 test("the sign-in card's Move to cloud continues the agent in the cloud while Bring your own host is on, and is left out with it off, where an unknown Mac and repository are named as such", async () => {
@@ -474,7 +507,7 @@ test("the sign-in card's Move to cloud continues the agent in the cloud while Br
   assert.equal(off.named(offCard, "Move to cloud"), undefined);
 });
 
-test("a failed turn's end line names no price, even from a service that sent the turn's, while the model menu's foot still says the whole run's", async () => {
+test("a failed turn's end line names no price, while the model menu's foot still says the whole run's", async () => {
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SANDBOX,
@@ -486,7 +519,6 @@ test("a failed turn's end line names no price, even from a service that sent the
         costUsd: 2.41,
         payer: AGENT_PAYER.API_KEY,
       },
-      turnUsage: { inputTokens: 40_000, outputTokens: 900, cachedInputTokens: 0, costUsd: 0.08 },
     },
   });
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
@@ -500,7 +532,6 @@ test("a failed turn's end line names no price, even from a service that sent the
   await settle();
   const menu = tab.container.querySelector(".ui-searchable-menu") ?? assert.fail("the menu opens");
   assert.match(menu.textContent ?? "", /API key · \$2\.41 so far/);
-  assert.doesNotMatch(menu.textContent ?? "", /\$0\.08/);
 });
 
 test("a failed end line's row ends on Continue where only a new agent goes on, also once another continued it, and not beside a closed box's own press", () => {
@@ -553,11 +584,16 @@ test("a failed end line's row ends on Try again where a message carries the agen
   );
 });
 
-test("a turn failed on its sandbox ends on Try again, which sends the agent one line in place of Continue however often pressed", async () => {
+test("a turn failed on its sandbox ends on Try again, which asks the service to send again once however often pressed, writes no line of its own, and stands again where refused", async () => {
+  const retried: string[] = [];
   const sent: string[] = [];
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SANDBOX,
+    onRetry: (words) => {
+      retried.push(words);
+      return Promise.resolve(false);
+    },
     onMessage: (text) => {
       sent.push(text);
       return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
@@ -575,7 +611,10 @@ test("a turn failed on its sandbox ends on Try again, which sends the agent one 
   });
   await settle();
 
-  assert.deepEqual(sent, ["Try again"]);
+  assert.deepEqual(retried, ["Try again"]);
+  assert.deepEqual(sent, []);
+  assert.equal(tab.lines("Try again").length, 0);
+  assert.equal(press.disabled, false, "a refused Try again is offered again");
 });
 
 test("a message to an ended agent says to continue it in a new one, while a Start refused alike still says to start one", () => {

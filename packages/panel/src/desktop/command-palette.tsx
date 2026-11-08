@@ -173,11 +173,13 @@ import {
   panelCommandOf,
 } from "../command-items.js";
 import { unreadShown } from "../failure-report.js";
+import { type InboxView, useInboxView } from "../inbox-route.js";
 import { type CopyLink, inSidePanel, type LinkAtHand } from "../links-at-hand.js";
 import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-reads.js";
 import { memberRows } from "../member-rows.js";
 import { PANEL_SPAN, useKeystrokeSpans } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { Highlighted } from "../search-field.js";
 import { settingsPageOf } from "../settings/pages.js";
 import { settingsPageShown } from "../settings/settings-rows.js";
@@ -189,6 +191,7 @@ import {
 } from "../settings-search.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD, tasklessRowSubject } from "../tasks/agent-ref.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { fileName } from "../tasks/file-ref-model.js";
@@ -208,15 +211,16 @@ import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
-import { AUTOMATIONS_PAGE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
+import { agentEntries } from "./agent-entries.js";
 import { type AgentReadMarks, useAgentReadMarks } from "./agent-read-marks.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
-import { agentEntries, inboxEntries } from "./main-tabs.js";
+import { inboxEntries } from "./main-tabs.js";
 import { ADD_SECTION, offeredPanelKinds, panelOffers, SIDE_PANEL_HOLDER } from "./side-panel.js";
 import type { AddEntry } from "./strip-tabs.js";
 import { taskOf } from "./task-actions.js";
@@ -968,6 +972,7 @@ function paletteEntries(entry: AddEntry): readonly AddEntry[] {
  */
 function agentRows(
   tasks: TasksControl,
+  inboxStanding: InboxStanding,
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
   people: ReadonlyMap<string, HeldPeople>,
@@ -984,11 +989,13 @@ function agentRows(
   }));
   // Note that the plan's places open in its own panel, and in the Inbox's
   // beside an item of the plan, whose panel is the Inbox's.
-  const holder = holdsTaskPanel(tasks) ? SIDE_PANEL_HOLDER.TASK : SIDE_PANEL_HOLDER.INBOX;
+  const holder = holdsTaskPanel(tasks, inboxStanding)
+    ? SIDE_PANEL_HOLDER.TASK
+    : SIDE_PANEL_HOLDER.INBOX;
   // Note that the Inbox's panel reads the chosen item's pages on its own (`desktop-inbox.tsx`).
   const inboxHeld = holder === SIDE_PANEL_HOLDER.INBOX;
   const pages = (inboxHeld ? tasks.inboxView.pages : tasks.pages) ?? [];
-  const places = opensTaskItems(tasks)
+  const places = opensTaskItems(tasks, inboxStanding)
     ? panelOffers({
         holder,
         taskId,
@@ -1260,10 +1267,8 @@ const OWN_ROW_COMMANDS: ReadonlySet<AppCommand> = new Set([
 ]);
 
 /** The open thing's commands as its run lists them: U only while the Inbox stands, whose chosen item no row of its own marks. */
-function openThingCommands(tasks: TasksControl): readonly AppCommand[] {
-  return OPEN_THING_COMMANDS.filter(
-    (command) => command !== APP_COMMAND.TOGGLE_READ || tasks.inboxView.open,
-  );
+function openThingCommands(inbox: InboxStanding): readonly AppCommand[] {
+  return OPEN_THING_COMMANDS.filter((command) => command !== APP_COMMAND.TOGGLE_READ || inbox.open);
 }
 
 /** The open thing's Show terminal, listed beside its other Show rows. */
@@ -1336,13 +1341,16 @@ function actionRows(
     });
 }
 
+/** The Inbox as the palette reads it: whether it stands, and the item chosen in it. */
+type InboxStanding = Pick<InboxView, "open" | "chosen">;
+
 /**
  * Whether the side panel draws the open plan's own tabs, its fixed kinds and
  * its workers: not while an agent's page holds it, nor while the Inbox does,
  * whose panel is bare and draws neither (`use-tasks-tab.ts`).
  */
-function holdsTaskPanel(tasks: TasksControl): boolean {
-  return tasks.agentView.agentId === undefined && !tasks.inboxView.open;
+function holdsTaskPanel(tasks: TasksControl, inbox: InboxStanding): boolean {
+  return tasks.agentView.agentId === undefined && !inbox.open;
 }
 
 /**
@@ -1351,10 +1359,10 @@ function holdsTaskPanel(tasks: TasksControl): boolean {
  * whose panel opens that task's files and draws its pull requests. Over an
  * Inbox with nothing chosen the panel has no task, so neither could be shown.
  */
-function opensTaskItems(tasks: TasksControl): boolean {
-  if (holdsTaskPanel(tasks)) return true;
-  if (tasks.agentView.agentId !== undefined || !tasks.inboxView.open) return false;
-  const { chosen } = tasks.inboxView;
+function opensTaskItems(tasks: TasksControl, inbox: InboxStanding): boolean {
+  if (holdsTaskPanel(tasks, inbox)) return true;
+  if (tasks.agentView.agentId !== undefined || !inbox.open) return false;
+  const { chosen } = inbox;
   return chosen !== undefined && "taskId" in chosen && chosen.taskId === tasks.activeTaskId;
 }
 
@@ -1393,9 +1401,10 @@ function copyLinkRows(
  */
 function panelTabRows(
   tasks: TasksControl,
+  inbox: InboxStanding,
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
-  if (tasks.region.kind !== DOCUMENT_REGION.READY || !holdsTaskPanel(tasks)) return [];
+  if (tasks.region.kind !== DOCUMENT_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
   const plan = openPlanStanding(tasks);
   const kinds = offeredPanelKinds(SIDE_PANEL_HOLDER.TASK);
   return kinds.map((tab) => {
@@ -1549,7 +1558,7 @@ function taskCommandRows(
   const commands: readonly { item: PanelCommand; run: () => void }[] = [
     ...(renamed === undefined ? [] : [{ item: PANEL_COMMAND.RENAME_TASK, run: renamed }]),
     ...(historyOffered
-      ? [{ item: PANEL_COMMAND.VERSION_HISTORY, run: () => tasks.history.onOpen(task.id) }]
+      ? [{ item: PANEL_COMMAND.VERSION_HISTORY, run: () => tasks.onOpenHistory(task.id) }]
       : []),
     {
       item: PANEL_COMMAND.NEW_CHILD_TASK,
@@ -1593,8 +1602,13 @@ function taskCommandRows(
  * is its chosen item's (`use-inbox-read-marks.ts`), so nothing here stands
  * while the Inbox does.
  */
-function useOpenThingKeys(tasks: TasksControl, reads: ReadMarks, agentReads: AgentReadMarks): void {
-  const inbox = tasks.inboxView.open;
+function useOpenThingKeys(
+  tasks: TasksControl,
+  inboxStanding: InboxStanding,
+  reads: ReadMarks,
+  agentReads: AgentReadMarks,
+): void {
+  const inbox = inboxStanding.open;
   const task = inbox || reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
   const agent = inbox ? undefined : openAgentOf(tasks);
   const standing =
@@ -2046,16 +2060,20 @@ export function CommandPalette({
     chosen.current = run;
     setOpen(false);
   }, []);
+  const automationsDoor = useAutomationsDoor(tasks);
+  const inboxDoor = useInboxDoor(tasks);
+  const inboxStanding = useInboxView(tasks);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
+  const { placeLeave } = tasks;
   const onTasks = useCallback(
     (run: () => void) =>
-      choose(() => {
-        // A routed place standing, Settings or Admin, is left for what was chosen.
-        onTabChange(PANEL_TAB.TASKS);
-        run();
-      }),
-    [choose, onTabChange],
+      choose(() =>
+        // A routed place standing, Settings or Admin, is left for what was chosen once its move lands, where that move
+        // left it standing (`app.tsx`'s `changeTab`).
+        placeLeave.arrive(run, () => onTabChange(PANEL_TAB.TASKS)),
+      ),
+    [choose, onTabChange, placeLeave],
   );
   // The seek for a setting's row gives itself up once another is asked
   // for or Settings is left, so it never lands on a later visit's page.
@@ -2163,7 +2181,7 @@ export function CommandPalette({
   );
   const renameOffer = useTaskRenameOffer();
   const agentReads = useAgentReadMarks();
-  useOpenThingKeys(tasks, reads, agentReads);
+  useOpenThingKeys(tasks, inboxStanding, reads, agentReads);
   // The open agent's Archive, asked of `OpenAgentArchive` by the agent it was chosen for.
   const openAgent = openAgentOf(tasks);
   const [archiveAsks, setArchiveAsks] = useState<{ agentId: string; asked: number }>(
@@ -2196,7 +2214,8 @@ export function CommandPalette({
   const taskId = tasks.activeTaskId;
   const repository = tasks.tasks.find((task) => task.id === taskId)?.repository ?? null;
   // Note that a task's files are searched only while its panel is the one standing, which an agent's page holds otherwise.
-  const filesOpen = opensTaskItems(tasks) && taskId !== undefined && repository !== null;
+  const filesOpen =
+    opensTaskItems(tasks, inboxStanding) && taskId !== undefined && repository !== null;
   const filesAsked = open && filesOpen && (filter === PALETTE_FILTER.FILES || tokens.length > 0);
   // Note that the Inbox is read the first time it is searched, on the Files filter's terms.
   const inboxAsked =
@@ -2257,16 +2276,18 @@ export function CommandPalette({
           tokens,
           now,
           open: (chosen) =>
-            onTasks(() => tasks.inboxView.onOpenItem({ ...choiceOf(chosen), opened: true })),
+            onTasks(() => inboxDoor.openItem({ ...choiceOf(chosen), opened: true })),
         }),
       ),
   } as const;
   // Every other kind's rows in tiers, built only for the filter shown and only
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
-    [PALETTE_FILTER.THIS_TASK]: () => [agentRows(tasks, offerDoors, onTasks, changesPeople)],
+    [PALETTE_FILTER.THIS_TASK]: () => [
+      agentRows(tasks, inboxStanding, offerDoors, onTasks, changesPeople),
+    ],
     [PALETTE_FILTER.PEOPLE]: () => [
-      peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.personView.onOpen(userId))),
+      peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),
     ],
     [PALETTE_FILTER.AUTOMATIONS]: () => [
       automationRows(
@@ -2275,9 +2296,7 @@ export function CommandPalette({
           : [],
         tasks.workspace?.name,
         (automationId) =>
-          onTasks(() =>
-            tasks.automationsView.onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
-          ),
+          onTasks(() => automationsDoor.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId })),
       ),
     ],
     // Note that a command is found by its letters in order too, as a path is, since a command's name is typed by its first letters.
@@ -2286,14 +2305,14 @@ export function CommandPalette({
     [PALETTE_FILTER.COMMANDS]: () => [
       [
         ...copyLinkRows(links.linksAt(fromPanel), (held) => choose(() => links.copy(held))),
-        ...actionRows(openThingCommands(tasks), runCommand, experiments),
+        ...actionRows(openThingCommands(inboxStanding), runCommand, experiments),
         ...readMarkRows(tasks, reads, choose),
         ...agentReadMarkRows(tasks, agentReads, choose),
         ...taskPinRows(tasks, reads, choose),
         ...agentPinRows(tasks, choose),
         ...taskCommandRows(tasks, reads, renameOffer, choose, historyOffered),
         ...agentArchiveRows(openAgent, askArchive, choose),
-        ...panelTabRows(tasks, onTasks),
+        ...panelTabRows(tasks, inboxStanding, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),
         ...actionRows(OPEN_THING_LAST_COMMANDS, runCommand, experiments),
         ...actionRows(GO_TO_COMMANDS, runCommand, experiments),

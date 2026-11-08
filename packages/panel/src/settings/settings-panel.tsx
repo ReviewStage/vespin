@@ -30,6 +30,7 @@ import { PrivacySection } from "./privacy-section.js";
 import { settingsRowsInput, shownWorkspace } from "./settings-rows.js";
 import { WindowShortcutSections } from "./shortcuts-page.js";
 import { SkillsPage } from "./skills-page.js";
+import { SoundsSection } from "./sounds-section.js";
 import { TasksSection } from "./tasks-section.js";
 import { UpdatesSection } from "./updates.js";
 import { WorkspacePage, type WorkspaceSettingsControl } from "./workspace-page.js";
@@ -101,6 +102,9 @@ export function SettingsPanel({
             {panelView ? <AgentComposerSection view={panelView} writes={writes} /> : null}
             {panelView ? (
               <CommitsSection view={panelView} writes={writes} account={account} />
+            ) : null}
+            {panelView ? (
+              <SoundsSection view={panelView} writes={writes} notifications={notifications} />
             ) : null}
             {panelView ? <TasksSection view={panelView} writes={writes} /> : null}
             {panelView ? <PrivacySection view={panelView} writes={writes} /> : null}

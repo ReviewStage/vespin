@@ -1,4 +1,4 @@
-import { Schema as EffectSchema, SchemaTransformation } from "effect";
+import { Schema as EffectSchema, Option, SchemaTransformation } from "effect";
 import { MODEL_PROVIDER } from "./models-wire.js";
 import { countedNumber } from "./service-wire.js";
 
@@ -228,6 +228,18 @@ const pastedKeySchema = EffectSchema.String.pipe(
   ),
 );
 
+const readPastedKey = EffectSchema.decodeUnknownOption(pastedKeySchema);
+
+/**
+ * Whether a paste could be a key at all, by the bounds a save's request is
+ * decoded by. Note that a form asks this before it sends, because a paste
+ * outside them is refused as the act's input, which reads as a save the
+ * service never answered rather than as no key.
+ */
+export function pastedKeyFits(pasted: string): boolean {
+  return Option.isSome(readPastedKey(pasted));
+}
+
 /** Saving a key for a provider (PUT), replacing the one of its kind it held; a request naming no kind saves an API key. */
 export const providerKeySaveRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
@@ -323,8 +335,6 @@ export const chatGptDeviceLoginRequestSchema = EffectSchema.Struct({
     EffectSchema.isMaxLength(CHATGPT_DEVICE_LOGIN_ID_MAX_CHARS),
   ),
 });
-
-export type ChatGptDeviceLoginRequest = typeof chatGptDeviceLoginRequestSchema.Type;
 
 /**
  * How a device-code connection stands (a poll's answer, and a cancel's):

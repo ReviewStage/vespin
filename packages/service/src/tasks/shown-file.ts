@@ -22,7 +22,7 @@ export const SHOWN_FILE_REFUSAL = {
 
 export type ShownFileRefusal = (typeof SHOWN_FILE_REFUSAL)[keyof typeof SHOWN_FILE_REFUSAL];
 
-export const SHOWN_FILE_BOUNDS = {
+const SHOWN_FILE_BOUNDS = {
   /** The largest file read at all; a larger one is said to be too large. */
   MAX_FILE_BYTES: 1024 * 1024,
   /** How many of a file's first bytes are looked at to tell text from binary. */
@@ -62,9 +62,4 @@ export function fileLines(text: string): string[] {
 /** One line as it travels: cut to the bound. */
 export function shownLine(line: string): string {
   return line.slice(0, TASK_FILE_BOUNDS.MAX_LINE_CHARS);
-}
-
-/** Lines of text as they travel: at most `count` of them, each cut to the bound. */
-export function shownLines(text: string, count: number): string[] {
-  return fileLines(text).slice(0, count).map(shownLine);
 }

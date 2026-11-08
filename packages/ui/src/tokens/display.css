@@ -41,15 +41,13 @@
 
   /* The landing's warmth over the brand's warm near-black: the hairline a
      stage is ruled in and the line of light along its top edge, both of the
-     warm gray, the soft warm-gray glow round a product screen, and the one
-     faint copper glow behind the hero's Inbox. */
+     warm gray, and the soft warm-gray glow round a product screen. */
   --ui-display-landing-rule: color-mix(in srgb, var(--ui-color-text-muted) 18%, transparent);
   --ui-display-landing-edge: inset 0 1px 0
     color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-display-landing-screen-glow:
     0 0 0 1px color-mix(in srgb, var(--ui-color-text-muted) 6%, transparent),
     0 0 96px -24px color-mix(in srgb, var(--ui-color-text-muted) 12%, transparent);
-  --ui-display-landing-glow: color-mix(in srgb, var(--ui-color-accent) 15%, transparent);
   /* The bar over the page: the page's own warm ground, a share see-through,
      so what scrolls under it blurs rather than shows. */
   --ui-display-landing-bar: color-mix(in srgb, var(--ui-color-ground) 76%, transparent);

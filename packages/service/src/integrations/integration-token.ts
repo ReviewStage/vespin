@@ -8,8 +8,7 @@
  *
  * A connection that cannot be used fails only the call that tried it: the
  * read answers one of the fixed sentences below. No sentence carries a
- * token, a Connect message, or an HTTP status, because the retired runtime
- * read a status in an error's words as a sign-in to start.
+ * token, a Connect message, or an HTTP status.
  *
  * A read is two steps: the grant the token would be read on, from the store
  * alone (`integrationGrant`), and the token on it, asked of Connect only
@@ -303,22 +302,4 @@ export function evictGrantToken(
     case INTEGRATION_GRANT_HOLDER.SIGN_IN:
       return Effect.void;
   }
-}
-
-/**
- * One account's token for the user account the session was admitted for,
- * or the sentence saying why there is none: its grant
- * (`integrationGrant`), then the token on it.
- */
-export function integrationAccessToken(
-  account: IntegrationAccountRef,
-  admission: IntegrationAdmission,
-): Effect.Effect<IntegrationTokenAnswer, never, IntegrationTokenServices> {
-  return Effect.flatMap(
-    integrationGrant(account, admission),
-    (grant): Effect.Effect<IntegrationTokenAnswer, never, IntegrationTokenServices> =>
-      Result.isSuccess(grant)
-        ? grantAccessToken(grant.success)
-        : Effect.succeed(Result.fail(grant.failure)),
-  );
 }

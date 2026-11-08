@@ -19,27 +19,23 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM } from "../shell-room.js";
-import { useLeaveGuard, useTasksTab } from "../tasks/use-tasks-tab.js";
+import { useTasksTab } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import {
-  ADMIN_AWAY,
   AGENT_AWAY,
-  AUTOMATIONS_AWAY,
-  BOARD_AWAY,
   HOME_AWAY,
-  INBOX_AWAY,
   NO_ARRIVALS,
-  PERSON_AWAY,
+  NO_LEAVE_ASK,
   TASK_AWAY,
   UNKNOWN_WORKSPACE_AWAY,
   UNMOVED_LINK_READS,
-  VERSION_HISTORY_AWAY,
 } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksPage } from "./tasks-page.js";
 import { TasksPageHeld } from "./tasks-page-held.js";
@@ -225,15 +221,9 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: () => undefined,
-      leaveGuard: useLeaveGuard(),
+      placeLeave: NO_LEAVE_ASK,
       room: SHELL_ROOM.WIDE,
-      adminView: ADMIN_AWAY,
-      boardView: BOARD_AWAY,
-      personView: PERSON_AWAY,
       agentView: AGENT_AWAY,
-      automationsView: AUTOMATIONS_AWAY,
-      versionHistoryView: VERSION_HISTORY_AWAY,
-      inboxView: INBOX_AWAY,
       unknownWorkspaceView: UNKNOWN_WORKSPACE_AWAY,
       homeView: HOME_AWAY,
       taskView: TASK_AWAY,
@@ -241,6 +231,8 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       arrivals: NO_ARRIVALS,
       linkReads: UNMOVED_LINK_READS,
       visitTask: () => false,
+      startStands: () => undefined,
+      leaveStart: () => false,
     });
     return createElement(TasksPage, { tasks: control, room: SHELL_ROOM.WIDE, held });
   }
@@ -250,7 +242,11 @@ async function mountPage(held?: TasksPageHeld): Promise<{
   roots.push(root);
   act(() =>
     root.render(
-      withQueryClient(createElement(Fragment, null, createElement(Page), createElement(ToastHost))),
+      windowRouter().provide(
+        withQueryClient(
+          createElement(Fragment, null, createElement(Page), createElement(ToastHost)),
+        ),
+      ),
     ),
   );
   await settle();

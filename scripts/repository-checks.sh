@@ -34,9 +34,9 @@ if [[ -n "$engines_drift" ]]; then
     exit 1
 fi
 
-# The packages below the runtime (live, features) open
-# `@repo/runtime/vocabulary` precisely because it resolves no Node module
-# and no Effect layer that would carry one in. The renderer's own `node:` grep
+# The packages that import `@repo/runtime/vocabulary` open it precisely
+# because it resolves no Node module and no Effect layer that would carry one
+# in. The renderer's own `node:` grep
 # (below) can only see files inside one directory; this walks the door's
 # actual relative-import graph, so a later re-export cannot quietly reintroduce
 # `@effect/platform-node` or `effect/sql` a few files deep.
@@ -206,6 +206,24 @@ undeclared_web_packages=$(undeclared_packages "$APP_REPO_ROOT/apps/web/package.j
 if [[ -n "$undeclared_web_packages" ]]; then
     printf 'error: apps/web names workspace packages its package.json does not declare (the function bundle resolves bare @repo specifiers from apps/web/node_modules, which pnpm links from the declared dependencies alone):\n%s\n' \
         "$undeclared_web_packages" >&2
+    exit 1
+fi
+
+# Every call of a sandbox goes through `@repo/sandbox`, and its provider's SDK
+# through `packages/sandbox/src/vercel/` alone, so changing providers changes
+# that package and nothing else. The package itself reaches nothing of the
+# repository but `@repo/wire`, so it can never learn what an agent or a
+# session is. `tools/claude-code-probe`, a developer's command line, drives a
+# sandbox through the SDK by hand and is left out.
+sandbox_sdk_escapes=$(grep -rnE --include='*.ts' --include='*.tsx' --include='*.mjs' --include='package.json' \
+    --exclude-dir=node_modules '"@vercel/(sandbox|oidc)"' \
+    "$APP_REPO_ROOT/apps" "$APP_REPO_ROOT/packages" "$APP_REPO_ROOT/tools" |
+    grep -vE "^$APP_REPO_ROOT/(packages/sandbox/src/vercel/|packages/sandbox/package\.json:|tools/claude-code-probe/)" || true)
+sandbox_repository_reaches=$(grep -rnoE --include='*.ts' '(from|import) "@repo/[a-z-]+' \
+    "$APP_REPO_ROOT/packages/sandbox/src" | grep -v '"@repo/wire$' || true)
+if [[ -n "$sandbox_sdk_escapes" || -n "$sandbox_repository_reaches" ]]; then
+    printf 'error: only packages/sandbox/src/vercel/ names @vercel/sandbox or @vercel/oidc, and @repo/sandbox reaches no workspace package but @repo/wire:\n%s%s\n' \
+        "${sandbox_sdk_escapes:+$sandbox_sdk_escapes$'\n'}" "$sandbox_repository_reaches" >&2
     exit 1
 fi
 
@@ -388,8 +406,7 @@ if [[ -n "$node_reaching_effect" ]]; then
 fi
 
 # The rules about the repository's state a lint rule cannot see: the agents'
-# pins against what is installed, the coding agent's tool files against its
-# registry, the probes' committed fixtures
+# pins against what is installed, the probes' committed fixtures
 # against their own leak guards, the lint rules' baselines against the files
 # they name, the catalog against `@repo/ui`'s components, the panel's launch
 # bundle, and the site's page heads and Tailwind entries. Each was a test that

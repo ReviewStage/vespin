@@ -25,12 +25,11 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handState } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-sections.test.ts -- the account's own sections in the sidebar:
@@ -202,7 +201,7 @@ function sidebarOver(
     onWriteSections: (asked) => writes.push(...asked),
     ...rest,
   });
-  return createElement(DesktopSidebar, sidebarProps(tasks));
+  return drawnSidebar(sidebarProps(tasks));
 }
 
 /** The sidebar over `sections`, Launch unless said, and a way to draw it again over other sections, as a refresh does. */
@@ -380,7 +379,7 @@ test("a filter by person leaves out a section's task it would leave out of the l
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
 });
 
-test("the status filter leaves a section's backlog task out as it does the list's, and counts it among those it hides", async () => {
+test("the status filter leaves a section's backlog task out as it does the list's", async () => {
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...INVITES, status: TASK_STATUS.BACKLOG },
@@ -390,26 +389,19 @@ test("the status filter leaves a section's backlog task out as it does the list'
 
   assert.deepEqual(namesIn(sidebar, "Sections"), []);
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
-  assert.equal(
-    sidebar.querySelector(".sidebar-hidden-statuses button")?.textContent,
-    "1 more in Backlog",
-  );
 });
 
-test("a section whose only task is done says so in place of Drag tasks here, and the Tasks line counts it no more", async () => {
+test("a section whose only task is done still says Drag tasks here", async () => {
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...INVITES, status: TASK_STATUS.DONE },
       { ...RETRIES, status: TASK_STATUS.DONE },
     ],
   });
-  const hiddenIn = (label: string) =>
-    sidebar.querySelector(`nav[aria-label="${label}"] .sidebar-hidden-statuses button`)
-      ?.textContent;
 
-  assert.equal(hiddenIn("Sections"), "1 more in Done");
-  assert.ok(!sidebar.textContent?.includes("Drag tasks here"));
-  assert.equal(hiddenIn("My tasks"), "1 more in Done");
+  assert.ok(
+    sidebar.querySelector('nav[aria-label="Sections"]')?.textContent?.includes("Drag tasks here"),
+  );
 });
 
 test("a task's Move to puts it on top of the section chosen", async () => {
@@ -968,7 +960,7 @@ async function mountDraggable(
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(DesktopSidebar, sidebarProps(tasks)))));
+  act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
   await settle();
   layOutRows();
   return container;
@@ -1131,7 +1123,7 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
       workspace: WORKSPACE,
       taskSections: SECTIONS,
     });
-    act(() => root.render(withQueryClient(createElement(DesktopSidebar, sidebarProps(tasks)))));
+    act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
     await settle();
   };
   await draw([PINNED, INVITES, RETRIES]);
@@ -1538,7 +1530,7 @@ function PinsThatMove(): React.JSX.Element {
         }),
       ),
   });
-  return createElement(DesktopSidebar, sidebarProps(tasks));
+  return drawnSidebar(sidebarProps(tasks));
 }
 
 test("⇧⌘↓ moves the pin that has the keyboard below the next and leaves it focused, so ⇧⌘↑ can move it back", async () => {

@@ -124,6 +124,7 @@ import {
   XIcon,
 } from "@repo/ui/icons";
 import { landedMark } from "@repo/ui/landed";
+import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
 import {
   VIRTUAL_ROWS_ANCHOR,
@@ -135,9 +136,9 @@ import { type UseQueryResult, useMutation, useQuery } from "@tanstack/react-quer
 import {
   type ComponentProps,
   createContext,
+  lazy,
   type ReactNode,
   type RefObject,
-  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -162,7 +163,6 @@ import {
 } from "../desktop/strip-tabs.js";
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
-import { lazyRoute } from "../lazy-route.js";
 import {
   pullRequestChecksQuery,
   pullRequestConversationQuery,
@@ -259,6 +259,7 @@ import {
   usePullRequestWrites,
   WritePlaceProvider,
 } from "./pull-request-writes.js";
+import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import {
   THREAD_REVEAL_WORDS,
   type ThreadLanding,
@@ -277,7 +278,6 @@ import {
   useOpenLink,
   useOpenPlace,
 } from "./use-open-link.js";
-import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
 
 /**
  * agent-pull-request-tab.tsx -- one agent's Pull request tab in the side panel: its pull request as GitHub holds it, laid out as stage-cli's pull request page: a fixed header, then tabs for its conversation, its checks, its chapters, and its files.
@@ -339,9 +339,11 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * each over its own hunks in Files changed's list, its count saying
  * where they stand: being made, failed, out of date, or how many, and how
  * many viewed once any is; and Files changed (`AgentChangesTab`), its own bar and
- * tree, counted by its files as Chapters counts its chapters. A phone names
- * the chosen tab alone and draws the others by their glyphs and counts, and
- * a folded row leaves "viewed" out of every count. A review carries the
+ * tree, counted by its files as Chapters counts its chapters. A phone, and
+ * a panel too narrow for every tab's name, names the chosen tab alone and
+ * draws the others by their glyphs and counts, the chosen one too only
+ * where even that does not fit, and a folded row leaves "viewed" out of
+ * every count. A review carries the
  * threads on lines it started, each on the card every annotation on code
  * stands on (`annotation-card.tsx`): its file and lines in the strip over
  * its head, then the end of the hunk it was made on, drawn as Files changed
@@ -361,6 +363,9 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * (`ph-no-capture`).
  */
 
+/** Whether the Chapters view's module has landed, so its boundary's Reload knows a failed chunk from a failed draw. */
+let chaptersTabLanded = false;
+
 /**
  * The Chapters view, loaded as a chunk of its own the first time it is
  * shown rather than with the window, as Settings is, because the renderer
@@ -368,9 +373,15 @@ import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
  * chapter logic are opened seldom. What stands while
  * the chunk loads is the view's own wait, for a frame.
  */
-const CHAPTERS_TAB = lazyRoute(() =>
-  import("./agent-chapters-tab.js").then((loaded) => loaded.AgentChaptersTab),
+const CHAPTERS_TAB = lazy(() =>
+  import("./agent-chapters-tab.js").then((loaded) => {
+    chaptersTabLanded = true;
+    return { default: loaded.AgentChaptersTab };
+  }),
 );
+
+/** Whether the Chapters view's module has landed (`LazyBoundary`'s `loaded`). */
+const chaptersTabLoaded = (): boolean => chaptersTabLanded;
 
 /**
  * A view of the tab, filling the room under the header and the tabs, the
@@ -507,6 +518,11 @@ function partOf<A>(read: PartRead<A>): Part<A> {
   return answer.pullRequest === null
     ? { kind: PART.NONE }
     : { kind: PART.LANDED, value: answer.pullRequest };
+}
+
+/** Whether a part's read ended with nothing to draw: it failed, or answered that there is no pull request. */
+function unread(part: Part<unknown>): boolean {
+  return part.kind === PART.FAILED || part.kind === PART.NONE;
 }
 
 /** What a landed part holds; none while it is on its way or failed. */
@@ -1789,6 +1805,13 @@ interface OverviewParts {
   };
 }
 
+/** Asks again the pull request's own read and each other part whose read failed beside it, which the failure under the title speaks for. */
+function askUnreadAgain(parts: OverviewParts): void {
+  parts.ask.pullRequest();
+  if (unread(parts.conversation)) parts.ask.conversation();
+  if (unread(parts.checks)) parts.ask.checks();
+}
+
 /** The line under the title, in the people line's caption type: the branches, who opened it, its reviewers and labels. */
 function PeopleLine({ children }: { children: ReactNode }): React.JSX.Element {
   return (
@@ -1832,7 +1855,8 @@ function standingFactsOf(standing: LinkStanding | undefined): HeadFacts | undefi
  * line draws what its link standing holds, the read its chip's card draws
  * from, without the reviewers and the pickers, since that read is one ask
  * the host may already hold while the tab's waits on the merge box's; a
- * skeleton where neither has landed, and the tab's failure with Retry.
+ * skeleton where neither has landed, and the tab's failure with Retry,
+ * which speaks for every part that failed beside it and asks each again.
  */
 function PullRequestHead({
   parts,
@@ -1863,7 +1887,7 @@ function PullRequestHead({
         line={PULL_REQUEST_WORDS.FAILED}
         surface={FAILURE_SURFACE.PULL_REQUEST_READ}
         part={part}
-        onRetry={parts.ask.pullRequest}
+        onRetry={() => askUnreadAgain(parts)}
       />
     );
   }
@@ -2114,7 +2138,7 @@ function PreviewControl({
   );
 }
 
-/** The checks section as its read stands: every check once landed, its running counts moving while the tab is shown (`live`), a skeleton of rows while out, its failure with Retry. */
+/** The checks section as its read stands: every check once landed, its running counts moving while the tab is shown (`live`), a skeleton of rows while out, its failure with Retry, and nothing where the pull request's own read failed too, whose failure under the title speaks for it. */
 function ChecksPart({
   agentId,
   parts,
@@ -2123,8 +2147,9 @@ function ChecksPart({
   agentId: string;
   parts: OverviewParts;
   live: boolean;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const part = parts.checks;
+  if (unread(part) && unread(parts.pullRequest)) return null;
   if (part.kind === PART.LANDED) {
     return (
       <>
@@ -2209,7 +2234,7 @@ function DescriptionPart({
   );
 }
 
-/** The conversation as its read stands, under its heading and its filters: its entries once landed, as the filters leave them, the earlier ones counted first; a skeleton while out, its failure with Retry. */
+/** The conversation as its read stands, under its heading and its filters: its entries once landed, as the filters leave them, the earlier ones counted first; a skeleton while out, its failure with Retry, and nothing where the pull request's own read failed too, whose failure under the title speaks for it. */
 function ConversationPart({
   parts,
   shown,
@@ -2237,8 +2262,9 @@ function ConversationPart({
   landing: ThreadLanding | undefined;
   now: number;
   picture: GitHubPictureDrawer;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const part = parts.conversation;
+  if (unread(part) && unread(parts.pullRequest)) return null;
   if (part.kind !== PART.LANDED) {
     return (
       <Section title="Conversation" fold={fold} end={filterControls}>
@@ -3330,10 +3356,11 @@ function PullRequestTabBody({
 }: Omit<AgentPullRequestTabProps, "control"> & { source: PullRequestSource }): React.JSX.Element {
   const id = useId();
   // A phone names the chosen tab and draws the others by their glyphs and counts, so the four fit its row without scrolling; a tab pressed is named.
+  // A narrow panel folds the same way once their names stop fitting, the chosen tab's last, so the view standing open is named in words, not a bare count.
   const tabsFold =
     useContext(ShellRoomContext) === SHELL_ROOM.NARROW
       ? CHOICE_BAR_FOLD.OWN
-      : CHOICE_BAR_FOLD.TOGETHER;
+      : CHOICE_BAR_FOLD.CHOSEN_LAST;
   const ids = (each: PullRequestView) => ({
     tab: `${id}-${each}-tab`,
     panel: `${id}-${each}-panel`,
@@ -3656,13 +3683,16 @@ function PullRequestTabBody({
                   hidden={view !== PULL_REQUEST_VIEW.CHAPTERS}
                 >
                   {chaptersSeen ? (
-                    <Suspense
-                      fallback={<SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />}
+                    <HandTabActionsContext.Provider
+                      value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}
                     >
-                      <HandTabActionsContext.Provider
-                        value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}
+                      <LazyBoundary
+                        fallback={
+                          <SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />
+                        }
+                        loaded={chaptersTabLoaded}
                       >
-                        <CHAPTERS_TAB.Route
+                        <CHAPTERS_TAB
                           agentId={agentId}
                           source={source}
                           shown={shown && view === PULL_REQUEST_VIEW.CHAPTERS}
@@ -3673,8 +3703,8 @@ function PullRequestTabBody({
                           threads={changesThreads}
                           lineComments={{ pending: pendingReview, onWritten: written }}
                         />
-                      </HandTabActionsContext.Provider>
-                    </Suspense>
+                      </LazyBoundary>
+                    </HandTabActionsContext.Provider>
                   ) : null}
                 </Fill>
               </>

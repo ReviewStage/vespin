@@ -14,10 +14,7 @@ import {
   withoutAccessTokens,
 } from "@repo/features/sentry-breadcrumbs";
 import { type SentryCapture, sentryReporterLayer } from "@repo/features/sentry-reporting";
-import {
-  SENTRY_PROFILE_SESSION_SAMPLE_RATE,
-  sentryTracesSampler,
-} from "@repo/features/sentry-tracing";
+import { sentryTracesSampler } from "@repo/features/sentry-tracing";
 import { type RunMode, sentryReportingEnabled } from "@repo/host";
 import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
@@ -57,13 +54,12 @@ declare const PACKAGED_SENTRY_RELEASE: string;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Main also decides, once a launch, whether its windows are profiled: where
- * they are, the SDK serves every document with `Document-Policy: js-profiling`,
- * which the browser's profiler needs, and each window profiles as it starts
- * (`renderer/desktop-sentry-sdk.ts`). Note that the choice is made here rather
- * than by each window's SDK, because the policy alone already costs a page:
- * Chromium readies its profiler for every document it is granted to, so a
- * launch left unprofiled is served none.
+ * Every window profiles while a kept trace's root span is open
+ * (`SENTRY_PROFILING`), so a send and a page load carry the stack frames that
+ * ran under them: main serves every document with
+ * `Document-Policy: js-profiling`, which the browser's profiler needs
+ * (`renderer/desktop-sentry-sdk.ts`). Main itself is not profiled, because
+ * Sentry ships its Node profiler's addon for Node's ABIs and not Electron's.
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
   Sentry.init({
@@ -72,7 +68,7 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
     release: PACKAGED_SENTRY_RELEASE,
     environment,
     tracesSampler: sentryTracesSampler,
-    enableRendererProfiling: Math.random() < SENTRY_PROFILE_SESSION_SAMPLE_RATE,
+    enableRendererProfiling: true,
     integrations: [Sentry.startupTracingIntegration()],
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,

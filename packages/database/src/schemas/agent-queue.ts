@@ -26,8 +26,8 @@ import { user } from "./auth.js";
  * hand-off at it until the edit is saved or canceled. `claimed_at` is when
  * the hand-off took it to send, after which no member's edit, delete, or
  * new order reaches it and no window lists it; null until then, and lapsed
- * once a line's grace has passed, so a send cut off is sent again under its
- * id.
+ * once a claim's length has passed (`AGENT_QUEUE_BOUNDS.CLAIM_MS`), so a
+ * send cut off is sent again under its id.
  */
 export const queuedMessage = pgTable(
   "queued_message",

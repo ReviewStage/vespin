@@ -133,10 +133,13 @@ const FAILING_CHECK_CONCLUSIONS: ReadonlySet<string> = new Set([
  * within the most GitHub lets one body spell, as many inline comments as we
  * read of a review, as many checks as we read of a head (a hundred check
  * runs and a hundred commit statuses), and every name or address within a
- * bound far past what GitHub mints, so nothing it sends is refused.
+ * bound far past what GitHub mints, so nothing it sends is refused. GitHub's
+ * rendering of a body (`body_html`) spells its links and pictures out whole,
+ * so it is kept to a few times a body's bound, and one past it is left out.
  */
 export const GITHUB_LINE_BOUNDS = {
   WORDS_CHARS: 65_536,
+  HTML_CHARS: 262_144,
   COMMENTS: 300,
   CHECKS: 200,
   PATH_CHARS: 4_096,
@@ -336,12 +339,18 @@ const githubBody = EffectSchema.String.check(
   EffectSchema.isMaxLength(GITHUB_LINE_BOUNDS.WORDS_CHARS),
 );
 
-/** One inline comment of a review: the file and line it is on, its page, and what it says. */
+/** GitHub's own rendering of what its author wrote (`body_html`), as GitHub answered it. */
+const githubHtml = EffectSchema.String.check(
+  EffectSchema.isMaxLength(GITHUB_LINE_BOUNDS.HTML_CHARS),
+);
+
+/** One inline comment of a review: the file and line it is on, its page, what it says, and GitHub's rendering of it where it was read. */
 const GITHUB_LINE_COMMENT = EffectSchema.Struct({
   path: githubName(GITHUB_LINE_BOUNDS.PATH_CHARS),
   line: EffectSchema.optional(nonNegativeInteger),
   url: githubName(GITHUB_LINE_BOUNDS.URL_CHARS),
   body: githubBody,
+  body_html: EffectSchema.optional(githubHtml),
 });
 
 /** One finished check on a GitHub line's commit: its name, how it ended, and its page, where GitHub names one. */
@@ -361,7 +370,9 @@ const GITHUB_LINE_CHECK = EffectSchema.Struct({
  * avatar host serves for them (`by_avatar`), since an App's bot's picture
  * lives at an address its login does not name. The words are the
  * reviewer's, never the developer's, and whether anyone but the agent's owner wrote them, which
- * `run_on_mac` reads. A check line says whether a check failed, and every
+ * `run_on_mac` reads; GitHub's own rendering of them, and of each inline
+ * comment, rides beside them where it was read (`words_html`, `body_html`),
+ * and a window draws them by it. A check line says whether a check failed, and every
  * check finished names each finished check; no output a check wrote rides
  * it. Each is absent from a line kept before it was said.
  */
@@ -375,6 +386,7 @@ const GITHUB_LINE_METADATA = EffectSchema.Struct({
   by_avatar: EffectSchema.optional(githubName(GITHUB_LINE_BOUNDS.URL_CHARS)),
   verdict: EffectSchema.optional(githubName(GITHUB_LINE_BOUNDS.NAME_CHARS)),
   words: EffectSchema.optional(githubBody),
+  words_html: EffectSchema.optional(githubHtml),
   comments: EffectSchema.optional(
     EffectSchema.Array(GITHUB_LINE_COMMENT).check(
       EffectSchema.isMaxLength(GITHUB_LINE_BOUNDS.COMMENTS),

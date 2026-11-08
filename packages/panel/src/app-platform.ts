@@ -127,6 +127,14 @@ export interface AppPlatform {
    * the Mac app leaves this out.
    */
   stopImpersonating?(memberId: string): Promise<string | undefined>;
+  /**
+   * Asks the browser to let the app post notifications, as the developer
+   * turns them on, in that press, since a browser refuses an ask nobody
+   * made; where it then stands reaches the window as the document's
+   * notifications status. The Mac app, which macOS asks at launch, leaves
+   * this out.
+   */
+  askForNotifications?(): void;
 }
 
 let installed: AppPlatform | undefined;

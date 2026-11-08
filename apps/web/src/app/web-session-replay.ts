@@ -18,11 +18,11 @@
  */
 
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { PANEL_PATH } from "@repo/features/link-home";
 import { POSTHOG_PROXY } from "@repo/features/posthog-proxy";
 import type { AppPlatform } from "@repo/panel/app-platform";
 import type { BundleImporter } from "@repo/panel/bundle-loader";
 import { type ApplySessionReplay, sessionReplay } from "@repo/panel/session-replay";
-import { PANEL_PATH } from "./web-address";
 import { webDeployment } from "./web-sentry";
 
 /** The host's word on recording, as the panel hands it to the platform. */

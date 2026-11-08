@@ -59,9 +59,14 @@ it.layer(getTestDB())("the native projection's place", (it) => {
       const after = yield* readBack(target);
       const sequence = yield* readNativeSequence(target);
 
-      assert.deepEqual(Option.getOrThrow(before), { sequence: null, projection: null });
+      // The launch is the one bearer the agent's runner was handed, its first.
+      assert.deepEqual(Option.getOrThrow(before), { sequence: null, projection: null, launch: 1 });
       assert.deepEqual(sequence, Option.some(3));
-      assert.deepEqual(Option.getOrThrow(after), { sequence: 3, projection: { turn: "t1" } });
+      assert.deepEqual(Option.getOrThrow(after), {
+        sequence: 3,
+        projection: { turn: "t1" },
+        launch: 1,
+      });
     }),
   );
 

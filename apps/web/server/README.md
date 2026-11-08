@@ -174,9 +174,8 @@ fewer than `MAX_VIDEOS_PER_DESCRIPTION` videos, answering `{ id }`
 or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/plans/<id>/attachments/<picture>`
 serves the bytes under their sniffed type, `nosniff` and `private, no-store`,
 to a member alone, anyone else reading `not-found`. The description's text names a
-picture by its address (`@repo/features/description-attachment-link`), which
-`saveDescriptionText` reads to stamp the picture `saved_at`, and the scheduled sweep
-deletes, a day on, a picture no save stamped.
+picture by its address (`@repo/features/description-attachment-link`); a picture
+stays until its task is deleted, whether or not a save named it.
 
 An agent's conversation keeps the member who started it as its
 `user_id`, the address its messages, turns, and asks are written under, and
@@ -345,7 +344,7 @@ the three exceptions, and the signal it keeps is a fourth external appearing.
 Reachability reads a different field: `bundlesReaching` walks the metafile's
 inputs for a module, so an import esbuild inlined counts exactly as one it left
 external, and the build (`scripts/bundle-functions.ts`) uses it to ship the
-agent runner's bundle beside each function that reaches its reader.
+agent runner's unit beside each function that reaches its reader.
 
 The build's last step, `server/build-output.ts`, writes the Build Output tree
 Vercel deploys: `.vercel/output/config.json` (version 3), the site under
@@ -354,17 +353,15 @@ bundle as `index.mjs` beside a `.vc-config.json` that names it as `handler`
 under the Node launcher with `shouldAddHelpers`, the fields Vercel's own Node
 builder writes (`packages/node/src/build.ts`), and the plan's `maxDuration`.
 A queue's consumer, the automation-runs consumer
-(`routes/automations/runs.ts`) alone today, is a function of its own whose
+(`routes/automations/runs.ts`) or the agent-turns consumer
+(`routes/agents/turns.ts`), is a function of its own whose
 `.vc-config.json` also carries the `queue/v2beta` trigger Vercel's builder
 writes for one (its topic, and its consumer group named from its path as
 the builder names one), since a tree deployed as it stands
 takes no trigger from `vercel.json`'s `functions`; it has no rewrite and no
 public path, and the queue alone invokes it. Every automation's schedule is
 kept in Vercel Schedules on production
-(`packages/service/src/automations/automation-cadence.ts`); the automations
-saved before that are given theirs once, after the deploy, by
-`scripts/backfill-automation-schedules.sh` against
-`/api/maintenance/automation-schedules` under the deployment's `CRON_SECRET`.
+(`packages/service/src/automations/automation-cadence.ts`).
 When that tree exists `@vercel/static-build` adopts it as the deployment's
 final form instead of serving `dist/`, so this build decides the deploy shape
 on every preset: under Vite today, and as the `web` service of a services
@@ -935,10 +932,12 @@ this Vercel project to the `vespin-web` Sentry project, owns `SENTRY_DSN`,
 `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`; a variable of those
 names set by hand stops it from syncing. Without `SENTRY_DSN` the SDK starts
 disabled. `VERCEL_ENV` names the environment, and the SDK reads
-`VERCEL_GIT_COMMIT_SHA` as the release. No build writes or uploads source
-maps, so a stack trace in Sentry reads as the minified bundle: uploading the
-client's, the functions', and the eve root's maps cost every production build
-60 to 75 seconds, and was dropped for it on 2026-10-27. Alert rules are set in
+`VERCEL_GIT_COMMIT_SHA` as the release. A production build that holds
+`SENTRY_AUTH_TOKEN` uploads the function bundles' source maps under that
+release (`scripts/bundle-functions.ts`) and deletes them, so a function's
+stack traces and profiles name the source; a Preview uploads none. The
+client's maps are not uploaded, so its traces read as the minified bundle.
+Alert rules are set in
 Sentry, not here: a Slack message on more than ten events in five
 minutes, and an email to the issue's owners on a high-priority issue.
 

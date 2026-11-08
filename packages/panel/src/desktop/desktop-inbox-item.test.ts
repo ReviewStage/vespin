@@ -126,6 +126,7 @@ import {
 } from "../testing/desktop-inbox.js";
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
+import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { viewerPlace } from "../testing/viewer-place.js";
 
@@ -209,7 +210,7 @@ test("a teammate's open item leads with its title alone, and its box still takes
   );
 });
 
-test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan, leaving the Inbox, and its agent's transcript beside the item, with no other way out in its bar", async () => {
+test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
   const { page, asked } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumbs = [
@@ -239,8 +240,52 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   act(() => crumbs[0]?.click());
   act(() => crumbs[1]?.click());
   assert.deepEqual(asked.shownTasks, [BILLING.id]);
-  assert.deepEqual(asked.previewedAgents, [AGENT.id], "the agent reads beside the item");
-  assert.deepEqual(asked.shownAgents, []);
+  assert.deepEqual(asked.shownAgents, [[BILLING.id, AGENT.id]], "the agent opens in its own tab");
+  assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
+});
+
+test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field", async () => {
+  const { page } = mount([], { chosen: ON_THRESHOLD });
+  await settle();
+  const crumb = (at: number) =>
+    page.querySelectorAll<HTMLButtonElement>('.inbox-view-items nav[aria-label="Path"] button')[
+      at
+    ] ?? assert.fail(`crumb ${at} is drawn`);
+  const rightClick = (target: HTMLElement) =>
+    act(() => {
+      target.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, clientX: 40, clientY: 60 }),
+      );
+    });
+  const offered = () => menuItems().map((item) => item.label);
+
+  rightClick(crumb(0));
+  for (const item of ["Copy link", "Rename", "Change repository", "Permanently delete"]) {
+    assert.ok(offered().includes(item), `the task's crumb offers ${item}`);
+  }
+  chooseMenuItem("Rename");
+  await settle();
+  assert.ok(
+    page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Task name"]'),
+    "the task's crumb stands as its name field",
+  );
+  act(() =>
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  await settle();
+
+  rightClick(crumb(1));
+  for (const item of ["Copy link", "Rename", "Archive"]) {
+    assert.ok(offered().includes(item), `the agent's crumb offers ${item}`);
+  }
+  chooseMenuItem("Rename");
+  await settle();
+  assert.ok(
+    page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Agent name"]'),
+    "the agent's crumb stands as its name field",
+  );
 });
 
 /** What an intersection observer reports of the heading it watches: in the thread's view, or scrolled up past its top. */
@@ -685,7 +730,7 @@ function threadRefs(page: HTMLElement): HTMLButtonElement[] {
   ];
 }
 
-test("the thread names its agent as one button wherever it does, its message's comment: it hangs the agent's tab's card, which offers no Open agent, and opens its transcript beside the item", async () => {
+test("the thread names its agent as one button wherever it does, its message's comment: it hangs the agent's tab's card, which offers no Open agent, and opens the agent's own tab on its task", async () => {
   const { page, asked } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const [comment, ...more] = threadRefs(page);
@@ -704,8 +749,8 @@ test("the thread names its agent as one button wherever it does, its message's c
   assert.deepEqual(standingCard(), ["Alerts", undefined]);
   assert.deepEqual(openings("[data-agent-card]"), [], "the name is the way to the tab");
   act(() => comment.click());
-  assert.deepEqual(asked.previewedAgents, [AGENT.id], "the agent reads beside the item");
-  assert.deepEqual(asked.shownAgents, []);
+  assert.deepEqual(asked.shownAgents, [[BILLING.id, AGENT.id]], "the agent opens in its own tab");
+  assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
 test("an archived agent is still named by its name, its card saying it was archived, and an agent the plan does not list goes by Agent, its card saying it is not found; an agent the task does not list opening its tab on its task, which shows the plan where its tab is gone", async () => {
@@ -739,7 +784,7 @@ test("an archived agent is still named by its name, its card saying it was archi
   assert.deepEqual(asked.previewedAgents, []);
 });
 
-test("an item's row hangs the thread's card beside it, as a sidebar task's row hangs its task's, the row wearing no tile of the agent's: its task, its title, where it stands, how it ended, and the agent that asked at its foot with the spinner while it works; a press on the card chooses nothing, and a press on the row chooses the item", async () => {
+test("an item's row hangs the thread's card beside it, as a sidebar task's row hangs its task's, the row wearing no tile of the agent's: its task, its title, where it stands, and the agent that asked at its foot with the spinner while it works; a press on the card chooses nothing, and a press on the row chooses the item", async () => {
   const { page, asked } = mount();
   await settle();
   const row = rowNamed(page, "How is a failed email retried?");
@@ -1295,7 +1340,7 @@ async function pressNoteSkill(page: HTMLElement, name: string): Promise<void> {
   act(() => chip.click());
 }
 
-test("in the window's Inbox a skill an answer's words name is the chip a sent message draws, which opens its SKILL.md in the panel beside it as its preview, as a file the item names does", async () => {
+test("in the window's Inbox a skill an answer's words name is the chip a sent message draws, which opens its SKILL.md in the panel beside it, as a file the item names does", async () => {
   const answered = answeredBy(
     item(RETRY.id, RETRY.title, 5_000),
     READER,
@@ -1804,7 +1849,7 @@ test("files alone make a message: sent from a settled item's box with no words, 
   assert.equal(message.querySelector("[data-inbox-message-text]"), null, "no empty words");
 });
 
-test("a thread read cut to its latest messages says the earlier ones are in the agent's tab, the agent's name opening its transcript beside the item", async () => {
+test("a thread read cut to its latest messages says the earlier ones are in the agent's tab, the agent's name opening that tab on its task", async () => {
   const long: InboxItem = {
     ...RETRY,
     thread: inOrder(
@@ -1834,8 +1879,8 @@ test("a thread read cut to its latest messages says the earlier ones are in the 
   assert.equal(wordsOf(earlier), "Earlier messages are in Alerts’s tab");
   assert.equal(threadOf(page)[1]?.[0], "earlier", "the line stands before the messages");
   act(() => earlier.querySelector<HTMLButtonElement>("button")?.click());
-  assert.deepEqual(asked.previewedAgents, [AGENT.id], "the agent reads beside the item");
-  assert.deepEqual(asked.shownAgents, []);
+  assert.deepEqual(asked.shownAgents, [[BILLING.id, AGENT.id]], "the agent opens in its own tab");
+  assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
 test("what an item's box holds unsent, its words and its files, outlasts every message landing on the item: a teammate's answer settling it, then the agent asking on it again", async () => {

@@ -50,14 +50,14 @@ import { experimentsOn } from "@repo/settings/testing";
 import { agentTab, changesTab, draftTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { Effect } from "effect";
-import { act, createElement, Fragment } from "react";
+import { act, createElement, Fragment, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
-import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
+import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import type { MainTab } from "../tasks/use-main-tabs.js";
 import { OpenLinkProvider } from "../tasks/use-open-link.js";
-import { PULL_REQUEST_VIEW, SIDE_PANEL_TAB, type SidePanelTab } from "../tasks/use-side-panel.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge, quietHold } from "../testing/app-bridge.js";
@@ -76,6 +76,7 @@ import {
   writeExperiments,
 } from "../testing/app-state.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
 const TASK: Task = {
@@ -117,16 +118,18 @@ test("a task the service will not hand the reader, as a link to another workspac
   const root = createRoot(container);
   act(() =>
     root.render(
-      withQueryClient(
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.MISSING },
-            onLeaveTask: () => left.push(TASK.id),
+      windowRouter().provide(
+        withQueryClient(
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              activeTaskId: TASK.id,
+              region: { kind: DOCUMENT_REGION.MISSING },
+              onLeaveTask: () => left.push(TASK.id),
+            }),
           }),
-        }),
+        ),
       ),
     ),
   );
@@ -214,7 +217,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
 
-  act(() => root.render(opened({ kind: DOCUMENT_REGION.READING })));
+  act(() => root.render(windowRouter().provide(opened({ kind: DOCUMENT_REGION.READING }))));
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
@@ -222,10 +225,12 @@ test("a task's comments are held from its open, so its first ready frame marks t
 
   act(() =>
     root.render(
-      opened({
-        kind: DOCUMENT_REGION.READY,
-        task: { ...TASK, document: { body, assumptions: [] } },
-      }),
+      windowRouter().provide(
+        opened({
+          kind: DOCUMENT_REGION.READY,
+          task: { ...TASK, document: { body, assumptions: [] } },
+        }),
+      ),
     ),
   );
   assert.equal(
@@ -237,35 +242,47 @@ test("a task's comments are held from its open, so its first ready frame marks t
   container.remove();
 });
 
+/** `element` drawn into a page of its own, as the window draws it, and taken down again: its markup as it drew. */
+function markupOf(element: ReactElement): string {
+  const page = document.createElement("div");
+  const drawn = createRoot(page);
+  act(() => drawn.render(element));
+  const markup = page.innerHTML;
+  act(() => drawn.unmount());
+  return markup;
+}
+
 test("a task with no agent tab draws a new agent's draft", () => {
   const DRAFT_ID = "draft-1";
   const drawn = () => {
     const page = document.createElement("div");
-    page.innerHTML = renderToStaticMarkup(
-      withQueryClient(
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.READY, task: TASK },
-            mainTabs: {
-              ...tasksControl().mainTabs,
-              tabs: [draftTab(DRAFT_ID)],
-              tab: draftTab(DRAFT_ID),
-            },
-            agents: agentsControl({
-              agentIds: [],
-              draft: {
-                id: DRAFT_ID,
-                prompt: "",
-                attachments: [],
-                choice: undefined,
-                disabledServers: [],
+    page.innerHTML = markupOf(
+      windowRouter().provide(
+        withQueryClient(
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              activeTaskId: TASK.id,
+              region: { kind: DOCUMENT_REGION.READY, task: TASK },
+              mainTabs: {
+                ...tasksControl().mainTabs,
+                tabs: [draftTab(DRAFT_ID)],
+                tab: draftTab(DRAFT_ID),
               },
+              agents: agentsControl({
+                agentIds: [],
+                draft: {
+                  id: DRAFT_ID,
+                  prompt: "",
+                  attachments: [],
+                  choice: undefined,
+                  disabledServers: [],
+                },
+              }),
             }),
           }),
-        }),
+        ),
       ),
     );
     return page;
@@ -284,21 +301,23 @@ test("a wide task's details with no agent offer New agent at their head, which o
   const root = createRoot(container);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.READY, task: TASK },
-            mainTabs: {
-              ...tasksControl().mainTabs,
-              onChoose: (tab) => chosen.push(tab),
-            },
-            agents: agentsControl({ agents: [], agentIds: [] }),
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              activeTaskId: TASK.id,
+              region: { kind: DOCUMENT_REGION.READY, task: TASK },
+              mainTabs: {
+                ...tasksControl().mainTabs,
+                onChoose: (tab) => chosen.push(tab),
+              },
+              agents: agentsControl({ agents: [], agentIds: [] }),
+            }),
           }),
-        }),
+        ),
       ),
     ),
   );
@@ -324,23 +343,25 @@ const DRAFT_TAB = draftTab("draft");
 
 /** The task's page with the side panel open on `tab`, as markup. */
 function panelTab(): HTMLElement {
-  const markup = renderToStaticMarkup(
-    withQueryClient(
-      createElement(DesktopTasks, {
-        looks: NO_LOOKS,
-        tasks: tasksControl({
-          page: TASKS_PAGE.DOCUMENT,
-          activeTaskId: TASK.id,
-          region: { kind: DOCUMENT_REGION.READY, task: TASK },
-          // Note that the panel stands beside an agent's tab, since the task's details take its room.
-          mainTabs: {
-            ...tasksControl().mainTabs,
-            tabs: [MAIN_TAB.OVERVIEW, DRAFT_TAB],
-            tab: DRAFT_TAB,
-          },
-          sidePanel: DOCUMENT_PANEL,
+  const markup = markupOf(
+    windowRouter().provide(
+      withQueryClient(
+        createElement(DesktopTasks, {
+          looks: NO_LOOKS,
+          tasks: tasksControl({
+            page: TASKS_PAGE.DOCUMENT,
+            activeTaskId: TASK.id,
+            region: { kind: DOCUMENT_REGION.READY, task: TASK },
+            // Note that the panel stands beside an agent's tab, since the task's details take its room.
+            mainTabs: {
+              ...tasksControl().mainTabs,
+              tabs: [MAIN_TAB.OVERVIEW, DRAFT_TAB],
+              tab: DRAFT_TAB,
+            },
+            sidePanel: DOCUMENT_PANEL,
+          }),
         }),
-      }),
+      ),
     ),
   );
   const page = document.createElement("div");
@@ -449,30 +470,32 @@ async function _narrowTaskInbox(
   const root = createRoot(container);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            activeTaskId: TASK.id,
-            region: { kind: DOCUMENT_REGION.READY, task: TASK },
-            sidePanel: {
-              ...tasksControl().sidePanel,
-              open: true,
-              tabs: [SIDE_PANEL_TAB.DESCRIPTION, SIDE_PANEL_TAB.INBOX],
-              strip: [SIDE_PANEL_TAB.DESCRIPTION, SIDE_PANEL_TAB.INBOX],
-              tab: SIDE_PANEL_TAB.INBOX,
-            },
-            me: reader.me,
-            agents: agentsControl({
-              agentIds: ["8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21"],
-              ...(reader.answerInbox === undefined
-                ? undefined
-                : { answerInbox: reader.answerInbox }),
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              activeTaskId: TASK.id,
+              region: { kind: DOCUMENT_REGION.READY, task: TASK },
+              sidePanel: {
+                ...tasksControl().sidePanel,
+                open: true,
+                tabs: [SIDE_PANEL_TAB.DESCRIPTION, SIDE_PANEL_TAB.INBOX],
+                strip: [SIDE_PANEL_TAB.DESCRIPTION, SIDE_PANEL_TAB.INBOX],
+                tab: SIDE_PANEL_TAB.INBOX,
+              },
+              me: reader.me,
+              agents: agentsControl({
+                agentIds: ["8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21"],
+                ...(reader.answerInbox === undefined
+                  ? undefined
+                  : { answerInbox: reader.answerInbox }),
+              }),
             }),
           }),
-        }),
+        ),
       ),
     ),
   );
@@ -586,19 +609,21 @@ test("a plan's document, its way back to the agents pinned in its card, opens on
   const root = createRoot(container);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            activeTaskId: task.id,
-            region: { kind: DOCUMENT_REGION.READY, task },
-            workspaces: [home],
-            workspace: home,
-            sidePanel: DOCUMENT_PANEL,
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              activeTaskId: task.id,
+              region: { kind: DOCUMENT_REGION.READY, task },
+              workspaces: [home],
+              workspace: home,
+              sidePanel: DOCUMENT_PANEL,
+            }),
           }),
-        }),
+        ),
       ),
     ),
   );
@@ -660,25 +685,27 @@ test("a sub-task's row opens the task as a sidebar row does, never a link to its
   const root = createRoot(container);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(
-          OpenLinkProvider,
-          { value: (link: ReadLink) => linked.push(link) },
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
-              tasks: [{ ...TASK, number: 1 }, child],
-              listRead: true,
-              activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.READY, task: TASK },
-              workspaces: [home],
-              workspace: home,
-              sidePanel: DOCUMENT_PANEL,
-              onSelect: (taskId) => selected.push(taskId),
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(
+            OpenLinkProvider,
+            { value: (link: ReadLink) => linked.push(link) },
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: tasksControl({
+                page: TASKS_PAGE.DOCUMENT,
+                tasks: [{ ...TASK, number: 1 }, child],
+                listRead: true,
+                activeTaskId: TASK.id,
+                region: { kind: DOCUMENT_REGION.READY, task: TASK },
+                workspaces: [home],
+                workspace: home,
+                sidePanel: DOCUMENT_PANEL,
+                onSelect: (taskId) => selected.push(taskId),
+              }),
             }),
-          }),
+          ),
         ),
       ),
     ),
@@ -719,19 +746,21 @@ test("opening another task draws only its own title and sub-tasks, none of the t
   const open = (task: Task) =>
     act(() =>
       root.render(
-        withQueryClient(
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
-              activeTaskId: task.id,
-              region: { kind: DOCUMENT_REGION.READY, task },
-              tasks: listed,
-              workspaces: [home],
-              workspace: home,
-              sidePanel: DOCUMENT_PANEL,
+        windowRouter().provide(
+          withQueryClient(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: tasksControl({
+                page: TASKS_PAGE.DOCUMENT,
+                activeTaskId: task.id,
+                region: { kind: DOCUMENT_REGION.READY, task },
+                tasks: listed,
+                workspaces: [home],
+                workspace: home,
+                sidePanel: DOCUMENT_PANEL,
+              }),
             }),
-          }),
+          ),
         ),
       ),
     );
@@ -752,7 +781,7 @@ test("opening another task draws only its own title and sub-tasks, none of the t
   container.remove();
 });
 
-test("a chip in the plan naming a pull request one of the task's agents opened opens that agent's Pull request tab on its conversation as the panel's preview, another of the task's repository, an archived agent's among them, opens by its number, and another repository's opens on GitHub", async () => {
+test("a chip in the plan naming a pull request one of the task's agents opened opens that agent's Pull request tab on its conversation, another of the task's repository, an archived agent's among them, opens by its number, and another repository's opens on GitHub", async () => {
   const agent: AgentSummary = {
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
     planId: TASK.id,
@@ -796,54 +825,56 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
   const root = createRoot(container);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.DOCUMENT,
-            activeTaskId: task.id,
-            region: { kind: DOCUMENT_REGION.READY, task },
-            sidePanel: {
-              ...DOCUMENT_PANEL,
-              onPullRequestView: (tab, view) => opened.push({ agentId: tab.changes, view }),
-              onOpen: (tab) => opened.push(tab),
-            },
-            agents: agentsControl({
-              agents: [agent],
-              archived: [archived],
-              agentIds: [agent.id],
-              pullRequests: new Map([
-                [
-                  agent.id,
-                  {
-                    number: 42,
-                    title: "Send invitations in batches",
-                    url,
-                    state: PULL_REQUEST_STATE.OPEN,
-                    checks: CHECK_SUMMARY.PASSING,
-                    additions: 12,
-                    deletions: 3,
-                    changedFiles: 2,
-                  },
-                ],
-                [
-                  archived.id,
-                  {
-                    number: 9,
-                    title: "Send invitations at once",
-                    url: archivedUrl,
-                    state: PULL_REQUEST_STATE.CLOSED,
-                    checks: CHECK_SUMMARY.NONE,
-                    additions: 4,
-                    deletions: 1,
-                    changedFiles: 1,
-                  },
-                ],
-              ]),
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(DesktopTasks, {
+            looks: NO_LOOKS,
+            tasks: tasksControl({
+              page: TASKS_PAGE.DOCUMENT,
+              activeTaskId: task.id,
+              region: { kind: DOCUMENT_REGION.READY, task },
+              sidePanel: {
+                ...DOCUMENT_PANEL,
+                onPullRequestView: (tab, view) => opened.push({ agentId: tab.changes, view }),
+                onOpen: (tab) => opened.push(tab),
+              },
+              agents: agentsControl({
+                agents: [agent],
+                archived: [archived],
+                agentIds: [agent.id],
+                pullRequests: new Map([
+                  [
+                    agent.id,
+                    {
+                      number: 42,
+                      title: "Send invitations in batches",
+                      url,
+                      state: PULL_REQUEST_STATE.OPEN,
+                      checks: CHECK_SUMMARY.PASSING,
+                      additions: 12,
+                      deletions: 3,
+                      changedFiles: 2,
+                    },
+                  ],
+                  [
+                    archived.id,
+                    {
+                      number: 9,
+                      title: "Send invitations at once",
+                      url: archivedUrl,
+                      state: PULL_REQUEST_STATE.CLOSED,
+                      checks: CHECK_SUMMARY.NONE,
+                      additions: 4,
+                      deletions: 1,
+                      changedFiles: 1,
+                    },
+                  ],
+                ]),
+              }),
             }),
           }),
-        }),
+        ),
       ),
     ),
   );
@@ -891,19 +922,21 @@ function panelPage(tab: SidePanelTab, overrides: Partial<TasksControl> = {}) {
   const draw = (shown: SidePanelTab, more: Partial<TasksControl> = {}) =>
     act(() =>
       root.render(
-        withExperiments(
-          experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
-              activeTaskId: TASK.id,
-              region: { kind: DOCUMENT_REGION.READY, task: TASK },
-              ...overrides,
-              ...more,
-              sidePanel: { ...DOCUMENT_PANEL, ...overrides.sidePanel, tab: shown },
+        windowRouter().provide(
+          withExperiments(
+            experimentsOn(EXPERIMENT.DESCRIPTIONS),
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: tasksControl({
+                page: TASKS_PAGE.DOCUMENT,
+                activeTaskId: TASK.id,
+                region: { kind: DOCUMENT_REGION.READY, task: TASK },
+                ...overrides,
+                ...more,
+                sidePanel: { ...DOCUMENT_PANEL, ...overrides.sidePanel, tab: shown },
+              }),
             }),
-          }),
+          ),
         ),
       ),
     );
@@ -964,7 +997,7 @@ test("a page of the task's Overview opens in the side panel beside the agents, a
     },
     sidePanel: {
       ...DOCUMENT_PANEL,
-      onChoose: (opened) => chosen.push(opened),
+      onOpen: (opened) => chosen.push(opened),
       onClose: () => closed.push("panel"),
     },
     pages: [{ id: "page-1", title: "Invite funnel", version: 1, at: 1 }],
@@ -1000,25 +1033,27 @@ function standingPageMounted(keeps: boolean) {
   const root = createRoot(container);
   act(() =>
     root.render(
-      withExperiments(
-        experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(
-          Fragment,
-          null,
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            tasks: tasksControl({
-              page: TASKS_PAGE.DOCUMENT,
-              activeTaskId: task.id,
-              region: { kind: DOCUMENT_REGION.READY, task },
-              sidePanel: DOCUMENT_PANEL,
-              onSetTaskStanding: (_taskId, standing) => {
-                sent.push(standing);
-                return askKept(Promise.resolve(keeps));
-              },
+      windowRouter().provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(
+            Fragment,
+            null,
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              tasks: tasksControl({
+                page: TASKS_PAGE.DOCUMENT,
+                activeTaskId: task.id,
+                region: { kind: DOCUMENT_REGION.READY, task },
+                sidePanel: DOCUMENT_PANEL,
+                onSetTaskStanding: (_taskId, standing) => {
+                  sent.push(standing);
+                  return askKept(Promise.resolve(keeps));
+                },
+              }),
             }),
-          }),
-          createElement(ToastHost),
+            createElement(ToastHost),
+          ),
         ),
       ),
     ),

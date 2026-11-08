@@ -30,7 +30,7 @@ import {
 } from "@repo/ui";
 import { type ReactNode, useEffect } from "react";
 import { ACTOR_SIZE, ActorMark, ActorRef, PROVENANCE_VERB, ProvenanceRow } from "../actor-ref.js";
-import { PULL_REQUEST_TAB } from "../desktop/pages-on-demand.js";
+import { prefetchPullRequestTab } from "../desktop/pages-on-demand.js";
 import { pullRequestNumberLabel, pullRequestStateLabel } from "./agent-model.js";
 import { LinesChanged } from "./agent-published.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
@@ -299,7 +299,7 @@ export function PullRequestCard({
   // An agent's pull request opens in its Pull request tab, a chunk of its own (`pages-on-demand.ts`), and the card hanging is the pointer on what opens it, so the chunk is read now rather than at the press.
   const owned = agent !== undefined;
   useEffect(() => {
-    if (owned) PULL_REQUEST_TAB.prefetch();
+    if (owned) prefetchPullRequestTab();
   }, [owned]);
   // What the place passed stands, and the pull request's link standing fills the rest.
   const standing = usePlaceStanding(place, pullRequest.url);

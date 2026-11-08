@@ -14,9 +14,7 @@
  * `POST /api/agents/{id}/browser-tabs` opens a page at an http or https
  * address in the agent's browser, and `POST /api/plans/{id}/browser-tabs`
  * in the browser of a coding agent on the task, as a member does to
- * sign in somewhere for it: the agent's sandbox is held through the
- * terminal's lease first, as the live view holds it, so a sandbox the open
- * resumes is not stopped under the sign-in; the browser is reached through
+ * sign in somewhere for it: the browser is reached through
  * `connectRestoring`, which resumes a stopped sandbox and reopens its kept
  * tabs; and the tab is kept with the member as its opener and taken over
  * for them at once, so the agent does not act on it until they hand it
@@ -48,16 +46,15 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import {
   type AgentBrowserTab,
   agentBrowserTabOf,
   type BrowserTabsPlace,
 } from "@repo/features/agent-browser-tab-wire";
 import { isBrowserAddress } from "@repo/features/browser-acts";
-import { DateTime, Duration, Effect, type Layer, Option } from "effect";
+import type { Sandbox } from "@repo/sandbox";
+import { DateTime, Effect, type Layer, Option } from "effect";
 import type { HttpClient } from "effect/http";
-import { BROWSER_LIVE_BOUNDS } from "../browser-live/bounds.js";
 import {
   recordServerEventIn,
   SERVER_AGENT_TOOL,
@@ -79,19 +76,10 @@ import { connectRestoring } from "./browser/restore-tabs.js";
 /** How long a takeover stands past the member's last take or renewal: long enough for a window's renewals to miss one, short enough that a closed one hands the tab back soon. */
 export const BROWSER_TAKEOVER_HOLD_MS = 60_000;
 
-/**
- * How long an open holds the agent's sandbox: the live view's idle bound and
- * the minute until its next write (`browser-live/bounds.ts`), since the
- * member's window opens the tab's live view at once, whose own lease takes
- * over within seconds; one that never attaches is stopped by the lease
- * sweep once this lapses.
- */
-const OPEN_HOLD = Duration.sum(BROWSER_LIVE_BOUNDS.IDLE, BROWSER_LIVE_BOUNDS.LEASE_WRITE_EVERY);
-
 export interface AgentBrowserTabsProcedureSeams {
   resolveUserId: UserIdResolver;
   /** The agents' browsers as an open reaches them: Vercel's sandboxes in production, a script's in a test. */
-  readonly agentBrowser: Layer.Layer<AgentBrowser, never, HttpClient.HttpClient>;
+  readonly agentBrowser: Layer.Layer<AgentBrowser, never, HttpClient.HttpClient | Sandbox>;
 }
 
 /** A reached tab as the wire carries it, its driver only while their takeover stands at `now`, its cursor once its agent pointed at it. */
@@ -230,8 +218,8 @@ function browserActed(userId: string, agentId: string, tool: ServerAgentTool) {
 }
 
 /**
- * The member's open: the agent reached, on the task named where one is, and
- * its sandbox held, the page opened, kept with the member as its opener,
+ * The member's open: the agent reached, on the task named where one is, the
+ * page opened, kept with the member as its opener,
  * and taken over for them, then answered as it stands under their reach.
  */
 const openTab = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -240,10 +228,6 @@ const openTab = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   if (!isBrowserAddress(open.address)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const { conversationId, sessionId } = yield* openedAgent(userId, open.agentId, open.taskId);
-  const held = yield* DateTime.nowAsDate;
-  yield* hostedStoreOrUnavailable(
-    holdSandbox(conversationId, new Date(held.getTime() + Duration.toMillis(OPEN_HOLD))),
-  );
   const targetId = yield* openedPage(sessionId, conversationId, open.address);
   // Note that the page is kept at the address asked, its title too, until the agent's next look at it
   // reads the page's own, and the member stands as its opener though the agent's `list` wrote it first.

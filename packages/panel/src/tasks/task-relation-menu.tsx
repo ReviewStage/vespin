@@ -1,3 +1,4 @@
+import { sameRepository } from "@repo/features/github-repositories-wire";
 import {
   TASK_BLOCK_CHANGE,
   TASK_CREATE_RELATION_KIND,
@@ -193,12 +194,6 @@ function ancestors(
     at = byId.get(at)?.parentTaskId;
   }
   return above;
-}
-
-/** Two repositories as the service compares them: both none, or the same name in any case. */
-function sameRepository(one: string | null, other: string | null): boolean {
-  if (one === null || other === null) return one === other;
-  return one.toLowerCase() === other.toLowerCase();
 }
 
 /** Why `other` cannot take `kind` against `task`; none where it can. */

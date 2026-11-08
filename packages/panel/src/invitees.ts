@@ -32,7 +32,7 @@ interface Invitee {
 }
 
 /** What a press sends, once what was typed stands as chips: the addresses to send. */
-export interface InviteesCommitted {
+interface InviteesCommitted {
   readonly pending: readonly string[];
 }
 

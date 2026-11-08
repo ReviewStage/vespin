@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { MESSAGE_ROLE } from "@repo/wire";
+import { Schema } from "effect";
 import { test } from "vitest";
 import {
+  AGENT_CURSOR_START,
+  AGENT_FAILURE,
+  AGENT_STATUS,
   type AgentTranscriptMessage,
+  agentMessagesAnswerSchema,
   applyMessagesPage,
   DEVICE_STANDING,
   deviceStanding,
@@ -39,6 +44,18 @@ test("a page saying again what is held keeps the messages held, so only one that
   const amended = applyMessagesPage(held, [message("a", "first"), message("b", "second, amended")]);
   assert.equal(amended[0], held[0], "a message heard again as it was is the one held");
   assert.deepEqual(amended[1]?.parts, [{ type: "text", text: "second, amended" }]);
+});
+
+test("a page naming a failure this build does not know decodes, the failure read as one it has no words for", () => {
+  const page = Schema.decodeUnknownSync(agentMessagesAnswerSchema)({
+    messages: [],
+    cursor: AGENT_CURSOR_START,
+    status: AGENT_STATUS.FAILED,
+    title: null,
+    failureReason: "runner_lost",
+  });
+
+  assert.equal(page.failureReason, AGENT_FAILURE.OTHER);
 });
 
 test("a device reads as there until it has missed four beats, as offline only once a read that landed lately found it so, and as unknown where the read failed or is late", () => {

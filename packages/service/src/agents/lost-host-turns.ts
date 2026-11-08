@@ -5,7 +5,7 @@
  * host on the same Mac (`@repo/database/models/host-store`). Either way its
  * secret is refused from now on, so no runner there can end the turns its
  * agents had running, and without this they would read as running until
- * their lease runs out (`@repo/database/models/turn-lease`).
+ * the minute sweep fails them past their deadline (`coder-host/reconcile.ts`).
  */
 
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";

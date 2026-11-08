@@ -1,9 +1,15 @@
 /**
- * web-notices.ts -- the doors a notice leaves a browser tab through: a badge on the installed app or a count before the tab's title.
+ * web-notices.ts -- the doors a notice leaves a browser tab through: the browser's notification, a badge on the installed app or a count before the tab's title, and a chime.
  *
- * A tab posts no notification. The one notification the app posts is a command
- * waiting on this Mac (`client-notices.ts`), and no command runs in a tab,
- * so the door that would post one is handed nothing and drops what it is.
+ * A tab posts a notification of an agent's finish or ask where the account
+ * turned notifications on (`agent-notices.ts`'s `heard`), through the
+ * browser's `Notification`, while the tab is hidden; no command runs in a
+ * tab, so none is posted for one. The browser lets the site post only once
+ * the developer allows it, which is asked as they turn notifications on, a
+ * press of theirs, and never on load; until they allow it, or where they
+ * blocked it, nothing posts and Settings says so. A notification is silent,
+ * since the chime is its one sound, and its click brings the tab forward on
+ * what it tells of.
  *
  * The badge is the installed app's own where it runs installed; elsewhere,
  * an uninstalled tab included, where a browser that names the app badge
@@ -11,9 +17,15 @@
  * kept there as the panel names the tab again. Either counts what waits on
  * the account as the Inbox's Open lists it, every workspace's
  * (`agent-notices.ts`'s `countedOf`).
+ *
+ * A chime plays in the tab itself, which runs the host and is its one
+ * window, through `@repo/ui`'s player. A browser keeps the tab's sound
+ * suspended until its first press, so one heard before that waits for it.
  */
 
 import type { AgentNoticeDoorsSurface } from "@repo/host/agent-notices";
+import { NOTIFICATIONS_STATUS, type NotificationsStatus } from "@repo/settings/settings-controls";
+import { playCompletionSound } from "@repo/ui/completion-sound";
 
 /** The display mode the site runs in once installed (`public/manifest.webmanifest`'s `display`). */
 const INSTALLED_DISPLAY = "(display-mode: standalone)";
@@ -95,12 +107,56 @@ export function onTabShownChanged(listener: (shown: boolean) => void): () => voi
   return () => document.removeEventListener("visibilitychange", said);
 }
 
-/** The tab's doors: the badge, and a post that drops what it is handed, since no command runs in a tab. */
+/** Whether this browser offers notifications at all. */
+function offersNotifications(): boolean {
+  return "Notification" in window;
+}
+
+/** Whether the browser lets the site post notifications: on once allowed, off where blocked or offered by no browser, unknown while nobody asked. */
+export function tabNotificationsStatus(): NotificationsStatus {
+  if (!offersNotifications()) return NOTIFICATIONS_STATUS.OFF;
+  switch (Notification.permission) {
+    case "granted":
+      return NOTIFICATIONS_STATUS.ON;
+    case "denied":
+      return NOTIFICATIONS_STATUS.OFF;
+    default:
+      return NOTIFICATIONS_STATUS.UNKNOWN;
+  }
+}
+
+/**
+ * Asks the browser to let the site post notifications, answering where it
+ * then stands. Note that it must be called in the developer's own press,
+ * since a browser refuses an ask nobody made; one already answered asks
+ * nothing again and answers as it stands.
+ */
+export async function askTabNotifications(): Promise<NotificationsStatus> {
+  if (!offersNotifications() || Notification.permission !== "default") {
+    return tabNotificationsStatus();
+  }
+  await Notification.requestPermission();
+  return tabNotificationsStatus();
+}
+
+/** Posts a notification where the browser allows it, silent, its click bringing the tab forward on what it tells of. */
+const postNotice: AgentNoticeDoorsSurface["post"] = (notice) => {
+  if (tabNotificationsStatus() !== NOTIFICATIONS_STATUS.ON) return;
+  const posted = new Notification(notice.title, { body: notice.body, silent: true });
+  posted.addEventListener("click", () => {
+    posted.close();
+    window.focus();
+    notice.onClick();
+  });
+};
+
+/** The tab's doors: the browser's notification, the badge, and the chime. */
 export function webNoticeDoors(): WebNoticeDoors {
   const badge = badgeDoor();
   return {
-    post: () => undefined,
+    post: postNotice,
     badge: badge.set,
+    chime: playCompletionSound,
     close: badge.close,
   };
 }

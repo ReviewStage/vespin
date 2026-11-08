@@ -29,6 +29,7 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { type SettledAgentTurn, SettledTurnListener } from "@repo/database/models/writer";
+import type { Sandbox } from "@repo/sandbox";
 import { Context, Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -62,12 +63,12 @@ const outsideTransaction = <A, E>(
 export const settledTurnListener: Layer.Layer<
   SettledTurnListener,
   never,
-  HttpClient.HttpClient | GitHubApp | HostedEnvironment | SlackBot
+  HttpClient.HttpClient | GitHubApp | HostedEnvironment | SlackBot | Sandbox
 > = Layer.effect(
   SettledTurnListener,
   Effect.gen(function* () {
     const reach = yield* Effect.context<
-      HttpClient.HttpClient | GitHubApp | HostedEnvironment | SlackBot
+      HttpClient.HttpClient | GitHubApp | HostedEnvironment | SlackBot | Sandbox
     >();
     const reported = (turn: SettledAgentTurn) =>
       afterResponse(

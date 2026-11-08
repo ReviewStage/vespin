@@ -17,6 +17,8 @@ test("a call of a tool the record does not hold is reported, but the harness's o
       conversationId: "c_projection",
       sequence: 0,
       now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
       model: undefined,
       ownKey: false,
       registered: () => false,
@@ -30,6 +32,8 @@ test("a warm launch that fails after its turn ended at its IDLE fails no turn of
   const context = {
     conversationId: "c_projection",
     now: 0,
+    attempt: 1,
+    queuedTurnId: undefined,
     model: undefined,
     ownKey: false,
     registered: () => true,
@@ -56,4 +60,35 @@ test("a warm launch that fails after its turn ended at its IDLE fails no turn of
     { ...context, sequence: 1 },
   );
   assert.deepEqual(crashed.writes, []);
+});
+
+test("a warm runner a newer launch cut off with no turn under way or queued fails no turn, says so, and lets its limit go", () => {
+  const reports: string[] = [];
+  const cutOff = projectMoments(
+    { rateLimit: "usage limit reached" },
+    [
+      {
+        kind: NATIVE_MOMENT.ENDED,
+        ending: NATIVE_ENDING.FAILED,
+        detail: "failed the service refused the launch's lines: The service answered 401",
+        launchFailed: true,
+      },
+    ],
+    {
+      conversationId: "c_projection",
+      sequence: 0,
+      now: 0,
+      attempt: 2,
+      queuedTurnId: undefined,
+      model: undefined,
+      ownKey: false,
+      registered: () => true,
+      report: (said) => reports.push(said),
+    },
+  );
+  assert.deepEqual(cutOff.writes, []);
+  assert.deepEqual(cutOff.state, {});
+  assert.deepEqual(reports, [
+    "A launch with no turn under way ended: failed the service refused the launch's lines: The service answered 401",
+  ]);
 });

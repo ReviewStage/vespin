@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { INTEGRATION_INSTALLATION_STATUS } from "@repo/database/integration-vocabulary";
 import {
   AUTOMATION_ACCESS,
@@ -35,6 +35,7 @@ import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import type { Sandbox } from "@repo/sandbox";
 import { isRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
 import { Clock, Effect, Option, Result, Schema, Struct } from "effect";
@@ -57,7 +58,6 @@ import {
 import { SERVER_AUTOMATION_SOURCE } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import {
@@ -352,6 +352,7 @@ export const RUN_AUTOMATION_TOOL = {
 
 /** What the automation tools reach: the store, the catalog a model is checked against, GitHub through the workspace's installation, and our Sentry integration. */
 type AutomationToolServices =
+  | Sandbox
   | DatabaseServices
   | ModelCatalog
   | GitHubApp

@@ -28,6 +28,7 @@ catalog:
   "@modelcontextprotocol/server": 2.4.0
   "@modelcontextprotocol/client": 2.4.0
   "@vercel/sandbox": 3.9.1
+  "@vercel/oidc": 4.0.0
   "@tanstack/react-router": 1.170.46
   "@tanstack/react-store": 0.11.2
 
@@ -109,6 +110,15 @@ patchedDependencies:
 # its cause. `apps/web/tests/drizzle-driver.test.ts` holds all three. Delete
 # the patch when drizzle-orm 1.0.0-rc.5 is released and carries them.
   drizzle-orm@1.0.0-rc.4: patches/drizzle-orm@1.0.0-rc.4.patch
+#
+# `@sentry/browser` 11.8.0, which `@sentry/electron` 8.3.0 pins, starts the
+# window's profiler in the trace lifecycle for a root span already open as its
+# profiling integration sets up, the page load, without asking whether that span
+# was sampled; one sampled out never ends as far as the profiler hears, so the
+# window profiled for five minutes with no trace kept. The patch makes the
+# check upstream's 11.11.0 makes: a root span that is not recording is passed
+# over. Delete it when `@sentry/electron` moves to a browser SDK that has it.
+  "@sentry/browser@11.8.0": patches/@sentry__browser@11.8.0.patch
 
 # A dependency is keyed by its peers' names alone, not by the peers' own peer
 # graphs, so one `vitest` serves every workspace. Keyed in full, a peer's own

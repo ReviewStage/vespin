@@ -1,8 +1,7 @@
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import { PORT_FORWARD_STATE, type PortForwardingAnswer } from "@repo/features/port-forward-acts";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { APP_SETTING_DEFAULTS, HOST_CAPABILITY } from "@repo/settings";
+import { HOST_CAPABILITY } from "@repo/settings";
 import {
   CHIP_LOOK,
   Chip,
@@ -15,23 +14,18 @@ import {
   Tooltip,
   useMenu,
 } from "@repo/ui";
-import { GlobeIcon, PlugIcon } from "@repo/ui/icons";
+import { CopyIcon, GlobeIcon, LinkIcon, PlugIcon, UnlinkIcon } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { pressAct } from "../act.js";
 import { appPlatform } from "../app-platform.js";
+import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { useToast } from "../toast.js";
-import {
-  appStateQuery,
-  selectAppSettingsView,
-  selectCapability,
-  selectPortForwarding,
-} from "../use-app-state.js";
-import { agentStillWriting } from "./agent-model.js";
+import { appStateQuery, selectCapability, selectPortForwarding } from "../use-app-state.js";
 
 /**
- * agent-forward.tsx -- an agent's cloud ports forwarded to this Mac's localhost: forwarded on their own while its tab is open, a toast saying so once, and a plug at its box's foot that says whether they are and turns them on or off.
+ * agent-forward.tsx -- an agent's cloud ports forwarded to this Mac's localhost: a plug at its box's foot that says whether they are and turns them on or off, and a toast saying so once.
  *
  * Only the desktop's host listens on the Mac's loopback
  * (`HOST_CAPABILITY.PORT_FORWARDS`), and only an agent in a cloud sandbox
@@ -40,13 +34,10 @@ import { agentStillWriting } from "./agent-model.js";
  * it keeps in app state (`portForwarding`), so all of this only reads it and
  * asks the host to turn forwarding on or off.
  *
- * With Forward cloud agents' ports automatically on (Settings › This Mac, on
- * by default), an agent at work whose tab is open is forwarded once no agent
- * is: the first keeps the ports until its forwarding is turned off or its
- * sandbox stops, so a browser tab open on one never starts showing another
- * agent's app. One the developer turned off in this window is left off
- * until they turn it on again. As the first port reaches the Mac, a toast
- * says its address once, with Open.
+ * Nothing is forwarded on its own: the developer turns an agent's
+ * forwarding on from its plug, and it stands until they turn it off or its
+ * sandbox stops. As the first port reaches the Mac, a toast says its address
+ * once, with Open.
  *
  * The box's foot wears a plug after the Cloud chip, its glyph alone, as
  * Cursor's cloud agents wear one: while the agent is forwarded it wears a
@@ -54,8 +45,12 @@ import { agentStillWriting } from "./agent-model.js";
  * "Forwarding to localhost:3000". Its menu holds the Forward to localhost
  * switch and, while on, one row per port, "localhost:3000", whose press
  * opens it in the default browser, with where it came from beside it where
- * the Mac's port differs ("from :3000"). Every word drawn is the app's own,
- * port numbers among them, so a screen recording shows them as they read.
+ * the Mac's port differs ("from :3000"). Under them, a port may be shared
+ * by a public link (`PORT_SHARE_SET`): one row per port, "Share :3000",
+ * and while one is shared, its link, which opens it, Copy, and Stop
+ * sharing, as the host keeps the link beside the ports. Every word drawn
+ * but the link is the app's own, port numbers among them, so a screen
+ * recording shows them as they read.
  */
 
 /** What an agent forwarding is off for reads. */
@@ -73,16 +68,10 @@ const WORDS = {
   FORWARDED: "Forwarded",
   FROM_SANDBOX: "From the agent's sandbox",
   OPEN: "Open",
+  SHARE: "Share",
+  COPY: "Copy",
+  STOP_SHARING: "Stop sharing",
 } as const;
-
-/** The agents whose forwarding the developer turned off in this window, which none is forwarded again on its own. */
-const declined = new Set<string>();
-
-/** The turn each agent was last forwarded on its own in, by agent, so a forward the host let go as its sandbox stopped is not taken again in the same turn. */
-const forwardedInTurn = new Map<string, string | null>();
-
-const selectForwardsPorts = (state: AppStateSnapshot): boolean =>
-  selectAppSettingsView(state)?.forwardPorts ?? APP_SETTING_DEFAULTS.forwardPorts;
 
 /** The local address a port is forwarded to. */
 function localAddress(localPort: number): string {
@@ -98,10 +87,7 @@ function reached(answer: PortForwardingAnswer): number[] {
   );
 }
 
-/** Forwarding turned on or off for the agent, an off kept in mind so it is not turned on again on its own. */
 function setForwarding(agentId: string, on: boolean): void {
-  if (on) declined.delete(agentId);
-  else declined.add(agentId);
   void pressAct(ACT_KIND.PORT_FORWARD_SET, { agentId, on });
 }
 
@@ -127,28 +113,9 @@ function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): {
   };
 }
 
-/**
- * Forwards the agent on its own while its tab is shown and it is at work,
- * where the setting is on, no agent is forwarded, and the developer did not
- * turn this one off, at most once a turn; then says so once, as its first
- * port reaches the Mac.
- */
-export function useAutoForward(
-  agent: Pick<AgentSummary, "id" | "machine" | "status" | "archivedAt" | "turnId">,
-  shown: boolean,
-): void {
-  const { offered, forwarding, answer } = useForwarding(agent);
-  const wanted = useQuery({ ...appStateQuery, select: selectForwardsPorts }).data === true;
-  const free = forwarding === null;
-  const working = agentStillWriting(agent.status) && agent.archivedAt === undefined;
-  const { id, turnId } = agent;
-  useEffect(() => {
-    if (!shown || !offered || !wanted || !free || !working || declined.has(id)) return;
-    if (forwardedInTurn.has(id) && forwardedInTurn.get(id) === turnId) return;
-    forwardedInTurn.set(id, turnId);
-    void pressAct(ACT_KIND.PORT_FORWARD_SET, { agentId: id, on: true });
-  }, [shown, offered, wanted, free, working, id, turnId]);
-
+/** Says once, as the agent's first forwarded port reaches the Mac, where it opens. */
+export function useForwardToast(agent: Pick<AgentSummary, "id" | "machine">): void {
+  const { answer } = useForwarding(agent);
   // Note that the toast answers the first port reaching the Mac, not each read, so a forward that stands says nothing more.
   const toast = useToast();
   const ports = reached(answer);
@@ -197,6 +164,41 @@ function portRows(answer: PortForwardingAnswer): MenuAction[] {
   );
 }
 
+/** The share rows: one per port, or the shared port's link, Copy, and Stop sharing. */
+function shareRows(
+  agentId: string,
+  answer: PortForwardingAnswer,
+  copy: (words: string, label: string) => void,
+): MenuAction[] {
+  const { shared } = answer;
+  if (shared === undefined)
+    return answer.ports.map(({ port }) => ({
+      key: port,
+      label: `${WORDS.SHARE} :${port}`,
+      icon: <LinkIcon aria-hidden="true" />,
+      onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
+    }));
+  return [
+    {
+      label: shared.url,
+      // Note that the link opens the port to anyone holding it, so a screen recording keeps it masked.
+      replayMasked: true,
+      icon: <GlobeIcon aria-hidden="true" />,
+      onSelect: () => appPlatform().openWeb(shared.url),
+    },
+    {
+      label: WORDS.COPY,
+      icon: <CopyIcon aria-hidden="true" />,
+      onSelect: () => copy(shared.url, LINK_COPY.COPIED),
+    },
+    {
+      label: WORDS.STOP_SHARING,
+      icon: <UnlinkIcon aria-hidden="true" />,
+      onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port: null }),
+    },
+  ];
+}
+
 /**
  * The plug at the agent's box's foot, for an agent whose ports this Mac
  * can forward: a dot in the complete tone while they are, the address in
@@ -209,6 +211,7 @@ export function ForwardChip({
 }): React.JSX.Element | null {
   const { offered, answer } = useForwarding(agent);
   const menu = useMenu(true);
+  const copy = useCopyToast();
   if (!offered) return null;
   const first = reached(answer)[0];
   const words = !answer.on
@@ -227,6 +230,9 @@ export function ForwardChip({
       },
     ],
     ...(answer.on ? [portRows(answer)] : []),
+    ...(answer.on && (answer.shared !== undefined || answer.ports.length > 0)
+      ? [shareRows(agent.id, answer, copy)]
+      : []),
   ];
   const chip = (
     <Chip

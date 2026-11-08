@@ -9,10 +9,7 @@ import {
   readAgentContext,
   readAgentRouting,
 } from "@repo/database/models/agent-store";
-import {
-  copySessionEntries,
-  holdsSessionEntries,
-} from "@repo/database/models/claude-session-entries";
+import { copySessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
@@ -36,6 +33,7 @@ import {
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { bothInOrder } from "@repo/runtime/effect";
+import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { START_LINE_BRIEF } from "@repo/wire";
 import { Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -48,10 +46,9 @@ import {
 import { logStoreFailure } from "../../http/store-failure.js";
 import { ModelCatalog } from "../../providers/model-catalog.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
-import { agentSandboxName } from "../agent-sandbox-open.js";
+import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
-import { deploymentOidcToken, SANDBOX_STATUS, vercelSandboxApi } from "../vercel-sandbox-api.js";
 import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
 import { contextWindowOf } from "./context.js";
 import { agentPublished } from "./published.js";
@@ -433,9 +430,9 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
 
 /**
  * Where the source's work reaches the new agent. A source whose sandbox
- * stands under its session's name, stopped on a snapshot, hands that
- * sandbox, whose latest snapshot the new agent's is created from at its
- * first open (`../machine/vercel-machine.ts`), so it is never woken; any
+ * stands stopped on a snapshot (`agentSandboxOf`), a legacy one among them,
+ * hands that sandbox, whose latest snapshot the new agent's is created from at its
+ * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
  * other has its work copied to a branch (`snapshot.ts`). Note that a
  * sandbox still running is copied rather than handed, because its snapshot
  * is its last stop's, behind what it holds now; that a source in another
@@ -460,9 +457,8 @@ const sourceWorkOf = (
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
         : [];
     if (session !== undefined) {
-      const api = yield* vercelSandboxApi(deploymentOidcToken);
-      const found = yield* api.getNamed(agentSandboxName(session.sessionId));
-      if (found?.status === SANDBOX_STATUS.STOPPED && found.currentSnapshotId !== undefined) {
+      const found = yield* agentSandboxOf(yield* Sandbox, session.sessionId);
+      if (found?.status === SANDBOX_STATUS.STOPPED && found.snapshotId !== undefined) {
         return { on: TAKEN_ON.SNAPSHOT, sandbox: found.name } satisfies SourceWork;
       }
     }
@@ -693,8 +689,9 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The source's CLI session a continue or a fork of a whole agent forks as
- * its own, in place of a replay of its steps: one the service keeps the
- * transcript of, on the harness the new agent runs (`runtime`), for an agent
+ * its own, in place of a replay of its steps: one the service holds the
+ * transcript of from its first entry (`holdsSession`), since the fork reads
+ * the copy alone, on the harness the new agent runs (`runtime`), for an agent
  * in the cloud, where its runner reads the transcript back; none for a fork
  * at a message, which is replayed to that message, and wherever else.
  */
@@ -712,7 +709,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   if (read?.nativeSession == null) return undefined;
   if ((yield* runtime).runtime !== read.runtime) return undefined;
   const held = yield* hostedStoreOrUnavailable(
-    holdsSessionEntries(source.userId, source.conversationId),
+    holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
   return held ? read.nativeSession : undefined;
 });
@@ -900,7 +897,7 @@ export const openedTakingOver = <E, R>(
 ): Effect.Effect<
   Option.Option<string>,
   E | HostedRefusal,
-  R | DatabaseServices | HttpClient.HttpClient
+  R | DatabaseServices | HttpClient.HttpClient | Sandbox
 > =>
   Effect.gen(function* () {
     const { from, rules } = inherited;

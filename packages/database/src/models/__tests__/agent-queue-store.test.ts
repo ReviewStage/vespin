@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
-import { LINE_GRACE_MILLIS } from "@repo/features/agent-status";
+import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
@@ -126,7 +125,7 @@ it.layer(getTestDB())("an agent's queue", (it) => {
         const [, second] = Option.getOrThrow(yield* readAgentQueue(userId, agentId)).messages;
         assert.ok(second !== undefined);
         yield* holdQueuedMessage(userId, agentId, head.id, true);
-        yield* TestClock.adjust(Duration.millis(LINE_GRACE_MILLIS));
+        yield* TestClock.adjust(Duration.millis(AGENT_QUEUE_BOUNDS.CLAIM_MS));
         assert.ok(Option.isNone(yield* claimQueueHead(agentId)), "nothing past it goes");
         yield* holdQueuedMessage(userId, agentId, head.id, false);
         yield* holdQueuedMessage(userId, agentId, second.id, true);
@@ -177,7 +176,7 @@ it.layer(getTestDB())("an agent's queue", (it) => {
         assert.deepEqual(yield* reorderAgentQueue(userId, agentId, [second.id]), Option.some(true));
 
         // A send cut off before it answered is sent again once its claim lapses.
-        yield* TestClock.adjust(Duration.millis(LINE_GRACE_MILLIS));
+        yield* TestClock.adjust(Duration.millis(AGENT_QUEUE_BOUNDS.CLAIM_MS));
         const again = Option.getOrThrow(yield* claimQueueHead(agentId));
         assert.equal(again.id, sending.id);
         // The first send, answering late, lets go of and drops nothing under the claim taken since.

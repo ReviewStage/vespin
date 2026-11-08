@@ -20,17 +20,11 @@ export interface KeptKey<A> {
   /** The name it is kept under in the window's storage. */
   readonly name: string;
   readonly schema: Schema.Codec<A, string>;
-  /** The name an earlier build kept it under, read where `name` holds none (`readKept`). */
-  readonly earlier?: string | undefined;
 }
 
 /** A view choice's key: kept under `name`, its value read and written through `schema`. */
-export function keptKey<A>(
-  name: string,
-  schema: Schema.Codec<A, string>,
-  earlier?: string,
-): KeptKey<A> {
-  return earlier === undefined ? { name, schema } : { name, schema, earlier };
+export function keptKey<A>(name: string, schema: Schema.Codec<A, string>): KeptKey<A> {
+  return { name, schema };
 }
 
 /** A flag kept as the word `true` or `false`; any other word no longer reads, and the flag stands at its initial value. */
@@ -67,7 +61,7 @@ export function useKept<A>(
   key: KeptKey<A>,
   initial: A,
 ): readonly [A, (next: A) => void, (change: (kept: A) => A) => void] {
-  const [value, setValue] = useState<A>(() => readKept(key.name, key.schema, initial, key.earlier));
+  const [value, setValue] = useState<A>(() => readKept(key.name, key.schema, initial));
   // What this surface draws, for the doors, which outlive a draw.
   const drawn = useRef(value);
   useEffect(() => {
@@ -98,9 +92,7 @@ export function useKept<A>(
     (changed: (kept: A) => A) => {
       // Note that where storage refused the last write, the choice drawn is newer than the one it holds, so it is changed instead, unless another window has kept one since.
       const refused = UNWRITTEN.has(key.name) && UNWRITTEN.get(key.name) === readKeptText(key.name);
-      const was = refused
-        ? drawn.current
-        : readKept(key.name, key.schema, drawn.current, key.earlier);
+      const was = refused ? drawn.current : readKept(key.name, key.schema, drawn.current);
       const next = changed(was);
       if (!Object.is(next, was)) choose(next);
     },

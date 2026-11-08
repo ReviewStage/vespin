@@ -200,12 +200,12 @@ const WritePlaceContext = createContext<WritePlace | undefined>(undefined);
 export const WritePlaceProvider = WritePlaceContext.Provider;
 
 /** What mends a change that never reached GitHub, beyond trying again. */
-export const WRITE_REMEDY = {
+const WRITE_REMEDY = {
   /** The workspace's GitHub in Settings, where the App is given the repository again. */
   GITHUB_ACCESS: "github-access",
 } as const;
 
-export type WriteRemedy = (typeof WRITE_REMEDY)[keyof typeof WRITE_REMEDY];
+type WriteRemedy = (typeof WRITE_REMEDY)[keyof typeof WRITE_REMEDY];
 
 /** How a change went, for a press that waits on it, such as a question's answer: made, or not, in the words the line says why, and the note it left. */
 export type WriteOutcome =

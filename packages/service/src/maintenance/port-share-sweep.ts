@@ -1,75 +1,71 @@
 /**
- * port-share-sweep.ts -- the scheduled sweep's close of a shared port's link no one has visited for its idle bound, and its hold on the sandbox while visits come.
+ * port-share-sweep.ts -- the scheduled sweep's close of a shared port's link no one has visited for its idle bound, and its touch of the sandbox while visits come.
  *
- * A shared sandbox carries the share's tag (`agents/terminal/port-share.ts`),
- * which the sweep lists by, one page a minute. A running one's last visit is
- * read from its helper's folder: past the idle bound, the share is closed as
- * the developer's own close does; within it, the sandbox's lease is held
- * from that visit and the sandbox kept alive, as a forwarded port's traffic
- * holds it. A stopped one is left until it runs again, when its old visit
- * closes it. What is logged of a failure is its status alone.
+ * A share is kept in the store by its agent's session
+ * (`@repo/database/models/sandbox-port-shares`), which the sweep lists. A
+ * running sandbox's last visit is read from its helper's folder: past the
+ * idle bound, the share is closed as the developer's own close does; within
+ * it, the sandbox is touched, as a forwarded port's traffic touches it. A
+ * stopped one is left until it runs again, when its old visit closes it,
+ * and one gone is forgotten.
+ * What is logged of a failure is the sandbox's own words.
  */
 
-import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { agentConversation } from "@repo/database/models/agent-store";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
-import { Duration, Effect, Option, Result } from "effect";
-import { agentTag } from "../agents/machine/vercel-machine.js";
-import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
+import type { DatabaseServices } from "@repo/database/core/query";
 import {
-  PORT_SHARE,
-  readSharedPort,
-  shareHeldUntil,
-  unsharePort,
-} from "../agents/terminal/port-share.js";
+  forgetPortShare,
+  listPortShares,
+  type PortShare,
+} from "@repo/database/models/sandbox-port-shares";
 import {
-  deploymentOidcToken,
-  type ListedSandbox,
+  isSandboxError,
   SANDBOX_STATUS,
-  SESSION_TAG,
-  type VercelSandboxApi,
-  vercelSandboxApi,
-} from "../agents/vercel-sandbox-api.js";
+  Sandbox,
+  type SandboxService,
+  touchSandbox,
+} from "@repo/sandbox";
+import { Duration, Effect, Result } from "effect";
+import { agentSandboxOf } from "../agents/agent-sandbox-open.js";
+import { PORT_SHARE, readSharedPort, unsharePort } from "../agents/terminal/port-share.js";
 
-/** How many shared sandboxes are read at once. */
+/** How many shares are read at once. */
 const CONCURRENCY = 5;
 
-/** One shared sandbox swept: its share closed where it went idle, answering whether it was, or its sandbox held. */
-const sweptShare = (api: VercelSandboxApi, sandbox: ListedSandbox, now: Date) =>
+/** One share swept: closed where it went idle, answering whether it was, or its sandbox touched. */
+const sweptShare = (api: SandboxService, share: PortShare, now: Date) =>
   Effect.gen(function* () {
-    const sandboxSessionId = sandbox.currentSessionId;
-    if (sandbox.status !== SANDBOX_STATUS.RUNNING || sandboxSessionId === undefined) return false;
-    const running = yield* api.session({ name: sandbox.name, sessionId: sandboxSessionId });
-    const visitedAt = (yield* readSharedPort(running))?.visitedAt ?? 0;
+    const sandbox = yield* agentSandboxOf(api, share.sessionId);
+    // A sandbox gone took its route with it, so its share is only forgotten.
+    if (sandbox === undefined) return yield* Effect.as(forgetPortShare(share.sessionId), false);
+    if (sandbox.status !== SANDBOX_STATUS.RUNNING || sandbox.running === undefined) return false;
+    const running = { name: sandbox.name, running: sandbox.running };
+    const visitedAt = (yield* readSharedPort(api, running))?.visitedAt ?? 0;
     if (now.getTime() - visitedAt >= Duration.toMillis(PORT_SHARE.IDLE)) {
-      yield* unsharePort(api, sandbox, running);
+      yield* unsharePort(api, share.sessionId, sandbox, running);
       return true;
     }
-    const agentId = agentTag(sandbox.tags);
-    const conversation = agentId === undefined ? Option.none() : yield* agentConversation(agentId);
-    if (Option.isSome(conversation)) {
-      yield* holdSandbox(conversation.value.conversationId, shareHeldUntil(visitedAt));
-    }
-    const sessionId = sandbox.tags?.[SESSION_TAG];
-    if (sessionId !== undefined) yield* keepSessionSandboxAlive(sessionId);
+    yield* touchSandbox(sandbox.name);
     return false;
   }).pipe(
-    Effect.catchTag("SandboxUnavailable", (failure) =>
+    Effect.catchIf(isSandboxError, (failure) =>
       Effect.as(Effect.logWarning(`a shared port was not swept: ${failure.message}`), false),
+    ),
+    Effect.catch((failure) =>
+      Effect.as(Effect.logWarning(`a shared port was not forgotten: ${failure._tag}`), false),
     ),
   );
 
-/** Closes the shared ports' links idle past the bound and holds the rest, answering how many closed. */
+/** Closes the shared ports' links idle past the bound and touches the rest, answering how many closed. */
 export const sweepPortShares = /* @__PURE__ */ Effect.fn("web/sweepPortShares")(function* (
   now: Date,
-): Effect.fn.Return<number, StoreFailure, DatabaseServices> {
-  const api = yield* vercelSandboxApi(deploymentOidcToken);
-  const listed = yield* Effect.result(api.listCarrying(PORT_SHARE.TAG, PORT_SHARE.TAG_ON));
+): Effect.fn.Return<number, never, DatabaseServices | Sandbox> {
+  const api = yield* Sandbox;
+  const listed = yield* Effect.result(listPortShares());
   if (Result.isFailure(listed)) {
-    yield* Effect.logWarning(`the shared sandboxes were not listed: ${listed.failure.message}`);
+    yield* Effect.logWarning(`the shared ports were not listed: ${listed.failure._tag}`);
     return 0;
   }
-  const closed = yield* Effect.forEach(listed.success, (sandbox) => sweptShare(api, sandbox, now), {
+  const closed = yield* Effect.forEach(listed.success, (share) => sweptShare(api, share, now), {
     concurrency: CONCURRENCY,
   });
   return closed.filter(Boolean).length;

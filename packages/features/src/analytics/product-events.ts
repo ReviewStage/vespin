@@ -641,7 +641,7 @@ export function productEventFromWire(value: UnparsedWireValue): ProductEvent | u
   }
   // SAFETY: every key came from this event's allowlist and every value from
   // that property's own reader, which is exactly the declared shape.
-  return { name: value.name, at, properties: properties as ProductEventProperties };
+  return { name: value.name, at, properties };
 }
 
 /**

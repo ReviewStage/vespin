@@ -16,7 +16,7 @@
  *   starts one. A native one is
  *   handed to that harness's sessions acting for the agent's starter, whose
  *   plan pays for it, and a session it opens claims the conversation's
- *   record.
+ *   record before its launch is scheduled (`runner-sessions.ts`).
  * - `cancel` and `reset` name a session alone, so they are
  *   answered by the harness that minted it (`native-runtime.ts`); a session
  *   no harness minted runs no turn and holds nothing, so it is answered so
@@ -30,18 +30,15 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation, readAgentRouting } from "@repo/database/models/agent-store";
+import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import {
-  readAgentHeaderOfConversation,
-  readAgentRouting,
-  recordAgentSeen,
-} from "@repo/database/models/agent-store";
-import {
-  claimRuntimeSession,
-  recordedRuntimeSession,
-} from "@repo/database/models/recorded-session";
-import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
-import { causeKind, failureKind } from "@repo/runtime/effect";
-import { Clock, Context, Effect, Option } from "effect";
+  AGENT_MACHINE,
+  type AgentMachineKind,
+  LOCAL_AGENT_REFUSAL,
+} from "@repo/features/agent-wire";
+import { failureKind } from "@repo/runtime/effect";
+import { Context, Effect, Option } from "effect";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
   HOSTED_REFUSAL,
@@ -60,7 +57,6 @@ import {
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
-  type SessionMessage,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
 import { agentLogIds } from "./agent-log.js";
@@ -88,6 +84,22 @@ export const RUNNER_CHECKOUT = {
 
 export type RunnerCheckout = (typeof RUNNER_CHECKOUT)[keyof typeof RUNNER_CHECKOUT];
 
+/** What a queued turn's hand-over to its agent's runner came to (`turnHandedOver`). */
+export const TURN_HANDOVER = {
+  /** A runner reads the turn's lines: one already up, one launched for them now, or none needed, nothing of them waiting. */
+  HANDED: "handed",
+  /** Another call holds the agent's runner lease, at work on its runner, so the hand-over is tried again shortly. */
+  BUSY: "busy",
+  /** A runner up reads the turn's lines and has its grace to take them, so the hand-over is tried once more after it (`TURN_DELIVERY.TAKE_GRACE`). */
+  AWAITED: "awaited",
+  /** The hand-over could not succeed, and the turn was failed with why. */
+  FAILED: "failed",
+  /** Nothing here reaches the turn's agent: it runs on no harness, its session never claimed its record, or this function holds no harness. */
+  UNREACHED: "unreached",
+} as const;
+
+export type TurnHandover = (typeof TURN_HANDOVER)[keyof typeof TURN_HANDOVER];
+
 /** A native harness's sessions: the `AgentSessions` interface, the agent's model and effort as they stand handed to a running runner, and its repositories as they stand checked out in the place it runs in. */
 export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   extends AgentSessions<Turn> {
@@ -96,8 +108,16 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   readonly checkOut: (sessionId: string, conversationId: string) => Effect.Effect<RunnerCheckout>;
   /** The session's runner ended, keeping its sandbox and the harness's session, so the next message relaunches it; whether no runner runs now. */
   readonly halt: (sessionId: string, conversationId: string) => Effect.Effect<boolean>;
-  /** The message lines an ended launch never took handed to a runner launched for them, where none runs (`runner-sessions.ts`'s `LINES_WAITING`); whether one was launched. */
-  readonly deliverWaiting: (sessionId: string, conversationId: string) => Effect.Effect<boolean>;
+  /**
+   * The lines a queued turn awaits handed to a runner that reads them, under
+   * the agent's runner lease where it is free: a runner launched for them
+   * where none is up (`runner-sessions.ts`'s `deliverTurn`). Fails only
+   * where trying again may succeed: the store or the machine unreachable.
+   */
+  readonly deliverTurn: (
+    sessionId: string,
+    conversationId: string,
+  ) => Effect.Effect<TurnHandover, { readonly _tag: string }>;
   /** The session's runner launched with no message past the answer, where none runs, for an agent on screen (`runner-sessions.ts`'s `warm`); it answers at once and fails nothing. */
   readonly warm: (sessionId: string, conversationId: string) => Effect.Effect<void>;
 }
@@ -209,23 +229,6 @@ function routed<Turn extends SessionTurn>(
       Effect.annotateLogs(agentLogIds({ conversationId })),
     );
 
-  /** The session a native open answered claimed as the conversation's record; a claim that fails is logged, and the next message finds the session by its tag all the same. */
-  const claimed = (starter: string, message: SessionMessage<Turn>, sessionId: string) =>
-    Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      yield* claimRuntimeSession(
-        { userId: starter, conversationId: message.conversationId },
-        sessionId,
-        new Date(now),
-      );
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning(`a native session did not claim its record: ${causeKind(cause)}`),
-      ),
-      Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
-      Effect.provideContext(store),
-    );
-
   const sessions: AgentSessions<Turn> = {
     open: (message) =>
       Effect.gen(function* () {
@@ -235,11 +238,7 @@ function routed<Turn extends SessionTurn>(
         if ("ended" in route) return ENDED;
         const reached = harness(route.runtime, route.starter);
         if (Option.isNone(reached)) return NOT_HERE;
-        const opened = yield* (yield* reached.value).open(message);
-        if (opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
-          yield* claimed(route.starter, message, opened.sessionId);
-        }
-        return opened;
+        return yield* (yield* reached.value).open(message);
       }),
 
     send: (sessionId, message) =>
@@ -361,11 +360,41 @@ export const runnerCheckedOut = (agent: {
   );
 
 /**
+ * A queued turn handed over to its agent's runner, acting for the agent's
+ * starter as every native call does (`NativeSessions`' `deliverTurn`): by
+ * the harness its conversation runs on, in the session its record names.
+ * An agent gone or on no harness, one whose session never claimed its
+ * record, and a function that cannot reach the harness hand nothing over,
+ * and say so. Fails only where trying again
+ * may succeed.
+ */
+export const turnHandedOver = (turn: {
+  readonly userId: string;
+  readonly conversationId: string;
+}): Effect.Effect<TurnHandover, { readonly _tag: string }, DatabaseServices> =>
+  Effect.gen(function* () {
+    const agent = yield* readAgentHeaderOfConversation(turn.userId, turn.conversationId);
+    if (Option.isNone(agent)) return TURN_HANDOVER.UNREACHED;
+    const routing = yield* readAgentRouting(turn.userId, agent.value.id);
+    const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+    if (runtime === undefined) return TURN_HANDOVER.UNREACHED;
+    const native = yield* Effect.serviceOption(NativeAgentSessions);
+    const reached = Option.flatMap(native, (service) =>
+      service.sessions(runtime, agent.value.userId),
+    );
+    if (Option.isNone(reached)) return TURN_HANDOVER.UNREACHED;
+    const sessionId = yield* recordedRuntimeSession(turn);
+    if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
+      return TURN_HANDOVER.UNREACHED;
+    }
+    return yield* (yield* reached.value).deliverTurn(sessionId, turn.conversationId);
+  }).pipe(Effect.annotateLogs(agentLogIds({ conversationId: turn.conversationId })));
+
+/**
  * A cloud agent a client has on screen kept warm, acting for the agent's
- * starter as every native call does: when it was seen recorded, and, past
- * the answer, its runner launched with no message where none runs, so the
- * next message goes into its running session (`runner-sessions.ts`'s
- * `warm`). A Mac's agent, an archived one, one on no harness, one whose
+ * starter as every native call does: past the answer, its sandbox touched
+ * and its runner launched with no message where none runs, so the next
+ * message goes into its running session (`runner-sessions.ts`'s `warm`). A Mac's agent, an archived one, one on no harness, one whose
  * session never claimed its record, and a function that cannot reach the
  * harness launch nothing. Nothing here fails its caller.
  */
@@ -373,9 +402,11 @@ export const runnerWarmed = (agent: {
   readonly id: string;
   readonly userId: string;
   readonly conversationId: string;
+  readonly machine?: AgentMachineKind;
+  readonly archivedAt: Date | null;
 }): Effect.Effect<void, never, DatabaseServices> =>
   Effect.gen(function* () {
-    if (!(yield* recordAgentSeen(agent.userId, agent.id))) return;
+    if (agent.machine === AGENT_MACHINE.DEVICE || agent.archivedAt !== null) return;
     const routing = yield* readAgentRouting(agent.userId, agent.id);
     const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
     if (runtime === undefined) return;

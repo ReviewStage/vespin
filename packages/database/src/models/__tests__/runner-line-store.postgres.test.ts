@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { Clock, Deferred, Duration, Effect, Fiber, Layer, Option } from "effect";
+import { Deferred, Effect, Fiber, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { Database, type DatabaseServices } from "../../core/query.js";
 import { sqlClientOverUrl } from "../../core/sql-client.js";
@@ -110,13 +110,9 @@ it.layer(getTestDB())("an agent's runner lines queued at once", (it) => {
         yield* Fiber.join(first);
         yield* Fiber.join(second);
 
-        const since = new Date(
-          (yield* Clock.currentTimeMillis) - Duration.toMillis(Duration.hours(1)),
-        );
         const lines = yield* runnerLinesPast(userId, agentId, {
           launch: LAUNCH,
           after: 0,
-          since,
           limit: 10,
         });
         assert.deepEqual(

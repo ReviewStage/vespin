@@ -6,13 +6,13 @@ import {
   Button,
   ErrorState,
   Fill,
-  ONE_LINE_ELEMENT,
-  ONE_LINE_END,
-  OneLine,
   SKELETON_SHAPE,
   Skeleton,
   SkeletonRegion,
   STATUS_TONE,
+  TEXT_ELEMENT,
+  TEXT_VARIANT,
+  Text,
   Toolbar,
   Tooltip,
 } from "@repo/ui";
@@ -26,17 +26,17 @@ import { PhoneHead, PlaceMore, phoneFindGroups } from "../desktop/phone-head.js"
 import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { TOAST_HOLD, type ToastNotice, undoToast, useToast } from "../toast.js";
-import { DocumentScroll } from "./document-frame.js";
 import { VERSION_CHANGE, type VersionDiff, versionDiff } from "./description-history-model.js";
 import { DescriptionPictures, useDescriptionPictureDrawer } from "./description-pictures.js";
+import { DocumentScroll } from "./document-frame.js";
 import { type MentionedTask, useMentionLink } from "./task-mentions.js";
 import { TextTitle } from "./task-title.js";
-import { useOpenLink } from "./use-open-link.js";
 import {
-  HISTORY_READ,
   type DescriptionHistoryControl,
+  HISTORY_READ,
   type ViewedVersion,
 } from "./use-description-history.js";
+import { useOpenLink } from "./use-open-link.js";
 
 /**
  * version-view.tsx -- one version of a description, drawn read-only with what it changed marked, under a bar with its restore.
@@ -204,7 +204,7 @@ function VersionSkeleton({
 }
 
 /** What the page says where the version's read did not answer. */
-export const VERSION_FAILED = readFailedWords("the version");
+const VERSION_FAILED = readFailedWords("the version");
 
 /** The version's content against the one before it, or the state standing in its place. */
 function VersionContent({
@@ -357,10 +357,16 @@ function VersionPageFrame({
   children: React.ReactNode;
 }): React.JSX.Element {
   // Note that only a phone leads the bar with a way back, the version standing there alone.
+  // The version's moment is the bar's title, so it takes a bar title's type, as every other bar's name does.
   const titled = (
-    <OneLine as={ONE_LINE_ELEMENT.H1} end={ONE_LINE_END.ELLIPSIS} className="ui-toolbar-title">
+    <Text
+      as={TEXT_ELEMENT.H1}
+      variant={TEXT_VARIANT.TOOLBAR_TITLE}
+      truncate
+      className="ui-toolbar-title"
+    >
       {title}
-    </OneLine>
+    </Text>
   );
   return (
     <>

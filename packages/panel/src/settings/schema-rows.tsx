@@ -18,7 +18,7 @@ type SettingOption = NonNullable<
   ReturnType<typeof settingRowsForPage>[number]["control"]
 >["options"][number];
 
-/** A toggle's row: the shared switch (`switch-row.tsx`), writing its setting through a mutation of its own. */
+/** A toggle's row: the shared switch (`switch-row.tsx`), writing its setting through a mutation of its own, and telling its section of each turn in the press itself, where it asks. */
 function SchemaToggleRow({
   id,
   field,
@@ -26,6 +26,7 @@ function SchemaToggleRow({
   detail,
   changed,
   checked,
+  onTurned,
 }: {
   id: string;
   field: AppSettingField;
@@ -33,13 +34,24 @@ function SchemaToggleRow({
   detail: string | undefined;
   changed: boolean;
   checked: boolean;
+  onTurned: ((enabled: boolean) => void) | undefined;
 }): React.JSX.Element {
-  const write = useSettingRowWrite(
+  const stored = useSettingRowWrite(
     field,
     (enabled: boolean) => enabled,
     (value) => value === true,
     true,
   );
+  const write =
+    onTurned === undefined
+      ? stored
+      : {
+          ...stored,
+          run: (enabled: boolean) => {
+            onTurned(enabled);
+            stored.run(enabled);
+          },
+        };
   return (
     <SwitchRow
       {...(isAppSettingId(id) ? { anchor: id } : undefined)}
@@ -70,6 +82,7 @@ function SchemaChoiceRow({
   options,
   search,
   faces,
+  action,
 }: {
   id: string;
   field: AppSettingField;
@@ -83,6 +96,8 @@ function SchemaChoiceRow({
   faces: ((token: string) => React.ReactNode) | undefined;
   /** The searchable menu's empty field words, for a set long enough to search. */
   search: string | undefined;
+  /** A control of the row's own beside the pop-up, where its section hands one. */
+  action: React.ReactNode;
 }): React.JSX.Element {
   const write = useSettingRowWrite(field, (token: string) => settingFromOption(field, token, view));
   return (
@@ -103,6 +118,7 @@ function SchemaChoiceRow({
       }
       placeholder={search}
       {...(isAppSettingId(id) ? { anchor: id } : undefined)}
+      action={action}
       write={write}
     />
   );
@@ -115,19 +131,28 @@ function SchemaChoiceRow({
  * line drawn under its label are the entry's own answers. A page component that decided any of it for itself would
  * be a second record of the same fact, and the two would drift. What the
  * section may add is a choice's faces, read at run time from what the
- * schema cannot know, such as the account's own picture.
+ * schema cannot know, such as the account's own picture, a control
+ * beside a choice's pop-up that acts on its value, such as a sound's Play,
+ * and what a toggle's turn asks of the platform in the press itself, such as
+ * a browser's leave to post notifications.
  */
 export function SchemaSettingRows({
   page,
   section = SETTING_SECTION.MAIN,
   view,
   faces,
+  actions,
+  onTurned,
 }: {
   page: (typeof SCHEMA_SETTINGS_PAGE)[keyof typeof SCHEMA_SETTINGS_PAGE];
   section?: SettingSection;
   view: SettingsRowsInput;
   /** What each of a choice's options shows beside its words, by the setting it stores and its token; none where its options are words alone. */
   faces?: ((field: AppSettingField, token: string) => React.ReactNode) | undefined;
+  /** The control a choice's row draws beside its pop-up, by the setting it stores; none where its pop-up stands alone. */
+  actions?: ((field: AppSettingField) => React.ReactNode) | undefined;
+  /** What a toggle's turn does beside its write, in the press itself, by the setting it stores; none where the write is all. */
+  onTurned?: ((field: AppSettingField, enabled: boolean) => void) | undefined;
 }): React.JSX.Element {
   const rows = settingRowsForPage(page, section, view).flatMap((row) => {
     const { field, entry, changed, control } = row;
@@ -141,6 +166,7 @@ export function SchemaSettingRows({
           detail={entry.detail}
           changed={changed}
           checked={entry.value === APP_TOGGLE_VALUE.ON}
+          onTurned={onTurned === undefined ? undefined : (enabled) => onTurned(field, enabled)}
         />,
       ];
     }
@@ -158,6 +184,7 @@ export function SchemaSettingRows({
         options={control.options}
         search={control.search}
         faces={faces === undefined ? undefined : (token) => faces(field, token)}
+        action={actions?.(field)}
       />,
     ];
   });

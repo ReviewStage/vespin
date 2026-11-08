@@ -296,15 +296,9 @@
 
   /* A tab something arrived on reads in the heavier weight and the primary
      ink until it is chosen, as a chat app's channels do. */
-  .ui-tab[data-unread="true"] .ui-tab-label {
+  .ui-tab[data-unread="true"] :is(.ui-tab-label, .ui-tab-rename) {
     color: var(--ui-color-text);
     font-weight: var(--ui-type-emphasis-weight);
-  }
-
-  /* Renamed in place, the label gives way to a field in the same type,
-     ringed rather than bordered so nothing moves. */
-  .ui-tab-button[data-editing="true"] {
-    box-shadow: inset 0 0 0 1px var(--ui-color-border-selected);
   }
 
   /* The ×, a row's compact mark, stands at the pill's end, out of the

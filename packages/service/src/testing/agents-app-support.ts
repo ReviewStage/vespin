@@ -8,6 +8,7 @@ import { Database } from "@repo/database/core/query";
 import { readAgent } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { saveDescriptionText } from "@repo/database/models/task-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
@@ -22,6 +23,7 @@ import {
 } from "@repo/features/agent-wire";
 import { INBOX_ASK_STATUS, INBOX_IMAGE_TYPE, type InboxItem } from "@repo/features/inbox-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
+import { vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -51,7 +53,7 @@ import { instancePublishedCache } from "../agents/coder-host/published.js";
 import type { SummaryModelOf } from "../agents/coder-host/replay-summary.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { messagesProcedures } from "../agents/messages-procedures.js";
-import { type SandboxStopReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
+import { type SandboxDeleteReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import {
   type AgentSessions,
   SESSION_CANCEL_OUTCOME,
@@ -102,7 +104,6 @@ import {
 import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "../testing/integration-connect.js";
 import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
-import { sandboxFetchOver } from "../testing/vercel-sandbox-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
 export const ORIGIN = "https://app.test";
@@ -242,7 +243,7 @@ export function sessionCookieOf(userId: string): string {
 }
 
 /** How the fake harness writes down the deployment acting for an account, apart from any bearer a request carried. */
-export function deploymentFor(account: string): string {
+function deploymentFor(account: string): string {
   return `deployment for ${account}`;
 }
 
@@ -416,7 +417,7 @@ export const standing = (
   github: FakeGitHub,
   agentSessions: ReturnType<typeof fakeAgentSessions>,
   summaryModel: SummaryModelOf = () => Effect.succeed(undefined),
-  sessionSandboxes: SandboxStopReach["sessionSandboxes"] = sessionSandboxesLayer,
+  sessionSandboxes: SandboxDeleteReach["sessionSandboxes"] = sessionSandboxesLayer,
   titleModel: InboxTitleModelOf = () => Effect.succeed(undefined),
   afterResponse: Layer.Layer<AfterResponse> | Layer.Layer<never> = Layer.empty,
 ) =>
@@ -430,8 +431,8 @@ export const standing = (
       Layer.succeed(HostedEnvironment, NO_KEYS),
       scriptedHarnessLayer((account) => agentSessions.agentSessions(harnessFor(account))),
       github.layer,
-      // A sandbox's calls reach the same fake as GitHub's, through the `fetch` `@vercel/sandbox` sends on.
-      sandboxFetchOver(github.respond),
+      // A sandbox's calls reach the same fake as GitHub's, through the adapter's `fetch`.
+      Layer.provide(vercelSandboxOver(github.respond), github.layer),
       modelCatalogOf(CATALOG),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
@@ -667,7 +668,7 @@ export const openTask = (
     /** The model a replay's summary is written on; none unless a test names one. */
     readonly summaryModel?: SummaryModelOf;
     /** The sandboxes an archive stops; Vercel's own, which a test with no token in its environment finds unavailable, unless a test scripts them. */
-    readonly sessionSandboxes?: SandboxStopReach["sessionSandboxes"];
+    readonly sessionSandboxes?: SandboxDeleteReach["sessionSandboxes"];
     /** The model an untitled inbox thread's title is generated on; none unless a test names one. */
     readonly titleModel?: InboxTitleModelOf;
     /** Where a request's after-response work goes; run inline, before the answer is read, unless a test keeps it (`keptAfterResponse`). */
@@ -996,7 +997,7 @@ export function openedParts(agentSessions: ReturnType<typeof fakeAgentSessions>)
 export const messagedAgent = (
   agentSessions: ReturnType<typeof fakeAgentSessions>,
   turn: { readonly running: boolean } | undefined,
-  sessionSandboxes?: SandboxStopReach["sessionSandboxes"],
+  sessionSandboxes?: SandboxDeleteReach["sessionSandboxes"],
   afterResponse?: Layer.Layer<AfterResponse>,
 ) =>
   Effect.flatMap(
@@ -1026,7 +1027,8 @@ export const agentStartedOn = (
     const sessionId = agentSessions.opened.at(-1)?.sessionId ?? "";
     assert.equal(yield* claimRuntimeSession(target, sessionId, new Date()), true);
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-    const turnId = randomUUID();
+    // The Start's first line queued the turn its runner opens (`turn-state.ts`).
+    const turnId = Option.getOrThrow(yield* queuedTurnOf(target.conversationId));
     if (turn !== undefined) {
       yield* writer.enqueueTurn(target, {
         turnId,
@@ -1057,6 +1059,8 @@ export const agentStartedOn = (
         });
       }
     }
+    // Note that the clock moves on past the turn's queueing, so a turn a later message queues is the newer, as it is on any clock that runs.
+    yield* TestClock.adjust(Duration.millis(1));
     /** The transcript as the owner reads it now: the developer's lines, and the status. */
     const transcript = () =>
       Effect.map(

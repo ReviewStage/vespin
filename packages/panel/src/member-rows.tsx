@@ -1,5 +1,5 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords, TERM, VERB } from "@repo/features/words";
+import { readFailedWords, TERM } from "@repo/features/words";
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import { ErrorState, MENU_DETAIL, Spinner } from "@repo/ui";
 import { memberActor, type PersonActor } from "@repo/ui/actor-model";
@@ -31,30 +31,6 @@ export const PEOPLE_FILTER_WORDS = {
   ANYONE: "Anyone",
   ME: "Me",
 } as const;
-
-/**
- * The row standing last in a people menu while the members are read or could
- * not be: a disabled row for the wait, and for the failure a row that says
- * they could not be read, whose press, Retry, reads them again and leaves the
- * menu standing; none while the members stand read.
- */
-export function memberReadNotice(
-  reader: Pick<Directory, "reading" | "refused" | "retry">,
-): MenuAction[] {
-  if (reader.refused) {
-    return [
-      {
-        label: readFailedWords(TERM.MEMBER.many),
-        detail: VERB.RETRY,
-        detailPlace: MENU_DETAIL.BESIDE,
-        stays: true,
-        onSelect: reader.retry,
-      },
-    ];
-  }
-  if (!reader.reading) return [];
-  return [{ label: `Reading ${TERM.MEMBER.many}…`, disabled: true, onSelect: () => undefined }];
-}
 
 /**
  * What a searchable people menu says in its list's place while the members

@@ -1,11 +1,10 @@
 /**
- * production.ts -- the live view's dependencies as the deployment stands them: the tab read and taken over in the store by the tabs contract's rules, the agent's sandbox session from its conversation, its browser over Vercel's REST API and the sandbox's PTY, and the terminal's lease.
+ * production.ts -- the live view's dependencies as the deployment stands them: the tab read and taken over in the store by the tabs contract's rules, the agent's sandbox session from its conversation, and its browser through `Sandbox` and the sandbox's PTY.
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the service stands, so the relay itself requires none.
- * A store that cannot take a lease's move is logged, since the panel's next
- * message tries again, as is a keep-alive of the sandbox Vercel did not
- * confirm; nothing a tab shows is.
+ * A touch of the sandbox Vercel did not confirm is logged, since the next
+ * tries again; nothing a tab shows is.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -18,19 +17,19 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
-import { Effect, Layer, Option } from "effect";
+import { Sandbox, touchSandbox } from "@repo/sandbox";
+import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
-import { AgentBrowser, agentBrowserLayer } from "../agents/browser/agent-browser.js";
+import { agentSandboxName } from "../agents/agent-sandbox-open.js";
+import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
-import type { AgentImage } from "../agents/coder-host/agent-image.js";
-import { sandboxPtyLayer } from "../agents/sandbox-pty.js";
-import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
+import { AgentImage } from "../agents/coder-host/agent-image.js";
+import { sandboxPtyOf } from "../agents/sandbox-pty.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
 /** What the live view's dependencies answer over: the agents' image among it, which a sandbox is made again from. */
-export type BrowserLiveServices = DatabaseServices | HttpClient.HttpClient | AgentImage;
+export type BrowserLiveServices = DatabaseServices | HttpClient.HttpClient | AgentImage | Sandbox;
 
 /** The live view's dependencies over the services the runtime holds now. */
 export const browserLiveDependencies: Effect.Effect<
@@ -41,12 +40,8 @@ export const browserLiveDependencies: Effect.Effect<
   const context = yield* Effect.context<BrowserLiveServices>();
   const run = <A, E>(effect: Effect.Effect<A, E, BrowserLiveServices>) =>
     Effect.provideContext(effect, context);
-  const browser = yield* Effect.provide(
-    Effect.gen(function* () {
-      return yield* AgentBrowser;
-    }),
-    agentBrowserLayer.pipe(Layer.provide(sandboxPtyLayer)),
-  );
+  const sandbox = yield* Sandbox;
+  const browser = agentBrowserOver(sandbox, sandboxPtyOf(sandbox), yield* AgentImage);
   return {
     readTab: (userId, place, tabId) => run(readBrowserTab(userId, place, tabId)),
     // Note that the tab was read under the member's reach first, so its agent's conversation is read whoever started it.
@@ -83,10 +78,6 @@ export const browserLiveDependencies: Effect.Effect<
         Effect.catch(() => Effect.logWarning("a watched tab's page was not kept")),
         Effect.asVoid,
       ),
-    hold: (conversationId, heldUntil) =>
-      run(holdSandbox(conversationId, heldUntil)).pipe(
-        Effect.catch(() => Effect.logWarning("a watched browser's lease was not moved on")),
-      ),
-    keepAlive: (sessionId) => run(keepSessionSandboxAlive(sessionId)),
+    touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
   };
 });

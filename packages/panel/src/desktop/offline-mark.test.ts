@@ -114,10 +114,10 @@ test("a service that answers no seal says offline while the Mac is online", asyn
   await vi.waitFor(() => assert.equal(said(), undefined));
 });
 
-test("a service whose calls go unanswered says it isn't answering while the Mac is online, and an answer clears it", async () => {
+test("a service whose calls go unanswered asks to check the connection while the Mac is online, and an answer clears it", async () => {
   const push = await mount(documentOf(true, HOST_LIVE.LIVE, 1, false));
   await vi.waitFor(() => assert.equal(said(), "Offline"));
-  await vi.waitFor(() => assert.equal(why(), "The service isn't answering."));
+  await vi.waitFor(() => assert.equal(why(), "Can't connect. Check your internet connection."));
 
   await push(documentOf(true, HOST_LIVE.LIVE, 2));
   await vi.waitFor(() => assert.equal(said(), undefined));

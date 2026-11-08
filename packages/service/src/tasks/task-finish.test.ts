@@ -121,23 +121,36 @@ const settle = (turnId: string) =>
     ),
   );
 
-/** A line of the developer's to the agent, written now, awaiting the turn it opens. */
+/** A line of the developer's to the agent, written now beside the turn it queues, as a send writes both; that turn's id. */
 const awaitingLine = (agent: { readonly userId: string; readonly conversationId: string }) =>
-  Effect.flatMap(Clock.currentTimeMillis, (now) =>
-    Database.use((db) =>
-      db.insert(messages).values({
+  Effect.gen(function* () {
+    const now = new Date(yield* Clock.currentTimeMillis);
+    const db = yield* Database;
+    const [queued] = yield* db
+      .insert(turns)
+      .values({
         userId: agent.userId,
         conversationId: agent.conversationId,
-        seq: 1,
-        clientId: randomUUID(),
-        role: MESSAGE_ROLE.USER,
-        parts: [{ type: "text", text: "Start the next worker." }],
-        placedAt: new Date(now),
-        createdAt: new Date(now),
-        turnId: null,
-      }),
-    ),
-  );
+        origin: TURN_ORIGIN.TYPED,
+        status: TURN_STATUS.QUEUED,
+        queuedAt: now,
+      })
+      .returning({ id: turns.id });
+    const turnId = queued?.id ?? assert.fail("the turn was not queued");
+    yield* db.insert(messages).values({
+      userId: agent.userId,
+      conversationId: agent.conversationId,
+      seq: 1,
+      clientId: randomUUID(),
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text", text: "Start the next worker." }],
+      placedAt: now,
+      createdAt: now,
+      turnId: null,
+      awaitsTurnId: turnId,
+    });
+    return turnId;
+  });
 
 const statusOf = (userId: string, taskId: string) =>
   Effect.map(readTask(userId, taskId), (read) => Option.getOrThrow(read).task.status);
@@ -165,12 +178,12 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
 
         // The worker's turn ended, but it messaged the orchestrator, whose turn is on its way.
         yield* settle(running);
-        yield* awaitingLine(orchestrator);
+        const next = yield* awaitingLine(orchestrator);
         yield* settleTaskIfFinished(userId, task.id);
         assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.IN_PROGRESS);
 
         // The orchestrator's turn took the line and ended: everyone is idle.
-        const next = yield* turnOf(orchestrator, TURN_STATUS.SETTLED);
+        yield* settle(next);
         yield* Database.use((db) =>
           db
             .update(messages)

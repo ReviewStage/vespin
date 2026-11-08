@@ -130,7 +130,10 @@ export async function mountWebApp(
   };
   // Sentry's reporter stands beneath the host, so every fiber it forks and every act reports through it.
   runtime = ManagedRuntime.make(
-    Layer.provideMerge(composeWeb({ httpClient, fork, linkPlatform }), sentry.errorReporting),
+    Layer.provideMerge(
+      composeWeb({ httpClient, fork, linkPlatform, history: tabHistory }),
+      sentry.errorReporting,
+    ),
   );
   // What the tab installed, taken down again in the reverse order as it closes.
   const installed: (() => void)[] = [() => tabHistory.destroy()];

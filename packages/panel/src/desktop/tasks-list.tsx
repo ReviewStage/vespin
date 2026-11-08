@@ -122,6 +122,7 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useBoardDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { pullRequestNumberLabel } from "../tasks/agent-model.js";
@@ -956,7 +957,7 @@ export function TasksList({
   room: ShellRoom;
   frame: TasksViewFrame;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_BOARD, tasks.boardView.onClose);
+  useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
   const { filter, display } = frame;
   const directory = useMemberDirectory();
   const now = useMinute();

@@ -1,0 +1,909 @@
+/**
+ * turn-state.ts -- the one writer of a turn's state: where it stands, the deadline of that, the attempt it runs under, and how it ended.
+ *
+ * A turn row is the one record of a turn. Every statement that writes its
+ * status, its deadline (`turns.lease_until`), its attempt, its start or its
+ * end is here, and the store writer (`./writer.ts`) is their one caller,
+ * under the conversation's lock, so the line a send writes and the turn it
+ * awaits land in one transaction, and a turn's end and its journal's close
+ * in another.
+ *
+ * A coding agent's line awaits a turn from the moment it is written
+ * (`messages.awaits_turn_id`): the open turn it joins, where one stands that
+ * no Stop was asked of, or a turn queued for it in the same transaction,
+ * with a pickup deadline that runs from its queueing and never moves, however
+ * often the agent's runner is launched. A line written past an open turn's
+ * deadline joins nothing, since that turn is over by its record, and queues a
+ * turn of its own. A runner that takes the line starts that turn under its
+ * own launch (`turns.attempt`), and from then every move of the turn
+ * names the attempt: a start, its progress (and nothing else) pushing its deadline on, and its
+ * end, so a runner a newer launch replaced, or whose turn was failed, moves
+ * nothing. A turn that ends well with lines it never took queues a turn for
+ * them; a turn that fails keeps them, to be resent; and a Stop pulls the
+ * turn's deadline in and leaves the lines written before it awaiting nothing.
+ *
+ * A turn still open past its deadline, or past its cap, is lapsed
+ * (`@repo/features/turn-deadline`), and only the minute sweep's reconcile
+ * reads it so (`lapsedTurnsOf`, `lapsedAgents`): every reap is a
+ * compare-and-set on the turn's status and attempt, and on its standing
+ * lapsed at the instant the reap read it, so a turn its runner moved on
+ * since keeps running. Nothing here reads the clock: each write is handed
+ * its instant.
+ */
+
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin, type TurnStatus } from "@repo/wire";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { Effect, Option, Schema } from "effect";
+import { SqlSchema } from "effect/sql";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
+import { messages, turns } from "../schemas/storage.js";
+import { TurnUsageColumnSchema } from "./columns.js";
+
+type TurnStateEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/** The statuses of a turn still open: queued for its runner, or running. */
+const OPEN_STATUSES = [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING] as const;
+
+const TurnOriginSchema = Schema.Literals(Object.values(TURN_ORIGIN));
+
+const TurnStatusSchema = Schema.Literals(Object.values(TURN_STATUS));
+
+const IdSchema = Schema.Struct({ id: Schema.String });
+
+/**
+ * That a turn still open stands lapsed at the instant given: past the
+ * deadline of the state it stands in, or past its cap from its start.
+ */
+function lapsedAt(at: Date) {
+  return and(
+    inArray(turns.status, [...OPEN_STATUSES]),
+    or(
+      lt(turns.leaseUntil, at),
+      lt(turns.startedAt, new Date(at.getTime() - TURN_DEADLINE.CAP_MS)),
+    ),
+  );
+}
+
+const insertQueued = SqlSchema.void({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    userId: Schema.String,
+    conversationId: Schema.String,
+    origin: TurnOriginSchema,
+    runtimeTurnId: Schema.NullOr(Schema.String),
+    model: Schema.NullOr(Schema.String),
+    reasoningEffort: Schema.NullOr(Schema.String),
+    promptHash: Schema.NullOr(Schema.String),
+    toolSetHash: Schema.NullOr(Schema.String),
+    queuedAt: Schema.Date,
+  }),
+  execute: (row) =>
+    Database.use((db) =>
+      db.insert(turns).values({
+        id: row.turnId,
+        userId: row.userId,
+        conversationId: row.conversationId,
+        origin: row.origin,
+        status: TURN_STATUS.QUEUED,
+        runtimeTurnId: row.runtimeTurnId,
+        model: row.model,
+        reasoningEffort: row.reasoningEffort,
+        promptHash: row.promptHash,
+        toolSetHash: row.toolSetHash,
+        queuedAt: row.queuedAt,
+        leaseUntil: new Date(row.queuedAt.getTime() + TURN_DEADLINE.PICKUP_MS),
+      }),
+    ),
+});
+
+const namedRun = SqlSchema.void({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    runtimeTurnId: Schema.NullOr(Schema.String),
+    model: Schema.NullOr(Schema.String),
+    reasoningEffort: Schema.NullOr(Schema.String),
+  }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          runtimeTurnId: row.runtimeTurnId,
+          model: row.model,
+          reasoningEffort: row.reasoningEffort,
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.QUEUED),
+          ),
+        ),
+    ),
+});
+
+const insertStarted = SqlSchema.void({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    userId: Schema.String,
+    conversationId: Schema.String,
+    origin: TurnOriginSchema,
+    startedAt: Schema.Date,
+    attempt: Schema.Number,
+  }),
+  execute: (row) =>
+    Database.use((db) =>
+      db.insert(turns).values({
+        id: row.turnId,
+        userId: row.userId,
+        conversationId: row.conversationId,
+        origin: row.origin,
+        status: TURN_STATUS.RUNNING,
+        queuedAt: row.startedAt,
+        startedAt: row.startedAt,
+        leaseUntil: new Date(row.startedAt.getTime() + TURN_DEADLINE.PROGRESS_MS),
+        attempt: row.attempt,
+      }),
+    ),
+});
+
+const startQueued = SqlSchema.findAll({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    startedAt: Schema.Date,
+    attempt: Schema.Number,
+  }),
+  Result: IdSchema,
+  execute: (row) => {
+    const progressBy = new Date(row.startedAt.getTime() + TURN_DEADLINE.PROGRESS_MS);
+    return Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          status: TURN_STATUS.RUNNING,
+          startedAt: row.startedAt,
+          // A Stop asked while the turn stood queued keeps its own deadline, where that comes sooner.
+          leaseUntil: sql`case when ${turns.cancelRequestedAt} is null then ${progressBy} else least(coalesce(${turns.leaseUntil}, ${progressBy}), ${progressBy}) end`,
+          attempt: row.attempt,
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.QUEUED),
+          ),
+        )
+        .returning({ id: turns.id }),
+    );
+  },
+});
+
+/**
+ * Note that the response ids no longer need the empty array written as a
+ * literal: a driver infers a parameter's Postgres type from the value it is
+ * handed and an empty array offers no element to infer one from, but a
+ * `text[]` column renders its own value as the array literal it is, so the
+ * ordinary case — a turn that called nothing and settles with no response
+ * ids — is one more bound parameter.
+ */
+const endOpen = SqlSchema.findAll({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    attempt: Schema.Number,
+    lapsedAt: Schema.NullOr(Schema.Date),
+    status: TurnStatusSchema,
+    settledAt: Schema.Date,
+    failure: Schema.NullOr(Schema.String),
+    failureDetail: Schema.NullOr(Schema.String),
+    usage: Schema.NullOr(TurnUsageColumnSchema),
+    responseIds: Schema.Array(Schema.String),
+  }),
+  Result: IdSchema,
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          status: row.status,
+          settledAt: row.settledAt,
+          failure: row.failure,
+          failureDetail: row.failureDetail,
+          usage: row.usage,
+          responseIds: [...row.responseIds],
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            inArray(turns.status, [...OPEN_STATUSES]),
+            eq(turns.attempt, row.attempt),
+            row.lapsedAt === null ? undefined : lapsedAt(row.lapsedAt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+const pushDeadlines = SqlSchema.findAll({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    attempt: Schema.Number,
+    until: Schema.Date,
+    before: Schema.Date,
+  }),
+  Result: IdSchema,
+  execute: (request) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({ leaseUntil: request.until })
+        .where(
+          and(
+            eq(turns.conversationId, request.conversationId),
+            eq(turns.status, TURN_STATUS.RUNNING),
+            eq(turns.attempt, request.attempt),
+            // A Stop's deadline is the Stop's: progress after it pushes nothing on.
+            isNull(turns.cancelRequestedAt),
+            lt(turns.leaseUntil, request.before),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+const stampStop = SqlSchema.findAll({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    at: Schema.Date,
+    key: Schema.NullOr(Schema.String),
+    by: Schema.NullOr(Schema.String),
+  }),
+  Result: IdSchema,
+  execute: (row) => {
+    const stopBy = new Date(row.at.getTime() + TURN_DEADLINE.STOP_MS);
+    return Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          cancelRequestedAt: row.at,
+          cancelRequestKey: row.key,
+          cancelRequestedBy: row.by,
+          // Note that a turn still open past the Stop's own deadline is canceled by the sweep.
+          leaseUntil: sql`least(coalesce(${turns.leaseUntil}, ${stopBy}), ${stopBy})`,
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            isNull(turns.cancelRequestedAt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    );
+  },
+});
+
+const deleteQueued = SqlSchema.void({
+  Request: Schema.Struct({ turnId: Schema.String, conversationId: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .delete(turns)
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.QUEUED),
+          ),
+        ),
+    ),
+});
+
+const settleKept = SqlSchema.void({
+  Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
+  execute: ({ conversationId, turnId }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          status: TURN_STATUS.SETTLED,
+          settledAt: sql`now()`,
+          cancelRequestedAt: null,
+          cancelRequestKey: null,
+          cancelRequestedBy: null,
+          failure: null,
+          failureDetail: null,
+        })
+        .where(and(eq(turns.conversationId, conversationId), eq(turns.id, turnId))),
+    ),
+});
+
+/** The newest open turn of the conversation, still inside its deadline at `at`, no Stop was asked of: the one a line written then joins. */
+const findJoinable = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, at: Schema.Date }),
+  Result: IdSchema,
+  execute: ({ conversationId, at }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id })
+        .from(turns)
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            inArray(turns.status, [...OPEN_STATUSES]),
+            isNull(turns.cancelRequestedAt),
+            // Not lapsed at `at`, as `lapsedAt` reads it: a turn with no deadline, or not started, is not.
+            or(isNull(turns.leaseUntil), gte(turns.leaseUntil, at)),
+            or(
+              isNull(turns.startedAt),
+              gte(turns.startedAt, new Date(at.getTime() - TURN_DEADLINE.CAP_MS)),
+            ),
+          ),
+        )
+        .orderBy(desc(turns.queuedAt), desc(turns.id))
+        .limit(1),
+    ),
+});
+
+/** The conversation's oldest queued turn: the one a runner opening a turn takes. */
+const findOpen = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String }),
+  Result: IdSchema,
+  execute: ({ conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id })
+        .from(turns)
+        .where(
+          and(eq(turns.conversationId, conversationId), inArray(turns.status, [...OPEN_STATUSES])),
+        )
+        .limit(1),
+    ),
+});
+
+const findQueued = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String }),
+  Result: IdSchema,
+  execute: ({ conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id })
+        .from(turns)
+        .where(and(eq(turns.conversationId, conversationId), eq(turns.status, TURN_STATUS.QUEUED)))
+        .orderBy(asc(turns.queuedAt), asc(turns.id))
+        .limit(1),
+    ),
+});
+
+const findStatus = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
+  Result: Schema.Struct({ status: TurnStatusSchema }),
+  execute: ({ conversationId, turnId }) =>
+    Database.use((db) =>
+      db
+        .select({ status: turns.status })
+        .from(turns)
+        .where(and(eq(turns.conversationId, conversationId), eq(turns.id, turnId))),
+    ),
+});
+
+const AwaitingRunnerSchema = Schema.Struct({
+  userId: Schema.String,
+  conversationId: Schema.String,
+  turnId: Schema.String,
+});
+
+/** A coding agent's turns still queued that were queued before the instant given and stand inside their pickup deadline at the other, oldest first. */
+const findAwaitingRunner = SqlSchema.findAll({
+  Request: Schema.Struct({ before: Schema.Date, at: Schema.Date, limit: Schema.Int }),
+  Result: AwaitingRunnerSchema,
+  execute: ({ before, at, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          userId: turns.userId,
+          conversationId: turns.conversationId,
+          turnId: turns.id,
+        })
+        .from(turns)
+        .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
+        .where(
+          and(
+            eq(turns.status, TURN_STATUS.QUEUED),
+            lt(turns.queuedAt, before),
+            gte(turns.leaseUntil, at),
+          ),
+        )
+        .orderBy(asc(turns.queuedAt), asc(turns.id))
+        .limit(limit),
+    ),
+});
+
+/** The turn the conversation's line under the client id given awaits. */
+const findAwaitedByLine = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, clientId: Schema.String }),
+  Result: Schema.Struct({ turnId: Schema.String }),
+  execute: ({ conversationId, clientId }) =>
+    Database.use((db) =>
+      db
+        .select({ turnId: sql<string>`${messages.awaitsTurnId}` })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.clientId, clientId),
+            isNotNull(messages.awaitsTurnId),
+          ),
+        ),
+    ),
+});
+
+/** The developer's lines awaiting the turn that no turn took and no hand-over withdrew. */
+const findUntaken = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
+  Result: IdSchema,
+  execute: ({ conversationId, turnId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.awaitsTurnId, turnId),
+            isNull(messages.turnId),
+            isNull(messages.withdrawnAt),
+          ),
+        ),
+    ),
+});
+
+const pointLines = SqlSchema.void({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    ids: Schema.Array(Schema.String),
+    turnId: Schema.NullOr(Schema.String),
+  }),
+  execute: ({ conversationId, ids, turnId }) =>
+    Database.use((db) =>
+      db
+        .update(messages)
+        .set({ awaitsTurnId: turnId })
+        .where(and(eq(messages.conversationId, conversationId), inArray(messages.id, [...ids]))),
+    ),
+});
+
+/** The conversation's running turns under an attempt older than the launch named, whose runner that launch replaced. */
+const findSuperseded = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, launch: Schema.Number }),
+  Result: IdSchema,
+  execute: ({ conversationId, launch }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id })
+        .from(turns)
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            eq(turns.status, TURN_STATUS.RUNNING),
+            lt(turns.attempt, launch),
+          ),
+        ),
+    ),
+});
+
+const LapsedTurnSchema = Schema.Struct({
+  id: Schema.String,
+  status: TurnStatusSchema,
+  attempt: Schema.Number,
+  startedAt: Schema.NullOr(Schema.Date),
+  cancelRequestedAt: Schema.NullOr(Schema.Date),
+});
+
+const findLapsed = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, at: Schema.Date }),
+  Result: LapsedTurnSchema,
+  execute: ({ conversationId, at }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: turns.id,
+          status: turns.status,
+          attempt: turns.attempt,
+          startedAt: turns.startedAt,
+          cancelRequestedAt: turns.cancelRequestedAt,
+        })
+        .from(turns)
+        .where(and(eq(turns.conversationId, conversationId), lapsedAt(at)))
+        .orderBy(asc(turns.queuedAt), asc(turns.id)),
+    ),
+});
+
+const LapsedAgentSchema = Schema.Struct({
+  id: Schema.String,
+  userId: Schema.String,
+  conversationId: Schema.String,
+  machine: Schema.Literals(Object.values(AGENT_MACHINE)),
+  deviceId: Schema.NullOr(Schema.String),
+});
+
+const findLapsedAgents = SqlSchema.findAll({
+  Request: Schema.Struct({ at: Schema.Date, limit: Schema.Int }),
+  Result: LapsedAgentSchema,
+  execute: ({ at, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: agentTable.id,
+          userId: agentTable.userId,
+          conversationId: agentTable.conversationId,
+          machine: agentTable.machine,
+          deviceId: agentTable.deviceId,
+        })
+        .from(turns)
+        .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
+        .where(lapsedAt(at))
+        .groupBy(
+          agentTable.id,
+          agentTable.userId,
+          agentTable.conversationId,
+          agentTable.machine,
+          agentTable.deviceId,
+        )
+        // Note that the order is drawn afresh each sweep, so agents one sweep could not reap never hold back every other.
+        .orderBy(sql`random()`)
+        .limit(limit),
+    ),
+});
+
+/** A turn of the conversation as a write names it: its id, and the conversation and account it stands in. */
+export interface TurnTarget {
+  readonly userId: string;
+  readonly conversationId: string;
+}
+
+/** The turn a line written now awaits, and whether it was queued for it here. */
+export interface AwaitedTurn {
+  readonly turnId: string;
+  readonly queued: boolean;
+}
+
+/**
+ * The turn a coding agent's line written at `now` awaits: the newest open
+ * turn no Stop was asked of, which takes it as a steer or as its next line,
+ * or a turn queued for it here, its id minted by `mint`, with its pickup
+ * deadline. Note that a turn a Stop was asked of, or one past its deadline,
+ * is joined by nothing, because the Stop ends what it was doing and the
+ * deadline says it is over, so a line written after either opens a turn of
+ * its own. Its caller writes the line in the same transaction.
+ */
+export function awaitedTurn(
+  target: TurnTarget,
+  now: Date,
+  mint: () => string,
+): TurnStateEffect<AwaitedTurn> {
+  return Effect.gen(function* () {
+    const open = yield* findJoinable({ conversationId: target.conversationId, at: now });
+    if (Option.isSome(open)) return { turnId: open.value.id, queued: false };
+    const turnId = mint();
+    yield* insertQueued({
+      turnId,
+      userId: target.userId,
+      conversationId: target.conversationId,
+      origin: TURN_ORIGIN.TYPED,
+      // Note that the turn is named to its harness only once a runner opens it (`queueTurn`), so a Stop names no turn nothing runs yet.
+      runtimeTurnId: null,
+      model: null,
+      reasoningEffort: null,
+      promptHash: null,
+      toolSetHash: null,
+      queuedAt: now,
+    });
+    return { turnId, queued: true };
+  });
+}
+
+/** What a turn is queued with, ahead of its start. */
+export interface TurnQueueing {
+  readonly turnId: string;
+  readonly origin: TurnOrigin;
+  readonly runtimeTurnId: string | null;
+  readonly model: string | null;
+  readonly reasoningEffort: string | null;
+  readonly promptHash: string | null;
+  readonly toolSetHash: string | null;
+}
+
+/**
+ * Queues the turn at `now`, or, where it already stands queued, as a turn
+ * its line queued does until a runner takes it, records what its runner
+ * names it runs on. A turn past its queueing is left as it stands.
+ */
+export function queueTurn(
+  target: TurnTarget,
+  queueing: TurnQueueing,
+  now: Date,
+  standing: boolean,
+): TurnStateEffect<void> {
+  if (standing) {
+    return namedRun({
+      turnId: queueing.turnId,
+      conversationId: target.conversationId,
+      runtimeTurnId: queueing.runtimeTurnId,
+      model: queueing.model,
+      reasoningEffort: queueing.reasoningEffort,
+    });
+  }
+  return insertQueued({ ...queueing, ...target, queuedAt: now });
+}
+
+/**
+ * Starts the turn under the attempt given at `at`: a turn queued for it is
+ * moved to running with its progress deadline, and a turn no row stands for
+ * is written running; answers whether this call started it, a turn already
+ * past its queueing being left as it stands.
+ */
+export function startTurn(
+  target: TurnTarget,
+  start: {
+    readonly turnId: string;
+    readonly origin: TurnOrigin;
+    readonly attempt: number;
+    readonly at: Date;
+  },
+  standing: Option.Option<{ readonly status: string }>,
+): TurnStateEffect<boolean> {
+  return Effect.gen(function* () {
+    if (Option.isNone(standing)) {
+      yield* insertStarted({
+        turnId: start.turnId,
+        userId: target.userId,
+        conversationId: target.conversationId,
+        origin: start.origin,
+        startedAt: start.at,
+        attempt: start.attempt,
+      });
+      return true;
+    }
+    if (standing.value.status !== TURN_STATUS.QUEUED) return false;
+    const started = yield* startQueued({
+      turnId: start.turnId,
+      conversationId: target.conversationId,
+      startedAt: start.at,
+      attempt: start.attempt,
+    });
+    return started.length > 0;
+  });
+}
+
+/** How a turn ends, and what fences its end. */
+export interface TurnEnd {
+  readonly turnId: string;
+  /** The attempt the end is told by, which must be the turn's. */
+  readonly attempt: number;
+  /** Where the end is a reap, the instant the turn was read lapsed at, at which it must still stand lapsed. */
+  readonly lapsedAt: Date | null;
+  readonly status: (typeof TURN_STATUS)[keyof typeof TURN_STATUS];
+  readonly settledAt: Date;
+  readonly failure: string | null;
+  readonly failureDetail: string | null;
+  readonly usage: typeof TurnUsageColumnSchema.Type | null;
+  readonly responseIds: readonly string[];
+}
+
+/**
+ * Ends the turn as `end` says, where it still stands open under the
+ * attempt the end names, and, for a reap, still stands lapsed at the
+ * instant it was read; answers whether this call ended it.
+ */
+export function endTurn(target: TurnTarget, end: TurnEnd): TurnStateEffect<boolean> {
+  return Effect.map(
+    endOpen({ ...end, conversationId: target.conversationId }),
+    (ended) => ended.length > 0,
+  );
+}
+
+/**
+ * Queues a turn for the lines the turn named awaited and never took, where
+ * it ended well with none of them withdrawn: they go to the open turn they
+ * may join, or a turn queued for them at `now`, as a line written then
+ * would. Answers the turn they await now, none where none was left.
+ */
+export function requeueUntaken(
+  target: TurnTarget,
+  endedTurnId: string,
+  now: Date,
+  mint: () => string,
+): TurnStateEffect<Option.Option<string>> {
+  return Effect.gen(function* () {
+    const left = yield* findUntaken({ conversationId: target.conversationId, turnId: endedTurnId });
+    if (left.length === 0) return Option.none();
+    const awaited = yield* awaitedTurn(target, now, mint);
+    yield* pointLines({
+      conversationId: target.conversationId,
+      ids: left.map((line) => line.id),
+      turnId: awaited.turnId,
+    });
+    return Option.some(awaited.turnId);
+  });
+}
+
+/** Points the lines named at the turn they now await, or at none. */
+export function awaitTurn(
+  conversationId: string,
+  lineIds: readonly string[],
+  turnId: string | null,
+): TurnStateEffect<void> {
+  return lineIds.length === 0 ? Effect.void : pointLines({ conversationId, ids: lineIds, turnId });
+}
+
+/**
+ * Deletes, among the turns named, each still queued that no line awaits any
+ * more, its lines having been taken into another turn, or its one line's
+ * hand-over having answered that its runtime did not take it: a turn queued
+ * stands only while a line awaits it.
+ */
+export function dropAwaitingNothing(
+  target: TurnTarget,
+  turnIds: readonly string[],
+): TurnStateEffect<void> {
+  return Effect.forEach(
+    turnIds,
+    (turnId) =>
+      Effect.gen(function* () {
+        const left = yield* findUntaken({ conversationId: target.conversationId, turnId });
+        if (left.length === 0)
+          yield* deleteQueued({ turnId, conversationId: target.conversationId });
+      }),
+    { discard: true },
+  );
+}
+
+/**
+ * Stamps a Stop on the turn at `at`, once, and pulls its deadline in to the
+ * Stop's own (`TURN_DEADLINE.STOP_MS`); answers whether this call stamped it.
+ */
+export function stopTurn(
+  target: TurnTarget,
+  stop: {
+    readonly turnId: string;
+    readonly at: Date;
+    readonly key: string | null;
+    readonly by: string | null;
+  },
+): TurnStateEffect<boolean> {
+  return Effect.map(
+    stampStop({ ...stop, conversationId: target.conversationId }),
+    (stamped) => stamped.length > 0,
+  );
+}
+
+/**
+ * Pushes on the progress deadline of the conversation's running turns under
+ * the attempt given, as its progress at `now` does; answers how many it
+ * wrote. A deadline with more than its renewal's worth still to run is left
+ * as it stands, so most posts write nothing, and a turn a Stop was asked of
+ * keeps the Stop's.
+ */
+export function progressTurns(
+  conversationId: string,
+  attempt: number,
+  now: number,
+): TurnStateEffect<number> {
+  return Effect.map(
+    pushDeadlines({
+      conversationId,
+      attempt,
+      until: new Date(now + TURN_DEADLINE.PROGRESS_MS),
+      before: new Date(now + TURN_DEADLINE.PROGRESS_MS - TURN_DEADLINE.RENEW_AFTER_MS),
+    }),
+    (rows) => rows.length,
+  );
+}
+
+/** Whether the conversation holds a turn still open, queued for its runner or running. */
+export function hasOpenTurn(conversationId: string): TurnStateEffect<boolean> {
+  return Effect.map(findOpen({ conversationId }), Option.isSome);
+}
+
+/** The conversation's queued turn a runner opening a turn takes, oldest first; none where none is queued. */
+export function queuedTurnOf(conversationId: string): TurnStateEffect<Option.Option<string>> {
+  return Effect.map(
+    findQueued({ conversationId }),
+    Option.map((row) => row.id),
+  );
+}
+
+/** The turn the conversation's line under the client id given awaits, as its send wrote it; none for a line no turn is awaited by. */
+export function turnAwaitedByLine(
+  conversationId: string,
+  clientId: string,
+): TurnStateEffect<Option.Option<string>> {
+  return Effect.map(
+    findAwaitedByLine({ conversationId, clientId }),
+    Option.map((row) => row.turnId),
+  );
+}
+
+/** Where the conversation's turn named stands; none where no such turn does. */
+export function turnStatusOf(
+  conversationId: string,
+  turnId: string,
+): TurnStateEffect<Option.Option<TurnStatus>> {
+  return Effect.map(
+    findStatus({ conversationId, turnId }),
+    Option.map((row) => row.status),
+  );
+}
+
+/** A coding agent's turn still awaiting a runner: the account, the conversation, and the turn. */
+export type AwaitingRunner = typeof AwaitingRunnerSchema.Type;
+
+/**
+ * The coding agents' turns, among every account's, still queued for a
+ * runner that were queued before `before` and stand inside their pickup
+ * deadline at `at`, oldest first, at most `limit` of them.
+ */
+export function turnsAwaitingRunner(
+  before: Date,
+  at: Date,
+  limit: number,
+): TurnStateEffect<readonly AwaitingRunner[]> {
+  return findAwaitingRunner({ before, at, limit });
+}
+
+/**
+ * The ids of the conversation's turns running under an attempt older than
+ * the launch named: their runner was replaced by that launch, so their end
+ * is not coming, and the launch's first post fails them so.
+ */
+export function supersededTurnsOf(
+  conversationId: string,
+  launch: number,
+): TurnStateEffect<readonly string[]> {
+  return Effect.map(findSuperseded({ conversationId, launch }), (rows) =>
+    rows.map((row) => row.id),
+  );
+}
+
+/** Settles the turn a rewind keeps as its conversation's first, its work dropped, with no Stop or failure on it. */
+export function settleKeptTurn(conversationId: string, turnId: string): TurnStateEffect<void> {
+  return settleKept({ conversationId, turnId });
+}
+
+/** A turn read lapsed: its id, where it stood, the attempt it ran under, when it started, and when a Stop was asked of it. */
+export type LapsedTurn = typeof LapsedTurnSchema.Type;
+
+/** The conversation's turns still open that stand lapsed at `at`, oldest first. */
+export function lapsedTurnsOf(
+  conversationId: string,
+  at: Date,
+): TurnStateEffect<readonly LapsedTurn[]> {
+  return findLapsed({ conversationId, at });
+}
+
+/** Whether the lapsed turn ran past its cap rather than its state's deadline. */
+export function pastCap(turn: Pick<LapsedTurn, "startedAt">, at: Date): boolean {
+  return turn.startedAt !== null && at.getTime() - turn.startedAt.getTime() > TURN_DEADLINE.CAP_MS;
+}
+
+/** A coding agent with a turn lapsed: its ids, and where its runner lives. */
+export type LapsedAgent = typeof LapsedAgentSchema.Type;
+
+/**
+ * The coding agents, among every account's, with a turn still open that
+ * stands lapsed at `at`, at most `limit` of them, drawn in an order of their
+ * own each read: so agents a sweep could not reap, their runner lease held
+ * by another call or their reap failed, are read again by a later sweep
+ * without keeping every other lapsed agent waiting behind them.
+ */
+export function lapsedAgents(at: Date, limit: number): TurnStateEffect<readonly LapsedAgent[]> {
+  return findLapsedAgents({ at, limit });
+}

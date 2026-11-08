@@ -3,6 +3,7 @@ import type { UnparsedWireValue } from "@repo/wire";
 import type { AppSettingId, DescribedSetting } from "@repo/wire/app-settings";
 import type { HostCapability } from "./capabilities.js";
 import type { ExperimentChoices } from "./experiments.js";
+import type { SoundWhen } from "./sound-when.js";
 
 export const SETTINGS_PAGE = {
   /** Who is signed in and the ways out, the page Settings opens on. */
@@ -70,6 +71,8 @@ export const SETTING_SECTION = {
   COMPOSER: "composer",
   /** Who authors an agent's commits, a group of its own on Account, under the message box. */
   COMMITS: "commits",
+  /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Account, under Commits. */
+  SOUNDS: "sounds",
 } as const;
 
 export type SettingSection = (typeof SETTING_SECTION)[keyof typeof SETTING_SECTION];
@@ -122,8 +125,8 @@ export interface SettingGuardResult<Value> {
  * can no longer lead to a page without its row.
  */
 export interface SettingsVisibility {
-  /** The experiments the account has on, which a gated feature's row stands on. */
-  settings: { experiments: ExperimentChoices };
+  /** The experiments the account has on, which a gated feature's row stands on, and when a sound plays, which the sound's own row stands on; none stored reads as its default. */
+  settings: { experiments: ExperimentChoices; soundWhen?: SoundWhen | undefined };
   /** Whether the Account section stands. */
   accountDrawn: boolean;
   /** What the platform offers, which a platform feature's row stands on. */

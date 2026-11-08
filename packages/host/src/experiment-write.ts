@@ -7,8 +7,8 @@ import type { PlatformError } from "effect/PlatformError";
 import type { AccountPreferencesClient } from "./account-preferences-client.js";
 import type { SettingsStore } from "./settings-store.js";
 
-/** Why an experiment's switch did not move: the service did not answer the write. */
-export const EXPERIMENT_UNANSWERED = "The service did not answer. Try again.";
+/** Why an experiment's switch did not move: the write got no answer, or one that was no answer, as a 503 is. */
+export const EXPERIMENT_UNANSWERED = "Could not save that switch. Try again.";
 
 /** Why an experiment's switch did not move: the account it was pressed for signed out before the service answered. */
 export const EXPERIMENT_ACCOUNT_CHANGED = "The account changed before that switch landed.";

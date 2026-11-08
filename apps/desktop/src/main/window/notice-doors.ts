@@ -1,13 +1,17 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import type { AgentNoticeDoorsSurface } from "@repo/host/agent-notices";
+import { type AgentNoticeDoorsSurface, NOTICE_KIND } from "@repo/host/agent-notices";
+import { PUSH } from "@repo/host/contract";
 import { NOTIFICATIONS_STATUS, type NotificationsStatus } from "@repo/settings/settings-controls";
 import { app, Notification } from "electron";
+import type { PanelManager } from "./panel-manager";
 
 /**
- * notice-doors.ts -- the doors a notice leaves this process through: Electron's `Notification`, shown once with its click handed back, which only a command waiting on this Mac posts, or the Dock's badge.
+ * notice-doors.ts -- the doors a notice leaves this process through: Electron's `Notification`, shown once with its click handed back, which a command waiting on this Mac posts, as does an agent's finish or ask where the account turned notifications on, the Dock's badge, or a chime played in one panel window.
  *
  * A system that posts no notifications is left alone rather than asked;
- * the prompt in the window still says a command waits.
+ * the prompt in the window still says a command waits. An agent's finish or
+ * ask is posted silent, since the chime, where the account turned one on,
+ * is its one sound; a command waiting sounds as macOS sounds a notification.
  *
  * Note that each notification is held until macOS is done with it, because
  * the object is all that ties the banner to its click: one the collector
@@ -18,17 +22,24 @@ import { app, Notification } from "electron";
  * The Dock's badge is Electron's own count, which macOS draws only where
  * notifications are allowed for the app and its badges are not turned off in
  * System Settings, so the developer's own switch for it is the system's.
+ *
+ * A chime is played by a renderer, since main has no Web Audio: it is pushed
+ * to one panel window alone (`PanelManager`'s `pushToOne`), which plays it
+ * through `@repo/ui`'s player, so it sounds once however many windows stand.
  */
 export function electronNoticeDoors(dependencies: {
   /** macOS showed a notification, or refused one: whether notifications are on for the app. */
   onAnswered: (status: NotificationsStatus) => void;
+  /** The panel windows, one of which plays each chime. */
+  panels: Pick<PanelManager, "pushToOne">;
   report: (line: string) => void;
 }): AgentNoticeDoorsSurface {
-  const { onAnswered, report } = dependencies;
+  const { onAnswered, panels, report } = dependencies;
   const standing = new Set<Notification>();
   const post: AgentNoticeDoorsSurface["post"] = (notice) => {
     if (!Notification.isSupported()) return;
-    const posted = new Notification({ title: notice.title, body: notice.body });
+    const silent = notice.subject.kind !== NOTICE_KIND.MAC_COMMAND_ASK;
+    const posted = new Notification({ title: notice.title, body: notice.body, silent });
     const release = () => standing.delete(posted);
     standing.add(posted);
     posted.on("click", () => {
@@ -49,6 +60,7 @@ export function electronNoticeDoors(dependencies: {
     badge: (count) => {
       app.setBadgeCount(count);
     },
+    chime: (sound) => panels.pushToOne(PUSH.CHIME, sound),
   };
 }
 

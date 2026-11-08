@@ -42,6 +42,7 @@ import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { MAC_COMMAND_BOUNDS } from "@repo/features/mac-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { failureKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import {
   EXCESS_KEYS,
   HTTP_METHOD,
@@ -265,7 +266,7 @@ const DOOR_FAILED_RESULT: McpToolCallResult = {
 type WorkspaceMcpSandboxDoor = (admitted: AdmittedConversation) => AgentSandboxDoors;
 
 /** The agent's browser as the edge composes it (`../browser/agent-browser.ts`'s `agentBrowserServices`), over the runtime's HTTP client. */
-export type WorkspaceMcpBrowser = Layer.Layer<AgentBrowser, never, HttpClient.HttpClient>;
+export type WorkspaceMcpBrowser = Layer.Layer<AgentBrowser, never, HttpClient.HttpClient | Sandbox>;
 
 /** What the server is composed over: the doors to the agent's sandbox, and its browser. */
 export interface WorkspaceMcpDoors {

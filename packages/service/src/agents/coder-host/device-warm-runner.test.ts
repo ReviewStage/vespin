@@ -16,6 +16,7 @@ import { beatDevice } from "@repo/database/models/device-store";
 import { turns } from "@repo/database/schemas/storage";
 import { getTestDB } from "@repo/database/testing";
 import { DEVICE_AGENT_LINE_KIND, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -35,6 +36,9 @@ import { claimedDeviceAgentLine, settledDeviceAgentLine } from "../device-agent.
 import { MAC_MACHINE } from "../machine/device-machine.js";
 import { SESSION_CANCEL_OUTCOME, SESSION_SEND_OUTCOME } from "../sessions/agent-sessions.js";
 import { runnerIdled } from "./runner-sessions.js";
+
+/** No network, and sandboxes kept in memory, which a Mac's agent never reaches. */
+const UNREACHED = Layer.merge(noNetwork, memorySandbox().layer);
 
 /** The line a retire writes to a warm runner, as its Mac takes it. */
 const RETIRE_LINE = '{"type":"retire"}\n';
@@ -63,7 +67,7 @@ const stopped = (warm: WarmLocalAgent, turnId: string) =>
     return yield* driven(yield* forkClockDriven(cancel), MAC_MACHINE.POLL);
   });
 
-it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, noNetwork))(
+it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
   "a local agent's warm runner",
   (it) => {
     it.effect(

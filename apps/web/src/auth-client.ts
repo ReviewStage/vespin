@@ -9,11 +9,11 @@
  * or for that member's page of the dashboard as the maintainer again.
  */
 
+import { PANEL_PATH } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { accountPageHref } from "@repo/panel/admin/routing";
 import { adminClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
-import { PANEL_PATH } from "./app/web-address";
 
 export const authClient = createAuthClient({ plugins: [adminClient()] });
 

@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { type DatabaseServices, READ_CONCURRENCY } from "@repo/database/core/query";
 import { readAccountPreferences } from "@repo/database/models/account-store";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type Agent,
   type AgentPlace,
+  type AgentStarted,
   createAgent,
   discardAgent,
-  nativeRuntimesOfReached,
   readAgentByKey,
   readNewestAgentPlace,
   taskPilotStands,
@@ -62,10 +61,11 @@ import { automationRun } from "@repo/features/model-label";
 import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wire";
 import { TASK_MODE, type Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL, type SlackLineMetadata, START_LINE_BRIEF } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Cause, Clock, Effect, Option, Result } from "effect";
+import { Cause, Effect, Option, Ref, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   recordServerEvent,
@@ -106,6 +106,7 @@ import {
   RUNTIME_REFUSAL,
   SESSION_SEND_OUTCOME,
   SESSION_TURN,
+  type SessionOpened,
   type TypedTurn,
 } from "../sessions/agent-sessions.js";
 import { experimentOnIn } from "../workspace-experiment-on.js";
@@ -122,7 +123,6 @@ import {
 import type { NativeRuntime } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { failedCallRefusal } from "./runtime-sessions.js";
-import { agentSummary, summaryAccounts, summaryDevices } from "./status.js";
 import { agentLineSender } from "./steer.js";
 import { summaryOf } from "./stop.js";
 import {
@@ -288,16 +288,13 @@ export interface StartReach {
   readonly access: GitHubAccess;
 }
 
-/** What a Start came to: the agent, and whether this ask made it or found it under its key. */
-export interface AgentStarted {
-  readonly agent: Agent;
-  readonly created: boolean;
-  /** The transaction the agent's row was written in, where this Start wrote it. */
-  readonly txid?: string;
-}
-
 /** What a Start reaches: the store, the catalog, GitHub through the App on the developer's standing, and the network to the agent's harness. */
-export type StartServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | ModelCatalog;
+export type StartServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | ModelCatalog
+  | Sandbox;
 
 /** What an account may start an agent on: the models the catalog offers it, and the choice a Start naming none runs on. */
 export interface AccountModelChoices {
@@ -706,10 +703,20 @@ function openingOf(
 
 /**
  * The first message of a Start, written as the line awaiting its turn under
- * a fresh key, as a steer's is (`steer.ts`), and its line id, which a native
- * runner is handed and names back as it takes the line. Its
- * dispatch has already happened by the time it matters: the line is written
- * standing, and the Start's own open is what hands it over.
+ * a fresh key, as a steer's is (`steer.ts`), and handed over by the open
+ * given as its dispatch, as a send hands a steer's: the line and its turn
+ * stand before the open claims the agent's session and queues the line, and
+ * the turn is handed on for a runner only once the open's answer is recorded
+ * taken (`turn-delivery.ts`), so its delivery never finds a session not yet
+ * opened. Answers what the open answered, none where its runtime could not be
+ * reached or it outlasted the dispatch's deadline; an open that did not take
+ * the line takes the line and its turn back with it. Fails where the store
+ * wrote no line, or failed around an open that did not take it. Note that an
+ * open that took the line is answered whatever the store recorded after it,
+ * because the line and its queued turn were written before the open and
+ * stand, the sweep handing that turn on where its record failed
+ * (`republishQueuedTurns`), so the agent is that session's and is never
+ * discarded under it.
  */
 const openingLine = (
   agent: Agent,
@@ -717,11 +724,17 @@ const openingLine = (
   files: readonly HandedFile[],
   mentioned: string | undefined,
   opened: { readonly sender: LineSender; readonly metadata: AwaitingLineMetadata },
+  open: (lineId: string) => Effect.Effect<SessionOpened | undefined>,
 ) =>
   Effect.gen(function* () {
     const clientKey = randomUUID();
+    const answered = yield* Ref.make<SessionOpened | undefined>(undefined);
+    const dispatch = open(sentLineId(clientKey)).pipe(
+      Effect.tap((answer) => Ref.set(answered, answer)),
+      Effect.map((answer) => answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED),
+    );
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-    const written = yield* hostedStoreOrUnavailable(
+    const written = yield* Effect.result(
       writer.writeAwaitingLine(
         { userId: agent.userId, conversationId: agent.conversationId },
         {
@@ -731,14 +744,24 @@ const openingLine = (
           mentioned,
           ...opened,
         },
-        Effect.succeed(true),
+        dispatch,
       ),
     );
-    // A line refused, or one the store never landed, is no line the runner could name back.
-    if (Result.isFailure(written) || Option.isNone(written.success)) {
+    const answer = yield* Ref.get(answered);
+    if (Result.isFailure(written)) {
+      if (answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
+        yield* Effect.logError(
+          `a Start's open took its line, but the store failed to record its answer, so its queued turn waits on the sweep's republish: ${failureKind(written.failure)}`,
+        ).pipe(Effect.annotateLogs({ ...agentLogIds(agent), outcome: answer.outcome }));
+        return answer;
+      }
+      // A line the store failed around is no line the runner could name back.
+      yield* logStoreFailure(written.failure);
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
-    return sentLineId(clientKey);
+    // A line refused is no line the runner could name back.
+    if (Result.isFailure(written.success)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+    return answer;
   });
 
 /** Where a Start's agent runs, as `machineOfStart` decides it: the machine and device it asks the runtime and machine choices for. */
@@ -1092,14 +1115,41 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
               undefined,
               yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
             );
+      // The runtime says why an open it refused was refused; one that could not be asked is said here.
+      const open = (lineId: string) =>
+        Effect.andThen(
+          Effect.sync(() => {
+            asked = true;
+          }),
+          sessions
+            .open({
+              conversationId: agent.conversationId,
+              turn: SESSION_TURN.TYPED,
+              message: turnContent(handed, files, mentioned),
+              lineId,
+            })
+            .pipe(
+              Effect.catchTag("SessionUnreachable", (failure) =>
+                Effect.as(
+                  agentFailureSaid(
+                    `the agent's runtime could not be reached to start a coding agent: ${describeUnreachable(failure)}`,
+                    failure._tag,
+                    true,
+                  ),
+                  undefined,
+                ),
+              ),
+            ),
+        );
       // The first message is written here, awaiting its turn, on every runtime, so it says what it is and
-      // who sent it: a native harness's runner names the line back as it takes it (`native-events/`).
-      const line = yield* openingLine(
+      // who sent it, and handed over by the open: a native harness's runner names the line back as it takes it (`native-events/`).
+      return yield* openingLine(
         agent,
         handed,
         files,
         mentioned,
         openingOf(agent, ask, brief, rules.startLine),
+        open,
       ).pipe(
         Effect.tapError((refusal) =>
           discardedAt(
@@ -1111,27 +1161,6 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
           ),
         ),
       );
-      // The runtime says why an open it refused was refused; one that could not be asked is said here.
-      asked = true;
-      return yield* sessions
-        .open({
-          conversationId: agent.conversationId,
-          turn: SESSION_TURN.TYPED,
-          message: turnContent(handed, files, mentioned),
-          lineId: line,
-        })
-        .pipe(
-          Effect.catchTag("SessionUnreachable", (failure) =>
-            Effect.as(
-              agentFailureSaid(
-                `the agent's runtime could not be reached to start a coding agent: ${describeUnreachable(failure)}`,
-                failure._tag,
-                true,
-              ),
-              undefined,
-            ),
-          ),
-        );
     }).pipe(
       Effect.onError((cause) =>
         Cause.hasFails(cause)
@@ -1265,8 +1294,9 @@ export const requestedChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
  * place (`POST /api/agents/{id}/agents`), and a task's start that names an
  * agent (`POST /api/plans`) all take it, so they refuse and answer alike.
  * A choice the catalog refuses is refused as invalid; an empty note is none,
- * its files carrying it alone. A new agent's summary is read as it was just
- * made, with no turn; one a retry found under its key, as it stands now.
+ * its files carrying it alone. The agent's summary is read as it stands once
+ * the Start is done, with the first turn its opening queued, a new agent and
+ * one a retry found under its key alike.
  */
 export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   agentSessions: Effect.Effect<
@@ -1302,33 +1332,6 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     reached,
     landed,
   }).pipe(Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)));
-  if (!created) return { agent: yield* summaryOf(userId, agent), created };
-  const [names, runtimes, macs, owners] = yield* hostedStoreOrUnavailable(
-    Effect.all(
-      [
-        readAccountNames(summaryAccounts(agent)),
-        nativeRuntimesOfReached([agent.conversationId]),
-        devicesNamed(summaryDevices([agent])),
-        agentOwnerFactsOf([agent]),
-      ],
-      { concurrency: 4 },
-    ),
-  );
-  return {
-    agent: agentSummary(
-      agent,
-      {
-        turn: undefined,
-        awaitingLineAt: undefined,
-        runtime: runtimes.get(agent.conversationId),
-      },
-      yield* Clock.currentTimeMillis,
-      names,
-      owners,
-      [],
-      macs,
-    ),
-    created,
-    ...(txid === undefined ? undefined : { txid }),
-  };
+  const summary = yield* summaryOf(userId, agent);
+  return { agent: summary, created, ...(txid === undefined ? undefined : { txid }) };
 });

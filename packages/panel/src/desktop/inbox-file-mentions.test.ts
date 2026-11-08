@@ -14,14 +14,15 @@ import type { CodeRef, TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { NO_EXPERIMENTS } from "@repo/settings";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Effect } from "effect";
-import { act, createElement, useState } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { useInboxRoute } from "../inbox-route.js";
 import { useInboxTaskAgents } from "../tasks/use-inbox-task-agents.js";
 import { OpenLinkProvider } from "../tasks/use-open-link.js";
 import { useSidePanel } from "../tasks/use-side-panel.js";
-import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import {
   FAKE_ANSWER,
   type FakeActAnswer,
@@ -34,6 +35,7 @@ import { handInboxItems, handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { holdingInboxChoice, windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
 /**
@@ -151,11 +153,8 @@ async function inbox() {
     rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] }, [INBOX_SCOPE_KIND.AGENT]: {} },
   });
   function Page() {
-    // Note that the item stands chosen, as a press on its row chooses it.
-    const [chosen, setChosen] = useState<InboxChoice | undefined>({
-      taskId: TASK.id,
-      itemId: ITEM.id,
-    });
+    // Note that the item stands chosen at its address, as a press on its row chooses it.
+    const { chosen } = useInboxRoute();
     const panelFor = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
     const taskAgents = useInboxTaskAgents(panelFor);
     const sidePanel = useSidePanel(
@@ -178,19 +177,7 @@ async function inbox() {
           tasks: [TASK],
           inbox: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
           inboxTasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
-          inboxView: {
-            open: true,
-            chosen,
-            onOpen: () => undefined,
-            onClose: () => undefined,
-            onChoose: setChosen,
-            onOpenItem: () => undefined,
-            onClear: () => setChosen(undefined),
-            narrowed: undefined,
-            onWiden: () => undefined,
-            pages: [],
-            onTaskAgents: taskAgents.onRead,
-          },
+          inboxView: { ...tasksControl().inboxView, pages: [], onTaskAgents: taskAgents.onRead },
           sidePanel,
           onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) =>
             went.push(`${taskId} file ${JSON.stringify(ref)} ${commit}`),
@@ -201,7 +188,13 @@ async function inbox() {
   }
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(createElement(Page))));
+  const router = windowRouter(createMemoryHistory({ initialEntries: [`/acme/inbox/${ITEM.id}`] }));
+  const held = holdingInboxChoice({ taskId: TASK.id, itemId: ITEM.id });
+  act(() =>
+    root?.render(
+      router.provide(withQueryClient(createElement(Fragment, null, held, createElement(Page)))),
+    ),
+  );
   await settle();
   return { container, links, went };
 }
@@ -231,7 +224,7 @@ function panelTabs(container: HTMLElement): string[] | undefined {
   );
 }
 
-test("a file an item of a task names in the older form opens beside the Inbox as the panel's preview, the Inbox still standing", async () => {
+test("a file an item of a task names in the older form opens beside the Inbox in the panel, the Inbox still standing", async () => {
   const { container, links, went } = await inbox();
   assert.equal(panelTabs(container), undefined, "no panel stands until the item opens one");
 

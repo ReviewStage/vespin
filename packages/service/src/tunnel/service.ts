@@ -48,29 +48,25 @@ const PortSchema = Schema.NumberFromString.pipe(
 const readId = readEither(wireUuidSchema);
 const readKind = readEither(Schema.Literals(Object.values(TUNNEL_KIND)));
 const readPort = readEither(PortSchema);
-const readText = readEither(Schema.String);
 
 /** What an upgrade asks for before its credential is resolved: who it says it is, and the agent and bridge it names. */
-export type TunnelUpgrade =
+type TunnelUpgrade =
   | { readonly status: number }
   | { readonly credential: RelayCredential; readonly ask: Omit<TunnelAsk, "userId"> };
 
-/** The bridge an upgrade's query names, or none where it names no kind and argument this service takes; the mirror takes whether to wake. */
+/** The bridge an upgrade's query names, or none where it names no kind and argument this service takes; the mirror takes none, and a `wake` an older desktop still sends is ignored. */
 function bridgeOf(
   query: (name: string) => ReturnType<typeof unparsedWire>,
 ): TunnelBridge | undefined {
   const kind = readKind(query(SANDBOX_TUNNEL.QUERY.KIND));
   if (Result.isFailure(kind)) return undefined;
-  if (kind.success === TUNNEL_KIND.MIRROR) {
-    const wake = Result.getOrUndefined(readText(query(SANDBOX_TUNNEL.QUERY.WAKE)));
-    return { kind: kind.success, wake: wake === SANDBOX_TUNNEL.WAKE_ASKED };
-  }
+  if (kind.success === TUNNEL_KIND.MIRROR) return { kind: kind.success };
   const port = readPort(query(SANDBOX_TUNNEL.QUERY.PORT));
   return Result.isFailure(port) ? undefined : { kind: kind.success, port: port.success };
 }
 
 /** Whether an upgrade is the tunnel's to take, read from its address and headers alone, against the deployment's own origins. */
-export function admitTunnelUpgrade(
+function admitTunnelUpgrade(
   url: string | undefined,
   headers: IncomingHttpHeaders,
   ownOrigins: ReadonlySet<string>,

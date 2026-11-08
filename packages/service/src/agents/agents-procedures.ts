@@ -50,7 +50,6 @@ import {
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -64,7 +63,8 @@ import {
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS } from "@repo/features/contract";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { Clock, Duration, Effect, type Layer, Option, type Redacted, Result } from "effect";
+import type { Sandbox } from "@repo/sandbox";
+import { Clock, Effect, type Layer, Option, type Redacted, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
@@ -95,7 +95,6 @@ import {
 } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
-import { settleLapsedRunner } from "./coder-host/lapsed-runner.js";
 import {
   agentPullRequestReach,
   instancePublishedCache,
@@ -129,28 +128,24 @@ import {
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
-import type { SandboxStopReach } from "./session-sandboxes.js";
+import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
 import { runOnMacStanding } from "./workspace-tools.js";
 
-export interface AgentsProcedureSeams extends PublishedReach, SandboxStopReach {
+export interface AgentsProcedureSeams extends PublishedReach, SandboxDeleteReach {
   resolveUserId: UserIdResolver;
   /** The agent's sandbox as the shells reach it: Vercel's in production, a script's in a test. */
-  readonly sandbox: Layer.Layer<AgentSandbox, never, HttpClient.HttpClient | DatabaseServices>;
+  readonly sandbox: Layer.Layer<
+    AgentSandbox,
+    never,
+    HttpClient.HttpClient | DatabaseServices | Sandbox
+  >;
   /** The model a Start from another agent summarizes the steps it cannot keep on; the deployment's own (`coder-host/replay-summary.ts`) where none is named. */
   summaryModel?: SummaryModelOf;
 }
-
-/**
- * How long a developer's resume holds the sandbox it wakes: five minutes,
- * since a resume is a Terminal about to attach, whose own lease takes over
- * within seconds; one that never attaches is stopped by the lease sweep once
- * this lapses past its grace, rather than at Vercel's timeout.
- */
-const RESUME_HOLD = Duration.minutes(5);
 
 /** A choice the catalog refused is an invalid request, on the wire. */
 const choiceOrInvalid = <A, E, R>(
@@ -425,15 +420,12 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent as its own page, an agent with no task as much as one on a task. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      // An open of the agent settles a turn whose runner stopped posting past its answer, which never
-      // waits on the machine it asks, since every reader already reads that turn lost. Where it settled
-      // none, the queue a hand-off cut off left claimed is handed on once its claim lapsed; a turn it
-      // settled hands on, or pauses, the queue through its own end.
+      // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
+      // its claim lapsed. Note that it settles no turn: a turn past its deadline is the minute sweep's to
+      // reap (`coder-host/reconcile.ts`), never a read's.
       yield* afterResponse(
-        "a lapsed runner's settle",
-        Effect.flatMap(settleLapsedRunner(agent), (settled) =>
-          settled.length === 0 ? queueAtTouch(routedSessions, agent) : Effect.void,
-        ),
+        "an agent queue's hand-on at an open",
+        queueAtTouch(routedSessions, agent),
       );
       const standing = yield* standingsOf([agent.conversationId]);
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
@@ -625,13 +617,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     }),
     /** The agent's sandbox resumed from its snapshot, the developer's click and nothing else, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {
-      const { conversationId, sessionId } = yield* reachedAgentSession(context.userId, input.id);
+      const sessionId = yield* reachedSession(context.userId, input.id);
       if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING };
-      // The resume is held before it is asked, so a sandbox woken for a Terminal that never attaches is stopped by the lease sweep.
-      const now = yield* Clock.currentTimeMillis;
-      yield* hostedStoreOrUnavailable(
-        holdSandbox(conversationId, new Date(now + Duration.toMillis(RESUME_HOLD))),
-      );
       return yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;

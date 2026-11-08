@@ -99,8 +99,6 @@ export const memorySaveRequestSchema = EffectSchema.Struct({
   replaces: EffectSchema.optionalKey(memoryIdSchema),
 });
 
-export type MemorySaveRequest = typeof memorySaveRequestSchema.Type;
-
 /** What a keep came to, and the memory as it then stands. */
 export const memorySaveAnswerSchema = EffectSchema.Struct({
   outcome: EffectSchema.Literals(Object.values(MEMORY_SAVED)),
@@ -119,5 +117,3 @@ export const memorySearchAnswerSchema = EffectSchema.Struct({
   memories: EffectSchema.Array(memorySummarySchema),
   total: countedNumber,
 });
-
-export type MemorySearchAnswer = typeof memorySearchAnswerSchema.Type;

@@ -16,7 +16,7 @@
  * it as it stands.
  */
 
-/** The unprivileged user the harness runs as, which a sandbox makes as the Sandbox SDK makes a user (`vercel-machine.ts`). */
+/** The unprivileged user the harness runs as, which a sandbox makes as the Sandbox SDK makes a user (`sandbox-machine.ts`). */
 export const AGENT_USER = "agent";
 
 /**
@@ -69,15 +69,32 @@ export const SANDBOX_TOOL_ENV = { PLAYWRIGHT_BROWSERS_PATH: "0" } as const;
  * it. Note that a persistent sandbox resumes from its own snapshot of the
  * image it was made from, so one made before the product's rename holds them
  * under `SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME`, which each launch links this
- * name to (`vercel-machine.ts`'s launch).
+ * name to (`sandbox-machine.ts`'s launch).
  */
 export const SANDBOX_TOOLS_DIRECTORY = "/opt/agent";
 
 /** Where a sandbox made before the rename holds our tools, read through `SANDBOX_TOOLS_DIRECTORY`'s link and never written. */
 export const SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME = "/opt/luke";
 
-/** Where the image keeps the runner's bundle, built into it with the image (`apps/web/agent-image/Dockerfile`). */
+/** Where a sandbox keeps the runner's unit (`RUNNER_UNIT`): the image's, which each launch installs the deploy's over (`apps/web/agent-image/Dockerfile`). */
 export const RUNNER_DIRECTORY = `${SANDBOX_TOOLS_DIRECTORY}/agent-runner`;
+
+/**
+ * The runner as one unit, every file of it named once: its bundle and each
+ * file the bundle loads from beside itself, as its build leaves them in
+ * `dist/`. Sentry's profiler binary is the one for the sandbox's x64 glibc
+ * Linux on Node 24, ABI 137 (`scripts/profiler-binary.mjs`). The image's
+ * context holds the unit in a folder of its own, the web build ships it the
+ * same way beside each function that opens a sandbox
+ * (`apps/web/scripts/agent-image.ts`), and each cloud launch installs it
+ * whole over `RUNNER_DIRECTORY` (`@repo/service`'s `sandbox-machine.ts`), so
+ * no file of it comes from another build than the bundle, whatever disk the
+ * sandbox resumed on.
+ */
+export const RUNNER_UNIT = {
+  BUNDLE: "agent-runner.mjs",
+  PROFILER: "sentry_cpu_profiler-linux-x64-glibc-137.node",
+} as const;
 
 /**
  * The Claude Agent SDK, pinned exactly, and the `claude` binary its

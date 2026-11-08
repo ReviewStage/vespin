@@ -48,15 +48,6 @@ export const VERB = {
 } as const;
 
 /**
- * What the account's connected services are called where they are connected:
- * Settings' Integrations page and the setup that leads to it.
- */
-export const INTEGRATION_LABEL = {
-  one: "Integration",
-  many: "Integrations",
-} as const satisfies Noun;
-
-/**
  * What those same services are called where an agent is handed them: the
  * agent box's + menu and popover, the @ menu, and the automation editor's
  * field, since an agent reaches each one as an MCP server.
@@ -214,8 +205,9 @@ export function replyFromWords(agent: string, lead?: string): string {
 /** What a refresh that failed says beside the last good read, which stays drawn; Retry stands with it. */
 export const REFRESH_FAILED_WORDS = "Could not refresh";
 
-/** What an act that failed on its way to the service says, whatever the failure's own text: a person reads this, and the text goes to the log. */
-export const ACT_UNREACHED_WORDS = "Could not reach the service. Try again.";
+/** What an act that failed on its way to the service says, as the reader's connection, whatever the failure's own text: a person reads this, and the text goes to the log. */
+export const ACT_UNREACHED_WORDS =
+  "Could not connect. Check your internet connection and try again.";
 
 /**
  * Why a sign-in ended without landing, each said in words of its own. The
@@ -250,10 +242,3 @@ export const SIGN_IN_FAILURE_WORDS = {
   [SIGN_IN_FAILURE.OFFLINE]: "You're offline. Connect to the internet, then sign in.",
   [SIGN_IN_FAILURE.UNFINISHED]: "Sign-in didn't finish. Try again.",
 } as const satisfies Record<SignInFailure, string>;
-
-const SIGN_IN_FAILURES: ReadonlySet<string> = new Set(Object.values(SIGN_IN_FAILURE));
-
-/** Whether a value crossing from another process is one of the sign-in's failures, and no free text. */
-export function isSignInFailure(value: unknown): value is SignInFailure {
-  return typeof value === "string" && SIGN_IN_FAILURES.has(value);
-}

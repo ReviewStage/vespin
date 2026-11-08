@@ -325,7 +325,7 @@ test("a refused Remove is said in the dialog that asked it, though the list drew
   await press("Remove host");
 
   const said = document.querySelector('[role="alertdialog"]')?.textContent ?? "";
-  assert.ok(said.includes("Could not reach the service. Try again."), said);
+  assert.ok(said.includes("Could not remove this host. Try again."), said);
 });
 
 test("a host the service still lists for this Mac while it is off stands as any host does, with its Remove", async () => {

@@ -4,7 +4,8 @@
  * Bundled with the SDK into one file (`pnpm --filter @repo/agent-runner
  * build`), which the service uploads to the agent's sandbox and starts there as the
  * agent user (P08). Exit 0 is a launch that ended as the service asked or as the
- * turn did; anything else is one we show as interrupted.
+ * turn did; anything else is one we show as interrupted, and
+ * `RUNNER_EXIT.UNCONFIGURED` one whose config line never came.
  *
  * Started as `node <bundle> codex-token <tokenUrl>` by app-server
  * (`codex-token.ts`), it prints the token the service answers on stdout and exits
@@ -22,10 +23,9 @@ import { Effect, Exit, Layer, Stream } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { claudeCodeLive } from "./claude-code.js";
 import { codexToken } from "./codex-token.js";
-import { CODEX_TOKEN_COMMAND, RUNNER_END } from "./protocol.js";
+import { RunnerUnconfigured } from "./launch.js";
+import { CODEX_TOKEN_COMMAND, RUNNER_END, RUNNER_EXIT } from "./protocol.js";
 import { runAgent } from "./runner.js";
-
-const EXIT = { ENDED: 0, FAILED: 1 } as const;
 
 // Note that the interface is made only as the stream starts, and iterated at
 // once, because readline drops every line it reads before its iterator exists.
@@ -47,9 +47,13 @@ const launch = runAgent({
   self: script === undefined ? undefined : { executable: process.execPath, script },
 }).pipe(
   Effect.scoped,
-  Effect.map((end) => (end === RUNNER_END.FAILED ? EXIT.FAILED : EXIT.ENDED)),
+  Effect.map((end) => (end === RUNNER_END.FAILED ? RUNNER_EXIT.FAILED : RUNNER_EXIT.ENDED)),
   Effect.catch((error) =>
-    Effect.logError(`agent-runner: ${error._tag}: ${error.detail}`).pipe(Effect.as(EXIT.FAILED)),
+    Effect.logError(`agent-runner: ${error._tag}: ${error.detail}`).pipe(
+      Effect.as(
+        error instanceof RunnerUnconfigured ? RUNNER_EXIT.UNCONFIGURED : RUNNER_EXIT.FAILED,
+      ),
+    ),
   ),
   Effect.provide(
     Layer.mergeAll(
@@ -70,11 +74,11 @@ const token = Effect.gen(function* () {
     Effect.mapError((failure) => failure.detail),
   );
   yield* Effect.sync(() => process.stdout.write(`${accessToken}\n`));
-  return EXIT.ENDED;
+  return RUNNER_EXIT.ENDED;
 }).pipe(
   Effect.catch((detail) =>
     Effect.sync(() => process.stderr.write(`agent-runner: ${detail}\n`)).pipe(
-      Effect.as(EXIT.FAILED),
+      Effect.as(RUNNER_EXIT.FAILED),
     ),
   ),
   Effect.provide(FetchHttpClient.layer),
@@ -86,5 +90,5 @@ const main = mode === CODEX_TOKEN_COMMAND ? token : launch;
 // the process to drain, because stdin, which the service may hold open, would keep
 // it alive after the launch has ended.
 NodeRuntime.runMain(main, {
-  teardown: (exit) => process.exit(Exit.isSuccess(exit) ? Number(exit.value) : EXIT.FAILED),
+  teardown: (exit) => process.exit(Exit.isSuccess(exit) ? Number(exit.value) : RUNNER_EXIT.FAILED),
 });

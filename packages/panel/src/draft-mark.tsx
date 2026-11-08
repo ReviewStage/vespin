@@ -40,7 +40,7 @@ export function DraftMark(): React.JSX.Element {
 const NOT_DELIVERED_WORD = "Not delivered";
 
 /** The failed mark a row or tab wears in the pencil's place while a message sent there was not delivered. */
-export function NotDeliveredMark(): React.JSX.Element {
+function NotDeliveredMark(): React.JSX.Element {
   return <RowMark kind={ROW_MARK.FAILED} label={NOT_DELIVERED_WORD} glyph={<GLYPH.FAILED />} />;
 }
 

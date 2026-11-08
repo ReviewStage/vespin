@@ -62,14 +62,16 @@
 
   /* Only the desktop's window is dragged by its bar, and what stands on the
      bar keeps its presses: the actions, a title that opens what it names,
-     a title holding the page's menu, and the buttons of a lead. */
+     a title holding the page's menu, a title being renamed, and the
+     buttons of a lead. */
   [data-ui-profile="desktop"] .ui-toolbar {
     -webkit-app-region: drag;
   }
 
   [data-ui-profile="desktop"] .ui-toolbar-actions,
   [data-ui-profile="desktop"] .ui-toolbar-title-press,
-  [data-ui-profile="desktop"] .ui-toolbar-title-menu {
+  [data-ui-profile="desktop"] .ui-toolbar-title-menu,
+  [data-ui-profile="desktop"] .ui-toolbar-title-edit {
     -webkit-app-region: no-drag;
   }
 
@@ -126,6 +128,13 @@
     gap: var(--ui-space-8);
   }
 
+  /* A title renamed in place on a phone keeps its words centered where
+     they stood, since its field is as wide as the heading lets it be rather
+     than as wide as its words. */
+  .ui-toolbar[data-look="phone"] .ui-inline-edit {
+    text-align: center;
+  }
+
   /* A phone's tag stands under its title, both centered, as a phone's
      header says what a page covers under its name, so the name stays the
      row's center rather than moving aside for the tag beside it. */
@@ -158,6 +167,23 @@
   .ui-toolbar[data-look="phone"] > .ui-toolbar-actions {
     grid-column: 3;
     justify-content: flex-end;
+  }
+
+  /* A bar's labeled quiet button (a way back, a crumb's, an act with
+     words) stands its glyph a tab's start in (`--ui-tab-start`), as the
+     task's name press does, so every glyph that leads words in a bar
+     starts the same way in from its pill's edge, the button's hairline
+     edge counted. Note that it is a rule of the components layer, so a
+     folded button's square, a utility, still centers its glyph. */
+  .ui-toolbar .ui-folding-button > .ui-button[data-variant="quiet"] {
+    padding-left: calc(var(--ui-space-8) - 1px);
+  }
+
+  /* A tab strip's bar lights its buttons (the strip's "+", its Retry, and
+     the bar's acts) in the tab's own soft wash under the pointer, so the
+     row reads as one strip rather than tabs beside darker buttons. */
+  .ui-toolbar[data-look="tabs"] {
+    --ui-button-hover-fill: var(--ui-color-fill-hover);
   }
 
   /* A tab strip's bar leads with its strip, which a narrow room has no room

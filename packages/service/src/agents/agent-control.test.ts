@@ -9,7 +9,8 @@ import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { DateTime, Effect, Option } from "effect";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { DateTime, Effect, Layer, Option } from "effect";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
 import {
   connectWorkspaceGitHub,
@@ -25,6 +26,9 @@ import { steerAgent } from "./coder-host/steer.js";
 import { startFromOf } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * Who controls a coding agent that runs on its starter's own GitHub token,
@@ -67,7 +71,7 @@ const openTokenAgent = Effect.gen(function* () {
   return { owner, reader, tokenless, workspace, task, agent: Option.getOrThrow(started).agent };
 });
 
-it.layer(getTestDB())("an agent on its starter's own GitHub token", (it) => {
+it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
   it.effect(
     "a teammate who sees it is refused its messages and a start from it, and a teammate who keeps no token reaches it not at all",
     () =>

@@ -15,6 +15,7 @@ import { askAct } from "@repo/panel/act";
 import { installActPort, installAppBridge } from "@repo/panel/app-bridge";
 import { HOST_CAPABILITY, THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS, isRecord, unparsedWire, type WireBoundaryInput } from "@repo/wire";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Context, Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
@@ -44,6 +45,7 @@ const standingHost = (service: ReturnType<typeof fakeService>) =>
         fork: (effect) => {
           Effect.runForkWith(services)(effect);
         },
+        history: createMemoryHistory(),
       }),
     );
     return Context.get(built, WebHostTag);

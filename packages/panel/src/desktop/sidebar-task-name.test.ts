@@ -3,16 +3,15 @@
 import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-task-name.test.ts -- a sidebar task's name held to its row's one line: fading out where the row cuts it, never ending hard, and named whole by the row's hint while it is cut. Synthetic.
@@ -75,7 +74,7 @@ async function mountSidebar(): Promise<HTMLElement> {
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
   });
-  act(() => root.render(withQueryClient(createElement(DesktopSidebar, sidebarProps(tasks)))));
+  act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });

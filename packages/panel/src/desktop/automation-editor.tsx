@@ -151,7 +151,7 @@ import {
   useMinute,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
-import { neverBusyAct } from "@repo/ui/confirm-state";
+import { confirmAsked, neverBusyAct } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { inputProblem, UNREPORTED } from "@repo/ui/reported-failure";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -179,6 +179,7 @@ import { confirmFailure, failureShown, unreadShown } from "../failure-report.js"
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useCreator } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
+import type { LeaveAsk, PlaceLeave } from "../places/place-leave.js";
 import { Picker, PickerRow } from "../settings/picker-row.js";
 import { SelectRow } from "../settings/select-row.js";
 import { SwitchRow } from "../settings/switch-row.js";
@@ -191,7 +192,6 @@ import { ModelMenu } from "../tasks/model-menu.js";
 import { CHIP_PLACE, RepositoryChip, type RepositoryChooser } from "../tasks/repository-chip.js";
 import { mentionableAgent } from "../tasks/task-mentions.js";
 import { useKnownNames } from "../tasks/use-known-names.js";
-import type { LeaveAsk, LeaveGuard } from "../tasks/use-tasks-tab.js";
 import { useListedAgent } from "../tasks/use-workspace-agents.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
@@ -2648,7 +2648,7 @@ export function AutomationEditor({
   onDeleted,
   onOpenAgent,
   linked,
-  leaveGuard,
+  placeLeave,
   room,
   runsShown,
   onRuns,
@@ -2674,7 +2674,7 @@ export function AutomationEditor({
    */
   linked?: { readonly runId?: string | undefined } | undefined;
   /** The window's ask before leaving unsaved work, which this page stands while it holds some. */
-  leaveGuard: LeaveGuard;
+  placeLeave: PlaceLeave;
   /** The room the panel's stage gives, narrow where the runs are a screen of their own. */
   room: ShellRoom;
   /** Whether one column stands the runs rather than the setup. */
@@ -2765,7 +2765,7 @@ export function AutomationEditor({
     if (answer.automation.trigger.kind !== AUTOMATION_TRIGGER.WEBHOOK) setShownSecret(undefined);
     else if (answer.webhookSecret !== undefined) setShownSecret(answer.webhookSecret);
     // Note that the page it now stands as is this one, saved, so the move there passes the ask.
-    if (automation === undefined) leaveGuard.pass(() => onCreated(answer.automation.id));
+    if (automation === undefined) placeLeave.pass(() => onCreated(answer.automation.id));
   };
   const save = () => {
     if (sentryWithheld(sentry, automation, draft)) {
@@ -2795,21 +2795,30 @@ export function AutomationEditor({
   };
   // Note that any way out of the page, a crumb, Escape, a run's agent, the sidebar, ⌘K, history,
   // or Settings, asks first while something written would be lost, and goes once Leave is pressed.
-  const [leavingBy, setLeavingBy] = useState<{ readonly leave: () => void } | undefined>(undefined);
+  const [leavingBy, setLeavingBy] = useState<
+    { readonly leave: () => void; readonly stay: () => void } | undefined
+  >(undefined);
   const leaving = useConfirmDialog(
     { subject: leavingBy !== undefined, surfaceOpen: true },
     neverBusyAct(() => leavingBy?.leave()),
     confirmFailure(FAILURE_SURFACE.AUTOMATION_LEAVE),
   );
   const askLeave = useRef<LeaveAsk>(() => undefined);
-  askLeave.current = (leave) => {
-    setLeavingBy({ leave });
+  askLeave.current = (leave, stay) => {
+    setLeavingBy({ leave, stay });
     leaving.ask();
   };
   useEffect(
-    () => (written ? leaveGuard.stand((leave) => askLeave.current(leave)) : undefined),
-    [written, leaveGuard],
+    () => (written ? placeLeave.stand((leave, stay) => askLeave.current(leave, stay)) : undefined),
+    [written, placeLeave],
   );
+  // The ask put away however it went, Cancel among them, keeps the window where it stands, as the move held waits to hear; once Leave went, staying is too late to hold anything.
+  const leaveAsked = confirmAsked(leaving.stage);
+  useEffect(() => {
+    if (leaveAsked || leavingBy === undefined) return;
+    leavingBy.stay();
+    setLeavingBy(undefined);
+  }, [leaveAsked, leavingBy]);
   const toggle = (enabled: boolean) =>
     automation === undefined
       ? Promise.resolve<AutomationView>({ failure: AUTOMATION_CALL_FAILURE.NOT_FOUND })
@@ -2819,7 +2828,7 @@ export function AutomationEditor({
     send: () => {
       if (automation === undefined) return Promise.resolve();
       return removing.mutateAsync(automation.id).then((answer) => {
-        if (!("failure" in answer)) leaveGuard.pass(() => onDeleted(automation.id));
+        if (!("failure" in answer)) placeLeave.pass(() => onDeleted(automation.id));
       });
     },
     answered: (answer): ActionResult =>

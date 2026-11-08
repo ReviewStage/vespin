@@ -1,5 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { causeKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, type Redacted } from "effect";
 import { GitHubBackground } from "../github/github-rate-gate.js";
 import {
@@ -13,16 +14,22 @@ import {
 /**
  * The scheduled sweep: once a minute, Vercel's cron ends what no request
  * will. Each sweep is bounded on its own, and they run in turn, each kept
- * from the others, so one that fails is logged and the rest still run.
+ * from the others, so one that fails is logged and the rest still run. Each
+ * is idempotent and reconciles what the rows say, so a minute the cron skips
+ * or calls twice ends nothing it should not.
  */
 
-type SweepRead<A> = Effect.Effect<A, unknown, DatabaseServices>;
+type SweepRead<A> = Effect.Effect<A, unknown, DatabaseServices | Sandbox>;
 
 interface MaintenanceSweeps {
   /** Prunes the sync log's transactions older than its keep, a sweep's worth, answering how many rows went. */
   pruneSyncLog: (now: number) => SweepRead<number>;
   /** Closes the shared ports' links no one has visited for their idle bound, holding the rest's sandboxes, answering how many closed. */
   sweepPortShares: (now: number) => SweepRead<number>;
+  /** Fails, with why, the coding agents' turns past their deadline, a sweep's worth of agents, answering how many turns it settled (`coder-host/reconcile.ts`). */
+  reconcileAgents: (now: number) => SweepRead<number>;
+  /** Publishes again the coding agents' turns still queued for a runner whose message may have been lost, a sweep's worth, answering how many (`coder-host/turn-delivery.ts`). */
+  republishTurns: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -47,6 +54,10 @@ interface MaintenanceSweepAnswer {
   syncLog: Swept<number>;
   /** Shared ports' links closed for going unvisited. */
   portShares: Swept<number>;
+  /** Coding agents' turns settled past their deadline. */
+  turns: Swept<number>;
+  /** Coding agents' turns still queued, published again. */
+  republished: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -78,18 +89,20 @@ const isolated = <A>(name: string, sweep: SweepRead<A>): SweepRead<Swept<A>> =>
 /** The sweeps in turn, each handed the same instant and each kept from the others (`isolated`). */
 const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
   sweeps: MaintenanceSweeps,
-): Effect.fn.Return<MaintenanceSweepAnswer, unknown, DatabaseServices> {
+): Effect.fn.Return<MaintenanceSweepAnswer, unknown, DatabaseServices | Sandbox> {
   const now = yield* Clock.currentTimeMillis;
   return {
     syncLog: yield* isolated("pruneSyncLog", sweeps.pruneSyncLog(now)),
     portShares: yield* isolated("sweepPortShares", sweeps.sweepPortShares(now)),
+    turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
+    republished: yield* isolated("republishTurns", sweeps.republishTurns(now)),
   };
 });
 
 export const handleMaintenanceSweep = /* @__PURE__ */ Effect.fn("web/handleMaintenanceSweep")(
   function* (
     options: MaintenanceSweepOptions,
-  ): Effect.fn.Return<Response, unknown, DatabaseServices> {
+  ): Effect.fn.Return<Response, unknown, DatabaseServices | Sandbox> {
     const { request } = options;
     if (request.method !== "GET") {
       return errorResponse(

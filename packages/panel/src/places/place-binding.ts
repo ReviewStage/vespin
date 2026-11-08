@@ -33,7 +33,7 @@
  */
 
 import { useRouter } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RoutedPlace } from "./routed-places.js";
 
 /**
@@ -231,15 +231,25 @@ export interface TaskAsking {
   readonly ask: (taskId: string | undefined) => () => void;
   /** Whether `taskId` is bound for as the window stands at the call, asked for or open. */
   readonly boundNow: (taskId: string) => boolean;
+  /** The task bound for as the window stands at the call, asked for or open; none where none is. */
+  readonly boundForNow: () => string | undefined;
 }
 
 /** The task the host binds the window to, `open`, as the window asks for another (see the module's head). */
 export function useTaskAsk(open: string | undefined): TaskAsking {
   const [asked, setAsked] = useState<TaskAsk | undefined>(undefined);
-  const boundFor = asked !== undefined && asked.over === open ? asked.taskId : open;
   // Note that what is bound for is read at the call too, from the ask as it was last made or taken back rather than as it
   // was last drawn, since an arrival may be drawn before the ask that led there is.
   const latest = useRef<TaskAsk | undefined>(undefined);
+  // Note that the host's next move answers the ask, so it is let go there, because an ask kept would stand again where
+  // the host binds back the task it was asked over, as a delete of a task opened from Home binds none again.
+  // The ask as it was last made is let go as the move commits, before any door reads it, so a draw React throws away
+  // lets go of nothing.
+  if (asked !== undefined && asked.over !== open) setAsked(undefined);
+  useLayoutEffect(() => {
+    if (latest.current !== undefined && latest.current.over !== open) latest.current = undefined;
+  }, [open]);
+  const boundFor = asked !== undefined && asked.over === open ? asked.taskId : open;
   const openNow = useRef(open);
   openNow.current = open;
   // Note that the ask stands over the task open as it is made, though the door making it was handed long before, as a toast's is.
@@ -252,11 +262,10 @@ export function useTaskAsk(open: string | undefined): TaskAsking {
       setAsked((held) => (held === made ? undefined : held));
     };
   }, []);
-  const boundNow = useCallback((taskId: string) => {
+  const boundForNow = useCallback(() => {
     const made = latest.current;
-    const standing =
-      made !== undefined && made.over === openNow.current ? made.taskId : openNow.current;
-    return standing === taskId;
+    return made !== undefined && made.over === openNow.current ? made.taskId : openNow.current;
   }, []);
-  return { boundFor, ask, boundNow };
+  const boundNow = useCallback((taskId: string) => boundForNow() === taskId, [boundForNow]);
+  return { boundFor, ask, boundNow, boundForNow };
 }

@@ -4,6 +4,8 @@ import {
   literalsReadingLegacy,
   MESSAGE_ROLE,
   TURN_ORIGIN,
+  TURN_STATUS,
+  type TurnStatus,
   WireValueSchema,
 } from "@repo/wire";
 import { readEither, verbatimJsonSchema, wireKeys } from "@repo/wire/effect";
@@ -11,7 +13,7 @@ import { Schema as EffectSchema, Result, SchemaTransformation } from "effect";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
-import { githubRepositoryFullNameSchema } from "./link-grammar.js";
+import { commitShaSchema, githubRepositoryFullNameSchema } from "./link-grammar.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -363,7 +365,7 @@ export const MAC_PRESENCE = {
  * device that went quiet, and a window that cannot ask must not say a device
  * is away.
  */
-export const PRESENCE_READ_STANDS_MS = MAC_PRESENCE.POLL_MS + MAC_PRESENCE.READ_TIMEOUT_MS;
+const PRESENCE_READ_STANDS_MS = MAC_PRESENCE.POLL_MS + MAC_PRESENCE.READ_TIMEOUT_MS;
 
 /**
  * A device's lease on the runs it holds: its beat is the lease, renewed every
@@ -468,6 +470,82 @@ export const AGENT_FAILURE = {
 } as const;
 
 export type AgentFailure = (typeof AGENT_FAILURE)[keyof typeof AGENT_FAILURE];
+
+/**
+ * A word of a fixed vocabulary as a reader decodes it, read by `read`, which
+ * takes a word this build does not know as one it does rather than refusing
+ * the whole answer, so a service that writes one more word than a desktop
+ * knows still answers that desktop. Note that its encoded side is typed as
+ * the vocabulary alone, because a write never names a word outside it, so an
+ * answer's encoded type stays the one its callers hold; its guard lets any
+ * word in only for the decode to read it.
+ */
+function wordReadingUnknown<const Values extends ReadonlyArray<string>>(
+  values: Values,
+  read: (word: string) => Values[number],
+) {
+  return EffectSchema.declare(
+    (input: unknown): input is Values[number] => typeof input === "string",
+  ).pipe(
+    EffectSchema.decodeTo(
+      EffectSchema.Literals(values),
+      SchemaTransformation.transform({
+        decode: read,
+        encode: (word): Values[number] => word,
+      }),
+    ),
+  );
+}
+
+const FAILURE_WORDS: ReadonlySet<string> = new Set(Object.values(AGENT_FAILURE));
+
+function isAgentFailure(word: string): word is AgentFailure {
+  return FAILURE_WORDS.has(word);
+}
+
+/** A failure word as a reader takes it: one this build does not know reads as `other`, a failure it has no words for. */
+function agentFailureOfWord(word: string): AgentFailure {
+  return isAgentFailure(word) ? word : AGENT_FAILURE.OTHER;
+}
+
+/** A failure word as a reader decodes it (`agentFailureOfWord`). */
+export const agentFailureSchema = wordReadingUnknown(
+  Object.values(AGENT_FAILURE),
+  agentFailureOfWord,
+);
+
+const TURN_STATUS_WORDS: ReadonlySet<string> = new Set(Object.values(TURN_STATUS));
+
+function isTurnStatus(word: string): word is TurnStatus {
+  return TURN_STATUS_WORDS.has(word);
+}
+
+/**
+ * A turn row's status word as a reader takes it. One this build does not
+ * know is a state a newer service writes of a turn not yet ended, since every
+ * ending is already a word here, so it reads as running; the service's
+ * deadlines, not the reader, are what end it.
+ */
+export function turnStatusOfWord(word: string): TurnStatus {
+  return isTurnStatus(word) ? word : TURN_STATUS.RUNNING;
+}
+
+/**
+ * A coding agent's newest turn as its row records it, the one record of a
+ * turn's state (`@repo/database`'s `turn-state.ts`): its id and when it was
+ * queued, which order it against another turn, its status word as a reader
+ * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
+ * failed where it did, in the wire's word.
+ */
+const agentTurnSchema = EffectSchema.Struct({
+  id: wireUuidSchema,
+  queuedAt: countedNumber,
+  status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
+  stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  failure: EffectSchema.optionalKey(agentFailureSchema),
+});
+
+export type AgentTurn = typeof agentTurnSchema.Type;
 
 /**
  * The files a message may carry, by the media type each travels as: an
@@ -575,7 +653,7 @@ export const agentAttachmentsSchema = EffectSchema.Array(agentAttachmentSchema).
 );
 
 /** A message's words, trimmed and bounded, and empty where the files carry the message alone. */
-export const messageWordsSchema = EffectSchema.Trim.check(
+const messageWordsSchema = EffectSchema.Trim.check(
   EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_MESSAGE_CHARS),
 );
 
@@ -664,7 +742,7 @@ export const startBranchSchema = EffectSchema.String.check(
 );
 
 /** A repository a Start names beside the agent's own: `owner/name`, and the branch its checkout is cloned at, none for its default branch. */
-export const agentAlsoRepositorySchema = EffectSchema.Struct({
+const agentAlsoRepositorySchema = EffectSchema.Struct({
   repository: githubRepositoryFullNameSchema,
   branch: EffectSchema.optionalKey(startBranchSchema),
 });
@@ -672,7 +750,7 @@ export const agentAlsoRepositorySchema = EffectSchema.Struct({
 export type AgentAlsoRepository = typeof agentAlsoRepositorySchema.Type;
 
 /** The repositories a Start names beside the agent's own: at least one where the list is named, at most the bound, and each once, in any case. */
-export const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
+const agentAlsoRepositoriesSchema = EffectSchema.Array(agentAlsoRepositorySchema).check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ALSO_REPOSITORIES),
   EffectSchema.makeFilter(
@@ -807,12 +885,15 @@ export const agentStartRequestOnWire = (request: AgentStartRequest) =>
  * sees it at its next step and a call still generating is cut short and
  * run again with it, or opens a turn where none runs. The answer is the
  * agent's summary with its status read after the message was taken, which
- * is running.
+ * is running. Lines the agent's failed turn never took are sent again ahead
+ * of the words; a retry, a failed turn's Try again, sends its words only
+ * where no line was lost, since those lines are what it asks to send again.
  */
 export const agentMessageRequestSchema = EffectSchema.Struct({
   text: messageWordsSchema,
   clientKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
   attachments: EffectSchema.optionalKey(agentAttachmentsSchema),
+  retry: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 }).check(EffectSchema.makeFilter(({ text, attachments }) => hasWordsOrFiles(text, attachments)));
 
 export type AgentMessageRequest = typeof agentMessageRequestSchema.Type;
@@ -886,8 +967,6 @@ export type AgentQueueChange = typeof agentQueueChangeSchema.Type;
 
 /** What a change to the queue answers: the queue as it then stands. */
 export const agentQueueAnswerSchema = EffectSchema.Struct({ queue: agentQueueSchema });
-
-export type AgentQueueAnswer = typeof agentQueueAnswerSchema.Type;
 
 /**
  * Rewinding an agent (POST): the developer's line it goes back to just
@@ -974,7 +1053,7 @@ export const ADDED_REPOSITORY_CHECKOUT = {
 export type AddedRepositoryCheckout =
   (typeof ADDED_REPOSITORY_CHECKOUT)[keyof typeof ADDED_REPOSITORY_CHECKOUT];
 
-export const addedRepositoryCheckoutSchema = EffectSchema.Literals(
+const addedRepositoryCheckoutSchema = EffectSchema.Literals(
   Object.values(ADDED_REPOSITORY_CHECKOUT),
 );
 
@@ -1069,7 +1148,7 @@ export const AGENT_OWNER = {
  * neither, or whose owner is gone, carries none: the run of a deleted
  * automation goes with it, and no case stands for that.
  */
-export const agentOwnerSchema = EffectSchema.Union([
+const agentOwnerSchema = EffectSchema.Union([
   EffectSchema.Struct({ kind: EffectSchema.Literal(AGENT_OWNER.TASK), taskId: wireUuidSchema }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(AGENT_OWNER.RUN),
@@ -1162,6 +1241,12 @@ export const agentSummarySchema = EffectSchema.Struct({
    */
   turnId: EffectSchema.NullOr(wireUuidSchema),
   /**
+   * The newest turn as its row records it, which a tab reads whether the
+   * agent works and how its newest turn ended from; absent before the first
+   * turn, and from a service older than it.
+   */
+  turn: EffectSchema.optionalKey(agentTurnSchema),
+  /**
    * Epoch milliseconds the run the status is read from began, which is what
    * a tab counts how long the agent has been working from: the newest
    * turn's start, or its queueing where its harness has not started it, and the
@@ -1173,9 +1258,9 @@ export const agentSummarySchema = EffectSchema.Struct({
    * False while the agent reads running but a Stop has nothing to stop
    * (`turnStoppable`): its turn already stopped, with a line written since
    * awaiting the turn it opens, or a line awaiting its turn beside none
-   * running. Its tab offers Stop only where this is not false, so a press is
-   * never taken and silently dropped. Absent otherwise, and from a service
-   * older than it.
+   * running. Its tab reads a message sent now as steering a turn under way
+   * only where this is not false. Absent otherwise, and from a service older
+   * than it.
    */
   stoppable: EffectSchema.optionalKey(EffectSchema.Literal(false)),
   /**
@@ -1292,14 +1377,6 @@ export const agentAnswerSchema = EffectSchema.Struct({
   txid: EffectSchema.optionalKey(agentTxidSchema),
   /** Where a repository a change added was checked out: in the place the agent runs now, or at its next turn; none for any other change. */
   addedCheckout: EffectSchema.optionalKey(addedRepositoryCheckoutSchema),
-  /**
-   * Retired: a service no longer sends it, since a Start on a teammate's
-   * device is refused (`LOCAL_AGENT_REFUSAL.NOT_OWNER`) and never runs in the
-   * cloud on its own. Kept optional so a build that still reads it decodes
-   * every answer, and so one from before the refusal reads an answer a
-   * service older than this still sends.
-   */
-  notice: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /**
@@ -1558,8 +1635,6 @@ export const CHANGES_BOUNDS = {
  * and removes; and its patch, every hunk of a unified diff from the first
  * `@@` header on, or null with why where it carries none.
  */
-/** A commit as GitHub names it: forty hex digits. */
-const commitShaSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9a-f]{40}$/u));
 
 /**
  * One changed file as GitHub lists it: its path, where it moved from, what
@@ -2691,7 +2766,7 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    */
   subagents: EffectSchema.optionalKey(EffectSchema.Array(agentSubagentStandingSchema)),
   title: EffectSchema.NullOr(EffectSchema.String),
-  failureReason: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(AGENT_FAILURE))),
+  failureReason: EffectSchema.optionalKey(agentFailureSchema),
   /**
    * The host a failed agent's run was lost with, by its name, where the
    * host stopped beating while its turn ran and the run was taken from it.
@@ -2708,12 +2783,6 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * before payers were recorded, and from a service older than it.
    */
   payer: EffectSchema.optionalKey(agentPayerSchema),
-  /**
-   * What the newest turn alone cost. No service sends it any more, since a
-   * price the window draws means the whole run's (`usage`); it stays an
-   * optional key so the answer's shape is the one older desktops read.
-   */
-  turnUsage: EffectSchema.optionalKey(agentUsageSchema),
   context: EffectSchema.optionalKey(agentContextSchema),
   /**
    * The journal revision the agent's transcript was last rewound at, on

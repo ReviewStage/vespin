@@ -1,6 +1,6 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { AGENT_FAILURE, AGENT_STATUS, disabledServersSchema } from "./agent-wire.js";
+import { AGENT_STATUS, agentFailureSchema, disabledServersSchema } from "./agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
 import { chosenIdSchema, countedNumber, wireUuidSchema } from "./service-wire.js";
@@ -496,7 +496,7 @@ const automationRunSummarySchema = EffectSchema.Struct({
       /** Whether it runs on the reading account's own keys; absent from a service before it. */
       ownKey: EffectSchema.optionalKey(EffectSchema.Boolean),
       /** Why it failed, where it did, as its own end line says; absent otherwise, and from a service before it. */
-      failureReason: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(AGENT_FAILURE))),
+      failureReason: EffectSchema.optionalKey(agentFailureSchema),
     }),
   ),
   firedAt: countedNumber,
@@ -510,7 +510,7 @@ export type AutomationRunSummary = typeof automationRunSummarySchema.Type;
  * runs and why not where the service paused it, what fires it and what it
  * starts, its guards, when a schedule is next due, and its newest run.
  */
-export const automationSummarySchema = EffectSchema.Struct({
+const automationSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
   /** The task it was made on; null for an automation made on its workspace with no task, which its repositories stand in for. */
   planId: EffectSchema.NullOr(wireUuidSchema),
@@ -665,14 +665,9 @@ export const automationRunsAnswerSchema = EffectSchema.Struct({
 });
 
 /** One run of a workspace's runs: the run as an automation's history shows it, and the automation it is a run of. */
-export const automationWorkspaceRunSchema = EffectSchema.Struct({
+const automationWorkspaceRunSchema = EffectSchema.Struct({
   ...automationRunSummarySchema.fields,
   automation: EffectSchema.Struct({ id: wireUuidSchema, name: EffectSchema.String }),
 });
 
 export type AutomationWorkspaceRun = typeof automationWorkspaceRunSchema.Type;
-
-/** Every run of a workspace's automations the account may read, newest first. */
-export const automationWorkspaceRunsAnswerSchema = EffectSchema.Struct({
-  runs: EffectSchema.Array(automationWorkspaceRunSchema),
-});

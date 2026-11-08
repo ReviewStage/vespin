@@ -586,16 +586,6 @@ export function sentryQueueSent(): Promise<boolean> {
 }
 
 /**
- * A step of a promise a library calls back into, where no Effect runs to
- * span it, traced as Sentry's custom instrumentation traces one: a span
- * under whichever is active, which is the Effect span whose fiber started
- * the call, as Sentry's tracer makes it active while the fiber runs.
- */
-export function sentryStep<A>(name: string, step: () => Promise<A>): Promise<A> {
-  return Sentry.startSpan({ name }, step);
-}
-
-/**
  * What a runner in the cloud's sandbox is handed to trace its startup in the
  * launch's own trace (`@repo/agent-runner`'s `trace.ts`): this deployment's
  * project, environment and release, and the active span's `sentry-trace`

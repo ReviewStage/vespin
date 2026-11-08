@@ -11,7 +11,7 @@ import {
   appendSessionEntries,
   copySessionEntries,
   deleteSessionEntries,
-  holdsSessionEntries,
+  holdsSession,
   listSessionEntrySessions,
   listSessionEntrySubkeys,
   loadSessionEntries,
@@ -32,6 +32,8 @@ const MAIN = { projectKey: PROJECT, sessionId: SESSION };
 const SUBAGENT = { ...MAIN, subpath: "subagents/agent-1" };
 
 const entry = (uuid: string) => ({ type: "user", uuid, message: { role: "user", content: uuid } });
+/** A session's root: its first entry, the user's, with no parent. */
+const root = (uuid: string) => ({ ...entry(uuid), parentUuid: null });
 
 /** A key's whole transcript as the account reads it, none read as no entries. */
 const loaded = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
@@ -104,28 +106,36 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
     }),
   );
 
-  it.effect("a Start copies its source's transcript, which the source keeps", () =>
-    Effect.gen(function* () {
-      const source = yield* openAgent;
-      const started = yield* openAgent;
-      const empty = yield* openAgent;
-      yield* appendSessionEntries(source.userId, source.conversationId, MAIN, [
-        entry("a"),
-        entry("b"),
-      ]);
+  it.effect(
+    "a session is held from its first entry where its root is stored, never where only a tail is, and a Start's copy of its source's transcript holds it as the source does",
+    () =>
+      Effect.gen(function* () {
+        const source = yield* openAgent;
+        const started = yield* openAgent;
+        const tail = yield* openAgent;
+        yield* appendSessionEntries(source.userId, source.conversationId, MAIN, [
+          root("a"),
+          entry("b"),
+        ]);
+        yield* appendSessionEntries(tail.userId, tail.conversationId, MAIN, [
+          entry("b"),
+          { type: "cost-state", sessionId: SESSION },
+        ]);
 
-      assert.equal(yield* holdsSessionEntries(empty.userId, empty.conversationId), false);
-      assert.equal(yield* holdsSessionEntries(source.userId, source.conversationId), true);
-      yield* copySessionEntries(source, started.conversationId);
-      assert.deepEqual(yield* loaded(started.userId, started.conversationId, MAIN), [
-        entry("a"),
-        entry("b"),
-      ]);
-      assert.deepEqual(yield* loaded(source.userId, source.conversationId, MAIN), [
-        entry("a"),
-        entry("b"),
-      ]);
-    }),
+        assert.equal(yield* holdsSession(source.userId, source.conversationId, SESSION), true);
+        assert.equal(yield* holdsSession(tail.userId, tail.conversationId, SESSION), false);
+        assert.equal(yield* holdsSession(started.userId, started.conversationId, SESSION), false);
+        yield* copySessionEntries(source, started.conversationId);
+        assert.equal(yield* holdsSession(started.userId, started.conversationId, SESSION), true);
+        assert.deepEqual(yield* loaded(started.userId, started.conversationId, MAIN), [
+          root("a"),
+          entry("b"),
+        ]);
+        assert.deepEqual(yield* loaded(source.userId, source.conversationId, MAIN), [
+          root("a"),
+          entry("b"),
+        ]);
+      }),
   );
 
   it.effect("a transcript goes with its conversation when a delete removes it", () =>

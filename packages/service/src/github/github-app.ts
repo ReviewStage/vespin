@@ -26,9 +26,8 @@
  * workspace and the repository as asked, and a token minted for one
  * repository under the workspace, the installation, the repository, and
  * the permissions it is cut to, until shortly before GitHub expires it. A
- * token is still minted for the one repository alone, with the permissions
- * it always had, and a reach is kept only under the workspace that reached
- * it, so nothing kept crosses workspaces. A kept reach is used only while
+ * token is minted for the one repository alone, and a reach is kept only
+ * under the workspace that reached it, so nothing kept crosses workspaces. A kept reach is used only while
  * the store still links its installation to the workspace, running, so a
  * disconnect, or a removal GitHub's webhook reported, stops it at once; and
  * GitHub itself ends a token's access to a repository removed from its
@@ -64,12 +63,12 @@
  *
  * Signing in with GitHub is also an authorization of the App, and the token
  * Better Auth leaves on the `account` row is read here, refreshed when it is
- * about to expire and re-sealed in place, for two readers: GitHub's MCP
- * server (`integrations/github-integration.ts`), and a coding agent that
- * writes as the developer who started it (`agents/coder-host/checkout.ts`),
- * which reads on it whether the developer may push to the agent's
- * repository and opens its pull request on it. No read of what a
- * workspace reaches takes it.
+ * about to expire and re-sealed in place, for GitHub's MCP server
+ * (`integrations/github-integration.ts`), for a coding agent that writes as
+ * the developer who started it (`agents/coder-host/checkout.ts`,
+ * `agents/coder-host/pull-request.ts`), and for a member's change to a pull
+ * request (`agents/pull-request-write.ts`). No read of what a workspace
+ * reaches takes it.
  *
  * Nothing here holds a client: the GitHub reads run on the ambient
  * `HttpClient` and the rows are read on the ambient `SqlClient`, so a test
@@ -80,7 +79,7 @@
  */
 
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
-import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
@@ -132,8 +131,7 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { type GitHubRepository, text } from "../core.js";
-import { HostedEnvironment } from "../environment.js";
-import type { StoreFailure } from "../http/store-failure.js";
+import { HostedEnvironment, present } from "../environment.js";
 import {
   installationsOfWorkspace,
   mendInstallationStatus,
@@ -174,9 +172,9 @@ const APP_JWT = {
 } as const;
 
 /**
- * How close to its expiry a stored user token is refreshed rather than
- * handed out: a token good for less than this is refreshed first, so the
- * request it is handed to does not watch it expire mid-flight.
+ * A stored user token good for less than this is refreshed before it is
+ * handed out, so the request it is handed to does not watch it expire
+ * mid-flight.
  */
 export const USER_TOKEN_REFRESH_MARGIN_MS = 60_000;
 
@@ -504,7 +502,7 @@ export interface GitHubRepositoryToken {
   readonly access: GitHubTokenAccess;
 }
 
-/** Why one token of the App's does not reach a set of repositories, as `REPOSITORY_SET_UNREACHED` says. */
+/** Why one token of the App's does not reach a set of repositories. */
 export const REPOSITORY_SET_UNREACHED = {
   /** Neither the workspace's installation nor the member's token reaches the repository; why travels beside it. */
   UNREACHED: "unreached",
@@ -515,7 +513,7 @@ export const REPOSITORY_SET_UNREACHED = {
 } as const;
 
 /** The set's first repository the App's one token does not reach, and why. */
-export type RepositorySetUnreached =
+type RepositorySetUnreached =
   | {
       readonly why: typeof REPOSITORY_SET_UNREACHED.UNREACHED;
       readonly unreached: GitHubRepositoryUnreached;
@@ -528,7 +526,7 @@ export type RepositorySetUnreached =
     };
 
 /** One installation token for several repositories: each as GitHub spells it, in the order named, and the token, good for an hour from its mint. */
-export interface GitHubRepositoriesToken {
+interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
   readonly token: Redacted.Redacted;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };
@@ -703,16 +701,6 @@ export interface GitHubAppService {
     HttpClient.HttpClient | DatabaseServices
   >;
   /**
-   * Whether a write token for the repository will read its pull requests'
-   * CI: the workspace's installation grants the App `CI_READ_PERMISSIONS`
-   * whole and reaches the repository, or the member's own token reaches it.
-   */
-  readonly repositoryCiReadable: (
-    organizationId: string,
-    fullName: string,
-    member: string | undefined,
-  ) => Effect.Effect<boolean, GitHubWorkspaceReadFailure, HttpClient.HttpClient | DatabaseServices>;
-  /**
    * The same mint with contents and pull requests write, which is what a
    * coding agent's push to its branch and its pull request need, and with CI
    * read beside them where the installation grants it.
@@ -840,7 +828,7 @@ const InstallationSchema = Schema.Struct({
     }),
   ),
   repository_selection: Schema.Literals(Object.values(GITHUB_REPOSITORY_SELECTION)),
-  /** What the installation grants the App, by permission name; read for the CI permissions alone. */
+  /** What the installation grants the App, by permission name; read for the CI and issues permissions alone. */
   permissions: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   /** When the account suspended it; null or absent while it runs. */
   suspended_at: Schema.optional(Schema.NullOr(Schema.String)),
@@ -934,7 +922,7 @@ const AccountTokenRowSchema = Schema.Struct({
 });
 type AccountTokenRow = typeof AccountTokenRowSchema.Type;
 
-/** The user's GitHub row, locked for the transaction around it; the newest where a user somehow has two. */
+/** The user's GitHub row, locked for the transaction around it; the newest where a user has two. */
 const lockGithubAccount = SqlSchema.findOneOption({
   Request: Schema.String,
   Result: AccountTokenRowSchema,
@@ -1354,16 +1342,6 @@ export function readBody<A>(
   );
 }
 
-/** An OK answer's body as text, on the terms of `readBody`. */
-export function readText(
-  response: HttpClientResponse.HttpClientResponse,
-): Effect.Effect<string, GitHubUnavailable> {
-  return HttpClientResponse.filterStatusOk(response).pipe(
-    Effect.mapError(unavailable),
-    Effect.flatMap((ok) => Effect.mapError(ok.text, () => unreadable(response.status))),
-  );
-}
-
 /**
  * The read made on a repository token, where GitHub answering 401 to a
  * member's own token marks that token invalid, as the reach does
@@ -1381,7 +1359,7 @@ export function markRefusedToken(access: GitHubTokenAccess) {
         );
 }
 
-/** A token or a refresh token opened from the row, or the sign-in the row's state calls for. */
+/** A sealed token opened under the secret; one that will not open asks for a new sign-in. */
 function unseal(
   sealed: string,
   secret: Redacted.Redacted,
@@ -1439,13 +1417,11 @@ const tokenOfRow = /* @__PURE__ */ Effect.fn("web/githubTokenOfRow")(function* (
   GitHubUnavailable | GitHubSignInRequired | StoreFailure,
   HttpClient.HttpClient | DatabaseServices
 > {
-  // A row without an access token is one whose authorization was revoked: the
-  // user holds no GitHub authorization until a new sign-in writes one.
+  // A row without an access token is one whose authorization was revoked.
   if (row.accessToken === null) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.NO_GITHUB_ACCOUNT });
   }
-  // A row without a refresh token is the OAuth App's from before the GitHub
-  // App: its token reaches no installation, and only a new sign-in replaces it.
+  // A row without a refresh token is the OAuth App's from before the GitHub App.
   if (row.refreshToken === null || row.accessTokenExpiresAt === null) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.BEFORE_THE_APP });
   }
@@ -1874,13 +1850,6 @@ function githubAppService(
       return yield* tokenReach(member, fullName, throughApp);
     });
 
-  /** The repository as `reach` reads it, and how, none where it does not reach it. */
-  const reachableRepository = (
-    organizationId: string,
-    fullName: string,
-    member: string | undefined,
-  ) => Effect.map(reach(organizationId, fullName, member), Result.getSuccess);
-
   /**
    * A token minted for the key's one repository, by its name, which is one
    * repository on the installation's one account, or for none named, and
@@ -2192,13 +2161,6 @@ function githubAppService(
         repositoryToken(organizationId, fullName, member, (on) =>
           on.issuesReadable ? INSTALLATION_TOKEN_PERMISSIONS.ISSUES : undefined,
         ),
-      repositoryCiReadable: (organizationId, fullName, member) =>
-        Effect.map(reachableRepository(organizationId, fullName, member), (reached) =>
-          Option.match(reached, {
-            onNone: () => false,
-            onSome: (on) => on.access === GITHUB_ACCESS.TOKEN || on.installation.ciReadable,
-          }),
-        ),
       repositoryWriteToken: (organizationId, fullName, member) =>
         repositoryToken(
           organizationId,
@@ -2271,11 +2233,6 @@ function githubAppService(
     };
     return service;
   });
-}
-
-/** A value under the same rule as `HostedEnvironment`'s: trimmed, and a blank one is absent. */
-function present(value: Option.Option<string>): string | undefined {
-  return text(Option.getOrUndefined(value));
 }
 
 function presentRedacted(value: Option.Option<Redacted.Redacted>): Redacted.Redacted | undefined {

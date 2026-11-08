@@ -34,6 +34,7 @@ import {
   type GitHubTriggerEvent,
   PULL_REQUEST_MOMENT,
 } from "@repo/features/automation-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq } from "drizzle-orm";
 import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
@@ -55,6 +56,9 @@ import { recordingHarness } from "../testing/native-harness-fake.js";
 import { GITHUB_PROVIDER_ID, GitHubApp } from "./github-app.js";
 import { LINK_OUTCOME } from "./github-installations.js";
 import { githubWebhookApp } from "./github-webhook-app.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * Our GitHub App's webhook, answered by its group the way a function
@@ -167,6 +171,7 @@ const answer = (
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -262,7 +267,7 @@ const openAgent = (pull: PullRequestFixture) =>
 
 const refusal = (status: number, error: string): Answer => ({ status, body: { error } });
 
-it.layer(getTestDB())("the GitHub App's webhook", (it) => {
+it.layer(SUITE)("the GitHub App's webhook", (it) => {
   it.effect(
     "a deployment holding no secret refuses every delivery, and a delivery whose signature does not hold is refused, each before GitHub is asked",
     () =>

@@ -2,24 +2,21 @@
  * source-sandbox.ts -- a coding agent's sandbox at Vercel's REST boundary, as `@vercel/sandbox` reads it, its shell a real one over a git checkout on disk, for the suites that copy a source agent's work.
  *
  * The double answers Vercel Sandbox's API as the scenario has it: the
- * session's sandbox under the name given, stopped on a snapshot, or under a
- * name of eve's that no lookup by the session's name finds,
- * in the status given, a resume that brings it up under a
- * fresh session, a stop that stops it where it is sent as JSON and is
- * refused with 415 where not, as Vercel refuses it, a firewall policy
- * written down, and each command run in a checkout the test made by a real
- * POSIX shell with git, what it printed on stdout and stderr streamed back,
- * refused where it names any directory but the agent's checkout. The
- * checkout is the way an agent leaves one: cloned from a bare remote on
- * disk, one commit pushed, its identity set. Synthetic throughout.
+ * session's sandbox under its session's name, in the status given, stopped
+ * on a snapshot where the scenario says so, a resume
+ * that brings it up under a fresh session, a stop that stops it where it is
+ * sent as JSON and is refused with 415 where not, as Vercel refuses it, a
+ * firewall policy written down, and each command run in a checkout the test
+ * made by a real POSIX shell with git, what it printed on stdout and stderr
+ * streamed back, refused where it names any directory but the agent's
+ * checkout. The checkout is the way an agent leaves one: cloned from a bare
+ * remote on disk, one commit pushed, its identity set. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Deferred, Effect } from "effect";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import {
   commandRunStreamed,
   sandboxesListed,
@@ -27,10 +24,13 @@ import {
   sandboxListRefusal,
   sandboxStopRefusal,
   sessionAnswered,
-} from "./vercel-sandbox-fake.js";
+} from "@repo/sandbox/vercel/testing";
+import { agentSandboxName } from "../agents/agent-sandbox-open.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 
 export const SOURCE_SANDBOX = {
-  NAME: "eve-sbx-vercel-fixture",
+  /** The source's session, after which its sandbox is named. */
+  SESSION: "wrun_source",
   RUNNING: "sbs_running",
   WOKEN: "sbs_woken",
   /** The session a stopped sandbox last ran, which Vercel's list names as its current one. */
@@ -100,8 +100,6 @@ export interface SourceSandbox {
   readonly state: { status: string | undefined; session: string | undefined };
   /** The sessions it stopped, in order; a stop it refused is none of them. */
   readonly stops: string[];
-  /** Settles once a stop is first asked of it, whether it stopped or refused it. */
-  readonly stopAsked: Deferred.Deferred<void>;
   readonly policies: { readonly session: string; readonly hosts: readonly string[] }[];
   /** The session each command ran in, in order. */
   readonly ran: string[];
@@ -109,19 +107,18 @@ export interface SourceSandbox {
   readonly answer: (sent: SentToSandbox) => Response | undefined;
 }
 
-/** The double over the checkout given, its sandbox first listed in the status given, or none listed for a session that never opened one, under the name given with a snapshot to resume from where it is named. */
+/** The double over the checkout given, its sandbox first standing in the status given, or none for a session that never opened one, with a snapshot to resume from where `snapshotted`. */
 export function sourceSandbox(
   source: SourceCheckout,
   status: string | undefined,
-  snapshotted?: string,
+  snapshotted = false,
 ): SourceSandbox {
-  const name = snapshotted ?? SOURCE_SANDBOX.NAME;
+  const name = agentSandboxName(SOURCE_SANDBOX.SESSION);
   const state: SourceSandbox["state"] = {
     status,
     session: status === "running" ? SOURCE_SANDBOX.RUNNING : undefined,
   };
   const stops: string[] = [];
-  const stopAsked = Deferred.makeUnsafe<void>();
   const policies: SourceSandbox["policies"] = [];
   const ran: string[] = [];
   const answer = ({ url, method, headers, body }: SentToSandbox): Response | undefined => {
@@ -149,8 +146,6 @@ export function sourceSandbox(
         stops.push(session);
         state.status = "stopped";
       }
-      // Settled once the stop is recorded, since a fiber awaiting it may resume before this returns.
-      Deferred.doneUnsafe(stopAsked, Effect.void);
       return refused ?? Response.json(sessionAnswered({ id: session, status: "stopped" }));
     }
     if (parsed.pathname.endsWith("/network-policy")) {
@@ -167,9 +162,9 @@ export function sourceSandbox(
       status: state.status ?? "stopped",
       currentSessionId: state.session ?? SOURCE_SANDBOX.STOPPED,
       createdAt: 0,
-      ...(snapshotted === undefined ? undefined : { currentSnapshotId: "snap_source" }),
+      ...(snapshotted ? { currentSnapshotId: "snap_source" } : undefined),
     };
-    // A lookup by any other name finds none, as for a source whose sandbox eve named.
+    // A lookup by any other name finds none, as for a session that never opened a sandbox.
     if (/^\/api\/v2\/sandboxes\/[^/]+$/u.test(parsed.pathname)) {
       return parsed.pathname === `/api/v2/sandboxes/${name}` && state.status !== undefined
         ? Response.json(sandboxFound(listed))
@@ -180,5 +175,5 @@ export function sourceSandbox(
       Response.json(sandboxesListed(state.status === undefined ? [] : [listed]))
     );
   };
-  return { state, stops, stopAsked, policies, ran, answer };
+  return { state, stops, policies, ran, answer };
 }

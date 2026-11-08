@@ -1,22 +1,25 @@
-import { useId, useRef } from "react";
+import { useRef, useState } from "react";
+import { GLYPH } from "../../icons/glyph-registry.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
+import { CHOICE_LOOK, ChoiceList } from "../choice-list/choice-list.js";
+import { CODE_CARD_TITLE, CodeCard } from "../code-card/code-card.js";
 import { DIALOG_ROLE, DIALOG_SIZE, Dialog } from "../dialog/dialog.js";
 import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
-import { TEXT_TONE, Text } from "../text/text.js";
 
 /**
- * command-ask.tsx -- a command an agent asks to run on this Mac, put to the developer as a modal over the window: the command as written, then Deny, Allow all commands, and Allow once.
+ * command-ask.tsx -- a command an agent asks to run on this Mac, put to the developer as a modal over the window: the command in its Shell card, how often to allow it, then Deny and Run.
  *
  * The window asks the way a permission prompt does: it dims, a card asks
- * its question over the exact command, mono and whole, scrolling past a
- * few lines so a long one never fills the card, and the three answers sit
- * at its foot, the safe one first. Allow all commands is not a wider
- * once: it sets This Mac's setting to Always allow, so a line above the
- * answers says what it lets through and where it is undone, and that line,
- * not the command, is the card's description, since a payload of thousands
- * of characters would be read out before the answers; the command stands as
- * its own named region instead. The card is a wide one, since a question's
- * measure has no room for the three answers in the web's type.
+ * its question over the exact command, mono and whole in the Shell card a
+ * transcript draws a call in, wrapping rather than running sideways and
+ * scrolling past a few lines so a long one never fills the card or hides
+ * past its edge. Under it, a choice of how often: Always allow, picked and
+ * marked Recommended, which sets This Mac's setting to Always allow so
+ * later commands run without asking, or Just this once. Run answers with
+ * the choice, so trusting the Mac is one press, and Deny sits before it.
+ * The subtitle, not the command, is the card's description, since a
+ * payload of thousands of characters would be read out before the answers;
+ * the command stands as its own named region instead.
  * Focus lands on Deny, so a key already pressed runs nothing; Escape and a
  * press on the dimmed window deny too, since a prompt waved away must not
  * run the command.
@@ -26,16 +29,32 @@ import { TEXT_TONE, Text } from "../text/text.js";
  */
 
 /** What the card is titled. */
-const TITLE = "Run this command on your Mac?";
+const TITLE = "Run on this Mac?";
+
+/** What the card says is asking. */
+const SUBTITLE = "An agent wants to run a command.";
 
 /** The label a reader is given for the command's region. */
 const COMMAND_LABEL = "The command";
 
-/** The answer that lets every later command through, which the line below names as its button does. */
-const ALLOW_ALL = "Allow all commands";
+/** How often Run lets a command through: this one and every later one, or this one alone. */
+const ALLOW_SCOPE = {
+  ALWAYS: "always",
+  ONCE: "once",
+} as const;
 
-/** What the card says Allow all commands does, and where it is undone. */
-const ALLOW_ALL_LINE = `${ALLOW_ALL} lets every agent run commands on this Mac without asking. You can change it in Settings › This Mac.`;
+type AllowScope = (typeof ALLOW_SCOPE)[keyof typeof ALLOW_SCOPE];
+
+/** The choice of how often, Always allow first and recommended. */
+const SCOPE_OPTIONS = [
+  {
+    value: ALLOW_SCOPE.ALWAYS,
+    label: "Always allow",
+    detail: "Agents run commands on this Mac without asking",
+    badge: "Recommended",
+  },
+  { value: ALLOW_SCOPE.ONCE, label: "Just this once" },
+] as const;
 
 export function CommandAsk({
   open,
@@ -44,29 +63,34 @@ export function CommandAsk({
   onAllowAlways,
   onDeny,
   onExited,
+  copy,
 }: {
   /** Whether the ask stands; falling, the card fades out before it goes. */
   open: boolean;
   /** The shell command, as the agent wrote it. */
   command: string;
-  /** Run it this once. */
+  /** Run it this once: Run, with Just this once picked. */
   onAllowOnce: () => void;
-  /** Run it, and every later command without asking. */
+  /** Run it, and every later command without asking: Run, with Always allow picked. */
   onAllowAlways: () => void;
   /** Do not run it, which Escape and the dimmed window also answer. */
   onDeny: () => void;
   /** Its fade has run and the card is gone, which its owner takes the ask down on. */
   onExited?: (() => void) | undefined;
+  /** The caller's platform act that puts words on the clipboard, for the Shell card's Copy. */
+  copy: (text: string) => Promise<void>;
 }): React.JSX.Element {
   const deny = useRef<HTMLButtonElement | null>(null);
-  const lineId = useId();
+  const [scope, setScope] = useState<readonly AllowScope[]>([ALLOW_SCOPE.ALWAYS]);
+  // Note that a pick taken back leaves no scope, which runs once rather than widening.
+  const run = scope[0] === ALLOW_SCOPE.ALWAYS ? onAllowAlways : onAllowOnce;
   return (
     <Dialog
       open={open}
       role={DIALOG_ROLE.ALERT_DIALOG}
       size={DIALOG_SIZE.WIDE}
       title={TITLE}
-      describedBy={lineId}
+      subtitle={SUBTITLE}
       initialFocus={deny}
       onDismiss={onDeny}
       onExited={onExited}
@@ -75,19 +99,27 @@ export function CommandAsk({
           <Button ref={deny} variant={BUTTON_VARIANT.QUIET} onClick={onDeny}>
             Deny
           </Button>
-          <Button variant={BUTTON_VARIANT.OUTLINE} onClick={onAllowAlways}>
-            {ALLOW_ALL}
-          </Button>
-          <Button variant={BUTTON_VARIANT.PRIMARY} onClick={onAllowOnce}>
-            Allow once
+          <Button variant={BUTTON_VARIANT.PRIMARY} onClick={run}>
+            Run
           </Button>
         </>
       }
     >
-      <FileText text={command} label={COMMAND_LABEL} extent={FILE_TEXT_EXTENT.BRIEF} />
-      <Text id={lineId} tone={TEXT_TONE.MUTED}>
-        {ALLOW_ALL_LINE}
-      </Text>
+      <CodeCard
+        glyph={<GLYPH.TERMINAL />}
+        title="Shell"
+        titleIs={CODE_CARD_TITLE.WORDS}
+        body={<FileText text={command} label={COMMAND_LABEL} extent={FILE_TEXT_EXTENT.BRIEF} />}
+        copied={command}
+        copy={copy}
+      />
+      <ChoiceList
+        legend="How often to allow"
+        look={CHOICE_LOOK.MARKED}
+        options={SCOPE_OPTIONS}
+        value={scope}
+        onChange={setScope}
+      />
     </Dialog>
   );
 }

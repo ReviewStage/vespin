@@ -6,7 +6,7 @@ import {
   type Picture,
   pictureMediaTypeSchema,
 } from "@repo/features/picture-wire";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
@@ -16,20 +16,16 @@ import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
 
 /**
- * description-attachments.ts -- a description's pictures: keep one, read one, and stamp the ones a save names.
+ * description-attachments.ts -- a description's pictures: keep one and read one.
  *
  * A picture, or a video an agent recorded, is kept under the plan row's own
  * lock, so the counts it is held to, every picture's and every video's,
  * cannot be crossed by a second upload. Every read names the account beside the
  * plan and gates on its membership of the plan's workspace, so a member
  * reads a picture a teammate pasted and a plan of a workspace the account is
- * not in reads as no plan, exactly as in `plan-store.ts`. A save stamps the
- * pictures its text names (`saveDescriptionText`). A picture stays until its
- * task is deleted, which cascades to it, whether or not a save named it.
- * Note that the stamp is still written though nothing here reads it, because
- * a rollback to a release that still runs the old unsaved-picture purge would
- * otherwise delete every picture saved since; a later release stops writing it
- * and drops the column once this one is the rollback floor.
+ * not in reads as no plan, exactly as in `task-store.ts`. A picture stays
+ * until its task is deleted, which cascades to it, whether or not a save
+ * named it.
  */
 
 /** What keeping a picture came to: kept under its new id, refused for the description's count of pictures or of videos, or no plan to keep it on. */
@@ -117,28 +113,6 @@ const findPicture = SqlSchema.findOneOption({
     ),
 });
 
-const stampSaved = SqlSchema.void({
-  Request: Schema.Struct({
-    taskId: Schema.String,
-    ids: Schema.Array(Schema.String),
-    now: Schema.Date,
-  }),
-  execute: ({ taskId, ids, now }) =>
-    Database.use((db) =>
-      db
-        .update(attachment)
-        .set({ savedAt: now })
-        .where(
-          and(
-            eq(attachment.taskId, taskId),
-            inArray(attachment.id, [...ids]),
-            descriptionPicture,
-            isNull(attachment.savedAt),
-          ),
-        ),
-    ),
-});
-
 /**
  * Keeps one picture or video on the description, uploaded by the account, under a
  * new id; refused where the description already holds its bound of pictures, or a
@@ -192,13 +166,4 @@ export function readDescriptionAttachment(
   attachmentId: string,
 ): TaskStoreEffect<Option.Option<Picture>> {
   return findPicture({ userId, taskId, attachmentId });
-}
-
-/** Stamps the description's pictures the saved text names as saved, the ones no save stamped before; nothing where it names none. */
-export function stampSavedAttachments(
-  taskId: string,
-  ids: readonly string[],
-): TaskStoreEffect<void> {
-  if (ids.length === 0) return Effect.void;
-  return Effect.flatMap(DateTime.nowAsDate, (now) => stampSaved({ taskId, ids, now }));
 }

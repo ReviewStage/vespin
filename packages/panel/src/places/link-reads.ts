@@ -14,7 +14,7 @@
 import type { RouterHistory } from "@tanstack/react-router";
 import { useRouter } from "@tanstack/react-router";
 import { useCallback } from "react";
-import { savesStep } from "../navigation-history.js";
+import { savesStep } from "./window-steps.js";
 
 /** The developer's moves to another page counted beside each window's router history. */
 const movesBeside = new WeakMap<RouterHistory, { count: number }>();

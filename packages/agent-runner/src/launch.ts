@@ -11,7 +11,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Cause, Queue, Redacted } from "effect";
+import type { Cause, Effect, Queue, Redacted } from "effect";
 import { Data } from "effect";
 import type { EventSink } from "./events.js";
 import { RUNNER_ENV, RUNNER_PLACE, type RunnerEnd } from "./protocol.js";
@@ -24,6 +24,11 @@ export function runsOnHost(env: Readonly<Record<string, string | undefined>>): b
 
 /** Why a launch could not run at all, before or after its harness. */
 export class RunnerFailed extends Data.TaggedError("RunnerFailed")<{ readonly detail: string }> {}
+
+/** A launch whose config line never came within its bound, which exits as `RUNNER_EXIT.UNCONFIGURED`. */
+export class RunnerUnconfigured extends Data.TaggedError("RunnerUnconfigured")<{
+  readonly detail: string;
+}> {}
 
 /**
  * How to start the runner's own bundle again, as a command its harness runs:
@@ -43,6 +48,13 @@ export interface LaunchContext<Config> {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly bearer: Redacted.Redacted;
   readonly sink: EventSink;
+  /**
+   * Settles only once the service will hear nothing more from the launch, its
+   * post refused for good (`EventSink`'s `undelivered`), or hand it nothing
+   * more, its line read refused for good (`lines.ts`), with why; the launch
+   * ends as `FAILED` on it rather than stand up deaf.
+   */
+  readonly cutOff: Effect.Effect<string>;
   /** The launch's startup as Sentry spans, where the config handed a trace (`trace.ts`). */
   readonly trace: LaunchTrace;
   /** The runner's own bundle as a command; none where the runner was not started from one, as in a test that names none. */

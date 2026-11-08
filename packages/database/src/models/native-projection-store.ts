@@ -21,12 +21,14 @@ import type { ConversationTarget } from "./writer.js";
  * unread.
  */
 
-/** What the conversation keeps for its projection: the last event applied, and the projection's own state. */
+/** What the conversation keeps for its projection: the last event applied, and the projection's own state; and the launch whose bearer the batch was admitted under. */
 export interface NativeProjectionRow {
   /** The number of the last event applied; null before the first. */
   readonly sequence: number | null;
   /** The projection's state as it was saved; null before the first save. */
   readonly projection: WireValue | null;
+  /** The launch the runner posting is (`agent.runner_launch`), read under the lock with its bearer, which every turn it moves runs under. */
+  readonly launch: number;
 }
 
 const lockProjectionRow = SqlSchema.findOneOption({
@@ -38,6 +40,7 @@ const lockProjectionRow = SqlSchema.findOneOption({
   Result: Schema.Struct({
     sequence: Schema.NullOr(Schema.Number),
     projection: Schema.NullOr(WireValueSchema),
+    launch: Schema.Number,
   }),
   execute: ({ userId, conversationId, runnerTokenHash }) =>
     Database.use((db) =>
@@ -45,6 +48,7 @@ const lockProjectionRow = SqlSchema.findOneOption({
         .select({
           sequence: conversations.nativeSequence,
           projection: conversations.nativeProjection,
+          launch: agentTable.runnerLaunch,
         })
         .from(conversations)
         .innerJoin(agentTable, eq(agentTable.conversationId, conversations.id))
@@ -114,16 +118,21 @@ export interface NativeProjectionApplied<A> {
  * lock is taken, where `apply` never runs. Note that the digest is read
  * again under the lock, on the agent's row, which is locked with the
  * conversation's, because a bearer retired after the caller admitted it
- * takes that row's lock and must leave its runner writing nothing.
+ * takes that row's lock and must leave its runner writing nothing. Nothing
+ * either where the post named a launch (`launch`) other than the one the
+ * row holds by then, since a newer launch recorded after the caller
+ * admitted the post replaced its runner.
  */
 export function withNativeProjection<A, E, R>(
   target: ConversationTarget,
   runnerTokenHash: string,
   apply: (held: NativeProjectionRow) => Effect.Effect<NativeProjectionApplied<A>, E, R>,
+  launch?: number,
 ): Effect.Effect<Option.Option<A>, E | StoreFailure, R | DatabaseServices> {
   const locked = Effect.gen(function* () {
     const held = yield* lockProjectionRow({ ...target, runnerTokenHash });
     if (Option.isNone(held)) return Option.none<A>();
+    if (launch !== undefined && held.value.launch !== launch) return Option.none<A>();
     const applied = yield* apply(held.value);
     if (applied.saved !== undefined) {
       yield* saveProjectionRow({ ...target, ...applied.saved });

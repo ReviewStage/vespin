@@ -37,6 +37,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
+import { leavingBy, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksBoard } from "./tasks-board.js";
 
@@ -179,12 +180,6 @@ async function mountBoard(
     me: DEAN,
     listRead: true,
     onSelect: (taskId) => opened.push(taskId),
-    boardView: {
-      open: true,
-      onOpen: () => undefined,
-      onClose: () => (closed += 1),
-      onPreload: () => undefined,
-    },
     onSetTaskStanding: (taskId, standing) => {
       sent.push([taskId, standing]);
       return askKept(Promise.resolve(keeps));
@@ -195,29 +190,34 @@ async function mountBoard(
     }, undefined),
     ...overrides,
   });
+  // The window's router, whose routed exits the Board's close leaves by, as the window's history does.
+  const { provide } = windowRouter();
   const draw = (shown: TasksDisplay, changed: Partial<typeof control> = {}) =>
     root.render(
       withQueryClient(
-        createElement(
-          Fragment,
-          null,
-          createElement(MemberDirectory, {
-            workspace: ACME,
-            readerId: DEAN,
-            children: createElement(TasksBoard, {
-              tasks: { ...control, ...changed },
-              room,
-              title: "Tasks",
-              frame: {
-                toolbar: null,
-                chips: null,
-                filter: NO_TASKS_FILTER,
-                display: shown,
-                onDisplay: (next) => displayed.push(next),
-              },
+        provide(
+          createElement(
+            Fragment,
+            null,
+            leavingBy(() => (closed += 1)),
+            createElement(MemberDirectory, {
+              workspace: ACME,
+              readerId: DEAN,
+              children: createElement(TasksBoard, {
+                tasks: { ...control, ...changed },
+                room,
+                title: "Tasks",
+                frame: {
+                  toolbar: null,
+                  chips: null,
+                  filter: NO_TASKS_FILTER,
+                  display: shown,
+                  onDisplay: (next) => displayed.push(next),
+                },
+              }),
             }),
-          }),
-          createElement(ToastHost),
+            createElement(ToastHost),
+          ),
         ),
       ),
     );

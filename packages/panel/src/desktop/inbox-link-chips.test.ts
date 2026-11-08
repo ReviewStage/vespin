@@ -15,8 +15,9 @@ import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTasklessItem } from "@repo/host/app-state";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Effect } from "effect";
-import { act, createElement, useState } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
@@ -32,6 +33,7 @@ import { signedInAs } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { holdingInboxChoice, windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
 /**
@@ -194,16 +196,15 @@ async function inbox(options: {
   });
   fakeActPort({ ...fakeActPortCalls() });
   const sweep = options.sweep;
-  // The Inbox's own choice is held as the plans tab holds it, so the item it stands chosen is drawn.
-  function Page() {
-    // Note that the first item stands chosen, as a press on its row chooses it.
-    const [chosen, setChosen] = useState<InboxChoice | undefined>(() => {
-      const [first] = options.taskItems;
-      if (first !== undefined) return { taskId: TASK.id, itemId: first.id };
-      return sweep === undefined
+  // Note that the first item stands chosen at its address, held as a press on its row holds it, so the item is drawn.
+  const [first] = options.taskItems;
+  const chosen: InboxChoice | undefined =
+    first !== undefined
+      ? { taskId: TASK.id, itemId: first.id }
+      : sweep === undefined
         ? undefined
         : { agentId: sweep.item.agentId, itemId: sweep.item.id };
-    });
+  function Page() {
     return createElement(DesktopInbox, {
       tasks: tasksControl({
         workspace: options.listed,
@@ -217,25 +218,21 @@ async function inbox(options: {
             ? []
             : [{ taskId: TASK.id, items: options.taskItems.length, updatedAt: 2_000 }],
         inboxTaskless: sweep === undefined ? [] : [waitingSweep(sweep.item, sweep.workspaceId)],
-        inboxView: {
-          open: true,
-          chosen,
-          onOpen: () => undefined,
-          onClose: () => undefined,
-          onChoose: setChosen,
-          onOpenItem: () => undefined,
-          onClear: () => setChosen(undefined),
-          narrowed: undefined,
-          onWiden: () => undefined,
-          pages: undefined,
-          onTaskAgents: () => undefined,
-        },
       }),
     });
   }
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(withQueryClient(createElement(Page))));
+  const listedStep =
+    options.listed === undefined ? "acme" : (options.listed.slug ?? options.listed.id);
+  const at = `/${listedStep}/inbox${chosen === undefined ? "" : `/${chosen.itemId}`}`;
+  const router = windowRouter(createMemoryHistory({ initialEntries: [at] }));
+  const held = chosen === undefined ? null : holdingInboxChoice(chosen);
+  act(() =>
+    root?.render(
+      router.provide(withQueryClient(createElement(Fragment, null, held, createElement(Page)))),
+    ),
+  );
   await act(async () => {
     for (let tick = 0; tick < 16; tick += 1) await Promise.resolve();
   });

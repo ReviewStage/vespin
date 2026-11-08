@@ -6,7 +6,6 @@ import { archiveAgent, createAgent, readAgent } from "@repo/database/models/agen
 import { recordRepositoryReads } from "@repo/database/models/github-repository-reads";
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
-import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import { createTask } from "@repo/database/models/task-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
@@ -17,6 +16,8 @@ import {
   type SandboxState,
   type TerminalSummary,
 } from "@repo/features/terminal-wire";
+import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -31,9 +32,11 @@ import { openGithubUser, openTokenMember } from "../testing/github-app-fake.js";
 import { keepAwakeDetached, scriptedSessionSandboxes } from "../testing/session-sandboxes-fake.js";
 import { agentPortsProcedures } from "./agent-ports-procedures.js";
 import { agentsProcedures } from "./agents-procedures.js";
-import { type SandboxStopReach, SessionSandboxes } from "./session-sandboxes.js";
+import { type SandboxDeleteReach, SessionSandboxes } from "./session-sandboxes.js";
 import { AgentSandbox, type AgentSandboxService, SHELL_REFUSAL } from "./terminal/agent-sandbox.js";
-import { SandboxUnavailable } from "./vercel-sandbox-api.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A coding agent's terminals as its tab reaches them, through the hosted
@@ -187,10 +190,9 @@ const standing = (
   bearers: ReadonlyMap<string, string>,
   sandbox: Layer.Layer<AgentSandbox>,
   sessionSandboxes: Layer.Layer<SessionSandboxes> = Layer.succeed(SessionSandboxes, {
-    stopFor: () => Effect.die("the terminals routes stop no sandbox"),
-    keepAliveFor: () => Effect.die("the terminals routes keep no sandbox alive"),
+    deleteFor: () => Effect.die("the terminals routes delete no sandbox"),
   }),
-  keepAwake: SandboxStopReach["keepAwake"] = keepAwakeDetached,
+  keepAwake: SandboxDeleteReach["keepAwake"] = keepAwakeDetached,
 ) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<SqlClient.SqlClient | Database>().pipe(
@@ -265,7 +267,7 @@ const resumeOf = (agentId: string) => `/api/agents/${agentId}/sandbox/resume`;
 const portsOf = (agentId: string) => `/api/agents/${agentId}/ports`;
 const terminalOf = (agentId: string, terminalId: string) => `${terminalsOf(agentId)}/${terminalId}`;
 
-it.layer(getTestDB())("the agent terminals procedures", (it) => {
+it.layer(SUITE)("the agent terminals procedures", (it) => {
   it.effect(
     "the agent's member lists its shells and ports, and another account reads the agent as none",
     () =>
@@ -325,22 +327,6 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
         assert.deepEqual(resumed.body, { sandbox: SANDBOX_STATE.RUNNING });
         assert.deepEqual(sandbox.asked.at(-1), { what: "resume", sessionId });
       }),
-  );
-
-  it.effect("a resume holds the sandbox it wakes", () =>
-    Effect.gen(function* () {
-      const { userId, agent } = yield* openAgent;
-      const sandbox = scriptedSandbox(SANDBOX_STATE.STOPPED);
-      const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox.layer);
-      const at = new Date(yield* Clock.currentTimeMillis);
-      const heldBefore = yield* sandboxHeld(agent.conversationId, at);
-
-      const resumed = yield* call(resumeOf(agent.id), "Bearer owner", { method: "POST" });
-
-      assert.equal(resumed.status, 200);
-      assert.equal(heldBefore, false);
-      assert.equal(yield* sandboxHeld(agent.conversationId, at), true);
-    }),
   );
 
   it.effect(
@@ -407,7 +393,7 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agent } = yield* openAgent;
-        const unanswered = new SandboxUnavailable({ status: 400 });
+        const unanswered = new SandboxUnavailable({});
         const sandbox = Layer.succeed(AgentSandbox, {
           ...scriptedSandbox(SANDBOX_STATE.RUNNING).service,
           terminals: () => Effect.fail(unanswered),
@@ -434,9 +420,9 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agent } = yield* openAgent;
-        const gone = new SandboxUnavailable({ status: 410, code: "snapshot_not_found" });
-        // Vercel answers 410 for a call to a sandbox that stopped under it too, which a resume mends.
-        const stopped = new SandboxUnavailable({ status: 410, code: "sandbox_stopped" });
+        const gone = new SnapshotGone({});
+        // A sandbox that stopped under a call answers unavailable, which a resume mends.
+        const stopped = new SandboxUnavailable({});
         const sandbox = Layer.succeed(AgentSandbox, {
           ...scriptedSandbox(SANDBOX_STATE.STOPPED).service,
           resume: () => Effect.fail(gone),
@@ -469,7 +455,7 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
     }),
   );
 
-  it.effect("archiving the agent stops its sandbox without deleting it", () =>
+  it.effect("archiving the agent deletes its sandbox", () =>
     Effect.gen(function* () {
       const { userId, agent, sessionId } = yield* openAgent;
       const sandboxes = yield* scriptedSessionSandboxes();
@@ -485,12 +471,12 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
       });
 
       assert.equal(archived.status, 200);
-      assert.equal(yield* Queue.take(sandboxes.stops), sessionId);
+      assert.equal(yield* Queue.take(sandboxes.deletes), sessionId);
     }),
   );
 
   it.effect(
-    "an archive answers while the sandbox's stop is still on its way, and again when the stop fails",
+    "an archive answers while the sandbox's delete is still on its way, and again when the delete fails",
     () =>
       Effect.gen(function* () {
         const hung = yield* openAgent;
@@ -517,8 +503,8 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
         });
 
         assert.deepEqual([waiting.status, failed.status], [200, 200]);
-        assert.equal(yield* Queue.take(stalled.stops), hung.sessionId);
-        assert.equal(yield* Queue.take(refused.stops), failing.sessionId);
+        assert.equal(yield* Queue.take(stalled.deletes), hung.sessionId);
+        assert.equal(yield* Queue.take(refused.deletes), failing.sessionId);
         for (const { userId, agent } of [hung, failing]) {
           const stored = yield* readAgent(userId, agent.id);
           assert.notEqual(Option.getOrThrow(stored).archivedAt, null);
@@ -526,7 +512,7 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
       }),
   );
 
-  it.effect("a stop that runs after the agent was unarchived leaves its sandbox up", () =>
+  it.effect("a delete that runs after the agent was unarchived leaves its sandbox standing", () =>
     Effect.gen(function* () {
       const { userId, agent } = yield* openAgent;
       const sandboxes = yield* scriptedSessionSandboxes();
@@ -534,7 +520,7 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
       const call = yield* standing(
         new Map([["Bearer owner", userId]]),
         scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
-        // The stop is kept back, as a function slow to reach Vercel runs it, until the agent is back.
+        // The delete is kept back, as a function slow to reach Vercel runs it, until the agent is back.
         sandboxes.layer,
         (work) => Effect.sync(() => void held.push(work as Effect.Effect<void, never, never>)),
       );
@@ -552,11 +538,11 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
 
       assert.deepEqual([archived.status, restored.status], [200, 200]);
       assert.equal(held.length, 1);
-      assert.equal(yield* Queue.size(sandboxes.stops), 0);
+      assert.equal(yield* Queue.size(sandboxes.deletes), 0);
     }),
   );
 
-  it.effect("an agent that opened no sandbox is archived with nothing to stop", () =>
+  it.effect("an agent that opened no sandbox is archived with nothing to delete", () =>
     Effect.gen(function* () {
       const { userId, agent } = yield* openAgentWith({ claimed: false });
       const sandboxes = yield* scriptedSessionSandboxes();
@@ -572,7 +558,7 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
       });
 
       assert.equal(archived.status, 200);
-      assert.equal(yield* Queue.size(sandboxes.stops), 0);
+      assert.equal(yield* Queue.size(sandboxes.deletes), 0);
     }),
   );
 
@@ -646,7 +632,9 @@ it.layer(getTestDB())("the agent terminals procedures", (it) => {
           refused(409, HOSTED_API_ERROR.AGENT_RETIRED),
         );
         assert.deepEqual(
-          yield* call.bytes(terminalOf(agent.id, "no-uuid"), "Bearer owner", { method: "DELETE" }),
+          yield* call.bytes(terminalOf(agent.id, "no-uuid"), "Bearer owner", {
+            method: "DELETE",
+          }),
           refused(404, HOSTED_API_ERROR.NOT_FOUND),
         );
         assert.deepEqual(

@@ -107,7 +107,7 @@ import { CURSOR_START } from "./transcript.js";
  * later turns either. The preamble
  * names where the source's work now stands: in the new agent's own
  * checkout, in a sandbox created from the latest snapshot of the source's
- * stopped one (`../machine/vercel-machine.ts`), what it had not committed
+ * stopped one (`../machine/sandbox-machine.ts`), what it had not committed
  * included; for a source whose sandbox was not stopped on a snapshot, the
  * branch its checkout was copied to as the Start was made (`snapshot.ts`),
  * what it had not pushed included, or, where it could not be copied, the

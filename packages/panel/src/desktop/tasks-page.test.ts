@@ -37,6 +37,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { leavingBy, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useInboxWaiting } from "./places-waiting.js";
 import { TasksPage } from "./tasks-page.js";
@@ -211,6 +212,8 @@ async function mountPage(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+  // The window's router, whose routed exits the page's close leaves by, as the window's history does.
+  const { provide } = windowRouter();
   const draw = (workspace: Workspace) => {
     const control = tasksControl({
       tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
@@ -222,12 +225,6 @@ async function mountPage(
       listRead: true,
       taskSections: sections,
       onSelect: (taskId) => opened.push(taskId),
-      boardView: {
-        open: true,
-        onOpen: () => undefined,
-        onClose: () => (closed += 1),
-        onPreload: () => undefined,
-      },
       onSetTaskStanding: (taskId, standing) => {
         sent.push([taskId, standing]);
         return askKept(Promise.resolve(keeps));
@@ -238,11 +235,14 @@ async function mountPage(
     });
     root.render(
       withQueryClient(
-        createElement(
-          Fragment,
-          null,
-          createElement(TasksPage, { tasks: control, room }),
-          createElement(ToastHost),
+        provide(
+          createElement(
+            Fragment,
+            null,
+            leavingBy(() => (closed += 1)),
+            createElement(TasksPage, { tasks: control, room }),
+            createElement(ToastHost),
+          ),
         ),
       ),
     );
@@ -1074,18 +1074,13 @@ test("a row draws its assignee and not its creator at first, and a List display 
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
-  for (const kept of [
-    { properties: BEFORE_ASSIGNEE, offered: BEFORE_ASSIGNEE },
-    { properties: BEFORE_ASSIGNEE },
-  ]) {
-    window.localStorage.setItem("app.tasksListDisplay", JSON.stringify(kept));
-    const page = await mountPage();
-    assert.ok(cells(page).includes("assignee"), "the assignee is drawn without turning it on");
-    assert.ok(cells(page).includes("creator"), "the creator stays on, as kept");
-    act(() => {
-      for (const root of roots.splice(0)) root.unmount();
-    });
-  }
+  window.localStorage.setItem(
+    "app.tasksListDisplay",
+    JSON.stringify({ properties: BEFORE_ASSIGNEE, offered: BEFORE_ASSIGNEE }),
+  );
+  const page = await mountPage();
+  assert.ok(cells(page).includes("assignee"), "the assignee is drawn without turning it on");
+  assert.ok(cells(page).includes("creator"), "the creator stays on, as kept");
 });
 
 test("a row's Assignee chip sends the member picked, and No assignee assigns it to no one, opening no task", async () => {
@@ -1158,19 +1153,6 @@ test("on a phone grouped by assignee, a row keeps its Assignee chip, which moves
   choose("No assignee");
 
   assert.deepEqual(sent, [["t-39", { assigneeId: null }]]);
-});
-
-test("a Board display kept before its cards offered Agents and Needs you draws them, the rest as kept", async () => {
-  window.localStorage.setItem("app.tasksPageView", JSON.stringify("board"));
-  window.localStorage.setItem(
-    "app.tasksBoardDisplay",
-    JSON.stringify({ properties: ["priority", "status"] }),
-  );
-  const page = await mountPage();
-  const card = page.querySelector<HTMLElement>('li[data-task-id="t-44"]');
-
-  assert.match(card?.textContent ?? "", /2 need you/, "the card says what waits on the reader");
-  assert.equal(card?.querySelector("[data-task-key]"), null, "the key stays off, as kept");
 });
 
 /** The section writes sent, each as its kind, its task, and its section. */

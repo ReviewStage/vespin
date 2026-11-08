@@ -49,7 +49,7 @@ import {
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { type EntityPool, entityPool } from "@repo/sync";
-import { isRecord, TURN_STATUS, type WireValue } from "@repo/wire";
+import { isRecord, type WireValue } from "@repo/wire";
 import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppDescriptionComments } from "./app-state.js";
@@ -2804,55 +2804,6 @@ it.effect(
       assert.deepEqual(
         [last()?.tasks[0]?.agents?.working, last()?.taskAgents?.map((each) => each.status)],
         [0, [AGENT_STATUS.FAILED]],
-      );
-    }),
-);
-
-it.effect(
-  "an agent whose line no turn takes reads running in the live list until the line's grace ends, then failed with nothing read",
-  () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(LIVE_NOW);
-      const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
-      const { call, last, settled } = yield* subject(service);
-
-      yield* call("TASKS_REFRESH", undefined);
-      yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
-        // A settled turn, and a line written after it that no turn has taken yet.
-        agents: [
-          {
-            ...agentRow(INVITES, 30 * 60_000),
-            turnId: "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
-            turnStatus: TURN_STATUS.SETTLED,
-            cancelRequested: false,
-            queuedAt: LIVE_NOW - 20 * 60_000,
-            startedAt: LIVE_NOW - 20 * 60_000,
-            settledAt: LIVE_NOW - 10 * 60_000,
-            turnSessionEnded: false,
-            awaitingLineAt: LIVE_NOW - 60_000,
-          },
-        ],
-        issues: [],
-      });
-      assert.equal(last()?.tasks[0]?.name, "Teammate invitations, live", "the list is drawn live");
-      assert.deepEqual(
-        last()?.taskAgents?.map((each) => each.status),
-        [AGENT_STATUS.RUNNING],
-      );
-      yield* TestClock.adjust(Duration.minutes(3));
-      yield* settled;
-      assert.deepEqual(
-        last()?.taskAgents?.map((each) => each.status),
-        [AGENT_STATUS.RUNNING],
-        "inside the line's grace",
-      );
-      yield* TestClock.adjust(Duration.minutes(2));
-      yield* settled;
-      assert.deepEqual(
-        last()?.taskAgents?.map((each) => each.status),
-        [AGENT_STATUS.FAILED],
-        "the line's grace ran out with no row moving",
       );
     }),
 );

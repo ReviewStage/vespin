@@ -26,7 +26,6 @@ import {
   COPY_FIELD_WIDTH,
   ConfirmDialog,
   CopyField,
-  ErrorState,
   MARK_PROVIDER,
   ProviderMark,
   SETTINGS_ROW_STATE,
@@ -50,11 +49,12 @@ import { useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { confirmFailure, refusedShown, unreadShown } from "../failure-report.js";
+import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
 /**
@@ -482,14 +482,11 @@ export function McpClientsSections(): React.JSX.Element {
   if (rows === undefined) {
     return read.isError ? (
       <SettingsSection title={SECTION_TITLE.CLIENTS} anchor={SETTINGS_SEARCH_ROW.MCP_CLIENTS}>
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.MCP_CLIENTS_READ)}
-            onRetry={() => retry.mutate()}
-          >
-            {PAGE_LINE.READ_FAILED}
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line={PAGE_LINE.READ_FAILED}
+          surface={FAILURE_SURFACE.MCP_CLIENTS_READ}
+          onRetry={() => retry.mutate()}
+        />
       </SettingsSection>
     ) : (
       <SettingsSectionsSkeleton

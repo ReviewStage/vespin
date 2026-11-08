@@ -1,7 +1,13 @@
 import { isLinkOpen, LINK_OPEN, LINK_OPEN_LABEL, LINK_OPEN_LIST } from "@repo/features/link-open";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
-import { APP_SETTING_ID, isAppSettingId } from "@repo/wire/app-settings";
+import {
+  APP_SETTING_ID,
+  COMPLETION_SOUND,
+  COMPLETION_SOUND_LABEL,
+  COMPLETION_SOUNDS,
+  isAppSettingId,
+} from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
   AGENT_ENTER,
@@ -55,6 +61,7 @@ import {
   type SettingsVisibility,
 } from "./schema-types.js";
 import { isSetupPlaceJson } from "./setup-place.js";
+import { isSoundWhen, SOUND_WHEN, SOUND_WHEN_LABEL, SOUND_WHEN_LIST } from "./sound-when.js";
 import { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
 import { isZoomPercent, ZOOM_ACTUAL_SIZE, ZOOM_PERCENTS } from "./zoom.js";
 
@@ -198,25 +205,6 @@ export const APP_SETTING_SCHEMA = {
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
   /*
-   * Whether a cloud agent's ports reach this Mac on their own: the agent whose
-   * tab is open is forwarded once nothing else is, a toast saying so. Off,
-   * an agent's ports are forwarded only from the plug at its box's foot.
-   */
-  forwardPorts: toggleSetting({
-    field: "forwardPorts",
-    id: APP_SETTING_ID.FORWARD_PORTS,
-    label: "Forward cloud agents' ports automatically",
-    detail:
-      "A dev server an agent starts in its sandbox opens at localhost on this Mac. A forward already on stands until it is stopped from its ports chip.",
-    default: true,
-    page: SETTINGS_PAGE.THIS_MAC,
-    order: 3,
-    // Only the Mac app listens on this Mac's localhost.
-    visible: desktopAppDrawn,
-    // Nothing to run per write: an agent's tab reads the setting as it opens.
-    sideEffect: SETTING_SIDE_EFFECT.NONE,
-  }),
-  /*
    * Where an app link opened in a browser goes: it stays on the web, or the
    * web hands it to the Mac app (`@repo/features/link-open`). The account's,
    * so the web reads it on a signed-in load; it rides the preferences
@@ -338,6 +326,63 @@ export const APP_SETTING_SCHEMA = {
     section: SETTING_SECTION.COMMITS,
     order: 450,
     // Nothing to run per write: an agent reads the choice as its first session starts.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
+   * When a sound plays as an agent finishes or asks, and which one. Account
+   * preferences, as Enter's choice is, each riding a part of the snapshot
+   * of its own. The sound's row stands only while one plays at all, and
+   * Settings draws a Play beside it.
+   */
+  soundWhen: choiceSetting({
+    field: "soundWhen",
+    id: APP_SETTING_ID.SOUND_WHEN,
+    label: "Play a sound",
+    values: SOUND_WHEN_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => SOUND_WHEN_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isSoundWhen),
+    default: SOUND_WHEN.OFF,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.SOUNDS,
+    order: 500,
+    // Nothing to run per write: an agent's finish reads the choice as it lands.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  completionSound: choiceSetting({
+    field: "completionSound",
+    id: APP_SETTING_ID.COMPLETION_SOUND,
+    label: "Sound",
+    values: COMPLETION_SOUNDS,
+    token: (sound) => sound,
+    optionLabel: (sound) => COMPLETION_SOUND_LABEL[sound],
+    guard: (value: UnparsedWireValue) => optional(value, oneOf(COMPLETION_SOUNDS)),
+    default: COMPLETION_SOUND.CHIME,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.SOUNDS,
+    order: 510,
+    // Nothing to run per write: an agent's finish reads the choice as it plays.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: (view) =>
+      view.accountDrawn && (view.settings.soundWhen ?? SOUND_WHEN.OFF) !== SOUND_WHEN.OFF,
+  }),
+  /*
+   * Whether the OS posts a notification as an agent the account started
+   * finishes or asks, while the window is behind; off until the account
+   * turns it on, and apart from the sound. An account preference riding a
+   * part of the snapshot of its own, as the sound's choices do.
+   */
+  turnNotifications: accountToggleSetting({
+    field: "turnNotifications",
+    id: APP_SETTING_ID.TURN_NOTIFICATIONS,
+    label: "Show a notification",
+    default: false,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.SOUNDS,
+    order: 520,
+    // Nothing to run per write: an agent's finish reads the choice as it lands.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
   }),

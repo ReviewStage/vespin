@@ -18,6 +18,7 @@ import {
   recordAgentNativeSession,
   updateAgentChoice,
 } from "@repo/database/models/agent-store";
+import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
 import {
   type KeyRing,
@@ -31,10 +32,12 @@ import {
   setPlanStatus,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
+import { runnerLinesPast } from "@repo/database/models/runner-line-store";
+import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { deviceAgentLaunchSecretsSchema } from "@repo/features/device-agent-wire";
@@ -43,6 +46,10 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
+import type { Sandbox } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
+import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
@@ -64,22 +71,23 @@ import {
   runnerSandboxApi,
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
-import { fixtureToken, sandboxFetchOver } from "../../testing/vercel-sandbox-fake.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
-import { vercelMachineLayer } from "../machine/vercel-machine.js";
+import { sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import {
   PLAN_REFUSAL,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
-import { deploymentOidcToken } from "../vercel-sandbox-api.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { type CodexSessionsOptions, codexSessions } from "./codex-sessions.js";
 import { RUNNER_ENDED, runnerEnded } from "./runner-sessions.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * A coding agent's sessions on Codex, against a fake of Vercel Sandbox's
@@ -107,6 +115,8 @@ const INSTRUCTIONS = "You are a Vespin coding agent.";
 const KEK = `1:${Buffer.alloc(32, 3).toString("base64")}`;
 const THREAD = "019a0b1c-2d3e-7f40-8a5b-6c7d8e9f0a1b";
 const TOKEN_URL = "https://app.test/api/agents/runner-token";
+/** The query every URL a runner is handed names its launch by, here the agent's first. */
+const FIRST_LAUNCH = "?runnerLaunch=1";
 const MINUTE = 60 * 1000;
 /** The ChatGPT workspace a device-code login's ID token names. */
 const WORKSPACE = "chatgpt-workspace-fixture";
@@ -155,9 +165,8 @@ const NO_KEYS: HostedEnvironmentValues = {
 };
 
 /** The agent's machine over the fake Vercel the client given answers as, its checkout run on this test's own runner. */
-function machineOver<E, R>(http: Layer.Layer<HttpClient.HttpClient, E, R>) {
-  return vercelMachineLayer({
-    readToken: deploymentOidcToken,
+function machineOver<E, R>(http: Layer.Layer<HttpClient.HttpClient | Sandbox, E, R>) {
+  return sandboxMachineLayer({
     run: (effect) => Effect.runPromise(effect),
   }).pipe(Layer.provide(http));
 }
@@ -167,20 +176,23 @@ function services(
   api: ReturnType<typeof runnerSandboxApi>,
   openai: ReturnType<typeof openAi> = openAi(),
 ) {
-  const http = Layer.merge(
+  const http = Layer.provideMerge(
+    vercelSandboxOver(api.respond),
     fakeHttpClientLayer((url, init) =>
       new URL(url).origin === CHATGPT_OAUTH.ISSUER
         ? openai.respond(url, init)
         : api.respond(url, init),
     ),
-    sandboxFetchOver(api.respond),
   );
   return Layer.mergeAll(
     http,
     machineOver(http),
     GITHUB_APP_WITH_TOKENS,
     Layer.succeed(HostedEnvironment, NO_KEYS),
-    Layer.succeed(AgentImage, { reference: Effect.succeed(IMAGE) }),
+    Layer.succeed(AgentImage, {
+      reference: Effect.succeed(IMAGE),
+      runner: Effect.succeed([]),
+    }),
   );
 }
 
@@ -272,10 +284,56 @@ const message = (agent: Agent, text: string, lineId?: string) => ({
   ...(lineId === undefined ? undefined : { lineId }),
 });
 
+/** A message written as the line awaiting the turn its send queues, as a steer's is (`steer.ts`), and handed on under its line id. */
+const writtenLine = (agent: Agent, text: string) =>
+  Effect.gen(function* () {
+    const clientKey = randomUUID();
+    const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+    yield* writer.writeAwaitingLine(
+      { userId: agent.userId, conversationId: agent.conversationId },
+      { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
+      Effect.succeed(true),
+    );
+    return message(agent, text, sentLineId(clientKey));
+  });
+
+/**
+ * A Start's open of its agent's session on the message given, whose line its
+ * Start wrote awaiting the turn it queues (`writtenLine`), and that turn
+ * delivered where the open took it, as the agent-turns consumer hands it
+ * over (`turn-delivery.ts`), which opens the place and launches the runner.
+ */
+const deliveredOpen = (
+  sessions: Effect.Success<ReturnType<typeof sessionsFor>>,
+  sent: Parameters<Effect.Success<ReturnType<typeof sessionsFor>>["open"]>[0],
+) =>
+  Effect.gen(function* () {
+    const opened = yield* sessions.open(sent);
+    if (opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
+      yield* sessions.deliverTurn(opened.sessionId, sent.conversationId);
+    }
+    return opened;
+  });
+
+/** What the launch reads past its config: its own lines, and the messages no earlier launch took, as its runner is handed them. */
+const handedLines = (userId: string, command: Parameters<typeof launchLines>[0]) =>
+  Effect.gen(function* () {
+    const [config] = (yield* launchLines(command)) as [CodexConfig];
+    assert.ok(command?.agentId !== undefined);
+    const read = yield* runnerLinesPast(userId, command.agentId, {
+      launch: config.firstSequence,
+      after: 0,
+      limit: 50,
+    });
+    return read.map((line) => JSON.parse(line.text) as InputLine);
+  });
+
 /** A turn of the agent's under way, as the events route queues one, by the id a Stop names it by. */
 const turnUnderWay = (userId: string, agent: Agent) =>
   Effect.gen(function* () {
-    const turnId = randomUUID();
+    // The turn a line queued, as a Start's, is the one its runner takes up; one is queued where none stands.
+    const queued = yield* queuedTurnOf(agent.conversationId);
+    const turnId = Option.getOrElse(queued, () => randomUUID());
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     yield* writer.enqueueTurn(
       { userId, conversationId: agent.conversationId },
@@ -288,7 +346,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
+it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
   it.effect(
     "a local agent's launch on its Mac runs the Codex the Mac checked in its folder, sealed in its line with no token in it, on the plan naming the token route",
     () =>
@@ -326,7 +384,6 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           );
         const http = fakeHttpClientLayer(() => assert.fail("a local launch reaches no network"));
         const machines = agentMachinesLayer({
-          readToken: deploymentOidcToken,
           run: (effect) => Effect.runPromise(effect),
         }).pipe(Layer.provide(http));
         /** The agent's launch, its line's row as stored and its secrets as the Mac's claim opens them. */
@@ -337,7 +394,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
               Effect.provide(machines),
               Effect.provide(services(runnerSandboxApi())),
             );
-            const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+            const opened = yield* deliveredOpen(
+              sessions,
+              yield* writtenLine(agent, "Fix the invitations."),
+            );
             assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
             const db = yield* Database;
             const [row] = yield* db
@@ -371,7 +431,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           [RUNNER_ENV.BEARER]: plan.secrets.env[RUNNER_ENV.BEARER],
         });
         assert.equal(plan.config.executable, codexExecutable);
-        assert.equal(plan.config.tokenUrl, TOKEN_URL);
+        assert.equal(plan.config.tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
         const bearer = plan.secrets.env[RUNNER_ENV.BEARER] ?? "";
         // A Mac has no firewall of ours, so its runner is handed the bearer itself.
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, onPlan.id));
@@ -438,7 +498,6 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
             (started) => Option.getOrThrow(started).agent,
           );
         const machines = agentMachinesLayer({
-          readToken: deploymentOidcToken,
           run: (effect) => Effect.runPromise(effect),
         }).pipe(
           Layer.provide(
@@ -453,7 +512,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
               local ? Effect.provide(machines) : (effect) => effect,
               Effect.provide(services(runnerSandboxApi())),
             );
-            const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+            const opened = yield* deliveredOpen(
+              sessions,
+              yield* writtenLine(agent, "Fix the invitations."),
+            );
             assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
             const db = yield* Database;
             if (local) {
@@ -505,10 +567,12 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const openai = openAi();
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
-        const lineId = randomUUID();
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
+        const line = yield* writtenLine(agent, "Fix the invitations.");
+        const { lineId } = line;
+        assert.ok(lineId !== undefined);
 
-        const opened = yield* sessions.open(message(agent, "Fix the invitations.", lineId));
+        const opened = yield* deliveredOpen(sessions, line);
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.match(opened.sessionId, /^codex-[0-9a-f]{12}-[0-9a-f-]{36}$/u);
@@ -544,15 +608,14 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           effort: "xhigh",
           developerInstructions: INSTRUCTIONS,
           firstSequence: 0,
-          eventsUrl: EVENTS_URL,
-          linesUrl: LINES_URL,
+          eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
+          linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
-          transcriptsUrl: TRANSCRIPTS_URL,
+          transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
-          tokenUrl: TOKEN_URL,
+          tokenUrl: `${TOKEN_URL}${FIRST_LAUNCH}`,
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
-          warmForMs: 7 * 60_000,
         });
         assert.ok(first.type === INPUT_LINE.MESSAGE);
         assert.equal(first.uuid, lineId);
@@ -615,7 +678,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const api = runnerSandboxApi();
         const openai = openAi();
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [command] = api.commands;
         assert.ok(command !== undefined);
@@ -639,7 +705,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const gone = runnerSandboxApi();
         const without = yield* sessionsFor(userId).pipe(Effect.provide(services(gone)));
         assert.equal(
-          (yield* without.open(message(agent, "Go."))).outcome,
+          (yield* deliveredOpen(without, yield* writtenLine(agent, "Go."))).outcome,
           SESSION_SEND_OUTCOME.FAILED,
         );
         assert.deepEqual(gone.commands, []);
@@ -658,7 +724,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         yield* signIn(userId, 40);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
 
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
 
         assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(openai.state.renewals, 1);
@@ -678,7 +747,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const { userId, agent } = yield* openAgent;
         yield* signIn(userId, 60);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api)));
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         yield* updateAgentChoice(userId, agent.id, {
           model: "openai/gpt-4.1",
@@ -702,6 +774,8 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         });
         assert.equal(lines[1]?.type, INPUT_LINE.MESSAGE);
         assert.deepEqual(lines[2], { type: INPUT_LINE.STOP, launch: 0 });
+        // The runner took its lines, so nothing of the session waits on a launch once it is reset.
+        yield* runnerTook(agent.id);
 
         const reset = yield* sessions.reset(opened.sessionId);
 
@@ -728,10 +802,20 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const sessions = yield* sessionsFor(userId, sequence).pipe(
           Effect.provide(services(api, openai)),
         );
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        // The events route records Codex's thread as the runner reports it, and the run ends.
+        // The events route records Codex's thread as the runner reports it, the store holding its
+        // rollout from its first line as the runner mirrors it, and the run ends.
         assert.equal(yield* recordAgentNativeSession(userId, agent.id, THREAD), true);
+        yield* appendSessionEntries(
+          userId,
+          agent.conversationId,
+          { projectKey: "codex", sessionId: THREAD, subpath: `sessions/rollout-${THREAD}.jsonl` },
+          [{ type: "session_meta", payload: { id: THREAD } }],
+        );
         yield* runnerTook(agent.id);
         const [first] = api.commands;
         const firstBearer = launchBearer(api, first, SERVICE_HOST);
@@ -741,11 +825,16 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           sessionId: opened.sessionId,
           sequence: 16,
         }).pipe(Effect.provide(services(api, openai)));
-        assert.equal(ended, RUNNER_ENDED.STOPPED);
-        assert.equal(api.sandboxes[0]?.status, "stopped");
+        assert.equal(ended, RUNNER_ENDED.LEFT);
+        api.idleStop();
         yield* TestClock.adjust("55 minutes");
 
-        const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
+        const sent = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Now the emails."),
+        );
+        // The turn the message awaits is delivered, as the agent-turns consumer hands it over (`turn-delivery.ts`).
+        yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes.length, 1);
@@ -754,11 +843,12 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const relaunch = api.commands[1];
         assert.equal(relaunch?.sandboxSessionId, api.sandboxes[0]?.currentSessionId);
         assert.equal(openai.state.renewals, 1);
-        const [config, line] = (yield* launchLines(relaunch)) as [CodexConfig, InputLine];
+        const [config] = (yield* launchLines(relaunch)) as [CodexConfig];
+        const [line] = yield* handedLines(userId, relaunch);
         assert.equal(config.harness, RUNNER_HARNESS.CODEX);
         assert.equal(config.threadId, THREAD);
         assert.equal(config.firstSequence, 17);
-        assert.ok(line.type === INPUT_LINE.MESSAGE);
+        assert.ok(line?.type === INPUT_LINE.MESSAGE);
         assert.deepEqual(developerContent(line), [{ type: "text", text: "Now the emails." }]);
         // A fresh bearer for the new launch at the resumed session's firewall, recorded in place of the last.
         const bearer = launchBearer(api, relaunch, SERVICE_HOST);
@@ -776,7 +866,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const { userId, agent } = yield* openAgent;
         const none = runnerSandboxApi();
         const withoutSignIn = yield* sessionsFor(userId).pipe(Effect.provide(services(none)));
-        assert.deepEqual(yield* withoutSignIn.open(message(agent, "Go.")), {
+        assert.deepEqual(yield* deliveredOpen(withoutSignIn, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           planRefusal: PLAN_REFUSAL.NONE,
@@ -800,7 +890,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
           Effect.provide(services(invalid, openai)),
         );
 
-        assert.deepEqual(yield* signedOut.open(message(agent, "Go.")), {
+        assert.deepEqual(yield* deliveredOpen(signedOut, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           planRefusal: PLAN_REFUSAL.SIGNED_OUT,
@@ -831,7 +921,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         );
         const limited = runnerSandboxApi();
         const limitedSessions = yield* sessionsFor(userId).pipe(Effect.provide(services(limited)));
-        assert.deepEqual(yield* limitedSessions.open(message(agent, "Go.")), {
+        assert.deepEqual(yield* deliveredOpen(limitedSessions, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
           planRefusal: PLAN_REFUSAL.LIMIT_REACHED,
@@ -844,7 +934,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const resetSessions = yield* sessionsFor(userId).pipe(
           Effect.provide(services(reset, openAi())),
         );
-        const reopened = yield* resetSessions.open(message(agent, "Go."));
+        const reopened = yield* deliveredOpen(resetSessions, yield* writtenLine(agent, "Go."));
         assert.equal(reopened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.notDeepEqual(reset.commands, []);
 
@@ -861,11 +951,14 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const ineligibleSessions = yield* sessionsFor(userId).pipe(
           Effect.provide(services(ineligible)),
         );
-        assert.deepEqual(yield* ineligibleSessions.open(message(agent, "Go on.")), {
-          outcome: SESSION_SEND_OUTCOME.FAILED,
-          status: 422,
-          planRefusal: PLAN_REFUSAL.INELIGIBLE,
-        });
+        assert.deepEqual(
+          yield* deliveredOpen(ineligibleSessions, yield* writtenLine(agent, "Go on.")),
+          {
+            outcome: SESSION_SEND_OUTCOME.FAILED,
+            status: 422,
+            planRefusal: PLAN_REFUSAL.INELIGIBLE,
+          },
+        );
         assert.deepEqual(ineligible.commands, []);
       }),
   );
@@ -881,7 +974,10 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         yield* signIn(userId, 50);
         const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
 
-        const opened = yield* sessions.open(message(agent, "Fix the invitations."));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(openai.state.renewals, 0);
         // Ten minutes on, forty are left: renewed ahead of the message, and handed on nowhere.
@@ -892,7 +988,7 @@ it.layer(getTestDB())("a coding agent's sessions on Codex", (it) => {
         const [command] = api.commands;
         assert.equal(command?.env.CODEX_HOME, "/home/agent/.codex");
         const lines = linesOf(command) as [CodexConfig, ...InputLine[]];
-        assert.equal(lines[0].tokenUrl, TOKEN_URL);
+        assert.equal(lines[0].tokenUrl, `${TOKEN_URL}${FIRST_LAUNCH}`);
         const visible = JSON.stringify([command, api.sandboxes]);
         for (const secret of ["access-0", "access-1", "refresh-1"]) {
           assert.equal(visible.includes(secret), false, "a token handed to the runner");

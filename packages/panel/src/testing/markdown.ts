@@ -6,10 +6,9 @@ import { landRead } from "./landed-reads.js";
 /**
  * markdown.ts -- the HTML parser a reply's markdown is drawn through, landed as the panel lands it after its first paint.
  *
- * A reply is drawn only once the parser's chunk has landed
- * (`../markdown-html-parser.ts`), which the panel starts as it first
- * paints, long before a transcript opens. A test that draws one at once runs
- * this first, as the panel would have, and every case of its file after has
+ * A reply drawn before the parser's chunk has landed is drawn again through
+ * it once it has (`../markdown-html-parser.ts`). A test that reads a reply's
+ * parsed markup at once runs this first, and every case of its file after has
  * it (`landed-reads.ts`); a test of a reply drawn before the parser lands
  * leaves it out.
  */

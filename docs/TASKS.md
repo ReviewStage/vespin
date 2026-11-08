@@ -376,8 +376,20 @@ subagent's tab stays in the side panel.
 - **When it ends.** Main keeps a ledger of where each agent stands
   (`packages/host/src/agent-notices.ts`) and marks an agent that moves from writing
   to completed or failed once, unless the window is focused on that agent's
-  tab, with no toast and no notification. The agent's tab reads in semibold
-  until it is shown.
+  tab, with no toast. The agent's tab reads in semibold until it is shown.
+  A sound plays only where the developer turned one on (Settings › Account ›
+  Sounds): once as a turn of an agent they started ends, never on a Stop, in
+  the background only while the window is behind, and once for a burst of
+  ends. A notification is posted only where they turned that on beside it
+  (Show a notification), and only while the window is behind (the Mac app's
+  panel, or the web app's tab hidden): silent, titled by the agent or its
+  task and saying it finished or failed, or, for an item asking them
+  something, titled by the task with the question as its body; a click opens
+  the agent's tab or the Inbox item. A burst within 1.5 s posts one
+  notification counting it ("3 agents finished"). Those names then reach
+  the system's notification center, so it waits on the developer's switch.
+  The web app asks the browser's leave as the switch is turned on, never on
+  load, and says under the switch where the browser or macOS refuses.
 - **Privacy.** Every word is the agent's, the developer's, or the description's, so
   the tab carries `ph-no-capture`.
 

@@ -1,5 +1,6 @@
 import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { RUNNER_LOST_DETAIL, settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
   type Agent,
   readAgentOfConversation,
@@ -7,17 +8,21 @@ import {
   recordAgentCompaction,
   recordAgentNativeSession,
   recordAgentStep,
+  recordNativeHanded,
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
+import { markSessionBroken } from "@repo/database/models/claude-session-entries";
 import {
   type NativeProjectionRow,
   withNativeProjection,
 } from "@repo/database/models/native-projection-store";
 import { setPlanStatus } from "@repo/database/models/provider-key-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
-import { renewTurnLease } from "@repo/database/models/turn-lease";
+import { progressTurns, queuedTurnOf, supersededTurnsOf } from "@repo/database/models/turn-state";
 import {
   type ConversationTarget,
+  type QueuedAgentTurn,
+  QueuedTurnListener,
   type SettledAgentTurn,
   SettledTurnListener,
   type StoreWriter,
@@ -32,11 +37,13 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
+import { SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   Cause,
   Clock,
   Data,
+  Duration,
   Effect,
   ErrorReporter,
   Layer,
@@ -52,7 +59,7 @@ import {
   HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
-import { RUN_EVENT, type RunEvent, TURN_ORIGIN } from "../../core.js";
+import { RUN_EVENT, type RunEvent, TURN_FAILURE, TURN_ORIGIN } from "../../core.js";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
@@ -69,15 +76,17 @@ import {
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
-import { harnessOf } from "../coder-host/native-runtime.js";
+import { agentSandboxName } from "../agent-sandbox-open.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
-import { NativeAgentSessions } from "../coder-host/runtime-sessions.js";
-import { estimatedTokens } from "../coder-host/token-estimate.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
+import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
-import { keepAliveDue } from "../sandbox-keep-alive.js";
-import { keepSessionSandboxAlive } from "../session-sandboxes.js";
-import { admitRunnerBearer, presentedBearer, runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import {
+  admitRunnerBearer,
+  presentedBearer,
+  presentedLaunch,
+  runnerTokenDigest,
+} from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
 import type { NativeHeld, NativeMoment } from "./native-moments.js";
@@ -87,6 +96,7 @@ import {
   type NativeProjection,
   type NativeWrite,
   projectMoments,
+  turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
 import { redactKeepingPlanCodes } from "./runner-moments.js";
@@ -98,7 +108,10 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * numbered in order, in batches, under the bearer it was launched with, and
  * posts a batch again until we take it. A bearer no standing coding
  * agent's conversation holds, a retired one's among them, is refused before
- * the body is read (`../workspace-mcp/bearer.ts`). The batch is read as moments
+ * the body is read (`../workspace-mcp/bearer.ts`), as is a post naming a
+ * launch other than the one its bearer was recorded as, read again under
+ * the lock, so a runner a newer launch replaced applies nothing, even under
+ * the bearer its sandbox's firewall now swaps in. The batch is read as moments
  * by the reader of the harness the conversation runs on
  * (`claude-code-moments.ts`, `codex-moments.ts`), folded into the store
  * writer's events
@@ -108,16 +121,27 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * racing, write nothing twice. A write the writer refuses is said in the
  * log and passed over, since the runner
  * posting the batch again would be refused again. The answer names the last
- * event applied, which a relaunch numbers its events after. A runner posting
- * is a run under way, so a post keeps its sandbox alive past its short
- * timeout, at most every keep-alive interval (`../sandbox-keep-alive.ts`),
- * stamped in the projection under the same lock, unless it ends the launch,
- * whose sandbox is stopped instead. A batch with no events is the runner's
- * heartbeat (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`), posted while its
- * harness says nothing, as it may for an hour while a background command
- * runs; it applies nothing but that and the lease every post short of the
- * launch's end pushes on, which the turns it runs are read as lost by once
- * it runs out (`@repo/database/models/turn-lease`).
+ * event applied, which a relaunch numbers its events after. A post while a
+ * turn runs touches the runner's sandbox (`@repo/sandbox`'s `touch`), at
+ * most every `SANDBOX_TOUCH_EVERY`, stamped in the projection under the same
+ * lock, unless it ends the launch, whose runner uses the sandbox no more; a
+ * warm runner with no turn touches nothing, so it cannot keep its own sandbox up.
+ * A batch with no events is the runner's heartbeat (`@repo/agent-runner`'s
+ * `RUNNER_HEARTBEAT`), posted every minute whatever its harness says, as it
+ * may say nothing for an hour while a background command runs; it applies
+ * nothing but that. The running turn's progress deadline
+ * (`@repo/database/models/turn-state`), which the minute sweep fails it by
+ * once it passes, is pushed on only by the turn's progress short of the
+ * launch's end (`native-projection.ts`'s `turnProgressed`): any event, or a
+ * heartbeat while the turn holds a call still unanswered or waits on
+ * background work, so a runner alive with its harness stuck lapses too.
+ *
+ * Every turn the batch moves runs under the launch its bearer was recorded
+ * as (`agent.runner_launch`), read under the lock: a turn the runner opens
+ * is the one its line queued, where one stands queued, started under that
+ * launch, and a turn still running under an older launch, whose runner this
+ * one replaced, is failed as its runner lost before anything else is
+ * applied, so its end, which is not coming, waits on no deadline.
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -137,6 +161,9 @@ export const RUNNER_EVENTS_PATH = "/api/agents/runner-events";
 /** The most a batch may hold: the runner's 256 events, a tool's whole answer among them, under the platform's own bound. */
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
+/** The bytes a token stands for in a step's estimate. */
+const BYTES_PER_TOKEN = 4;
+
 const RunnerEventBatchSchema = Schema.Struct({
   events: Schema.Array(
     Schema.Struct({
@@ -148,6 +175,14 @@ const RunnerEventBatchSchema = Schema.Struct({
 type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
+
+/**
+ * The tokens of a value's JSON as a step's estimate tells them: its bytes
+ * over four, rounded up, the rule the retired runtime's steps were estimated by.
+ */
+function estimatedTokens(json: string): number {
+  return Math.ceil(new TextEncoder().encode(json).byteLength / BYTES_PER_TOKEN);
+}
 
 /**
  * How a harness's messages are read: one message, as its runner posted it,
@@ -197,19 +232,19 @@ interface Applied {
   readonly sequence: number | null;
 }
 
-/** A run whose sandbox a batch keeps alive: the conversation, and the session its sandbox is tagged with. */
+/** A run whose sandbox a batch touches: the conversation, and the session its sandbox is named for. */
 export interface RunnerAlive {
   readonly target: ConversationTarget;
   readonly sessionId: string | undefined;
 }
 
-/** A launch's end the batch applied: the conversation, the session it ran under, the number of its END event, why it ended where the END said, and the harness the conversation runs on. */
+/** A launch's end the batch applied: the conversation, the session it ran under, the number of its END event, why it ended where the END said, and the launch its post named, where it named one. */
 export interface RunnerEnded {
   readonly target: ConversationTarget;
   readonly sessionId: string | undefined;
   readonly sequence: number;
   readonly reason?: RunnerEnd | undefined;
-  readonly runtime?: ConversationRuntime | undefined;
+  readonly launch?: number | undefined;
 }
 
 /** What the route reads a batch with and tells of a launch's end. */
@@ -221,19 +256,19 @@ export interface RunnerEventsOptions<R = never> {
    * transaction: the sandbox's own lifecycle (P08's `runnerEnded`), which
    * stops nothing for a launch since replaced. Nothing where left out.
    */
-  readonly ended?: (ended: RunnerEnded) => Effect.Effect<void, never, DatabaseServices>;
+  readonly ended?: (ended: RunnerEnded) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
    * Told once a batch that holds a launch's IDLE, and no END after it, has
    * landed, after its transaction: the device's warm runner retired at once
    * where its device waits to update (`sandboxAtRunnerIdle`). Nothing where
    * left out.
    */
-  readonly idled?: (idled: RunnerEnded) => Effect.Effect<void, never, DatabaseServices>;
+  readonly idled?: (idled: RunnerEnded) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
-   * Told once a batch due a keep-alive has landed, after its transaction:
-   * the run's sandbox kept alive (`sandboxKeptAlive`). Nothing where left out.
+   * Told once a batch due a touch has landed, after its transaction: the
+   * run's sandbox touched (`sandboxTouched`). Nothing where left out.
    */
-  readonly alive?: (alive: RunnerAlive) => Effect.Effect<void, never, DatabaseServices>;
+  readonly alive?: (alive: RunnerAlive) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
    * Told once a batch that started or ended a turn has landed, after its
    * transaction: the agent's title asked for where none stands
@@ -246,30 +281,28 @@ export interface RunnerEventsOptions<R = never> {
 }
 
 /**
- * A run's sandbox kept alive as a batch of its runner's events lands
- * (`../session-sandboxes.ts`'s `keepSessionSandboxAlive`), which logs a
- * keep-alive Vercel did not confirm, since the next due batch tries again.
+ * A run's sandbox touched as a batch of its runner's events lands
+ * (`@repo/sandbox`'s `touchSandbox`), which logs a touch the sandbox did not
+ * confirm, since the next due batch, a minute on, touches it again.
  */
-export function sandboxKeptAlive(alive: RunnerAlive): Effect.Effect<void> {
+export function sandboxTouched(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
   const { sessionId } = alive;
   if (sessionId === undefined) return Effect.void;
-  return keepSessionSandboxAlive(sessionId).pipe(Effect.provide(FetchHttpClient.layer));
+  return touchSandbox(agentSandboxName(sessionId));
 }
 
 /**
  * A launch's end as the sandbox hears it (`../coder-host/runner-sessions.ts`'s
  * `runnerEnded`), once the ended runner's last post has its answer, so that
- * post never waits on the runner lease or on Vercel's stop, which holds its
- * call until the sandbox's snapshot is taken: stopped, unless a developer's
- * Terminal holds it or a newer launch replaced this one, or a message the
- * launch never took waits, which the harness's sessions then hand to a
- * launch of their own (`deliverWaiting`). A stop that fails is said in the
- * log and passed over, because the sandbox then stops at its own timeout,
- * and the events it ended are already kept.
+ * post never waits on the runner lease: where a message the launch never
+ * took waits, its queued turn is published again for a launch of its own
+ * (`../coder-host/turn-delivery.ts`). The sandbox is left to its own idle
+ * stop. A read that fails is said in the log and passed over, since the
+ * events it ended are already kept.
  */
 export function sandboxAtRunnerEnd(
   ended: RunnerEnded,
-): Effect.Effect<void, never, DatabaseServices> {
+): Effect.Effect<void, never, DatabaseServices | Sandbox> {
   const { sessionId } = ended;
   if (sessionId === undefined) return Effect.void;
   return afterResponse(
@@ -279,36 +312,33 @@ export function sandboxAtRunnerEnd(
       sessionId,
       sequence: ended.sequence,
       reason: ended.reason,
+      launch: ended.launch,
     }).pipe(
       Effect.provide(FetchHttpClient.layer),
       Effect.flatMap((left) =>
-        left === RUNNER_ENDED.LINES_WAITING ? waitingHandedOn(ended, sessionId) : Effect.void,
+        left === RUNNER_ENDED.LINES_WAITING ? waitingRepublished(ended) : Effect.void,
       ),
       Effect.catch((failure) =>
-        Effect.logWarning(
-          `runner-events: the sandbox was not stopped at its launch's end: ${failure._tag}`,
-        ),
+        Effect.logWarning(`runner-events: a launch's end was not handed on: ${failure._tag}`),
       ),
     ),
   );
 }
 
-/** The waiting lines of an ended launch handed to a launch of their own, by the harness the conversation runs on, where this function holds it. */
-const waitingHandedOn = (ended: RunnerEnded, sessionId: string) =>
+/**
+ * The turn an ended launch's waiting lines await, where it stands queued,
+ * published again for its delivery to launch a runner for them. Note that it
+ * is published as an event of its own, not under the turn's id, because
+ * Queues would drop it as the turn's first publish, whose delivery found the
+ * ended runner up.
+ */
+const waitingRepublished = (ended: RunnerEnded) =>
   Effect.gen(function* () {
-    const native = yield* Effect.serviceOption(NativeAgentSessions);
-    const runtime = harnessOf(ended.runtime);
-    const reached =
-      runtime === undefined
-        ? Option.none()
-        : Option.flatMap(native, (service) => service.sessions(runtime, ended.target.userId));
-    if (Option.isNone(reached)) {
-      return yield* Effect.logWarning(
-        "runner-events: a launch's waiting lines could not be handed on here",
-      );
-    }
-    const sessions = yield* reached.value;
-    yield* sessions.deliverWaiting(sessionId, ended.target.conversationId);
+    const { userId, conversationId } = ended.target;
+    const queued = yield* queuedTurnOf(conversationId);
+    if (Option.isNone(queued)) return;
+    const queue = yield* TurnQueue;
+    yield* queue.publish({ userId, conversationId, turnId: queued.value }, TURN_PUBLISH.UNKEYED);
   });
 
 /**
@@ -322,7 +352,7 @@ const waitingHandedOn = (ended: RunnerEnded, sessionId: string) =>
  */
 export function sandboxAtRunnerIdle(
   idled: RunnerEnded,
-): Effect.Effect<void, never, DatabaseServices> {
+): Effect.Effect<void, never, DatabaseServices | Sandbox> {
   const { sessionId } = idled;
   if (sessionId === undefined) return Effect.void;
   return runnerIdled({ target: idled.target, sessionId, sequence: idled.sequence }).pipe(
@@ -481,10 +511,15 @@ function landWrite(
         (result) => reportRefused("a turn's queueing", result),
       );
     case NATIVE_WRITE.TAKE_LINE:
-      // The runner's line is stamped taken, so no later launch is handed it again (`runner-lines-app.ts`).
+      // The runner's line is stamped taken, so no later launch is handed it again (`runner-lines-app.ts`),
+      // and what its words handed the session is kept now that the session has them, in the batch's transaction.
       return Effect.flatMap(
         Effect.andThen(
-          acceptRunnerLine(target.userId, applying.agentId, write.clientId),
+          Effect.flatMap(
+            acceptRunnerLine(target.userId, applying.agentId, write.clientId),
+            (handed) =>
+              Option.isSome(handed) ? recordNativeHanded(target, handed.value) : Effect.void,
+          ),
           writer.takeAwaitingLine(target, { clientId: write.clientId, turnId: write.turnId }),
         ),
         (result) => reportRefused("a line's taking", result),
@@ -493,6 +528,9 @@ function landWrite(
       return Effect.asVoid(
         recordAgentNativeSession(target.userId, applying.agentId, write.sessionId),
       );
+    case NATIVE_WRITE.TRANSCRIPT_BROKEN:
+      // A session whose stored transcript holds a gap is let go at the next launch, which replays the agent's steps.
+      return markSessionBroken(target.userId, target.conversationId, write.sessionId);
     case NATIVE_WRITE.COMPACTED:
       // The summary may have dropped what the turns' messages handed, so the next message hands it again.
       return Effect.andThen(
@@ -561,12 +599,55 @@ function landWrites(applying: Applying, writes: readonly NativeWrite[], now: num
   });
 }
 
+/**
+ * The conversation's turns still running under a launch older than the one
+ * posting, whose runner this launch replaced, failed as their runner lost,
+ * or canceled where a Stop was asked of them; and the projection without the
+ * turn it held, where that was one of them, so this launch opens its own.
+ */
+function supersededDropped(
+  applying: Applying,
+  state: NativeProjection,
+  launch: number,
+  now: number,
+) {
+  return Effect.gen(function* () {
+    const { conversationId } = applying.target;
+    const superseded = yield* supersededTurnsOf(conversationId, launch);
+    if (superseded.length === 0) return state;
+    const failed = yield* settleRunnerLostTurns(
+      applying.writer,
+      conversationId,
+      now,
+      RUNNER_LOST_DETAIL,
+      new Set(superseded),
+      TURN_FAILURE.RUNNER_LOST,
+    );
+    if (failed.length > 0) {
+      yield* Effect.logWarning("runner-events: a newer launch replaced a turn's runner").pipe(
+        Effect.annotateLogs({ turnId: failed.join(","), failure: TURN_FAILURE.RUNNER_LOST }),
+      );
+    }
+    const { turn, ...rest } = state;
+    return turn !== undefined && superseded.includes(turn.id) ? rest : state;
+  });
+}
+
 /** The batch's events not yet applied, projected and written, and the place the conversation keeps after them. */
 function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativeProjectionRow) {
   return Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const events = unapplied(batch, held.sequence);
-    let state: NativeProjection = heldProjection(held.projection);
+    const { conversationId } = applying.target;
+    let state: NativeProjection = yield* supersededDropped(
+      applying,
+      heldProjection(held.projection),
+      held.launch,
+      now,
+    );
+    // The next turn the runner opens is the one its line queued, where one stands queued.
+    let queuedTurnId = Option.getOrUndefined(yield* queuedTurnOf(conversationId));
+    const { launch } = held;
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
     for (const { sequence, message } of events) {
@@ -577,9 +658,11 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       };
       const moments = applying.read(message, held);
       const projected = projectMoments(state, moments, {
-        conversationId: applying.target.conversationId,
+        conversationId,
         sequence,
         now,
+        attempt: launch,
+        queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
         registered,
@@ -594,6 +677,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       // own, never the next turn's.
       for (const write of projected.writes) {
         if (write.kind !== NATIVE_WRITE.ENQUEUE) continue;
+        if (write.turnId === queuedTurnId) queuedTurnId = undefined;
         const taken = yield* takeAgentMentionedServers(
           applying.target.userId,
           applying.target.conversationId,
@@ -601,24 +685,36 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         state = withTurnServers(state, write.turnId, taken);
       }
     }
-    for (const said of reports) yield* Effect.logWarning(`runner-events: ${said}`);
+    // Each is said under the agent's ids, so what a harness said that no turn keeps is found by them.
+    for (const said of reports) {
+      yield* Effect.logWarning(`runner-events: ${said}`).pipe(
+        Effect.annotateLogs({ agentId: applying.agentId, conversationId }),
+      );
+    }
     yield* landWrites(applying, writes, now);
     const last = events.at(-1)?.sequence;
     const ends = runnerEndsOf(batch, held.sequence);
-    // Any post short of the launch's end, a heartbeat among them, pushes on the open turns' lease
-    // (`turn-lease.ts`), so a runner gone quiet is read as lost once it runs out.
-    if (ends.length === 0) yield* renewTurnLease(applying.target.conversationId, now);
+    // Only the turn's progress pushes on its deadline (`turn-state.ts`), a heartbeat only where the turn
+    // is expected to be silent, so a runner gone quiet, or alive with its harness stuck, lapses.
+    if (ends.length === 0 && turnProgressed(events.length, state)) {
+      yield* progressTurns(conversationId, launch, now);
+    }
     // Only the batch's last IDLE is told, and none where the launch ended in the same batch.
     const idle =
       ends.length === 0
         ? runnerEventsOf(batch, held.sequence, RUNNER_EVENT.IDLE).at(-1)
         : undefined;
-    // Any post is the runner still running, a heartbeat with no events among them, but a batch that
-    // ends the launch keeps nothing alive, since its sandbox is stopped once it lands; and a launch
-    // that has applied nothing yet has a sandbox that opened moments ago.
+    // Any post while a turn runs is its sandbox in use, a heartbeat with no events among them, but a
+    // warm runner with no turn keeps nothing up, a batch that ends the launch touches nothing, since
+    // its runner uses the sandbox no more, and a launch that has applied nothing yet has a sandbox
+    // that opened moments ago.
     const sequence = last ?? held.sequence;
     const keepsAlive =
-      sequence !== null && ends.length === 0 && keepAliveDue(state.keptAliveAt, now);
+      sequence !== null &&
+      ends.length === 0 &&
+      state.turn !== undefined &&
+      (state.keptAliveAt === undefined ||
+        now - state.keptAliveAt >= Duration.toMillis(SANDBOX_TOUCH_EVERY));
     if (keepsAlive) state = { ...state, keptAliveAt: now };
     const result = {
       applied: { applied: events.length, sequence: last ?? held.sequence } satisfies Applied,
@@ -666,7 +762,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   HostedRefusal,
-  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | R
+  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | Sandbox | R
 > {
   const { read, ended, idled, alive, title } = options;
   const incoming = yield* HttpServerRequest.HttpServerRequest;
@@ -676,7 +772,9 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const bearer = presentedBearer(request);
   if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-  const admitted = yield* hostedStoreOrUnavailable(admitRunnerBearer(bearer));
+  const admitted = yield* hostedStoreOrUnavailable(
+    admitRunnerBearer(bearer, presentedLaunch(request)),
+  );
   if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const { target } = admitted.value;
   // Every line the batch writes, and every issue it raises, names the account the agent runs for.
@@ -724,17 +822,31 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // the Slack thread and the agent's starter) is what the batch wrote, and a rolled back batch
   // tells nobody.
   const settled: SettledAgentTurn[] = [];
-  const collecting = Layer.succeed(SettledTurnListener, {
-    heard: (turn) => Effect.sync(() => void settled.push(turn)),
-  });
+  const queued: QueuedAgentTurn[] = [];
+  const collecting = Layer.merge(
+    Layer.succeed(SettledTurnListener, {
+      heard: (turn) => Effect.sync(() => void settled.push(turn)),
+    }),
+    Layer.succeed(QueuedTurnListener, {
+      heard: (turn) => Effect.sync(() => void queued.push(turn)),
+    }),
+  );
   const applied = yield* hostedStoreOrUnavailable(
-    withNativeProjection(target, runnerTokenDigest(bearer), (held) =>
-      applyBatch(applying, batch.value, held),
+    withNativeProjection(
+      target,
+      runnerTokenDigest(bearer),
+      (held) => applyBatch(applying, batch.value, held),
+      admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
   const listener = yield* Effect.serviceOption(SettledTurnListener);
   if (Option.isSome(listener)) {
     yield* Effect.forEach(settled, listener.value.heard, { discard: true });
+  }
+  // The turns the batch queued for a runner, as a turn that ended well queues one for the lines it never took, are handed on once it commits too.
+  const queuing = yield* Effect.serviceOption(QueuedTurnListener);
+  if (Option.isSome(queuing)) {
+    yield* Effect.forEach(queued, queuing.value.heard, { discard: true });
   }
   // Note that a conversation cleared, or a bearer retired, since the bearer was read takes nothing more.
   if (Option.isNone(applied)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
@@ -772,7 +884,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
         sessionId: admitted.value.runtimeSessionId,
         sequence,
         reason,
-        runtime: Option.getOrUndefined(runtime),
+        launch: admitted.value.launch,
       });
     }
   }
@@ -789,7 +901,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 /** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. */
 export function runnerEventsApp<R = never>(
   options: RunnerEventsOptions<R> = {},
-): WebRoutes<DatabaseServices | R> {
+): WebRoutes<DatabaseServices | Sandbox | R> {
   const endpoint = runnerEventsEndpoint(options);
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_EVENTS_PATH, hostedRefusing(endpoint)),

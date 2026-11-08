@@ -7,20 +7,24 @@
  */
 
 import { createLazyRoute } from "@tanstack/react-router";
+import { useAdminView } from "../admin/admin-route.js";
+import { useAdminDoor } from "../places/routed-doors.js";
 import { DesktopAdmin } from "./desktop-admin.js";
 import { AdminRouteLoading, useShellPlaces } from "./desktop-shell.js";
 
 /** The admin screens in the task's place beside the sidebar. */
 function AdminRoutePlace(): React.JSX.Element {
   const { tasks, room, adminAccess } = useShellPlaces();
+  const view = useAdminView();
+  const admin = useAdminDoor(tasks);
   if (!adminAccess) return <AdminRouteLoading />;
   return (
     <DesktopAdmin
       room={room}
-      view={tasks.adminView.view}
+      view={view}
       shown={tasks.shown}
-      onOpen={tasks.adminView.onOpen}
-      onExit={tasks.adminView.onClose}
+      onOpen={admin.open}
+      onExit={admin.close}
     />
   );
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { test } from "vitest";
 import { AGENT_ENTER } from "./agent-enter.js";
 import { COMMIT_AUTHOR } from "./commit-author.js";
@@ -9,6 +10,7 @@ import {
   accountPreferencesToPush,
   accountPreferencesToWrite,
 } from "./schema-access.js";
+import { SOUND_WHEN } from "./sound-when.js";
 
 /**
  * The keys v0.18.0 knows inside the snapshot's `preferences` part, read from
@@ -83,6 +85,9 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     commitAuthor: COMMIT_AUTHOR.APP,
     setupFinished: true,
     setupPlace: '{"audience":"me","at":1}',
+    soundWhen: SOUND_WHEN.BACKGROUND,
+    completionSound: COMPLETION_SOUND.QUACK,
+    turnNotifications: true,
   } satisfies Required<AccountPreferences>;
   const shared = Object.keys(accountPreferencesParts(everything).preferences);
   assert.deepEqual(

@@ -5,8 +5,8 @@
  * made from a menu that closed with the press, a note sent from a dialog
  * that closed with the send, a task archived from a menu, or a change
  * refused where nothing beside it is left to say so. Beside those it says
- * only what is rare enough to be worth the interruption, as the app updated to
- * a new version (`update-toast.ts`); what happened elsewhere, an agent's
+ * only what is rare enough to be worth the interruption, as a new version
+ * waiting on its restart or the app updated to one (`update-toast.ts`); what happened elsewhere, an agent's
  * turn ended, an Inbox item posted, or an automation's run that failed, is
  * said by the window's own marks and counts instead. Each is a
  * card of its words, an optional second line under them, each cut at two
@@ -560,6 +560,13 @@ export function useWithdrawToast(): (subject: string) => void {
 /** Withdraws every toast standing or waiting about `subject` (`useWithdrawToast`). */
 function withdrawToast(subject: string): void {
   stepToasts({ kind: TOAST_STEP.WITHDRAW, subject });
+}
+
+/** Whether a toast about `subject` stands in sight, not on its way out; the same answer while the stack holds it. */
+export function useToastStanding(subject: string): boolean {
+  return useSelector(toastStackStore, (stack) =>
+    stack.shown.some((toast) => !toast.leaving && toast.notice.subject === subject),
+  );
 }
 
 /** What a toast says aloud: its words, then its second line. */

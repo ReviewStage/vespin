@@ -16,10 +16,10 @@ import {
   type BrowserLiveClientMessage,
 } from "@repo/features/browser-live-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { type Cause, Clock, Duration, Effect, Fiber, Option, Queue, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { agentBrowserOver } from "../agents/browser/agent-browser.js";
-import { CODER } from "../agents/coder-host/bounds.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
 import { Sync, type SyncShape } from "../sync/watch.js";
 import type { RelayFrame } from "../terminal/relay.js";
@@ -42,7 +42,7 @@ import { type BrowserLiveDependencies, type BrowserLiveViewer, relayBrowserTab }
  * over and reaches the page mapped onto it after, any socket of the member
  * whose takeover stands drives it, a member who does not control the agent
  * cannot take it, a close hands the tab back, and a coding agent's sandbox
- * is held while its tab is watched. A tab the browser no longer holds, or
+ * is touched while its tab is watched. A tab the browser no longer holds, or
  * the store no longer lists, closes as gone; an agent with no sandbox yet
  * as not opened; and a panel that sends nothing as idle.
  */
@@ -151,14 +151,13 @@ function liveBrowser(
   });
 }
 
-/** The store as the scenario has it: one tab, its takeover kept on the store's own terms, and the lease. */
+/** The store as the scenario has it: one tab, its takeover kept on the store's own terms, and every touch asked. */
 function world(
   browser: BrowserLiveDependencies["browser"],
   options: { readonly reached?: ReachedBrowserTab; readonly session?: Option.Option<string> } = {},
 ) {
   let row: ReachedBrowserTab | undefined = options.reached ?? reachedTab(undefined);
-  const holds: number[] = [];
-  const keptAlive: { readonly sessionId: string; readonly at: number }[] = [];
+  const touched: { readonly sessionId: string; readonly at: number }[] = [];
   const handedBack: string[] = [];
   const notedPages: { readonly targetId: string; readonly address: string }[] = [];
   const setDriver = (driverUserId: string | null, heldUntil: Date | null) => {
@@ -197,16 +196,14 @@ function world(
     counted: (_userId, _agentId, tool) => Effect.sync(() => void counted.push(tool)),
     notePage: (_tab, targetId, page) =>
       Effect.sync(() => void notedPages.push({ targetId, address: page.address })),
-    hold: (_conversation, heldUntil) => Effect.sync(() => void holds.push(heldUntil.getTime())),
-    keepAlive: (sessionId) =>
+    touch: (sessionId) =>
       Effect.flatMap(Clock.currentTimeMillis, (at) =>
-        Effect.sync(() => void keptAlive.push({ sessionId, at })),
+        Effect.sync(() => void touched.push({ sessionId, at })),
       ),
   };
   return {
     deps,
-    holds,
-    keptAlive,
+    touched,
     handedBack,
     counted,
     notedPages,
@@ -688,52 +685,31 @@ it.effect("a socket that closes hands back the takeover it took", () =>
   }),
 );
 
-it.effect("a watched coding agent's sandbox is held, and moved on as the panel acts", () =>
-  Effect.gen(function* () {
-    const coder = yield* liveBrowser();
-    const panel = yield* scriptedViewer;
-    const store = world(coder.browser);
-    const { fiber } = yield* started(
-      coder.peer,
-      coder.commands,
-      Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
-    );
-    assert.equal(store.holds.length, 1, "connecting holds the sandbox");
-    assert.ok((store.holds[0] ?? 0) > Duration.toMillis(BROWSER_LIVE_BOUNDS.IDLE));
-    yield* TestClock.adjust(BROWSER_LIVE_BOUNDS.LEASE_WRITE_EVERY);
-    yield* panel.push(VIEWPORT);
-    yield* until(() => store.holds.length === 2);
-    assert.ok((store.holds[1] ?? 0) > (store.holds[0] ?? 0));
-    yield* panel.leave;
-    yield* Fiber.join(fiber);
-  }),
-);
-
 it.effect(
-  "a watched coding agent's sandbox is kept alive once its browser is reached, every keep-alive interval while the panel acts, and no longer once it closes",
+  "a watched coding agent's sandbox is touched once its browser is reached, every touch interval while the panel acts, and no longer once it closes",
   () =>
     Effect.gen(function* () {
       const coder = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(coder.browser);
-      const every = Duration.toMillis(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+      const every = Duration.toMillis(SANDBOX_TOUCH_EVERY);
       const { fiber } = yield* started(
         coder.peer,
         coder.commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
-      // The panel resizing every four minutes, inside the idle bound, for two keep-alive intervals.
-      for (let acted = 0; acted < 2 * every; acted += Duration.toMillis(Duration.minutes(4))) {
-        yield* TestClock.adjust(Duration.minutes(4));
+      // The panel resizing every minute, inside the idle bound, for two touch intervals.
+      for (let acted = 0; acted < 2 * every; acted += Duration.toMillis(Duration.minutes(1))) {
+        yield* TestClock.adjust(Duration.minutes(1));
         yield* panel.push({ ...VIEWPORT, width: VIEWPORT.width + acted / 60_000 });
         yield* settle;
       }
       yield* panel.leave;
       yield* Fiber.join(fiber);
-      yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+      yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
 
       assert.deepEqual(
-        store.keptAlive,
+        store.touched,
         [0, every, 2 * every].map((at) => ({ sessionId: SESSION, at })),
       );
     }),
@@ -947,7 +923,7 @@ it.effect("a panel that sends nothing for the idle bound closes as idle", () =>
 );
 
 it.effect(
-  "the same viewport sent again every minute neither keeps the socket open nor moves the lease on, and a resize does both",
+  "the same viewport sent again every minute does not keep the socket open, and a resize does",
   () =>
     Effect.gen(function* () {
       const resent = yield* liveBrowser();
@@ -973,7 +949,6 @@ it.effect(
       assert.deepEqual(resentPanel.closed, [
         BROWSER_LIVE_CLOSE_CODE[BROWSER_LIVE_CLOSE_REASON.IDLE],
       ]);
-      assert.equal(resentStore.holds.length, 1, "only connecting held the sandbox");
 
       const resized = yield* liveBrowser();
       const resizedPanel = yield* scriptedViewer;
@@ -991,14 +966,13 @@ it.effect(
         yield* settle;
       }
       assert.deepEqual(resizedPanel.closed, [], "a resize keeps the socket open");
-      assert.equal(resizedStore.holds.length, 7, "each resize a minute on moved the lease on");
       yield* resizedPanel.leave;
       yield* Fiber.join(relay.fiber);
     }),
 );
 
 it.effect(
-  "a panel saying it is watching once a minute stays open past the idle bound and moves the lease on, until the member has sent no input for the input bound",
+  "a panel saying it is watching once a minute stays open past the idle bound, until the member has sent no input for the input bound",
   () =>
     Effect.gen(function* () {
       const { peer, browser, commands } = yield* liveBrowser();
@@ -1020,7 +994,6 @@ it.effect(
       yield* watchFor(10);
       assert.deepEqual(panel.closed, [], "a watched panel stays open");
       assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.REFUSED), [], "watching drives nothing");
-      assert.equal(store.holds.length, 11, "each minute's watching moved the lease on");
 
       // A resize is the member's input, so the input bound runs from it.
       yield* panel.push({ ...VIEWPORT, width: VIEWPORT.width + 1 });

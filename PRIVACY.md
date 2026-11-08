@@ -50,11 +50,16 @@ as written, not end-to-end encrypted, and our operators can read them.
 
 Through your workspace's GitHub App installation, we access repository
 contents, pull requests, code diffs, review comments, checks, and issues for
-repositories where the App is installed. Each agent works on a checkout of the
-repository in its own Vercel Sandbox. We generally do not keep copies of
-repository content apart from what lands in an agent's transcript, except a
-pull request's number, title, state, and checks, and any chapters you
-generate for it.
+repositories where the App is installed. A cloud agent works on a checkout of
+the repository in its own Vercel Sandbox: on a drive of its own where it was
+forked from its repository's default-branch drive or from the drive of the agent
+it was continued from, and in the sandbox otherwise; an agent on your own
+machine keeps its work there. A workspace
+repository's default branch may be kept on a drive cloud agents start from.
+Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
+Apart from them, we generally do not keep copies of repository content beyond
+what lands in an agent's transcript, except a pull request's number, title,
+state, and checks, and any chapters you generate for it.
 
 ### Credentials you save
 
@@ -137,8 +142,8 @@ way, under your account.
 ### Error and performance data
 
 The Mac app, the web app, and the Service send Sentry error reports, crash
-reports, reports of the errors Vespin shows you, and performance traces and
-profiles for a sample of launches and page loads. They use Sentry's default data collection,
+reports, reports of the errors Vespin shows you, and performance traces for a
+sample of launches and page loads. They use Sentry's default data collection,
 so reports may include error messages, stack traces, request addresses and
 headers, device details, and your IP address. Sentry replaces values whose
 names look like credentials, and Vespin removes query parameter values and
@@ -146,8 +151,9 @@ token-shaped parts of addresses. Reports name your account by its id only. The
 Service does not send Sentry what was sent to or returned by a model, though an
 error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage. The
-Service sends processor profiles of the traces Sentry keeps: which of its own
-functions ran and for how long, never the values they handled.
+Service and the Mac app's windows send processor profiles of the traces Sentry
+keeps: which of their own functions ran and for how long, never the values
+they handled.
 
 An agent running in Vespin's cloud also sends Sentry, from its sandbox, the
 timings of its own start: performance traces of its startup steps, in the same
@@ -161,6 +167,20 @@ sends Sentry nothing.
 
 If you send feedback, we receive your words, any screenshots you attach, and,
 unless you untick it, your name and email.
+
+### Notifications
+
+If you turn on Show a notification in Settings › Account › Sounds, the Mac
+app, or the web app where your browser allows it, asks your system to show a
+notification while Vespin is in the background when an agent you started
+finishes, or when an Inbox item asks you something, including one on a task
+assigned to you whose agent someone else started. **The notification shows the
+agent's or the task's name, and the title of the question asked**, and your
+system (macOS's Notification Center, or your browser and the system it runs
+on) shows it and may keep it in its notification history under its own
+settings, outside Vespin. Showing one sends nothing to us or anyone else. It is off until you
+turn it on. The notification that a command waits on your Mac, which the Mac
+app shows whatever this setting, names no command.
 
 ### Information stored on your Mac
 
@@ -245,7 +265,10 @@ data with:
 
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
-Vercel Sandboxes and in snapshots kept for up to thirty days after last use.
+Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
+checkout on a drive of its own, and a copy of each workspace repository's
+default branch, with its dependencies installed, on a drive its agents start
+from.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -261,14 +284,21 @@ affected users and relevant authorities as required by applicable law.
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Their sandboxes and those sandboxes' snapshots expire and are
-removed seven days after they were last used. When you delete your account:
+agent deletes its transcript at once. Deleting or archiving an agent asks
+Vercel to delete its sandbox and the drive holding its checkout; where that
+fails or does not finish in time, the delete or archive goes ahead anyway, and
+the drive may remain. A sandbox's snapshots otherwise expire and are removed
+seven days after they were last used. A repository's default-branch drive is
+kept for the workspace's agents until we remove it, and a repository snapshot
+made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, and integration records) is deleted at once.
-- **Your tasks, descriptions, transcripts, and inbox items** are deleted at once, and
-  your agents' sandboxes and their snapshots expire and are removed seven days
-  after they were last used.
+- **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
+  and we ask Vercel to delete your agents' sandboxes and the drives holding
+  their checkouts; where that fails or does not finish in time, your account is
+  deleted anyway and a drive may remain. Their snapshots otherwise expire and
+  are removed seven days after they were last used.
 - **Workspaces you own and are the only member of** are deleted at once with
   everything in them, as a deleted task is. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those

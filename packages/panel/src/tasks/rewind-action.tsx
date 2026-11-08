@@ -258,7 +258,7 @@ export function RevertMessageAction({ messageId }: { messageId: string }): React
       <ConfirmDialog
         open
         confirm={confirm}
-        question={revertQuestion(doors?.revertTakes.get(messageId))}
+        question={revertQuestion(doors.revertTakes.get(messageId))}
       />
     </>
   );

@@ -506,6 +506,69 @@ it.effect(
     }),
 );
 
+it.effect("takes its line from the read on a traced launch whose profiler cannot load", () =>
+  Effect.gen(function* () {
+    // A sandbox whose disk predates the profiler's binary cannot load its module.
+    vi.doMock("@sentry/profiling-node", () => {
+      throw new Error("Cannot find module './sentry_cpu_profiler-linux-x64-glibc-137.node'");
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(() => vi.doUnmock("@sentry/profiling-node")));
+    const service = fakeService();
+    const linesUrl = "https://app.test/runner/lines";
+    const uuid = "00000000-0000-4000-8000-0000000000ab";
+    let read = false;
+    // The first read is answered the message; every later one is held until the launch lets it go.
+    const respond: FakeResponder = (url, init) => {
+      if (!url.startsWith(linesUrl)) return service.respond(url, init);
+      if (read) {
+        return new Promise<Response>((_, reject) =>
+          init.signal?.addEventListener("abort", () => reject(new Error("aborted"))),
+        );
+      }
+      read = true;
+      return Response.json({
+        lines: [{ seq: 12, text: JSON.stringify({ ...FIRST_MESSAGE, uuid }) }],
+      });
+    };
+    const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
+      ...service,
+      layer: fakeHttpClientLayer(respond),
+    });
+    // Note that the trace names no DSN, so Sentry sends nothing from the test.
+    const trace = {
+      dsn: "",
+      environment: "test",
+      sentryTrace: "0123456789abcdef0123456789abcdef-0123456789abcdef-1",
+    };
+    yield* write({ ...CONFIG, linesUrl, trace });
+    yield* closeStdin;
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    assert.equal(cli.prompts[0]?.uuid, uuid);
+  }),
+);
+
+it.effect("ends the launch as failed, saying why, when Vespin refuses its line read for good", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const linesUrl = "https://app.test/runner/lines";
+    const respond: FakeResponder = (url, init) =>
+      url.startsWith(linesUrl) ? new Response(null, { status: 401 }) : service.respond(url, init);
+    const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
+      ...service,
+      layer: fakeHttpClientLayer(respond),
+    });
+    yield* write({ ...CONFIG, linesUrl });
+    yield* closeStdin;
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+    const end = service.applied.at(-1)?.message;
+    assert.ok(end !== undefined && "type" in end && end.type === RUNNER_EVENT.END);
+    assert.match(String("detail" in end ? end.detail : ""), /refused the launch's lines.*401/);
+    assert.equal(cli.closed, true);
+  }),
+);
+
 it.effect("a warm launch nobody retires ends as idled once the window it was handed passes", () =>
   Effect.gen(function* () {
     const warmForMs = 5 * 60 * 1_000;
@@ -998,6 +1061,8 @@ it.effect(
       assert.equal(options.env?.[RUNNER_ENV.CLAUDE_TOKEN], CLAUDE_TOKEN);
       // A command's Playwright looks for its browsers in its own package: the image's where it installed them, a repository's where the agent may install them.
       assert.equal(options.env?.PLAYWRIGHT_BROWSERS_PATH, "0");
+      // The first turn waits on no server the CLI may connect in the background.
+      assert.equal(options.env?.CLAUDE_CODE_MCP_STARTUP_WAIT_MS, "0");
     }),
 );
 

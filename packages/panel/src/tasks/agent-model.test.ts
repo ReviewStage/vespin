@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
+  AGENT_FAILURE,
   AGENT_LAUNCH,
   AGENT_PAYER,
   AGENT_RUNTIME,
+  AGENT_STATUS,
   type AgentPullRequest,
+  type AgentSummary,
   type AgentTranscriptMessage,
+  type AgentTurn,
   CHECK_SUMMARY,
   CONTEXT_WINDOW,
   LOCAL_AGENT_REFUSAL,
@@ -16,7 +20,7 @@ import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { TASK_MODE } from "@repo/features/task-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
 import { TOOL_STATE } from "../ai-elements/tool.js";
@@ -24,7 +28,6 @@ import {
   AGENT_PART,
   agentLines,
   agentParts,
-  agentWorkingPhase,
   agentWorkingSince,
   checkoutCommand,
   choiceLabel,
@@ -40,6 +43,7 @@ import {
   noteWhileOffline,
   offeredModels,
   offersContinue,
+  offersStop,
   openingLineOf,
   pilotTarget,
   placedMessages,
@@ -53,6 +57,8 @@ import {
   startedAgentOf,
   startFailureNote,
   startsOwnAgents,
+  type TabSends,
+  tabTurnOf,
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
@@ -451,55 +457,91 @@ test("an effort carried to a model that lacks it falls to the nearest the model 
   assert.equal(effortFor([], "high"), undefined);
 });
 
-test("a working agent is starting until its turn opens, saying what a host's launch waits on, thinking until the turn draws a row, and working after, a steering line leaving the turn under way as it was and a closing turn ending as working", () => {
-  const task: AgentTranscriptMessage = {
-    id: "m-plan",
-    role: MESSAGE_ROLE.USER,
-    parts: [{ type: AGENT_PART.TEXT, text: "# Invitations" }],
+test("a tab reads its agent from the newer of its summary's turn and its answered send's, never from its transcript, and words the working line by that turn's state", () => {
+  const turn = (
+    id: string,
+    queuedAt: number,
+    status: AgentTurn["status"],
+    more = {},
+  ): AgentTurn => ({
+    id,
+    queuedAt,
+    status,
+    ...more,
+  });
+  const idle: TabSends = { turn: undefined, unanswered: false, rewinding: false };
+  const settled = turn("t-1", 1_000, TURN_STATUS.SETTLED);
+  const queued = turn("t-2", 2_000, TURN_STATUS.QUEUED);
+  const read = (agent: Pick<AgentSummary, "status" | "turn">, sends = idle) => {
+    const { working, phase, status, failure } = tabTurnOf(agent, sends);
+    return [working, phase, status, failure];
   };
-  const opened: AgentTranscriptMessage = {
-    id: "m-turn",
-    role: MESSAGE_ROLE.ASSISTANT,
-    parts: [{ type: AGENT_PART.STEP_START }],
-    startedAt: 1_000,
-  };
-  const calling: AgentTranscriptMessage = {
-    ...opened,
-    parts: [
-      { type: AGENT_PART.STEP_START },
-      { type: "tool-bash", toolCallId: "call_1", state: TOOL_STATE.INPUT_AVAILABLE },
-    ],
-  };
-  const closed: AgentTranscriptMessage = { ...calling, finishedAt: 9_000 };
-  const line: AgentTranscriptMessage = {
-    id: "m-line",
-    role: MESSAGE_ROLE.USER,
-    parts: [{ type: AGENT_PART.TEXT, text: "Also expire them after a week." }],
-  };
-  // Before the session runs a turn, whatever stands, and before the turn writes its journal.
-  assert.equal(agentWorkingPhase([task], true), "starting");
-  // A rewind under way is what the line says, whatever the transcript shows.
-  assert.equal(agentWorkingPhase([task, opened], false, true), "rewinding");
-  assert.equal(agentWorkingPhase([task, opened], true), "starting");
-  assert.equal(agentWorkingPhase([task], false), "starting");
-  // The turn open with nothing past its step boundary is the model at its first step.
-  assert.equal(agentWorkingPhase([task, opened], false), "thinking");
-  assert.equal(agentWorkingPhase([task, calling], false), "working");
-  // A line after a closed turn awaits a turn of its own; one sent into an open turn steers it.
-  assert.equal(agentWorkingPhase([task, closed, line], false), "starting");
-  // A turn closing ahead of its row's settling ends as it worked, not as a start.
-  assert.equal(agentWorkingPhase([task, closed], false), "working");
-  assert.equal(agentWorkingPhase([task, calling, line], false), "working");
-  assert.equal(agentWorkingPhase([task, opened, line], false), "thinking");
-  // A host's launch says what the start waits on, naming the host or the harness, and nothing once the turn has opened.
+
+  // A send answered with a turn newer than the list's holds the tab at work until the list catches up.
+  assert.deepEqual(
+    read({ status: AGENT_STATUS.COMPLETED, turn: settled }, { ...idle, turn: queued }),
+    [true, "waiting", AGENT_STATUS.RUNNING, undefined],
+  );
+  // Once the list names that turn, its record is the one read, here failed with why.
+  const failed = turn("t-2", 2_000, TURN_STATUS.FAILED, { failure: AGENT_FAILURE.MODEL });
+  assert.deepEqual(read({ status: AGENT_STATUS.FAILED, turn: failed }, { ...idle, turn: queued }), [
+    false,
+    "starting",
+    AGENT_STATUS.FAILED,
+    AGENT_FAILURE.MODEL,
+  ]);
+  // A running turn works, and one a Stop was asked of is stopping until its runner ends it.
+  const running = turn("t-2", 2_000, TURN_STATUS.RUNNING);
+  assert.deepEqual(read({ status: AGENT_STATUS.RUNNING, turn: running }).slice(0, 2), [
+    true,
+    "working",
+  ]);
+  assert.deepEqual(
+    read({ status: AGENT_STATUS.CANCELED, turn: { ...running, stopAsked: true } }).slice(0, 3),
+    [true, "stopping", AGENT_STATUS.CANCELED],
+  );
+  // A send not yet answered, or a rewind out, works past an ended turn until its call answers.
+  assert.deepEqual(
+    read({ status: AGENT_STATUS.COMPLETED, turn: settled }, { ...idle, unanswered: true }).slice(
+      0,
+      2,
+    ),
+    [true, "starting"],
+  );
+  assert.deepEqual(
+    read({ status: AGENT_STATUS.COMPLETED, turn: settled }, { ...idle, rewinding: true }).slice(
+      0,
+      2,
+    ),
+    [true, "rewinding"],
+  );
+  // With no turn, the summary's status says it: starting, then failed as one that never started.
+  assert.deepEqual(read({ status: AGENT_STATUS.STARTING }).slice(0, 2), [true, "starting"]);
+  assert.deepEqual(read({ status: AGENT_STATUS.FAILED }), [
+    false,
+    "starting",
+    AGENT_STATUS.FAILED,
+    AGENT_FAILURE.NOT_STARTED,
+  ]);
+
+  // A host's launch says what the turn waits on before a runner opens it, naming the host or the harness, and nothing once it runs.
   const waiting = { launch: AGENT_LAUNCH.WAITING, host: "Studio", runtime: AGENT_RUNTIME.CODEX };
-  assert.equal(workingLineWords("starting", waiting), "Waiting for Studio…");
+  assert.equal(workingLineWords("waiting", waiting), "Waiting for Studio…");
   assert.equal(
     workingLineWords("starting", { ...waiting, launch: AGENT_LAUNCH.STARTING }),
     "Starting Codex…",
   );
-  assert.equal(workingLineWords("thinking", waiting), "Thinking…");
-  assert.equal(workingLineWords("starting"), "Starting…");
+  assert.equal(workingLineWords("working", waiting), "Working…");
+  assert.equal(workingLineWords("waiting"), "Waiting for the runner…");
+});
+
+test("Stop is offered while an agent may still write, a stalled one starting or awaiting its turn included, and not once it has ended", () => {
+  // A line awaiting a turn that never opens reads running with nothing yet to cancel, which a Stop settles where its runner went quiet.
+  const awaitingItsTurn = { status: AGENT_STATUS.RUNNING, stoppable: false } as const;
+  assert.equal(offersStop(awaitingItsTurn), true);
+  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), true);
+  assert.equal(offersStop({ status: AGENT_STATUS.COMPLETED }), false);
+  assert.equal(offersStop({ status: AGENT_STATUS.CANCELED }), false);
 });
 
 test("the working line counts from the press of the line that opened the turn, through the turn and a line steering it", () => {

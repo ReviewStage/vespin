@@ -35,7 +35,7 @@ export const WORKSPACE_RENAMES = {
 } as const;
 
 /** The procedures a workspace call asks: every workspace group's, and the GitHub group's two over a workspace's token repositories. */
-export const WORKSPACE_CALLS = {
+const WORKSPACE_CALLS = {
   workspaces: workspacesContract,
   workspaceInvitations: workspaceInvitationsContract,
   workspaceEnvironment: workspaceEnvironmentContract,

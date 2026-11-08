@@ -39,7 +39,7 @@ const LIVE_MARK_LOOK = {
   [LIVE_MARK.MAC_OFFLINE]: { word: "Offline", hint: "You're offline.", Icon: WifiOffIcon },
   [LIVE_MARK.SERVICE_OFFLINE]: {
     word: "Offline",
-    hint: "The service isn't answering.",
+    hint: "Can't connect. Check your internet connection.",
     Icon: WifiOffIcon,
   },
   [LIVE_MARK.CATCHING_UP]: {

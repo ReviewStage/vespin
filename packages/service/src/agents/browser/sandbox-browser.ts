@@ -5,7 +5,7 @@
  * (`apps/web/agent-image/Dockerfile`), run headful on an Xvfb display of its own,
  * so a site sees an ordinary browser rather than a headless one. Its
  * DevTools port is bound to the sandbox's loopback alone and is never
- * exposed: Vercel Sandbox's exposed ports are public, so the service reaches
+ * exposed: a sandbox's exposed ports are public, so the service reaches
  * it through the sandbox's own PTY instead, where `BRIDGE_SOURCE` runs and
  * pipes one CDP message a line between its stdio and the browser's
  * WebSocket. The profile lives on the sandbox's disk, so its cookies and
@@ -24,8 +24,8 @@
  */
 
 import { PLAYWRIGHT_PIN, SANDBOX_BROWSER_PIN } from "@repo/agent-runner/pins";
+import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
-import type { CommandAsk, CommandRun } from "../vercel-sandbox-api.js";
 
 export const SANDBOX_BROWSER = {
   /** The browser's DevTools port on the sandbox's loopback: apart from the 9222 an agent's own Chromium would take, and Node's inspector's 9229. */
@@ -56,7 +56,7 @@ export const BROWSER_START_OUTPUT = { ATTACHED: "attached", STARTED: "started" }
 const CHROMIUM_FLAGS = [
   "--no-first-run",
   "--no-default-browser-check",
-  // Note that Chromium's own sandbox needs user namespaces or a setuid helper, which the sandbox's user does not count on; the Vercel Sandbox is the boundary, as it is for Playwright's own launches.
+  // Note that Chromium's own sandbox needs user namespaces or a setuid helper, which the sandbox's user does not count on; the sandbox itself is the boundary, as it is for Playwright's own launches.
   "--no-sandbox",
   "--disable-gpu",
   "--disable-dev-shm-usage",

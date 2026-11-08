@@ -4,12 +4,12 @@ import {
   checkoutIdentityEnv,
 } from "@repo/features/checkout-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import type { SandboxError } from "@repo/sandbox";
 import { Data, Duration, Effect, Option, type Redacted, Tracer } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import type { FirewallSources } from "./sandbox-firewall.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
-import type { SandboxUnavailable } from "./vercel-sandbox-api.js";
 
 /**
  * repository-shell.ts -- an agent's checkout of the task's GitHub repository in its session's sandbox: the clone, its refresh, and the commit identity set in it.
@@ -64,7 +64,7 @@ const COMMAND_ENVIRONMENT = {
 /**
  * How every write of the checkout is made: group-writable, files and
  * folders alike. Note that this is because a coding agent's runner runs as
- * a user in the default user's group (`machine/vercel-machine.ts`), and
+ * a user in the default user's group (`machine/sandbox-machine.ts`), and
  * what the default user writes at its own umask, 0022, that user alone may
  * write; a clone shares its repository with the group too
  * (`core.sharedRepository`), so git keeps what it writes under `.git` so
@@ -134,7 +134,7 @@ const EXTRA_CHECKOUT_SCRIPT = [
 ].join("\n");
 
 /**
- * A whole checkout a base snapshot holds (`base-snapshot.ts`) brought
+ * A whole checkout a base drive holds (`base-drive.ts`) brought
  * up to its branch as GitHub has it now: the branch fetched through
  * the credential the caller set at the firewall and checked out at what was
  * fetched, its writes the group's (`GROUP_WRITES`), and the record
@@ -170,7 +170,7 @@ const REFRESH_SCRIPT = [
  * those, and sent (`sandbox-firewall.ts`).
  */
 export interface RepositoryFirewall {
-  readonly write: (sources: FirewallSources) => Effect.Effect<void, SandboxUnavailable>;
+  readonly write: (sources: FirewallSources) => Effect.Effect<void, SandboxError>;
 }
 
 /** One command run in the sandbox: its line, and where and with what environment it runs. */
@@ -351,8 +351,8 @@ export const cloneExtraRepository = /* @__PURE__ */ Effect.fn("web/cloneExtraRep
 );
 
 /**
- * What a base snapshot's checkout records it is of: the repository as GitHub
- * spells it, lower-cased, so a base snapshot and the refresh of it agree
+ * What a base drive's checkout records it is of: the repository as GitHub
+ * spells it, lower-cased, so a base drive and the refresh of it agree
  * whatever case a row spells the repository in.
  */
 export function snapshotRecordOf(fullName: string): string {
@@ -360,11 +360,11 @@ export function snapshotRecordOf(fullName: string): string {
 }
 
 /**
- * The checkout a base snapshot holds brought up to the branch named,
+ * The checkout a base drive holds brought up to the branch named,
  * with the token at the firewall for the fetch alone, as for a clone
  * (`underCloneCredential`), and recorded under the name the caller keeps;
  * refused, in git's own words where it said any, where the checkout is not
- * the base snapshot's of that repository or the fetch failed.
+ * the base drive's of that repository or the fetch failed.
  */
 export const refreshRepository = /* @__PURE__ */ Effect.fn("web/refreshRepository")(function* (
   sandbox: RepositorySandbox,
@@ -412,9 +412,3 @@ export const setCheckoutIdentity = /* @__PURE__ */ Effect.fn("web/setCheckoutIde
   );
   if (set.exitCode !== 0) return yield* gitRefusal(set);
 });
-
-/** The session's sandbox with a checkout standing in it, and which repository the checkout is of. */
-export interface CheckedOutSandbox {
-  readonly sandbox: RepositorySandbox;
-  readonly repository: string;
-}

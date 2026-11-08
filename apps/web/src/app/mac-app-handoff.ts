@@ -25,7 +25,7 @@ import {
   linkOpenTarget,
   withoutStayOnWeb,
 } from "@repo/features/link-open";
-import { savesStep } from "@repo/panel/navigation-history";
+import { savesStep } from "@repo/panel/places/window-steps";
 import { HTTP_METHOD } from "@repo/wire";
 import type { HistoryLocation } from "@tanstack/react-router";
 import { Effect, Schema } from "effect";

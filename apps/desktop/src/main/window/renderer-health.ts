@@ -29,13 +29,13 @@ const CPU_SAMPLE_INTERVAL = Duration.seconds(15);
 const CPU_SUMMARY_SPAN = Duration.minutes(5);
 
 /** The kinds of process whose CPU is summarized. */
-export const PROCESS_KIND = {
+const PROCESS_KIND = {
   MAIN: "main",
   RENDERER: "renderer",
   GPU: "gpu",
   UTILITY: "utility",
 } as const;
-export type ProcessKind = (typeof PROCESS_KIND)[keyof typeof PROCESS_KIND];
+type ProcessKind = (typeof PROCESS_KIND)[keyof typeof PROCESS_KIND];
 
 /** Each kind by Electron's name for it; a process of any other type is left out. */
 const KIND_OF_PROCESS_TYPE: Partial<Record<ProcessMetric["type"], ProcessKind>> = {
@@ -46,21 +46,21 @@ const KIND_OF_PROCESS_TYPE: Partial<Record<ProcessMetric["type"], ProcessKind>> 
 };
 
 /** Where the app's windows stand as a sample is read: one has the focus, one shows without it, or none shows. */
-export const WINDOW_STATE = {
+const WINDOW_STATE = {
   FOCUSED: "focused",
   VISIBLE: "visible",
   HIDDEN: "hidden",
 } as const;
-export type WindowState = (typeof WINDOW_STATE)[keyof typeof WINDOW_STATE];
+type WindowState = (typeof WINDOW_STATE)[keyof typeof WINDOW_STATE];
 
 /** How many agents were working as a sample is read, by rung. */
-export const WORKING_AGENTS = {
+const WORKING_AGENTS = {
   NONE: "0",
   ONE: "1",
   FEW: "2-4",
   MANY: "5+",
 } as const;
-export type WorkingAgents = (typeof WORKING_AGENTS)[keyof typeof WORKING_AGENTS];
+type WorkingAgents = (typeof WORKING_AGENTS)[keyof typeof WORKING_AGENTS];
 
 /** What a window says of its page's responsiveness, by Electron's event names, and its close, which ends the following. */
 const WINDOW_EVENT = {

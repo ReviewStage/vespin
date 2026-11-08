@@ -2,7 +2,6 @@ import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type AgentLatestTurn,
   type AgentStoreEffect,
-  awaitingLinesOfReached,
   continuationsOf,
   lastSettledTurnsOfReached,
   latestTurnsOfReached,
@@ -45,10 +44,10 @@ import {
 /**
  * task-agents.ts -- what each listed task's coding agents are doing and what they published, in brief, for the held list (GET) the command line and released desktops read, and the agents with no plan the list carries beside the plans.
  *
- * Five statements answer the whole list however many tasks it holds: the
+ * Four statements answer the whole list however many tasks it holds: the
  * agents of every task named with the pull request each last published,
- * their newest turns, when each last ended a turn, which of them hold a line
- * awaiting its turn, and the names of the members who started them. An
+ * their newest turns, when each last ended a turn, and the names of the
+ * members who started them. An
  * agent's status and its starter are read exactly as its tab's are
  * (`coder-host/status.ts`), and a pull request is the one its row keeps as
  * GitHub last answered, so nothing here asks GitHub. A task with no agent carries nothing, so the
@@ -56,7 +55,6 @@ import {
  * on.
  */
 
-/** The statuses under which an agent is at work. */
 const WORKING_STATUSES: ReadonlySet<AgentStatus> = new Set([
   AGENT_STATUS.STARTING,
   AGENT_STATUS.RUNNING,
@@ -75,14 +73,13 @@ interface ReadAgent {
 function agentLine(
   held: PublishedAgentLine,
   turn: AgentLatestTurn | undefined,
-  awaitingLineAt: Date | undefined,
   lastSettledAt: Date | undefined,
   now: number,
   names: ReadonlyMap<string, string>,
 ): ReadAgent {
   const { agent } = held;
   const starter = names.get(agent.userId);
-  const standing = { createdAt: agent.createdAt, now, awaitingLineAt, blank: startedBlank(agent) };
+  const standing = { createdAt: agent.createdAt, now, blank: startedBlank(agent) };
   const status = agentStatusOf(turn, standing);
   const at = WORKING_STATUSES.has(status)
     ? agentRunStartedAt(turn, standing)
@@ -205,7 +202,6 @@ export function withTaskAgents(
     const conversationIds = held.map(({ agent }) => agent.conversationId);
     // The agents were read through the tasks' gate, and each conversation is its starter's, a teammate's as often as the account's.
     const turns = yield* latestTurnsOfReached(conversationIds);
-    const awaiting = yield* awaitingLinesOfReached(conversationIds);
     const settled = yield* lastSettledTurnsOfReached(conversationIds);
     const names = yield* readAccountNames(held.map(({ agent }) => agent.userId));
     const now = yield* Clock.currentTimeMillis;
@@ -217,7 +213,6 @@ export function withTaskAgents(
       const line = agentLine(
         agent,
         turns.get(conversationId),
-        awaiting.get(conversationId),
         settled.get(conversationId),
         now,
         names,
@@ -253,7 +248,6 @@ export function listTasklessAgents(
     const conversationIds = agents.map((agent) => agent.conversationId);
     // The agents were read through their workspaces' gate, and each conversation is its starter's.
     const turns = yield* latestTurnsOfReached(conversationIds);
-    const awaiting = yield* awaitingLinesOfReached(conversationIds);
     const settled = yield* lastSettledTurnsOfReached(conversationIds);
     const runtimes = yield* nativeRuntimesOfReached(conversationIds);
     const sandboxes = yield* openSandboxesOfReached(conversationIds);
@@ -269,13 +263,12 @@ export function listTasklessAgents(
     const now = yield* Clock.currentTimeMillis;
     return agents.map((agent) => {
       const turn = turns.get(agent.conversationId);
-      const awaitingLineAt = awaiting.get(agent.conversationId);
       const runtime = runtimes.get(agent.conversationId);
       const sandboxOpen = sandboxes.has(agent.conversationId);
       return {
         ...agentSummary(
           agent,
-          { turn, awaitingLineAt, runtime, sandboxOpen },
+          { turn, runtime, sandboxOpen },
           now,
           names,
           owners,

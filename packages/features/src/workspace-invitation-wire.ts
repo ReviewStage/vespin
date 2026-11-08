@@ -95,7 +95,7 @@ const readInvitedEmail = EffectSchema.decodeUnknownOption(invitedEmailSchema);
  * Whether typed words are an address the service invites, read as it reads
  * them, so a form says what is wrong before it asks.
  */
-export function isInvitableEmail(typed: string): boolean {
+function isInvitableEmail(typed: string): boolean {
   return Option.isSome(readInvitedEmail(typed));
 }
 

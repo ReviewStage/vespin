@@ -5,7 +5,6 @@ import {
   type Agent,
   type AgentLatestTurn,
   type AgentStartedFromIt,
-  awaitingLinesOfReached,
   continuationsOf,
   latestTurnsOfReached,
   nativeRuntimesOfReached,
@@ -19,6 +18,7 @@ import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_STATUS, type AgentStatus, type AgentSummary } from "@repo/features/agent-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Clock, DateTime, Effect, Exit, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
@@ -34,13 +34,12 @@ import {
   describeUnreachable,
   SESSION_CANCEL_OUTCOME,
 } from "../sessions/agent-sessions.js";
-import { settleLapsedRunner } from "./lapsed-runner.js";
+import { reconciledBeforeWrite } from "./reconcile.js";
 import { failedCallRefusal, routedSessions } from "./runtime-sessions.js";
 import {
   type AgentTurnStanding,
   agentStatusOf,
   agentSummary,
-  lineAwaitsTurn,
   startedBlank,
   summaryAccounts,
   summaryDevices,
@@ -59,14 +58,14 @@ import {
  * one stopped in its place, and a harness that refuses leaves the row as it
  * stood and the caller unavailable. An agent stopped for good, as an
  * archive or a delete wants it, must also have no turn coming that no
- * Stop could name yet: a session still coming up, or a line awaiting the
- * turn it opens, is refused as not ready until that turn exists or has
- * ended. Every agent here was read through the caller's membership of its
+ * Stop could name yet: a session still coming up, or a turn queued for a
+ * line no runner took yet, is refused as not ready until a runner takes that
+ * turn or it has ended. Every agent here was read through the caller's membership of its
  * task's workspace, so a member stops a teammate's agent on the agent's own
  * conversation, whichever of them started it.
  */
 
-/** Where each of the agents' conversations named stands now, read by id since the agents passed the task's gate: its newest turn, whether a line of the developer's awaits one, and whether its sandbox stands open. */
+/** Where each of the agents' conversations named stands now, read by id since the agents passed the task's gate: its newest turn, and whether its sandbox stands open. */
 export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   conversationIds: readonly string[],
 ): Effect.fn.Return<
@@ -75,12 +74,10 @@ export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices
 > {
   const turns = yield* hostedStoreOrUnavailable(latestTurnsOfReached(conversationIds));
-  const awaiting = yield* hostedStoreOrUnavailable(awaitingLinesOfReached(conversationIds));
   const runtimes = yield* hostedStoreOrUnavailable(nativeRuntimesOfReached(conversationIds));
   const sandboxes = yield* hostedStoreOrUnavailable(openSandboxesOfReached(conversationIds));
   return (conversationId) => ({
     turn: turns.get(conversationId),
-    awaitingLineAt: awaiting.get(conversationId),
     runtime: runtimes.get(conversationId),
     sandboxOpen: sandboxes.has(conversationId),
   });
@@ -124,13 +121,10 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const statusOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Agent,
 ): Effect.fn.Return<AgentSummary["status"], HostedRefusal, DatabaseServices> {
-  const { turn, awaitingLineAt } = (yield* standingsOf([agent.conversationId]))(
-    agent.conversationId,
-  );
+  const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
   return agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
-    awaitingLineAt,
     blank: startedBlank(agent),
   });
 });
@@ -161,7 +155,7 @@ export const stoppedTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   agent: Agent,
   stop: TurnStop = {},
-): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   // An agent its starter's plan pays for is stopped by those the plan's policy admits.
   yield* admitsPlanWriter(account, agent);
   return yield* canceledTurn(routedSessions(account), writer, agent, stop);
@@ -173,7 +167,7 @@ export const stoppedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   agent: Agent,
   stop: TurnStop = {},
-): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const stopped = yield* stoppedTurn(writer, account, agent, stop);
   if (stopped) {
     yield* recordServerEvent(
@@ -204,14 +198,14 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   agent: Agent,
   { key, by }: TurnStop = {},
-): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   // Every Stop, the developer's, a Continue's, another agent's, or a rewind's, pauses what is queued behind the
   // turn, so nothing more goes until Resume. Note that it pauses before the cancel goes out, because the turn's
   // end may land before the harness answers it, and would hand on a queue not yet paused.
   yield* hostedStoreOrUnavailable(pauseAgentQueue(agent.id, QUEUE_PAUSE.STOPPED));
-  // A turn whose runner stopped posting has nothing to stop, and is settled lost first (`lapsed-runner.ts`).
-  yield* settleLapsedRunner(agent);
+  // A turn past its deadline has nothing to stop, and is reaped first (`reconcile.ts`).
+  yield* reconciledBeforeWrite(agent);
   const turn = (yield* standingsOf([agent.conversationId]))(agent.conversationId).turn;
   if (!stoppable(turn)) return false;
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
@@ -262,7 +256,7 @@ export const stoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   account: string,
   agent: Agent,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   yield* stoppedTurn(writer, account, agent);
   const status = yield* statusOf(agent);
   if (status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING) {
@@ -284,7 +278,7 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   account: string,
   agents: readonly Agent[],
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const stops = yield* Effect.forEach(
     agents,
     (agent) => Effect.exit(stoppedForGood(writer, account, agent)),
@@ -306,23 +300,18 @@ export const everyStopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * Whether `stoppedForGood` would stop the agent rather than refuse it, read
- * before any Stop is sent: no line awaits the turn it opens, it is past its
- * start, and a turn still running carries the runtime's id for a Stop to name or a
- * Stop already. A caller stopping several agents as one asks this of every
- * one first, so a refusal cancels nobody's work.
+ * before any Stop is sent: it is past its start, and a turn still open
+ * carries the runtime's id for a Stop to name, as a turn a runner took does,
+ * or a Stop already. A caller stopping several agents as one asks this of
+ * every one first, so a refusal cancels nobody's work.
  */
-export const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
-  const { turn, awaitingLineAt } = (yield* standingsOf([agent.conversationId]))(
-    agent.conversationId,
-  );
-  const standing = {
+const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
+  const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
+  const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
-    awaitingLineAt,
     blank: startedBlank(agent),
-  };
-  if (lineAwaitsTurn(turn, standing)) return false;
-  const status = agentStatusOf(turn, standing);
+  });
   if (status === AGENT_STATUS.STARTING) return false;
   return status !== AGENT_STATUS.RUNNING || stoppable(turn);
 });
@@ -330,7 +319,7 @@ export const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: 
 /**
  * The agents as the sidebar reads them, under their conversations' locks as a
  * task's finish and its move to Done hold them (`tasks/task-finish.ts`), each
- * beside its newest turn: a line awaiting the turn it opens reads as running,
+ * beside its newest turn: a turn queued for its runner reads as running,
  * and a turn whose Stop is on its way to its harness as stopped. Note that the agents
  * are read by one id list, because the transaction holds one connection and a
  * read per agent only adds trips.
@@ -340,16 +329,10 @@ const standingTurns = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const conversationIds = agents.map(({ conversationId }) => conversationId);
   const turns = yield* latestTurnsOfReached(conversationIds);
-  const awaiting = yield* awaitingLinesOfReached(conversationIds);
   const now = yield* Clock.currentTimeMillis;
   return agents.map((agent) => {
     const turn = turns.get(agent.conversationId);
-    const status = agentStatusOf(turn, {
-      createdAt: agent.createdAt,
-      now,
-      awaitingLineAt: awaiting.get(agent.conversationId),
-      blank: agent.blank,
-    });
+    const status = agentStatusOf(turn, { createdAt: agent.createdAt, now, blank: agent.blank });
     return { agent, turn, status };
   });
 });
@@ -360,7 +343,7 @@ const settledStatus = (status: AgentStatus) =>
 
 /**
  * Whether every agent stands stopped, as `standingTurns` reads each: none
- * starting, nor running, nor holding a line awaiting its turn, a turn whose
+ * starting, nor running, nor holding a turn queued for its runner, a turn whose
  * Stop is on its way to its harness reading as stopped, as `stoppedForGood` reads it.
  */
 export const standsStopped = (agents: readonly TaskStandingAgent[]) =>

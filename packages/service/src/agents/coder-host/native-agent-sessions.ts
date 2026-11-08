@@ -29,17 +29,16 @@ import {
 } from "../../integrations/connection-door.js";
 import type { AgentMachine, MachineLayout } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
-import type { SandboxRunner } from "../machine/vercel-machine.js";
+import type { SandboxRunner } from "../machine/sandbox-machine.js";
 import { RUNNER_EVENTS_PATH } from "../native-events/runner-events-app.js";
 import { RUNNER_LINES_PATH } from "../native-events/runner-lines-app.js";
 import { RUNNER_TOKEN_PATH } from "../native-events/runner-token-app.js";
 import { RUNNER_TRANSCRIPTS_PATH } from "../native-events/runner-transcripts-app.js";
 import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { standingOfAgent } from "../tool-catalog/gates.js";
-import { deploymentOidcToken } from "../vercel-sandbox-api.js";
 import { WORKSPACE_MCP_PATH, workspaceIntegrationMcpUrl } from "../workspace-mcp/app.js";
 import { workspaceStepOf } from "../written-mentions.js";
-import { agentAuthorship, agentCiReadable } from "./checkout.js";
+import { agentAuthorship } from "./checkout.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { codexSessions } from "./codex-sessions.js";
 import {
@@ -90,8 +89,7 @@ const agentExtraCheckouts = (userId: string, agent: Agent) =>
 
 /**
  * Our coder instructions for an agent on the harness given, composed on
- * what its row names (`instructions.ts`'s `agentCoderInstructions`): whether
- * its token reads the repository's CI, whose its commits are and the
+ * what its row names (`instructions.ts`'s `agentCoderInstructions`): whose its commits are and the
  * co-author trailer where its starter's choice credits one, the workspace its links are written under, the number
  * its task goes by there, and where it stands against our tools' gates, read once (`standingOfAgent`).
  */
@@ -103,17 +101,23 @@ const nativeCoderInstructions = (
 ) =>
   Effect.gen(function* () {
     const target = { userId, conversationId: agent.conversationId };
-    const ciReadable = hasRepository(agent) ? yield* agentCiReadable(target, agent) : false;
-    const authorship = hasRepository(agent) ? yield* agentAuthorship(target, agent) : undefined;
-    const workspace = yield* workspaceStepOf(userId, agent.organizationId).pipe(
-      Effect.tapError(logStoreFailure),
-      Effect.orElseSucceed(() => agent.organizationId),
+    // Note that we read these together, because none waits on another.
+    const [authorship, workspace, taskNumber, standing, extraRepositories] = yield* Effect.all(
+      [
+        hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
+        workspaceStepOf(userId, agent.organizationId).pipe(
+          Effect.tapError(logStoreFailure),
+          Effect.orElseSucceed(() => agent.organizationId),
+        ),
+        agentTaskNumber(userId, agent),
+        standingOfAgent(Option.some(agent)),
+        hasRepository(agent)
+          ? agentExtraCheckouts(userId, agent)
+          : Effect.succeed<readonly ExtraCheckout[]>([]),
+      ],
+      { concurrency: "unbounded" },
     );
-    const taskNumber = yield* agentTaskNumber(userId, agent);
-    const standing = yield* standingOfAgent(Option.some(agent));
-    const extraRepositories = hasRepository(agent) ? yield* agentExtraCheckouts(userId, agent) : [];
     return agentCoderInstructions(agent, {
-      ciReadable,
       authorship,
       workspace,
       taskNumber,
@@ -136,7 +140,7 @@ const nativeIntegrations = (userId: string, agent: Agent, origin: string) =>
     (names) => names.map((name) => ({ name, url: workspaceIntegrationMcpUrl(origin, name) })),
   );
 
-/** The native harnesses over the function's services, as above, each agent's runner on the machine its row names (`agent-machines.ts`): Vercel Sandbox, or its starter's Mac. */
+/** The native harnesses over the function's services, as above, each agent's runner on the machine its row names (`agent-machines.ts`): a cloud sandbox, or its starter's Mac. */
 export function nativeAgentSessionsLayer(
   options: NativeAgentSessionsOptions,
 ): Layer.Layer<
@@ -197,5 +201,5 @@ export function nativeAgentSessionsLayer(
         },
       };
     }),
-  ).pipe(Layer.provide(agentMachinesLayer({ readToken: deploymentOidcToken, run: options.run })));
+  ).pipe(Layer.provide(agentMachinesLayer({ run: options.run })));
 }

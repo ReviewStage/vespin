@@ -16,12 +16,8 @@ import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress, SELECT_BOX_PLACE } from "../card-press/card-press.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
-import {
-  type ListRowFold,
-  type ListRowHint,
-  type ListRowNest,
-  nestedItem,
-} from "../list-row/list-row.js";
+import { type ListRowFold, type ListRowNest, nestedItem } from "../list-row/list-row.js";
+import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { OneLine } from "../one-line/one-line.js";
 import { useRovingKeys } from "../roving-keys/roving-keys.js";
 import { type ListRowMenu, useRowMenu } from "../row-menu/row-menu.js";
@@ -365,9 +361,6 @@ const NAME_WEIGHT = { REST: "font-ui-medium", UNREAD: "font-emphasis" } as const
 /** A mark beside the name, a gap from its last letter. */
 const BESIDE = "ui-task-row-beside ms-icon-gap inline-flex flex-none items-center";
 
-/** Where a row's name gives way to its field while it is renamed. */
-const EDITOR = "ui-task-row-press flex min-w-0 items-center font-ui-regular";
-
 /** What did not land, in the name's cell. */
 const NOTE = "ui-task-row-note text-caption text-danger";
 
@@ -679,7 +672,10 @@ export function TaskRow({
   const named = (
     <>
       {editor !== undefined ? (
-        <span className={EDITOR}>{editor}</span>
+        // Note that the field stands where the name stood, in its weight, so the name being typed reads as it will be drawn.
+        <span className={`${PRESS} ${unread ? NAME_WEIGHT.UNREAD : NAME_WEIGHT.REST}`}>
+          {editor}
+        </span>
       ) : hint === undefined ? (
         pressed
       ) : (

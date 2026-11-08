@@ -461,9 +461,13 @@ describe("a host waiting on its record", () => {
       }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
   );
 
-  it.effect(
-    "a box whose state folder is removed while it waits watches the folder made again",
-    () =>
+  it.effect.each([
+    { when: "once its removal is heard", madeBeforeHeard: false },
+    // Note that a busy box can make the folder again before the removal is heard, so the record lands in a folder the first watch is not laid on.
+    { when: "before its removal is heard", madeBeforeHeard: true },
+  ])(
+    "a box whose state folder is removed while it waits watches the folder made again $when",
+    ({ madeBeforeHeard }) =>
       Effect.gen(function* () {
         const { stateRoot } = yield* box;
         const fileSystem = yield* FileSystem.FileSystem;
@@ -471,6 +475,7 @@ describe("a host waiting on its record", () => {
         const waiting = yield* hostDeviceWhen(stateRoot, Option.isSome).pipe(Effect.forkScoped);
         yield* elapsed(Duration.seconds(30));
         yield* fileSystem.remove(stateRoot, { recursive: true });
+        if (madeBeforeHeard) yield* fileSystem.makeDirectory(stateRoot, { recursive: true });
         yield* elapsed(Duration.seconds(30));
         yield* writeHostDevice(stateRoot, DEVICE);
         yield* untilEnded(waiting);

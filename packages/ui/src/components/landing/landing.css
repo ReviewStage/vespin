@@ -190,20 +190,6 @@
     overflow: hidden;
   }
 
-  /* The page's one glow: a faint light behind the hero's Inbox, centered
-     on where it stands, so the screen reads lifted off the ground. */
-  .ui-landing-hero::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      ellipse 640px 520px at calc(100% - var(--ui-landing-inset) - 314px) 46%,
-      var(--ui-display-landing-glow),
-      transparent 70%
-    );
-    pointer-events: none;
-  }
-
   .ui-landing-hero-words {
     position: relative;
     z-index: 1;
@@ -735,13 +721,6 @@
     margin-top: 8px;
   }
 
-  .ui-landing-hidden-statuses {
-    margin: var(--ui-tight-gap) var(--ui-row-inset);
-    color: var(--ui-color-text-muted);
-    font-size: var(--ui-type-caption-size);
-    line-height: var(--ui-type-caption-leading);
-  }
-
   .ui-landing-sidebar-foot {
     display: flex;
     align-items: center;
@@ -1174,15 +1153,6 @@
 
     .ui-landing-hero-words {
       padding: var(--ui-landing-hero-top) var(--ui-landing-gutter) 0;
-    }
-
-    /* Stacked, the glow stands under the words, behind the Inbox. */
-    .ui-landing-hero::before {
-      background: radial-gradient(
-        ellipse 90% 50% at 50% 70%,
-        var(--ui-display-landing-glow),
-        transparent 70%
-      );
     }
 
     .ui-landing-hero-art {

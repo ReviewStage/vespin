@@ -13,6 +13,7 @@ import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { agentTable } from "../schemas/agent.js";
 import { user } from "../schemas/auth.js";
 import { task } from "../schemas/task.js";
@@ -106,18 +107,7 @@ const SECTION_COLUMNS = {
 
 const SectionKeySchema = Schema.Struct({ userId: Schema.String, id: Schema.String });
 
-/**
- * The id of the transaction that made a write, read in the write's own
- * `RETURNING`, as Neon's mutations guide does it: a follower of the sidebar
- * waits for it to arrive on its live query. A write that changed no row
- * returns none, so there is nothing to wait for.
- */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
-/** The transaction a statement wrote its rows in; no row where it changed none. */
-const WrittenSchema = Schema.Struct({ txid: Schema.String });
-
-type Written = typeof WrittenSchema.Type;
+type Written = typeof TxidRowSchema.Type;
 
 /** The account's sections in the workspaces it is a member of. */
 const findSections = SqlSchema.findAll({
@@ -325,7 +315,7 @@ const insertSection = SqlSchema.findAll({
     icon: Schema.NullOr(taskSectionIconSchema),
     now: Schema.Date,
   }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: (write) =>
     Database.use((db) =>
       db
@@ -339,7 +329,7 @@ const insertSection = SqlSchema.findAll({
           createdAt: write.now,
         })
         .onConflictDoNothing()
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -350,7 +340,7 @@ const editSection = SqlSchema.findAll({
     title: Schema.String,
     icon: Schema.NullOr(taskSectionIconSchema),
   }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, id, title, icon }) =>
     Database.use((db) =>
       db
@@ -366,14 +356,14 @@ const editSection = SqlSchema.findAll({
             ),
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 /** A section stood at a new place among the others; no row where it already stood there. */
 const moveSection = SqlSchema.findAll({
   Request: Schema.Struct({ ...SectionKeySchema.fields, position: Schema.String }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, id, position }) =>
     Database.use((db) =>
       db
@@ -386,19 +376,19 @@ const moveSection = SqlSchema.findAll({
             sql`${taskSection.position} is distinct from ${position}`,
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 const deleteSection = SqlSchema.findAll({
   Request: SectionKeySchema,
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, id }) =>
     Database.use((db) =>
       db
         .delete(taskSection)
         .where(and(eq(taskSection.id, id), eq(taskSection.userId, userId)))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -411,7 +401,7 @@ const putEntry = SqlSchema.findAll({
     position: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, taskId, sectionId, position, now }) =>
     Database.use((db) =>
       db
@@ -421,14 +411,14 @@ const putEntry = SqlSchema.findAll({
           target: [taskSectionEntry.userId, taskSectionEntry.taskId],
           set: { sectionId, position, addedAt: now },
         })
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 /** The task's entry given a new place in the section it already stands in, its instant kept; no row where it already stood there. */
 const placeEntry = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, taskId: Schema.String, position: Schema.String }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, taskId, position }) =>
     Database.use((db) =>
       db
@@ -441,19 +431,19 @@ const placeEntry = SqlSchema.findAll({
             sql`${taskSectionEntry.position} is distinct from ${position}`,
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 const deleteEntry = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, taskId: Schema.String }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, taskId }) =>
     Database.use((db) =>
       db
         .delete(taskSectionEntry)
         .where(and(eq(taskSectionEntry.userId, userId), eq(taskSectionEntry.taskId, taskId)))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -466,7 +456,7 @@ const putAgentEntry = SqlSchema.findAll({
     position: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, agentId, sectionId, position, now }) =>
     Database.use((db) =>
       db
@@ -476,7 +466,7 @@ const putAgentEntry = SqlSchema.findAll({
           target: [agentSectionEntry.userId, agentSectionEntry.agentId],
           set: { sectionId, position, addedAt: now },
         })
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -487,7 +477,7 @@ const placeAgentEntry = SqlSchema.findAll({
     agentId: Schema.String,
     position: Schema.String,
   }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, agentId, position }) =>
     Database.use((db) =>
       db
@@ -499,16 +489,16 @@ const placeAgentEntry = SqlSchema.findAll({
             sql`${agentSectionEntry.position} is distinct from ${position}`,
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 const deleteAgentEntry = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
-      db.delete(agentSectionEntry).where(ownAgentEntry(userId, agentId)).returning(TXID),
+      db.delete(agentSectionEntry).where(ownAgentEntry(userId, agentId)).returning(TXID_RETURNING),
     ),
 });
 

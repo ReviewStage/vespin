@@ -2,7 +2,7 @@
  * agent-machine.ts -- the machine a native coding agent runs on, as the one interface its launch and our doors to its files reach it through.
  *
  * A native agent's runner (`@repo/agent-runner`) runs on a machine we
- * open for it, today a Vercel Sandbox (`vercel-machine.ts`). Its launch
+ * open for it, today a cloud sandbox (`sandbox-machine.ts`). Its launch
  * (`../coder-host/runner-sessions.ts`) and the door our MCP tools read
  * a file through (`../workspace-mcp/sandbox-door.ts`) reach that machine here
  * and nowhere else, so a second kind of machine shares one launch path and
@@ -17,10 +17,10 @@
  * machine whose layout says it reads its lines takes them from our store
  * instead (`../coder-host/runner-sessions.ts`), and its stdin carries only
  * its config. What a
- * machine keeps of its own beyond that (a Vercel sandbox's snapshots, the
+ * machine keeps of its own beyond that (a sandbox's snapshots, the
  * Terminal, the browser) stays outside it until a second machine needs it.
  *
- * Two machines answer it: Vercel Sandbox (`vercel-machine.ts`) and the
+ * Two machines answer it: a cloud sandbox (`sandbox-machine.ts`) and the
  * starter's Mac (`device-machine.ts`), which the agent's row picks between
  * (`agent.machine`, `agent-machines.ts`).
  *
@@ -29,10 +29,9 @@
  * runs now, which is the machine's own and opaque to everyone else. A door
  * holds the session id alone, so a door's call names only that.
  *
- * What fails answers `SandboxUnavailable`, with the status the machine
- * answered where it answered one; a runner that has ended answers
- * `NOT_FOUND_STATUS` to a write, which is how a caller tells it from a
- * machine that did not answer.
+ * What fails answers a sandbox's failure (`SandboxError`); a runner that has
+ * ended answers `SandboxGone` to a write, which is how a caller tells it from
+ * a machine that did not answer.
  */
 
 import type { LaunchPath } from "@repo/agent-runner/protocol";
@@ -40,7 +39,16 @@ import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
-import { type Brand, Context, Data, type Duration, type Effect, type Redacted } from "effect";
+import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
+import {
+  type Brand,
+  Context,
+  Data,
+  type Duration,
+  type Effect,
+  type Option,
+  type Redacted,
+} from "effect";
 import type { AgentImage, AgentImageMissing } from "../coder-host/agent-image.js";
 import type { CheckoutRefused, CheckoutServices } from "../coder-host/checkout.js";
 import type {
@@ -51,12 +59,11 @@ import type {
   PlaceholderSwap,
 } from "../sandbox-firewall.js";
 import type { KeyRefusal, PlanRefusal } from "../sessions/agent-sessions.js";
-import type { CommandExit, SandboxFile, SandboxUnavailable } from "../vercel-sandbox-api.js";
 
-/** Where a session runs now, as its machine names it: a Vercel sandbox's running session, or a local agent's id on its Mac. Opaque to every caller but the machine. */
+/** Where a session runs now, as its machine names it: a sandbox's run, or a local agent's id on its Mac. Opaque to every caller but the machine. */
 export type MachineRunning = string & Brand.Brand<"MachineRunning">;
 
-/** What a machine's own lifecycle calls a place: a Vercel sandbox's name, or a local agent's id. Opaque to every caller but the machine. */
+/** What a machine's own lifecycle calls a place: a sandbox's name, or a local agent's id. Opaque to every caller but the machine. */
 export type MachineName = string & Brand.Brand<"MachineName">;
 
 /** What a machine keeps of a place it found, for its own later calls on it. Opaque to every caller but the machine. */
@@ -154,15 +161,12 @@ export interface FoundPlace {
   readonly kept: MachineKept;
 }
 
-/** A found place's resume where it can never run again, its disk lost. */
-export const PLACE_RESUME = { GONE: "gone" } as const;
-
 /**
  * A found place running again: where it runs now, and whether it was made
  * anew in place of one whose disk was lost (`created`), which holds nothing
  * the place kept on its disk, the harness's own session among it.
  */
-export interface ResumedPlace {
+interface ResumedPlace {
   readonly place: MachinePlace;
   readonly created: boolean;
 }
@@ -178,12 +182,12 @@ interface MachineFirewall {
     place: MachinePlace,
     userId: string,
     sources: FirewallSources,
-  ) => Effect.Effect<void, SandboxUnavailable, DatabaseServices>;
+  ) => Effect.Effect<void, SandboxError, DatabaseServices>;
   readonly keepLaunch: (
     place: MachinePlace,
     userId: string,
     launch: FirewallLaunch,
-  ) => Effect.Effect<void, SandboxUnavailable, DatabaseServices>;
+  ) => Effect.Effect<void, SandboxError, DatabaseServices>;
 }
 
 /**
@@ -319,11 +323,11 @@ export interface AgentMachineService {
     E | EB | LaunchRefused | { readonly _tag: string },
     R | RB | MachineServices
   >;
-  /** Every place opened under the account's session, the newest first; none where none stands. */
-  readonly findPlaces: (
+  /** The place opened under the account's session; none where none stands. */
+  readonly findPlace: (
     userId: string,
     session: string,
-  ) => Effect.Effect<readonly FoundPlace[], SandboxUnavailable | StoreFailure, DatabaseServices>;
+  ) => Effect.Effect<Option.Option<FoundPlace>, SandboxError | StoreFailure, DatabaseServices>;
   /** What the place's record says of its runner, in place of whatever it said, kept under the account given. */
   readonly recordRunner: (
     place: {
@@ -334,33 +338,32 @@ export interface AgentMachineService {
       readonly agentId: string;
     },
     record: RunnerRecord,
-  ) => Effect.Effect<void, SandboxUnavailable | StoreFailure, DatabaseServices>;
+  ) => Effect.Effect<void, SandboxError | StoreFailure, DatabaseServices>;
   /** The running place's firewall, every write to it composing what stands whole. */
   readonly firewall: MachineFirewall;
   /**
    * The agent's found place run again, where it is not, and where it runs
-   * now: made anew on the machine's own terms where its disk is lost, or
-   * gone where the machine cannot make it again.
+   * now: made anew on the machine's own terms where its disk is lost.
    */
   readonly resume: (
     found: FoundPlace,
     agent: Agent,
   ) => Effect.Effect<
-    ResumedPlace | typeof PLACE_RESUME.GONE,
-    SandboxUnavailable | CheckoutRefused | AgentImageMissing,
+    ResumedPlace,
+    SandboxError | CheckoutRefused | AgentImageMissing,
     AgentImage | DatabaseServices
   >;
   /** The running place stopped, its disk kept for a later resume. */
-  readonly stop: (place: MachinePlace) => Effect.Effect<void, SandboxUnavailable>;
+  readonly stop: (place: MachinePlace) => Effect.Effect<void, SandboxError>;
   /** The found place thrown away, with whatever runs in it and its record. */
   readonly discard: (
     found: FoundPlace,
-  ) => Effect.Effect<void, SandboxUnavailable | StoreFailure, DatabaseServices>;
+  ) => Effect.Effect<void, SandboxError | StoreFailure, DatabaseServices>;
   /** Files written into the running place, as the machine's default user, before a later line names them; refused (`LaunchRefused`'s `deviceAway`) where they would go to a device that is away, as the line naming them would be. */
   readonly writeFiles: (
     place: MachinePlace,
     files: readonly SandboxFile[],
-  ) => Effect.Effect<void, SandboxUnavailable | LaunchRefused>;
+  ) => Effect.Effect<void, SandboxError | LaunchRefused>;
   /**
    * What the running place does not hold yet of the agent's repositories
    * cloned: before a relaunch (not `shared`), its own checkout where the
@@ -376,19 +379,19 @@ export interface AgentMachineService {
     target: ConversationTarget,
     agent: Agent,
     shared: boolean,
-  ) => Effect.Effect<void, CheckoutRefused | SandboxUnavailable, CheckoutServices>;
+  ) => Effect.Effect<void, CheckoutRefused | SandboxError, CheckoutServices>;
   /** The runner launched in the place once `ready` is done, recorded, and handed its first lines; ended again where they were not taken. */
   readonly launchRunner: <A, E, R, EL, RL>(
     place: MachinePlace,
     launch: RunnerLaunch<A, E, R, EL, RL>,
   ) => Effect.Effect<
     { readonly handle: RunnerHandle; readonly ready: A },
-    E | EL | SandboxUnavailable | { readonly _tag: string },
+    E | EL | SandboxError | { readonly _tag: string },
     R | RL | MachineServices
   >;
   /**
    * Text appended to the runner's stdin after whatever it already took;
-   * `NOT_FOUND_STATUS` where the runner has ended, and refused
+   * `SandboxGone` where the runner has ended, and refused
    * (`LaunchRefused`'s `deviceAway`) where a line that carries more than a
    * stop goes to a device that is away. Note that a line written
    * here is not sealed, and a Mac keeps its lines in the store until it
@@ -401,7 +404,7 @@ export interface AgentMachineService {
   readonly writeLine: (
     handle: RunnerHandle,
     text: string,
-  ) => Effect.Effect<void, SandboxUnavailable | LaunchRefused>;
+  ) => Effect.Effect<void, SandboxError | LaunchRefused>;
   /**
    * Whether the text given was written to the runner since its launch, as
    * one write, where the machine keeps what it wrote: a Mac keeps its lines
@@ -409,17 +412,14 @@ export interface AgentMachineService {
    * runner reads its lines from the service, which its END hands on, so it answers
    * false.
    */
-  readonly wrote: (
-    handle: RunnerHandle,
-    text: string,
-  ) => Effect.Effect<boolean, SandboxUnavailable>;
+  readonly wrote: (handle: RunnerHandle, text: string) => Effect.Effect<boolean, SandboxError>;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,
     within?: Duration.Duration,
-  ) => Effect.Effect<CommandExit, SandboxUnavailable>;
+  ) => Effect.Effect<CommandExit, SandboxError>;
   /** Ends the runner; one already gone counts as ended. */
-  readonly kill: (handle: RunnerHandle) => Effect.Effect<void, SandboxUnavailable>;
+  readonly kill: (handle: RunnerHandle) => Effect.Effect<void, SandboxError>;
   /**
    * One file of the session's place, read as the agent's own user, never as
    * root: at most one byte past `bound`, so a caller still sees a file
@@ -429,7 +429,7 @@ export interface AgentMachineService {
     session: string,
     path: string,
     bound: number,
-  ) => Effect.Effect<Uint8Array | undefined, SandboxUnavailable>;
+  ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
 }
 
 /** What a machine does to a place it already opened: everything but where it keeps things, opening a place or running it again, checking out what the place does not hold yet, handing a runner its credentials, and launching a runner in it. */

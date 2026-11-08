@@ -87,7 +87,6 @@ const SIGNATURES: ReadonlyMap<GitHubImageType, (bytes: Uint8Array) => boolean> =
   [GITHUB_IMAGE_TYPE.SVG, (bytes) => new TextDecoder().decode(bytes).includes("<svg")],
 ]);
 
-/** Whether the bytes open with the ones given. */
 function opensWith(bytes: Uint8Array, opening: readonly number[]): boolean {
   return opening.every((byte, at) => bytes[at] === byte);
 }

@@ -357,6 +357,15 @@ test("a tab landing on an agent's address, its link opened as it lands, stands t
   assert.equal(router.addresses().length, steps + 1, router.addresses().join(" → "));
 });
 
+test("an agent's link naming no workspace, as a notification's click hands it, opens its page under the workspace the window stands in", async () => {
+  const router = await drawWindow("/acme");
+
+  act(() => showLink?.({ workspace: "", place: { kind: LINK_PLACE.AGENT, agentId: "agent-9" } }));
+  await settle();
+
+  assert.equal(router.history.location.pathname, "/acme/agent/agent-9");
+});
+
 /** Whether the page saying a workspace is not there for the reader stands. */
 function unknownWorkspaceShown(): boolean {
   return document.body.textContent?.includes("This workspace doesn't exist") === true;

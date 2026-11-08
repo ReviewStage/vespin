@@ -1,5 +1,4 @@
-import { LINE_GRACE_MILLIS, STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
-import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
+import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import { GITHUB_TOKEN_REFRESH } from "@repo/features/host-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Duration } from "effect";
@@ -10,47 +9,14 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
  *
  * A coding agent is one native harness's session over a `coding_agent`
  * conversation, run by the runner we launch on its machine
- * (`runner-sessions.ts`). What differs is named here: how long its sandbox may
- * live, how it is kept alive, and how large it is, how often the repository credential at its
- * firewall is renewed, where its checkout stands, how a transcript read
- * waits, how full its context grows before its harness compacts it, and how much
- * a worker it delegates to may spend.
+ * (`runner-sessions.ts`). What differs is named here: how large its sandbox
+ * is, how often the repository credential at its firewall is renewed, where
+ * its checkout stands, how a transcript read waits, how full its context
+ * grows before its harness compacts it, and how much a worker it delegates to
+ * may spend. How long an idle sandbox lives is `@repo/sandbox`'s
+ * (`SANDBOX_IDLE`).
  */
 export const CODER = {
-  /**
-   * How long a Vercel Sandbox session lives past its last sign of use: the
-   * timeout it opens with, and how far ahead of now each keep-alive puts its
-   * end (`sandbox-keep-alive.ts`). A native runner keeps its sandbox alive by
-   * its heartbeat for as long as it runs, warm included and a wait on a
-   * wakeup too, since the CLI fires the wakeup only while it runs, and its
-   * end, once its warm window passes (`RUNNER_WARM`), stops it. What its end leaves up, as a
-   * developer's Terminal holds it, is stopped by this timeout once nothing
-   * keeps it alive, its snapshot taken as at any stop, so this is how an
-   * idle sandbox ends, and it bills its memory until then: at the default
-   * size, 4 GB for twenty minutes. Twenty, because a live turn shows use far
-   * more often than that: a native runner posts at least every heartbeat
-   * (`RUNNER_HEARTBEAT`, five minutes), a terminal closes after ten idle
-   * minutes, and a watched browser after five. Each of them keeps it alive at most every
-   * `SANDBOX_KEEP_ALIVE_EVERY`.
-   */
-  SANDBOX_TIMEOUT_MS: 20 * 60 * 1_000,
-  /**
-   * The longest a Vercel Sandbox session may live in all, however often it is
-   * kept alive: the platform's maximum on Pro and Enterprise, past which it
-   * refuses an extension.
-   */
-  SANDBOX_MAX_LIFETIME_MS: 24 * 60 * 60 * 1_000,
-  /**
-   * How often a live turn, a terminal, or a watched browser keeps the
-   * sandbox alive: one list and at most one extension each time, so a
-   * step's start or an event batch costs nothing more between them, and an
-   * extension only once less than the timeout less this is left
-   * (`keepAliveExtension`). Five minutes, a quarter of the timeout, so a
-   * keep-alive that found no extension due, and the heartbeat's five minutes
-   * before the next sign of use past this, still land before the sandbox
-   * would stop.
-   */
-  SANDBOX_KEEP_ALIVE_EVERY: Duration.minutes(5),
   /**
    * The sandbox's vCPUs, each with 2 GB of memory, where its repository asks
    * for no more (`SANDBOX_VCPUS_BY_REPOSITORY`); also the size a repository
@@ -77,21 +43,6 @@ export const CODER = {
    * boots with the default, lets it lint there in 36 seconds.
    */
   SANDBOX_VCPUS_BY_REPOSITORY: new Map([["reviewstage/vespin", 4]]) as ReadonlyMap<string, number>,
-  /**
-   * The snapshots Vercel keeps of the agent's sandbox: the newest alone, which
-   * is all a resume reads, so snapshot storage stays flat however many turns
-   * stop it. An evicted one is deleted at once, and the kept one expires
-   * seven days after it was last used, as Vercel's persistent sandbox
-   * examples keep one (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes),
-   * named here because Vercel's own pages disagree on the default. The cost:
-   * an agent resumed after 7 idle days finds no snapshot, and its sandbox is
-   * created again on its drive (`../machine/vercel-machine.ts`), its checkout
-   * as the agent left it, but what stood outside the drive, its harness's own
-   * session among it, is gone; one opened before drives starts from a fresh
-   * clone of its repository, its uncommitted and unpushed work gone
-   * (`runner-sessions.ts`).
-   */
-  SANDBOX_SNAPSHOTS: { count: 1, expiration: Duration.days(7), deleteEvicted: true },
   /** An installation token is good for an hour from its mint; the one at the firewall is renewed this long after, inside that hour, as a host renews its agents' (`@repo/features/host-wire`). */
   GITHUB_TOKEN_REFRESH,
   /** The context window the session is told where the catalog names none for the model. */
@@ -156,22 +107,11 @@ export const CODER = {
   PUBLISHED_CLOSED_FRESH: Duration.minutes(10),
   /**
    * How long after its Start an agent with no turn row yet still reads as
-   * starting. The harness took the session and its first turn is on its way; an
+   * starting. The Start writes its first line with the turn it queues; an
    * agent still without one past this is read as failed, so nothing reads
    * starting forever and no transcript read is held for it.
    */
   STARTING_GRACE: Duration.millis(STARTING_GRACE_MILLIS),
-  /**
-   * How long a line of the developer's may stand with no turn to take it
-   * while none runs, and still read the agent as running. The harness opens
-   * the turn on a line it took, as it lands the first turn of a
-   * Start (`STARTING_GRACE`, whose length this shares); a line still
-   * waiting past this is one whose turn is not coming, as when the session
-   * failed with the store's hooks failing beside it, so no failed turn was
-   * written. It is read as failed rather than running forever, so the
-   * developer is offered Continue on it.
-   */
-  LINE_GRACE: Duration.millis(LINE_GRACE_MILLIS),
   /**
    * The lease one call holds on a native agent's runner across reading
    * whether it runs and writing to it or launching it
@@ -193,68 +133,40 @@ export const CODER = {
     POLL: Duration.millis(250),
   },
   /**
-   * How long a native agent's runner stays warm once its turn is over, for
-   * the next message to reach it as a line rather than through a relaunched
-   * CLI, one window per machine: read by the machine the runner's place is on
-   * (`FoundPlace.machine`), never by a flag. A runner is launched warm only
-   * on a machine whose window is not zero (`runner-sessions.ts`'s launch),
-   * and is handed its window, past which it ends itself (`warmForMs`,
-   * `@repo/agent-runner`'s `RUNNER_WARM`), `RUNNER_WARM_SLACK` later.
+   * How long a Mac's runner stays warm once its turn is over, for the next
+   * message to reach it as a line rather than through a relaunched CLI: thirty
+   * minutes, because nothing is billed on a host, and every message within it
+   * goes into the running session rather than through a relaunched CLI, a new
+   * GitHub token, and the last runner's grace. The runner is handed its
+   * window, past which it ends itself (`warmForMs`, `@repo/agent-runner`'s
+   * `RUNNER_WARM`), `RUNNER_WARM_SLACK` later. Past it, a message we send ends
+   * the runner under the lease and relaunches (`sendHolding`), so none is
+   * written to a runner about to end itself; a host waiting to switch release
+   * has its runner retired at its IDLE (`runnerIdled`), and retires its own
+   * warm runners while it waits (`@repo/host`'s `compose-local-agents.ts`).
    *
-   * The sandbox's is five minutes from the later of its turn's end and the
-   * last time a client had the agent on screen (`runner-sessions.ts`'s
-   * `warm`, which runs a warm runner's window again from now with a `warm`
-   * line, or launches one with no message where none is up), so an agent the
-   * developer is looking at takes a message straight into its running
-   * session, and one they left ends its runner five minutes on, its END
-   * stopping the sandbox, as Vercel advises: an idle sandbox bills its
-   * memory. Ten warm minutes after every turn, on screen or not, kept a
-   * 4 vCPU, 8 GB sandbox up for up to 62 sandbox-hours a day over Oct 23–24,
-   * about $5–10 a day, for the 636 of 1,536 finished turns a follow-up
-   * reached within three minutes. A message sent while the runner ends is
-   * queued for it to read, and a runner that ends without reading it leaves
-   * it waiting, which its END hands on (`runner-sessions.ts`'s
-   * `LINES_WAITING`).
-   *
-   * The device's is thirty minutes, because nothing is billed on a host, and
-   * every message within it goes into the running session rather than
-   * through a relaunched CLI, a new GitHub token, and the last runner's
-   * grace. Past it, a message we send ends the runner under the lease and
-   * relaunches (`sendHolding`), so none is written to a runner about to end
-   * itself; a host waiting to switch release has its runner retired at its
-   * IDLE (`runnerIdled`), and retires its own warm runners while it waits
-   * (`@repo/host`'s `compose-local-agents.ts`).
+   * A sandbox's runner has no window of its own: it is launched warm and
+   * lives until its sandbox stops, five idle minutes after its last touch
+   * (`@repo/sandbox`'s `SANDBOX_IDLE`), bounded only by the runner's own cap
+   * (`RUNNER_WARM.IDLE_CAP_MS`).
    */
-  RUNNER_WARM: {
-    [AGENT_MACHINE.VERCEL]: Duration.minutes(5),
-    [AGENT_MACHINE.DEVICE]: Duration.minutes(30),
-  } satisfies Record<AgentMachineKind, Duration.Duration>,
+  RUNNER_WARM: Duration.minutes(30),
   /**
-   * How much longer than its window a warm runner waits before it ends
+   * How much longer than its window a Mac's warm runner waits before it ends
    * itself: the window runs from the turn's settle, which we stamp after
-   * the runner's IDLE, and a message sent just inside it reaches a device's
-   * runner only once its host claims the line, so the runner outlasts both
-   * rather than ending under a message on its way.
+   * the runner's IDLE, and a message sent just inside it reaches the runner
+   * only once its host claims the line, so the runner outlasts both rather
+   * than ending under a message on its way.
    */
   RUNNER_WARM_SLACK: Duration.minutes(2),
   /**
-   * How long a message to a runner that reads its lines waits on that
-   * runner's exit, its liveness in place of the 404 a write to an exited
+   * How long a Stop, a retire, or a reap waits on the exit of a runner that
+   * reads its lines, its liveness in place of the 404 a write to an exited
    * command's stdin answers: a command that exited answers within one round
-   * trip, and one that runs answers nothing, so the wait is all it costs,
-   * run beside the message's own reads. A runner read as running that has
-   * in fact gone leaves its line waiting for the next message's read.
+   * trip, and one that runs answers nothing, so the wait is all it costs.
+   * A message reads no exit: it is queued for the runner its place records.
    */
   RUNNER_EXIT_READ: Duration.seconds(1),
-  /**
-   * How long renewing a running runner's credential may take once its
-   * message is written. The send answers only after it, inside the store's
-   * thirty-second dispatch deadline (`AWAITING_LINE_DISPATCH_DEADLINE`), and
-   * a send that timed out there records no line for a message the runner
-   * already took, so a renewal past this is given up and logged; the next
-   * message renews it.
-   */
-  CREDENTIAL_RENEWAL: Duration.seconds(5),
   /**
    * How long a rewind waits for a native agent's runner to end on its Stop
    * before ending its command: a turn interrupted mid-step settles in a

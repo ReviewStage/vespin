@@ -28,10 +28,12 @@ export const AGENT_QUEUE_BOUNDS = {
   MAX_MESSAGES: 50,
   /** The longest refusal word a pause carries, past every word the service has. */
   MAX_REFUSAL_CHARS: 64,
+  /** How long a send's claim on a queued message holds, in milliseconds: past it, a send cut off before it sent the message is read as never having claimed it. */
+  CLAIM_MS: 5 * 60 * 1000,
 } as const;
 
 /** One queued message as the queue lists it, in its place. */
-export const queuedMessageSchema = EffectSchema.Struct({
+const queuedMessageSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   text: EffectSchema.String,
   /**
@@ -62,7 +64,7 @@ export type QueuedMessage = typeof queuedMessageSchema.Type;
  * a refusal a newer service names still reads, as one the window has no
  * words for.
  */
-export const queuePausedSchema = EffectSchema.Struct({
+const queuePausedSchema = EffectSchema.Struct({
   because: EffectSchema.Literals(Object.values(QUEUE_PAUSE)),
   refusal: EffectSchema.optionalKey(
     EffectSchema.String.check(EffectSchema.isMaxLength(AGENT_QUEUE_BOUNDS.MAX_REFUSAL_CHARS)),

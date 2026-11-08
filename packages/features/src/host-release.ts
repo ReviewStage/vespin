@@ -54,7 +54,7 @@ export const HOST_RELEASE: HostRelease | undefined = {
 };
 
 /** The release's tag, apart from the desktop's `v<version>`. */
-export function hostReleaseTag(version: string): string {
+function hostReleaseTag(version: string): string {
   return `host-v${version}`;
 }
 

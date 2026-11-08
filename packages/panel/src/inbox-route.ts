@@ -9,7 +9,7 @@
  * way back to that list finds it narrowed again. Opening it, narrowing or
  * widening it, and choosing an item are each a visit; going back to the
  * list from an item, which the window's history steps back to where it
- * stands behind (`navigation-history.ts`'s `lists.inbox`), and another
+ * stands behind (`places/narrow-backs.ts`), and another
  * workspace listed under it, take the step in place.
  *
  * An address names an item by its id alone. Where it stands, on a task or
@@ -22,11 +22,11 @@
 import type { InboxItemHome } from "@repo/features/inbox-wire";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
-import { Store, useSelector } from "@tanstack/react-store";
-import { useState } from "react";
+import { useSelector } from "@tanstack/react-store";
+import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 import { inboxItemHomeQueryOptions } from "./tasks/agent-reads.js";
-import type { InboxChoice } from "./tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 
 /** The Inbox's routes by id. */
 const INBOX_LEAF = {
@@ -34,9 +34,6 @@ const INBOX_LEAF = {
   TASK: "/places/$workspace/inbox/task/$taskId",
   ITEM: "/places/$workspace/inbox/$itemId",
 } as const;
-
-/** Each item a door chose in the window's Inbox, by its id: where it stands, which its address leaves out. */
-type ChoicesHeld = Store<ReadonlyMap<string, InboxChoice>>;
 
 /** Where an item opens: the workspace whose Inbox it is chosen in, by its address step, and the task that Inbox's list is narrowed to, none for every task's. */
 export interface InboxAt {
@@ -61,6 +58,10 @@ export interface InboxRoute {
   readonly choiceOf: (itemId: string) => InboxChoice | undefined;
   /** Chooses `chosen` at `at`; where none is named, in the Inbox standing. Either way an item of another task than the one the list is narrowed to widens it. */
   readonly onChoose: (chosen: InboxChoice, at?: InboxAt) => void;
+  /** Goes to `chosen` at `at` as `onChoose` does, but holds nothing: a door that moves first holds it once it lands (`onHold`). */
+  readonly onGoTo: (chosen: InboxChoice, at?: InboxAt) => void;
+  /** Holds where `chosen` stands, by its item, as `onChoose` does before it goes there. */
+  readonly onHold: (chosen: InboxChoice) => void;
   /** Stands the list the item standing was chosen in, in the step's place. */
   readonly onClear: () => void;
   /** Lists every task's items again, where the list is narrowed to one. */
@@ -68,6 +69,15 @@ export interface InboxRoute {
   readonly onClose: () => void;
   /** Stands the Inbox of `workspace` in the step's place, on its list, as another workspace listed under it does. */
   readonly onTurn: (workspace: string) => void;
+}
+
+/** The window's Inbox as a surface reads it: whether it stands, the item chosen in the listed workspace's list, and the task the list is narrowed to. */
+export interface InboxView {
+  readonly open: boolean;
+  /** The item chosen, none until one is, or while the one chosen is a task's of another workspace than the one listed. */
+  readonly chosen: InboxChoice | undefined;
+  /** The task the list is narrowed to, none where it lists every task's items. */
+  readonly narrowed: string | undefined;
 }
 
 /** The navigation that stands the list at `at`. */
@@ -117,14 +127,15 @@ function useFoundChoice(itemId: string | undefined, held: boolean): InboxChoice 
   return found === undefined ? { itemId, opened: true } : choiceAt(itemId, found);
 }
 
-/** The Inbox as the router stands it, left by `onClose`, and kept standing by `onStay` where a leave was asked of it before a door asked for the place standing. */
-export function useInboxRoute(input: { onClose: () => void; onStay: () => void }): InboxRoute {
+/** The Inbox as the router stands it, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for the place standing (`places/routed-exits.ts`). */
+export function useInboxRoute(): InboxRoute {
   const router = useRouter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const here = useWindowPlace();
+  const exits = useRoutedExits();
   // Only grows: each item a door chose, by its id, for as long as the window lives.
-  const [choices] = useState<ChoicesHeld>(() => new Store(new Map()));
+  const choices = useRoutedMemory().inboxChoices;
   const open = here.place === ROUTED_PLACE.INBOX;
   const standingIn = open ? here.params.workspace : undefined;
   const itemId = open && here.leaf === INBOX_LEAF.ITEM ? here.params.itemId : undefined;
@@ -141,19 +152,26 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
   // Note that a door asked for the place standing moves nothing, and keeps it standing where it left the routed place first, as a link's and ⌘K's do.
   const visit = (options: NavigateOptions, replace = false) => {
     if (router.buildLocation(options).href === router.history.location.href) {
-      input.onStay();
+      exits.stay();
       return;
     }
     void navigate({ ...options, replace });
   };
-  const onChoose = (chosen: InboxChoice, at?: InboxAt) => {
+  // Note that an item still being found by its address is no door's choice, so it is held nowhere and found again where it stands.
+  const onHold = (chosen: InboxChoice) => {
+    if (!beingFound(chosen)) choices.setState((map) => new Map(map).set(chosen.itemId, chosen));
+  };
+  const onGoTo = (chosen: InboxChoice, at?: InboxAt) => {
     const to = at ?? standingAt;
     if (to === undefined) return;
-    // Note that an item still being found by its address is no door's choice, so it is held nowhere and found again where it stands.
-    if (!beingFound(chosen)) choices.setState((map) => new Map(map).set(chosen.itemId, chosen));
     // An item of another task, or of an agent on no task, leaves the task the list is narrowed to, so the list it opens in holds it.
     const keeps = to.narrowed === undefined || to.narrowed === choiceTaskOf(chosen);
     visit(itemAt(chosen.itemId, keeps ? to : { ...to, narrowed: undefined }));
+  };
+  const onChoose = (chosen: InboxChoice, at?: InboxAt) => {
+    if (at === undefined && standingAt === undefined) return;
+    onHold(chosen);
+    onGoTo(chosen, at);
   };
   const list = standingAt === undefined ? undefined : listAt(standingAt);
   return {
@@ -171,6 +189,8 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
       return home === undefined || "failure" in home ? undefined : choiceAt(itemId, home);
     },
     onChoose,
+    onGoTo,
+    onHold,
     onClear: () => {
       if (list !== undefined && itemId !== undefined) void navigate({ ...list, replace: true });
     },
@@ -179,11 +199,35 @@ export function useInboxRoute(input: { onClose: () => void; onStay: () => void }
         visit(listAt({ workspace: standingIn, narrowed: undefined }));
       }
     },
-    onClose: input.onClose,
+    onClose: () => exits.leave(),
     onTurn: (workspace) => {
       if (standingIn === undefined || standingIn === workspace) return;
       // Note that the same Inbox under another workspace lists that workspace's items alone, so it stands on its list.
       void navigate({ to: "/$workspace/inbox", params: { workspace }, replace: true });
     },
   };
+}
+
+/**
+ * The item `chosen` as the listed workspace's Inbox holds it: the Inbox lists
+ * the listed workspace's items alone, so a choice another workspace's list
+ * made gives way with it. Note that an agent's with no task, or one named by
+ * its id alone, is held to the listed workspace by the list itself.
+ */
+export function listedInboxChoice(
+  chosen: InboxChoice | undefined,
+  tasks: Pick<TasksControl, "tasks" | "workspace">,
+): InboxChoice | undefined {
+  if (chosen === undefined || !("taskId" in chosen) || tasks.workspace === undefined) return chosen;
+  const listedId = tasks.workspace.id;
+  const listed = tasks.tasks.some(
+    (task) => task.id === chosen.taskId && task.workspaceId === listedId,
+  );
+  return listed ? chosen : undefined;
+}
+
+/** The window's Inbox as the router stands it, its choice as the listed workspace's list holds it. */
+export function useInboxView(tasks: Pick<TasksControl, "tasks" | "workspace">): InboxView {
+  const { open, chosen, narrowed } = useInboxRoute();
+  return { open, chosen: listedInboxChoice(chosen, tasks), narrowed };
 }

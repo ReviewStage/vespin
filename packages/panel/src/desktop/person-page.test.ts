@@ -32,11 +32,12 @@ import {
 } from "@repo/host/app-state";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
 import { OpenSettingsProvider } from "../open-settings.js";
-import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -51,6 +52,7 @@ import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { PersonPage } from "./person-page.js";
 
 /**
@@ -308,7 +310,6 @@ afterEach(() => {
 interface Opened {
   readonly tasks: string[];
   readonly agents: [string, string][];
-  readonly inbox: (InboxChoice | "inbox")[];
   readonly settings: SettingsLink[];
 }
 
@@ -361,7 +362,7 @@ function mountWith(
   memberCount = MEMBERS.length,
   away?: { label: string; onPress: () => void },
 ) {
-  const opened: Opened = { tasks: [], agents: [], inbox: [], settings: [] };
+  const opened: Opened = { tasks: [], agents: [], settings: [] };
   const reads = handHostReads({ items: feedNow() });
   // Note that the workspace's automations are laid as the page holds them, unless the test holds or refuses them.
   holdAutomations(reads.deliverAutomations, {
@@ -381,30 +382,23 @@ function mountWith(
       ...HOLDING,
       onSelect: (taskId) => opened.tasks.push(taskId),
       onShowAgent: (taskId, agentId) => opened.agents.push([taskId, agentId]),
-      inboxView: {
-        open: false,
-        chosen: undefined,
-        onOpen: () => opened.inbox.push("inbox"),
-        onClose: () => undefined,
-        onChoose: (chosen) => opened.inbox.push(chosen),
-        onOpenItem: (chosen) => opened.inbox.push(chosen),
-        onClear: () => undefined,
-        narrowed: undefined,
-        onWiden: () => undefined,
-        pages: undefined,
-        onTaskAgents: () => undefined,
-      },
       ...overrides,
       ...more,
     });
+  // The page stands at its person's address under Acme, as the router stands it.
+  const router = windowRouter(
+    createMemoryHistory({ initialEntries: [`/acme/person/${encodeURIComponent(userId)}`] }),
+  );
   const draw = (tasks: TasksControl) =>
     act(() =>
       root?.render(
         withQueryClient(
-          createElement(
-            OpenSettingsProvider,
-            { value: (link: SettingsLink) => opened.settings.push(link) },
-            createElement(PersonPage, { tasks, userId, name, away }),
+          router.provide(
+            createElement(
+              OpenSettingsProvider,
+              { value: (link: SettingsLink) => opened.settings.push(link) },
+              createElement(PersonPage, { tasks, userId, name, away }),
+            ),
           ),
         ),
       ),
@@ -415,7 +409,7 @@ function mountWith(
   draw(control({}));
   /** Draws the page again over the workspace with `more` on top of what it was mounted with. */
   const redraw = (more: Partial<TasksControl>) => draw(control(more));
-  return { page: container, opened, redraw };
+  return { page: container, opened, redraw, router };
 }
 
 async function settle(): Promise<void> {
@@ -490,7 +484,6 @@ function mountLinked(userId: string) {
   return mountWith(
     {
       workspaces: [{ ...ACME, slug: "acme" }],
-      personView: { ...tasksControl().personView, userId, workspaceId: ACME.id },
     },
     userId,
   );
@@ -560,7 +553,7 @@ test("a member with nothing here yet is named, and the page says there is nothin
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {
-  const { page, opened } = mount(CHARLES.userId);
+  const { page, opened, router } = mount(CHARLES.userId);
   await settle();
 
   button(page, "Jittered backoff").click();
@@ -568,9 +561,8 @@ test("each row opens what it names: an agent its tab, an item the Inbox on it, a
   button(page, "Retry budget dashboard").click();
 
   assert.deepEqual(opened.agents, [[RETRIES.id, BACKOFF.id]]);
-  assert.deepEqual(opened.inbox, [
-    { taskId: RETRIES.id, itemAgentId: RETRY_429.agentId, itemId: RETRY_429.id },
-  ]);
+  // Note that Acme has no slug, so the Inbox's address names it by its id.
+  assert.equal(router.history.location.pathname, `/${ACME.id}/inbox/${RETRY_429.id}`);
   assert.deepEqual(opened.tasks, [DASHBOARD.id]);
 });
 
@@ -771,11 +763,6 @@ test("Copy link copies their page's link under the slug of the workspace it stan
   const { page } = mountWith(
     {
       workspaces: [{ ...ACME, slug: "acme" }],
-      personView: {
-        ...tasksControl().personView,
-        userId: CHARLES.userId,
-        workspaceId: ACME.id,
-      },
     },
     CHARLES.userId,
   );

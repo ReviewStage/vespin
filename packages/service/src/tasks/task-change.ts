@@ -20,6 +20,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TASK_STATUS, type TaskUpdateRequest } from "@repo/features/task-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Data, Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import {
@@ -28,7 +29,7 @@ import {
   idleStandingAgents,
 } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { type SandboxStopReach, stoppedInBackground } from "../agents/session-sandboxes.js";
+import { deletedInBackground, type SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import { recordServerEvent, SERVER_EVENT, SERVER_TASK_FINISHER } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
@@ -87,7 +88,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   TaskChangeConfirmed,
   HostedRefusal,
-  GitHubApp | HttpClient.HttpClient | DatabaseServices
+  GitHubApp | HttpClient.HttpClient | DatabaseServices | Sandbox
 > {
   const header = yield* hostedStoreOrUnavailable(readTaskHeader(userId, taskId));
   if (Option.isNone(header)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -141,7 +142,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     asked.status !== undefined || asked.archived === undefined
       ? asked.status
       : yield* hostedStoreOrUnavailable(
-          archiveAskedStatus(userId, taskId, standing ?? TASK_STATUS.TODO, asked.archived),
+          archiveAskedStatus(userId, taskId, standing, asked.archived),
         );
   return {
     changes: {
@@ -192,11 +193,11 @@ export const taskChangeWritten = (
 
 /** The change followed through once it commits: the agents its move to Done archived let go of as an archive by hand does, and a move to Done or Canceled counted. */
 export const taskChangeSettled = /* @__PURE__ */ Effect.fnUntraced(function* (
-  reach: SandboxStopReach,
+  reach: SandboxDeleteReach,
   userId: string,
   { task, archived, statusMoved }: TaskChanged,
 ) {
-  if (archived.length > 0) yield* stoppedInBackground(reach, archived);
+  if (archived.length > 0) yield* deletedInBackground(reach, archived);
   if (statusMoved && (task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED)) {
     yield* recordServerEvent(
       SERVER_EVENT.TASK_FINISH,

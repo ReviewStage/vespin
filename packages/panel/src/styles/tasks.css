@@ -180,6 +180,69 @@
   margin-top: 0.25em;
 }
 
+/* A divider ProseMirror holds selected whole, as a click on its line, an
+   arrow onto it, or a Backspace up to it leaves it: drawn in the accent, on a
+   wash outside its box so nothing moves, so the caret does not seem to vanish
+   and a Backspace or Delete is seen to take it. Note that TipTap's own base
+   rules are left out (`description-editor.ts`'s `injectCSS`), so nothing else
+   draws a selected node. */
+.description-document-text hr.ProseMirror-selectednode {
+  border-top-color: var(--accent);
+  border-radius: var(--ui-radius-6);
+  box-shadow: 0 0 0 0.3em var(--ui-color-fill-selected);
+}
+
+/* The caret where no line stands to take one, between two dividers or past
+   one at the text's ends (TipTap's gap cursor), which TipTap's left-out base
+   rules drew: out of the flow, so it moves no block as it stands, and a short
+   accent line blinking where the next block's line would start. */
+.description-document-text .ProseMirror-gapcursor {
+  display: none;
+  position: absolute;
+  margin: 0;
+  pointer-events: none;
+}
+
+.description-document-text.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+/* Note that the caret between two dividers stands in their pair's gap
+   (`@repo/ui`'s prose.css), which it would otherwise close as it stands
+   between them, and in the middle of that gap rather than against the first:
+   below the first divider's own margin (prose.css's 0.3em), half a line down. */
+.description-document-text hr + .ProseMirror-gapcursor + hr {
+  margin-top: 1lh;
+}
+
+.description-document-text hr + .ProseMirror-gapcursor:has(+ hr)::after {
+  top: calc(0.5lh - 0.3em);
+}
+
+.description-document-text .ProseMirror-gapcursor::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  width: 1.5em;
+  border-top: 1px solid var(--accent);
+  animation: description-gap-caret-blink 1.1s steps(2, start) infinite;
+  animation-play-state: var(--ui-loop-motion);
+}
+
+/* Note that reduced motion takes the blink away rather than pausing it,
+   because a blink paused in its hidden half would hide the caret. */
+@media (prefers-reduced-motion: reduce) {
+  .description-document-text .ProseMirror-gapcursor::after {
+    animation: none;
+  }
+}
+
+@keyframes description-gap-caret-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
 /* What the editor keeps byte for byte but does not draw as its own: inline
    HTML, a footnote, a link's definition, a block of HTML. */
 .description-raw-block {
@@ -991,11 +1054,12 @@
 
 /* The tabs' row under the header, Review at its end while the pull request
    is open, gives way in steps as the tab narrows, so every tab keeps its
-   name for as long as it can and none is named while the others are not:
-   first Review folds to a square around its glyph, which wears its count,
-   its word left to its hint; then the tabs take in their room; and only once their names no
-   longer fit do they fold, every one to its glyph at once
-   (`CHOICE_BAR_FOLD.TOGETHER`), about 480px with counts of a usual size. */
+   name for as long as it can: first Review folds to a square around its
+   glyph, which wears its count, its word left to its hint; then the tabs
+   take in their room; and only once their names no longer fit do they
+   fold, about 480px with counts of a usual size, every tab but the chosen
+   one to its glyph, as a phone's, and the chosen one last
+   (`CHOICE_BAR_FOLD.CHOSEN_LAST`). */
 /* off-scale: 650px, where Review's word stops fitting beside the tabs */
 @container pull-request-tab (width < 650px) {
   .pull-request-tab > .ui-pane-bar .pull-request-review {
@@ -1555,11 +1619,13 @@
    review thread in Files changed and the Conversation, and the app's note in a
    File tab. The review thread's quiet card (`@repo/ui`'s Card), as wide as
    its words up to a reading measure. Its columns are the custom properties below: the head's
-   chevron in a file header's 24px slot at its inset, the faces' column
-   after it, and the words' column after the faces, which the head's face
-   and name and every comment's face and words read alike. */
+   chevron in a file header's 24px slot at the file header's inset (a
+   disclosure row's start, `disclosure.css`), so its glyph stands where a
+   file's does and under the strip's words, the faces' column after it, and
+   the words' column after the faces, which the head's face and name and
+   every comment's face and words read alike. */
 .annotation-card {
-  --annotation-inset: var(--ui-space-4);
+  --annotation-inset: var(--ui-space-8);
   --annotation-turn: var(--ui-space-24);
   --annotation-gap: var(--ui-space-8);
   --annotation-face: var(--ui-space-20);

@@ -24,24 +24,12 @@ import {
 } from "@repo/features/automation-wire";
 import type { SentryTriggerEvent, TriggerProvider } from "@repo/features/trigger-catalog";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  gt,
-  gte,
-  inArray,
-  isNull,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder } from "../core/query.js";
+import { CURRENT_TXID } from "../core/txid.js";
 import { agentTable } from "../schemas/agent.js";
 import { member } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
@@ -313,14 +301,6 @@ function triggerColumns(
   };
 }
 
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * automations waits for that transaction to arrive before it confirms the
- * write.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
-
 /** A written automation's id, and the transaction it was written in. */
 const WrittenSchema = Schema.Struct({ id: Schema.String, txid: Schema.String });
 
@@ -368,7 +348,7 @@ const insertAutomation = SqlSchema.findAll({
         })
         // A caller that names the id may run its make again, which then finds the row standing and writes nothing.
         .onConflictDoNothing({ target: automation.id })
-        .returning({ id: automation.id, txid: TXID }),
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -439,7 +419,7 @@ const writeAutomation = SqlSchema.findAll({
           updatedAt: now,
         })
         .where(allowedTo(userId, access, id))
-        .returning({ id: automation.id, txid: TXID }),
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -451,7 +431,7 @@ const removeAutomation = SqlSchema.findAll({
       db
         .delete(automation)
         .where(allowedTo(userId, AUTOMATION_ACCESS.DELETE, id))
-        .returning({ id: automation.id, txid: TXID }),
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -471,7 +451,7 @@ const insertRun = SqlSchema.findAll({
         .insert(automationRun)
         .values({ ...row, status: AUTOMATION_RUN_STATUS.QUEUED })
         .onConflictDoNothing({ target: [automationRun.automationId, automationRun.dedupeKey] })
-        .returning({ ...QUEUED_RUN_COLUMNS, txid: TXID }),
+        .returning({ ...QUEUED_RUN_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -597,30 +577,6 @@ const ScheduledRowSchema = Schema.Struct({
 
 /** One scheduled automation as its schedule is kept for it: its id, its workspace, whether it runs, and what fires it. */
 export type ScheduledAutomation = typeof ScheduledRowSchema.Type;
-
-const findScheduled = SqlSchema.findAll({
-  Request: Schema.Struct({ after: Schema.NullOr(Schema.String), limit: Schema.Int }),
-  Result: ScheduledRowSchema,
-  execute: ({ after, limit }) =>
-    Database.use((db) =>
-      db
-        .select({
-          id: automation.id,
-          organizationId: automation.organizationId,
-          enabled: automation.enabled,
-          trigger: automation.trigger,
-        })
-        .from(automation)
-        .where(
-          and(
-            eq(automation.triggerKind, AUTOMATION_TRIGGER.SCHEDULE),
-            after === null ? undefined : gt(automation.id, after),
-          ),
-        )
-        .orderBy(asc(automation.id))
-        .limit(limit),
-    ),
-});
 
 const StartedAgentSchema = Schema.Struct({
   agentId: Schema.String,
@@ -1238,14 +1194,6 @@ export function advanceAutomationSchedule(
   nextRunAt: Date | null,
 ): TaskStoreEffect<void> {
   return writeNextRun({ id, nextRunAt });
-}
-
-/** The automations a schedule fires, paused ones among them, in id order after `after` (from the first where it is null), at most `limit`, for keeping their schedules. */
-export function scheduledAutomations(
-  after: string | null,
-  limit: number,
-): TaskStoreEffect<readonly ScheduledAutomation[]> {
-  return findScheduled({ after, limit });
 }
 
 /** The agents the automation's runs fired at or after `since` started, and that stand still. */

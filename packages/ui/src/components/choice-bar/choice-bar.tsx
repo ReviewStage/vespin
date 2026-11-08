@@ -20,8 +20,8 @@
  * (`scrollFadeMarks`), the chosen option brought into view as it is chosen;
  * a fill bar shows an option other than the chosen one by its glyph alone
  * too, its name left to a reader who cannot see it, and one standing in a
- * toolbar beside other controls folds every option at once instead, once
- * their names no longer fit (`fold`). An option drawn by its glyph alone
+ * toolbar beside other controls folds once their names no longer fit,
+ * every option at once or the chosen one last (`fold`). An option drawn by its glyph alone
  * raises its name in the hint over it, for the pointer and the keyboard.
  * A count is words, or parts each in
  * its own tone (`CountPart`), which holds chosen or not; a diff's lines are
@@ -131,17 +131,21 @@ export type ChoiceBarFocus = (typeof CHOICE_BAR_FOCUS)[keyof typeof CHOICE_BAR_F
 /**
  * What folds a fill bar's options when the row is short of room: its own
  * width, each option but the chosen one drawn by its glyph alone below a
- * width; or their names not fitting (`together`), measured, every option
- * then drawn by its glyph alone at once, the chosen one too, so none is
- * named while the others are not. A bar folding together also takes its
- * options' room in where its toolbar sets `--ui-fold: tight`, which it
- * does before their names stop fitting. A bar a finger works (`words`) never
- * folds: every option is named in words alone, with no glyph a finger could
- * not hover for its name, and a row too long scrolls sideways.
+ * width; or their names not fitting, measured, every option then drawn by
+ * its glyph alone at once, the chosen one too, so none is named while the
+ * others are not (`together`), or in two steps (`chosen-last`), every
+ * option but the chosen one first, as a phone's, so the view standing open
+ * keeps its name, and the chosen one too only once even that does not fit.
+ * A bar folding by measure also takes its options' room in where its
+ * toolbar sets `--ui-fold: tight`, which it does before their names stop
+ * fitting. A bar a finger works (`words`) never folds: every option is
+ * named in words alone, with no glyph a finger could not hover for its
+ * name, and a row too long scrolls sideways.
  */
 export const CHOICE_BAR_FOLD = {
   OWN: "own",
   TOGETHER: "together",
+  CHOSEN_LAST: "chosen-last",
   WORDS: "words",
 } as const;
 
@@ -168,6 +172,9 @@ const THUMB_ELEMENT = ":scope > .ui-choice-bar-thumb";
 /** An option's name beside its glyph, the one a fold draws nowhere. */
 const FOLDABLE_NAME = ".ui-choice-bar-icon + .ui-choice-bar-label";
 
+/** The name beside its glyph of an option other than the chosen one, which a fold in steps draws nowhere first. */
+const OTHER_NAME = `.ui-choice-bar-option:not([aria-selected="true"], [aria-checked="true"]) > ${FOLDABLE_NAME}`;
+
 /** A part of a glyphed option's count that folds with its name (`CountPart.folds`). */
 const FOLDABLE_PART = ".ui-choice-bar-option:has(> .ui-choice-bar-icon) .ui-count-part[data-folds]";
 
@@ -177,6 +184,22 @@ const NAME_FOLDED = "folded";
 
 /** No option's name folded. */
 const NONE_FOLDED: ReadonlySet<string> = new Set();
+
+/** How far a bar folding by measure has folded: not at all, every option but the chosen one, or every option; the bar says it as `data-folded`, which `choice-bar.css` reads. */
+const FOLD_STEP = {
+  NONE: "none",
+  OTHERS: "others",
+  ALL: "all",
+} as const;
+
+type FoldStep = (typeof FOLD_STEP)[keyof typeof FOLD_STEP];
+
+/** What each step draws nowhere: the names it folds, and the count parts folding with them (`CountPart.folds`), every glyphed option's, the chosen one's too, so the counts read alike. */
+const FOLDED_AT = {
+  none: undefined,
+  others: `${OTHER_NAME}, ${FOLDABLE_PART}`,
+  all: `${FOLDABLE_NAME}, ${FOLDABLE_PART}`,
+} as const satisfies Record<FoldStep, string | undefined>;
 
 /** The option a bar's thumb stands under, of the bar's own options. */
 const CHOSEN = ':scope > [aria-selected="true"], :scope > [aria-checked="true"]';
@@ -228,7 +251,7 @@ const SEGMENTED_WIDTH = {
 } as const;
 
 /**
- * A fill bar folding together, or named in words alone, takes its options'
+ * A fill bar folding by measure, or named in words alone, takes its options'
  * room in where its toolbar says `--ui-fold: tight`. Note that each is
  * keyed on the bar's `data-fold`, which outweighs the room it takes in.
  */
@@ -465,10 +488,11 @@ function optionsWidth(bar: HTMLElement): number {
   return last.offsetLeft + last.offsetWidth + inset;
 }
 
-/** The room the folded options' names, and the count parts folding with them, would take back: each one's own width and the gap it would stand in. */
-function foldedNames(bar: HTMLElement): number {
+/** The room the names and count parts `selector` finds would take, drawn or folded: each one's own width and the gap it would stand in. */
+function namesRoom(bar: HTMLElement, selector: string | undefined): number {
+  if (selector === undefined) return 0;
   let room = 0;
-  for (const folded of bar.querySelectorAll<HTMLElement>(`${FOLDABLE_NAME}, ${FOLDABLE_PART}`)) {
+  for (const folded of bar.querySelectorAll<HTMLElement>(selector)) {
     const row = folded.parentElement;
     const gap = row === null ? 0 : Number.parseFloat(getComputedStyle(row).columnGap) || 0;
     room += folded.scrollWidth + gap;
@@ -479,29 +503,46 @@ function foldedNames(bar: HTMLElement): number {
 /** How far short of the bar's width named options must stand before a folded bar names them again, so a width on the edge never sets it folding and unfolding in turn. */
 const UNFOLD_SLACK = 2;
 
+/** Whether `needs` fits `width`, short of it by the slack where the step would unfold. */
+function fits(needs: number, width: number, unfolding: boolean): boolean {
+  return needs <= width - (unfolding ? UNFOLD_SLACK : 0);
+}
+
 /**
- * Whether a bar folding together draws its options by their glyphs alone:
- * while their names do not fit its width. The width the names take is
- * measured from the options as they stand, drawn or folded (`optionsWidth`),
- * a folded name read by its own width (`foldedNames`), so a change that makes them fit, a tighter step's
+ * How far a bar folding by measure draws its options by their glyphs alone:
+ * not at all while their names fit its width; then, folding in steps,
+ * every option but the chosen one while that fits; and every option
+ * otherwise. The width the names take is measured from the options as they
+ * stand, drawn or folded (`optionsWidth`), a folded name read by its own
+ * width (`namesRoom`), so a change that makes them fit, a tighter step's
  * padding among them, unfolds the bar at once. It is measured before the
- * frame is painted as it first draws and whenever the options' names or the
- * bar's look change (`named`), and whenever the bar or an option resizes.
- * Note that a draw changing neither reads nothing, because measuring lays out
- * the whole window, and a bar is drawn again with everything around it.
+ * frame is painted as it first draws and whenever the options' names, the
+ * chosen one, or the bar's look change (`named`), and whenever the bar or
+ * an option resizes. Note that a draw changing none of them reads nothing,
+ * because measuring lays out the whole window, and a bar is drawn again
+ * with everything around it.
  */
-function useFoldTogether(
+function useMeasuredFold(
   on: boolean,
+  inSteps: boolean,
   bar: React.RefObject<HTMLDivElement | null>,
   named: OptionsNamed | undefined,
-): boolean {
-  const [folded, setFolded] = useState(false);
+): FoldStep {
+  const [step, setStep] = useState<FoldStep>(FOLD_STEP.NONE);
   const measure = useCallback(() => {
     const element = bar.current;
     if (!on || element === null) return;
-    const named = optionsWidth(element) + (folded ? foldedNames(element) : 0);
-    setFolded(folded ? named > element.clientWidth - UNFOLD_SLACK : named > element.clientWidth);
-  }, [on, bar, folded]);
+    const width = element.clientWidth;
+    const whole = optionsWidth(element) + namesRoom(element, FOLDED_AT[step]);
+    const others = whole - namesRoom(element, FOLDED_AT.others);
+    setStep(
+      fits(whole, width, step !== FOLD_STEP.NONE)
+        ? FOLD_STEP.NONE
+        : inSteps && fits(others, width, step === FOLD_STEP.ALL)
+          ? FOLD_STEP.OTHERS
+          : FOLD_STEP.ALL,
+    );
+  }, [on, inSteps, bar, step]);
   useLayoutEffect(measure, [measure, named]);
   // Note that the options are found afresh as they change, so one that joined is watched too.
   useLayoutEffect(() => {
@@ -512,7 +553,7 @@ function useFoldTogether(
     for (const option of element.children) resized.observe(option);
     return () => resized.disconnect();
   }, [on, bar, measure, named]);
-  return on && folded;
+  return on ? step : FOLD_STEP.NONE;
 }
 
 /** `folded` with `value` folded or not, `now`. */
@@ -693,7 +734,7 @@ interface OptionsPlaced {
   readonly values: readonly string[];
 }
 
-/** One option as a bar folding together is measured by: its glyph, name, and count. */
+/** One option as a bar folding by measure is measured by: its glyph, name, and count. */
 interface OptionNamed {
   readonly value: string;
   readonly glyph: boolean;
@@ -701,10 +742,11 @@ interface OptionNamed {
   readonly count: string | readonly CountPart[] | null;
 }
 
-/** What a bar folding together is measured by: how it draws its options, and each option's glyph, name, and count; a change in any may fold or unfold it without resizing the bar. */
+/** What a bar folding by measure is measured by: how it draws its options, the chosen one, and each option's glyph, name, and count; a change in any may fold or unfold it without resizing the bar. */
 interface OptionsNamed {
   readonly look: ChoiceBarLook;
   readonly size: ChoiceBarSize;
+  readonly chosen: string | undefined;
   readonly options: readonly OptionNamed[];
 }
 
@@ -745,12 +787,14 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
     values: items.map((item) => item.value),
   });
   const thumb = useThumb(value, placed);
-  const together = fold === CHOICE_BAR_FOLD.TOGETHER;
+  const inSteps = fold === CHOICE_BAR_FOLD.CHOSEN_LAST;
+  const measured = fold === CHOICE_BAR_FOLD.TOGETHER || inSteps;
   const named = useKept<OptionsNamed | undefined>(
-    together
+    measured
       ? {
           look,
           size,
+          chosen: value,
           options: items.map((item) => ({
             value: item.value,
             glyph: item.icon !== undefined,
@@ -760,7 +804,7 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
         }
       : undefined,
   );
-  const folded = useFoldTogether(together, thumb.bar, named);
+  const step = useMeasuredFold(measured, inSteps, thumb.bar, named);
   const ownFolds = fold === CHOICE_BAR_FOLD.OWN && look === CHOICE_BAR_LOOK.FILL;
   const ownFold = useOwnFold(ownFolds);
   const optionRef = useMemo(
@@ -820,7 +864,7 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
       data-look={look}
       data-size={size}
       data-fold={fold}
-      data-folded={folded ? "true" : undefined}
+      data-folded={step === FOLD_STEP.NONE ? undefined : step}
       data-stretch={stretch ? "true" : undefined}
     >
       <span className={cn(THUMB_BOX, THUMB_LOOK[look])} aria-hidden="true" />
@@ -853,8 +897,12 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
           </TogglePrimitive>
         );
         // Note that an option a fold may draw by its glyph alone always stands in its hint, which raises nothing while its name is drawn, so folding never mounts it afresh and takes the keyboard off it.
-        const foldable = item.icon !== undefined && (together || ownFolds);
-        const nameFolded = foldable && (folded || ownFold.folded.has(item.value));
+        const foldable = item.icon !== undefined && (measured || ownFolds);
+        const nameFolded =
+          foldable &&
+          (step === FOLD_STEP.ALL ||
+            (step === FOLD_STEP.OTHERS && !chosen) ||
+            ownFold.folded.has(item.value));
         return item.hint === undefined && !foldable ? (
           option
         ) : (

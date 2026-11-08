@@ -17,7 +17,7 @@ import { cn } from "../cn.js";
  */
 
 /** The field's edge, ground, inset, and handle, which a bare text area replaces. */
-export const TEXTAREA_WELL =
+const TEXTAREA_WELL =
   "rounded-control border border-border-strong bg-field px-control-inset py-ui-6 resize-y focus:bg-field-focus";
 
 /** What every text area shares: its box, its type, its placeholder, and its invalid and disabled states. */

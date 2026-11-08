@@ -40,18 +40,13 @@ import {
   turnsSync,
   userSync,
 } from "@repo/database/sync/tables";
-import { AGENT_BRIEF, AGENT_KIND } from "@repo/features/agent-wire";
+import { AGENT_BRIEF, AGENT_KIND, type AgentFailure } from "@repo/features/agent-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { and, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
-import {
-  awaitingLineAtIn,
-  lastSettledAtIn,
-  latestTurnOf,
-  sessionEndedOf,
-} from "../agent-standing.js";
+import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
 
 /**
@@ -217,6 +212,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         turnId: outerJoined(latest.id),
         turnStatus: outerJoined(latest.status),
         cancelRequested: sql<boolean | null>`${isNotNull(latest.cancelRequestedAt)}`,
+        turnFailure: sql<AgentFailure | null>`case when ${latest.id} is null then null else ${failureWordOf(latest)} end`,
         turnSessionEnded: sessionEndedOf(latest),
         sandboxOpen: sql<boolean>`${conversations.runtimeSessionId} is not null`,
         pilot: sql<boolean>`${agentTable.kind} = ${AGENT_KIND.PILOT}`,
@@ -232,7 +228,9 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         startedAt: latest.startedAt,
         settledAt: latest.settledAt,
         leaseUntil: latest.leaseUntil,
-        awaitingLineAt: awaitingLineAtIn(agentTable.conversationId),
+        // Note that a desktop released before the turn record reads a line awaiting its turn by this; null
+        // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
+        awaitingLineAt: sql<Date | null>`null::timestamptz`,
         lastSettledAt: lastSettledAtIn(agentTable.conversationId),
       },
     },

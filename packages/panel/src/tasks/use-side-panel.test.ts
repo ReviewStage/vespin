@@ -14,12 +14,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { onTerminals, windowTerminals } from "../testing/terminals.js";
+import { SIDE_PANEL_TABS } from "./task-tab-model.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
 import {
   drawsChanges,
   drawsTerminal,
   type OpenTask,
-  SIDE_PANEL_TABS,
   type SidePanelControl,
   useSidePanel,
 } from "./use-side-panel.js";
@@ -55,6 +55,8 @@ interface Stood {
   bare?: boolean;
   /** The account signed in, none for no account. */
   account?: string;
+  /** The agent the task's column shows, whose tabs alone the strip draws. */
+  agent?: string;
 }
 
 /** Mounts the panel alone, as a launch does, over the task and agents given, answering the control as it stands. */
@@ -63,7 +65,9 @@ function launch(stood: Stood) {
   function Probe({ held }: { held: Stood }) {
     control = useSidePanel(
       undefined,
-      held.bare === true ? { id: held.task, holds: {} } : usedTask(held.task),
+      held.bare === true
+        ? { id: held.task, holds: {} }
+        : { ...usedTask(held.task), agent: held.agent },
       held.taskAgents,
       [],
       [],
@@ -116,6 +120,24 @@ function launch(stood: Stood) {
   };
 }
 
+test("each agent's strip draws its own tabs and the files opened or browsed to under it, and comes back to the tab it was left on", () => {
+  const first = { task: TASK, taskAgents: [AGENT, OTHER_AGENT], agent: AGENT };
+  const panel = launch(first);
+  panel.open(CLOUD);
+  act(() => panel.control().onOpenFile({ path: "src/a.ts" }));
+  act(() => panel.control().onBrowseFile("src/a.ts", "src/b.ts", false));
+  panel.open(CLOUD);
+
+  panel.render({ ...first, agent: OTHER_AGENT });
+  assert.deepEqual(panel.control().strip, [], "none of the first agent's tabs");
+  panel.open(OTHER_CLOUD);
+  assert.deepEqual(panel.control().strip, [OTHER_CLOUD]);
+
+  panel.render(first);
+  assert.deepEqual(panel.control().strip, [CLOUD, fileTab("src/b.ts")]);
+  assert.deepEqual(panel.control().tab, CLOUD, "the tab it was left on");
+});
+
 test("an agent's Changes tab opens on its plan, stands chosen across a launch, and stands on no other plan", () => {
   const first = launch({ task: TASK, taskAgents: [AGENT, OTHER_AGENT] });
   act(() => first.control().onChoose(changesTab(AGENT)));
@@ -137,27 +159,18 @@ test("an agent's Changes tab opens on its plan, stands chosen across a launch, a
   assert.equal(second.control().tab, undefined);
 });
 
-test("a record keeps each tab without its kind, as a build before tabs carried their kind wrote it, and one kept before tasks had their name holds each task's choices under plans and its pins' task under plan; a launch still opens on both, each tab tagged with its kind", () => {
+test("a record keeps each tab without its kind, as a build before tabs carried their kind wrote it, and a launch opens on it, each tab tagged with its kind", () => {
   const first = launch({ task: TASK, taskAgents: [AGENT] });
   act(() => first.control().onChoose(changesTab(AGENT)));
   act(() => first.control().onPin({ task: TASK }, changesTab(AGENT), "Changes: Invite flow"));
   first.quit();
-  const { tasks, pins, ...kept } = JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}");
+  const { tasks, pins, tab } = JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}");
   assert.ok(tasks, "the record keeps the task's choices");
   assert.deepEqual(
-    [kept.tab, tasks[TASK].changes, pins[0].tab],
+    [tab, tasks[TASK].changes, pins[0].tab],
     [{ changes: AGENT }, [{ changes: AGENT }], { changes: AGENT }],
     "a rollback reads the tabs this build wrote",
   );
-  const earlierPins = pins.map(({ task, ...pin }: { readonly task: string }) => ({
-    ...pin,
-    plan: task,
-  }));
-  window.localStorage.setItem(
-    "app.sidePanel",
-    JSON.stringify({ ...kept, plans: tasks, pins: earlierPins }),
-  );
-
   const second = launch({ task: TASK, taskAgents: [AGENT] });
   assert.deepEqual(second.control().tab, changesTab(AGENT));
   assert.deepEqual(

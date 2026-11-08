@@ -51,6 +51,7 @@ import {
   useResizeEdge,
 } from "@repo/ui";
 import { ListIcon } from "@repo/ui/icons";
+import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import {
   agentOfTab,
@@ -81,7 +82,6 @@ import { absurd } from "effect";
 import {
   Fragment,
   type ReactNode,
-  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -101,7 +101,7 @@ import { panelTabPlace } from "../links-at-hand.js";
 import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
-import { ADDRESS, type Address } from "../route.js";
+import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { centerWithin } from "../scroll-within.js";
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
@@ -151,6 +151,14 @@ import {
   TAB_KIND,
   tabLook,
 } from "../tasks/tab-look.js";
+import { COLUMN, type Column, type ColumnKeys } from "../tasks/tab-press.js";
+import {
+  type FixedSidePanelTab,
+  PULL_REQUEST_VIEW,
+  type PullRequestView,
+  SIDE_PANEL_TAB,
+  SIDE_PANEL_WIDTH,
+} from "../tasks/task-tab-model.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
@@ -174,15 +182,10 @@ import {
   type FileHistoryStep,
   type FileReadPlace,
   type FileReads,
-  type FixedSidePanelTab,
   isPinnable,
   type OpenFile,
   type OpenPage,
   type PinHolder,
-  PULL_REQUEST_VIEW,
-  type PullRequestView,
-  SIDE_PANEL_TAB,
-  SIDE_PANEL_WIDTH,
   type SidePanelControl,
   type SidePanelTab,
   sameHolder,
@@ -192,7 +195,7 @@ import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useFileTreeWidth } from "./folded-groups.js";
 import { AgentMenuTab } from "./main-tabs.js";
-import { PULL_REQUEST_TAB } from "./pages-on-demand.js";
+import { PULL_REQUEST_TAB, pullRequestTabLoaded } from "./pages-on-demand.js";
 import { paneTiming, pastRightEdge } from "./pane-motion.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
 import {
@@ -438,14 +441,6 @@ export function offeredPanelKinds(holder: SidePanelHolder): readonly FixedSidePa
   return HOLDER_KINDS[holder];
 }
 
-/** Which of a page's two columns holds the window's focus, which ⌘T, ⌘W, and ⌘F answer to: its own, or the side panel beside it. */
-export const COLUMN = {
-  MAIN: "main",
-  SIDE: "side",
-} as const;
-
-type Column = (typeof COLUMN)[keyof typeof COLUMN];
-
 /** The column holding the keys, the door its page's area is handed through, and the door a press that hands the keys over goes through. */
 export interface ColumnFocus {
   readonly onArea: (area: HTMLDivElement | null) => void;
@@ -455,13 +450,24 @@ export interface ColumnFocus {
 
 /**
  * The column of a page with a side panel that holds the keys: the one the
- * pointer or the focus last went into, and the door a press that hands the
- * keys over goes through. Note that it is heard on the page's area, handed
- * through `onArea`, as it bubbles, because the columns are no controls of
- * their own to hear it.
+ * pointer or the focus last went into, or the one a door that opened a tab
+ * asked for since (`keys`, `tab-press.ts`), and the door a press that hands
+ * the keys over goes through. Note that it is heard on the page's area,
+ * handed through `onArea`, as it bubbles, because the columns are no
+ * controls of their own to hear it; and that an ask is taken, and let go
+ * (`onTaken`), by the page standing as it is drawn, a page drawn by the door
+ * that asked among them, so it never waits for a page kept out of sight.
  */
-export function useColumnFocus(): ColumnFocus {
+export function useColumnFocus(
+  keys: ColumnKeys | undefined,
+  onTaken: (ask: number) => void,
+): ColumnFocus {
   const [focus, setFocus] = useState<Column>(COLUMN.MAIN);
+  useLayoutEffect(() => {
+    if (keys === undefined) return;
+    setFocus(keys.column);
+    onTaken(keys.ask);
+  }, [keys, onTaken]);
   const [area, onArea] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     if (area === null) return;
@@ -953,8 +959,11 @@ export function panelOffers(input: {
   cards: PanelCards;
 }): AddEntry[] {
   const { holder, account, taskId, panel, agents, onNewTerminal, cards } = input;
-  const changes = panel.changes.filter((each) =>
-    drawsChanges(each, { taskAgents: agents.heldIds }),
+  // Note that a task's strip under one agent offers that agent's things alone, as it draws them.
+  const only = holder === SIDE_PANEL_HOLDER.TASK ? panel.agent : undefined;
+  const mine = (agentId: string) => only === undefined || agentId === only;
+  const changes = panel.changes.filter(
+    (each) => drawsChanges(each, { taskAgents: agents.heldIds }) && mine(each.changes),
   );
   const ownerOf = (agentId: string): CloudBrowserOwner => {
     const subject = agentSubject(agents, agentId, cards.held, false);
@@ -968,24 +977,30 @@ export function panelOffers(input: {
       : (agents.agents ?? [])
           .filter((agent) => agent.machine !== AGENT_MACHINE.DEVICE)
           .filter((agent) => holder !== SIDE_PANEL_HOLDER.AGENT || agent.id === taskId)
+          .filter((agent) => mine(agent.id))
           .sort((a, b) => Number(b.id === input.viewedAgent) - Number(a.id === input.viewedAgent))
           .map((agent) => ({ agentId: agent.id, agent, owner: ownerOf(agent.id) }));
   return panelEntries({
     panel,
     kinds: offeredPanelKinds(holder),
-    changes: changesOffers(agents, changes),
+    changes: changesOffers(agents, changes).filter((offer) => mine(offer.agentId)),
     pages: input.pages,
     // Note that a panel that draws no Terminal, the Inbox's among them, offers none.
     ...(onNewTerminal === undefined || holder === SIDE_PANEL_HOLDER.INBOX
       ? undefined
-      : { terminals: { offers: terminalOffers(agents, panel), onNew: onNewTerminal } }),
+      : {
+          terminals: {
+            offers: terminalOffers(agents, panel).filter(({ agent }) => mine(agent.id)),
+            onNew: onNewTerminal,
+          },
+        }),
     // Note that only a cloud agent has a mirror, so an agent on a Mac is offered no Local tab.
     ...(input.onNewLocal === undefined || holder === SIDE_PANEL_HOLDER.INBOX
       ? undefined
       : {
           locals: {
             offers: terminalOffers(agents, panel).filter(
-              ({ agent }) => agent.machine !== AGENT_MACHINE.DEVICE,
+              ({ agent }) => agent.machine !== AGENT_MACHINE.DEVICE && mine(agent.id),
             ),
             onNew: input.onNewLocal,
           },
@@ -1510,6 +1525,7 @@ function PanelTabs({
         : null}
       <TabStrip
         label="Panel"
+        sheet={holder === SIDE_PANEL_HOLDER.TASK}
         onMove={(from, to) => {
           const entry = strip[from];
           if (entry !== undefined) panel.onMove(entry.tab, to);
@@ -1671,6 +1687,15 @@ const panelToggleRoomStore = createStore<HTMLElement | null>(null);
 export function usePanelToggleRoom(): (room: HTMLElement | null) => void {
   return useCallback((room: HTMLElement | null) => panelToggleRoomStore.setState(() => room), []);
 }
+
+/**
+ * The box just before the side panel's toggle, which a task's panel draws
+ * its full-screen button in (`PanelFrame`'s `besideToggle`); none where no
+ * toggle is drawn.
+ */
+const fullScreenRoomStore = createStore<HTMLElement | null>(null);
+
+const setFullScreenRoom = (room: HTMLElement | null) => fullScreenRoomStore.setState(() => room);
 
 /**
  * The "+" menu hung from the side panel's toggle, where the toggle or ⌘T
@@ -2159,8 +2184,11 @@ function TabContent({
             value={codeFilesRead ? (path) => onBrowseFile(undefined, path, true) : undefined}
           >
             {/* The tab is a chunk of its own, read the first time one is drawn or its card hangs (`pages-on-demand.ts`). */}
-            <Suspense fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}>
-              <PULL_REQUEST_TAB.Route
+            <LazyBoundary
+              fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}
+              loaded={pullRequestTabLoaded}
+            >
+              <PULL_REQUEST_TAB
                 agentId={tab.changes}
                 number={tab.number}
                 control={agentsOf(tab.changes)}
@@ -2171,7 +2199,7 @@ function TabContent({
                 onView={(view) => onPullRequestView(tab, view)}
                 onActions={(actions) => onTabActions(tab, actions)}
               />
-            </Suspense>
+            </LazyBoundary>
           </OpenFileTabProvider>
         </PullRequestsOnGitHub>
       );
@@ -2253,7 +2281,9 @@ function TabContent({
  * panel covers everything else. It stands on every task's page, so it
  * is also what offers the panel's shortcut. ⌘T is the task's page's, which hands it to the column
  * holding the window's focus (desktop-tasks.tsx). While the task is not
- * drawn there is no panel to show, so it is disabled and offers none.
+ * drawn there is no panel to show, so it is disabled and offers none. On a
+ * task's page it stands at the end of the agents' tabs' row instead, with the
+ * panel's full-screen button just before it (desktop.css).
  */
 export function SidePanelToggle({
   panel,
@@ -2268,15 +2298,18 @@ export function SidePanelToggle({
   const offer = (run: () => void) => (disabled ? undefined : run);
   useAppCommand(APP_COMMAND.TOGGLE_SIDE_PANEL, offer(panel.onToggle));
   return (
-    <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDE_PANEL}>
-      <IconButton
-        icon={closes ? <CloseIcon /> : <SidePanelIcon />}
-        label={label}
-        aria-expanded={panel.open || panel.toggleAsked}
-        disabled={disabled}
-        onClick={panel.onToggle}
-      />
-    </Tooltip>
+    <>
+      <div ref={setFullScreenRoom} className="contents" />
+      <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDE_PANEL}>
+        <IconButton
+          icon={closes ? <CloseIcon /> : <SidePanelIcon />}
+          label={label}
+          aria-expanded={panel.open || panel.toggleAsked}
+          disabled={disabled}
+          onClick={panel.onToggle}
+        />
+      </Tooltip>
+    </>
   );
 }
 
@@ -2680,10 +2713,14 @@ export function SidePanel({
     return drawn.length === 0 ? NO_CLOUD_BROWSERS : drawn;
   }, [cloudListed, cloudDraftsHeld, agents, drawnTranscripts]);
   // The "+" offers each tab the agents' browsers hold, which stands in the strip only once opened from there.
+  // Note that a task's strip under one agent offers that agent's browser tabs alone.
   const listedBrowsers = useMemo(
     () =>
       cloudBrowsers.flatMap((drawn) =>
-        "tab" in drawn
+        "tab" in drawn &&
+        (holder !== SIDE_PANEL_HOLDER.TASK ||
+          panel.agent === undefined ||
+          drawn.tab.agentId === panel.agent)
           ? [
               {
                 id: drawn.id,
@@ -2694,7 +2731,7 @@ export function SidePanel({
             ]
           : [],
       ),
-    [cloudBrowsers],
+    [cloudBrowsers, holder, panel.agent],
   );
   const cloudBrowserLabel = (id: string) => {
     const drawn = cloudBrowsers.find((each) => each.id === id);
@@ -2824,6 +2861,7 @@ export function SidePanel({
       onLeft={onLeft}
       edge={edge}
       label="Panel"
+      besideToggle={holder === SIDE_PANEL_HOLDER.TASK}
       banner={banner}
       switched={switched}
       onLeavingHere={carryToAgent}
@@ -2993,7 +3031,7 @@ export function SidePanelSkeleton({
   panel: SidePanelControl;
 }): React.JSX.Element {
   return (
-    <PanelFrame {...drawing} panel={panel} label="Panel" tabs={null}>
+    <PanelFrame {...drawing} panel={panel} label="Panel" besideToggle tabs={null}>
       {null}
     </PanelFrame>
   );
@@ -3086,8 +3124,9 @@ function PanelPhoneHead({
  * The frame every side panel stands in, the task's, an agent's page's, and
  * the Inbox's: the panel's pane at the window's
  * right, its width the window's, over its top row of `tabs`, the chosen
- * tab's `actions`, and its full-screen button, with what it shows under the
- * row and its resize edge at its left. Full screen, it covers what it stood
+ * tab's `actions`, and its full-screen button, or none there where the button
+ * stands beside the panel's toggle instead (`besideToggle`), with what it
+ * shows under the row and its resize edge at its left. Full screen, it covers what it stood
  * beside rather than taking its place, and an empty room holds the panel's
  * own width beside it, so what is beneath keeps its layout and is there to
  * be uncovered as the panel goes back. Where the room holds it only full
@@ -3100,6 +3139,7 @@ function PanelFrame({
   onLeft,
   edge,
   label,
+  besideToggle = false,
   tabs,
   banner,
   switched = false,
@@ -3110,6 +3150,8 @@ function PanelFrame({
   panel: Pick<SidePanelControl, "width" | "fullScreen" | "fullScreenOnly" | "onToggleFullScreen">;
   /** What the pane is called to a reader. */
   label: string;
+  /** Whether the full-screen button stands just before the panel's toggle, where one is drawn, rather than at the row's end: a task's page's, whose agents' tabs' row holds both. */
+  besideToggle?: boolean;
   /** The row's tabs, which take what the row leaves beside the full-screen button. */
   tabs: React.ReactNode;
   /** Drawn under the row while the panel fills the window and covers what draws it otherwise. */
@@ -3124,10 +3166,19 @@ function PanelFrame({
 }): React.JSX.Element {
   const aside = useRef<HTMLElement>(null);
   const room = useRef<HTMLDivElement>(null);
+  const toggleRoom = useSelector(fullScreenRoomStore);
+  const beside = besideToggle ? toggleRoom : null;
   useLayoutEffect(() => {
     if (leaving === PANEL_LEAVING.NONE || aside.current === null) return;
     return playExit(aside.current, room.current, leaving, onLeft);
   }, [leaving, onLeft]);
+  const fullScreenToggle = panel.fullScreenOnly ? null : (
+    <FullScreenToggle
+      fullScreen={panel.fullScreen}
+      leaving={leaving !== PANEL_LEAVING.NONE}
+      onToggle={panel.onToggleFullScreen}
+    />
+  );
   return (
     <>
       {/* Shut, it gives the document its room back at once, to glide into. A
@@ -3154,13 +3205,7 @@ function PanelFrame({
             document order, so the controls follow it. */}
         <div className="side-panel-bar">
           {tabs}
-          {panel.fullScreenOnly ? null : (
-            <FullScreenToggle
-              fullScreen={panel.fullScreen}
-              leaving={leaving !== PANEL_LEAVING.NONE}
-              onToggle={panel.onToggleFullScreen}
-            />
-          )}
+          {beside === null ? fullScreenToggle : null}
         </div>
         {head}
         {panel.fullScreen ? banner : null}
@@ -3173,6 +3218,8 @@ function PanelFrame({
             edge's top from it. Full screen has no edge to drag. */}
         {panel.fullScreen ? null : <ResizeEdge edge={edge} />}
       </aside>
+      {/* Beside the toggle it stands still with it, a title-bar control, while the panel slides beneath. */}
+      {beside === null || fullScreenToggle === null ? null : createPortal(fullScreenToggle, beside)}
     </>
   );
 }

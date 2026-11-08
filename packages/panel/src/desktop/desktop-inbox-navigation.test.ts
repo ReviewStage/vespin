@@ -487,7 +487,7 @@ test("an agent's row hangs a card naming the agent and the automation that start
     [STRAY_AGENT, [BUMP]],
     [TASKLESS_AGENT, [DOMAIN]],
   ]);
-  const { page, asked } = mount([
+  const { page, windowPath } = mount([
     { ...waitingTaskless(QUARANTINE), agentTitle: "Sweep the flaky tests" },
     { ...waitingTaskless(BUMP), automationId: null, automationName: null },
     tasklessItem(DOMAIN),
@@ -520,8 +520,10 @@ test("an agent's row hangs a card naming the agent and the automation that start
     "the crumb's card offers nothing to press, since the crumb opens the automation",
   );
   act(() => crumb.click());
-  assert.deepEqual(asked.shownAutomations, [SWEEP.id]);
+  // Note that the listed workspace has no slug, so its address names it by its id.
+  assert.equal(windowPath(), `/workspace-acme/automation/${SWEEP.id}`);
 
+  act(() => world.setInboxOpen(true));
   act(() => rowNamed(page, "Bump the Node image?").click());
   await settle();
   // Note that no automation stands behind its crumb, so the crumb is words, opening nothing.
@@ -772,6 +774,23 @@ test("an item a link names is not found though another task's read failed, and i
       document.activeElement.closest(".inbox-tasks") !== null,
     "the keyboard lands on the list, not the hidden notice",
   );
+});
+
+test("a link naming a task's item by its agent lists the item once, under its task", async () => {
+  // Note that the agent's own read holds its task's items, as the service reads an agent's items whatever task it works on.
+  world.agentInboxes = new Map([[AGENT.id, [THRESHOLD, RETRY]]]);
+  const { page } = mount();
+  await settle();
+  const rows = listed(page);
+  act(() => world.chooseFromOutside({ agentId: AGENT.id, itemId: THRESHOLD.id, opened: true }));
+  await settle();
+
+  assert.deepEqual(
+    listed(page).map((row) => row.replace("▸ ", "")),
+    rows,
+  );
+  layOut(page, 600);
+  assert.equal(pagerOf(page), "3 of 3", "each item stepped through once");
 });
 
 test("an item a link names under an agent that is not there, deleted or another's, is not found once its page's read says so, and no other item is chosen", async () => {

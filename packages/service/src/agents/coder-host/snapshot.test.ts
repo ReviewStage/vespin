@@ -6,13 +6,14 @@ import { Database } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { commandRunStreamed, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { temporaryDirectory } from "@repo/wire/testing";
-import { Deferred, Duration, Effect, Fiber, Layer, Logger, Redacted } from "effect";
+import { Duration, Effect, Fiber, Layer, Logger, Redacted } from "effect";
+import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import type { TestContext } from "vitest";
 import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import {
-  fixtureOidcToken,
   type SentToSandbox,
   SOURCE_SANDBOX,
   type SourceCheckout,
@@ -20,9 +21,7 @@ import {
   sourceCheckout,
   sourceSandbox,
 } from "../../testing/source-sandbox.js";
-import { commandRunStreamed, sandboxFetchOver } from "../../testing/vercel-sandbox-fake.js";
 import type { RepositoryCredential } from "../sandbox-firewall.js";
-import { vercelSandboxApi } from "../vercel-sandbox-api.js";
 import { SNAPSHOT, SNAPSHOT_MISS, type SnapshotOutcome, snapshotSource } from "./snapshot.js";
 
 /**
@@ -33,16 +32,15 @@ import { SNAPSHOT, SNAPSHOT_MISS, type SnapshotOutcome, snapshotSource } from ".
  * made, bar what git ignores and files named like credentials, lands as one commit on the branch asked for,
  * and the source's own index and working tree are as they were; a checkout
  * with nothing uncommitted pushes its `HEAD`; a retry pushes over its own
- * branch; a stopped sandbox is woken and stopped again unless it must stay
- * up, by a stop sent as JSON that the copy never waits on, and a running one
- * is left running; and a sandbox gone, a failed copy, or one past its bound
- * is a miss, a sandbox it was waking stopped again all the same, and a failed
- * copy logs the end of its stderr, bounded and redacted. The
+ * branch; a stopped sandbox is woken and left to its own idle stop, and a
+ * running one is left running; and a sandbox gone, a failed copy, or one
+ * past its bound is a miss, and a failed copy logs the end of its stderr,
+ * bounded and redacted. The
  * firewall's record is kept in the test's own database, under the source's
  * account and a key ring of the suite's.
  */
 
-const SESSION = "wrun_fixture";
+const SESSION = SOURCE_SANDBOX.SESSION;
 /** The account whose agent the source is. */
 const SOURCE_OWNER = "user-snapshot-source";
 const BRANCH = "luke/fix-invites-continued-0a1b2c3d";
@@ -69,10 +67,9 @@ function standing({ checkout, sh }: SourceCheckout) {
   };
 }
 
-/** The copy asked of the sandbox over the responder given, through the credential given, the sandbox left up where `keepUp` says so. */
+/** The copy asked of the sandbox over the responder given, through the credential given. */
 function copyOver(
-  respond: Parameters<typeof sandboxFetchOver>[0],
-  keepUp: Effect.Effect<boolean> = Effect.succeed(false),
+  respond: Parameters<typeof vercelSandboxOver>[0],
   credential: RepositoryCredential = CREDENTIAL.APP,
 ) {
   return Effect.gen(function* () {
@@ -82,16 +79,21 @@ function copyOver(
         .values({ id: SOURCE_OWNER, name: "Test User", email: `${SOURCE_OWNER}@app.test` })
         .onConflictDoNothing(),
     );
-    const api = yield* vercelSandboxApi(async () => fixtureOidcToken());
-    return yield* snapshotSource(api, {
+    return yield* snapshotSource({
       userId: SOURCE_OWNER,
       sessionId: SESSION,
       branch: BRANCH,
       message: MESSAGE,
       credential: Effect.succeed(credential),
-      keepUp,
     });
-  }).pipe(Effect.provide(Layer.merge(sandboxFetchOver(respond), LOCAL_AGENT_ENVIRONMENT)));
+  }).pipe(
+    Effect.provide(
+      Layer.merge(
+        vercelSandboxOver(respond).pipe(Layer.provide(FetchHttpClient.layer)),
+        LOCAL_AGENT_ENVIRONMENT,
+      ),
+    ),
+  );
 }
 
 /** A request as the double reads it. */
@@ -110,8 +112,8 @@ async function answerOf(sandbox: SourceSandbox, url: string, init: RequestInit):
 }
 
 /** The copy asked of the double. */
-function copy(sandbox: SourceSandbox, keepUp = false, credential?: RepositoryCredential) {
-  return copyOver((url, init) => answerOf(sandbox, url, init), Effect.succeed(keepUp), credential);
+function copy(sandbox: SourceSandbox, credential?: RepositoryCredential) {
+  return copyOver((url, init) => answerOf(sandbox, url, init), credential);
 }
 
 /** Every warning logged while the effect runs, its words joined, the fibers it forked included. */
@@ -215,7 +217,7 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
   );
 
   it.effect(
-    "a stopped sandbox is woken for the copy, which runs in the woken session under the installation token, and stopped again",
+    "a stopped sandbox is woken for the copy, which runs in the woken session under the installation token, and is left running",
     (t) =>
       Effect.gen(function* () {
         const source = yield* checkoutFor(t);
@@ -223,62 +225,13 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
         const sandbox = sourceSandbox(source, "stopped");
 
         const outcome = yield* copy(sandbox);
-        yield* Deferred.await(sandbox.stopAsked);
 
         assert.ok(outcome.copied);
         assert.deepEqual(sandbox.ran, [SOURCE_SANDBOX.WOKEN]);
-        assert.deepEqual(
-          [sandbox.state.status, sandbox.stops],
-          ["stopped", [SOURCE_SANDBOX.WOKEN]],
-        );
+        assert.deepEqual([sandbox.state.status, sandbox.stops], ["running", []]);
         assert.deepEqual(sandbox.policies, [
           { session: SOURCE_SANDBOX.WOKEN, hosts: ["*", "github.com", "api.github.com"] },
         ]);
-      }),
-  );
-
-  it.effect(
-    "a woken sandbox a developer's terminal holds, or a turn of the source took up, is left running",
-    (t) =>
-      Effect.gen(function* () {
-        const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
-
-        const outcome = yield* copy(sandbox, true);
-
-        assert.ok(outcome.copied);
-        assert.deepEqual([sandbox.state.status, sandbox.stops], ["running", []]);
-      }),
-  );
-
-  it.effect(
-    "a woken sandbox taken up between the copy's end and its stop, by a terminal, a turn, or another Start, is left running",
-    (t) =>
-      Effect.gen(function* () {
-        const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
-        const asked = Deferred.makeUnsafe<boolean>();
-        let ran = false;
-        let held = false;
-        // Free as the copy ends; held once the stop behind it lists the sandbox.
-        const keepUp = Effect.sync(() => {
-          Deferred.doneUnsafe(asked, Effect.succeed(held));
-          return held;
-        });
-        const answer = (url: string, init: RequestInit) => {
-          const { pathname } = new URL(url);
-          if (pathname.endsWith("/cmd")) ran = true;
-          if (ran && pathname === "/api/v2/sandboxes") held = true;
-          return answerOf(sandbox, url, init);
-        };
-
-        const outcome = yield* copyOver(answer, keepUp);
-        const heldWhenAsked = yield* Deferred.await(asked);
-        yield* Effect.yieldNow;
-
-        assert.ok(outcome.copied);
-        assert.deepEqual(
-          [heldWhenAsked, sandbox.state.status, sandbox.stops],
-          [true, "running", []],
-        );
       }),
   );
 
@@ -293,32 +246,28 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
     }),
   );
 
-  it.effect(
-    "a copy git refuses is a miss that logs why git refused it, and the sandbox it woke is stopped again",
-    (t) =>
-      Effect.gen(function* () {
-        const source = yield* checkoutFor(t);
-        source.sh(
-          source.checkout,
-          "git",
-          "remote",
-          "set-url",
-          "origin",
-          join(source.root, "gone.git"),
-        );
-        const sandbox = sourceSandbox(source, "stopped");
-        const logged: string[] = [];
+  it.effect("a copy git refuses is a miss that logs why git refused it", (t) =>
+    Effect.gen(function* () {
+      const source = yield* checkoutFor(t);
+      source.sh(
+        source.checkout,
+        "git",
+        "remote",
+        "set-url",
+        "origin",
+        join(source.root, "gone.git"),
+      );
+      const sandbox = sourceSandbox(source, "stopped");
+      const logged: string[] = [];
 
-        const outcome = yield* copy(sandbox).pipe(logging(logged));
-        yield* Deferred.await(sandbox.stopAsked);
+      const outcome = yield* copy(sandbox).pipe(logging(logged));
 
-        assert.deepEqual(outcome, { copied: false, miss: SNAPSHOT_MISS.FAILED });
-        assert.ok(
-          logged.some((line) => /exited 128: .*does not appear to be a git repository/u.test(line)),
-          logged.join("\n"),
-        );
-        assert.deepEqual(sandbox.stops, [SOURCE_SANDBOX.WOKEN]);
-      }),
+      assert.deepEqual(outcome, { copied: false, miss: SNAPSHOT_MISS.FAILED });
+      assert.ok(
+        logged.some((line) => /exited 128: .*does not appear to be a git repository/u.test(line)),
+        logged.join("\n"),
+      );
+    }),
   );
 
   it.effect(
@@ -348,77 +297,34 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
       }),
   );
 
-  it.effect(
-    "the copy answers without waiting on the stop of the sandbox it woke, which gives up at its own bound behind it",
-    (t) =>
-      Effect.gen(function* () {
-        const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
-        const logged: string[] = [];
-        let stopSent = () => {};
-        const stopping = new Promise<void>((resolve) => {
-          stopSent = resolve;
-        });
-        let stopAbandoned = () => {};
-        const abandoned = new Promise<void>((resolve) => {
-          stopAbandoned = resolve;
-        });
-
-        const outcome = yield* copyOver(async (url, init) => {
-          if (!new URL(url).pathname.endsWith("/stop")) return answerOf(sandbox, url, init);
-          // Vercel took the stop, and never answered it.
-          stopSent();
+  it.effect("a wake that never answers is given up at the bound", (t) =>
+    Effect.gen(function* () {
+      const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
+      let wakeStarted = () => {};
+      const woken = new Promise<void>((resolve) => {
+        wakeStarted = resolve;
+      });
+      const fiber = yield* Effect.forkChild(
+        copyOver(async (url, init) => {
+          if (new URL(url).searchParams.get("resume") !== "true") {
+            return answerOf(sandbox, url, init);
+          }
+          // Vercel began bringing the sandbox up, and never answered the wake.
+          sandbox.state.status = "pending";
+          sandbox.state.session = SOURCE_SANDBOX.WOKEN;
+          wakeStarted();
           return new Promise<Response>((_, reject) => {
-            init.signal?.addEventListener("abort", () => {
-              stopAbandoned();
-              reject(new Error("aborted"));
-            });
+            init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
           });
-        }).pipe(logging(logged));
-        yield* Effect.promise(() => stopping);
+        }),
+      );
+      yield* Effect.promise(() => woken);
 
-        assert.ok(outcome.copied);
-        assert.equal(sandbox.state.status, "running");
-        yield* TestClock.adjust(Duration.sum(SNAPSHOT.STOP_TIMEOUT, Duration.seconds(1)));
-        yield* Effect.promise(() => abandoned);
-        yield* Effect.yieldNow;
-        assert.ok(
-          logged.some((line) => line.startsWith("a woken source sandbox was not stopped again")),
-          logged.join("\n"),
-        );
-      }),
-  );
+      yield* TestClock.adjust(Duration.sum(SNAPSHOT.TIMEOUT, Duration.seconds(1)));
+      const outcome: SnapshotOutcome = yield* Fiber.join(fiber);
 
-  it.effect(
-    "a wake that never answers is given up at the bound, and the sandbox it was waking is stopped again",
-    (t) =>
-      Effect.gen(function* () {
-        const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
-        let wakeStarted = () => {};
-        const woken = new Promise<void>((resolve) => {
-          wakeStarted = resolve;
-        });
-        const fiber = yield* Effect.forkChild(
-          copyOver(async (url, init) => {
-            if (new URL(url).searchParams.get("resume") !== "true") {
-              return answerOf(sandbox, url, init);
-            }
-            // Vercel began bringing the sandbox up, and never answered the wake.
-            sandbox.state.status = "pending";
-            sandbox.state.session = SOURCE_SANDBOX.WOKEN;
-            wakeStarted();
-            return new Promise<Response>((_, reject) => {
-              init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-            });
-          }),
-        );
-        yield* Effect.promise(() => woken);
-
-        yield* TestClock.adjust(Duration.sum(SNAPSHOT.TIMEOUT, Duration.seconds(1)));
-        const outcome: SnapshotOutcome = yield* Fiber.join(fiber);
-        yield* Deferred.await(sandbox.stopAsked);
-
-        assert.deepEqual(outcome, { copied: false, miss: SNAPSHOT_MISS.TIMED_OUT });
-        assert.deepEqual([sandbox.ran, sandbox.stops], [[], [SOURCE_SANDBOX.WOKEN]]);
-      }),
+      assert.deepEqual(outcome, { copied: false, miss: SNAPSHOT_MISS.TIMED_OUT });
+      assert.deepEqual(sandbox.ran, []);
+    }),
   );
 });

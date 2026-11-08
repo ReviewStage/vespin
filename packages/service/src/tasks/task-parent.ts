@@ -23,6 +23,7 @@ import {
   type TaskStoreFailure,
 } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
+import { sameRepository } from "@repo/features/github-repositories-wire";
 import { Effect, Option } from "effect";
 
 /** The parent a child is made under, and what the child takes from it. */
@@ -31,12 +32,6 @@ export interface TaskParent {
   readonly repository: string | null;
   /** The parent's assignee while still a member of the workspace; null for none. */
   readonly assigneeId: string | null;
-}
-
-/** Whether a repository a create names is the parent's: GitHub's names match whatever their case, and none matches none. */
-function sameRepository(asked: string | null, held: string | null): boolean {
-  if (asked === null || held === null) return asked === held;
-  return asked.toLowerCase() === held.toLowerCase();
 }
 
 /**

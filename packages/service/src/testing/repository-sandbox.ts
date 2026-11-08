@@ -1,7 +1,7 @@
 /**
  * repository-sandbox.ts -- a sandbox double at the agent machine's boundary, for the tests that run an agent's checkout of the task's repository.
  *
- * The double stands where the agent machine (`agents/machine/vercel-machine.ts`) hands the shell a live
+ * The double stands where the agent machine (`agents/machine/sandbox-machine.ts`) hands the shell a live
  * Vercel Sandbox: it answers each run from the contract the shell hands the
  * sandbox (`REPOSITORY_SANDBOX_CONTRACT`), keeping the one thing a sandbox
  * keeps between calls, which repository stands checked out, and writing
@@ -13,6 +13,7 @@
  */
 
 import { CHECKOUT_IDENTITY_VARIABLE } from "@repo/features/checkout-identity";
+import { type NetworkPolicy, OPEN_INTERNET } from "@repo/sandbox";
 import { Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import type {
@@ -21,7 +22,6 @@ import type {
   SandboxRunOptions,
 } from "../agents/repository-shell.js";
 import { composePolicy, type FirewallSources } from "../agents/sandbox-firewall.js";
-import { type NetworkPolicy, OPEN_INTERNET_POLICY } from "../agents/vercel-sandbox-api.js";
 
 /** One run as the sandbox saw it. */
 interface SandboxRun {
@@ -72,7 +72,7 @@ export function sandboxDouble(
   options: { readonly firewall?: boolean } = {},
 ): SandboxDouble {
   const { PATH, VARIABLE } = REPOSITORY_SANDBOX_CONTRACT;
-  let policy: NetworkPolicy = OPEN_INTERNET_POLICY;
+  let policy: NetworkPolicy = OPEN_INTERNET;
   /** The policy the sources compose, set and recorded. */
   const composed = (sources: FirewallSources) =>
     Effect.sync(() => {

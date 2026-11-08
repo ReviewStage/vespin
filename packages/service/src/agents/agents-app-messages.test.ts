@@ -6,7 +6,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
+  latestTurnsOfReached,
   pinAgent,
   readAgent,
   recordAgentPublished,
@@ -42,6 +44,7 @@ import {
   agentListAnswerSchema,
   agentMessageAnswerSchema,
   agentMessagesAnswerSchema,
+  agentNewestAnswerSchema,
   agentPageAnswerSchema,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
@@ -68,10 +71,15 @@ import {
   TASK_STATUS,
   taskDeleteAnswerSchema,
 } from "@repo/features/task-wire";
+import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { TURN_FAILURE } from "@repo/features/turn-run";
 import { RUN_ON_MAC_OFF, workspaceToolsAnswerSchema } from "@repo/features/workspace-tools-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { TURN_ORIGIN } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { noNetwork } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Option, Queue, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { AssistantMessageBuilder, isRecord, MESSAGE_ROLE, RUN_EVENT, sessionKey } from "../core.js";
@@ -82,6 +90,7 @@ import {
   AGENT,
   AGENT_INBOX,
   AGENT_MESSAGES,
+  AGENT_NEWEST,
   AGENT_PICTURE,
   AGENT_STOP,
   AGENT_WORKSPACE_TOOLS,
@@ -113,10 +122,13 @@ import {
 import { harnessFor } from "../testing/native-harness-fake.js";
 import { scriptedSessionSandboxes } from "../testing/session-sandboxes-fake.js";
 import { receivedMessage } from "./attached-files.js";
-import { CODER } from "./coder-host/bounds.js";
+import { reconcileAgent } from "./coder-host/reconcile.js";
 import { SESSION_SEND_OUTCOME, SESSION_TURN } from "./sessions/agent-sessions.js";
 
-it.layer(getTestDB())("messaging a coding agent", (it) => {
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
+
+it.layer(SUITE)("messaging a coding agent", (it) => {
   it.effect(
     "over a browser's session cookie a message reaches the agent as one over the bearer does, its harness acting for the agent's starter",
     () =>
@@ -379,7 +391,7 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
         );
 
         assert.equal(archived.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(yield* Queue.poll(sandboxes.stops), Option.none());
+        assert.deepEqual(yield* Queue.poll(sandboxes.deletes), Option.none());
       }),
   );
 
@@ -803,13 +815,13 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a plan's archive is refused as not ready while one of its agents holds a message awaiting its turn, which no Stop can name yet, before any Stop is sent, and leaves the plan and the agent standing",
+    "a plan's archive is refused as not ready while one of its agents holds a message whose turn no runner has taken yet, which no Stop can name, before any Stop is sent, and leaves the plan and the agent standing",
     () =>
       Effect.gen(function* () {
         const { owner, task, agent, ask, sent, agentSessions } = yield* messagedAgent(
           fakeAgentSessions(),
           {
-            running: true,
+            running: false,
           },
         );
         yield* sent("Rename the subject line too.");
@@ -935,16 +947,16 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a line no turn ever took reads its agent running for the line's grace and failed past it, alike on its page, in its task's list, and on its transcript",
+    "a line no runner ever takes reads its agent running until its turn's pickup deadline, and the agent's reconcile then fails that turn as untaken, alike on its page, in its task's list, and on its transcript",
     () =>
       Effect.gen(function* () {
-        const { owner, task, agent, ask, transcript, sent } = yield* messagedAgent(
+        const { owner, task, agent, ask, transcript, sent, target } = yield* messagedAgent(
           fakeAgentSessions(),
           {
             running: false,
           },
         );
-        // The session takes the line and then fails with the store's hooks, so no turn row is written for it.
+        // The session takes the line, but no runner ever does, so the turn its send queued never starts.
         yield* TestClock.adjust(Duration.seconds(1));
         assert.equal(
           (yield* sent("Rename the subject line too.")).agent.status,
@@ -968,19 +980,81 @@ it.layer(getTestDB())("messaging a coding agent", (it) => {
               transcript: (yield* transcript()).status,
             };
           });
+        const reconciled = Effect.flatMap(readAgent(owner, agent.id), (stored) =>
+          reconcileAgent(Option.getOrThrow(stored)).pipe(Effect.provide(noNetwork)),
+        );
 
-        yield* TestClock.adjust(CODER.LINE_GRACE);
+        yield* TestClock.adjust(Duration.millis(TURN_DEADLINE.PICKUP_MS));
+        assert.deepEqual(yield* reconciled, [], "nothing lapses before the deadline");
         assert.deepEqual(yield* statuses(), {
           page: AGENT_STATUS.RUNNING,
           list: AGENT_STATUS.RUNNING,
           transcript: AGENT_STATUS.RUNNING,
         });
         yield* TestClock.adjust(Duration.millis(1));
+        assert.equal((yield* reconciled).length, 1);
         assert.deepEqual(yield* statuses(), {
           page: AGENT_STATUS.FAILED,
           list: AGENT_STATUS.FAILED,
           transcript: AGENT_STATUS.FAILED,
         });
+        const turn = (yield* latestTurnsOfReached([target.conversationId])).get(
+          target.conversationId,
+        );
+        assert.equal(turn?.failure, TURN_FAILURE.LINE_UNTAKEN);
+      }),
+  );
+
+  it.effect(
+    "Try again on a turn whose launch failed before its runner read the first message hands the harness that message again, under its own line id, and writes no line of its own",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, agent, ask, target, writer, transcript } = yield* messagedAgent(
+          agentSessions,
+          undefined,
+        );
+        const first = agentSessions.opened.at(-1)?.message;
+        assert.ok(first !== undefined);
+        // The launch fails past the Start's answer as the service writes it: a turn queued and settled failed, the line untaken.
+        yield* TestClock.adjust(Duration.seconds(1));
+        const turnId = randomUUID();
+        yield* writer.enqueueTurn(target, {
+          turnId,
+          runtimeTurnId: turnId,
+          origin: TURN_ORIGIN.TYPED,
+        });
+        yield* settleRunnerLostTurns(
+          writer,
+          target.conversationId,
+          yield* Clock.currentTimeMillis,
+          "the sandbox could not be opened",
+        );
+        assert.equal((yield* transcript()).status, AGENT_STATUS.FAILED);
+
+        yield* TestClock.adjust(Duration.seconds(1));
+        readAnswer(
+          agentMessageAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            messageAs(owner, agent.id, { text: "Try again", clientKey: randomUUID(), retry: true }),
+          ),
+        );
+
+        assert.deepEqual(
+          agentSessions.sent.map((each) => [each.message.lineId, each.message.message]),
+          [[first.lineId, first.message]],
+        );
+        // Note that the newest page is read, since the line moved and a transcript read past a cursor reads it afresh.
+        const page = readAnswer(
+          agentNewestAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_NEWEST, owner, { id: agent.id })),
+        );
+        assert.deepEqual(
+          { lines: userTexts(page), status: page.status },
+          { lines: [SNAPSHOT], status: AGENT_STATUS.RUNNING },
+        );
       }),
   );
 

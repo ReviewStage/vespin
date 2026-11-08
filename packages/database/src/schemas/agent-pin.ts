@@ -7,7 +7,7 @@ import { user } from "./auth.js";
  * agent-pin.ts -- one coding agent, on a plan or with none, an account pinned in its sidebar, and when.
  *
  * A pin lives on the account rather than on the agent because it is the
- * developer's reading of their own work, as a plan's is (`plan-pin.ts`): an
+ * developer's reading of their own work, as a plan's is (`task-pin.ts`): an
  * agent an automation started in a shared workspace, pinned by one member,
  * stands pinned for them alone, and follows their sign-in to every Mac.
  * Pinning an agent already pinned keeps the instant it was first pinned;

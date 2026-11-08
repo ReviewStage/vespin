@@ -40,8 +40,9 @@ import { CheckList, CheckRow } from "./agent-pull-request-tab.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { ChipOrLink, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ReviewBadge } from "./pull-request-people.js";
+import { EntryPictures, usePictureDrawer } from "./pull-request-pictures.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { TranscriptWords } from "./transcript-blocks.js";
+import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
 
 /**
  * line-cards.tsx -- a line steered into an agent drawn from what its metadata says carried it: a thread's, a comment's, or a Slack message's line under its head, and GitHub's word as its card.
@@ -59,8 +60,10 @@ import { TranscriptWords } from "./transcript-blocks.js";
  * as it lands, since its head already says what happened. Its head says who did what to
  * which pull request, by the verdict's own badge from the Pull request
  * tab, or a check event's status, in the icon's seat; its body holds their
- * words as the transcript draws markdown and each inline comment as GitHub
- * heads one, or the Pull request tab's own rows of the checks it names. A
+ * words and each inline comment, headed as GitHub heads one, as GitHub
+ * rendered them where the line kept that, as the Pull request tab draws a
+ * comment, else as the transcript draws markdown; or the Pull request tab's
+ * own rows of the checks it names. A
  * card with nothing under its head is its head alone, with no chevron. The
  * instructions and the fence are left to the agent.
  */
@@ -313,6 +316,33 @@ function pullRequestPage(line: GitHubLineMetadata): string {
   return `https://github.com/${line.repository}/pull/${line.number}`;
 }
 
+/** A picture drawer that draws none, each picture standing as its link, where no agent's transcript is drawn to read it as. */
+const NO_PICTURE: GitHubPictureDrawer = () => undefined;
+
+/**
+ * What GitHub's author wrote: as GitHub rendered it (`body_html`) where the
+ * line kept that, drawn as the Pull request tab draws a comment, its
+ * pictures read through the service as the agent's and opening the viewer
+ * over them; else, on a line kept before it did or whose rendering could
+ * not be read, the words as markdown.
+ */
+function GitHubLineWords({
+  words,
+  html,
+}: {
+  words: string;
+  html: string | undefined;
+}): React.JSX.Element {
+  const agentId = useContext(TranscriptAgent);
+  const drawn = usePictureDrawer(agentId ?? "");
+  if (html === undefined) return <TranscriptWords text={words} />;
+  return (
+    <EntryPictures html={html}>
+      <GitHubWords html={html} picture={agentId === undefined ? NO_PICTURE : drawn} />
+    </EntryPictures>
+  );
+}
+
 /** One inline comment as GitHub heads one: its file's icon, its path linking the comment, and its line, over what the reviewer said. */
 function commentNote(
   comment: NonNullable<GitHubLineMetadata["comments"]>[number],
@@ -330,7 +360,10 @@ function commentNote(
         )}
       </>
     ),
-    body: comment.body === "" ? null : <TranscriptWords text={comment.body} />,
+    body:
+      comment.body === "" ? null : (
+        <GitHubLineWords words={comment.body} html={comment.body_html} />
+      ),
   };
 }
 
@@ -434,7 +467,7 @@ export function GitHubLineCard({
       </PlanHeader>
       {folds ? (
         <PlanContent layout={PLAN_BODY_LAYOUT.STACK}>
-          {said === "" ? null : <TranscriptWords text={said} />}
+          {said === "" ? null : <GitHubLineWords words={said} html={line.words_html} />}
           <EventNotes notes={comments.map(commentNote)} />
           {rows ? <GitHubCheckRows line={line} /> : null}
         </PlanContent>

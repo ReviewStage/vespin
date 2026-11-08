@@ -18,6 +18,7 @@ import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { DEVICE_AGENT_LINE_KIND } from "@repo/features/device-agent-wire";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option } from "effect";
@@ -95,8 +96,12 @@ export const openLocalAgent = (options: LocalAgentOptions = {}) =>
 /** What the sessions reach beside the store and the deployment's environment: the Mac's machine, and no GitHub or image, which a Mac's launch in no repository never asks. */
 const LOCAL_AGENT_SERVICES = Layer.mergeAll(
   Layer.effect(AgentMachine, deviceMachine),
+  memorySandbox().layer,
   NO_GITHUB,
-  Layer.succeed(AgentImage, { reference: Effect.die(new Error("a Mac opens no image")) }),
+  Layer.succeed(AgentImage, {
+    reference: Effect.die(new Error("a Mac opens no image")),
+    runner: Effect.die(new Error("a Mac opens no image")),
+  }),
 );
 
 /**

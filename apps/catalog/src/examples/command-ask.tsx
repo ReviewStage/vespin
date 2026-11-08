@@ -11,6 +11,8 @@ import { CatalogSection } from "../section";
  * answers, Escape, or a press on the dimmed window, fading out as it goes.
  */
 
+const copyToClipboard = (text: string): Promise<void> => navigator.clipboard.writeText(text);
+
 const SHORT_COMMAND = "git -C ~/code/app status --short";
 
 const LONG_COMMAND = [
@@ -43,6 +45,7 @@ function Asking({ label, command }: { label: string; command: string }): React.J
         onAllowOnce={close}
         onAllowAlways={close}
         onDeny={close}
+        copy={copyToClipboard}
       />
     </>
   );

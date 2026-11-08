@@ -15,7 +15,7 @@ function functionNameOf(node: ESTree.Node): string | undefined {
   }
   if (node.type !== "ArrowFunctionExpression" && node.id) return node.id.name;
   const binding = node.parent;
-  return binding?.type === "VariableDeclarator" && binding.id.type === "Identifier"
+  return binding.type === "VariableDeclarator" && binding.id.type === "Identifier"
     ? binding.id.name
     : undefined;
 }

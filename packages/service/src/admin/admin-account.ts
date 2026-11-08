@@ -70,7 +70,6 @@ export interface AdminAccountAgentSource {
   /** The state of its pull request as GitHub last answered, alone; null where none was found. */
   pullRequestState: PullRequestState | null;
   turn: AgentLatestTurn | undefined;
-  awaitingLineAt: Date | undefined;
 }
 
 /** One of the account's workspace memberships: the workspace's name, its size, and its GitHub installations. */
@@ -124,11 +123,7 @@ function pullRequestOf(state: PullRequestState | null): AdminPullRequest {
 
 /** One agent with its status read at `now`, and its failure class where it failed. */
 function agentOf(source: AdminAccountAgentSource, now: number): AdminAccountAgent {
-  const status = agentStatusOf(source.turn, {
-    createdAt: source.createdAt,
-    now,
-    awaitingLineAt: source.awaitingLineAt,
-  });
+  const status = agentStatusOf(source.turn, { createdAt: source.createdAt, now });
   const failure = status === AGENT_STATUS.FAILED ? (agentFailureOf(source.turn) ?? null) : null;
   return {
     id: source.id,

@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { it } from "@effect/vitest";
 import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
-import { lapsedTurnIds } from "@repo/database/models/abandoned-turns";
 import {
   createAgent,
   readAgent,
@@ -13,12 +12,14 @@ import {
   recordAgentPublished,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
+import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
 import {
   listProviderKeyRows,
   type ProviderKeyRow,
   saveProviderKey,
 } from "@repo/database/models/provider-key-store";
 import { readTask, updateTask } from "@repo/database/models/task-store";
+import { lapsedTurnsOf } from "@repo/database/models/turn-state";
 import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -38,12 +39,14 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, eq } from "drizzle-orm";
-import { Clock, Effect, ErrorReporter, Layer, Option } from "effect";
+import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -56,13 +59,12 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
-import { CODER } from "../coder-host/bounds.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { CURSOR_START, transcriptPast } from "../coder-host/transcript.js";
 import { readNativeTurnHanded, recordNativeTurnHanded } from "../coder-host/turn-message.js";
-import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import { launchUrl, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import {
   RUNNER_EVENTS_PATH,
   type RunnerAlive,
@@ -70,6 +72,9 @@ import {
   type RunnerEventsOptions,
   runnerEventsApp,
 } from "./runner-events-app.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * The events route, answered by its group the way a function answers it,
@@ -98,6 +103,7 @@ const standingWith = (
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -111,12 +117,13 @@ const standingWith = (
       },
     );
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
-    return (bearer: string | undefined, events: readonly RunnerEvent[]) =>
+    return (bearer: string | undefined, events: readonly RunnerEvent[], launch?: number) =>
       Effect.promise(async () => {
         const headers = new Headers({ "content-type": "application/json" });
         if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+        const url = `${ORIGIN}${RUNNER_EVENTS_PATH}`;
         const response = await web.handler(
-          new Request(`${ORIGIN}${RUNNER_EVENTS_PATH}`, {
+          new Request(launch === undefined ? url : launchUrl(url, launch), {
             method: "POST",
             headers,
             body: JSON.stringify({ events }),
@@ -265,6 +272,37 @@ function workflowTurn(lineId: string): readonly RunnerEvent[] {
   return messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent);
 }
 
+/** Events renumbered as the runner would have posted them alone. */
+function renumbered(messages: readonly RunnerEvent[]): readonly RunnerEvent[] {
+  return messages.map(({ message }, sequence) => ({ sequence, message }));
+}
+
+/**
+ * Where P00's workflow turn falls silent, and whether its runner's heartbeats
+ * hold the turn through that silence: through a call still unanswered (its
+ * `Write`, before its answer), through a wait on background work after its
+ * model turn (its two calls answered, then its `result` and WAITING), and,
+ * with neither, never, since a harness stuck between its steps beats on.
+ */
+const HEARTBEAT_SILENCES = [
+  {
+    name: "a call of it is still unanswered",
+    upTo: (events: readonly RunnerEvent[]) => events.slice(0, 3),
+    holds: true,
+  },
+  {
+    name: "it waits on background work",
+    upTo: (events: readonly RunnerEvent[]) =>
+      renumbered([...events.slice(0, 6), ...events.slice(8, 10)]),
+    holds: true,
+  },
+  {
+    name: "neither, as a harness stuck between its steps",
+    upTo: (events: readonly RunnerEvent[]) => events.slice(0, 6),
+    holds: false,
+  },
+] as const;
+
 /** The conversation's rows as a reader of the transcript sees them: each message's role and parts, and each turn's end. */
 const transcriptOf = (conversationId: string) =>
   Effect.gen(function* () {
@@ -309,7 +347,7 @@ function drawn(part: StoredUIMessage["parts"][number]): readonly WireValue[] {
   return fields;
 }
 
-it.layer(getTestDB())("the runner events route", (it) => {
+it.layer(SUITE)("the runner events route", (it) => {
   it.effect(
     "P00's workflow turn lands as one turn: the line it took, each call settled, the words, and its cost",
     () =>
@@ -399,7 +437,7 @@ it.layer(getTestDB())("the runner events route", (it) => {
   );
 
   it.effect(
-    "a run under way keeps its sandbox alive at its first batch and once a keep-alive interval after the last, and a batch that ends the launch keeps nothing alive",
+    "a running turn touches its sandbox at its first batch and once a touch interval after the last, and a batch that ends the launch touches nothing",
     () =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
@@ -412,10 +450,10 @@ it.layer(getTestDB())("the runner events route", (it) => {
         yield* post(agent.bearer, events.slice(0, 3));
         yield* post(agent.bearer, events.slice(3, 6));
         const withinInterval = told.length;
-        yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
         yield* post(agent.bearer, events.slice(6, 11));
         // The batch carrying the launch's END, past another interval, is the stop's to settle.
-        yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
         yield* post(agent.bearer, events.slice(11));
 
         assert.equal(withinInterval, 1, "a batch inside the interval asks Vercel nothing");
@@ -426,41 +464,40 @@ it.layer(getTestDB())("the runner events route", (it) => {
       }),
   );
 
-  it.effect(
-    "a heartbeat with no events keeps a run's sandbox alive and its turn's lease running through its harness's silence, applying nothing, and none before the launch applied an event",
-    () =>
+  it.effect.each(HEARTBEAT_SILENCES)(
+    "a heartbeat with no events touches a running turn's sandbox through its harness's silence, applying nothing, and none before the launch applied an event, and holds its turn only where $name",
+    ({ upTo, holds }) =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
         const post = yield* standingWith({
           alive: (alive) => Effect.sync(() => void told.push(alive)),
         });
         const agent = yield* agentWithBearer;
-        const events = workflowTurn(agent.lineId);
+        const events = upTo(workflowTurn(agent.lineId));
 
         const early = yield* post(agent.bearer, []);
-        yield* post(agent.bearer, events.slice(0, 9));
+        yield* post(agent.bearer, events);
         const silence = [];
-        // An hour and more of a background command, the harness saying nothing, and the runner beating.
+        // An hour and more of the harness saying nothing, and the runner beating.
         for (const _beat of [1, 2, 3, 4, 5, 6, 7]) {
-          yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+          yield* TestClock.adjust(Duration.minutes(5));
           silence.push(yield* post(agent.bearer, []));
         }
         const midway = yield* transcriptOf(agent.target.conversationId);
-        const lapsed = yield* lapsedTurnIds(
+        const lapsed = yield* lapsedTurnsOf(
           agent.target.conversationId,
-          yield* Clock.currentTimeMillis,
+          new Date(yield* Clock.currentTimeMillis),
         );
-        // The END, a moment after the last heartbeat, is the stop's to settle.
-        yield* post(agent.bearer, events.slice(9));
 
         assert.deepEqual(early.body, { applied: 0, sequence: null });
         assert.equal(told.length, 8, "the first batch, then each heartbeat an interval apart");
-        assert.ok(silence.every((beat) => beat.body.applied === 0 && beat.body.sequence === 8));
+        const last = events.length - 1;
+        assert.ok(silence.every((beat) => beat.body.applied === 0 && beat.body.sequence === last));
         assert.deepEqual(
           midway.turns.map((turn) => turn.status),
           [TURN_STATUS.RUNNING],
         );
-        assert.deepEqual(lapsed, [], "a runner still beating holds its turn");
+        assert.equal(lapsed.length, holds ? 0 : 1);
       }),
   );
 
@@ -480,6 +517,40 @@ it.layer(getTestDB())("the runner events route", (it) => {
       assert.deepEqual(overlapping.body, { applied: 0, sequence: 11 });
       assert.deepEqual(twice, once);
     }),
+  );
+
+  it.effect(
+    "a Claude Code session the store held from its first entry is held no longer once the SDK says it dropped a batch of its transcript",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const { userId, conversationId } = agent.target;
+        const transcript = { projectKey: "-workspace-repository", sessionId: SESSION };
+        yield* appendSessionEntries(userId, conversationId, transcript, [
+          { type: "user", uuid: randomUUID(), parentUuid: null },
+        ]);
+        // The line taken and the CLI's init, which names the session.
+        yield* post(agent.bearer, workflowTurn(agent.lineId).slice(0, 2));
+        const before = yield* holdsSession(userId, conversationId, SESSION);
+
+        yield* post(agent.bearer, [
+          {
+            sequence: 2,
+            message: {
+              type: "system",
+              subtype: "mirror_error",
+              error: "The transcript store answered 503",
+              key: transcript,
+              uuid: randomUUID(),
+              session_id: SESSION,
+            },
+          },
+        ]);
+
+        assert.equal(before, true);
+        assert.equal(yield* holdsSession(userId, conversationId, SESSION), false);
+      }),
   );
 
   it.effect(
@@ -518,33 +589,53 @@ it.layer(getTestDB())("the runner events route", (it) => {
       }),
   );
 
-  it.effect("a wrong bearer, none, and one retired from the conversation are refused", () =>
-    Effect.gen(function* () {
-      const post = yield* standing;
-      const agent = yield* agentWithBearer;
-      const events = workflowTurn(agent.lineId).slice(0, 2);
+  it.effect(
+    "a wrong bearer, none, a launch a newer one replaced under the bearer its sandbox's firewall now swaps in, and one retired from the conversation are refused",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const events = workflowTurn(agent.lineId).slice(0, 2);
 
-      const wrong = yield* post(randomBytes(32).toString("base64url"), events);
-      const none = yield* post(undefined, events);
-      yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
-      const retired = yield* post(agent.bearer, events);
-      const { rows, turns: written } = yield* transcriptOf(agent.target.conversationId);
+        const wrong = yield* post(randomBytes(32).toString("base64url"), events);
+        const none = yield* post(undefined, events);
+        // A newer launch in the same sandbox records the bearer its one firewall swap hands both runners.
+        yield* recordAgentRunnerToken(agent.userId, agent.agentId, runnerTokenDigest(agent.bearer));
+        const cutOff: RunnerEvent = {
+          sequence: 0,
+          message: {
+            type: RUNNER_EVENT.END,
+            reason: RUNNER_END.FAILED,
+            detail: "the service refused the launch's lines: The service answered 401",
+          },
+        };
+        const replaced = yield* post(agent.bearer, [cutOff], 1);
+        // The launch now recorded is admitted under the same bearer, its heartbeat taken.
+        const current = yield* post(agent.bearer, [], 2);
+        yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
+        const retired = yield* post(agent.bearer, events);
+        const { rows, turns: written } = yield* transcriptOf(agent.target.conversationId);
 
-      assert.deepEqual(
-        [wrong.status, none.status, retired.status],
-        [
-          HOSTED_HTTP_STATUS.UNAUTHORIZED,
-          HOSTED_HTTP_STATUS.UNAUTHORIZED,
-          HOSTED_HTTP_STATUS.UNAUTHORIZED,
-        ],
-      );
-      // The awaiting line alone stands: nothing of the batch was applied.
-      assert.deepEqual(
-        rows.map((row) => row.turnId),
-        [null],
-      );
-      assert.deepEqual(written, []);
-    }),
+        assert.deepEqual(
+          [wrong.status, none.status, replaced.status, current.status, retired.status],
+          [
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.OK,
+            HOSTED_HTTP_STATUS.UNAUTHORIZED,
+          ],
+        );
+        // The awaiting line and the turn it queued alone stand: nothing of the batch was applied.
+        assert.deepEqual(
+          rows.map((row) => row.turnId),
+          [null],
+        );
+        assert.deepEqual(
+          written.map((turn) => turn.status),
+          [TURN_STATUS.QUEUED],
+        );
+      }),
   );
 
   it.effect(
@@ -639,12 +730,14 @@ it.layer(getTestDB())("the runner events route", (it) => {
   );
 
   it.effect(
-    "a warm launch's IDLE settles its turn as a turn's end does and is told once, and the END that retires it later settles nothing more",
+    "a warm launch's IDLE settles its turn as a turn's end does and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
     () =>
       Effect.gen(function* () {
         const told: RunnerEnded[] = [];
+        const touched: RunnerAlive[] = [];
         const post = yield* standingWith({
           idled: (idled) => Effect.sync(() => void told.push(idled)),
+          alive: (alive) => Effect.sync(() => void touched.push(alive)),
         });
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
@@ -667,6 +760,9 @@ it.layer(getTestDB())("the runner events route", (it) => {
 
         yield* post(agent.bearer, events.slice(0, turn.length));
         const idle = yield* transcriptOf(agent.target.conversationId);
+        // The warm runner beats on with no turn, and keeps nothing up.
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+        yield* post(agent.bearer, []);
         yield* post(agent.bearer, events.slice(turn.length));
         const ended = yield* transcriptOf(agent.target.conversationId);
 
@@ -680,6 +776,7 @@ it.layer(getTestDB())("the runner events route", (it) => {
           told.map((each) => [each.target, each.sequence]),
           [[agent.target, turn.length - 1]],
         );
+        assert.deepEqual(touched, []);
       }),
   );
 
@@ -890,6 +987,93 @@ it.layer(getTestDB())("the runner events route", (it) => {
       assert.deepEqual(
         ended.map((turn) => [turn.status, turn.failureDetail]),
         [[TURN_STATUS.FAILED, "success 529: API Error: 529 Overloaded"]],
+      );
+    }),
+  );
+
+  it.effect("a turn the model refused with no fallback ends as a refusal", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentWithBearer;
+      const top = { parent_tool_use_id: null, session_id: SESSION };
+      const messagesOfTurn = [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        {
+          type: "system",
+          subtype: "model_refusal_no_fallback",
+          original_model: "claude-opus-5-5",
+          request_id: null,
+          api_refusal_category: "cyber",
+          content: "Claude declined to answer.",
+          ...top,
+        },
+        // The CLI's result need not say the model turn failed.
+        { type: "result", subtype: "success", is_error: false, ...top },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ];
+      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+      yield* post(
+        agent.bearer,
+        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+      );
+      const db = yield* Database;
+      const ended = yield* db
+        .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+        .from(turns)
+        .where(eq(turns.conversationId, agent.target.conversationId));
+
+      assert.deepEqual(ended, [
+        {
+          status: TURN_STATUS.FAILED,
+          failure: "refusal",
+          detail: "model_refusal_no_fallback cyber",
+        },
+      ]);
+    }),
+  );
+
+  it.effect("a compaction that failed is why its failed turn says it failed", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentWithBearer;
+      const top = { parent_tool_use_id: null, session_id: SESSION };
+      const messagesOfTurn = [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        { type: "system", subtype: "init", ...top },
+        { type: "system", subtype: "status", status: "compacting", ...top },
+        {
+          type: "system",
+          subtype: "status",
+          status: null,
+          compact_result: "failed",
+          compact_error: "Conversation too long to summarize",
+          ...top,
+        },
+        {
+          type: "result",
+          subtype: "success",
+          is_error: true,
+          api_error_status: 400,
+          result: "Prompt is too long",
+          ...top,
+        },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ];
+      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+      yield* post(
+        agent.bearer,
+        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+      );
+      const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
+
+      assert.deepEqual(
+        ended.map((turn) => [turn.status, turn.failureDetail]),
+        [
+          [
+            TURN_STATUS.FAILED,
+            "compaction failed: Conversation too long to summarize; success 400: Prompt is too long",
+          ],
+        ],
       );
     }),
   );
@@ -1161,7 +1345,7 @@ function notification(method: string, params: WireRecord): WireRecord {
   return { method, params: { threadId: THREAD, turnId: "turn-1", ...params } };
 }
 
-it.layer(getTestDB())("the runner events route, on Codex", (it) => {
+it.layer(SUITE)("the runner events route, on Codex", (it) => {
   it.effect(
     "P16's recorded launches land as three turns: each line taken, each call settled, the words, and the meter",
     () =>
@@ -1758,7 +1942,11 @@ it.layer(getTestDB())("the runner events route, on Codex", (it) => {
                 rateLimits: {
                   limitId: null,
                   limitName: null,
-                  primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: resetsAt / 1000 },
+                  primary: {
+                    usedPercent: 100,
+                    windowDurationMins: 300,
+                    resetsAt: resetsAt / 1000,
+                  },
                   secondary: null,
                   rateLimitReachedType: "rate_limit_reached",
                 },
@@ -2208,7 +2396,7 @@ function scriptedTitleModel(title: string) {
   return { model, asked };
 }
 
-it.layer(getTestDB())("the runner events route, as it keeps an agent", (it) => {
+it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
   const top = { parent_tool_use_id: null, session_id: SESSION };
   const numbered = (messagesOfLaunch: readonly unknown[], from = 0) =>
     // SAFETY: each message is one the pinned SDK, app-server, or the runner emits, written in its JSON shape.

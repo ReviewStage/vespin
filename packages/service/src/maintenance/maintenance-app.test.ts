@@ -3,6 +3,7 @@ import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { getTestDB } from "@repo/database/testing";
 import { noDatabase } from "@repo/database/testing/no-database";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, Effect, Layer, Redacted } from "effect";
 import { type HttpClient, HttpRouter } from "effect/http";
@@ -14,6 +15,9 @@ import { type ModelCatalog, modelCatalogOf } from "../providers/model-catalog.js
 import { recordingSentry, type SentItem, sentOfType } from "../testing/sentry-transport.js";
 import { maintenanceApp } from "./maintenance-app.js";
 import { MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
+
+/** What every case runs over: the store, and sandboxes kept in memory. */
+const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * The sweep's group as the cron reaches it, told to Sentry's Crons through a
@@ -73,6 +77,7 @@ const sweep = (
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
+      memorySandbox().layer,
       database,
       reached,
       Layer.succeed(HostedEnvironment, environment(cronSecret)),
@@ -109,7 +114,7 @@ it.effect("a call that is not the cron's checks nothing in", () =>
   }),
 );
 
-it.layer(getTestDB())("a sweep that runs", (it) => {
+it.layer(SUITE)("a sweep that runs", (it) => {
   it.effect("checks in as it starts and as it ends, with the monitor's schedule", () =>
     Effect.gen(function* () {
       const sentry = recordingSentry();

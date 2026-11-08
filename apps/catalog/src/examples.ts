@@ -28,6 +28,7 @@ import { COMBOBOX_EXAMPLE } from "./examples/combobox";
 import { COMMAND_ASK_EXAMPLE } from "./examples/command-ask";
 import { COMMAND_DIALOG_EXAMPLE } from "./examples/command-dialog";
 import { COMMENTS_EXAMPLE } from "./examples/comments";
+import { COMPLETION_SOUNDS_EXAMPLE } from "./examples/completion-sounds";
 import { COMPOSER_FOOTS_EXAMPLE } from "./examples/composer-foots";
 import { COMPOSER_FRAMES_EXAMPLE } from "./examples/composer-frames";
 import { CONFIRM_DIALOGS_EXAMPLE } from "./examples/confirm-dialogs";
@@ -205,6 +206,7 @@ export const EXAMPLES: readonly Example[] = [
   COMMAND_ASK_EXAMPLE,
   COMMAND_DIALOG_EXAMPLE,
   COMMENTS_EXAMPLE,
+  COMPLETION_SOUNDS_EXAMPLE,
   DAILY_BARS_EXAMPLE,
   DATA_TABLE_EXAMPLE,
   DETAIL_PAGE_EXAMPLE,

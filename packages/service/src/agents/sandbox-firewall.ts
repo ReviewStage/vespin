@@ -1,7 +1,7 @@
 /**
- * sandbox-firewall.ts -- a sandbox session's whole firewall policy, rebuilt at every write from the credentials its writer gathered and the swaps of the launch standing in it, and the one way the service writes it.
+ * sandbox-firewall.ts -- a sandbox run's whole firewall policy, rebuilt at every write from the credentials its writer gathered and the swaps of the launch standing in it, and the one way the service writes it.
  *
- * Vercel's network-policy write replaces a session's whole policy, and the
+ * A network-policy write replaces a run's whole policy, and the
  * policy reads back with every header value redacted, so a write never
  * reads what stands and keeps it: each composes the session's whole policy
  * from its sources at the moment of writing and sends it whole. A writer
@@ -10,13 +10,13 @@
  * run alone. The one source no writer can gather again is a runner's
  * launch: the placeholders it minted are in its runner's environment
  * alone, and its bearer's bytes nowhere once its digest is kept, so the
- * launch's swaps (`LAUNCH_SWAP`) are kept for its session
- * (`sandbox-firewall-store.ts`), one row per sandbox session under the
- * account whose agent the session is, sealed under the deployment's key
- * ring for that account and session alone (`provider-key-seal.ts`), and
+ * launch's swaps (`LAUNCH_SWAP`) are kept for its run
+ * (`sandbox-firewall-store.ts`), one row per sandbox run under the
+ * account whose agent the run is, sealed under the deployment's key
+ * ring for that account and run alone (`provider-key-seal.ts`), and
  * every write sends them beside what it gathered. A launch keeps them before
  * it writes, and nothing else changes them; they stand on the firewall until
- * the sandbox stops, and the agent's next launch in another session deletes
+ * the sandbox stops, and the agent's next launch in another run deletes
  * the row. With nothing to carry, the policy is the open internet.
  *
  * Two writers that compose from the same sources send the same policy, so
@@ -28,9 +28,9 @@
  * stands only in its own writes, so another writer landing during a clone
  * takes it off, though the clone goes on under the agent's own credential
  * that writer carries, minted afresh, which reaches every repository the
- * agent clones. Every send reaches the session through its sandbox's
- * name (`VercelSandboxApi`'s `session`), so a write to a session its sandbox
- * no longer runs is refused, as Vercel refuses one to a session gone.
+ * agent clones. Every send is fenced to the run it was composed for
+ * (`Sandbox`'s `updateNetworkPolicy` on a `SandboxRunning`), so a write to a
+ * run its sandbox is no longer up in is refused as gone.
  *
  * A placeholder swap is how a secret leaves the sandbox: the process that
  * needs it is handed a random placeholder minted for its launch
@@ -41,8 +41,8 @@
  *
  * A launch that could not be kept or read, or a deployment with no key ring
  * to seal it under, fails the write as the policy write unavailable
- * (`SandboxUnavailable`), as Vercel's own refusal does; what fails names no
- * value, and nothing here logs one.
+ * (`SandboxUnavailable`), as the sandbox's own refusal does; what fails names
+ * no value, and nothing here logs one.
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
@@ -59,18 +59,19 @@ import {
   readFirewallLaunch,
 } from "@repo/database/models/sandbox-firewall-store";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import {
+  type HeaderRule,
+  isSandboxError,
+  type NetworkPolicy,
+  OPEN_INTERNET,
+  SANDBOX_CALL,
+  type SandboxError,
+  type SandboxService,
+  SandboxUnavailable,
+} from "@repo/sandbox";
 import { DateTime, Effect, Option, Redacted, Result, Schema } from "effect";
 import { HostedEnvironment } from "../environment.js";
 import type { GitHubTokenAccess } from "../github/github-app.js";
-import {
-  type NetworkPolicy,
-  type NetworkRule,
-  OPEN_INTERNET_POLICY,
-  SANDBOX_CALL,
-  SandboxUnavailable,
-  type SessionRef,
-  type VercelSandboxApi,
-} from "./vercel-sandbox-api.js";
 
 /**
  * The credentials a runner's launch holds at the firewall behind its
@@ -93,9 +94,6 @@ const SWAP_ORDER: readonly LaunchSwapKind[] = Object.values(LAUNCH_SWAP);
 /** The random bytes a placeholder is minted from. */
 const PLACEHOLDER_BYTES = 32;
 
-/** The host every policy that carries a credential leaves open, ahead of the hosts its rules name. */
-const EVERY_HOST = "*";
-
 /** GitHub's two hosts a credential is set on: git's, and the REST API's. */
 const GITHUB_HOST = { GIT: "github.com", API: "api.github.com" } as const;
 
@@ -107,7 +105,7 @@ export interface RepositoryCredential {
 }
 
 /** One host's rules in an entry. */
-type HostRules = readonly [host: string, rules: readonly NetworkRule[]];
+type HostRules = readonly [host: string, rules: readonly HeaderRule[]];
 
 /** One credential at the firewall: the rules that carry it on each host it names, in order, kept redacted. */
 export interface FirewallEntry {
@@ -164,12 +162,12 @@ export interface SandboxFirewall {
   readonly write: (
     session: FirewallSession,
     sources: FirewallSources,
-  ) => Effect.Effect<void, SandboxUnavailable, DatabaseServices>;
+  ) => Effect.Effect<void, SandboxError, DatabaseServices>;
   /** A launch's swaps kept for the session in place of an earlier launch's, so every write from here on sends them; nothing is sent. */
   readonly keepLaunch: (
     session: FirewallSession,
     launch: FirewallLaunch,
-  ) => Effect.Effect<void, SandboxUnavailable, DatabaseServices>;
+  ) => Effect.Effect<void, SandboxError, DatabaseServices>;
 }
 
 const PathMatchSchema = Schema.Union([
@@ -177,6 +175,11 @@ const PathMatchSchema = Schema.Union([
   Schema.Struct({ exact: Schema.String }),
 ]);
 
+/**
+ * A rule as a launch's seal holds it: the shape every row sealed so far was
+ * written in, matchers and transforms, read into a `HeaderRule` and written
+ * back from one (`ruleOfStored`, `storedOfRule`).
+ */
 const RuleSchema = Schema.Struct({
   match: Schema.optionalKey(
     Schema.Struct({
@@ -207,6 +210,40 @@ const SealedSwapsSchema = Schema.fromJsonString(
 const encodeSwaps = Schema.encodeSync(SealedSwapsSchema);
 const decodeSwaps = Schema.decodeUnknownResult(SealedSwapsSchema);
 
+type StoredRule = typeof RuleSchema.Type;
+
+/** A rule as the seal holds it. */
+function storedOfRule(rule: HeaderRule): StoredRule {
+  const headers = Object.entries(rule.headers ?? {}).map(([key, value]) => ({
+    key: { exact: key },
+    value: { exact: value },
+  }));
+  const matched = rule.path !== undefined || headers.length > 0;
+  return {
+    ...(matched
+      ? {
+          match: {
+            ...(rule.path === undefined ? undefined : { path: rule.path }),
+            ...(headers.length === 0 ? undefined : { headers }),
+          },
+        }
+      : undefined),
+    transform: [{ headers: { ...rule.set } }],
+  };
+}
+
+/** A rule the seal holds, as the policy carries it: every transform's headers set together. */
+function ruleOfStored(stored: StoredRule): HeaderRule {
+  const headers = stored.match?.headers;
+  return {
+    ...(stored.match?.path === undefined ? undefined : { path: stored.match.path }),
+    ...(headers === undefined
+      ? undefined
+      : { headers: Object.fromEntries(headers.map((each) => [each.key.exact, each.value.exact])) }),
+    set: Object.assign({}, ...stored.transform.map((each) => each.headers)),
+  };
+}
+
 /** No launch's swaps. */
 const NO_SWAPS: LaunchSwaps = new Map();
 
@@ -220,9 +257,12 @@ function entryOf(rules: readonly HostRules[]): FirewallEntry {
 }
 
 /** A rule that sets the authorization header on every request to its host, or on those whose path matches. */
-function authorizing(authorization: string, path?: { startsWith: string } | { exact: string }) {
-  const transform = [{ headers: { authorization } }];
-  return path === undefined ? { transform } : { match: { path }, transform };
+function authorizing(
+  authorization: string,
+  path?: { startsWith: string } | { exact: string },
+): HeaderRule {
+  const set = { authorization };
+  return path === undefined ? { set } : { path, set };
 }
 
 /**
@@ -291,20 +331,14 @@ function cloneEntry({ fullName, token, access }: RepositoryCredential): Firewall
 
 /** The swap at the firewall: a rule on its domain matching its header at the placeholder, setting the real value. */
 export function placeholderSwap(swap: PlaceholderSwap): FirewallEntry {
-  const placeholder = {
-    key: { exact: swap.header },
-    value: { exact: Redacted.value(swap.placeholder) },
-  };
   return entryOf([
     [
       swap.domain,
       [
         {
-          match: {
-            ...(swap.path === undefined ? undefined : { path: swap.path }),
-            headers: [placeholder],
-          },
-          transform: [{ headers: { [swap.header]: Redacted.value(swap.value) } }],
+          ...(swap.path === undefined ? undefined : { path: swap.path }),
+          headers: { [swap.header]: Redacted.value(swap.placeholder) },
+          set: { [swap.header]: Redacted.value(swap.value) },
         },
       ],
     ],
@@ -331,19 +365,24 @@ export function composePolicy(sources: FirewallSources, swaps: LaunchSwaps): Net
       return entry === undefined ? [] : [entry];
     }),
   ];
-  if (entries.length === 0) return OPEN_INTERNET_POLICY;
-  const allow = new Map<string, readonly NetworkRule[]>([[EVERY_HOST, []]]);
+  if (entries.length === 0) return OPEN_INTERNET;
+  const hosts = new Map<string, readonly HeaderRule[]>();
   for (const entry of entries) {
     for (const [host, rules] of Redacted.value(entry.rules)) {
-      allow.set(host, [...(allow.get(host) ?? []), ...rules]);
+      hosts.set(host, [...(hosts.get(host) ?? []), ...rules]);
     }
   }
-  return { allow: Object.fromEntries(allow) };
+  return { hosts: Object.fromEntries(hosts) };
 }
 
 /** The swaps sealed for the session's row. */
 function sealed(ring: KeyRing, session: FirewallOwner, swaps: LaunchSwaps): string {
-  const kinds = [...swaps].map(([slot, entry]) => ({ slot, rules: Redacted.value(entry.rules) }));
+  const kinds = [...swaps].map(([slot, entry]) => ({
+    slot,
+    rules: Redacted.value(entry.rules).map(
+      ([host, rules]) => [host, rules.map(storedOfRule)] as const,
+    ),
+  }));
   return sealFirewallEntries(ring, session, Redacted.make(encodeSwaps(kinds)));
 }
 
@@ -361,7 +400,14 @@ function opened(ring: KeyRing, session: FirewallOwner, column: string): LaunchSw
   const known = (kind: string): kind is LaunchSwapKind => SWAP_ORDER.some((each) => each === kind);
   return new Map(
     read.success.flatMap(({ slot, rules }) =>
-      known(slot) ? [[slot, entryOf(rules)] as const] : [],
+      known(slot)
+        ? [
+            [
+              slot,
+              entryOf(rules.map(([host, stored]) => [host, stored.map(ruleOfStored)] as const)),
+            ] as const,
+          ]
+        : [],
     ),
   );
 }
@@ -392,18 +438,16 @@ const launchKept = (session: FirewallOwner) =>
 
 /** A store failure as the policy write unavailable, in words naming no value. */
 const storeUnavailable = (detail: string) =>
-  Effect.mapError((failure: SandboxUnavailable | { readonly _tag: string }) =>
-    failure instanceof SandboxUnavailable ? failure : unkept(detail),
+  Effect.mapError((failure: SandboxError | { readonly _tag: string }) =>
+    isSandboxError(failure) ? failure : unkept(detail),
   );
 
-/** The firewall over the API given: every write composed whole from its sources and the launch kept for its session. */
-export function sandboxFirewall(api: VercelSandboxApi): SandboxFirewall {
-  /** The policy given sent to the session, looked up by its sandbox's name for this one write. */
-  const policySent = (session: SessionRef, policy: NetworkPolicy) =>
-    Effect.flatMap(api.session(session), (running) => running.updateNetworkPolicy(policy));
+/** The firewall over the sandboxes given: every write composed whole from its sources and the launch kept for its run. */
+export function sandboxFirewall(sandbox: SandboxService): SandboxFirewall {
+  /** The policy composed sent to the run alone it was composed for. */
   const sent = (session: FirewallSession, sources: FirewallSources, swaps: LaunchSwaps) =>
-    policySent(
-      { name: session.name, sessionId: session.sandboxSessionId },
+    sandbox.updateNetworkPolicy(
+      { name: session.name, running: session.sandboxSessionId },
       composePolicy(sources, swaps),
     );
 

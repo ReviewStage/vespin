@@ -19,7 +19,7 @@
  * which clears the row's copy. `writeLine`, `writeFiles`, and `kill` queue a
  * message, files, or stop line, files in as many lines as their size takes
  * (`DEVICE_AGENT_BOUNDS.MAX_FILES_LINE_BYTES`); a runner whose launch line
- * its Mac settled has ended, and a write to it answers `NOT_FOUND_STATUS`,
+ * its Mac settled has ended, and a write to it answers `SandboxGone`,
  * so a message relaunches it. `runnerExit` reads the exit code the Mac settled the
  * launch line with.
  *
@@ -52,8 +52,8 @@
  * an away Mac at once too, as a Start on it is refused
  * (`LOCAL_AGENT_REFUSAL.MAC_AWAY`), and a host its account removed by name,
  * rather than queue a line no one may take for hours: a message, a Stop, or
- * a retire to it fails in words, and its open run is taken from it at the
- * agent's next touch once its lease lapses (`../coder-host/lapsed-runner.ts`).
+ * a retire to it fails in words, and its open run is taken from it by the
+ * agent's next reconcile once its Mac's lease lapses (`../coder-host/reconcile.ts`).
  */
 
 import { randomUUID } from "node:crypto";
@@ -93,6 +93,14 @@ import {
 } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
+  COMMAND_GONE,
+  type CommandExit,
+  type SandboxError,
+  type SandboxFile,
+  SandboxGone,
+  SandboxUnavailable,
+} from "@repo/sandbox";
+import {
   Brand,
   Clock,
   type Context,
@@ -107,13 +115,6 @@ import {
 import { HostedEnvironment } from "../../environment.js";
 import { heldUntil } from "../../http/held-read.js";
 import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checkout.js";
-import {
-  COMMAND_GONE,
-  type CommandExit,
-  NOT_FOUND_STATUS,
-  type SandboxFile,
-  SandboxUnavailable,
-} from "../vercel-sandbox-api.js";
 import {
   type AgentMachineService,
   type DeliveredCredentials,
@@ -148,7 +149,7 @@ export const MAC_MACHINE = {
  * reads GitHub too, for who the agent's commits are by.
  */
 export interface DeviceMachineService extends AgentMachineService {
-  readonly owns: (session: string) => Effect.Effect<boolean, SandboxUnavailable>;
+  readonly owns: (session: string) => Effect.Effect<boolean, SandboxError>;
   readonly open: <A, E, R, B, EB, RB>(
     ask: MachineOpen<B, EB, RB>,
     use: (opened: OpenedPlace, beside: B) => Effect.Effect<A, E, R>,
@@ -158,7 +159,7 @@ export interface DeviceMachineService extends AgentMachineService {
     launch: RunnerLaunch<A, E, R, EL, RL>,
   ) => Effect.Effect<
     { readonly handle: RunnerHandle; readonly ready: A },
-    E | EL | SandboxUnavailable | { readonly _tag: string },
+    E | EL | SandboxError | { readonly _tag: string },
     R | RL | CheckoutServices
   >;
 }
@@ -434,10 +435,10 @@ function deviceMachineOver(
       }),
 
     // The session's pin names its account, so the account given is not needed to find it.
-    findPlaces: (_userId, session) =>
+    findPlace: (_userId, session) =>
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
-        if (Option.isNone(pin)) return [];
+        if (Option.isNone(pin)) return Option.none<FoundPlace>();
         const { userId, agentId } = pin.value;
         const launch = yield* stored(latestDeviceAgentLaunch(userId, agentId));
         const place = macPlace(session, agentId);
@@ -468,10 +469,10 @@ function deviceMachineOver(
           // SAFETY: the pin is this machine's own to read back; no caller reads it.
           kept: pin.value as unknown as MachineKept,
         };
-        return [found];
+        return Option.some(found);
       }),
 
-    // The record is the agent's launch and stop lines themselves, which `findPlaces` reads: a
+    // The record is the agent's launch and stop lines themselves, which `findPlace` reads: a
     // runner the record no longer tells of is stopped, and one it tells of was recorded by its launch.
     recordRunner: (place, record) =>
       Effect.gen(function* () {
@@ -527,14 +528,14 @@ function deviceMachineOver(
         ),
       ),
 
+    // Note that only an agent in the cloud works in repositories beside its own, so a device clones none.
+    checkOutMissing: () => Effect.void,
     // The secrets and the first lines are sealed together, bound to the agent, before the line is
     // queued; a launch whose line was not queued undoes what its caller recorded of it. Who the
     // agent's commits are by is read beside the caller's steps, as a sandbox's checkout finish reads it
     // (`agentCommitIdentity`), and kept as it ended, so a read that failed fails the launch where
     // its caller's record is undone; the Mac sets it in the agent's repository on every launch,
     // so an agent whose repository was made before the field gets it too.
-    // Note that only an agent in the cloud works in repositories beside its own, so a device clones none.
-    checkOutMissing: () => Effect.void,
     launchRunner: (place, launch) =>
       Effect.gen(function* () {
         const pin = yield* pinOfPlace(place);
@@ -593,7 +594,7 @@ function deviceMachineOver(
       Effect.gen(function* () {
         const pin = yield* pinOfPlace(handle);
         if (yield* runnerEnded(pin, handle)) {
-          return yield* new SandboxUnavailable({ status: NOT_FOUND_STATUS });
+          return yield* new SandboxGone({});
         }
         yield* refuseAway(pin);
         yield* queued(pin, stdinLine(text));

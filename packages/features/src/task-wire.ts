@@ -16,6 +16,7 @@ import {
 } from "./agent-wire.js";
 import { DEVICE_KIND, DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
+import { commitShaSchema } from "./link-grammar.js";
 import { modelProviderSchema } from "./models-wire.js";
 import { pinPositionSchema } from "./pin-order.js";
 import { type ReadMark, readMarkSchema } from "./read-mark.js";
@@ -470,8 +471,6 @@ export const TASK_BLOCK_CHANGE = {
   REMOVE: "remove",
 } as const;
 
-export type TaskBlockChange = (typeof TASK_BLOCK_CHANGE)[keyof typeof TASK_BLOCK_CHANGE];
-
 /**
  * One block of the task the path names, added or taken away (POST): the
  * other task, of the same workspace, and the side it stands on. A block is
@@ -776,7 +775,7 @@ const taskAgentLineSchema = EffectSchema.Struct({
 export type TaskAgentLine = typeof taskAgentLineSchema.Type;
 
 /** A pull request one of a task's agents opened, as GitHub last answered the service: where it stands and its size. */
-export const taskPullRequestLineSchema = EffectSchema.Struct({
+const taskPullRequestLineSchema = EffectSchema.Struct({
   number: countedNumber,
   title: EffectSchema.String,
   state: EffectSchema.Literals(Object.values(PULL_REQUEST_STATE)),
@@ -916,7 +915,7 @@ const agentEditLineSchema = EffectSchema.Struct({
  * name it holds now, a member who has since left the workspace among them.
  * The window calls the member You only where the id is its own account's.
  */
-export const descriptionEditorSchema = memberRefSchema;
+const descriptionEditorSchema = memberRefSchema;
 
 export type DescriptionEditor = typeof descriptionEditorSchema.Type;
 
@@ -990,7 +989,7 @@ export type Task = typeof taskSchema.Type;
  * first, each with its agents counted, and beside them every agent with no
  * plan in the account's workspaces, newest started first.
  */
-export const taskListAnswerSchema = EffectSchema.Struct({
+const taskListAnswerSchema = EffectSchema.Struct({
   plans: EffectSchema.Array(taskSummarySchema),
   planlessAgents: EffectSchema.optionalKey(EffectSchema.Array(tasklessAgentSchema)),
 });
@@ -1072,8 +1071,6 @@ export type TaskAgentRefusal = typeof taskAgentRefusalSchema.Type;
 export const taskStartAnswerSchema = EffectSchema.Struct({
   plan: taskSchema,
   agent: EffectSchema.optionalKey(agentSummarySchema),
-  /** Retired, and kept optional so every answer decodes (`agentAnswerSchema`'s). */
-  notice: EffectSchema.optionalKey(EffectSchema.String),
   agentRefusal: EffectSchema.optionalKey(taskAgentRefusalSchema),
   txid: EffectSchema.optionalKey(taskTxidSchema),
 });
@@ -1082,8 +1079,6 @@ export type TaskStartAnswer = typeof taskStartAnswerSchema.Type;
 
 /** The task a link names by its workspace and its number (GET), by its id, which every other read names it by. */
 export const taskFoundAnswerSchema = EffectSchema.Struct({ taskId: EffectSchema.String });
-
-export type TaskFoundAnswer = typeof taskFoundAnswerSchema.Type;
 
 /** A deleted task (DELETE): its row, its document, and its association are gone. */
 export const taskDeleteAnswerSchema = EffectSchema.Struct({
@@ -1165,17 +1160,6 @@ export const CODE_PATH_MAX_CHARS = 1_024;
 /** A line of a file, counted from one. */
 export const codeLineSchema = EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(1));
 
-/**
- * A commit as GitHub names it: its whole SHA-1 in lowercase hex, and nothing
- * a branch, a tag, or a path could spell, so a read pinned to one asks
- * GitHub for exactly that commit.
- */
-export const commitShaSchema = EffectSchema.String.check(
-  EffectSchema.isMinLength(40),
-  EffectSchema.isMaxLength(40),
-  EffectSchema.isPattern(/^[0-9a-f]{40}$/u),
-);
-
 /** Whether a reference names both of its lines or neither, in order and within the bound. */
 function codeRangeIsReadable(ref: { startLine?: number; endLine?: number }): boolean {
   if (ref.startLine === undefined || ref.endLine === undefined) {
@@ -1188,7 +1172,7 @@ function codeRangeIsReadable(ref: { startLine?: number; endLine?: number }): boo
  * A place in the task's repository: a file, named relative to the checkout
  * root, and the lines pointed at, or the file whole with none.
  */
-export const codeRefSchema = EffectSchema.Struct({
+const codeRefSchema = EffectSchema.Struct({
   path: EffectSchema.String.check(
     EffectSchema.isNonEmpty(),
     EffectSchema.isMaxLength(CODE_PATH_MAX_CHARS),

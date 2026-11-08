@@ -60,6 +60,7 @@ import { act, createContext, createElement, Fragment, type ReactElement, useCont
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
+import { RoutedExitsProvider } from "../places/routed-exits.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
@@ -444,7 +445,7 @@ function onAgentRoute(page: ReactElement): ReactElement {
   return createElement(
     RoutedPage.Provider,
     { value: page },
-    createElement(RouterProvider, { router }),
+    createElement(RoutedExitsProvider, null, createElement(RouterProvider, { router })),
   );
 }
 
@@ -685,7 +686,7 @@ function PanelPage(): React.JSX.Element {
   });
 }
 
-test("a delegation's row opens its worker in the side panel beside the agent's page, whose + offers no Inbox, its threads opening in the window's Inbox, and none of a task's Description or Comments", async () => {
+test("a delegation's row opens its worker in the side panel beside the agent's page, handing it the keys, whose + offers no Inbox, its threads opening in the window's Inbox, and none of a task's Description or Comments", async () => {
   localStorage.clear();
   installScrollIntoView();
   transcript = {
@@ -719,8 +720,18 @@ test("a delegation's row opens its worker in the side panel beside the agent's p
   assert.ok(row, "the delegation's row opens its worker");
   act(() => row.click());
   await settle();
+  const tabLabels = () =>
+    [...(container.querySelector("aside.side-panel")?.querySelectorAll("[role='tab']") ?? [])].map(
+      (tab) => tab.textContent,
+    );
+  const opened = tabLabels();
+  // The row hands the panel the keys, so ⌘W closes the tab it just opened.
+  act(() => runAppCommand(APP_COMMAND.CLOSE_TAB));
+  await settle();
+  const afterClose = tabLabels();
+  act(() => row.click());
+  await settle();
   const panel = container.querySelector("aside.side-panel");
-  const opened = [...(panel?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent);
   const add = panel?.querySelector<HTMLButtonElement>("button[aria-label='Open a tab']");
   assert.ok(add, "the panel offers its +");
   act(() => add.click());
@@ -730,6 +741,11 @@ test("a delegation's row opens its worker in the side panel beside the agent's p
   assert.ok(
     opened.some((label) => label?.includes("Find the flakiest test.")),
     `the worker's tab stands in the panel: ${opened.join(", ")}`,
+  );
+  assert.equal(
+    afterClose.some((label) => label?.includes("Find the flakiest test.")),
+    false,
+    `⌘W closes the worker's tab: ${afterClose.join(", ")}`,
   );
   assert.deepEqual(
     offered.filter((label) => /^(Description|Comments|Inbox)/u.test(label ?? "")),
@@ -1471,12 +1487,7 @@ test("an automation's agent opens on the automation's prompt alone, sent by the 
   holdAutomations(handHostReads({}).deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: [SWEEP] }),
   });
-  const opened: unknown[] = [];
-  const tasks = tasksControl({ workspaces: [ACME] });
-  const page = mount({
-    ...tasks,
-    automationsView: { ...tasks.automationsView, onOpen: (place) => opened.push(place) },
-  });
+  const page = mount(tasksControl({ workspaces: [ACME], workspace: ACME }));
   await settle();
 
   const { card, sender } = origin(page);
@@ -1486,7 +1497,8 @@ test("an automation's agent opens on the automation's prompt alone, sent by the 
   assert.doesNotMatch(card.textContent ?? "", /Vespin started this run/u);
   act(() => automation?.click());
 
-  assert.deepEqual(opened, [{ kind: "edit", automationId: SWEEP.id }]);
+  const router = agentRouter ?? assert.fail("the agent's route stands");
+  assert.equal(router.history.location.pathname, `/${ACME.id}/automation/${SWEEP.id}`);
 });
 
 test("a deleted automation's agent still names it, plainly, with nothing to open", async () => {

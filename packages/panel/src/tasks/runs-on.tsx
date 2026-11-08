@@ -9,6 +9,7 @@ import {
   DEVICE_PLATFORM,
   DEVICE_SETUP,
   type DevicePlatform,
+  type DeviceSetup,
 } from "@repo/features/device-agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
@@ -32,7 +33,6 @@ import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
 import { devicePlatformOf } from "../device-platform.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
-import { DEVICE_SETUP_WORDS } from "../device-setup.js";
 import { machineName, type ThisMac, useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";
 import { keptKey, useKept } from "../use-kept.js";
@@ -72,6 +72,12 @@ import { keptKey, useKept } from "../use-kept.js";
  * that agent runs on, named the same way, or that the device was removed
  * (`plan-agents.tsx`).
  */
+
+/** What a device still setting itself up is called, which Runs on says of a device that takes no agent yet. */
+const DEVICE_SETUP_WORDS = {
+  [DEVICE_SETUP.PREPARING]: "Getting ready…",
+  [DEVICE_SETUP.FAILED]: "Couldn't set up",
+} as const satisfies Record<DeviceSetup, string>;
 
 /** What the menu and its chips say. */
 export const RUNS_ON_WORDS = {

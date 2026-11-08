@@ -1,13 +1,11 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readAgent } from "@repo/database/models/agent-store";
-import { readTaskHeader } from "@repo/database/models/task-store";
+import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { workspaceOf } from "@repo/database/models/workspace-store";
 import { LINK_PLACE, linkOf, mentionMarkdownLink, taskLinkStep } from "@repo/features/link-grammar";
 import { MENTION_KIND, type Mention, mentionMarkdown } from "@repo/features/mention-link";
 import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
 import { Effect, Option } from "effect";
-import { taskWorkspace } from "../github/workspace-repository.js";
-import type { StoreFailure } from "../http/store-failure.js";
 
 /**
  * written-mentions.ts -- the mentions a tool hands an agent ready to write: a task's, a page's, on a task or on an agent with no task, or another agent's, each `[@name](target)` under its workspace.
@@ -58,7 +56,7 @@ const taskStepOf = (
   userId: string,
   taskId: string,
 ): Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices> =>
-  Effect.flatMap(taskWorkspace(userId, taskId), (workspace) =>
+  Effect.flatMap(readTaskWorkspace(userId, taskId), (workspace) =>
     Option.match(workspace, {
       onNone: () => Effect.succeed(Option.none<string>()),
       onSome: (workspaceId) => Effect.map(workspaceStepOf(userId, workspaceId), Option.some),

@@ -18,6 +18,7 @@
     "@repo/features": "workspace:*",
     "@repo/settings": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@repo/wire": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

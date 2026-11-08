@@ -29,12 +29,11 @@
  *
  * A caller that draws the agent's pointer passes a cursor
  * (`BrowserCursor`): each click, type, choice, and wheel turn reports its point
- * just before its input is dispatched, and where someone is watching the
- * input waits `BROWSER_CURSOR_BEAT` after it, so a pointer drawn gliding to
- * the point arrives as the action lands. A click sends its move before the
- * beat, and holds the beat too where the page draws a recording's pointer
- * (`BROWSER_RECORDING_POINTER_MARK`), which glides as the page hears the move,
- * so a video's pointer arrives as the press lands. A caller that passes none
+ * just before its input is dispatched, at one pace whoever watches. A click
+ * sends its move first, and where the page draws a recording's pointer
+ * (`BROWSER_RECORDING_POINTER_MARK`), which glides as the page hears the
+ * move, holds `BROWSER_CURSOR_BEAT` before its press, so a video's pointer
+ * arrives as the press lands. A caller that passes none
  * sends exactly the commands it always did.
  *
  * A `wait` right after an action that may navigate (a click, Enter, a
@@ -93,7 +92,7 @@ import {
 /** How often `wait` asks whether what it waits for has come. */
 const WAIT_POLL = Duration.millis(250);
 
-/** How long a watched pointer's input waits after its move is reported: about the glide the panel draws to the point. */
+/** How long a click on a page that draws a recording's pointer waits after its move: about the glide that pointer draws to the point. */
 export const BROWSER_CURSOR_BEAT = Duration.millis(250);
 
 /**
@@ -116,14 +115,11 @@ const CURSOR_REPORT_TIMEOUT = Duration.seconds(1);
 
 /**
  * Where a run reports the agent's pointer: `report` is told of each move
- * just before its input is dispatched, and `watched` says whether someone
- * is watching the tabs, which holds each input `BROWSER_CURSOR_BEAT` after
- * its report. Note that a report never fails the action: one that could
- * not be made is the caller's to swallow.
+ * just before its input is dispatched. Note that a report never fails the
+ * action: one that could not be made is the caller's to swallow.
  */
 export interface BrowserCursor<R = never> {
   readonly report: (move: BrowserCursorMove) => Effect.Effect<void, never, R>;
-  readonly watched: boolean;
 }
 
 /**
@@ -711,9 +707,9 @@ function drawsRecordingPointer(page: Page) {
 
 /**
  * A left click at a point, the pointer moved there first: its move is
- * reported and sent, then held for the beat where someone watches or the page
- * draws a recording's pointer, so the panel's pointer and the recording's
- * both glide there and arrive as the press lands. A caller that passes no
+ * reported and sent, then held for the beat where the page draws a
+ * recording's pointer, so the recording's glides there and arrives as the
+ * press lands. A caller that passes no
  * cursor sends the move and the press back to back, as it always did.
  */
 function clickAt<R>(
@@ -722,12 +718,9 @@ function clickAt<R>(
   point: { readonly x: number; readonly y: number },
 ) {
   return Effect.gen(function* () {
-    const heard =
-      cursor === undefined
-        ? false
-        : yield* reportPoint(page, cursor, BROWSER_CURSOR_KIND.CLICK, point);
+    if (cursor !== undefined) yield* reportPoint(page, cursor, BROWSER_CURSOR_KIND.CLICK, point);
     yield* mouseAt(page, point, "mouseMoved");
-    if (cursor !== undefined && (heard || (yield* drawsRecordingPointer(page)))) {
+    if (cursor !== undefined && (yield* drawsRecordingPointer(page))) {
       yield* Effect.sleep(BROWSER_CURSOR_BEAT);
     }
     yield* pressAt(page, point);
@@ -812,9 +805,8 @@ function typeText(page: Page, text: string, ref: string | undefined) {
 }
 
 /**
- * Reports the pointer's move to a point, with the visible page's size, and
- * answers whether someone watching heard it, which holds the input after it
- * for the beat. Note that a page whose size cannot be read reports nothing,
+ * Reports the pointer's move to a point, with the visible page's size. Note
+ * that a page whose size cannot be read reports nothing,
  * since a point the panel cannot place is no use, and the action goes on as
  * it would have; and that the measure and the report together are bounded by
  * `CURSOR_REPORT_TIMEOUT`, past which the input goes on unreported.
@@ -830,7 +822,7 @@ function reportPoint<R>(
     const metrics = yield* Effect.option(
       Effect.flatMap(page.send(method), (answer) => readMetrics(method, answer)),
     );
-    if (Option.isNone(metrics)) return false;
+    if (Option.isNone(metrics)) return;
     const view = metrics.value.cssVisualViewport;
     yield* cursor.report({
       tab: page.targetId,
@@ -840,16 +832,11 @@ function reportPoint<R>(
       viewport: { width: view.clientWidth, height: view.clientHeight },
       at: yield* Clock.currentTimeMillis,
     });
-    return true;
   });
-  // Note that the beat is held only for a move the panel heard, since it is the glide's time.
-  return Effect.map(
-    Effect.timeoutOption(reported, CURSOR_REPORT_TIMEOUT),
-    (made) => cursor.watched && Option.getOrElse(made, () => false),
-  );
+  return Effect.asVoid(Effect.timeoutOption(reported, CURSOR_REPORT_TIMEOUT));
 }
 
-/** Reports the pointer's move to a point and holds the input after it for the beat where someone watching heard it. */
+/** Reports the pointer's move to a point, where the run draws the pointer. */
 function pointTo<R>(
   page: Page,
   cursor: BrowserCursor<R> | undefined,
@@ -857,9 +844,7 @@ function pointTo<R>(
   point: { readonly x: number; readonly y: number },
 ) {
   if (cursor === undefined) return Effect.void;
-  return Effect.flatMap(reportPoint(page, cursor, kind, point), (heard) =>
-    heard ? Effect.sleep(BROWSER_CURSOR_BEAT) : Effect.void,
-  );
+  return reportPoint(page, cursor, kind, point);
 }
 
 /**

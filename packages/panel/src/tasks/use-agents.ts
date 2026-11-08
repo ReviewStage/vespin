@@ -72,17 +72,20 @@ import {
 } from "../use-app-state.js";
 import {
   ARCHIVE_NOT_READY,
+  agentStillWriting,
   archiveWords,
   choiceRequest,
   continueFailureNote,
   DELETE_WORDS,
   openingLineOf,
   RENAME_FAILED,
+  RETRY_FAILED,
   SERVERS_FAILED,
   type SentLine,
   START_FAILED_AWAY,
   START_NEEDS_TASK,
   STOP_FAILED,
+  STOP_NOTHING_YET,
   startFailureNote,
 } from "./agent-model.js";
 import {
@@ -470,6 +473,12 @@ export interface AgentsControl {
   onRewind: (agentId: string, messageId: string) => Promise<AgentActAnswer>;
   /** Sends one agent a message under the key the composer made. */
   onMessage: MessageSender;
+  /**
+   * A failed turn's Try again: sends again the lines the agent's failed turn
+   * never took, or, where none was lost, the words given as the developer's
+   * own; answers whether the service took it, a refusal said in a toast.
+   */
+  onRetry: (agentId: string, words: string) => Promise<boolean>;
   /** Changes one agent's model and effort for its next step, drawn at once by the host. */
   onChoose: ChoiceWriter;
   /** Switches one agent's MCP servers for its next turn on, drawn at once by the host; a refusal is said in a toast. */
@@ -600,7 +609,7 @@ function runsOnOf(runsOn: AgentRunsOnRequest | undefined): {
 const NOTHING_CARRIED: Pick<Draft, "text" | "attachments"> = { text: "", attachments: [] };
 
 /** The agent a Start is still making: the key its press minted, which its tab stands under until the service answers, and the model it was chosen on, none for the account's default. */
-export interface StartingAgent {
+interface StartingAgent {
   readonly key: string;
   readonly model: string | undefined;
 }
@@ -764,7 +773,7 @@ export const MODELS_READ = {
   FAILED: "failed",
 } as const;
 
-export type ModelsReadState = (typeof MODELS_READ)[keyof typeof MODELS_READ];
+type ModelsReadState = (typeof MODELS_READ)[keyof typeof MODELS_READ];
 
 /**
  * The newest read of the models, stamped with the generation that read
@@ -1197,17 +1206,17 @@ export function useAgents(input: {
   ): string => {
     const joins = draft?.fork?.agentId === sourceId && draft.fork.messageId === undefined;
     const adds = words.trim() !== "" || attachments.length > 0;
-    const id = joins && !adds && draft !== undefined ? draft.id : mintKey();
+    const id = joins && !adds ? draft.id : mintKey();
     if (startsOn === undefined) return id;
     const source = standing?.find((agent) => agent.id === sourceId);
     const fork = continueFork(sourceId);
     moveWords(startsOn, id, fork, { text: words.trim(), attachments });
     withDraft(startsOn, {
       id,
-      choice: joins ? draft?.choice : undefined,
-      disabledServers: joins ? (draft?.disabledServers ?? []) : (source?.disabledServers ?? []),
+      choice: joins ? draft.choice : undefined,
+      disabledServers: joins ? draft.disabledServers : (source?.disabledServers ?? []),
       fork,
-      ...runsOnOf(joins ? draft?.runsOn : undefined),
+      ...runsOnOf(joins ? draft.runsOn : undefined),
     });
     return id;
   };
@@ -1393,13 +1402,42 @@ export function useAgents(input: {
     return undefined;
   };
 
-  // A refused Stop leaves the button as it was, so it says so in a toast.
+  // A refused Stop, or one that found nothing to stop yet, leaves the button as it was, so it says so in a toast.
   const onStop = async (agentId: string): Promise<boolean> => {
     const answer = await sendStop({ agentId }).catch(agentUnreached);
-    const took = !("failure" in answer);
-    if (!took) {
+    if ("failure" in answer) {
       failed(STOP_FAILED, {
         surface: FAILURE_SURFACE.AGENT_STOP,
+        cause: answer,
+        about: { agentId },
+      });
+      return false;
+    }
+    // An agent still at work once its Stop answered is one the Stop found nothing to stop in yet.
+    if (agentStillWriting(answer.agent.status)) {
+      toast({
+        replayUnmasked: true,
+        words: STOP_NOTHING_YET,
+        tone: STATUS_TONE.ATTENTION,
+        hold: TOAST_HOLD.FAILED,
+      });
+      return false;
+    }
+    return true;
+  };
+
+  // A refused Try again leaves the end line offering it, so it says so in a toast.
+  const onRetry = async (agentId: string, words: string): Promise<boolean> => {
+    const answer = await sendMessage({
+      agentId,
+      text: words,
+      clientKey: crypto.randomUUID(),
+      retry: true,
+    }).catch(agentUnreached);
+    const took = !("failure" in answer);
+    if (!took) {
+      failed(RETRY_FAILED, {
+        surface: FAILURE_SURFACE.AGENT_SEND,
         cause: answer,
         about: { agentId },
       });
@@ -1669,6 +1707,7 @@ export function useAgents(input: {
     onStop,
     onRewind,
     onMessage,
+    onRetry,
     onChoose,
     onSwitchServers,
     addRepository,

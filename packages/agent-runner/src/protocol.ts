@@ -159,15 +159,15 @@ export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS]
 
 /**
  * How a message reached its runner, as the launch's trace names it: a place
- * created from its source agent's snapshot, its repository's base snapshot,
- * or the agents' image; one resumed from its own snapshot; the runner
+ * created from its source agent's snapshot, with a fork of its repository's
+ * base drive, or from the agents' image alone; one resumed from its own snapshot; the runner
  * launched again in a place still up; a place made anew where the one found
  * was gone; or a runner already up. The last four are spelled as the
  * service's hand-off event spells them (`SERVER_HANDOFF_PATH`).
  */
 export const LAUNCH_PATH = {
   SOURCE_SNAPSHOT: "source_snapshot",
-  BASE_SNAPSHOT: "base_snapshot",
+  BASE_DRIVE: "base_drive",
   IMAGE: "image",
   RESUMED: "resumed",
   RELAUNCHED: "relaunched",
@@ -625,6 +625,28 @@ export const RUNNER_END = {
 export type RunnerEnd = (typeof RUNNER_END)[keyof typeof RUNNER_END];
 
 /**
+ * How the runner's process exits: a launch that ended as the service asked or
+ * as its turn did, one that failed, and one whose config line never came
+ * within `RUNNER_CONFIG.WAIT_MS`, which has no route to say so but its exit,
+ * since the config is what names the events route.
+ */
+export const RUNNER_EXIT = {
+  ENDED: 0,
+  FAILED: 1,
+  UNCONFIGURED: 3,
+} as const;
+
+/**
+ * How long a launch waits for its config line before it exits as
+ * `RUNNER_EXIT.UNCONFIGURED` rather than stand up reading nothing: the
+ * service writes it right after it starts the command, or hands it with the
+ * launch on a Mac, so one that has not come in this long never will.
+ */
+export const RUNNER_CONFIG = {
+  WAIT_MS: 2 * 60 * 1_000,
+} as const;
+
+/**
  * How long a warm launch waits on its own before it ends itself. The service
  * hands each warm launch its window (`warmForMs`, from `CODER.RUNNER_WARM`),
  * and a launch past it is ended here rather than by a sweep: a message the
@@ -762,14 +784,15 @@ export interface RunnerEventBatch {
 
 /**
  * How often a launch tells the service it still runs, as a batch with no events,
- * for as long as it runs. A harness may say nothing for an hour while a
- * background command or a wakeup it waits on runs, and the service keeps the
- * sandbox alive only on what the runner posts (its keep-alive interval is
- * ten minutes, its timeout an hour), so five minutes leaves room for a
- * heartbeat the service did not take, and costs one small post each.
+ * for as long as it runs, on its own timer whatever its harness says. A harness
+ * may say nothing for an hour while a background command or a wakeup it waits
+ * on runs, and the service touches the sandbox during a turn only on what the
+ * runner posts, about once a minute, against a sandbox that stops five idle
+ * minutes after its last touch, so a minute leaves room for heartbeats the
+ * service did not take, and costs one small post each.
  */
 export const RUNNER_HEARTBEAT = {
-  EVERY_MS: 5 * 60 * 1_000,
+  EVERY_MS: 60 * 1_000,
   /**
    * How long one heartbeat waits on the service's answer before it is let go, well
    * inside the interval, so a post the service never answers cannot hold back the

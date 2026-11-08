@@ -1026,7 +1026,7 @@ function ChaptersReading({
                             <KeyChangeItem
                               key={index}
                               change={change}
-                              paths={row?.paths ?? []}
+                              paths={row.paths}
                               onReveal={
                                 stale
                                   ? undefined

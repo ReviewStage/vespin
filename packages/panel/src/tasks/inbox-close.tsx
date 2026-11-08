@@ -85,7 +85,7 @@ function resolvedNote(items: readonly InboxItem[]): string {
 }
 
 /** What one toast says of a resolve of several items the service refused some of: how many it took, and how many not. */
-export function closedNote(landed: number, refused: number): string {
+function closedNote(landed: number, refused: number): string {
   return landed === 0
     ? `Could not resolve ${countWords(refused, TERM.INBOX_ITEM)}`
     : `${countWords(landed, TERM.INBOX_ITEM)} resolved, ${refused} could not be`;

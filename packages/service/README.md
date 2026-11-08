@@ -1458,7 +1458,7 @@ model. An account that saved no API key, as one on a plan alone, has its
 replays carried without a summary.
 
 The sandbox is one Vercel Sandbox per agent
-(`src/agents/machine/vercel-machine.ts`), booted from the agents' custom image
+(`src/agents/machine/sandbox-machine.ts`), booted from the agents' custom image
 (`apps/web/agent-image/Dockerfile`: Node, git, pnpm, Python, Playwright's
 Chromium, Claude Code, Codex, `gh`, and the runner itself), which CI pushes
 to the project's registry before the deploy that names it, and kept alive
@@ -1508,9 +1508,9 @@ conversation's lock, so an agent's turns land as `turns` rows naming its model
 and effort and its `messages` rows as `UIMessage`s, and a batch posted again
 writes nothing twice; and it takes the developer's lines from
 `/api/agents/runner-lines` (`runner-lines-app.ts`), a held read woken through
-Sync. The runner is retired when its turn goes idle, and its end takes the
-credential off the firewall and stops the sandbox, unless a Terminal holds
-it, which keeps the credential on until the sandbox stops on its timeout. The instructions (`src/agents/coder-host/instructions.ts`, worded for the
+Sync. The runner stays warm past its turn, and the sandbox, its credential
+on the firewall, stops five minutes after anything last touched it
+(`@repo/sandbox`'s `SANDBOX_IDLE`). The instructions (`src/agents/coder-host/instructions.ts`, worded for the
 harness and handed to it at every launch) tell the agent to read `AGENTS.md`
 and `CLAUDE.md` first, reread the code the description names and say where it no
 longer fits, run the repository's checks, work on an `agent/<slug>` branch and
@@ -1551,16 +1551,20 @@ and the erasure call itself runs over the ambient
 `HttpClient` rather than an injected transport, so nothing in `AccountProcedureSeams`
 carries one — a test provides its own fake `HttpClient` layer instead.
 
-The preferences snapshot carries nine parts. `preferences` is the settings
+The preferences snapshot carries twelve parts. `preferences` is the settings
 snapshot the desktop syncs, replaced whole by a write that names it.
 `linkOpen`, where the account's app links open (null reads as the browser),
 `agentEnter`, what Enter does in an agent's box while it works (`steer`
 or `queue`, null reads as steer), `commitAuthor`, who authors an agent's
 commits, `setupFinished`, whether the account
-finished setup after sign-in (null reads as not yet), and `setupPlace`, where
-it stands in setup as its JSON (null until setup starts), are synced settings
-kept as parts of their own (`link_open`, `agent_enter`, `commit_author`,
-`setup_finished`, `setup_place`), so a build that predates them neither
+finished setup after sign-in (null reads as not yet), `setupPlace`, where
+it stands in setup as its JSON (null until setup starts), `soundWhen`, when a
+sound plays as an agent finishes (`off`, `background`, or `always`, null
+reads as off), `completionSound`, which sound (null reads as `chime`), and
+`turnNotifications`, whether a notification is posted then (null reads as
+off), are synced settings kept as parts of their own (`link_open`,
+`agent_enter`, `commit_author`, `setup_finished`, `setup_place`,
+`sound_when`, `completion_sound`, `turn_notifications`), so a build that predates them neither
 refuses the snapshot nor clears them by writing `preferences` back whole.
 `agent` is the account's default model and effort for an agent —
 what a click on Start runs on — as `{ model, effort }` in AI Gateway's catalog
@@ -1931,9 +1935,10 @@ turn sees the run a message opens as its own (`src/agents/coder-host/status.ts`)
 `starting` before one, `running`, `completed`, `failed`, or `cancelled`,
 with a running turn carrying a Stop stamp reading as canceled already, an
 agent still without a turn row five minutes after its Start
-(`CODER.STARTING_GRACE`) reading as failed rather than starting forever,
-and an agent with a message of the developer's still awaiting its turn
-(`awaitingLinesOf`) reading as running whatever its newest turn says.
+(`CODER.STARTING_GRACE`) reading as failed rather than starting forever.
+A message of the developer's is written with the turn it awaits, queued
+for its runner (`packages/database/src/models/turn-state.ts`), so the
+newest turn alone says where the agent stands.
 `GET /api/agents/{id}/messages?after=<seq>:<revision>` answers the
 conversation's rows past the cursor as `UIMessage`s, the cursor to read on
 from, the agent's status as the page was read, and, where that status is
@@ -2014,8 +2019,7 @@ agents on a task as `taskAgentPins`.
 `POST /api/agents/{id}/stop` is the harness's cancel of the turn under way, a
 stop line the runner hands on as an interrupt, then the row's stamp; a turn
 still running `CODER.STOP_CONFIRM` later has its runner ended and is settled
-canceled, the runner's end stops the sandbox, and anything the agent pushed
-stays.
+canceled, and anything the agent pushed stays.
 `GET /api/agents/{id}/pull-request` answers what the agent published
 (`src/agents/coder-host/published.ts`): the repository, the branch it pushed, and the
 pull request from it with its state (`open`, `draft`, `merged`, `closed`),
@@ -2635,13 +2639,17 @@ answers what each did; one that fails is logged and answered as failed while
 the rest still run, and any failure fails the cron's check-in. In order:
 
 - `syncLog`: the sync log's transactions older than its keep pruned.
+- `portShares`: the shared ports' links no one visited for their idle bound closed.
+- `turns`: the coding agents' turns past their deadline failed with why
+  (`src/agents/coder-host/reconcile.ts`), a sweep's worth of agents at a time.
 
-No sweep settles a turn whose runner went quiet. Every post a runner makes,
-its heartbeat among them, pushes on its open turns' lease
-(`packages/database/src/models/turn-lease.ts`); every reader takes a turn
-past its lease as its runner lost, and the agent's next touch (a message, a
-Stop, an open of it) settles it (`src/agents/coder-host/lapsed-runner.ts`).
-Nor does one retire a local runner left warm past its device's window: the
+A turn's row holds the deadline of the state it stands in
+(`packages/features/src/turn-deadline.ts`), written by its one writer
+(`packages/database/src/models/turn-state.ts`): its pickup while queued, its
+progress deadline while it runs, which only its progress pushes on, a Stop's,
+and a cap from its start. The sweep is the one reaper; a send or a Stop
+reconciles its own agent before it writes, and no read settles a turn.
+No sweep retires a local runner left warm past its device's window: the
 runner ends itself (`CODER.RUNNER_WARM`), and a host waiting to update retires
 its own. Nor does one hand on an agent's queue: every settle of a turn, whichever
 path made it, hands the queue on through the store writer's settled-turn

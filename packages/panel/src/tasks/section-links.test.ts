@@ -10,7 +10,7 @@ import {
 import type { Task } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
-import { act, createElement, useState } from "react";
+import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
@@ -480,14 +480,13 @@ function drawnTitled() {
   const root = createRoot(container);
   roots.push(root);
   function TitledPlan(): React.JSX.Element {
-    const [asks, setAsks] = useState(0);
     return createElement(DescriptionBody, {
       task: TASK,
       edit: descriptionEditMutation(TASK.id, () =>
         Promise.reject(new Error("Nothing is saved in this test.")),
       ),
       onRename: () => Promise.resolve(true),
-      rename: { asks, asked: undefined, onBegin: () => setAsks((count) => count + 1) },
+      rename: { asked: undefined },
       sectionLinks: { workspace: WORKSPACE, onOpen: () => undefined, reveal: undefined },
     });
   }

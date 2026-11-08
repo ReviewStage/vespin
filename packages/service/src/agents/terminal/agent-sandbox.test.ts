@@ -1,33 +1,30 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AGENT_USER } from "@repo/agent-runner/pins";
 import { Database } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { Effect, Layer, Redacted, Result } from "effect";
-import { afterEach, vi } from "vitest";
-import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
-import { runnerSandboxApi } from "../../testing/runner-sandbox-fake.js";
 import {
-  commandRunStreamed,
-  fixtureToken,
-  sandboxesListed,
-  sandboxFetchOver,
-  sandboxFound,
-  sandboxListRefusal,
-  sessionAnswered,
-} from "../../testing/vercel-sandbox-fake.js";
-import { openAgentSandbox } from "../agent-sandbox-open.js";
+  type CommandRun,
+  OPEN_INTERNET,
+  SANDBOX_STATUS,
+  type SandboxStatus,
+  SandboxUnavailable,
+} from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { Effect, Layer, Redacted, Result } from "effect";
+import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
+import { agentSandboxName } from "../agent-sandbox-open.js";
 import { AgentImage } from "../coder-host/agent-image.js";
-import { SandboxUnavailable, vercelSandboxApi } from "../vercel-sandbox-api.js";
 import { AgentSandbox, agentSandboxLayer, SHELL_REFUSAL } from "./agent-sandbox.js";
 import { TMUX_EXIT } from "./tmux.js";
 
 /**
- * A coding agent's sandbox as its Terminal tab reaches it, through
- * `@vercel/sandbox` over a fake of Vercel answering from a script: a stopped sandbox lists no
+ * A coding agent's sandbox as its Terminal tab reaches it, through `Sandbox`
+ * kept in memory, its tmux answering from a script: a stopped sandbox lists no
  * shells and is never woken by a list or a start, a running one's shells are
  * read from tmux in its running session, a shell starts under the id given
  * and is read back, one tmux does not hold is not found, a list tmux could
@@ -35,23 +32,20 @@ import { TMUX_EXIT } from "./tmux.js";
  * name. A GitHub credential is set at the firewall in its shape: an
  * installation's on GitHub's two hosts, a member's own on its repository's
  * paths alone, its record kept in the test's own database under a key ring
- * of the suite's. The token is a synthetic one, unexpired, so nothing
- * refreshes it.
+ * of the suite's.
  */
 
 const SESSION = "wrun_fixture";
-const FIXTURE_IMAGE = "agent-image:fixture";
-const SANDBOX = "eve-sbx-vercel-fixture";
+/** The agents' image as a deploy names it, the fixture's. */
+const FIXTURE_IMAGE = {
+  reference: Effect.succeed("agent-image:fixture"),
+  runner: Effect.succeed([]),
+};
+const SANDBOX = agentSandboxName(SESSION);
 const RUNNING_SESSION = "sbs_running";
 const SHELL = "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d";
 const REPOSITORY = "Acme/Relay";
 const MEMBER_TOKEN = "member-token-fixture";
-
-interface Asked {
-  readonly method: string;
-  readonly url: URL;
-  readonly args?: readonly string[];
-}
 
 /** The running session of the fixture's sandbox, under an account of its own, whose firewall a credential is set at. */
 const ownSession = Effect.gen(function* () {
@@ -62,83 +56,50 @@ const ownSession = Effect.gen(function* () {
   return { userId, name: SANDBOX, sandboxSessionId: RUNNING_SESSION };
 });
 
-/** A command's stream as Vercel answers a waited run in the running session: the command, what it printed, and its end. */
-const commandStream = (exitCode: number, stdout = "") =>
-  commandRunStreamed({ id: "cmd_1", sessionId: RUNNING_SESSION }, { exitCode, stdout, stderr: "" });
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
+/** A command's end as tmux answers it: its exit, and what it printed. */
+const ran = (exitCode: number, stdout = ""): CommandRun => ({ exitCode, stdout, stderr: "" });
 
 /**
- * Vercel as the scenario has it: the session's sandbox in the status given,
- * tmux holding the shells the list prints, refusing to name a shell it does
- * not hold, and a resume that brings the sandbox up under a fresh session.
+ * The fixture's sandbox as the memory has it: in the status given, none
+ * where none is given; tmux listing the shells given, or exiting the code
+ * given; the shell check exiting its own code for a shell tmux does not hold.
  */
-function vercel(
-  status: string | undefined,
+function standing(
+  status: SandboxStatus | undefined,
   shells: readonly string[] = [],
   listExit = 0,
-  interactiveUrl = "wss://sbx-fixture.vercel.run/ws",
   shellCheckExit: number = TMUX_EXIT.NO_SESSION,
 ) {
-  // The layer asks under the deployment's own token, read where the platform hands it.
-  vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-  const asked: Asked[] = [];
-  const policies: unknown[] = [];
+  const sandbox = memorySandbox({
+    run: ({ ask }) => {
+      // Every command is `sh -c <script> sh <tmux args>`; the list is the one with none.
+      const scriptAt = ask.args.indexOf("-c") + 1;
+      const tmuxArgs = ask.args.slice(scriptAt + 2);
+      if (tmuxArgs.length === 0) return ran(listExit, shells.join("\n"));
+      if (tmuxArgs[0] === "new-session") return ran(0);
+      const named = tmuxArgs.some((arg) => arg.startsWith(`=terminal-${SHELL}`));
+      // The shell check exits its own code for a session tmux does not hold, or what a tmux that would not start exits.
+      if (ask.args[scriptAt]?.includes("has-session")) return ran(named ? 0 : shellCheckExit);
+      return ran(named ? 0 : 1);
+    },
+  });
+  if (status !== undefined) {
+    sandbox.stand({
+      name: SANDBOX,
+      status,
+      running: RUNNING_SESSION,
+      tags: { sessionId: SESSION },
+    });
+  }
   const layer = Layer.provide(
     agentSandboxLayer,
     Layer.mergeAll(
       LOCAL_AGENT_ENVIRONMENT,
-      Layer.succeed(AgentImage, { reference: Effect.succeed(FIXTURE_IMAGE) }),
-      sandboxFetchOver(async (url, init) => {
-        const parsed = new URL(url);
-        const method = init.method ?? "GET";
-        if (parsed.pathname.endsWith("/cmd")) {
-          const body = JSON.parse(await new Response(init.body).text());
-          const args: readonly string[] = body.args;
-          asked.push({ method, url: parsed, args });
-          // Every command is `sh -c <script> sh <tmux args>`; the list is the one with none.
-          const scriptAt = args.indexOf("-c") + 1;
-          const tmuxArgs = args.slice(scriptAt + 2);
-          if (tmuxArgs.length === 0) return commandStream(listExit, shells.join("\n"));
-          if (tmuxArgs[0] === "new-session") return commandStream(0);
-          const named = tmuxArgs.some((arg) => arg.startsWith(`=terminal-${SHELL}`));
-          // The shell check exits its own code for a session tmux does not hold, or what a tmux that would not start exits.
-          if (args[scriptAt]?.includes("has-session"))
-            return commandStream(named ? 0 : shellCheckExit);
-          return commandStream(named ? 0 : 1);
-        }
-        asked.push({ method, url: parsed });
-        if (parsed.pathname.endsWith("/interactive")) {
-          return Response.json({ url: interactiveUrl, token: "pty-token" });
-        }
-        if (parsed.pathname.endsWith("/network-policy")) {
-          policies.push(JSON.parse(await new Response(init.body).text()));
-          return Response.json(sessionAnswered({ id: RUNNING_SESSION, status: "running" }));
-        }
-        const listed = {
-          name: SANDBOX,
-          status: status ?? "stopped",
-          currentSessionId: RUNNING_SESSION,
-          createdAt: 0,
-        };
-        if (parsed.searchParams.get("resume") === "true") {
-          return Response.json(
-            sandboxFound({ ...listed, status: "running", currentSessionId: "sbs_resumed" }),
-          );
-        }
-        if (parsed.pathname === `/api/v2/sandboxes/${SANDBOX}`) {
-          return Response.json(sandboxFound(listed));
-        }
-        return (
-          sandboxListRefusal(parsed) ??
-          Response.json(sandboxesListed(status === undefined ? [] : [listed]))
-        );
-      }),
+      Layer.succeed(AgentImage, FIXTURE_IMAGE),
+      sandbox.layer,
     ),
   );
-  return { layer, asked, policies };
+  return { layer, state: sandbox.state, sandbox };
 }
 
 /** One field as the list prints it: what tmux printed, newline and all, in base64. */
@@ -152,7 +113,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "a stopped sandbox lists no shells and no ports, and is never woken by a list or a start",
     () =>
       Effect.gen(function* () {
-        const api = vercel("stopped");
+        const api = standing(SANDBOX_STATUS.STOPPED);
 
         const { listed, ports, started } = yield* Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
@@ -169,8 +130,8 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           started,
           Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
         );
-        assert.ok(api.asked.every((call) => call.url.searchParams.get("resume") !== "true"));
-        assert.ok(api.asked.every((call) => !call.url.pathname.endsWith("/cmd")));
+        assert.deepEqual(api.state.resumed, []);
+        assert.deepEqual(api.state.commands, []);
       }),
   );
 
@@ -178,12 +139,12 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "a running sandbox's shells are read from tmux in its running session, and one never opened is starting",
     () =>
       Effect.gen(function* () {
-        const api = vercel("running", [listedShell(SHELL, "dev server", "node")]);
+        const api = standing(SANDBOX_STATUS.RUNNING, [listedShell(SHELL, "dev server", "node")]);
 
         const listed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.terminals(SESSION),
         ).pipe(Effect.provide(api.layer));
-        const never = vercel(undefined);
+        const never = standing(undefined);
         const unopened = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.terminals(SESSION),
         ).pipe(Effect.provide(never.layer));
@@ -200,8 +161,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
             },
           ],
         });
-        const run = api.asked.find((call) => call.args !== undefined);
-        assert.equal(run?.url.pathname, `/api/v2/sandboxes/sessions/${RUNNING_SESSION}/cmd`);
+        assert.equal(api.state.commands[0]?.running, RUNNING_SESSION);
         assert.deepEqual(unopened, { sandbox: SANDBOX_STATE.STARTING, terminals: [] });
       }),
   );
@@ -223,8 +183,8 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           "   0: 00000000000000000000000000000000:0BB8 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1002        0 4500 1",
           "   1: 00000000000000000000000000000000:1435 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 4600 1",
         ];
-        const api = vercel("running", tables);
-        const unread = vercel("running", [], 1);
+        const api = standing(SANDBOX_STATUS.RUNNING, tables);
+        const unread = standing(SANDBOX_STATUS.RUNNING, [], 1);
 
         const ports = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.listeningPorts(SESSION),
@@ -236,8 +196,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         );
 
         assert.deepEqual(ports, { running: true, ports: [3000, 5173] });
-        const run = api.asked.find((call) => call.args !== undefined);
-        assert.equal(run?.url.pathname, `/api/v2/sandboxes/sessions/${RUNNING_SESSION}/cmd`);
+        assert.equal(api.state.commands[0]?.running, RUNNING_SESSION);
         assert.ok(outage instanceof SandboxUnavailable);
       }),
   );
@@ -246,7 +205,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "a shell starts in the running sandbox under the id given and is read back, and one tmux does not hold is not found",
     () =>
       Effect.gen(function* () {
-        const api = vercel("running", [listedShell(SHELL, "", "bash")]);
+        const api = standing(SANDBOX_STATUS.RUNNING, [listedShell(SHELL, "", "bash")]);
         const other = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
         const { started, renamedOther } = yield* Effect.gen(function* () {
@@ -273,7 +232,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
   it.effect("a list tmux could not give is an outage, never a sandbox with no shells", () =>
     Effect.gen(function* () {
-      const api = vercel("running", [], 1);
+      const api = standing(SANDBOX_STATUS.RUNNING, [], 1);
 
       const listed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
         sandbox.terminals(SESSION),
@@ -285,15 +244,17 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
   it.effect("a resume wakes the stopped sandbox by its name and answers it running", () =>
     Effect.gen(function* () {
-      const api = vercel("stopped");
+      const api = standing(SANDBOX_STATUS.STOPPED);
 
       const resumed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
         sandbox.resume(SESSION),
       ).pipe(Effect.provide(api.layer));
 
       assert.equal(resumed, SANDBOX_STATE.RUNNING);
-      const woken = api.asked.find((call) => call.url.searchParams.get("resume") === "true");
-      assert.equal(woken?.url.pathname, `/api/v2/sandboxes/${SANDBOX}`);
+      assert.deepEqual(
+        api.state.resumed.map((each) => each.name),
+        [SANDBOX],
+      );
     }),
   );
 
@@ -301,48 +262,34 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "a resume of a sandbox under its session's name whose snapshot is gone makes it again under that name, with its tags, the agent's user in it, and answers it running",
     () =>
       Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const fake = runnerSandboxApi();
-        const image = Layer.succeed(AgentImage, { reference: Effect.succeed(FIXTURE_IMAGE) });
+        const api = standing(undefined);
         const tags = { sessionId: SESSION, agentId: "agent-fixture" };
-        const opened = yield* Effect.gen(function* () {
-          const api = yield* vercelSandboxApi(async () => fixtureToken());
-          return yield* openAgentSandbox(api, { sessionId: SESSION, tags, vcpus: undefined });
-        }).pipe(Effect.provide(Layer.merge(fake.layer, image)));
-        const [expired] = fake.sandboxes;
-        assert.ok(expired !== undefined);
-        expired.status = "stopped";
-        expired.snapshotExpired = true;
-        const userMade = (run: { readonly args: readonly string[] }) =>
-          run.args.join(" ") === "-m -s /bin/bash agent";
-        const usersBefore = fake.runs.filter(userMade).length;
+        const expired = api.sandbox.stand({
+          name: agentSandboxName(SESSION),
+          status: SANDBOX_STATUS.STOPPED,
+          snapshotId: "snap_expired",
+          tags,
+        });
+        api.state.goneSnapshots.add("snap_expired");
 
         const resumed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.resume(SESSION),
-        ).pipe(
-          Effect.provide(
-            Layer.provide(
-              agentSandboxLayer,
-              Layer.mergeAll(LOCAL_AGENT_ENVIRONMENT, image, fake.layer),
-            ),
-          ),
-        );
+        ).pipe(Effect.provide(api.layer));
 
         assert.equal(resumed, SANDBOX_STATE.RUNNING);
-        const remade = fake.sandboxes.at(-1);
+        const remade = api.state.sandboxes.get(expired.name);
         assert.ok(remade !== undefined && remade !== expired);
         assert.deepEqual(
-          [expired.deleted, remade.deleted, remade.name, remade.tags],
-          [true, false, opened.sandbox.name, tags],
+          [api.state.deleted, remade.tags, remade.user?.name],
+          [[expired.name], tags, AGENT_USER],
         );
-        assert.equal(fake.runs.filter(userMade).length, usersBefore + 1);
       }),
   );
 
   it.effect("an attach mints the running session's PTY and never wakes a stopped sandbox", () =>
     Effect.gen(function* () {
-      const running = vercel("running");
-      const stopped = vercel("stopped");
+      const running = standing(SANDBOX_STATUS.RUNNING);
+      const stopped = standing(SANDBOX_STATUS.STOPPED);
 
       const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
         sandbox.attach(SESSION, SHELL),
@@ -352,39 +299,17 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       ).pipe(Effect.provide(stopped.layer));
 
       assert.equal(attached.state, SANDBOX_STATE.RUNNING);
-      assert.ok("shell" in attached && attached.shell.url === "wss://sbx-fixture.vercel.run/ws");
-      const mint = running.asked.find((call) => call.url.pathname.endsWith("/interactive"));
-      assert.equal(mint?.url.pathname, `/api/v2/sandboxes/sessions/${RUNNING_SESSION}/interactive`);
+      assert.ok("shell" in attached);
+      assert.deepEqual(running.state.interactive, [{ name: SANDBOX, running: RUNNING_SESSION }]);
       assert.deepEqual(refused, { state: SANDBOX_STATE.STOPPED });
-      assert.ok(stopped.asked.every((call) => call.url.searchParams.get("resume") !== "true"));
-      assert.ok(stopped.asked.every((call) => !call.url.pathname.endsWith("/interactive")));
+      assert.deepEqual(stopped.state.resumed, []);
+      assert.deepEqual(stopped.state.interactive, []);
     }),
-  );
-
-  it.effect(
-    "a minted PTY address off Vercel's sandbox domain is refused, its token never handed on",
-    () =>
-      Effect.gen(function* () {
-        const addresses = [
-          "wss://pty.attacker.test/ws",
-          "wss://vercel.run.attacker.test/ws",
-          "ws://sbx-fixture.vercel.run/ws",
-          "wss://user:pass@sbx-fixture.vercel.run/ws",
-        ];
-
-        for (const address of addresses) {
-          const api = vercel("running", [], 0, address);
-          const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-            sandbox.attach(SESSION, SHELL),
-          ).pipe(Effect.provide(api.layer), Effect.flip);
-          assert.ok(attached instanceof SandboxUnavailable, address);
-        }
-      }),
   );
 
   it.effect("an attach to a shell tmux does not hold is gone, and no PTY is minted for it", () =>
     Effect.gen(function* () {
-      const api = vercel("running");
+      const api = standing(SANDBOX_STATUS.RUNNING);
       const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
       const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -392,7 +317,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       ).pipe(Effect.provide(api.layer));
 
       assert.deepEqual(attached, { state: SANDBOX_STATE.RUNNING, gone: true });
-      assert.ok(api.asked.every((call) => !call.url.pathname.endsWith("/interactive")));
+      assert.deepEqual(api.state.interactive, []);
     }),
   );
 
@@ -400,7 +325,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "a tmux that could not be asked is an outage the tab may retry, never a shell gone",
     () =>
       Effect.gen(function* () {
-        const api = vercel("running", [], 0, undefined, 1);
+        const api = standing(SANDBOX_STATUS.RUNNING, [], 0, 1);
         const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
         const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -415,7 +340,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "an installation's token is set at the firewall on GitHub's two hosts alone, every other host left open",
     () =>
       Effect.gen(function* () {
-        const api = vercel("running");
+        const api = standing(SANDBOX_STATUS.RUNNING);
         const session = yield* ownSession;
 
         yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -427,10 +352,12 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         ).pipe(Effect.provide(api.layer));
 
         const authorization = `Basic ${Buffer.from("x-access-token:ghs_fixture").toString("base64")}`;
-        const injected = [{ transform: [{ headers: { authorization } }] }];
-        assert.deepEqual(api.policies, [
-          { allow: { "*": [], "github.com": injected, "api.github.com": injected } },
-        ]);
+        const injected = [{ set: { authorization } }];
+        assert.deepEqual(
+          api.state.policies.map((each) => each.policy),
+          [{ hosts: { "github.com": injected, "api.github.com": injected } }],
+        );
+        assert.notDeepEqual(api.state.policies[0]?.policy, OPEN_INTERNET);
       }),
   );
 
@@ -438,7 +365,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     "a member's own token is set on the repository's git paths as Basic under their login and on its REST paths as a bearer, and nowhere else",
     () =>
       Effect.gen(function* () {
-        const api = vercel("running");
+        const api = standing(SANDBOX_STATUS.RUNNING);
         const session = yield* ownSession;
 
         yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -456,29 +383,25 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
         const basic = `Basic ${Buffer.from(`octo-member:${MEMBER_TOKEN}`).toString("base64")}`;
         const bearer = `Bearer ${MEMBER_TOKEN}`;
-        assert.deepEqual(api.policies, [
-          {
-            allow: {
-              "*": [],
-              "github.com": [
-                {
-                  match: { path: { startsWith: `/${REPOSITORY}.git/` } },
-                  transform: [{ headers: { authorization: basic } }],
-                },
-              ],
-              "api.github.com": [
-                {
-                  match: { path: { exact: `/repos/${REPOSITORY}` } },
-                  transform: [{ headers: { authorization: bearer } }],
-                },
-                {
-                  match: { path: { startsWith: `/repos/${REPOSITORY}/` } },
-                  transform: [{ headers: { authorization: bearer } }],
-                },
-              ],
+        assert.deepEqual(
+          api.state.policies.map((each) => each.policy),
+          [
+            {
+              hosts: {
+                "github.com": [
+                  {
+                    path: { startsWith: `/${REPOSITORY}.git/` },
+                    set: { authorization: basic },
+                  },
+                ],
+                "api.github.com": [
+                  { path: { exact: `/repos/${REPOSITORY}` }, set: { authorization: bearer } },
+                  { path: { startsWith: `/repos/${REPOSITORY}/` }, set: { authorization: bearer } },
+                ],
+              },
             },
-          },
-        ]);
+          ],
+        );
       }),
   );
 });

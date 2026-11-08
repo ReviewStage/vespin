@@ -51,11 +51,12 @@ import { agentForkDoors, ForkProvider } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
+import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import type { ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import type { MAIN_TAB, MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
+import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { type AgentTerminalDoors, useAgentActions } from "./agent-actions.js";
@@ -65,7 +66,6 @@ import {
   type AddEntry,
   type DocumentMenu,
   DoorsTab,
-  type HeldTranscripts,
   type ShownTab,
   type TabDoors,
   type TabLook,
@@ -75,6 +75,7 @@ import {
 import { LOOK_STRIP, useStripLooks } from "./switcher-looks.js";
 import { tabCard } from "./tab-card.js";
 import { TabStrip } from "./tab-strip.js";
+import { TASK_MENU_LABEL } from "./task-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
 
 /**
@@ -126,9 +127,6 @@ import { WaitingCount } from "./task-row-parts.js";
  * tabs are closed, and those archived, stand behind History at the bar's
  * end (`agent-history.tsx`), which opens them again.
  */
-
-/** The section the task's agents stand under where they are listed among other things, as ⌘K lists them, and the details' way back names. */
-export const AGENTS_SECTION = "Agents";
 
 /** What the row that opens a draft says while a Start is out. */
 const NEW_AGENT_STARTING = "Starting…";
@@ -370,46 +368,6 @@ function agentTabs(input: {
   return [...own, ...starting, ...drafts];
 }
 
-/**
- * Each of the task's agents in the order started, or of those given (`listed`), as History lists a closed
- * or an archived one (`agent-history.tsx`), the Overview's agents list it, and ⌘K finds it, in its
- * tab's look: its harness's mark wearing where it stands, and, where the
- * row draws one, a failure at its end, as its tab does. Picking an agent
- * whose tab is open chooses that tab rather than opening another, as a
- * browser's tab search does.
- */
-export function agentEntries(
-  main: Pick<MainTabsControl, "tab" | "onChoose">,
-  agents: AgentsControl,
-  held?: HeldTranscripts,
-  listed: readonly AgentSummary[] = agents.agents ?? [],
-): AddEntry[] {
-  return listed.map((agent) => {
-    const label = agentName(agent, agents.models);
-    const chosen = main.tab !== undefined && sameTab(agentTab(agent.id), main.tab);
-    return {
-      row: {
-        id: agent.id,
-        ...tabLook({ kind: TAB_KIND.AGENT, name: label, agent }),
-        section: AGENTS_SECTION,
-        replayMasked: true,
-      },
-      endMark: agentEndMark(agent, true),
-      // Note that a caller handing what its tabs hold gets the card its tab hangs; ⌘K and the summary hang theirs themselves.
-      card:
-        held === undefined ? undefined : (
-          <AgentTabCard
-            name={label}
-            models={agents.models ?? []}
-            read={agentCardReading(agent, label, held, chosen, agents)}
-          />
-        ),
-      onPick: () => main.onChoose(agentTab(agent.id)),
-      agent,
-    };
-  });
-}
-
 /** The task's Inbox as a row, its tray and its name, which picking opens through `onPick`. */
 function inboxEntry(waiting: number, onPick: () => void): AddEntry {
   return {
@@ -516,17 +474,14 @@ function MainTabsRow({ children }: { children: React.ReactNode }): React.JSX.Ele
 /** What the task's name in its topbar opens, and the place the details' way back leads to. */
 export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
 
-/** What the task's menu is named, which a right-click on its name opens. */
-const TASK_MENU_LABEL = "Task actions";
-
 /**
  * The task's topbar, across the task's page over its column and its side
  * panel: the task's status mark and name, the two one press, hanging the
  * task's card, that opens the
  * task's details across the page and, pressed again, goes back to the agents
  * (`details`), as a channel's name opens its details, and whose right-click
- * is the task's own menu (`descriptionMenu`), whichever the page shows; then
- * `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
+ * is the task's own menu (`descriptionMenu`), whichever the page shows,
+ * renamed where it stands while `rename` is editing; then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
  * it: every menu there is a right-click. The window's side panel toggle
  * stands at its end (`desktop-shell.tsx`).
  */
@@ -534,6 +489,7 @@ export function TaskTopbar({
   task,
   details,
   descriptionMenu,
+  rename,
   shown,
   actions,
 }: {
@@ -543,6 +499,8 @@ export function TaskTopbar({
   details: { readonly shown: boolean; readonly onToggle: () => void } | undefined;
   /** The task's own menu, which its ⋯ draws. */
   descriptionMenu: DocumentMenu | undefined;
+  /** The task's name renamed in place over the title (`useInlineRename`'s), opened over the name a refusal left standing. */
+  rename?: Pick<InlineRename, "editing" | "asked" | "end"> | undefined;
   /** Whether the task's page is on screen, for the menu not to outlive it. */
   shown: boolean;
   actions?: React.ReactNode;
@@ -552,12 +510,22 @@ export function TaskTopbar({
     task === undefined
       ? undefined
       : tabLook({ kind: TAB_KIND.PLAN, status: task.status, name: task.name });
+  const renaming = task !== undefined && rename?.editing === true;
   return (
     <>
       <Toolbar
         // Note that the status mark stands inside the name's press, as a task's chip wears it, where the name opens the details.
         lead={details === undefined ? look?.icon : undefined}
-        title={task?.name}
+        title={renaming ? (rename.asked ?? task.name) : task?.name}
+        titleEdit={
+          renaming
+            ? {
+                label: "Task name",
+                maxLength: TASK_BOUNDS.MAX_NAME_CHARS,
+                onEnd: (end) => rename.end(end.value),
+              }
+            : undefined
+        }
         titleMenu={
           task === undefined || descriptionMenu === undefined
             ? undefined

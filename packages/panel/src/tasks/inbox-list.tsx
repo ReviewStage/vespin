@@ -1147,7 +1147,6 @@ function ListHead({
           lead={all ?? head.lead}
           title={barTitle}
           titleReplayUnmasked
-          quiet={head.lead !== undefined}
           actions={actions}
           end={TOOLBAR_INSET.COLUMN}
         />

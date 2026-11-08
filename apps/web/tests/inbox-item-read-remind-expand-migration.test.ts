@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { NodeServices } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { MIGRATIONS_FOLDER, runWebMigrations } from "@repo/database/core/migrator";
-import {
-  openInboxItem,
-  openTaskAgent,
-  openWorkspace,
-  unmigratedPgliteSqlClient,
-} from "@repo/database/testing";
+import { openInboxItem, openWorkspace, unmigratedPgliteSqlClient } from "@repo/database/testing";
 import { remindInboxItem } from "@repo/service/inbox/inbox-store";
 import { Effect, Layer } from "effect";
 import { FileSystem } from "effect/FileSystem";
@@ -34,17 +30,13 @@ const MIGRATION = "20261105235359_inbox_item_read_remind_expand";
  */
 const DESCRIPTION_RENAME = "20261106055235_description_rename";
 
-/** The agent's `seen_at` column, which a later migration added, taken on the same terms, since the agent's model names it. */
-const AGENT_SEEN_AT = "20261107014920_agent_seen_at";
-
-/** A migrations folder holding every migration named before `MIGRATION`'s, and none after but the description's rename and the agent's seen-at. */
+/** A migrations folder holding every migration named before `MIGRATION`'s, and none after but the description's rename. */
 const foldersBefore = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-remind-expand-" });
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
-    (name) =>
-      name.localeCompare(MIGRATION) < 0 || name === DESCRIPTION_RENAME || name === AGENT_SEEN_AT,
+    (name) => name.localeCompare(MIGRATION) < 0 || name === DESCRIPTION_RENAME,
   );
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
@@ -61,7 +53,12 @@ it.effect(
         yield* runWebMigrations(yield* foldersBefore);
         yield* sql`insert into "user" (id, name, email) values ('dean', 'dean', 'dean@app.test')`;
         const workspaceId = yield* openWorkspace("dean");
-        const agentId = yield* openTaskAgent("dean", workspaceId, null);
+        // Note that the agent is written by the columns it sets alone, since today's model names columns later migrations added.
+        const agentId = randomUUID();
+        const conversationId = randomUUID();
+        yield* sql`insert into conversations (id, user_id, kind) values (${conversationId}, 'dean', 'agent')`;
+        yield* sql`insert into agent (id, organization_id, user_id, conversation_id, model, effort, repository, idempotency_key)
+          values (${agentId}, ${workspaceId}, 'dean', ${conversationId}, 'anthropic/claude-opus-5.5', 'high', 'acme/api', ${randomUUID()})`;
         const earlier = yield* openInboxItem("dean", workspaceId, null, agentId, true);
         const later = yield* openInboxItem("dean", workspaceId, null, agentId, true);
         // The release before writes a reminder on the earlier item in its own columns.

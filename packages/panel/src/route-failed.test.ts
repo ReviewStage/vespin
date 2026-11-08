@@ -17,7 +17,7 @@ import { LAZY_ROUTE } from "./panel-router.js";
 /**
  * route-failed.test.ts -- a lazy route of the window's that landed and threw
  * while drawing says so with Reload, which draws it again in place, the
- * window left standing, as `lazy-route.ts`'s surfaces do.
+ * window left standing.
  */
 
 let host: HTMLDivElement;

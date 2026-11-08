@@ -9,12 +9,14 @@ import {
 import {
   AGENT_FAILURE,
   AGENT_STATUS,
+  type AgentFailure,
   type AgentStatus,
   type AgentSummary,
   type AgentTranscriptMessage,
+  type AgentTurn,
 } from "@repo/features/agent-wire";
 import { type ShownFailureSentry, sendShownFailure } from "@repo/features/shown-failure";
-import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
+import { MESSAGE_ROLE, TURN_STATUS, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
@@ -50,6 +52,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+/** The agent's newest turn, running as each tab opens. */
+const TURN: AgentTurn = {
+  id: "5d9e2c41-7b3a-4f6e-9c1d-2a8b4e6f0c13",
+  queuedAt: 1,
+  status: TURN_STATUS.RUNNING,
+};
+
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
   planId: "plan-1",
@@ -58,8 +67,22 @@ const AGENT: AgentSummary = {
   title: "Retry audit",
   createdAt: 1,
   status: AGENT_STATUS.RUNNING,
-  turnId: null,
+  turnId: TURN.id,
+  turn: TURN,
 };
+
+/** The agent's row once its turn failed, on the word given where the service named one. */
+function failedRow(failure?: AgentFailure): AgentSummary {
+  return {
+    ...AGENT,
+    status: AGENT_STATUS.FAILED,
+    turn: {
+      ...TURN,
+      status: TURN_STATUS.FAILED,
+      ...(failure === undefined ? undefined : { failure }),
+    },
+  };
+}
 
 const DESCRIPTION: AgentTranscriptMessage = {
   id: "plan",
@@ -198,7 +221,7 @@ test("a turn that fails while the tab is open says its end line once, politely, 
   const tab = await runningTab(page("The retry", AGENT_STATUS.RUNNING, "1:1"));
 
   await tab.answer(page("The retry", AGENT_STATUS.FAILED, "1:2"));
-  await tab.row({ ...AGENT, status: AGENT_STATUS.FAILED });
+  await tab.row(failedRow(AGENT_FAILURE.OTHER));
 
   assert.equal(announcedPolitely(), "Failed: the run ended without saying why");
 });
@@ -213,7 +236,7 @@ test("a turn that fails before writing a word says its end line as it lands", as
   });
   const tab = await runningTab(blank(AGENT_STATUS.RUNNING, "1:1"));
 
-  await tab.row({ ...AGENT, status: AGENT_STATUS.FAILED });
+  await tab.row(failedRow(AGENT_FAILURE.OTHER));
   await tab.answer(blank(AGENT_STATUS.FAILED, "1:2"));
 
   assert.equal(announcedPolitely(), "Failed: the run ended without saying why");
@@ -224,21 +247,8 @@ test("a tab opened on a turn already finished, or already failed, says nothing",
   assert.equal(announcedPolitely(), "");
   act(() => root?.unmount());
 
-  await runningTab(page("The retry", AGENT_STATUS.FAILED, "1:1"), false, {
-    ...AGENT,
-    status: AGENT_STATUS.FAILED,
-  });
-  assert.equal(announcedPolitely(), "", "a failure the transcript opens on is history");
-  act(() => root?.unmount());
-
-  // A row still saying the turn runs, as a list read before it failed does, is no sign the turn was seen running.
-  const stale = await runningTab(page("The retry", AGENT_STATUS.FAILED, "1:1"));
-  await stale.row({ ...AGENT, status: AGENT_STATUS.FAILED });
-  assert.equal(
-    announcedPolitely(),
-    "",
-    "a failure read on opening is history, whatever the row said",
-  );
+  await runningTab(page("The retry", AGENT_STATUS.FAILED, "1:1"), false, failedRow());
+  assert.equal(announcedPolitely(), "", "a failure the tab opens on is history");
 });
 
 test("a reader whose focus stands in the transcript hears only who the reply is from", async () => {
@@ -285,7 +295,7 @@ test("a worker's reply is said once whole, under the worker's name", async () =>
   assert.equal(announcedPolitely(), `Reply from ${WORKER_TASK}: The writers quote every field.`);
 });
 
-test("a failed turn's end line reports the service's word for why, and the agent and task it is about, once", async () => {
+test("a failed turn's end line reports the service's word for why, and the agent and task it is about, once, a refused own key as a refusal", async () => {
   const reported: Readonly<Record<string, unknown>>[] = [];
   const recording: ShownFailureSentry = {
     captureException: () => "",
@@ -303,7 +313,7 @@ test("a failed turn's end line reports the service's word for why, and the agent
     testQueryClientNow(),
   );
   try {
-    const failed = { ...AGENT, status: AGENT_STATUS.FAILED };
+    const failed = failedRow(AGENT_FAILURE.PROVIDER_KEY);
     const tab = await runningTab(
       {
         ...page("The retry", AGENT_STATUS.FAILED, "1:1"),
@@ -321,10 +331,11 @@ test("a failed turn's end line reports the service's word for why, and the agent
   assert.deepEqual(
     reported.map((attributes) => [
       attributes["failure.surface"],
+      attributes["failure.kind"],
       attributes["failure.code"],
       attributes["agent.id"],
       attributes["task.id"],
     ]),
-    [["agent.turn", "provider_key", AGENT.id, "plan-1"]],
+    [["agent.turn", "refused", "provider_key", AGENT.id, "plan-1"]],
   );
 });

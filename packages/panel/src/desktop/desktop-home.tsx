@@ -217,7 +217,10 @@ function HomeRecent({
  * New task's composer, at the top of the page as a chat app's empty page
  * opens on its prompt box; nothing while signed out, where nothing could
  * start. An `@` or `/` list opens under the caret's line, because one risen
- * over it from the page's top is cut off under the page's head.
+ * over it from the page's top is cut off under the page's head. A start
+ * pressed here and refused opens it again on what it pressed, with why under
+ * it and Retry, as the dialog's card opens on a refusal, rather than a dialog
+ * drawing a second composer over it (`newTask.homeRefused`).
  */
 function HomeComposer({
   tasks,
@@ -228,11 +231,17 @@ function HomeComposer({
 }): React.JSX.Element | null {
   const box = useRef<HTMLDivElement>(null);
   useHomeNewTask(box, tasks.newTask.homeAsks);
+  const refusal = tasks.newTask.homeRefused;
   if (!tasks.signedIn) return null;
   return (
     <div className="home-composer ph-no-capture mb-page-section-gap" ref={box}>
       <NewTaskComposer
-        newTask={{ ...tasks.newTask, preset: undefined }}
+        // Note that each refusal mounts the composer afresh, as the card opens on what it pressed only as it mounts.
+        key={refusal?.opening}
+        newTask={{
+          ...tasks.newTask,
+          preset: refusal === undefined ? undefined : { refused: refusal.refused },
+        }}
         workspaceId={tasks.newTask.workspaceId}
         onLeave={letGoOfFocus}
         takesFocus={takesFocus}

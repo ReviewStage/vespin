@@ -9,11 +9,9 @@ import { countWords, readFailedWords, readingWords, TERM } from "@repo/features/
 import type { WorkspaceGithubInstallation } from "@repo/features/workspace-wire";
 import {
   ANNOUNCE,
-  ErrorState,
   SETTINGS_ROW_INDENT,
   SettingsFoldFoot,
   SettingsFoldLine,
-  SettingsLine,
   SettingsRowMark,
   TEXT_BUTTON_TONE,
   TextButton,
@@ -25,13 +23,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
-import { unreadShown } from "../failure-report.js";
 import {
   repositoryListsQuery,
   repositoryListsRetryMutation,
   repositoryScope,
 } from "../live-reads.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
+import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
 /**
@@ -253,14 +251,11 @@ function ListedAccountRows({
         );
       })}
       {failed ? (
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.WORKSPACE_REPOSITORIES_READ)}
-            onRetry={() => retry.mutate(repositoryScope(workspaceId))}
-          >
-            {WORDS.NOT_READ}
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line={WORDS.NOT_READ}
+          surface={FAILURE_SURFACE.WORKSPACE_REPOSITORIES_READ}
+          onRetry={() => retry.mutate(repositoryScope(workspaceId))}
+        />
       ) : null}
     </>
   );

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
+import { PANEL_PATH } from "@repo/features/link-home";
 import { createElement, type FunctionComponent } from "react";
 import { renderToString } from "react-dom/server";
 import { test } from "vitest";
 import { AboutPage } from "../src/AboutPage";
 import { App } from "../src/App";
-import { PANEL_PATH } from "../src/app/web-address";
 import { ChangelogPage, RELEASES } from "../src/ChangelogPage";
 import { changelogRoutes } from "../src/changelog-releases";
 import { PrivacyPage } from "../src/PrivacyPage";

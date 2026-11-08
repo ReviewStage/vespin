@@ -61,7 +61,7 @@ const ARROW_WAYS = ["data-expand-up", "data-expand-down", "data-expand-both"] as
 
 /** What a gap's words open: every line it leaves out, or, where it does not say how many, the rest of the file. */
 function wordsOf(words: Element): string {
-  const lines = Number.parseInt(words.textContent ?? "", 10);
+  const lines = Number.parseInt(words.textContent, 10);
   return Number.isNaN(lines) ? GAP_WORDS.REST : GAP_WORDS.every(lines);
 }
 

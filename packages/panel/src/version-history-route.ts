@@ -10,10 +10,11 @@
  * where it has one (`taskLinkStep`). The history is one step of the window's
  * however its versions are chosen, each move replacing the step standing,
  * but for a narrow room's version or section opened from its list, a step
- * after it, which the window's history steps back from (`lists.versions`).
+ * after it, which the window's history steps back from (`places/narrow-backs.ts`).
  */
 
 import { type RegisteredRouter, useNavigate, useRouter } from "@tanstack/react-router";
+import { useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
 import type { HistorySpot } from "./tasks/use-description-history.js";
@@ -136,12 +137,9 @@ function standingOf(
   return { workspace, task: taskId, spot };
 }
 
-/** A task's version history as the router stands it, in a room `narrow` or not, left by `onClose`, and kept standing by `onStay` where a leave was asked of it before a door asked for where it stands. */
-export function useVersionHistoryRoute(input: {
-  narrow: boolean;
-  onClose: () => void;
-  onStay: () => void;
-}): VersionHistoryRoute {
+/** A task's version history as the router stands it, in a room `narrow` or not, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for where it stands. */
+export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHistoryRoute {
+  const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
@@ -158,7 +156,7 @@ export function useVersionHistoryRoute(input: {
   const go = (href: string, replace: boolean) => {
     // Standing the history where it stands moves nothing, as pressing the place standing always has, and keeps it standing.
     if (href === router.history.location.href) {
-      input.onStay();
+      exits.stay();
       return;
     }
     void navigate({ href, replace });
@@ -195,7 +193,7 @@ export function useVersionHistoryRoute(input: {
     listAddress,
     onOpen,
     onMove,
-    onClose: input.onClose,
+    onClose: () => exits.leave(),
     onGiveWay,
     onPreload: (into, named) =>
       void router.preloadRoute({

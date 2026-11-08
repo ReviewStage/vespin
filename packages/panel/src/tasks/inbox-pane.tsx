@@ -82,6 +82,7 @@ import {
 } from "../ai-elements/conversation.js";
 import { useAutomation } from "../automation-directory.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import { AgentCrumbMenu, type CrumbHeld, TaskCrumbMenu } from "../desktop/crumb-menus.js";
 import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -157,6 +158,7 @@ import {
   pendingRepliesOn,
   type TaskInboxControl,
 } from "./use-task-inbox.js";
+import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
  * inbox-pane.tsx -- one inbox item at reading size: a comment thread under the item's title, the agent's messages and what they ask, and the answers given in place or as they were given.
@@ -1394,6 +1396,8 @@ function answerKeywords(holder: InboxHolder, item: InboxItem): readonly string[]
 
 /** What the pane's crumbs open, and the cards they hang. */
 export interface InboxPaneDoors {
+  /** The window's tasks, which the crumbs' menus act through, as the sidebar's rows do. */
+  readonly tasks: TasksControl;
   /** Opens what holds the item: its task, or its automation's page; nothing where there is none to open. */
   readonly onOpenHolder: (() => void) | undefined;
   /** The task's hover card, as its sidebar row hangs it; none for an automation. */
@@ -1477,39 +1481,66 @@ function useAutomationCrumb(
  * the bar still says what is read; it fades in as it comes and out as the
  * heading comes back, so the title never stands twice. A narrow bar cuts the
  * task's crumb short first, then the title, which fades out where it is cut
- * as every title does, and the agent's keeps its size.
+ * as every title does, and the agent's keeps its size. A right-click on the
+ * task's crumb opens the task's one menu, and on the agent's the agent's,
+ * as their sidebar rows and their own bars offer them (`crumb-menus.tsx`).
  */
 function Crumbs({
   holder,
   by,
   doors,
+  agents,
   title,
   titleShown,
 }: {
   holder: InboxHolder;
   by: ItemAgent;
   doors: InboxPaneDoors;
+  agents: AgentsControl;
   /** The item's title, as its heading reads it. */
   title: string;
   /** Whether the heading has scrolled away, so the path names the item. */
   titleShown: boolean;
 }): React.JSX.Element {
   const automation = useAutomationCrumb(holder, doors.onOpenHolder);
-  const crumbs: Crumb[] = [
-    taskCrumb(holder, doors) ?? automation,
-    // Note that once the title joins the path the agent's crumb keeps its size, so a narrow bar cuts the task's crumb short first and then the title.
-    agentCrumb(by, titleShown),
-    { label: title, current: true, shown: titleShown },
-  ].filter((crumb) => crumb !== undefined);
-  return (
-    <div className="inbox-crumbs flex min-w-0 flex-initial">
-      <Breadcrumbs label="Path" crumbs={crumbs} />
-    </div>
+  const path = (task: CrumbHeld | undefined, agent: CrumbHeld | undefined) => {
+    const crumbs: Crumb[] = [
+      taskCrumb(holder, doors, task) ?? automation,
+      // Note that once the title joins the path the agent's crumb keeps its size, so a narrow bar cuts the task's crumb short first and then the title.
+      agentCrumb(by, titleShown, agent),
+      { label: title, current: true, shown: titleShown },
+    ].filter((crumb) => crumb !== undefined);
+    return (
+      <div className="inbox-crumbs flex min-w-0 flex-initial">
+        <Breadcrumbs label="Path" crumbs={crumbs} />
+      </div>
+    );
+  };
+  // The agent's crumb holds its menu where the window lists the agent, which an agent started on another Mac may not be.
+  const listed = by.subject.agent;
+  const withAgent = (task: CrumbHeld | undefined) =>
+    listed === undefined ? (
+      path(task, undefined)
+    ) : (
+      <AgentCrumbMenu tasks={doors.tasks} agents={agents} agent={listed}>
+        {(agent) => path(task, agent)}
+      </AgentCrumbMenu>
+    );
+  return holder.kind === INBOX_HOLDER.TASK ? (
+    <TaskCrumbMenu tasks={doors.tasks} task={holder.task}>
+      {withAgent}
+    </TaskCrumbMenu>
+  ) : (
+    withAgent(undefined)
   );
 }
 
-/** The path's task crumb, wearing its plan's glyph and hanging its card, which opens the task; none for an item no task holds. */
-function taskCrumb(holder: InboxHolder, doors: InboxPaneDoors): Crumb | undefined {
+/** The path's task crumb, wearing its plan's glyph and hanging its card, which opens the task and holds its menu (`held`); none for an item no task holds. */
+function taskCrumb(
+  holder: InboxHolder,
+  doors: InboxPaneDoors,
+  held?: CrumbHeld | undefined,
+): Crumb | undefined {
   if (holder.kind !== INBOX_HOLDER.TASK) return undefined;
   const { onOpenHolder } = doors;
   return {
@@ -1519,11 +1550,13 @@ function taskCrumb(holder: InboxHolder, doors: InboxPaneDoors): Crumb | undefine
     hint: holder.task.name,
     card: doors.taskCard,
     onPress: () => onOpenHolder?.(),
+    menu: held?.menu,
+    editing: held?.editing,
   };
 }
 
-/** The path's agent crumb, wearing its mark and hanging its card, which opens its tab; `fixed` keeps its size where the crumbs after it give way first. */
-function agentCrumb(by: ItemAgent, fixed = false): Crumb {
+/** The path's agent crumb, wearing its mark and hanging its card, which opens its tab and holds its menu (`held`); `fixed` keeps its size where the crumbs after it give way first. */
+function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined): Crumb {
   const { name, agent } = by.subject;
   return {
     label: name,
@@ -1532,6 +1565,8 @@ function agentCrumb(by: ItemAgent, fixed = false): Crumb {
     card: <AgentCard subject={by.subject} models={by.models} />,
     onPress: () => by.onOpen(),
     fixed,
+    menu: held?.menu,
+    editing: held?.editing,
   };
 }
 
@@ -1781,13 +1816,13 @@ export function InboxPane({
                 holder={holder}
                 by={by}
                 doors={doors}
+                agents={agents}
                 title={cardTitle(item.title)}
                 titleShown={headingAway}
               />
             )
           }
           pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
-          quiet={within === true}
           actions={
             <>
               {/* The bar ends in the pager, where the item stands alone, and the item's ⋯ menu. */}

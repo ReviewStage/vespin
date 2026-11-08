@@ -12,7 +12,7 @@
 
 import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
-import { awaitingLinesOfReached, latestTurnsOfReached } from "@repo/database/models/agent-store";
+import { latestTurnsOfReached } from "@repo/database/models/agent-store";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import { utcDayKey } from "@repo/database/models/quota";
 import { accountProviderKey } from "@repo/database/schemas/account-provider-key";
@@ -375,10 +375,7 @@ const withStandings = Effect.fnUntraced(function* (
   const conversations = [
     ...new Set([...windowRows, ...recentRows].map((row) => row.conversationId)),
   ];
-  const [turns, awaiting] = yield* Effect.all(
-    [latestTurnsOfReached(conversations), awaitingLinesOfReached(conversations)],
-    { concurrency: "unbounded" },
-  );
+  const turns = yield* latestTurnsOfReached(conversations);
   const standing = (row: AgentRow): AdminAccountAgentSource => ({
     id: row.id,
     createdAt: row.createdAt,
@@ -388,7 +385,6 @@ const withStandings = Effect.fnUntraced(function* (
     contextWindow: row.contextWindow,
     pullRequestState: row.pullRequestState,
     turn: turns.get(row.conversationId),
-    awaitingLineAt: awaiting.get(row.conversationId),
   });
   return { windowAgents: windowRows.map(standing), recentAgents: recentRows.map(standing) };
 });

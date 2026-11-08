@@ -30,6 +30,7 @@ import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksBoard } from "./tasks-board.js";
 import { TasksList } from "./tasks-list.js";
@@ -125,6 +126,8 @@ async function mountView(
 ) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
+  // The window's router, which the page's way out reads, as the shell draws it under the window's.
+  const { provide } = windowRouter();
   roots.push(root);
   const sent: [string, unknown][] = [];
   const named: (string | undefined)[] = [];
@@ -153,24 +156,26 @@ async function mountView(
     act(() =>
       root.render(
         withQueryClient(
-          createElement(
-            Fragment,
-            null,
-            // The page kept drawn while the window is away from it, as the shell keeps it (`desktop-shell.tsx`).
-            createElement(Activity, {
-              mode: drawing.kept === true ? "hidden" : "visible",
-              children: createElement(MemberDirectory, {
-                workspace: ACME,
-                readerId: DEAN,
-                children: createElement(view, {
-                  tasks: control,
-                  room: SHELL_ROOM.WIDE,
-                  title: "Tasks",
-                  frame,
+          provide(
+            createElement(
+              Fragment,
+              null,
+              // The page kept drawn while the window is away from it, as the shell keeps it (`desktop-shell.tsx`).
+              createElement(Activity, {
+                mode: drawing.kept === true ? "hidden" : "visible",
+                children: createElement(MemberDirectory, {
+                  workspace: ACME,
+                  readerId: DEAN,
+                  children: createElement(view, {
+                    tasks: control,
+                    room: SHELL_ROOM.WIDE,
+                    title: "Tasks",
+                    frame,
+                  }),
                 }),
               }),
-            }),
-            createElement(ToastHost),
+              createElement(ToastHost),
+            ),
           ),
         ),
       ),

@@ -53,6 +53,7 @@ import {
   type AgentAlsoRepository,
   EXTRA_REPOSITORY_REFUSAL,
 } from "@repo/features/agent-wire";
+import type { Sandbox } from "@repo/sandbox";
 import { Effect, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { GitHubApp, REPOSITORY_SET_UNREACHED } from "../../github/github-app.js";
@@ -173,7 +174,7 @@ export const addAgentRepository = /* @__PURE__ */ Effect.fn("web/addAgentReposit
 ): Effect.fn.Return<
   AddedRepository,
   HostedRefusal,
-  DatabaseServices | HttpClient.HttpClient | GitHubApp
+  DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   const repository = yield* checkedRepository(adder, agent, asked);
   const written = yield* hostedStoreOrUnavailable(

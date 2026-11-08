@@ -142,6 +142,8 @@ export function createInProcessBridge(
       recordSurfaceEvent: reports.recordSurfaceEvent,
       onShowLink: said.onShowLink.subscribe,
       onMenuCommand: neverDelivered,
+      // The tab's own doors play a chime where it is heard (`web-notices.ts`), so none is pushed.
+      onChime: neverDelivered,
     };
     const events: InProcessEvents = {
       onShowLink: said.onShowLink.emit,

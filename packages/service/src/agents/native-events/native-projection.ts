@@ -109,11 +109,25 @@ const TurnSchema = Schema.Struct({
   step: Schema.optionalKey(StepSchema),
   /** The calls the turn holds, by id, under the name each is stored under. */
   calls: Schema.Record(Schema.String, Schema.String),
+  /**
+   * The calls it holds that are still unanswered, by id, each with when it
+   * started in epoch milliseconds; absent on a turn kept from before it was
+   * recorded, whose open calls are not known (`turnProgressed`).
+   */
+  running: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
+  /** Whether the harness ended its model turn with background work still in flight, and waits on it (`NATIVE_MOMENT.WAITING`) with no step opened since. */
+  waiting: Schema.optionalKey(Schema.Boolean),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
   usage: Schema.optionalKey(UsageSchema),
   /** Why the newest model turn failed, where it did. */
   failure: Schema.optionalKey(Schema.String),
+  /** Whether the newest model turn failed as the model refused it. */
+  refusal: Schema.optionalKey(Schema.Boolean),
+  /** The model's refusal of the model turn under way, said ahead of its result, which it fails (`NATIVE_MOMENT.REFUSED`). */
+  refusing: Schema.optionalKey(Schema.String),
+  /** The compaction the model turn under way could not make, said ahead of its result, and why that turn failed where it did. */
+  compactionFailed: Schema.optionalKey(Schema.String),
   /** Whether the plan's limit refused the turn, a failure its user expects. */
   limited: Schema.optionalKey(Schema.Boolean),
   /** Whether the provider refused the credential that paid, such as a key expired or a plan signed out. */
@@ -134,7 +148,7 @@ const NativeProjectionSchema = Schema.Struct({
   rateLimitResetsAt: Schema.optionalKey(Schema.Number),
   /** The running total a harness that reports one (Codex) last reported, which the next report is metered against. */
   metered: Schema.optionalKey(UsageSchema),
-  /** When a batch last kept the runner's sandbox alive (`../sandbox-keep-alive.ts`), in epoch milliseconds. */
+  /** When a batch last touched the runner's sandbox (`runner-events-app.ts`), in epoch milliseconds. */
   keptAliveAt: Schema.optionalKey(Schema.Number),
   /** Whether the launch went warm at its turn's IDLE with no turn since, so a failure it ends on is no turn's. */
   warm: Schema.optionalKey(Schema.Boolean),
@@ -176,6 +190,8 @@ export const NATIVE_WRITE = {
   TAKE_LINE: "take_line",
   /** Record the harness's session id on the conversation. */
   SESSION: "session",
+  /** Record that the store's copy of the session's transcript holds a gap, so it is never resumed. */
+  TRANSCRIPT_BROKEN: "transcript_broken",
   /** Record that the harness folded its context. */
   COMPACTED: "compacted",
   /** Record how a turn found the plan that pays for the agent, on its row. */
@@ -195,6 +211,7 @@ export type NativeWrite =
       readonly clientId: string;
     }
   | { readonly kind: typeof NATIVE_WRITE.SESSION; readonly sessionId: string }
+  | { readonly kind: typeof NATIVE_WRITE.TRANSCRIPT_BROKEN; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_WRITE.COMPACTED }
   | { readonly kind: typeof NATIVE_WRITE.CONTEXT; readonly usage: NativeContextUsage }
   | {
@@ -216,11 +233,15 @@ export type NativeWrite =
       readonly turnOpenedAt?: number;
     };
 
-/** What one event is projected under: its conversation and number, the instant, the model the agent runs on, and which tools the record holds. */
+/** What one event is projected under: its conversation and number, the instant, the launch posting it, the turn its line queued, the model the agent runs on, and which tools the record holds. */
 export interface NativeProjectionContext {
   readonly conversationId: string;
   readonly sequence: number;
   readonly now: number;
+  /** The launch of the runner posting the event (`agent.runner_launch`), which every turn it starts or ends runs under. */
+  readonly attempt: number;
+  /** The conversation's turn queued for a line no runner took yet, which the next turn opened is, rather than one minted; none where none is queued. */
+  readonly queuedTurnId: string | undefined;
   readonly model: string | undefined;
   /** Whether the starter's own API key pays for the agent, so a refusal of it is theirs to replace in Settings. */
   readonly ownKey: boolean;
@@ -261,6 +282,14 @@ function withSettledSubagents(turn: Turn, callId: string): Turn {
   return { ...turn, subagents };
 }
 
+/** The turn with the call answered: no longer running, and any background subagent under it settled. */
+function withSettledCall(turn: Turn, callId: string): Turn {
+  const settled = withSettledSubagents(turn, callId);
+  if (settled.running === undefined) return settled;
+  const { [callId]: _answered, ...running } = settled.running;
+  return { ...settled, running };
+}
+
 /** Everything one event's moments do, gathered as they are folded. */
 class Fold {
   state: NativeProjection;
@@ -292,18 +321,31 @@ class Fold {
     return { ...turn, told };
   }
 
-  /** The turn under way, opened here, by the event's own number, where none is. */
+  /**
+   * The turn under way, opened here where none is: the turn its line
+   * queued, where one stands queued, or else one by the event's own number,
+   * as a turn the harness opened itself is, on a wakeup or background work
+   * ending.
+   */
   turn(): Turn {
     const held = this.state.turn;
     if (held !== undefined) return held;
     const { warm: _warm, ...cold } = this.state;
     this.state = cold;
-    const id = nativeTurnId(this.#context.conversationId, this.#context.sequence);
+    const id =
+      this.#context.queuedTurnId ??
+      nativeTurnId(this.#context.conversationId, this.#context.sequence);
     this.writes.push({ kind: NATIVE_WRITE.ENQUEUE, turnId: id });
     const { origin, trigger } = SESSION_TURN_KIND[SESSION_TURN.TYPED];
     const opened = this.#tell(
-      { id, told: 0, steps: 0, calls: {}, openedAt: this.#context.now },
-      { kind: RUN_EVENT.TURN_STARTED, origin, trigger, at: this.#context.now },
+      { id, told: 0, steps: 0, calls: {}, running: {}, openedAt: this.#context.now },
+      {
+        kind: RUN_EVENT.TURN_STARTED,
+        origin,
+        trigger,
+        at: this.#context.now,
+        attempt: this.#context.attempt,
+      },
     );
     this.#setTurn(opened);
     return opened;
@@ -341,7 +383,8 @@ class Fold {
       this.#setTurn(keyed);
       return keyed;
     }
-    const closed = this.#closed(turn);
+    // A step opened is the harness at work again, so whatever it waited on is behind it.
+    const { waiting: _waiting, ...closed } = this.#closed(turn);
     const steps = closed.steps + 1;
     const opened = this.#tell({ ...closed, steps }, { kind: RUN_EVENT.STEP_STARTED, step: steps });
     const fresh = { open: true, draft: EMPTY_DRAFT, reasoning: 0 };
@@ -388,7 +431,13 @@ class Fold {
       name: moment.name,
       input: moment.input,
     });
-    this.#setTurn({ ...told, calls: { ...told.calls, [moment.callId]: moment.name } });
+    const held = { ...told, calls: { ...told.calls, [moment.callId]: moment.name } };
+    // Note that a turn kept from before its open calls were recorded stays unknown, since a call it opened then is not in them.
+    this.#setTurn(
+      told.running === undefined
+        ? held
+        : { ...held, running: { ...told.running, [moment.callId]: this.#context.now } },
+    );
   }
 
   #toolSettled(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_SETTLED }>): void {
@@ -396,7 +445,7 @@ class Fold {
     const name = turn?.calls[moment.callId];
     if (turn === undefined || name === undefined) return;
     this.#setTurn(
-      this.#tell(withSettledSubagents(turn, moment.callId), {
+      this.#tell(withSettledCall(turn, moment.callId), {
         kind: RUN_EVENT.TOOL_CALL_SETTLED,
         callId: moment.callId,
         name,
@@ -436,39 +485,68 @@ class Fold {
 
   /**
    * The turn a launch's end settles: the one under way, or, where the launch
-   * failed before its first, one opened for it, so why it failed is kept.
-   * None for any other end that finds no turn, nor for a warm launch's, whose
-   * turn already ended at its IDLE.
+   * failed before its first, the turn its line queued, opened for the end so
+   * why it failed is kept, and whether it was opened for the end. None for
+   * any other end that finds no turn, nor for a warm launch's, whose turn
+   * already ended at its IDLE. Note that a launch that fails with no turn
+   * under way and none queued, as a warm runner a newer launch cut off does,
+   * fails no turn but is said in the log, since no message of the developer's
+   * waited on it.
    */
   #endedTurn(
     moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>,
-  ): Turn | undefined {
+  ): { readonly turn: Turn; readonly openedForEnd: boolean } | undefined {
     const held = this.state.turn;
-    if (held !== undefined) return held;
+    if (held !== undefined) return { turn: held, openedForEnd: false };
     if (moment.launchFailed !== true || this.state.warm === true) return undefined;
-    return this.turn();
+    if (this.#context.queuedTurnId === undefined) {
+      this.#context.report(`A launch with no turn under way ended: ${moment.detail ?? "failed"}`);
+      return undefined;
+    }
+    return { turn: this.turn(), openedForEnd: true };
   }
 
-  /** The turn's end: its words told whole, then its status, cost, and why it failed, where it did. */
+  /**
+   * The turn's end: its words told whole, then its status, cost, and why it
+   * failed, where it did. Note that a launch that failed before it took any
+   * line, as one whose line reads were refused does, fails its turn as its
+   * runner lost rather than as a model call, since no model ran.
+   */
   #ended(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>): void {
-    const held = this.#endedTurn(moment);
-    const { warm: _warm, ...cold } = this.state;
+    const ended = this.#endedTurn(moment);
+    // Note that a limit is the launch's, let go at its end whether or not a turn ends with it:
+    // the next launch is refused again or it is not.
+    const { warm: _warm, rateLimit, rateLimitResetsAt: _resets, ...cold } = this.state;
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
-    if (held === undefined) return;
-    const turn = this.#closed(held);
-    const status = statusOf(moment.ending, turn.failure);
+    if (ended === undefined) return;
+    const turn = this.#closed(ended.turn);
+    // Note that a refusal its launch ended on before the model turn's result still fails the turn.
+    const status = statusOf(moment.ending, turn.failure ?? turn.refusing);
     const failed = status === RUN_STATUS.FAILED;
+    const refusal = turn.refusal === true || turn.refusing !== undefined;
+    const failure = ended.openedForEnd
+      ? TURN_FAILURE.RUNNER_LOST
+      : refusal
+        ? TURN_FAILURE.REFUSAL
+        : TURN_FAILURE.MODEL;
     // Note that a refusal of the starter's own key leads with the coder's word for it, so the window reads the failure as a key to replace rather than a model call failed.
     const ownKeyRefused =
       turn.refused === true && this.#context.ownKey ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED : undefined;
-    const detail = [ownKeyRefused, moment.detail, turn.failure, this.state.rateLimit]
+    const detail = [
+      ownKeyRefused,
+      moment.detail,
+      turn.compactionFailed,
+      turn.refusing,
+      turn.failure,
+      rateLimit,
+    ]
       .filter((word) => word !== undefined)
       .join("; ");
     const model = this.#context.model;
     this.#tell(turn, {
       kind: RUN_EVENT.TURN_ENDED,
       status,
-      ...(failed ? { failure: TURN_FAILURE.MODEL } : undefined),
+      ...(failed ? { failure } : undefined),
       ...(failed && detail.length > 0 ? { failureDetail: detail } : undefined),
       ...(turn.usage !== undefined ? { usage: turn.usage } : undefined),
       ...(turn.usage !== undefined && model !== undefined
@@ -476,21 +554,20 @@ class Fold {
         : undefined),
       responseIds: [],
       at: this.#context.now,
+      attempt: this.#context.attempt,
     });
     if (failed) {
       this.writes.push({
         kind: NATIVE_WRITE.FAILED,
         turnId: turn.id,
-        failure: TURN_FAILURE.MODEL,
+        failure,
         detail,
-        expected: turn.limited === true || this.state.rateLimit !== undefined,
+        // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue.
+        expected: turn.limited === true || rateLimit !== undefined || refusal,
         refused: turn.refused === true,
       });
     }
     this.#setTurn(undefined);
-    // Note that a limit is the launch's: the next launch is refused again or it is not.
-    const { rateLimit: _spent, rateLimitResetsAt: _resets, ...rest } = this.state;
-    this.state = rest;
   }
 
   #usage(usage: RunUsage): void {
@@ -508,8 +585,7 @@ class Fold {
   }
 
   #result(failure: string | undefined): void {
-    const { failure: _held, ...turn } = this.#closed(this.turn());
-    this.#setTurn(failure === undefined ? turn : { ...turn, failure });
+    this.#setTurn(settledModelTurn(this.#closed(this.turn()), failure));
   }
 
   fold(moment: NativeMoment): void {
@@ -527,6 +603,9 @@ class Fold {
         if (this.state.session === moment.sessionId) return;
         this.state = { ...this.state, session: moment.sessionId };
         this.writes.push({ kind: NATIVE_WRITE.SESSION, sessionId: moment.sessionId });
+        return;
+      case NATIVE_MOMENT.TRANSCRIPT_BROKEN:
+        this.writes.push({ kind: NATIVE_WRITE.TRANSCRIPT_BROKEN, sessionId: moment.sessionId });
         return;
       case NATIVE_MOMENT.ACTIVE:
         this.turn();
@@ -579,8 +658,22 @@ class Fold {
       case NATIVE_MOMENT.RESULT:
         this.#result(moment.failure);
         return;
+      case NATIVE_MOMENT.REFUSED: {
+        const turn = this.turn();
+        this.#setTurn({ ...turn, refusing: moment.detail });
+        return;
+      }
       case NATIVE_MOMENT.COMPACTED:
         this.writes.push({ kind: NATIVE_WRITE.COMPACTED });
+        return;
+      case NATIVE_MOMENT.COMPACTION_FAILED: {
+        this.#context.report(moment.detail);
+        const turn = this.state.turn;
+        if (turn !== undefined) this.#setTurn({ ...turn, compactionFailed: moment.detail });
+        return;
+      }
+      case NATIVE_MOMENT.NOTED:
+        this.#context.report(moment.said);
         return;
       case NATIVE_MOMENT.RATE_LIMIT: {
         const { rateLimit: _held, rateLimitResetsAt: _resets, ...rest } = this.state;
@@ -617,7 +710,7 @@ class Fold {
       case NATIVE_MOMENT.WAITING: {
         // Note that a waiting turn is still under way: its words are told whole and nothing ends.
         const turn = this.state.turn;
-        if (turn !== undefined) this.#setTurn(this.#closed(turn));
+        if (turn !== undefined) this.#setTurn({ ...this.#closed(turn), waiting: true });
         return;
       }
       case NATIVE_MOMENT.ENDED:
@@ -647,6 +740,24 @@ function usageGrowth(before: Usage | undefined, total: Usage): RunUsage | undefi
   return counts.some((count) => count > 0) ? grown : undefined;
 }
 
+/**
+ * The turn as one of its model turns ends, failed where `failure` says why:
+ * the model's refusal said ahead of the result fails it whatever the result
+ * says, and a compaction it could not make leads why it failed, where it
+ * did. What the model turn before it failed with is let go, as the newest
+ * model turn is the one the turn's end reads.
+ */
+function settledModelTurn(turn: Turn, failure: string | undefined): Turn {
+  const { failure: _held, refusal: _was, refusing, compactionFailed, ...rest } = turn;
+  if (refusing === undefined && failure === undefined) return rest;
+  const words = [compactionFailed, refusing, failure].filter((word) => word !== undefined);
+  return {
+    ...rest,
+    failure: words.join("; "),
+    ...(refusing === undefined ? undefined : { refusal: true }),
+  };
+}
+
 /** The turn's status by how its launch ended: done, unless its last model turn failed; stopped is canceled. */
 function statusOf(
   ending: (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING],
@@ -660,6 +771,28 @@ function statusOf(
     case NATIVE_ENDING.FAILED:
       return RUN_STATUS.FAILED;
   }
+}
+
+/**
+ * Whether a batch of the runner's, applying `applied` events and leaving the
+ * projection at `state`, is its turn's progress: what pushes the turn's lease
+ * on (`@repo/database`'s `turn-state.ts`), which is the turn's progress
+ * deadline. Any event is progress: a step's words streaming, a call or its
+ * answer, a subagent's inner work, the turn's end. A heartbeat alone, a batch
+ * with no events, proves only that the runner lives, so it is progress only
+ * where the turn is expected to be silent: it holds a call still unanswered,
+ * since a harness says nothing while a command runs and only answers once it
+ * ends, or it waits on background work after its model turn ended. Note that a
+ * turn kept from before its open calls were recorded has its heartbeats taken
+ * as progress, as every heartbeat was, because a call it opened then may
+ * still run; and with no turn under way there is no lease to push.
+ */
+export function turnProgressed(applied: number, state: NativeProjection): boolean {
+  if (applied > 0) return true;
+  const turn = state.turn;
+  if (turn === undefined) return false;
+  if (turn.running === undefined || turn.waiting === true) return true;
+  return Object.keys(turn.running).length > 0;
 }
 
 /** One event's moments folded into the projection: the state it moves to, and the writes it asks for, in order. */

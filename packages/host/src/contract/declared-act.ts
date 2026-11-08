@@ -224,7 +224,7 @@ export function hostAct<
     panelOnly: spec.panelOnly,
     door: spec.door,
     // Note that presence is read rather than the value, because `undefined` is the fallback of an act that answers nothing.
-    unanswered: "unanswered" in spec ? Option.some(spec.unanswered as Output) : Option.none(),
+    unanswered: "unanswered" in spec ? Option.some(spec.unanswered) : Option.none(),
     byHand: spec.byHand ?? false,
     procedure: procedureOf<
       Input,

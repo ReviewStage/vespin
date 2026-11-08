@@ -1,0 +1,32 @@
+{
+  "name": "@repo/sandbox",
+  "version": "0.24.0",
+  "private": true,
+  "type": "module",
+  "description": "Every call we make of a sandbox, through the one Sandbox service: its provider-neutral interface and vocabulary at the root, Vercel Sandbox's adapter under vercel/, and an in-memory implementation for tests",
+  "exports": {
+    ".": "./src/index.js",
+    "./testing": "./src/testing/index.js",
+    "./vercel": "./src/vercel/index.js",
+    "./vercel/testing": "./src/vercel/testing/index.js"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "test:vitest": "vitest run",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@repo/wire": "workspace:*",
+    "@vercel/oidc": "catalog:",
+    "@vercel/sandbox": "catalog:",
+    "effect": "catalog:",
+    "ws": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ws": "8.18.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -21,8 +21,6 @@ import { githubConnectionSchema } from "./github-connection-view.js";
 /** A connect intent (POST): the page the Mac opens to connect the account's GitHub. */
 export const githubConnectAnswerSchema = EffectSchema.Struct({ url: EffectSchema.String });
 
-export type GitHubConnectAnswer = typeof githubConnectAnswerSchema.Type;
-
 /** Whether the account has a GitHub account linked (GET), and its login where the service holds one. */
 export const githubConnectionAnswerSchema = githubConnectionSchema;
 

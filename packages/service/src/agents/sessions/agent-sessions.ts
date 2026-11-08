@@ -126,7 +126,7 @@ const SessionFailedSchema = EffectSchema.Struct({
 
 export type SessionFailed = typeof SessionFailedSchema.Type;
 
-type SessionOpened =
+export type SessionOpened =
   | { readonly outcome: typeof SESSION_SEND_OUTCOME.ACCEPTED; readonly sessionId: string }
   | SessionFailed;
 

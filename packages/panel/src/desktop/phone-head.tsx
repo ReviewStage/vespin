@@ -12,6 +12,7 @@ import {
   Toolbar,
   type ToolbarPickUp,
   type ToolbarProps,
+  type ToolbarTitleEdit,
   Tooltip,
   useMenu,
 } from "@repo/ui";
@@ -87,6 +88,8 @@ export interface PhoneHeadSlots {
   start: React.ReactNode;
   /** What is on screen, centered, or what stands in its place, such as a search's field; none where the page's own header names it, the row then picking that name up (`pickUp`). */
   title?: React.ReactNode;
+  /** While given, the title in words is a field renaming it in place (`Toolbar`'s `titleEdit`). */
+  titleEdit?: ToolbarTitleEdit | undefined;
   /** Whether a title in words is the app's own, which a screen recording shows as it reads (`Toolbar`'s `titleReplayUnmasked`); masked where none is named. */
   titleReplayUnmasked?: boolean | undefined;
   /** A document's name, centered once its header has scrolled away; read only where there is no `title`. */
@@ -102,6 +105,7 @@ export function phoneBar({
   place,
   start,
   title,
+  titleEdit,
   titleReplayUnmasked,
   pickUp,
   tag,
@@ -114,6 +118,7 @@ export function phoneBar({
     end: TOOLBAR_INSET.COLUMN,
     lead: start,
     title,
+    titleEdit,
     titleReplayUnmasked,
     pickUp,
     tag,

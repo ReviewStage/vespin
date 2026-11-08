@@ -31,6 +31,7 @@ import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
+import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
@@ -44,6 +45,8 @@ import {
 } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
+import { SandboxUnavailable } from "@repo/sandbox";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect";
@@ -64,7 +67,7 @@ import {
   cloneAgentRepository,
   finishCheckoutWith,
 } from "../coder-host/checkout.js";
-import { settleLapsedRunner } from "../coder-host/lapsed-runner.js";
+import { reconcileAgent } from "../coder-host/reconcile.js";
 import {
   agentFailureOf,
   hostLostOf,
@@ -77,7 +80,6 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
-import { SandboxUnavailable } from "../vercel-sandbox-api.js";
 import { LaunchRefused } from "./agent-machine.js";
 import { deviceMachine } from "./device-machine.js";
 
@@ -112,7 +114,7 @@ const RELAY_INSTALLATION: InstallationFixture = {
 const launched = (opened: Effect.Success<ReturnType<typeof openLocalAgent>>) =>
   Effect.gen(function* () {
     const machine = yield* deviceMachine;
-    const [found] = yield* machine.findPlaces(opened.userId, opened.session);
+    const found = Option.getOrUndefined(yield* machine.findPlace(opened.userId, opened.session));
     assert.ok(found?.running !== undefined, "a local agent's place always stands");
     return yield* machine.launchRunner(found.running, {
       env: ENV,
@@ -125,6 +127,16 @@ const launched = (opened: Effect.Success<ReturnType<typeof openLocalAgent>>) =>
     });
   });
 
+/** The developer's message to the agent written as its send writes it, with the turn it queues. */
+const messageSent = (opened: Effect.Success<ReturnType<typeof openLocalAgent>>) =>
+  Effect.flatMap(storeWriter({ tools: {} }), (writer) =>
+    writer.writeAwaitingLine(
+      { userId: opened.userId, conversationId: opened.agent.conversationId },
+      { text: "Draft the plan.", clientKey: "plan", sender: { kind: MESSAGE_SENDER.APP } },
+      Effect.succeed(true),
+    ),
+  );
+
 /** Lets a forked read's statements run until its request waits for the Mac. */
 const untilAsked = (userId: string, deviceId: string) =>
   Effect.gen(function* () {
@@ -134,7 +146,10 @@ const untilAsked = (userId: string, deviceId: string) =>
     return Option.getOrThrow(Option.fromNullishOr(request));
   });
 
-it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_GITHUB))(
+/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
+const NO_REACH = Layer.merge(NO_GITHUB, memorySandbox().layer);
+
+it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_REACH))(
   "a local agent's machine",
   (it) => {
     it.effect(
@@ -461,6 +476,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
       Effect.gen(function* () {
         const opened = yield* openLocalAgent();
         const { userId, deviceId, agent } = opened;
+        yield* messageSent(opened);
         const launch = yield* launched(opened);
         yield* claimedDeviceAgentLine(userId, deviceId, launch.handle.command);
         if (step !== undefined) {
@@ -474,7 +490,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
       });
 
     it.effect(
-      "a launch its Mac settled unstarted with no step reported fails the agent's turn as a lost runner's, though its runner never opened one",
+      "a launch its Mac settled unstarted with no step reported fails the turn its message queued as a lost runner's, though its runner never took it",
       () =>
         Effect.gen(function* () {
           const { turn } = yield* unstartedTurn();
@@ -550,17 +566,18 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
     );
 
     it.effect(
-      "a Mac quiet past its lease before its runner opened a turn fails the turn its message waits on at the agent's next touch, naming the Mac",
+      "a Mac quiet past its lease before its runner took its message fails the turn the message's send queued at the agent's reconcile, naming the Mac",
       () =>
         Effect.gen(function* () {
           const opened = yield* openLocalAgent();
           const { userId, deviceId, agent } = opened;
+          yield* messageSent(opened);
           const launch = yield* launched(opened);
           // The Mac took the launch and went quiet while preparing it, before its runner posted anything.
           yield* claimedDeviceAgentLine(userId, deviceId, launch.handle.command);
           yield* TestClock.adjust("6 minutes");
 
-          yield* settleLapsedRunner(agent);
+          yield* reconcileAgent(agent);
 
           const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
             agent.conversationId,
@@ -574,7 +591,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
     );
 
     it.effect(
-      "a Mac quiet past its lease loses its open run at the agent's next touch: the launch settled, the bearer let go, and the turn ended naming the Mac, with no stop queued; a Mac that beat within it keeps its run",
+      "a Mac quiet past its lease loses its open run at the agent's reconcile: the launch settled, the bearer let go, and the turn ended naming the Mac, with no stop queued; a Mac that beat within it keeps its run",
       () =>
         Effect.gen(function* () {
           const lapsed = yield* openLocalAgent();
@@ -598,7 +615,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           }
           yield* TestClock.adjust("6 minutes");
           yield* beatDevice(kept.userId, kept.deviceId);
-          for (const { agent } of [lapsed, kept]) yield* settleLapsedRunner(agent);
+          for (const { agent } of [lapsed, kept]) yield* reconcileAgent(agent);
           const turns = yield* latestTurnsOfReached([
             lapsed.agent.conversationId,
             kept.agent.conversationId,

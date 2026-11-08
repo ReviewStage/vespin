@@ -30,7 +30,7 @@ import {
 import { SENTRY_MIRROR_SPAN } from "@repo/features/sentry-tracing";
 import { GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal, readParams } from "@repo/gateway";
 import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
+import { cappedExponential, readEither } from "@repo/wire/effect";
 import {
   Clock,
   Data,
@@ -70,11 +70,12 @@ import type { RunMode } from "./run-mode.js";
  * header's `base` (`MirrorPlatform`'s scripts), and answers as soon as the
  * worktree stands. Note that the default branch is had from GitHub beside
  * the worktree's place while the tunnel opens, because the header waits on
- * the sandbox waking, and from it the worktree fetches only what its base
- * changes. While it has none, its tunnel asks the service to wake a
- * stopped sandbox to build it (`SANDBOX_TUNNEL.QUERY.WAKE`), and once it
- * stands it never asks again, so a stopped sandbox stays stopped and the
- * mirror waits for it. From then on the mirror holds one tunnel of the
+ * the sandbox running, and from it the worktree fetches only what its base
+ * changes. The mirror never wakes, opens, or keeps alive a sandbox: it
+ * follows one something else keeps running (a turn, the agent on screen, a
+ * Terminal), so a stopped sandbox stays stopped and the mirror waits for
+ * it, its worktree built the next time it finds the sandbox running. From
+ * then on the mirror holds one tunnel of the
  * `MIRROR` kind open (`@repo/features/sandbox-tunnel-wire`) with one channel on it,
  * whose messages are the mirror's own (`@repo/features/sandbox-mirror-wire`):
  * each manifest is matched against the mirror's own files, every file whose
@@ -112,7 +113,7 @@ import type { RunMode } from "./run-mode.js";
  */
 
 /** How long a mirror waits before it opens its tunnel again: from `FIRST`, twice as long each time, never longer than `LONGEST`. */
-export const MIRROR_RECONNECT = {
+const MIRROR_RECONNECT = {
   FIRST: Duration.seconds(1),
   LONGEST: Duration.seconds(30),
 } as const;
@@ -160,11 +161,7 @@ const WORKTREE_FOLDER = "repository";
 /** The one channel a mirror opens on its tunnel. */
 const CHANNEL = 0;
 
-const RECONNECT = Schedule.exponential(MIRROR_RECONNECT.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, MIRROR_RECONNECT.LONGEST)),
-  ),
-);
+const RECONNECT = cappedExponential(MIRROR_RECONNECT.FIRST, MIRROR_RECONNECT.LONGEST);
 
 /** How one tunnel's life ended, where the mirror does not try again on its own schedule. */
 const TUNNEL_ENDING = {
@@ -200,7 +197,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 /** The agent as the task list carries it, as far as a mirror reads it. */
-export interface MirroredAgent {
+interface MirroredAgent {
   readonly repository: string | null;
   readonly archivedAt?: number | undefined;
   /** Set only for a local agent on its starter's device, which has no mirror. */
@@ -284,13 +281,12 @@ function stepped<A, E, R>(
   );
 }
 
-/** The mirror tunnel's address for an agent, asking to wake a stopped sandbox where `wake` says so. */
-function tunnelAddress(socketOrigin: string, agentId: string, wake: boolean): string {
+/** The mirror tunnel's address for an agent. */
+function tunnelAddress(socketOrigin: string, agentId: string): string {
   const query = new URLSearchParams({
     [SANDBOX_TUNNEL.QUERY.AGENT]: agentId,
     [SANDBOX_TUNNEL.QUERY.KIND]: TUNNEL_KIND.MIRROR,
   });
-  if (wake) query.set(SANDBOX_TUNNEL.QUERY.WAKE, SANDBOX_TUNNEL.WAKE_ASKED);
   return `${socketOrigin}${SANDBOX_TUNNEL.PATH}?${query}`;
 }
 
@@ -524,12 +520,7 @@ export function composeMirrors(
               const dropped = (failure: MirrorFailure, code?: number) =>
                 Effect.fail(new MirrorDropped({ step: MIRROR_STEP.TUNNEL, failure, code }));
               if (socketOrigin === undefined) return yield* dropped(MIRROR_FAILURE.UNREACHABLE);
-              // Note that only a mirror with no worktree yet asks to wake the sandbox, once it stands it never does.
-              const address = tunnelAddress(
-                socketOrigin,
-                agentId,
-                !(yield* worktreeStands(agentId)),
-              );
+              const address = tunnelAddress(socketOrigin, agentId);
               const opening = yield* openedUnderCredential(account.credential, openSocket, address);
               if ("refused" in opening)
                 return yield* dropped(MIRROR_FAILURE.REFUSED, opening.refused);

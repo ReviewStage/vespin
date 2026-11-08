@@ -9,13 +9,22 @@
  * the main transcript. Beside them, a Start copies its source's rows to the
  * conversation it starts, so a continued or forked agent forks the source's
  * transcript as its own.
+ *
+ * A session is held from its first entry where the store holds the entry
+ * that opens it (`opensTranscript`), which an append marks as it inserts it.
+ * The Agent SDK resumes from the store whenever it holds any entry of the
+ * session, and from the store's entries alone, so a session the store holds
+ * only a tail of, as one the CLI began before the store kept transcripts, is
+ * never resumed (`../../../service/src/agents/coder-host/runner-sessions.ts`).
+ * Nor is a session the SDK dropped a batch of (`markSessionBroken`), whose
+ * entries hold a gap however they begin.
  */
 
 import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { claudeSessionEntries } from "../schemas/claude-session-entry.js";
+import { claudeBrokenSessions, claudeSessionEntries } from "../schemas/claude-session-entry.js";
 import { conversations } from "../schemas/storage.js";
 
 type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -74,11 +83,16 @@ const insertEntries = SqlSchema.void({
   Request: Schema.Struct({ ...KeyFields, entries: Schema.Array(EntrySchema) }),
   execute: ({ conversationId, projectKey, sessionId, subpath, entries }) =>
     Database.use((db) =>
-      db
-        .insert(claudeSessionEntries)
-        .values(
-          entries.map((entry) => ({ conversationId, projectKey, sessionId, subpath, entry })),
-        ),
+      db.insert(claudeSessionEntries).values(
+        entries.map((entry) => ({
+          conversationId,
+          projectKey,
+          sessionId,
+          subpath,
+          entry,
+          opens: opensTranscript(subpath, entry),
+        })),
+      ),
     ),
 });
 
@@ -176,6 +190,7 @@ const copyEntries = SqlSchema.void({
             sessionId: claudeSessionEntries.sessionId,
             subpath: claudeSessionEntries.subpath,
             entry: claudeSessionEntries.entry,
+            opens: claudeSessionEntries.opens,
             createdAt: claudeSessionEntries.createdAt,
           })
           .from(claudeSessionEntries)
@@ -186,19 +201,78 @@ const copyEntries = SqlSchema.void({
     ),
 });
 
-const findAnyEntry = SqlSchema.findOneOption({
-  Request: Schema.Struct(OwnerFields),
+const copyBreaks = SqlSchema.void({
+  Request: Schema.Struct({
+    sourceUserId: Schema.String,
+    sourceConversationId: Schema.String,
+    conversationId: Schema.String,
+  }),
+  execute: ({ sourceUserId, sourceConversationId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .insert(claudeBrokenSessions)
+        .select((qb) =>
+          qb
+            .select({
+              conversationId: sql<string>`${conversationId}::uuid`.as("conversation_id"),
+              sessionId: claudeBrokenSessions.sessionId,
+              createdAt: claudeBrokenSessions.createdAt,
+            })
+            .from(claudeBrokenSessions)
+            .innerJoin(conversations, eq(conversations.id, claudeBrokenSessions.conversationId))
+            .where(ownConversation(sourceUserId, sourceConversationId)),
+        )
+        .onConflictDoNothing(),
+    ),
+});
+
+const insertBreak = SqlSchema.void({
+  Request: Schema.Struct({ conversationId: Schema.String, sessionId: Schema.String }),
+  execute: ({ conversationId, sessionId }) =>
+    Database.use((db) =>
+      db.insert(claudeBrokenSessions).values({ conversationId, sessionId }).onConflictDoNothing(),
+    ),
+});
+
+const findOpening = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...OwnerFields, sessionId: Schema.String }),
   Result: Schema.Struct({ id: Schema.Number }),
-  execute: ({ userId, conversationId }) =>
+  execute: ({ userId, conversationId, sessionId }) =>
     Database.use((db) =>
       db
         .select({ id: claudeSessionEntries.id })
         .from(claudeSessionEntries)
         .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
-        .where(ownConversation(userId, conversationId))
+        .where(
+          and(
+            ownConversation(userId, conversationId),
+            eq(claudeSessionEntries.conversationId, conversationId),
+            eq(claudeSessionEntries.sessionId, sessionId),
+            eq(claudeSessionEntries.opens, true),
+            // Note that a session the SDK dropped a batch of holds a gap, however it begins.
+            sql`not exists (select 1 from ${claudeBrokenSessions} where ${and(
+              eq(claudeBrokenSessions.conversationId, conversationId),
+              eq(claudeBrokenSessions.sessionId, sessionId),
+            )})`,
+          ),
+        )
         .limit(1),
     ),
 });
+
+/**
+ * Whether the entry opens its transcript: a Claude Code session's root,
+ * the main transcript's user entry with no parent, which every later entry
+ * of its chain descends from; or a Codex rollout's first line, its
+ * `session_meta`. The migration that added the mark backfilled it by the
+ * same predicate. Note that a CLI that stopped writing either marks nothing,
+ * so its sessions start afresh rather than resume a transcript we cannot
+ * tell is whole.
+ */
+function opensTranscript(subpath: string | null, entry: SessionEntry): boolean {
+  if (entry.type === "session_meta") return true;
+  return subpath === null && entry.type === "user" && entry.parentUuid === null;
+}
 
 /** A key's fields as the requests take them: no subpath as null. */
 function keyFields(userId: string, conversationId: string, key: SessionEntryKey) {
@@ -272,19 +346,42 @@ export function listSessionEntrySubkeys(
   );
 }
 
-/** Whether the account's conversation holds any transcript entry. */
-export function holdsSessionEntries(userId: string, conversationId: string): EntryEffect<boolean> {
-  return findAnyEntry({ userId, conversationId }).pipe(Effect.map(Option.isSome));
+/**
+ * The session given marked broken in the account's conversation: the Agent
+ * SDK dropped a batch of its transcript, so the store holds it with a gap
+ * and it is never held again; nothing where the conversation is not the
+ * account's.
+ */
+export function markSessionBroken(
+  userId: string,
+  conversationId: string,
+  sessionId: string,
+): EntryEffect<void> {
+  return Effect.gen(function* () {
+    const own = yield* findConversation({ userId, conversationId });
+    if (Option.isNone(own)) return;
+    yield* insertBreak({ conversationId, sessionId });
+  });
 }
 
-/** Every row of the source conversation, read as its own account, copied to the conversation given in their order. */
+/** Whether the account's conversation holds the session given whole: from its first entry, the entry that opens it among its own, and with no batch dropped since (`markSessionBroken`). */
+export function holdsSession(
+  userId: string,
+  conversationId: string,
+  sessionId: string,
+): EntryEffect<boolean> {
+  return findOpening({ userId, conversationId, sessionId }).pipe(Effect.map(Option.isSome));
+}
+
+/** Every row of the source conversation, read as its own account, copied to the conversation given in their order, its broken sessions marked broken there too. */
 export function copySessionEntries(
   source: { readonly userId: string; readonly conversationId: string },
   conversationId: string,
 ): EntryEffect<void> {
-  return copyEntries({
+  const request = {
     sourceUserId: source.userId,
     sourceConversationId: source.conversationId,
     conversationId,
-  });
+  };
+  return Effect.andThen(copyEntries(request), copyBreaks(request));
 }

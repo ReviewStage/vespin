@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { noDatabase } from "@repo/database/testing/no-database";
-import { Effect, Exit, Redacted } from "effect";
+import { memorySandbox } from "@repo/sandbox/testing";
+import { Effect, Exit, Layer, Redacted } from "effect";
 import { HOSTED_API_ERROR } from "../http/http.js";
 import { MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import {
@@ -26,12 +27,16 @@ function sweepRequest(
 interface Recorded {
   syncLog: number[];
   portShares: number[];
+  turns: number[];
+  republished: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
   const recorded: Recorded = {
     syncLog: [],
     portShares: [],
+    turns: [],
+    republished: [],
   };
   const options: MaintenanceSweepOptions = {
     request: sweepRequest(),
@@ -47,6 +52,16 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
         recorded.portShares.push(now);
         return 0;
       }),
+    reconcileAgents: (now) =>
+      Effect.sync(() => {
+        recorded.turns.push(now);
+        return 0;
+      }),
+    republishTurns: (now) =>
+      Effect.sync(() => {
+        recorded.republished.push(now);
+        return 0;
+      }),
     ...overrides,
   };
   return { options, recorded };
@@ -54,8 +69,10 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
 
 /** The sweep over a client that refuses every statement — the fakes above stand in for every query. */
 function sweep(options: MaintenanceSweepOptions) {
-  return Effect.flatMap(Effect.provide(handleMaintenanceSweep(options), noDatabase), (response) =>
-    Effect.promise(async () => ({ status: response.status, body: await response.json() })),
+  return Effect.flatMap(
+    Effect.provide(handleMaintenanceSweep(options), Layer.merge(noDatabase, memorySandbox().layer)),
+    (response) =>
+      Effect.promise(async () => ({ status: response.status, body: await response.json() })),
   );
 }
 
@@ -69,6 +86,8 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
     assert.deepEqual(recorded, {
       syncLog: [],
       portShares: [],
+      turns: [],
+      republished: [],
     });
   }),
 );
@@ -86,10 +105,14 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
     assert.deepEqual(wrong.recorded, {
       syncLog: [],
       portShares: [],
+      turns: [],
+      republished: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
       portShares: [],
+      turns: [],
+      republished: [],
     });
   }),
 );
@@ -108,6 +131,8 @@ it.effect(
       assert.deepEqual(recorded, {
         syncLog: [instant],
         portShares: [instant],
+        turns: [instant],
+        republished: [instant],
       });
     }),
 );

@@ -1,4 +1,4 @@
-import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
+import { MESSAGE_ROLE } from "@repo/wire";
 import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -10,6 +10,7 @@ import {
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
+import { settleKeptTurn } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
@@ -151,26 +152,6 @@ const findTurnBefore = SqlSchema.findAll({
         .from(turns)
         .where(and(eq(turns.conversationId, conversationId), lt(turns.queuedAt, from)))
         .limit(1),
-    ),
-});
-
-/** A turn kept as the conversation's settled first, its work dropped, with no Stop or failure on it. */
-const settleKeptTurn = SqlSchema.void({
-  Request: Schema.Struct({ conversationId: Schema.String, turnId: Schema.String }),
-  execute: ({ conversationId, turnId }) =>
-    Database.use((db) =>
-      db
-        .update(turns)
-        .set({
-          status: TURN_STATUS.SETTLED,
-          settledAt: sql`now()`,
-          cancelRequestedAt: null,
-          cancelRequestKey: null,
-          cancelRequestedBy: null,
-          failure: null,
-          failureDetail: null,
-        })
-        .where(and(eq(turns.conversationId, conversationId), eq(turns.id, turnId))),
     ),
 });
 
@@ -326,7 +307,7 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const keepsFirst =
       first !== undefined && (yield* findTurnBefore({ conversationId, from })).length === 0;
     const dropped = keepsFirst ? later : turnIds;
-    if (keepsFirst && first !== undefined) yield* settleKeptTurn({ conversationId, turnId: first });
+    if (keepsFirst) yield* settleKeptTurn(conversationId, first);
     if (dropped.length > 0) yield* deleteTurns({ conversationId, turnIds: dropped });
     // Note that a worker a dropped turn delegated is deleted with it, its own workers by the cascade.
     yield* deleteWorkersFrom({ conversationId, from });

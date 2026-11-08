@@ -23,10 +23,10 @@ import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
-import type { AutomationsRoute } from "../automations-route.js";
-import type { InboxRoute } from "../inbox-route.js";
+import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
 import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
+import { MAIN_TAB, SIDE_PANEL_WIDTH } from "../tasks/task-tab-model.js";
 import {
   AGENT_RENAME_SHAPE,
   type AgentsControl,
@@ -36,11 +36,8 @@ import {
   MODELS_READ,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
-import { MAIN_TAB } from "../tasks/use-main-tabs.js";
-import { DRAWN_KINDS, SIDE_PANEL_WIDTH } from "../tasks/use-side-panel.js";
+import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
 import {
-  type AdminViewControl,
-  AUTOMATIONS_PAGE,
   type TasksControl,
   taskDeleteMutation,
   taskMoveMutation,
@@ -48,13 +45,7 @@ import {
   tasksDeleteMutation,
   type VersionHistoryControl,
 } from "../tasks/use-tasks-tab.js";
-import type { VersionHistoryRoute } from "../version-history-route.js";
-import type {
-  BoardRoute,
-  HomeRoute,
-  PersonRoute,
-  UnknownWorkspaceRoute,
-} from "../workspace-routes.js";
+import type { HomeRoute, RoutedViews, UnknownWorkspaceRoute } from "../workspace-routes.js";
 import { handHostReads, holdTranscripts, type TranscriptsHeld } from "./app-state.js";
 
 const ignore = () => undefined;
@@ -76,9 +67,7 @@ export function listedAgent(
 
 /** An open item as main's read of the account carries it into what waits: its id, its agent, what it asks, and when it was posted. */
 /** A page as the host pushes it: caught up where it came back with nothing on it, unless it says otherwise. */
-export function pushedPage(
-  page: AgentMessagesAnswerView | AgentTranscriptPage,
-): AgentTranscriptPage {
+function pushedPage(page: AgentMessagesAnswerView | AgentTranscriptPage): AgentTranscriptPage {
   if ("failure" in page || "caughtUp" in page) return page;
   return { ...page, caughtUp: page.messages.length === 0 };
 }
@@ -240,9 +229,6 @@ function versionHistoryControl(
 ): VersionHistoryControl {
   return {
     open: false,
-    onOpen: ignore,
-    onPreload: ignore,
-    onClose: ignore,
     list: { kind: HISTORY_READ.READING },
     selected: undefined,
     viewing: undefined,
@@ -315,6 +301,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onStop: () => Promise.resolve(false),
     onRewind: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onMessage: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    onRetry: () => Promise.resolve(false),
     onChoose: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onSwitchServers: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onOpenIntegrations: ignore,
@@ -381,77 +368,25 @@ export function agentHoldingsOf(
   return [...held.values()];
 }
 
-/** Admin as a window not standing on it holds it, every door ignored. */
-export const ADMIN_AWAY: AdminViewControl = {
-  open: false,
-  view: { kind: "dashboard" },
-  onOpen: ignore,
-  onClose: ignore,
-  onPreload: ignore,
+/** A leave guard no page asks through, so every way out goes at once. */
+export const NO_LEAVE_ASK: PlaceLeave = {
+  stand: () => () => undefined,
+  pass: (leave) => leave(),
+  arrive: (move, landed) => {
+    move(true);
+    landed();
+  },
+  stays: ignore,
+  stayed: () => false,
+  transitionalLeaveFirst: (leave) => leave,
 };
 
-/** The Board's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const BOARD_AWAY: BoardRoute = {
-  open: false,
-  standingIn: undefined,
-  onOpen: ignore,
-  onClose: ignore,
-  onTurn: ignore,
-  onPreload: ignore,
-};
-
-/** The Automations route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const AUTOMATIONS_AWAY: AutomationsRoute = {
-  open: false,
-  place: { kind: AUTOMATIONS_PAGE.LIST },
-  runs: false,
-  standingIn: undefined,
-  deleted: new Set(),
-  setupAddress: undefined,
-  onOpen: ignore,
-  onRuns: ignore,
-  onClose: ignore,
-  onTurn: ignore,
-};
-
-/** A version history's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const VERSION_HISTORY_AWAY: VersionHistoryRoute = {
-  open: false,
-  workspace: undefined,
-  task: undefined,
-  spot: undefined,
-  listAddress: undefined,
-  onOpen: ignore,
-  onMove: ignore,
-  onClose: ignore,
-  onGiveWay: ignore,
-  onPreload: ignore,
-};
-
-/** The Inbox's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const INBOX_AWAY: InboxRoute = {
-  open: false,
-  standingIn: undefined,
-  narrowed: undefined,
-  chosen: undefined,
-  listAddress: undefined,
-  onOpen: ignore,
-  choiceOf: () => undefined,
-  onChoose: ignore,
-  onClear: ignore,
-  onWiden: ignore,
-  onClose: ignore,
-  onTurn: ignore,
-};
-
-/** A person's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-export const PERSON_AWAY: PersonRoute = {
-  userId: undefined,
-  name: undefined,
-  workspace: undefined,
-  onOpen: ignore,
-  onClose: ignore,
-  onPreload: ignore,
+/** The Board, a person's page, the Automations pages, and the Inbox standing nowhere, as a step's name and Copy link read them. */
+export const VIEWS_AWAY: RoutedViews = {
+  board: false,
+  person: { userId: undefined, name: undefined, workspace: undefined },
+  automations: undefined,
+  inbox: { open: false, chosen: undefined, narrowed: undefined },
 };
 
 /** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */
@@ -574,8 +509,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       closedTabs: [],
       used: DRAWN_KINDS,
       pins: [],
-      carried: [],
-      onCarried: ignore,
       subagents: [],
       files: [],
       changes: [],
@@ -607,6 +540,8 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       onRenamePins: ignore,
       onPlacePins: ignore,
       onOpen: ignore,
+      agent: undefined,
+      ownerOf: () => undefined,
       onOpenFile: ignore,
       onBrowseFile: ignore,
       onFileHistory: ignore,
@@ -625,8 +560,12 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     taskView: { taskId: undefined },
     onArriveTask: ignore,
     onShowAgent: ignore,
+    onOpenHistory: ignore,
     onShowColumnTab: ignore,
     onShowPanelTab: ignore,
+    tabKeys: undefined,
+    onTabKeys: ignore,
+    onTabKeysTaken: ignore,
     onShowSource: ignore,
     onShowTask: ignore,
     onShowMention: ignore,
@@ -646,42 +585,18 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     inboxShown: null,
     inboxTasks: [],
     inboxView: {
-      open: false,
-      chosen: undefined,
-      onOpen: ignore,
-      onClose: ignore,
-      onChoose: ignore,
-      onOpenItem: ignore,
       onClear: ignore,
-      narrowed: undefined,
-      onWiden: ignore,
       pages: undefined,
       onTaskAgents: () => undefined,
     },
     agentView: { agentId: undefined, onOpen: ignore, onClose: ignore },
     onThreadsShown: ignore,
-    personView: {
-      userId: undefined,
-      name: undefined,
-      workspaceId: undefined,
-      onOpen: ignore,
-      onClose: ignore,
-      onPreload: ignore,
-    },
+    onOpenPerson: ignore,
     inboxTaskless: [],
     failedRuns: [],
-    adminView: ADMIN_AWAY,
     atHome: false,
     taskPlaceStands: true,
-    boardView: { open: false, onOpen: ignore, onClose: ignore, onPreload: ignore },
-    automationsView: {
-      open: false,
-      place: { kind: AUTOMATIONS_PAGE.LIST },
-      runs: false,
-      onOpen: ignore,
-      onRuns: ignore,
-      onClose: ignore,
-    },
+    onAutomationRuns: ignore,
     onShowFile: ignore,
     onOpenPinnedTab: ignore,
     onReopenClosedTab: undefined,
@@ -709,6 +624,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       open: false,
       preset: undefined,
       homeAsks: 0,
+      homeRefused: undefined,
       workspaces: [],
       workspaceId: undefined,
       repositoriesIn: () => NO_REPOSITORIES,
@@ -724,6 +640,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     },
     onLeaveTask: ignore,
     onGoHome: ignore,
+    onLeaveRouted: ignore,
     onUnbindTask: ignore,
     renameTask: taskRenameMutation(() => Promise.resolve(true), undefined),
     onDraftName: ignore,
@@ -742,12 +659,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     deleteTask: taskDeleteMutation((taskId) => onDeleteTask(taskId)),
     deleteTasks: tasksDeleteMutation((taskId) => onDeleteTask(taskId)),
     back: () => false,
-    // No page asks before it is left, so every way out goes at once.
-    leaveGuard: {
-      stand: () => ignore,
-      pass: (leave) => leave(),
-      guard: (leave) => leave,
-    },
+    placeLeave: NO_LEAVE_ASK,
     ...overrides,
     inboxAgents: overrides.inboxAgents ?? agentHoldingsOf(overrides.inboxTaskless ?? []),
   };

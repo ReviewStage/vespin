@@ -1,7 +1,7 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { AGENT_IMAGE_FILE } from "@repo/service/agents/coder-host/agent-image";
-import { build } from "esbuild";
+import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
+import { type BuildOptions, build } from "esbuild";
 import {
   BUILD_OUTPUT_DIRECTORY,
   emitBuildOutput,
@@ -20,7 +20,7 @@ import {
   FUNCTION_BUNDLE_DIRECTORY,
   functionPublicPath,
 } from "../server/function-layout.js";
-import { agentImageReference } from "./agent-image.js";
+import { agentImageContext, shippedBesideFunctions } from "./agent-image.js";
 
 /**
  * Bundles the functions the routes under `server/routes/` and the hosted
@@ -45,9 +45,10 @@ const WEB = join(import.meta.dirname, "..");
 
 /**
  * The module that reads the agents' image reference beside a function's
- * entry. Every function whose bundle reaches it ships the reference in its
- * `.func`, computed here as CI computes the tag it pushes the image under
- * (`agent-image.ts`), and a build without the runner's bundle the image
+ * entry. Every function whose bundle reaches it ships the reference, the
+ * image's digest without the runner's unit, and the runner's unit in its
+ * `.func`, the reference computed here as CI computes the tag it pushes the image under
+ * (`agent-image.ts`), and a build without every file of the runner's unit the image
  * carries fails here rather than deploy a launch that names no image.
  */
 const AGENT_IMAGE_READER = join(
@@ -64,12 +65,53 @@ const AGENT_IMAGE_READER = join(
 /** Where `vite build` and `prerender.ts` leave the site, copied whole under the output's `static/`. */
 const SITE_DIRECTORY = "dist";
 
-const agentImage = Buffer.from(`${await agentImageReference()}\n`, "utf8");
+/**
+ * The bundles' source maps, uploaded to Sentry's `vespin-web` project so a
+ * function's stack traces and profiles name the source under `packages/`.
+ * Only a production build that holds `SENTRY_AUTH_TOKEN` (set by Sentry's
+ * Vercel integration) uploads, since writing and uploading the maps costs
+ * the build time a Preview need not pay. The maps are written beside the
+ * bundles under `dist-functions/`, matched to them by the debug ID the plugin
+ * writes into each, filed under the release the plugin reads from
+ * `VERCEL_GIT_COMMIT_SHA` as the SDK does (`@repo/service/observability/sentry`),
+ * and deleted after the upload; none reaches a `.func`, which is handed each
+ * bundle's contents alone.
+ * A refused upload only warns, so Sentry being down never fails a deploy.
+ */
+function withSentrySourceMaps(options: BuildOptions): BuildOptions {
+  const authToken = process.env.SENTRY_AUTH_TOKEN;
+  if (!authToken || process.env.VERCEL_ENV !== "production") return options;
+  return {
+    ...options,
+    // Sentry's guide asks for "hidden" maps; esbuild spells that `external`, a map named by no comment in the bundle.
+    sourcemap: "external",
+    plugins: [
+      // Note that Sentry's plugin goes first, because it gives a bundle its debug ID by wrapping
+      // its entry point, which the dispatcher's plugin would otherwise resolve before it sees it.
+      sentryEsbuildPlugin({
+        org: "stage-review",
+        project: "vespin-web",
+        authToken,
+        sourcemaps: {
+          filesToDeleteAfterUpload: [join(WEB, FUNCTION_BUNDLE_DIRECTORY, "**/*.map")],
+        },
+        errorHandler: (error) => {
+          console.warn(
+            `warning: Sentry source-map upload failed, so the build goes on without it: ${error.message}`,
+          );
+        },
+      }),
+      ...(options.plugins ?? []),
+    ],
+  };
+}
+
+const agentImage = shippedBesideFunctions(await agentImageContext());
 
 const task = await functionBundlePlan(WEB);
 // Emptied first, so a bundle an earlier plan emitted can never sit beside the shipping ones and be read as one of them.
 await rm(join(WEB, FUNCTION_BUNDLE_DIRECTORY), { recursive: true, force: true });
-const result = await build({ ...task.options, metafile: true, write: true });
+const result = await build({ ...withSentrySourceMaps(task.options), metafile: true, write: true });
 
 const undeclared = undeclaredImports(result.metafile, WEB, task.externalPackages);
 if (undeclared.length > 0) {
@@ -117,9 +159,7 @@ const emitted = await emitBuildOutput({
         maxDuration: definition.maxDuration,
         queueTopic: definition.queueTopic,
         files: [
-          ...(shipsImage.has(join(WEB, bundlePath(definition)))
-            ? [{ name: AGENT_IMAGE_FILE, contents: agentImage }]
-            : []),
+          ...(shipsImage.has(join(WEB, bundlePath(definition))) ? agentImage : []),
           ...[profilerBinary.get(join(WEB, bundlePath(definition)))].filter(
             (file) => file !== undefined,
           ),

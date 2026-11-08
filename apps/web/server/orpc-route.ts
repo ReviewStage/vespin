@@ -7,7 +7,7 @@ import { hostedAdminSeams } from "@repo/service/admin/admin-route";
 import { agentBrowserServices } from "@repo/service/agents/browser/agent-browser";
 import type { NativeAgentSessions } from "@repo/service/agents/coder-host/runtime-sessions";
 import {
-  type SandboxStopReach,
+  type SandboxDeleteReach,
   sessionSandboxesLayer,
 } from "@repo/service/agents/session-sandboxes";
 import { agentSandboxLayer } from "@repo/service/agents/terminal/agent-sandbox";
@@ -55,7 +55,7 @@ export function routeFromHostedFetch(
  * reached Vercel (https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil).
  * The work runs on the services of the request it was asked in.
  */
-const keepAwake: SandboxStopReach["keepAwake"] = <R>(work: Effect.Effect<void, never, R>) =>
+const keepAwake: SandboxDeleteReach["keepAwake"] = <R>(work: Effect.Effect<void, never, R>) =>
   Effect.flatMap(Effect.context<R>(), (context) =>
     Effect.sync(() => waitUntil(Effect.runPromiseExitWith(context)(work))),
   );

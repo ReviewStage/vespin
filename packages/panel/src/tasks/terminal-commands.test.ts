@@ -20,9 +20,11 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 import { onTerminals, windowTerminals } from "../testing/terminals.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
+import { SIDE_PANEL_TAB } from "./task-tab-model.js";
 import type { MainTab } from "./use-main-tabs.js";
-import { SIDE_PANEL_TAB, type SidePanelTab } from "./use-side-panel.js";
+import type { SidePanelTab } from "./use-side-panel.js";
 import { NO_LOOKS } from "./use-task-looks.js";
 
 /**
@@ -142,14 +144,16 @@ async function mount(input: {
   });
   act(() =>
     root.render(
-      withQueryClient(
-        onTerminals(
-          windowTerminals(),
-          createElement(
-            Fragment,
-            null,
-            createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
-            createElement(ToastHost),
+      windowRouter().provide(
+        withQueryClient(
+          onTerminals(
+            windowTerminals(),
+            createElement(
+              Fragment,
+              null,
+              createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+              createElement(ToastHost),
+            ),
           ),
         ),
       ),
@@ -310,7 +314,7 @@ function menuItem(label: string) {
 /** Opens the right-click menu of the task's column's tab named `name`. */
 function rightClickTab(name: string): void {
   const tab = [
-    ...document.querySelectorAll<HTMLElement>('.desktop-task-main .ui-toolbar [role="tab"]'),
+    ...document.querySelectorAll<HTMLElement>('.task-tabs .ui-toolbar [role="tab"]'),
   ].find((each) => each.textContent?.includes(name) === true);
   assert.ok(tab, `the column has a tab named ${name}`);
   act(() => {

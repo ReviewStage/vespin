@@ -1,7 +1,10 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { pruneSyncLog } from "@repo/database/models/sync-log";
+import type { Sandbox } from "@repo/sandbox";
 import { Effect, Layer } from "effect";
-import { type HttpClient, HttpRouter } from "effect/http";
+import { HttpClient, HttpRouter } from "effect/http";
+import { reconcileAgents } from "../agents/coder-host/reconcile.js";
+import { republishQueuedTurns } from "../agents/coder-host/turn-delivery.js";
 import { HostedEnvironment } from "../environment.js";
 import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
 import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js";
@@ -26,15 +29,20 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
 ): Effect.fn.Return<
   Response,
   unknown,
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | Sandbox
 > {
   const environment = yield* HostedEnvironment;
+  // The reap asks the agents' machines where their runners stand, over the deployment's own client.
+  const http = yield* HttpClient.HttpClient;
   return yield* handleMaintenanceSweep({
     request,
     cronSecret: environment.cronSecret,
     monitor: sentryCronCheckIns(SWEEP_MONITOR),
     pruneSyncLog: (now) => pruneSyncLog(new Date(now)),
     sweepPortShares: (now) => sweepPortShares(new Date(now)),
+    reconcileAgents: (now) =>
+      Effect.provideService(reconcileAgents(now), HttpClient.HttpClient, http),
+    republishTurns: republishQueuedTurns,
   });
 });
 
@@ -44,7 +52,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
  * since `vercel.json` sends the function only its own path.
  */
 export function maintenanceApp(): WebRoutes<
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | Sandbox
 > {
   return Layer.mergeAll(
     // `ANY_METHOD`, not `GET`: the handler decides its own method refusal, so a

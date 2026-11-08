@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement } from "react";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { createMemoryHistory } from "@tanstack/react-router";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { SHELL_ROOM } from "../shell-room.js";
 import { fakeActPortAnswering, type SentPortAct } from "../testing/app-bridge.js";
 import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
+import { windowRouter } from "../testing/window-router.js";
 
 /**
  * sidebar-admin.test.ts -- the Admin row stands after Automations for an
@@ -40,40 +42,33 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+/** The workspace the sidebar lists, which Admin opens under. */
+const ACME: Workspace = {
+  id: "workspace-acme",
+  name: "Acme",
+  slug: "acme",
+  role: WORKSPACE_ROLE.MEMBER,
+  github: null,
+};
+
 /** The sidebar beside the work, for an account that is an admin or not. */
-async function mount(admin: boolean): Promise<{ sidebar: HTMLElement; opened: number }> {
+async function mount(admin: boolean): Promise<{ sidebar: HTMLElement; path: () => string }> {
   handState({}, { access: { admin } });
-  const counted = { opened: 0 };
-  const tasks = tasksControl();
-  const control = {
-    ...tasks,
-    adminView: {
-      ...tasks.adminView,
-      onOpen: () => {
-        counted.opened += 1;
-      },
-    },
-  };
+  const router = windowRouter(createMemoryHistory({ initialEntries: ["/acme"] }));
+  const control = tasksControl({ workspace: ACME, workspaces: [ACME] });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() =>
     root.render(
-      withQueryClient(
-        createElement(DesktopSidebar, { ...sidebarProps(control), room: SHELL_ROOM.WIDE }),
-      ),
+      withQueryClient(drawnSidebar({ ...sidebarProps(control), room: SHELL_ROOM.WIDE }, router)),
     ),
   );
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   if (admin) await vi.waitFor(() => assert.equal(adminRow(container) !== undefined, true));
-  return {
-    sidebar: container,
-    get opened() {
-      return counted.opened;
-    },
-  };
+  return { sidebar: container, path: () => router.history.location.pathname };
 }
 
 /** The names of the rows the sidebar's places draw, top to bottom. */
@@ -109,11 +104,13 @@ test("pressing the Admin row opens the window's Admin place and asks the host fo
   const row = adminRow(mounted.sidebar) ?? assert.fail("the Admin row");
 
   assert.ok(row instanceof HTMLButtonElement);
+  // Note that the listed workspace's reads are followed from the sidebar's first draw, before any press.
+  const before = sent.length;
   act(() => row.click());
   await act(async () => {
     for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
   });
 
-  assert.equal(mounted.opened, 1);
-  assert.deepEqual(sent, []);
+  assert.equal(mounted.path(), "/acme/admin");
+  assert.deepEqual(sent.slice(before), []);
 });

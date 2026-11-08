@@ -32,6 +32,7 @@ import {
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_REFRESH } from "@repo/features/host-wire";
+import { cappedExponential } from "@repo/wire/effect";
 import {
   Clock,
   Config,
@@ -221,11 +222,7 @@ const RETRY_AFTER = {
   LONGEST: Duration.minutes(5),
 } as const;
 
-const RETRY = Schedule.exponential(RETRY_AFTER.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, RETRY_AFTER.LONGEST)),
-  ),
-);
+const RETRY = cappedExponential(RETRY_AFTER.FIRST, RETRY_AFTER.LONGEST);
 /** How long a device whose setup failed waits before it tries again. */
 const SETUP_RETRY = Duration.minutes(1);
 /** How often a device following its agents beats, which the service's and the window's presence reads are derived from (`DEVICE_BEAT`). */
@@ -1283,8 +1280,8 @@ export function composeLocalAgents(
          * relaunches it on the new release. Asked under `claiming`, and only
          * where no line is claimed or waits to be delivered, so no message
          * this device took lands on a runner's stdin behind the line; one the
-         * service writes as the runner ends is not fenced here, and its turn
-         * reads failed past `CODER.LINE_GRACE`.
+         * service writes as the runner ends is not fenced here, and the turn
+         * it awaits is failed past its pickup deadline by the service's sweep.
          */
         const retiredWarm = claiming.withPermit(
           Effect.suspend(() =>
@@ -1316,7 +1313,7 @@ export function composeLocalAgents(
         const latest = yield* Queue.sliding<HeardBeat | undefined>(1);
         const told = Effect.flatMap(timedBeat(heardBeat), (heard) => Queue.offer(latest, heard));
         const reconciling = Effect.forever(Effect.flatMap(Queue.take(latest), followedBeat));
-        // Note that a reconcile that died ends the follow, as it did while it ran on the beat's own path, so the turn reports it and starts again.
+        // Note that a reconcile that died ends the follow, so the turn reports it and starts again.
         yield* Effect.raceFirst(presence(told), Effect.provideContext(reconciling, services));
       });
 

@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   moveDescriptionCommentAnchors,
   type ReportedAnchors,
@@ -32,7 +32,7 @@ import {
 import { Clock, Effect, Option, Result } from "effect";
 import { SqlClient } from "effect/sql";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
-import { logStoreFailure, type StoreFailure } from "../http/store-failure.js";
+import { logStoreFailure } from "../http/store-failure.js";
 
 /**
  * description-notes.ts -- the description's one write: take an agent's notes, the developer's edit of the text, or their restore of a revision, into a description and read back what was saved.

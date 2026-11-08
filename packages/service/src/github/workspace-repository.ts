@@ -13,7 +13,7 @@
  * in, it names that workspace, since an installation stands for one
  * workspace alone and moving the task there is the one thing that reaches the
  * repository again: a task written in a workspace before its repositories
- * came only from its own installation (#2524) is left that way.
+ * came only from its own installation is left that way.
  *
  * Where no installation reaches it, the acting member's own GitHub token may
  * (`github-app.ts`), and the access a read found, the App's or the token's,
@@ -22,13 +22,12 @@
  * falls back to anyone's token, and an automation acts as no member.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   readAgent,
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
-import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { Effect, Option, Result } from "effect";
@@ -38,22 +37,9 @@ import {
   hostedStoreOrUnavailable,
   repositoryNotReachable,
 } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import { GitHubApp, type ReachedRepository } from "./github-app.js";
 import { memberWorkspaceOnOwner } from "./github-installations.js";
 import { githubReachOrRefusal, logWorkspaceReadFailure } from "./github-refusal.js";
-
-/**
- * The workspace of a task the account reaches, whose installation every
- * GitHub read of the task's repository goes through; none where the account
- * reaches no such task.
- */
-export function taskWorkspace(
-  userId: string,
-  taskId: string,
-): Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices> {
-  return readTaskWorkspace(userId, taskId);
-}
 
 /**
  * The workspace an agent's repository is reached through: its own, which

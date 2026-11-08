@@ -13,8 +13,7 @@
  * once and the row never holds them again.
  */
 
-import { randomUUID } from "node:crypto";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
 import {
@@ -28,7 +27,7 @@ import {
 } from "@repo/database/models/device-agent-store";
 import { beatDevice, deviceLayout } from "@repo/database/models/device-store";
 import { openMacLaunchSecrets, parseKeyRing } from "@repo/database/models/provider-key-seal";
-import { type StoreWriter, storeWriter } from "@repo/database/models/writer";
+import { storeWriter } from "@repo/database/models/writer";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -37,22 +36,21 @@ import {
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
 import { Clock, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
-import { TURN_ORIGIN } from "../core.js";
+import { TURN_STATUS } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { heldUntil } from "../http/held-read.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import { launchStoppedDetail } from "./coder-host/status.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 
-export const DEVICE_AGENT_SERVICE = {
+const DEVICE_AGENT_SERVICE = {
   /** How long the Mac's read is held while nothing waits for it. */
   HOLD: Duration.seconds(20),
   /** How often a held read looks again where the sync hub cannot wake it. */
   POLL: Duration.millis(500),
   /**
    * How long a row may wait before it is withdrawn: past a day, so a line a
-   * Mac away that long would take is one whose turn its lease long since
-   * read as lost (`@repo/database/models/turn-lease`).
+   * Mac away that long would take is one whose turn the minute sweep long
+   * since failed past its deadline (`coder-host/reconcile.ts`).
    */
   EXPIRY: Duration.hours(26),
 } as const;
@@ -166,49 +164,17 @@ export function claimedDeviceAgentLine(
 }
 
 /**
- * The turn a launch's message waits on, queued where its runner never
- * opened one, for the settle after it to end, as its Mac settled the
- * launch: where no stop was queued after
- * the launch, which the service itself ended, and the conversation holds no
- * turn queued since the launch was written. Note that a native turn is
- * queued by its harness's first event (`native-events/runner-events-app.ts`),
- * so a runner that never started leaves its message awaiting a turn nothing
- * will queue, and the agent reading as running until that line's grace.
- * Answers whether it queued one, which is whether the launch never opened
- * its turn.
- */
-export const queuedUnopenedTurn = (
-  writer: Pick<StoreWriter, "enqueueTurn">,
-  userId: string,
-  conversationId: string,
-  launch: { readonly createdAt: Date; readonly stopped: boolean },
-) =>
-  Effect.gen(function* () {
-    if (launch.stopped) return false;
-    const newest = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);
-    if (newest !== undefined && newest.queuedAt >= launch.createdAt) return false;
-    const turnId = randomUUID();
-    yield* writer.enqueueTurn(
-      { userId, conversationId },
-      { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED },
-    );
-    return true;
-  });
-
-/**
  * One line the account's Mac claimed, settled; whether it was. A launch
  * line that was the agent's newest settles its runner as gone, so a turn
  * of the agent's still under way, whose runner posted no END before it
  * ended, as when the app quit or the Mac's switch went off mid-turn, is
  * settled lost (`settleRunnerLostTurns`) and the agent offers Continue
- * rather than running until its lease runs out. A launch whose runner ended
- * before it opened a turn, as one its Mac settled unstarted, first has the
- * turn its message waits on queued (`queuedUnopenedTurn`), as a launch that
- * failed before its runner is (`coder-host/runner-sessions.ts`'s
- * `launchFailed`), so that turn is settled the same way, whatever the Mac
- * said of why, and in words naming the step its host last reported where
- * it reported one, and by the reason the Mac said where it said one
- * (`launchStoppedDetail`). A turn the runner ended itself
+ * rather than running until its deadline passes. A launch whose runner
+ * ended before it took the turn its message's send queued, as one its Mac
+ * settled unstarted, leaves that turn still queued, and it is settled the
+ * same way, whatever the Mac said of why, in words naming the step its host
+ * last reported where it reported one, and by the reason the Mac said where
+ * it said one (`launchStoppedDetail`). A turn the runner ended itself
  * is already settled, and is left as it stands. An older launch a newer one
  * replaced settles nothing of the newer one's turn.
  *
@@ -241,13 +207,10 @@ export function settledDeviceAgentLine(
     const agent = yield* readAgent(userId, agentId);
     if (Option.isNone(agent)) return true;
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-    const unopened = yield* queuedUnopenedTurn(
-      writer,
-      userId,
-      agent.value.conversationId,
-      newest.value,
-    );
-    // Note that a launch whose turn opened is a runner gone however it ended, and one that never opened its turn is worded by the step it stopped at.
+    const { conversationId } = agent.value;
+    const turn = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);
+    // Note that a launch whose turn opened is a runner gone however it ended, and one that never took its turn, which stands queued, is worded by the step it stopped at.
+    const unopened = !newest.value.stopped && turn?.status === TURN_STATUS.QUEUED;
     const detail = unopened ? launchStoppedDetail(newest.value.step, unstarted) : undefined;
     yield* settleRunnerLostTurns(
       writer,
