@@ -60,6 +60,8 @@ export const TURN_FAILURE = {
   NO_PROGRESS: "no_progress",
   /** The turn's runner ended, or was replaced by a newer launch, before the turn did. */
   RUNNER_LOST: "runner_lost",
+  /** The model refused to answer the turn's newest model turn, and no other model retried it. */
+  REFUSAL: "refusal",
 } as const;
 
 export type TurnFailure = (typeof TURN_FAILURE)[keyof typeof TURN_FAILURE];

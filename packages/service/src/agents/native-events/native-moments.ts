@@ -65,8 +65,14 @@ export const NATIVE_MOMENT = {
   USAGE_TOTAL: "usage_total",
   /** A model turn of the harness ended, failed where `failure` says why. */
   RESULT: "result",
+  /** The model refused the model turn under way and no other model retried it, which fails that turn whatever its result says. */
+  REFUSED: "refused",
   /** The harness folded its context. */
   COMPACTED: "compacted",
+  /** The harness could not fold its context, why in `detail`: why the model turn under way failed, where it did. */
+  COMPACTION_FAILED: "compaction_failed",
+  /** The harness said something the record keeps nothing of but the log should: a failure that changes no turn, or a message this build does not read. */
+  NOTED: "noted",
   /** The plan's limit refused the harness, until when where it says; `refused` false is the limit lifting. */
   RATE_LIMIT: "rate_limit",
   /**
@@ -139,7 +145,10 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.CONTEXT; readonly usage: NativeContextUsage }
   | { readonly kind: typeof NATIVE_MOMENT.USAGE_TOTAL; readonly total: RunUsage }
   | { readonly kind: typeof NATIVE_MOMENT.RESULT; readonly failure?: string }
+  | { readonly kind: typeof NATIVE_MOMENT.REFUSED; readonly detail: string }
   | { readonly kind: typeof NATIVE_MOMENT.COMPACTED }
+  | { readonly kind: typeof NATIVE_MOMENT.COMPACTION_FAILED; readonly detail: string }
+  | { readonly kind: typeof NATIVE_MOMENT.NOTED; readonly said: string }
   | {
       readonly kind: typeof NATIVE_MOMENT.RATE_LIMIT;
       readonly refused: boolean;

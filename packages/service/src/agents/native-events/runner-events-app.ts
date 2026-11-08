@@ -661,7 +661,12 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         state = withTurnServers(state, write.turnId, taken);
       }
     }
-    for (const said of reports) yield* Effect.logWarning(`runner-events: ${said}`);
+    // Each is said under the agent's ids, so what a harness said that no turn keeps is found by them.
+    for (const said of reports) {
+      yield* Effect.logWarning(`runner-events: ${said}`).pipe(
+        Effect.annotateLogs({ agentId: applying.agentId, conversationId }),
+      );
+    }
     yield* landWrites(applying, writes, now);
     const last = events.at(-1)?.sequence;
     const ends = runnerEndsOf(batch, held.sequence);

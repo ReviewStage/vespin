@@ -962,6 +962,93 @@ it.layer(getTestDB())("the runner events route", (it) => {
     }),
   );
 
+  it.effect("a turn the model refused with no fallback ends as a refusal", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentWithBearer;
+      const top = { parent_tool_use_id: null, session_id: SESSION };
+      const messagesOfTurn = [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        {
+          type: "system",
+          subtype: "model_refusal_no_fallback",
+          original_model: "claude-opus-5-5",
+          request_id: null,
+          api_refusal_category: "cyber",
+          content: "Claude declined to answer.",
+          ...top,
+        },
+        // The CLI's result need not say the model turn failed.
+        { type: "result", subtype: "success", is_error: false, ...top },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ];
+      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+      yield* post(
+        agent.bearer,
+        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+      );
+      const db = yield* Database;
+      const ended = yield* db
+        .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+        .from(turns)
+        .where(eq(turns.conversationId, agent.target.conversationId));
+
+      assert.deepEqual(ended, [
+        {
+          status: TURN_STATUS.FAILED,
+          failure: "refusal",
+          detail: "model_refusal_no_fallback cyber",
+        },
+      ]);
+    }),
+  );
+
+  it.effect("a compaction that failed is why its failed turn says it failed", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentWithBearer;
+      const top = { parent_tool_use_id: null, session_id: SESSION };
+      const messagesOfTurn = [
+        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+        { type: "system", subtype: "init", ...top },
+        { type: "system", subtype: "status", status: "compacting", ...top },
+        {
+          type: "system",
+          subtype: "status",
+          status: null,
+          compact_result: "failed",
+          compact_error: "Conversation too long to summarize",
+          ...top,
+        },
+        {
+          type: "result",
+          subtype: "success",
+          is_error: true,
+          api_error_status: 400,
+          result: "Prompt is too long",
+          ...top,
+        },
+        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ];
+      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+      yield* post(
+        agent.bearer,
+        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+      );
+      const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
+
+      assert.deepEqual(
+        ended.map((turn) => [turn.status, turn.failureDetail]),
+        [
+          [
+            TURN_STATUS.FAILED,
+            "compaction failed: Conversation too long to summarize; success 400: Prompt is too long",
+          ],
+        ],
+      );
+    }),
+  );
+
   it.effect("an older runner's end on a wait it let go settles its turn as done", () =>
     Effect.gen(function* () {
       const post = yield* standing;

@@ -122,6 +122,12 @@ const TurnSchema = Schema.Struct({
   usage: Schema.optionalKey(UsageSchema),
   /** Why the newest model turn failed, where it did. */
   failure: Schema.optionalKey(Schema.String),
+  /** Whether the newest model turn failed as the model refused it. */
+  refusal: Schema.optionalKey(Schema.Boolean),
+  /** The model's refusal of the model turn under way, said ahead of its result, which it fails (`NATIVE_MOMENT.REFUSED`). */
+  refusing: Schema.optionalKey(Schema.String),
+  /** The compaction the model turn under way could not make, said ahead of its result, and why that turn failed where it did. */
+  compactionFailed: Schema.optionalKey(Schema.String),
   /** Whether the plan's limit refused the turn, a failure its user expects. */
   limited: Schema.optionalKey(Schema.Boolean),
   /** Whether the provider refused the credential that paid, such as a key expired or a plan signed out. */
@@ -505,13 +511,26 @@ class Fold {
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
     if (ended === undefined) return;
     const turn = this.#closed(ended.turn);
-    const status = statusOf(moment.ending, turn.failure);
+    // Note that a refusal its launch ended on before the model turn's result still fails the turn.
+    const status = statusOf(moment.ending, turn.failure ?? turn.refusing);
     const failed = status === RUN_STATUS.FAILED;
-    const failure = ended.openedForEnd ? TURN_FAILURE.RUNNER_LOST : TURN_FAILURE.MODEL;
+    const refusal = turn.refusal === true || turn.refusing !== undefined;
+    const failure = ended.openedForEnd
+      ? TURN_FAILURE.RUNNER_LOST
+      : refusal
+        ? TURN_FAILURE.REFUSAL
+        : TURN_FAILURE.MODEL;
     // Note that a refusal of the starter's own key leads with the coder's word for it, so the window reads the failure as a key to replace rather than a model call failed.
     const ownKeyRefused =
       turn.refused === true && this.#context.ownKey ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED : undefined;
-    const detail = [ownKeyRefused, moment.detail, turn.failure, this.state.rateLimit]
+    const detail = [
+      ownKeyRefused,
+      moment.detail,
+      turn.compactionFailed,
+      turn.refusing,
+      turn.failure,
+      this.state.rateLimit,
+    ]
       .filter((word) => word !== undefined)
       .join("; ");
     const model = this.#context.model;
@@ -534,7 +553,8 @@ class Fold {
         turnId: turn.id,
         failure,
         detail,
-        expected: turn.limited === true || this.state.rateLimit !== undefined,
+        // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue.
+        expected: turn.limited === true || this.state.rateLimit !== undefined || refusal,
         refused: turn.refused === true,
       });
     }
@@ -559,8 +579,7 @@ class Fold {
   }
 
   #result(failure: string | undefined): void {
-    const { failure: _held, ...turn } = this.#closed(this.turn());
-    this.#setTurn(failure === undefined ? turn : { ...turn, failure });
+    this.#setTurn(settledModelTurn(this.#closed(this.turn()), failure));
   }
 
   fold(moment: NativeMoment): void {
@@ -633,8 +652,22 @@ class Fold {
       case NATIVE_MOMENT.RESULT:
         this.#result(moment.failure);
         return;
+      case NATIVE_MOMENT.REFUSED: {
+        const turn = this.turn();
+        this.#setTurn({ ...turn, refusing: moment.detail });
+        return;
+      }
       case NATIVE_MOMENT.COMPACTED:
         this.writes.push({ kind: NATIVE_WRITE.COMPACTED });
+        return;
+      case NATIVE_MOMENT.COMPACTION_FAILED: {
+        this.#context.report(moment.detail);
+        const turn = this.state.turn;
+        if (turn !== undefined) this.#setTurn({ ...turn, compactionFailed: moment.detail });
+        return;
+      }
+      case NATIVE_MOMENT.NOTED:
+        this.#context.report(moment.said);
         return;
       case NATIVE_MOMENT.RATE_LIMIT: {
         const { rateLimit: _held, rateLimitResetsAt: _resets, ...rest } = this.state;
@@ -699,6 +732,24 @@ function usageGrowth(before: Usage | undefined, total: Usage): RunUsage | undefi
   const counts = Object.values(grown);
   if (counts.some((count) => count < 0)) return total;
   return counts.some((count) => count > 0) ? grown : undefined;
+}
+
+/**
+ * The turn as one of its model turns ends, failed where `failure` says why:
+ * the model's refusal said ahead of the result fails it whatever the result
+ * says, and a compaction it could not make leads why it failed, where it
+ * did. What the model turn before it failed with is let go, as the newest
+ * model turn is the one the turn's end reads.
+ */
+function settledModelTurn(turn: Turn, failure: string | undefined): Turn {
+  const { failure: _held, refusal: _was, refusing, compactionFailed, ...rest } = turn;
+  if (refusing === undefined && failure === undefined) return rest;
+  const words = [compactionFailed, refusing, failure].filter((word) => word !== undefined);
+  return {
+    ...rest,
+    failure: words.join("; "),
+    ...(refusing === undefined ? undefined : { refusal: true }),
+  };
 }
 
 /** The turn's status by how its launch ended: done, unless its last model turn failed; stopped is canceled. */
