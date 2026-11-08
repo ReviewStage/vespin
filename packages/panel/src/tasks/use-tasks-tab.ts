@@ -1060,6 +1060,12 @@ interface PinChoice {
 /** Takes back nothing, as a fixture run's select, which asks nothing of the host it binds. */
 const NO_TAKE_BACK = (): void => undefined;
 
+/**
+ * Does nothing: a door's move that is none of the router's, which a page holding unsaved work asks about up front, or
+ * what a door whose move is all it does does once it lands (`places/place-leave.ts`'s `arrive`).
+ */
+const NOTHING = (): void => undefined;
+
 /** No repository pinned, as before main's view carries the sidebar. */
 const NO_REPOSITORY_PINS: readonly RepositoryPin[] = [];
 
@@ -3109,6 +3115,13 @@ export function useTasksTab(input: {
     placeLeave.arrive(() => {
       standTaskPlace(taskId, over);
     }, door);
+  // A routed place's close is the window's history's to write, which leaves it for the place the window's state says
+  // (`navigation-history.ts`'s `onLeaveRouted`) past the router's blocker, so it asks up front while a page holds unsaved
+  // work, and closes once Leave is pressed.
+  const closeFirst = (close: () => void) => () => placeLeave.arrive(NOTHING, close);
+  // A door whose move is all it does, as opening a routed place, goes through `arrive` all the same, so a move to the
+  // place already standing, which navigates nowhere, still asks while a page holds unsaved work, as a move away would.
+  const moveFirst = (move: () => void) => placeLeave.arrive(move, NOTHING);
   // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
   // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
@@ -3404,9 +3417,14 @@ export function useTasksTab(input: {
     }
     const address = historyAddressOf(taskId, opening.workspace);
     if (address === undefined) return;
-    if (taskId !== boundFor) select(taskId, true);
-    setHistorySeek(opening.save === undefined ? undefined : { taskId, save: opening.save });
-    historyRoute.onOpen(address.workspace, address.task, opening.spot);
+    // Note that its task and the version sought follow the move, so a move kept at a page's leave ask changes neither.
+    placeLeave.arrive(
+      () => historyRoute.onOpen(address.workspace, address.task, opening.spot),
+      () => {
+        if (taskId !== boundFor) select(taskId, true);
+        setHistorySeek(opening.save === undefined ? undefined : { taskId, save: opening.save });
+      },
+    );
   };
   // A task's own place, whatever stands giving way as only one place stands at a time (`places/routed-places.ts`), its
   // task asked of the host where it is another than the one open.
@@ -3532,11 +3550,19 @@ export function useTasksTab(input: {
     return shown === undefined ? undefined : { workspace: stepOf(shown), narrowed };
   };
   // The Inbox opened on `chosen`, or on its list where nothing is chosen, at `at`: a version history or an agent's page there giving way, as the Inbox is the router's.
+  // Note that where the item chosen stands is held once the move lands, so a move kept at a page's leave ask holds nothing.
   const standInbox = (at: InboxAt | undefined, chosen: InboxChoice | undefined) => {
     if (at === undefined) return;
-    timeInboxOpen();
-    if (chosen === undefined) input.inboxView.onOpen(at);
-    else input.inboxView.onChoose(chosen, at);
+    placeLeave.arrive(
+      () => {
+        if (chosen === undefined) input.inboxView.onOpen(at);
+        else input.inboxView.onGoTo(chosen, at);
+      },
+      () => {
+        timeInboxOpen();
+        if (chosen !== undefined) input.inboxView.onHold(chosen);
+      },
+    );
   };
 
   // A review thread's ask, taken by its agent's Pull request tab once drawn; each ask is its own.
@@ -3801,10 +3827,15 @@ export function useTasksTab(input: {
     const shown = home ?? listedWorkspace;
     if (shown === undefined) return;
     // Note that the page is a navigation of its own, so a plan's open or a workspace's reopen
-    // asked before it, answering late, lists nothing and leaves nothing over it.
-    navigations.current += 1;
-    if (shown.id !== listedWorkspace?.id) chooseListed(shown.id);
-    input.personView.onOpen(userId, name, stepOf(shown));
+    // asked before it, answering late, lists nothing and leaves nothing over it; both follow the move, so a move kept at a
+    // page's leave ask lets that answer land and lists nothing.
+    placeLeave.arrive(
+      () => input.personView.onOpen(userId, name, stepOf(shown)),
+      () => {
+        navigations.current += 1;
+        if (shown.id !== listedWorkspace?.id) chooseListed(shown.id);
+      },
+    );
   };
 
   /**
@@ -4317,8 +4348,12 @@ export function useTasksTab(input: {
     history: {
       ...history,
       open: historyOpen,
-      // The history takes the window from whatever stood, so a page holding unsaved work asks first.
-      onOpen: leaveFirst((taskId: string, save?: number) => openHistory(taskId, { save })),
+      // The history takes the window from whatever stood, its move asking first while a page holds unsaved work; with
+      // descriptions off, its task's Overview stands in its place, as a tab of the task does.
+      onOpen: (taskId: string, save?: number) => {
+        if (descriptionsOnFor(taskId)) openHistory(taskId, { save });
+        else arriveAt(taskId, () => openHistory(taskId, { save }));
+      },
       onPreload: (taskId) => {
         const address = historyAddressOf(taskId, undefined);
         if (address !== undefined) historyRoute.onPreload(address.workspace, address.task);
@@ -4369,14 +4404,14 @@ export function useTasksTab(input: {
       chosen: inboxChosen,
       // Note that it opens on nothing chosen, so one column shows the list and two an empty pane beside it (`inbox-columns.ts`).
       // It leaves any task it was narrowed to, so the Inbox lists every item.
-      onOpen: leaveFirst(() => standInbox(inboxIn(listedWorkspace?.id, undefined), undefined)),
-      onClose: leaveFirst(input.inboxView.onClose),
+      onOpen: () => standInbox(inboxIn(listedWorkspace?.id, undefined), undefined),
+      onClose: closeFirst(input.inboxView.onClose),
       onChoose: (chosen) => input.inboxView.onChoose(chosen),
-      onOpenItem: leaveFirst((chosen: InboxChoice) => {
+      onOpenItem: (chosen: InboxChoice) => {
         // Note that the Inbox standing keeps its narrowing for an item of the task it is narrowed to, as a row's choice does.
         const narrowed = inboxView === undefined ? undefined : inboxView.narrowed;
         standInbox(inboxIn(listedWorkspace?.id, narrowed), chosen);
-      }),
+      },
       onClear: input.inboxView.onClear,
       narrowed: inboxView?.narrowed,
       onWiden: input.inboxView.onWiden,
@@ -4391,14 +4426,14 @@ export function useTasksTab(input: {
       pages: agentPages,
       // An agent's page is only the router's move there, which asks as it goes while a page holds unsaved work.
       onOpen: (agentId: string) => openAgentPage(agentId),
-      onClose: leaveFirst(input.agentView.onClose),
+      onClose: closeFirst(input.agentView.onClose),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
     personView: {
       userId: input.personView.userId,
       name: input.personView.name,
       workspaceId: personWorkspace,
-      onOpen: leaveFirst((userId: string, name?: string, workspaceId?: string) => {
+      onOpen: (userId: string, name?: string, workspaceId?: string) => {
         openPerson(
           userId,
           name,
@@ -4406,31 +4441,36 @@ export function useTasksTab(input: {
             ? undefined
             : viewed.workspaces.find((each) => each.id === workspaceId),
         );
-      }),
-      onClose: leaveFirst(input.personView.onClose),
+      },
+      onClose: closeFirst(input.personView.onClose),
       onPreload: (userId: string, workspaceId?: string) => {
         const home = viewed.workspaces.find((each) => each.id === workspaceId) ?? listedWorkspace;
         if (home !== undefined) input.personView.onPreload(userId, stepOf(home));
       },
     },
-    // The Admin place is the router's, which draws it in the task's place (`admin-route.ts`).
-    adminView: { ...input.adminView, onOpen: leaveFirst(input.adminView.onOpen) },
+    // The Admin place is the router's, which draws it in the task's place (`admin-route.ts`); opening it is only the
+    // router's move, which asks as it goes while a page holds unsaved work.
+    adminView: {
+      ...input.adminView,
+      onOpen: (view?: AdminView) => moveFirst(() => input.adminView.onOpen(view)),
+    },
     // The Automations pages are the router's, which draw them in the plan's place (`automations-route.ts`); a version history there gives way.
     automationsView: {
       open: input.automationsView.open,
       place: input.automationsView.place,
       runs: input.automationsView.runs,
-      onOpen: leaveFirst((place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
-        openAutomations(place),
-      ),
+      // Note that opening a page is only the router's move, which asks as it goes while a page holds unsaved work.
+      onOpen: (place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
+        moveFirst(() => openAutomations(place)),
       onRuns: input.automationsView.onRuns,
-      onClose: leaveFirst(input.automationsView.onClose),
+      onClose: closeFirst(input.automationsView.onClose),
     },
-    // The Board is the router's, which draws it in the plan's place (`workspace-routes.ts`).
+    // The Board is the router's, which draws it in the plan's place (`workspace-routes.ts`); opening it is only the
+    // router's move, which asks as it goes while a page holds unsaved work.
     boardView: {
       open: input.boardView.open,
-      onOpen: leaveFirst(() => openBoard(listedWorkspace)),
-      onClose: leaveFirst(input.boardView.onClose),
+      onOpen: () => moveFirst(() => openBoard(listedWorkspace)),
+      onClose: closeFirst(input.boardView.onClose),
       onPreload: () => {
         if (listedWorkspace !== undefined) input.boardView.onPreload(stepOf(listedWorkspace));
       },
@@ -4458,13 +4498,11 @@ export function useTasksTab(input: {
     // Only the ask shown is let go; a newer one stands until its own task shows it.
     onSectionRevealed: (ask) =>
       setSectionReveal((last) => (last?.reveal.ask === ask ? undefined : last)),
-    onShowInbox: leaveFirst(
-      ({ taskId, itemId }: { readonly taskId: string; readonly itemId?: string }) => {
-        const chosen = itemId === undefined ? undefined : { taskId, itemId, opened: true as const };
-        const home = viewed.tasks.find((task) => task.id === taskId)?.workspaceId;
-        standInbox(inboxIn(home ?? listedWorkspace?.id, taskId), chosen);
-      },
-    ),
+    onShowInbox: ({ taskId, itemId }: { readonly taskId: string; readonly itemId?: string }) => {
+      const chosen = itemId === undefined ? undefined : { taskId, itemId, opened: true as const };
+      const home = viewed.tasks.find((task) => task.id === taskId)?.workspaceId;
+      standInbox(inboxIn(home ?? listedWorkspace?.id, taskId), chosen);
+    },
     // A pinned tab is in one of the task's columns, so a version history over it gives way as well.
     // Note that its holder's place stands first, from wherever the window stands, as the sidebar leaves it, and the tab once it lands.
     onOpenPinnedTab: (pin: SidebarPin) =>

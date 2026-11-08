@@ -67,6 +67,7 @@ import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { KEPT, type Kept } from "../act.js";
+import { useAdminRoute } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
@@ -74,6 +75,7 @@ import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import {
   type TaskVisits,
+  useRoutedStanding,
   useWindowHistory,
   type WindowHistoryLists,
 } from "../navigation-history.js";
@@ -211,6 +213,8 @@ interface Standing {
   descriptions: AppDescriptionDocuments;
   /** Whether Admin stands over the tab, as the router stands it (`admin-route.ts`). */
   admin?: boolean;
+  /** Whether Admin is the router's own route, opened by its navigation, rather than a door that records its opens. */
+  adminRouted?: boolean;
   /** The address the window's page was loaded at, holding no step; `/app` where none is named. */
   loadedAt?: string;
 }
@@ -326,10 +330,12 @@ function mount(
   }) {
     // The step's address is the link the window's Copy link places it at, as the window's root hands it.
     const placed = useCopyLink(tasks, undefined, true, room).placed;
+    // The routed place standing is the router's, as the window's root reads it.
+    const routed = useRoutedStanding();
     windowHistory = useWindowHistory({
       known: true,
       link: placed,
-      routed: undefined,
+      routed,
       settingsList: undefined,
       onSettingsList: () => undefined,
       automations,
@@ -371,8 +377,12 @@ function mount(
   function Probe() {
     const [held, setHeld] = useState(standing);
     const router = useRouter();
-    // Note that the router here is drawn by no provider, which is what reads its history's moves, so its own last location stays where it was made, `/app`, and the leave is written to the history itself.
-    const leaveRouted = () => router.history.push("/app");
+    // Note that the router here is drawn by no provider, which is what reads its history's moves, so its own last location stays where it was made, `/app`, and the leave is written to the history itself;
+    // where the window's history stands beside the tab, the leave is its own, as the window's root has it.
+    const leaveRouted = () => {
+      if (windowHistory !== undefined) windowHistory.onLeaveRouted();
+      else router.history.push("/app");
+    };
     const automationsView = useAutomationsRoute({
       narrow: held.room === SHELL_ROOM.NARROW,
       onClose: leaveRouted,
@@ -387,6 +397,11 @@ function mount(
     // Home is the listed workspace's, as the window's root opens it.
     const homeView = useHomeRoute({
       listed: () => control?.workspace?.slug ?? control?.workspace?.id,
+      onClose: leaveRouted,
+    });
+    // Note that Admin opens under the workspace listed, as the window's root opens it.
+    const adminRoute = useAdminRoute({
+      listedSlug: () => control?.workspace?.slug,
       onClose: leaveRouted,
     });
     restand = setHeld;
@@ -409,11 +424,9 @@ function mount(
       onOpenSettings: (link) => links.push(link),
       placeLeave: usePlaceLeave(),
       room: held.room,
-      adminView: {
-        ...ADMIN_AWAY,
-        open: held.admin === true,
-        onOpen: (view) => adminOpens.push(view),
-      },
+      adminView: held.adminRouted
+        ? adminRoute
+        : { ...ADMIN_AWAY, open: held.admin === true, onOpen: (view) => adminOpens.push(view) },
       // The Board and a person's page are the router's, which the test's window router stands, each left for a place with no link.
       boardView: useBoardRoute({ onClose: leaveRouted, onStay: () => undefined }),
       personView: usePersonRoute({ onClose: leaveRouted, onStay: () => undefined }),
@@ -3488,21 +3501,22 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
     down = tab.control().placeLeave.stand(ask);
   });
 
+  // Note that the router's move waits a turn on its blocker, which stands while the page holds its ask.
   act(() => tab.control().boardView.onOpen());
-  act(() => tab.control().automationsView.onOpen());
+  await settle();
   act(() => tab.control().onChooseWorkspace("workspace-other"));
   assert.equal(tab.control().inboxView.open, true, "the page stands while it is asked about");
-  assert.equal(asked.length, 3, "the workspace switcher asks as the other doors do");
+  assert.equal(asked.length, 2, "the workspace switcher asks as the Board's move does");
 
   act(() => asked[0]?.());
-  // Note that the router's move waits a turn on its blocker, which stands while the page holds its ask.
   await settle();
   assert.equal(tab.control().boardView.open, true, "Leave goes where the first way out went");
 
   act(() => down());
   act(() => tab.control().inboxView.onOpen());
+  await settle();
   assert.equal(tab.control().inboxView.open, true);
-  assert.equal(asked.length, 3, "nothing is asked once the ask is down");
+  assert.equal(asked.length, 2, "nothing is asked once the ask is down");
 });
 
 /** The task the doors below go to, listed beside the open one in the open one's workspace. */
@@ -3517,6 +3531,7 @@ async function onInbox(
       shown: true,
       // Note that the window's history stands beside the tab, since a door's step is written through it.
       history: true,
+      adminRouted: true,
       tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
     },
     {
@@ -3538,9 +3553,16 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
     entries: tab.entries(),
     bound: control.boundFor,
     asked: opensAsked(tab.payloads),
-    inbox: control.inboxView.open,
+    inbox: control.inboxView.open
+      ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
+      : undefined,
     agentPage: control.agentView.agentId,
     automations: control.automationsView.open,
+    board: control.boardView.open,
+    person: control.personView.userId,
+    admin: control.adminView.open,
+    history: control.history.open,
+    listed: control.workspace?.id,
     tab: control.mainTabs.tab,
     side: control.sidePanel.open ? control.sidePanel.tab : undefined,
     pin: control.chosenPin,
@@ -3571,6 +3593,102 @@ const TAB_DOORS: [string, (control: TasksControl) => void][] = [
     (control) => control.newTask.onShowMention({ kind: MENTION_KIND.TASK, taskId: BILLING.id }),
   ],
 ];
+
+/** The window on the Board, as the Inbox's doors below are pressed from it. */
+const FROM_BOARD = (control: TasksControl) => control.boardView.onOpen();
+
+/** The doors of the router's places, each pressed from the Inbox over the open task, or from `away`'s place where named. */
+const ROUTED_DOORS: [
+  string,
+  (control: TasksControl) => void,
+  ((control: TasksControl) => void)?,
+][] = [
+  ["Admin", (control) => control.adminView.onOpen()],
+  ["the Board", (control) => control.boardView.onOpen()],
+  ["a person's page", (control) => control.personView.onOpen("user-ada", "Ada")],
+  [
+    "a person's page in another workspace, which it lists",
+    (control) => control.personView.onOpen("user-ada", "Ada", ACME.id),
+  ],
+  ["Automations", (control) => control.automationsView.onOpen()],
+  ["the Inbox", (control) => control.inboxView.onOpen(), FROM_BOARD],
+  [
+    "an Inbox item",
+    (control) =>
+      control.inboxView.onOpenItem({
+        taskId: BILLING.id,
+        itemAgentId: AGENT_ID,
+        itemId: ITEM_ID,
+        opened: true,
+      }),
+    FROM_BOARD,
+  ],
+  ["a task's Inbox", (control) => control.onShowInbox({ taskId: BILLING.id }), FROM_BOARD],
+  [
+    "a task's Inbox item",
+    (control) => control.onShowInbox({ taskId: BILLING.id, itemId: ITEM_ID }),
+    FROM_BOARD,
+  ],
+  ["the version history, sought to a version", (control) => control.history.onOpen(BILLING.id, 1)],
+  ["the Board's close", (control) => control.boardView.onClose(), FROM_BOARD],
+  [
+    "a person's page's close",
+    (control) => control.personView.onClose(),
+    (control) => control.personView.onOpen("user-ada", "Ada"),
+  ],
+  [
+    "an agent's page's close",
+    (control) => control.agentView.onClose(),
+    (control) => control.agentView.onOpen(AGENT_ID),
+  ],
+  [
+    "Automations' close",
+    (control) => control.automationsView.onClose(),
+    (control) => control.automationsView.onOpen(),
+  ],
+  ["the Inbox's close", (control) => control.inboxView.onClose()],
+];
+
+test.each(ROUTED_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press, away) => askedOver(press, away),
+);
+
+test("Automations pressed over its own page holding unsaved work asks still, and Leave keeps the page standing", async () => {
+  const tab = await onInbox((control) => control.automationsView.onOpen());
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  const stood = windowOf(tab);
+  act(() => tab.control().automationsView.onOpen());
+  await settle();
+  act(() => asks[0]?.());
+  await settle();
+
+  assert.equal(asks.length, 1, "the press asks, as it does over any other page");
+  assert.deepEqual(windowOf(tab), stood);
+});
+
+test("an Inbox item kept at a page's leave ask holds nothing, so its address landed on later is found as the service says", async () => {
+  const tab = await onInbox(FROM_BOARD);
+  let down: () => void = () => undefined;
+  act(() => {
+    down = tab.control().placeLeave.stand((_leave, stay) => stay());
+  });
+  act(() =>
+    tab.control().inboxView.onOpenItem({
+      taskId: BILLING.id,
+      itemAgentId: AGENT_ID,
+      itemId: ITEM_ID,
+      opened: true,
+    }),
+  );
+  await settle();
+  act(() => down());
+  tab.arrive(`/personal/inbox/${ITEM_ID}`);
+  await settle();
+
+  assert.deepEqual(tab.control().inboxView.chosen, { itemId: ITEM_ID, opened: true });
+});
 
 test.each<[string, (control: TasksControl) => void]>([
   ["a list's press", (control) => control.onSelect(BILLING.id)],
@@ -3608,6 +3726,8 @@ async function askedOver(
   await settle();
   const arrived = windowOf(unasked);
   closeWindow();
+  // Note that the second window starts as the first did, with nothing the first chose kept for it.
+  window.localStorage.clear();
 
   const tab = await onInbox(away);
   const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
@@ -4818,17 +4938,6 @@ test("a pinned tab of one agent's opened while the column shows another shows it
   await settle();
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
   assert.deepEqual(tab.control().sidePanel.tab, PULLS);
-});
-
-test("Admin opened while a page holds unsaved work waits on the leave question, and opens once it is answered", () => {
-  const tab = mount({ shown: true });
-  const asked: (() => void)[] = [];
-  act(() => void tab.control().placeLeave.stand((leave) => asked.push(leave)));
-  act(() => tab.control().adminView.onOpen());
-  assert.deepEqual(tab.adminOpens, [], "Admin waits on the question");
-
-  act(() => asked[0]?.());
-  assert.deepEqual(tab.adminOpens, [undefined]);
 });
 
 test("New task over Home under Admin opens its dialog, since Home's composer is not on screen", () => {

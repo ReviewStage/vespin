@@ -451,6 +451,8 @@ export const INBOX_AWAY: InboxRoute = {
   onOpen: ignore,
   choiceOf: () => undefined,
   onChoose: ignore,
+  onGoTo: ignore,
+  onHold: ignore,
   onClear: ignore,
   onWiden: ignore,
   onClose: ignore,

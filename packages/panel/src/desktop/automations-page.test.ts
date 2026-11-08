@@ -40,6 +40,7 @@ import { type AppWorkspaceIntegrations, NO_KEYS_HELD } from "@repo/host/app-stat
 import type { Experiment } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { PROFILE } from "@repo/ui";
+import { useRouter } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
@@ -902,6 +903,23 @@ let sendTo: (place: AutomationsPlace) => void = () => undefined;
 /** Lists another workspace under the mounted pages, as the switcher would. */
 let moveTo: (workspace: Workspace) => void = () => undefined;
 
+/** The address `place` stands at under the workspace, as the Automations route writes it. */
+function automationsAddress(place: AutomationsPlace): string {
+  const under = `/${WORKSPACE.slug}`;
+  switch (place.kind) {
+    case AUTOMATIONS_PAGE.LIST:
+      return `${under}/automations`;
+    case AUTOMATIONS_PAGE.RUNS:
+      return `${under}/automations/runs`;
+    case AUTOMATIONS_PAGE.NEW:
+      return `${under}/automations/new`;
+    case AUTOMATIONS_PAGE.EDIT:
+      return place.runId === undefined
+        ? `${under}/automation/${place.automationId}`
+        : `${under}/automation/${place.automationId}/run/${place.runId}`;
+  }
+}
+
 /**
  * The Automations pages as the window holds them, standing on `start` and
  * moved by their own presses, over the workspace listed, the personal one
@@ -917,21 +935,25 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
     sendTo = setPlace;
     const [listed, setListed] = useState(workspace);
     moveTo = setListed;
-    // The window's own guard, over doors that still ask up front as the Plans tab's own do.
+    // The window's own guard, over doors that move the window first as the Plans tab's own do: each is the router's
+    // move, which asks as it goes while the page holds unsaved work, and what it opens is recorded once it lands.
     const placeLeave = usePlaceLeave((ask) => {
       shellAsk = ask;
     });
-    const leaveFirst = placeLeave.transitionalLeaveFirst;
+    const router = useRouter();
+    const arriveAt = (href: string, landed: () => void) =>
+      placeLeave.arrive(() => void router.navigate({ href }), landed);
     const tasks = tasksControl({
       placeLeave,
       agentView: {
         agentId: undefined,
-        onOpen: leaveFirst((agentId: string) => agentsOpened.push(agentId)),
+        onOpen: (agentId: string) =>
+          arriveAt(`/${WORKSPACE.slug}/agent/${agentId}`, () => agentsOpened.push(agentId)),
         onClose: () => undefined,
       },
       boardView: {
         open: false,
-        onOpen: leaveFirst(() => boardOpens.push(1)),
+        onOpen: () => arriveAt(`/${WORKSPACE.slug}/tasks`, () => boardOpens.push(1)),
         onClose: () => undefined,
         onPreload: () => undefined,
       },
@@ -941,10 +963,11 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
         ...tasksControl().automationsView,
         open: true,
         place,
-        onOpen: leaveFirst((next: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) => {
-          places.push(next);
-          setPlace(next);
-        }),
+        onOpen: (next: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
+          arriveAt(automationsAddress(next), () => {
+            places.push(next);
+            setPlace(next);
+          }),
         onClose: () => undefined,
       },
     });
@@ -1413,6 +1436,8 @@ test("Escape leaves a page with nothing unsaved for the list, and asks first whe
 
   type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
   act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  // Note that the way out is the router's move, which asks a turn later, once its blocker holds it.
+  await settle();
   assert.equal(places.length, 1, "the unsaved draft stands");
   assert.match(leaveAsked() ?? "", /Your changes to this automation are lost\./u);
   act(() => button("Cancel").click());
@@ -1430,12 +1455,14 @@ test("a new automation with something written asks before any way out leaves it,
 
   type(page.querySelector("textarea[aria-label='Prompt']"), "Triage the issues opened overnight.");
   act(() => button("Automations").click());
+  await settle();
   assert.equal(places.length, 1, "the crumb waits on the question");
   assert.ok(leaveAsked(), "the leave question stands");
   act(() => button("Cancel").click());
   await settle();
 
   act(() => openBoard());
+  await settle();
   assert.deepEqual(boardOpens, [], "the sidebar's row waits on the question too");
   act(() => button("Leave").click());
   await settle();

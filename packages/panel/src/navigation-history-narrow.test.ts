@@ -267,14 +267,12 @@ function mount(
       placeLeave,
       atHome: home.open,
       adminView: admin,
-      // As the real one does, opening a page is a way out its guard asks first.
+      // As the real one does, opening a page is only the router's move, which its guard's blocker asks about.
       automationsView: {
         open: automations.open,
         place: automations.place,
         runs: automations.runs,
-        onOpen: placeLeave.transitionalLeaveFirst((to = { kind: AUTOMATIONS_PAGE.LIST }) =>
-          automations?.onOpen(to, ACME.slug),
-        ),
+        onOpen: (to = { kind: AUTOMATIONS_PAGE.LIST }) => automations?.onOpen(to, ACME.slug),
         onRuns: automations.onRuns,
         onClose: automations.onClose,
       },
