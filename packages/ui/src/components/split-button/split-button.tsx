@@ -9,7 +9,7 @@ import type {
 } from "react";
 import { useCallback, useRef } from "react";
 import { cn } from "../../cn.js";
-import { ChevronDownIcon } from "../../face/glyphs.js";
+import { ChevronDownIcon } from "../../icons/lucide-glyphs.js";
 import {
   BUTTON_VARIANT,
   type BusyProps,

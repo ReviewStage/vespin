@@ -4,6 +4,8 @@ import { Radio } from "@base-ui/react/radio";
 import { RadioGroup } from "@base-ui/react/radio-group";
 import type { ReactNode } from "react";
 import { cn } from "../../cn.js";
+import { ICON_STROKE_WIDTH } from "../../icons/icon-size.js";
+import { Check } from "../../icons/icons.js";
 import { pulsePress } from "../../press-pulse.js";
 import { ignoredByReplay, REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
@@ -261,19 +263,12 @@ export interface ChoiceListSettled<Value extends string> extends ChoiceListBase<
 /** The check before a picked row's note, or before a picked pill's words, in the ink around it. */
 function PickedCheck({ className }: { className: string }): React.JSX.Element {
   return (
-    <svg
+    <Check
       className={cn("ui-choice-check size-3 align-[-1px]", className)}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeWidth={ICON_STROKE_WIDTH}
       aria-hidden="true"
       focusable="false"
-    >
-      <path d="M4.8 12.6 9.6 17.3 19.2 6.9" />
-    </svg>
+    />
   );
 }
 

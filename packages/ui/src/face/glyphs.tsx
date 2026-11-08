@@ -39,128 +39,6 @@ function Glyph({
   );
 }
 
-/** Stands down without choosing: the cancel a control becomes mid-action. */
-export function CloseIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M5.2 5.2 18.8 18.8" />
-      <path d="M18.8 5.2 5.2 18.8" />
-    </Glyph>
-  );
-}
-
-/** Three dots in a row: more actions on the thing it sits beside, in a menu. */
-export function EllipsisIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <circle cx="5.5" cy="12" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="18.5" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </Glyph>
-  );
-}
-
-/** Points back out of one: the control that returns to the front page. */
-export function BackIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="m14.6 5.8-6.2 6.2 6.2 6.2" />
-    </Glyph>
-  );
-}
-
-/** Points on, the mirror of `BackIcon`: a calendar's next month. */
-export function ForwardIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="m9.4 5.8 6.2 6.2-6.2 6.2" />
-    </Glyph>
-  );
-}
-
-/** An arrow pointing left: back to the place the window stood on before. */
-export function ArrowLeftIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M19 12H5" />
-      <path d="m11.6 5.4-6.6 6.6 6.6 6.6" />
-    </Glyph>
-  );
-}
-
-/** An arrow pointing right: forward again to where back came from. */
-export function ArrowRightIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M5 12h14" />
-      <path d="m12.4 5.4 6.6 6.6-6.6 6.6" />
-    </Glyph>
-  );
-}
-
-/** An arrow pointing up: a row moved one place up its list. */
-export function ArrowUpIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M12 19V5" />
-      <path d="m5.4 11.6 6.6-6.6 6.6 6.6" />
-    </Glyph>
-  );
-}
-
-/** An arrow pointing down: a row moved one place down its list. */
-export function ArrowDownIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M12 5v14" />
-      <path d="m5.4 12.4 6.6 6.6 6.6-6.6" />
-    </Glyph>
-  );
-}
-
-/** An arrow up and to the right, set after a link's words: a press leaves the place for another. */
-export function ArrowUpRightIcon(): React.JSX.Element {
-  return (
-    // Note that the ↗ follows its link's words' size, faint until the link lights; the pointer lights it only where there is a hover, because iOS plays a first tap as a hover, which a change it draws spends.
-    <Glyph className="ui-text-link-out ms-[0.12em] inline-block size-[0.78em] align-[-0.02em] opacity-55 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-hover/text-link:opacity-100 group-focus-visible/text-link:opacity-100">
-      <path d="M7 17 17 7" />
-      <path d="M8 7h9v9" />
-    </Glyph>
-  );
-}
-
-/**
- * Takes one attachment back off the note. Its own element rather than a
- * `Glyph`: at the eight pixels it is drawn at, the shared 1.9 stroke thins to
- * nothing and the X reads as a dot, so this one carries the weight it needs.
- */
-export function RemoveIcon(): React.JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3.4"
-      strokeLinecap="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M5.6 5.6 18.4 18.4" />
-      <path d="M18.4 5.6 5.6 18.4" />
-    </svg>
-  );
-}
-
-/** A plus: a workspace or an agent that did not exist before the action. */
-export function PlusIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M12 5.4v13.2" />
-      <path d="M5.4 12h13.2" />
-    </Glyph>
-  );
-}
-
 /**
  * The Model Context Protocol's mark, its three strokes redrawn in this
  * file's weight and box rather than shipped as the project's artwork: the
@@ -176,12 +54,14 @@ export function McpIcon(): React.JSX.Element {
   );
 }
 
-/** A lit bulb: what our agents remember for the workspace. */
-export function MemoryIcon(): React.JSX.Element {
+/** A board on its stand with a line drawn across it: a description's diagram. */
+export function BoardIcon(): React.JSX.Element {
   return (
     <Glyph className="icon-button-glyph">
-      <path d="M12 3.6a5.4 5.4 0 0 0-3.2 9.8c.7.5 1.1 1.3 1.1 2.1v1.5h4.2v-1.5c0-.8.4-1.6 1.1-2.1A5.4 5.4 0 0 0 12 3.6Z" />
-      <path d="M9.9 19.6h4.2" />
+      <rect x="3.4" y="4" width="17.2" height="12" rx="1.8" />
+      <path d="M12 16v4.2" />
+      <path d="M8.6 20.2h6.8" />
+      <path d="m7.4 12 2.8-3 2.6 2.2 3.8-3.6" />
     </Glyph>
   );
 }
@@ -250,45 +130,6 @@ export function StopIcon(): React.JSX.Element {
   return (
     <Glyph className="control-icon">
       <rect x="6" y="6" width="12" height="12" rx="1.8" fill="currentColor" stroke="none" />
-    </Glyph>
-  );
-}
-
-/** A board on its stand with a line drawn across it: a description's diagram. */
-export function BoardIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <rect x="3.4" y="4" width="17.2" height="12" rx="1.8" />
-      <path d="M12 16v4.2" />
-      <path d="M8.6 20.2h6.8" />
-      <path d="m7.4 12 2.8-3 2.6 2.2 3.8-3.6" />
-    </Glyph>
-  );
-}
-
-/** Points down into a menu: the half of a split button that opens its choices. */
-export function ChevronDownIcon(): React.JSX.Element {
-  return (
-    <Glyph className="settings-chevron">
-      <path d="m5.8 9.4 6.2 6.2 6.2-6.2" />
-    </Glyph>
-  );
-}
-
-/** Points at a fold's body, turned down by its stylesheet while the fold is open. */
-export function FoldChevronIcon(): React.JSX.Element {
-  return (
-    <Glyph className="ui-disclosure-chevron">
-      <path d="m9.4 5.8 6.2 6.2-6.2 6.2" />
-    </Glyph>
-  );
-}
-
-/** Points into a submenu beside a menu row, in the chevron's own stroke. */
-export function ChevronRightIcon(): React.JSX.Element {
-  return (
-    <Glyph className="settings-chevron">
-      <path d="m9.4 5.8 6.2 6.2-6.2 6.2" />
     </Glyph>
   );
 }

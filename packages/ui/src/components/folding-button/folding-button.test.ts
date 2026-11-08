@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, cloneElement, createElement, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { PlusIcon } from "../../face/glyphs.js";
+import { PlusIcon } from "../../icons/lucide-glyphs.js";
 import { FoldingButton, type FoldingButtonHint } from "../../index.js";
 
 /**

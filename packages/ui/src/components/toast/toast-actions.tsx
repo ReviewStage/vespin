@@ -1,4 +1,4 @@
-import { CloseIcon } from "../../face/glyphs.js";
+import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, ButtonLink, IconButton } from "../button/button.js";
 import { CopyButton } from "../copy-button/copy-button.js";

@@ -16,7 +16,7 @@ import {
   useRef,
 } from "react";
 import { cssCustomProperties } from "../../css.js";
-import { ChevronRightIcon, FoldChevronIcon } from "../../face/glyphs.js";
+import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { useClipped } from "../../use-clipped.js";

@@ -10,8 +10,9 @@ import {
   useState,
 } from "react";
 import { cn } from "../../cn.js";
-import { ArrowUpRightIcon } from "../../face/glyphs.js";
-import { CheckIcon } from "../../icons/lucide-glyphs.js";
+import { ICON_STROKE_WIDTH } from "../../icons/icon-size.js";
+import { Square } from "../../icons/icons.js";
+import { ArrowUpIcon, ArrowUpRightIcon, CheckIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_FACE, PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { replayMotion } from "../../replay-motion.js";
@@ -744,47 +745,11 @@ export function IconButtonLink({
   );
 }
 
-/** A submit's arrow: the message goes up into the conversation. */
-function SendGlyph(): React.JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="m5 12 7-7 7 7" />
-      <path d="M12 19V5" />
-    </svg>
-  );
-}
-
-/** A submit's Stop, filled as every chat app draws it; an outline reads as a checkbox at this size. */
-function StopGlyph(): React.JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect width="16" height="16" x="4" y="4" rx="2" />
-    </svg>
-  );
-}
-
 /** The glyph a submit wears in its state. */
 function submitGlyph(state: SubmitState): React.JSX.Element {
   switch (state) {
     case SUBMIT_STATE.READY:
-      return <SendGlyph />;
+      return <ArrowUpIcon />;
     case SUBMIT_STATE.SUBMITTED:
       return (
         <span className="ui-button-ring block size-control-icon">
@@ -792,7 +757,15 @@ function submitGlyph(state: SubmitState): React.JSX.Element {
         </span>
       );
     case SUBMIT_STATE.STREAMING:
-      return <StopGlyph />;
+      // Note that Stop is filled, as every chat app draws it; an outline reads as a checkbox at this size.
+      return (
+        <Square
+          className="fill-current"
+          strokeWidth={ICON_STROKE_WIDTH}
+          aria-hidden="true"
+          focusable="false"
+        />
+      );
   }
 }
 

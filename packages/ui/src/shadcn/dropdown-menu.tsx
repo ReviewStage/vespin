@@ -1,6 +1,6 @@
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { cn } from "../cn.js";
-import { ChevronRightIcon } from "../face/glyphs.js";
+import { ChevronRightIcon } from "../icons/lucide-glyphs.js";
 
 /**
  * dropdown-menu.tsx -- shadcn/ui's dropdown menu (style `base-nova`, on Base UI), vendored and drawn as our menu.

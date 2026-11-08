@@ -9,8 +9,7 @@ import {
   type WritingShortcut,
 } from "@repo/settings/shortcuts";
 import { Fragment, type ReactNode, type Ref, useMemo } from "react";
-import { ChevronDownIcon } from "../../face/glyphs.js";
-import { CommentAddIcon } from "../../icons/lucide-glyphs.js";
+import { ChevronDownIcon, CommentAddIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
 import { Button, IconButton } from "../button/button.js";
 import { dropBelowStart, useMenu } from "../menu/menu.js";

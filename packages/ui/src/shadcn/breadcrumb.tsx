@@ -2,6 +2,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import type * as React from "react";
 import { cn } from "../cn.js";
+import { ChevronRightIcon } from "../icons/icons.js";
 
 /**
  * breadcrumb.tsx -- shadcn/ui's breadcrumb (style `base-nova`, on Base UI), vendored and drawn in our path.
@@ -35,8 +36,9 @@ import { cn } from "../cn.js";
  *   the words' own ink beside it.
  * - `BreadcrumbSeparator` is a `span` inside the crumb after it rather than
  *   an `li` of its own, so a crumb and its chevron come and go together and
- *   the list's items are its crumbs alone; its chevron is lucide's
- *   `chevron-right` drawn inline, the package taking no icon library.
+ *   the list's items are its crumbs alone; its chevron is Lucide's
+ *   `ChevronRightIcon`, as shadcn's is, reached through the package's icon
+ *   door (`icons/icons.ts`).
  * - `BreadcrumbEllipsis` is left out: a path's "…" is a crumb of its own,
  *   a press naming the folders it stands for.
  *
@@ -100,20 +102,7 @@ function BreadcrumbSeparator({ children, className, ...props }: React.ComponentP
       className={cn("[&>svg]:size-3.5", className)}
       {...props}
     >
-      {children ?? (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-      )}
+      {children ?? <ChevronRightIcon />}
     </span>
   );
 }

@@ -12,7 +12,7 @@ import {
   useState,
 } from "react";
 import { cn } from "../../cn.js";
-import { FoldChevronIcon } from "../../face/glyphs.js";
+import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { type DisclosureMotion, disclosureMotion, useDisclosure } from "../../use-disclosure.js";
 import { useListMotionReplay } from "../list-motion/list-motion.js";
 

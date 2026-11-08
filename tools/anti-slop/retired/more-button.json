@@ -6,7 +6,8 @@
       "glyph": "Ellipsis",
       "allow": [
         "packages/ui/src/components/landing/landing-scenes.tsx",
-        "packages/ui/src/components/more-button/"
+        "packages/ui/src/components/more-button/",
+        "packages/ui/src/icons/glyph-registry.tsx"
       ]
     },
     { "glyph": "EllipsisVertical", "allow": ["packages/ui/src/components/more-button/"] },
@@ -23,7 +24,7 @@
       ]
     },
     {
-      "import": "../face/glyphs.js",
+      "import": "./lucide-glyphs.js",
       "names": ["EllipsisIcon"],
       "allow": ["packages/ui/src/icons/glyph-registry.tsx"]
     }

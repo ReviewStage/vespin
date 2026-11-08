@@ -9,7 +9,7 @@ import {
   useRef,
 } from "react";
 import { cssCustomProperties } from "../../css.js";
-import { FoldChevronIcon } from "../../face/glyphs.js";
+import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayMask } from "../../session-replay-marks.js";
 import { LIST_COLUMN, TASK_PROPERTY } from "../../tasks-page-model.js";
 import { BUTTON_SIZE } from "../button/button.js";

@@ -81,7 +81,7 @@ import {
   useState,
 } from "react";
 import { cn } from "../../cn.js";
-import { ChevronRightIcon } from "../../face/glyphs.js";
+import { ChevronRightIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
 import { pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";

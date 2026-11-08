@@ -1,7 +1,7 @@
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { DAYS_PER_WEEK } from "../../activity-calendar.js";
 import { cn } from "../../cn.js";
-import { BackIcon, ForwardIcon } from "../../face/glyphs.js";
+import { BackIcon, ForwardIcon } from "../../icons/lucide-glyphs.js";
 import { pulseOnPress } from "../../press-pulse.js";
 import {
   CALENDAR,

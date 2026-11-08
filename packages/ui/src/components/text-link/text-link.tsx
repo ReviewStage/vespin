@@ -39,7 +39,7 @@
  */
 
 import type { FocusEventHandler, MouseEvent, PointerEventHandler, ReactNode } from "react";
-import { ArrowUpRightIcon } from "../../face/glyphs.js";
+import { ArrowUpRightIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { TEXT_FONT, type TextFont } from "../text/text.js";

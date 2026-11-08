@@ -1,10 +1,18 @@
 import {
   Archive,
   ArchiveRestore,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpRight,
   AudioLines,
   Bold,
   Bot,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   CircleArrowUp,
   CircleCheck,
@@ -12,6 +20,7 @@ import {
   CodeXml,
   Copy,
   Download,
+  Ellipsis,
   ExternalLink,
   Eye,
   EyeOff,
@@ -25,6 +34,7 @@ import {
   Italic,
   Keyboard,
   Laptop,
+  Lightbulb,
   Link,
   List,
   ListChecks,
@@ -44,6 +54,7 @@ import {
   Pin,
   PinOff,
   Plug,
+  Plus,
   RotateCw,
   Search,
   SearchX,
@@ -58,18 +69,26 @@ import {
   Type,
   Unlink,
   User,
+  X,
 } from "lucide-react";
 
+import React from "react";
+
 import { lucideGlyph } from "./lucide-glyph.js";
+
+// `tsx` executes imported workspace-package JSX with the classic runtime.
+void React;
 
 /**
  * lucide-glyphs.tsx -- the glyphs `glyphs.tsx` once drew as copies of
  * Lucide's, now Lucide's own, under the names their call sites already import.
  *
- * Fifty-three were Lucide's paths redrawn in our stroke and three were
- * Tabler's (the plug and both pins), each beside a Lucide glyph of the same
- * meaning. They are Lucide's drawing now, in our stroke (`lucide-glyph.tsx`),
- * so there is one drawing of each. A name here goes when the last screen that
+ * Every one was Lucide's paths redrawn in our stroke, mostly a step smaller
+ * than Lucide's, but three, which were Tabler's (the plug and both pins),
+ * each beside a Lucide glyph of the same meaning. They are Lucide's drawing
+ * now, in our stroke (`lucide-glyph.tsx`), so there is one drawing of each
+ * and every glyph stands at one scale. `RemoveIcon` is Lucide's X at a stroke
+ * of its own. A name here goes when the last screen that
  * imports it draws the glyph through `GLYPH` instead. The one name that is
  * no copy is `AgentPlaceholderIcon`, Lucide's robot in the muted ink, which
  * stands where `glyphs.tsx` once held an agent's mark's box empty.
@@ -266,3 +285,61 @@ export const ExitFullScreenIcon = lucideGlyph(Minimize, "icon-button-glyph");
 
 /** A pair of angle brackets with a slash between them: code. */
 export const CodeIcon = lucideGlyph(CodeXml, "icon-button-glyph");
+
+/*
+ * The arrows, chevrons, and marks a control points or acts with.
+ */
+
+/** Stands down without choosing: the cancel a control becomes mid-action. */
+export const CloseIcon = lucideGlyph(X, "icon-button-glyph");
+
+/** Three dots in a row: more actions on the thing it sits beside, in a menu. */
+export const EllipsisIcon = lucideGlyph(Ellipsis, "icon-button-glyph");
+
+/** Points back out of one: the control that returns to the front page. */
+export const BackIcon = lucideGlyph(ChevronLeft, "icon-button-glyph");
+
+/** Points on, the mirror of `BackIcon`: a calendar's next month. */
+export const ForwardIcon = lucideGlyph(ChevronRight, "icon-button-glyph");
+
+/** An arrow pointing left: back to the place the window stood on before. */
+export const ArrowLeftIcon = lucideGlyph(ArrowLeft, "icon-button-glyph");
+
+/** An arrow pointing right: forward again to where back came from. */
+export const ArrowRightIcon = lucideGlyph(ArrowRight, "icon-button-glyph");
+
+/** An arrow pointing up: a row moved one place up its list. */
+export const ArrowUpIcon = lucideGlyph(ArrowUp, "icon-button-glyph");
+
+/** An arrow pointing down: a row moved one place down its list. */
+export const ArrowDownIcon = lucideGlyph(ArrowDown, "icon-button-glyph");
+
+/** An arrow up and to the right, set after a link's words: a press leaves the place for another. */
+export const ArrowUpRightIcon = lucideGlyph(
+  ArrowUpRight,
+  "ui-text-link-out ms-[0.12em] inline-block size-[0.78em] align-[-0.02em] opacity-55 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-hover/text-link:opacity-100 group-focus-visible/text-link:opacity-100",
+);
+
+/** A plus: a workspace or an agent that did not exist before the action. */
+export const PlusIcon = lucideGlyph(Plus, "icon-button-glyph");
+
+/** A lit bulb: what our agents remember for the workspace. */
+export const MemoryIcon = lucideGlyph(Lightbulb, "icon-button-glyph");
+
+/** Points down into a menu: the half of a split button that opens its choices. */
+export const ChevronDownIcon = lucideGlyph(ChevronDown, "settings-chevron");
+
+/** Points at a fold's body, turned down by its stylesheet while the fold is open. */
+export const FoldChevronIcon = lucideGlyph(ChevronRight, "ui-disclosure-chevron");
+
+/** Points into a submenu beside a menu row, in the chevron's own stroke. */
+export const ChevronRightIcon = lucideGlyph(ChevronRight, "settings-chevron");
+
+/**
+ * Takes one attachment back off the note: Lucide's X at a stroke of its own,
+ * because at the eight pixels it is drawn at the shared stroke thins to
+ * nothing and the X reads as a dot.
+ */
+export function RemoveIcon(): React.JSX.Element {
+  return <X strokeWidth={3.4} aria-hidden="true" focusable="false" />;
+}

@@ -1,7 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
-import { RemoveIcon } from "../../face/glyphs.js";
-import { CheckIcon } from "../../icons/lucide-glyphs.js";
+import { CheckIcon, RemoveIcon } from "../../icons/lucide-glyphs.js";
 import { pulseOnPress } from "../../press-pulse.js";
 import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
 import { HoverCard, HoverCardHead } from "../hover-card/hover-card.js";

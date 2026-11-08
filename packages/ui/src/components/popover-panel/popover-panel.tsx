@@ -10,7 +10,7 @@ import {
   useRef,
 } from "react";
 import { isComposingKey } from "../../composing-key.js";
-import { CloseIcon } from "../../face/glyphs.js";
+import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { motionHeld } from "../../motion-timing.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import { useDisclosure } from "../../use-disclosure.js";

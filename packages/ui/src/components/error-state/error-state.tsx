@@ -64,8 +64,7 @@
  */
 
 import { createContext, type ReactNode, useContext } from "react";
-import { CloseIcon } from "../../face/glyphs.js";
-import { AlertIcon, RetryIcon } from "../../icons/lucide-glyphs.js";
+import { AlertIcon, CloseIcon, RetryIcon } from "../../icons/lucide-glyphs.js";
 import type { ReportedFailure, Unreported } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { EmptyState } from "../empty-state/empty-state.js";

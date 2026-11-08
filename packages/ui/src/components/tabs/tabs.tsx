@@ -20,7 +20,7 @@ import {
 import { flushSync } from "react-dom";
 import { cn } from "../../cn.js";
 import { cssCustomProperties } from "../../css.js";
-import { CloseIcon } from "../../face/glyphs.js";
+import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
 import { PRESS_PULSE, pulseOnPress, pulsePress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";

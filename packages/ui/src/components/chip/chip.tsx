@@ -1,5 +1,5 @@
 import type { ComponentPropsWithRef, MouseEvent, ReactNode } from "react";
-import { ChevronDownIcon, RemoveIcon } from "../../face/glyphs.js";
+import { ChevronDownIcon, RemoveIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_FACE, PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";

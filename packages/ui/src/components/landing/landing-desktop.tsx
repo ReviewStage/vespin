@@ -1,9 +1,10 @@
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
-import { ArrowLeftIcon, ArrowRightIcon } from "../../face/glyphs.js";
 import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   ComposeIcon,
   GearIcon,
   SearchIcon,

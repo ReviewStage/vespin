@@ -1,5 +1,5 @@
 import { SELECTION_WORDS } from "@repo/features/words";
-import { ChevronDownIcon } from "../../face/glyphs.js";
+import { ChevronDownIcon } from "../../icons/lucide-glyphs.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
 import { Checkbox } from "../checkbox/checkbox.js";
 import { dropBelowStart, Menu, type MenuAction, useMenu } from "../menu/menu.js";
