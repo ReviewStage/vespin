@@ -97,9 +97,11 @@ pull request with UI shows its screenshots to the developer in a thread.
   developer's choice of Nov 8, 2026. A React Native view draws only what
   SwiftUI has no piece for: message markdown and the agent transcript.
 - **Every control comes from `@repo/ui-native`**, the app's design system
-  (the task "Start @repo/ui-native, the app's design system"), as the web's
-  come from `@repo/ui`. Until that package lands, the skeleton's placeholder
-  screens under `src/screens/` are the one exception, and they move into it.
+  (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
+  screen composes its components and imports neither `@expo/ui` nor
+  `expo-glass-effect`, which lint refuses
+  (`anti-slop/no-raw-press-outside-ui-native`); the app still declares both,
+  since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends
   in `.js`, as the packages' do (`scripts/repository-checks.sh` holds it), and

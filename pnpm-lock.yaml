@@ -396,6 +396,9 @@ importers:
       '@repo/features':
         specifier: workspace:*
         version: link:../../packages/features
+      '@repo/ui-native':
+        specifier: workspace:*
+        version: link:../../packages/ui-native
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -405,6 +408,9 @@ importers:
       expo-constants:
         specifier: 58.0.15
         version: 58.0.15(expo@58.0.23)(react-native@0.88.1)(typescript@7.0.2)
+      expo-glass-effect:
+        specifier: 58.0.5
+        version: 58.0.5(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-linking:
         specifier: 58.0.16
         version: 58.0.16(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
@@ -1386,6 +1392,34 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1(@noble/hashes@2.3.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/browser-playwright@5.0.0)(@vitest/ui@5.0.0)(jsdom@30.0.1)(vite@7.3.1)
+
+  packages/ui-native:
+    dependencies:
+      '@expo/ui':
+        specifier: 58.0.27
+        version: 58.0.27(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+      '@repo/features':
+        specifier: workspace:*
+        version: link:../features
+      expo-glass-effect:
+        specifier: 58.0.5
+        version: 58.0.5(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+      react:
+        specifier: catalog:mobile
+        version: 19.3.0
+      react-native:
+        specifier: 0.88.1
+        version: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
+    devDependencies:
+      '@types/react':
+        specifier: catalog:mobile
+        version: 19.3.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

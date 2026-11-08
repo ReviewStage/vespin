@@ -20,6 +20,7 @@ import { noProductNameRule } from "./rules/no-product-name.ts";
 import { noRawAsyncPrimitivesRule } from "./rules/no-raw-async-primitives.ts";
 import { noRawHeadingOutsideUiRule } from "./rules/no-raw-heading-outside-ui.ts";
 import { noRawPressOutsideUiRule } from "./rules/no-raw-press-outside-ui.ts";
+import { noRawPressOutsideUiNativeRule } from "./rules/no-raw-press-outside-ui-native.ts";
 import { noReducedMotionQueryRule } from "./rules/no-reduced-motion-query.ts";
 import { noRunPromiseOutsideEdgesRule } from "./rules/no-run-promise-outside-edges.ts";
 import { noShadcnFocusRingRule } from "./rules/no-shadcn-focus-ring.ts";
@@ -29,7 +30,7 @@ import { skeletonThroughComponentsRule } from "./rules/skeleton-through-componen
 
 /**
  * Oxlint rules that catch code or tests that silently do nothing or wipe data,
- * and the design system's guards against controls and headings built outside `@repo/ui`,
+ * and the design system's guards against controls and headings built outside `@repo/ui`, and the iOS app's against controls built outside `@repo/ui-native`,
  * forms the browser checks with its own bubble, loading skeletons that copy the surface they stand for, buttons that wait on a press without saying so, buttons that open a page, placeholders that end in an ellipsis,
  * popovers that close on a press through a listener of their own, view choices stored by hand rather than through `useKept`, a follow
  * opened beside the live reads' queries, a vendored
@@ -59,6 +60,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "no-raw-async-primitives": noRawAsyncPrimitivesRule,
     "no-raw-heading-outside-ui": noRawHeadingOutsideUiRule,
     "no-raw-press-outside-ui": noRawPressOutsideUiRule,
+    "no-raw-press-outside-ui-native": noRawPressOutsideUiNativeRule,
     "no-reduced-motion-query": noReducedMotionQueryRule,
     "no-run-promise-outside-edges": noRunPromiseOutsideEdgesRule,
     "no-shadcn-focus-ring": noShadcnFocusRingRule,

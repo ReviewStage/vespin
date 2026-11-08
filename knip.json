@@ -35,7 +35,7 @@
     "apps/mobile": {
       "entry": ["src/app/**/*.tsx", "app.config.ts", "metro.config.js"],
       "project": ["src/**", "scripts/**"],
-      "ignoreDependencies": ["effect"]
+      "ignoreDependencies": ["effect", "@expo/ui", "expo-glass-effect"]
     },
     "apps/catalog": {
       "project": ["src/**"],
