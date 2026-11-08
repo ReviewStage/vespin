@@ -29,6 +29,8 @@ import {
   type VercelSandboxApi,
 } from "@repo/sandbox";
 import { Duration, Effect } from "effect";
+import { AGENT_TAG, SESSION_TAG } from "../agent-sandbox-open.js";
+import { agentTag } from "../machine/vercel-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
@@ -112,10 +114,22 @@ function readShare(): CommandAsk {
   };
 }
 
-/** The sandbox's tags with the share's mark set or dropped. */
+/**
+ * The sandbox's tags as a share writes them whole: its session, its agent
+ * (read under either of the agent tag's names, written under the current
+ * one), and the share's mark where shared. Note that every other tag is
+ * dropped, because Vercel refuses a sandbox more than five, and a sandbox
+ * from before the runner's state moved to our store still carries three
+ * leftovers that would push the mark past it.
+ */
 function tagsOf(sandbox: ListedSandbox, shared: boolean): Record<string, string> {
-  const { [PORT_SHARE.TAG]: _mark, ...rest } = sandbox.tags ?? {};
-  return shared ? { ...rest, [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON } : rest;
+  const session = sandbox.tags?.[SESSION_TAG];
+  const agent = agentTag(sandbox.tags);
+  return {
+    ...(session === undefined ? {} : { [SESSION_TAG]: session }),
+    ...(agent === undefined ? {} : { [AGENT_TAG]: agent }),
+    ...(shared ? { [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON } : {}),
+  };
 }
 
 /** The instant a share last visited at the instant given holds its sandbox's lease to: the idle bound, and the minute the sweep may wait to move it on. */
