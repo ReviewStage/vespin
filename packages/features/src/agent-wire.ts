@@ -1379,14 +1379,6 @@ export const agentAnswerSchema = EffectSchema.Struct({
   txid: EffectSchema.optionalKey(agentTxidSchema),
   /** Where a repository a change added was checked out: in the place the agent runs now, or at its next turn; none for any other change. */
   addedCheckout: EffectSchema.optionalKey(addedRepositoryCheckoutSchema),
-  /**
-   * Retired: a service no longer sends it, since a Start on a teammate's
-   * device is refused (`LOCAL_AGENT_REFUSAL.NOT_OWNER`) and never runs in the
-   * cloud on its own. Kept optional so a build that still reads it decodes
-   * every answer, and so one from before the refusal reads an answer a
-   * service older than this still sends.
-   */
-  notice: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /**
@@ -2795,12 +2787,6 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * before payers were recorded, and from a service older than it.
    */
   payer: EffectSchema.optionalKey(agentPayerSchema),
-  /**
-   * What the newest turn alone cost. No service sends it any more, since a
-   * price the window draws means the whole run's (`usage`); it stays an
-   * optional key so the answer's shape is the one older desktops read.
-   */
-  turnUsage: EffectSchema.optionalKey(agentUsageSchema),
   context: EffectSchema.optionalKey(agentContextSchema),
   /**
    * The journal revision the agent's transcript was last rewound at, on
