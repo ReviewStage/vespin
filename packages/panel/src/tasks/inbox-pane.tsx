@@ -1823,7 +1823,6 @@ export function InboxPane({
             )
           }
           pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
-          quiet={within === true}
           actions={
             <>
               {/* The bar ends in the pager, where the item stands alone, and the item's ⋯ menu. */}

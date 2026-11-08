@@ -1444,8 +1444,12 @@ body,
 
 /* The panel's top row, level with the plan's toolbar and, like it, the
    window's drag handle wherever no control stands. It runs to the window's
-   right edge, so its full-screen button stops short of the toggle there. */
+   right edge, so its full-screen button stops short of the toggle there.
+   Its buttons light in its tabs' soft wash, as a tab strip's bar's do
+   (`toolbar.css`). */
 .side-panel-bar {
+  --ui-button-hover-fill: var(--ui-color-fill-hover);
+
   display: flex;
   flex: 0 0 auto;
   align-items: center;

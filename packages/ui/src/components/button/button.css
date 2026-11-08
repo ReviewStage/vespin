@@ -170,7 +170,10 @@
      which is nothing unless a container sets it: one whose buttons stand
      still while something slides beneath them, as a window's title bar
      does over its panes, names the opaque ground they rest on, so what
-     passes beneath never shows through the fill. */
+     passes beneath never shows through the fill. Under the pointer it
+     lights in `--ui-button-hover-fill`, which a container sets where its
+     buttons stand among controls that light more softly, as a tab strip's
+     "+" does beside its tabs. */
   .ui-button:is([data-variant="quiet"], [data-variant="subtle"], [data-variant="outline"]):where(
     [aria-haspopup][aria-expanded="true"],
     [aria-pressed="true"]
@@ -185,7 +188,7 @@
     .ui-button:is([data-variant="quiet"], [data-variant="subtle"], [data-variant="outline"]):where(
         :hover:not(:disabled, [aria-disabled="true"])
       ) {
-      --ui-button-fill: var(--ui-color-fill-selected);
+      --ui-button-fill: var(--ui-button-hover-fill, var(--ui-color-fill-selected));
       --ui-button-ink: var(--ui-color-text);
       background: linear-gradient(var(--ui-button-fill), var(--ui-button-fill))
         var(--ui-button-ground, transparent);
