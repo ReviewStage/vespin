@@ -86,8 +86,7 @@ export const TOKEN_REPOSITORIES_READ = {
   READY: "ready",
 } as const;
 
-export type TokenRepositoriesRead =
-  (typeof TOKEN_REPOSITORIES_READ)[keyof typeof TOKEN_REPOSITORIES_READ];
+type TokenRepositoriesRead = (typeof TOKEN_REPOSITORIES_READ)[keyof typeof TOKEN_REPOSITORIES_READ];
 
 /** The workspace's token repositories as last read, and the change that moves them. */
 export interface TokenRepositories {

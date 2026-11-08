@@ -607,7 +607,7 @@ function runsOnOf(runsOn: AgentRunsOnRequest | undefined): {
 const NOTHING_CARRIED: Pick<Draft, "text" | "attachments"> = { text: "", attachments: [] };
 
 /** The agent a Start is still making: the key its press minted, which its tab stands under until the service answers, and the model it was chosen on, none for the account's default. */
-export interface StartingAgent {
+interface StartingAgent {
   readonly key: string;
   readonly model: string | undefined;
 }
@@ -771,7 +771,7 @@ export const MODELS_READ = {
   FAILED: "failed",
 } as const;
 
-export type ModelsReadState = (typeof MODELS_READ)[keyof typeof MODELS_READ];
+type ModelsReadState = (typeof MODELS_READ)[keyof typeof MODELS_READ];
 
 /**
  * The newest read of the models, stamped with the generation that read

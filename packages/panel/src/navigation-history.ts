@@ -240,7 +240,7 @@ export interface StepTitle {
 }
 
 /** What a task's step called the tab its column showed and the one its side panel showed, where each showed one. */
-export interface StepPanes {
+interface StepPanes {
   readonly column?: string | undefined;
   readonly side?: string | undefined;
 }

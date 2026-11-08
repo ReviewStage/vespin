@@ -395,7 +395,7 @@ const AGENT = "Agent";
 const SHOW_PANEL = "Show panel";
 
 /** What a phone's agent page heads itself with (`phone-head.tsx`): its way back, and the panel its ⋯ shows, while it is shut. */
-export interface AgentPagePhone {
+interface AgentPagePhone {
   readonly back: TaskHeadBack;
   readonly onShowPanel: (() => void) | undefined;
 }
@@ -424,7 +424,7 @@ export function AgentRoutePage({
 }
 
 /** One agent's page, in the plan's place: the agent read by its id, drawn as the task column's agent pane. */
-export function DesktopAgentPage({
+function DesktopAgentPage({
   tasks,
   agentId,
   away,

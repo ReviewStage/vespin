@@ -1086,7 +1086,7 @@ export function taskRenameMutation(
 }
 
 /** A task's rename as a surface holds it (`taskRenameMutation`). */
-export type TaskRenameMutation = ReturnType<typeof taskRenameMutation>;
+type TaskRenameMutation = ReturnType<typeof taskRenameMutation>;
 
 /** A task's delete as each place asking it holds its own mutation over it, run through `run`, answering whether it was deleted. */
 export function taskDeleteMutation(run: (taskId: string) => Promise<ActedResult>) {

@@ -103,7 +103,7 @@ const AUTOMATION_CARD: ThingCard<
 );
 
 /** The card each kind hangs, as the window hangs it wherever it names the thing; the chip's own standing in where the window holds none. */
-export const THING_CARD: ThingCards = {
+const THING_CARD: ThingCards = {
   [THING_KIND.PLAN]: (plan, at) =>
     tabCard({ kind: TAB_KIND.PLAN, taskId: plan.taskId, name: at.name }),
   [THING_KIND.SECTION]: (section, at) => (

@@ -67,9 +67,7 @@ export function listedAgent(
 
 /** An open item as main's read of the account carries it into what waits: its id, its agent, what it asks, and when it was posted. */
 /** A page as the host pushes it: caught up where it came back with nothing on it, unless it says otherwise. */
-export function pushedPage(
-  page: AgentMessagesAnswerView | AgentTranscriptPage,
-): AgentTranscriptPage {
+function pushedPage(page: AgentMessagesAnswerView | AgentTranscriptPage): AgentTranscriptPage {
   if ("failure" in page || "caughtUp" in page) return page;
   return { ...page, caughtUp: page.messages.length === 0 };
 }
