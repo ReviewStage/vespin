@@ -27,14 +27,16 @@ export const POPOVER_ALIGN = {
 export type PopoverAlign = (typeof POPOVER_ALIGN)[keyof typeof POPOVER_ALIGN];
 
 /**
- * The widths a popover may ask for by name, each a `--ui-popover-width-*`
- * token: a Settings picker's, the composer's menu's, and one that holds an
- * issue's title with its key and state after it.
+ * The widths a popover may ask for by name: each of the first three a
+ * `--ui-popover-width-*` token, a Settings picker's, the composer's menu's,
+ * and one that holds an issue's title with its key and state after it; and
+ * `fit`, as wide as what it holds, a palette of a few glyphs.
  */
 export const POPOVER_WIDTH = {
   NARROW: "narrow",
   REGULAR: "regular",
   WIDE: "wide",
+  FIT: "fit",
 } as const;
 
 export type PopoverWidth = (typeof POPOVER_WIDTH)[keyof typeof POPOVER_WIDTH];

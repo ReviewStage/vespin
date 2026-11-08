@@ -1,7 +1,6 @@
 import type { Ref } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { pulseOnPress } from "../../press-pulse.js";
-import { rovingItem } from "../roving-keys/roving-keys.js";
 
 /**
  * swatch.tsx -- a color dot a reader presses to choose that color.
@@ -10,16 +9,13 @@ import { rovingItem } from "../roving-keys/roving-keys.js";
  * chosen, which it draws as a ring and announces as a pressed button. One
  * given no `color` stands for none, a dot struck through. It is named by its
  * `label`, since a dot says nothing to a reader who cannot see it, and it
- * takes the Tab stop or not (`tabbable`) as one of a roving group, or is an
- * item of a roving set (`roving`, `useRovingKeys`) whose box walks it with
- * the arrows.
+ * takes the Tab stop or not (`tabbable`) as one of a roving group.
  */
 export function Swatch({
   color,
   label,
   pressed,
   tabbable,
-  roving = false,
   onClick,
   ref,
 }: {
@@ -31,8 +27,6 @@ export function Swatch({
   pressed: boolean;
   /** Whether Tab stops on it; false takes it out of the order. */
   tabbable?: boolean | undefined;
-  /** Whether it is an item of a roving set (`useRovingKeys`). */
-  roving?: boolean | undefined;
   onClick: () => void;
   ref?: Ref<HTMLButtonElement> | undefined;
 }): React.JSX.Element {
@@ -47,7 +41,6 @@ export function Swatch({
       data-none={color === undefined || undefined}
       style={color === undefined ? undefined : cssCustomProperties({ "--ui-swatch": color })}
       onClick={pulseOnPress(onClick)}
-      {...(roving ? rovingItem() : undefined)}
     />
   );
 }

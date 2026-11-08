@@ -9,6 +9,7 @@ import {
 } from "@repo/features/task-section-wire";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import {
+  AnchoredPopover,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -19,17 +20,21 @@ import {
   IconButton,
   NOTE_LINE_LOOK,
   NoteLine,
+  POPOVER_ALIGN,
+  POPOVER_PANEL_LOOK,
+  POPOVER_WIDTH,
   PopoverIconButton,
+  PopoverPanel,
   ROVING_ORIENTATION,
   ScrollArea,
   SearchField,
-  Swatch,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
   useRovingKeys,
   VisuallyHidden,
 } from "@repo/ui";
+import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
 import {
   type EmojiGroup,
@@ -139,9 +144,9 @@ const COLOR_INK = {
   [TASK_SECTION_ICON_COLOR.PINK]: "text-file-icon-pink",
 } as const satisfies Record<TaskSectionIconColor, string>;
 
-/** The ink a glyph is drawn in: its color's, or the text's own where it has none. */
-function inkOf(color: TaskSectionIconColor | undefined): string | undefined {
-  return color === undefined ? undefined : COLOR_INK[color];
+/** The ink a section's glyph is drawn in: its color's, or, where it has none, the text's full ink, white over a dark ground and black over a light one, rather than the quieter ink of whatever holds it. */
+function inkOf(color: TaskSectionIconColor | undefined): string {
+  return color === undefined ? "text-foreground" : COLOR_INK[color];
 }
 
 /** What each color of the palette is called. */
@@ -348,112 +353,138 @@ function iconLabel(icon: TaskSectionIcon): string {
   return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : glyphLabel(icon.glyph);
 }
 
-/** One choice in a grid: a button pressed while it is the icon chosen, the grid's tab stop where `stop`. */
+/**
+ * One choice in a grid: a button pressed while it is the icon chosen, the
+ * grid's tab stop where `stop`, and, for a glyph, the opener of the colors
+ * it hangs (`popup`). Note that the opener says it hangs them but not
+ * whether they stand open, because flipping `aria-expanded` restyles every
+ * box a `:has([aria-expanded])` rule reaches, some two thousand cells
+ * among them, for a quarter of a second; the colors take the focus as they
+ * open, which says it instead.
+ */
 function GridChoice({
   label,
   pressed,
   stop,
   face,
+  popup = false,
   onPress,
 }: {
   label: string;
   pressed: boolean;
   stop: boolean;
   face: React.ReactNode;
+  popup?: boolean | undefined;
   onPress: () => void;
 }): React.JSX.Element {
   return (
-    <IconButton icon={face} label={label} pressed={pressed} tabbable={stop} onClick={onPress} />
+    <IconButton
+      icon={face}
+      label={label}
+      pressed={pressed}
+      tabbable={stop}
+      aria-haspopup={popup ? "dialog" : undefined}
+      onClick={onPress}
+    />
   );
 }
 
-/** A glyph whose colors stand open under its row: the group it was pressed in, and the color they start on. */
+/** A glyph whose colors stand open over the grid: the group it was pressed in, and the color they start on. */
 interface OpenedGlyph {
   readonly group: string;
   readonly glyph: string;
-  readonly label: string;
   readonly color: TaskSectionIconColor | undefined;
 }
 
+/** The colors a glyph is asked in: the text's own first, then each of the palette's, two rows of five. */
+const GLYPH_COLORS: readonly (TaskSectionIconColor | undefined)[] = [
+  undefined,
+  ...Object.values(TASK_SECTION_ICON_COLOR),
+];
+
+/** What the text's own ink is called as the window draws it: white over a dark ground, black over a light one. */
+function textInkLabel(): string {
+  return drawnDark() ? "White" : "Black";
+}
+
 /**
- * A glyph's colors, opened under its row once it is pressed, across the
- * grid's width: the text's own, then each of the palette's, the one it
- * starts on pressed and taking the focus. The arrows move through them, a
- * press chooses the glyph in that color, and Escape closes them, the focus
- * going back to the glyph. Note that its keys and its focus stop here, so the
- * grid's arrows and tab stop are not moved by them.
+ * A pressed glyph's colors, hung over the grid from the glyph as a menu
+ * is: the glyph drawn in each of them, the text's own first, which the
+ * window's theme draws white or black as it draws the text, then the
+ * palette's, which answer the theme too. The one it starts on is pressed
+ * and takes the focus; the arrows walk them, a press chooses the glyph in
+ * that color, and Escape or the focus leaving puts them away, Escape
+ * handing the focus back to the glyph.
  */
-function ColorStrip({
-  opened,
+function GlyphColors({
+  Glyph,
+  label,
+  starts,
   onColor,
   onClose,
 }: {
-  opened: OpenedGlyph;
+  Glyph: LucideIcon | undefined;
+  label: string;
+  starts: TaskSectionIconColor | undefined;
   onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: () => void;
+  onClose: (byKey: boolean) => void;
 }): React.JSX.Element {
-  const strip = useRef<HTMLFieldSetElement | null>(null);
-  const roving = useRovingKeys<HTMLFieldSetElement>({
-    orientation: ROVING_ORIENTATION.HORIZONTAL,
-  });
-  useLayoutEffect(() => {
-    strip.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
-  }, []);
-  const keys = (event: React.KeyboardEvent<HTMLFieldSetElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-    } else roving.onKeyDown(event);
-    event.stopPropagation();
-  };
-  const swatch = (label: string, value: TaskSectionIconColor | undefined) => (
-    <Swatch
-      key={label}
-      label={label}
-      color={value === undefined ? undefined : `var(--file-icon-${value})`}
-      pressed={opened.color === value}
-      tabbable={opened.color === value}
-      roving
-      onClick={() => onColor(value)}
-    />
-  );
+  const start = useRef<HTMLButtonElement | null>(null);
+  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
+  const holder = useRef<HTMLDivElement | null>(null);
   return (
-    <fieldset
-      ref={(element) => {
-        strip.current = element;
-        roving.ref(element);
-      }}
-      data-roving={roving["data-roving"]}
-      className="section-icon-colors col-span-full m-0 flex min-w-0 flex-wrap gap-ui-4 rounded-control border-0 bg-muted p-tight-gap"
-      onKeyDown={keys}
-      onFocus={(event) => {
-        roving.onFocus(event);
-        event.stopPropagation();
+    <PopoverPanel
+      open
+      title={`${label} color`}
+      replayUnmasked
+      look={POPOVER_PANEL_LOOK.MENU}
+      initialFocus={start}
+      onDismiss={() => onClose(true)}
+      onLeave={(left) => {
+        if (!(left instanceof Node && holder.current?.parentElement?.contains(left)))
+          onClose(false);
       }}
     >
-      <VisuallyHidden as="legend">{`${opened.label} color`}</VisuallyHidden>
-      {swatch("No color", undefined)}
-      {Object.values(TASK_SECTION_ICON_COLOR).map((value) => swatch(COLOR_LABEL[value], value))}
-    </fieldset>
+      <div
+        ref={(element) => {
+          holder.current = element;
+          roving.ref(element);
+        }}
+        data-roving={roving["data-roving"]}
+        role="toolbar"
+        aria-label={`${label} color`}
+        className="section-icon-colors grid grid-cols-5 gap-tight-gap p-tight-gap"
+        onKeyDown={roving.onKeyDown}
+        onFocus={roving.onFocus}
+      >
+        {GLYPH_COLORS.map((value) => (
+          <IconButton
+            key={value ?? "text"}
+            ref={value === starts ? start : undefined}
+            icon={
+              Glyph === undefined ? null : (
+                <Glyph data-icon-color={value} className={inkOf(value)} />
+              )
+            }
+            label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
+            pressed={value === starts}
+            roving
+            onClick={() => onColor(value)}
+          />
+        ))}
+      </div>
+    </PopoverPanel>
   );
 }
 
-/** A group of choices under its name, and the colors of a glyph pressed in it standing open under that glyph's row. */
+/** A group of choices under its name. */
 function ChoiceGroup({
   name,
   choices,
-  colors,
 }: {
   name: string;
   choices: readonly React.ReactNode[];
-  /** Where the glyph whose colors stand open stands among the choices, and its strip. */
-  colors?: { readonly at: number; readonly strip: React.ReactNode } | undefined;
 }): React.JSX.Element {
-  // Note that the strip stands after the last choice of the pressed glyph's row, so the row it opened from stays where it stood.
-  const rowEnd =
-    colors === undefined
-      ? choices.length
-      : Math.min(choices.length, (Math.floor(colors.at / GRID_COLUMNS) + 1) * GRID_COLUMNS);
   return (
     <section
       className="section-icon-group [.section-icon-group+&]:mt-control-gap"
@@ -466,11 +497,7 @@ function ChoiceGroup({
       >
         {name}
       </Text>
-      <div className="section-icon-grid grid grid-cols-section-icons gap-tight-gap">
-        {choices.slice(0, rowEnd)}
-        {colors?.strip}
-        {choices.slice(rowEnd)}
-      </div>
+      <div className="section-icon-grid grid grid-cols-section-icons gap-tight-gap">{choices}</div>
     </section>
   );
 }
@@ -487,14 +514,14 @@ function PanelNote({
   return <NoteLine look={NOTE_LINE_LOOK.LIST}>{words}</NoteLine>;
 }
 
-/** What the grids are handed: the icon chosen, the glyph whose colors stand open, and where an emoji, a glyph's press, and a color go. */
+/** What the grids are handed: the icon chosen, the glyph whose colors stand open, and where an emoji, a glyph's press, a color, and its colors put away go. */
 interface GridProps {
   readonly icon: TaskSectionIcon | undefined;
   readonly opened: OpenedGlyph | undefined;
   readonly onIcon: (icon: TaskSectionIcon) => void;
   readonly onOpen: (opened: OpenedGlyph) => void;
   readonly onColor: (color: TaskSectionIconColor | undefined) => void;
-  readonly onCloseColors: () => void;
+  readonly onCloseColors: (byKey: boolean) => void;
 }
 
 /** The color a glyph's strip starts on: the icon's own where the glyph is the icon chosen, else `kept`, the color it was chosen in last. */
@@ -508,35 +535,12 @@ function startingColor(
     : kept;
 }
 
-/** The glyph's colors under its row in `group`, where they stand open for one of `glyphs`; none otherwise. */
-function colorsIn(
-  group: string,
-  glyphs: readonly string[],
-  props: GridProps,
-): { at: number; strip: React.ReactNode } | undefined {
-  const opened = props.opened;
-  if (opened === undefined || opened.group !== group) return undefined;
-  const at = glyphs.indexOf(opened.glyph);
-  if (at === -1) return undefined;
-  return {
-    at,
-    strip: (
-      <ColorStrip
-        // Note that the strip is keyed by its glyph, so another glyph's press draws it afresh, its starting color taking the focus and the tab stop.
-        key={opened.glyph}
-        opened={opened}
-        onColor={props.onColor}
-        onClose={props.onCloseColors}
-      />
-    ),
-  };
-}
-
 /**
  * One glyph's cell in `group`, in `color`, whose press opens its colors
- * starting on `starts`. Note that it is drawn again only where what it shows
- * changed, so opening a glyph's colors draws the strip alone and not some
- * two thousand cells around it.
+ * over the grid, starting on `starts`, while `open`. Note that it is drawn
+ * again only where what it shows changed, so opening a glyph's colors draws
+ * that one cell and not some two thousand around it, and that the cell
+ * stands in a box of its own, which its colors hang from.
  */
 const GlyphCell = memo(function GlyphCell({
   Glyph,
@@ -544,57 +548,131 @@ const GlyphCell = memo(function GlyphCell({
   glyph,
   label,
   pressed,
+  inked,
   color,
   starts,
   stop,
+  open,
   onOpen,
+  onColor,
+  onClose,
 }: {
   Glyph: LucideIcon | undefined;
   group: string;
   glyph: string;
   label: string;
   pressed: boolean;
+  /** Whether it is drawn in `color`, as the icon chosen and a recent one are, rather than in the grid's quiet ink. */
+  inked: boolean;
   color: TaskSectionIconColor | undefined;
   starts: TaskSectionIconColor | undefined;
   stop: boolean;
+  open: boolean;
   onOpen: (opened: OpenedGlyph) => void;
+  onColor: (color: TaskSectionIconColor | undefined) => void;
+  onClose: (byKey: boolean) => void;
 }): React.JSX.Element {
   return (
-    <GridChoice
-      label={label}
-      pressed={pressed}
-      stop={stop}
-      face={Glyph === undefined ? null : <Glyph data-icon-color={color} className={inkOf(color)} />}
-      onPress={() => onOpen({ group, glyph, label, color: starts })}
+    <span className="section-icon-cell relative grid">
+      <GridChoice
+        label={label}
+        pressed={pressed}
+        stop={stop}
+        face={
+          Glyph === undefined ? null : (
+            <Glyph data-icon-color={color} className={inked ? inkOf(color) : undefined} />
+          )
+        }
+        popup
+        onPress={() => onOpen({ group, glyph, color: starts })}
+      />
+      {open ? (
+        <AnchoredPopover open align={POPOVER_ALIGN.START} width={POPOVER_WIDTH.FIT}>
+          <GlyphColors
+            Glyph={Glyph}
+            label={label}
+            starts={starts}
+            onColor={onColor}
+            onClose={onClose}
+          />
+        </AnchoredPopover>
+      ) : null}
+    </span>
+  );
+});
+
+/**
+ * A group of glyphs, each in the chosen icon's color where it is that icon
+ * and the text's own otherwise, `opened` hanging its colors and `stop` the
+ * grid's tab stop. Note that it is drawn again only where what it holds
+ * changed, so opening a glyph's colors walks the group it stands in and
+ * not the other groups' some two thousand cells.
+ */
+const GlyphGroup = memo(function GlyphGroup({
+  name,
+  icons,
+  choices,
+  icon,
+  opened,
+  stop,
+  onOpen,
+  onColor,
+  onClose,
+}: {
+  name: string;
+  icons: LucideIcons;
+  choices: readonly { glyph: string; label: string }[];
+  icon: TaskSectionIcon | undefined;
+  /** The glyph whose colors stand open in this group; none where they stand in another, or nowhere. */
+  opened: string | undefined;
+  /** The glyph that is the grid's tab stop in this group; none where it stands in another. */
+  stop: string | undefined;
+  onOpen: (opened: OpenedGlyph) => void;
+  onColor: (color: TaskSectionIconColor | undefined) => void;
+  onClose: (byKey: boolean) => void;
+}): React.JSX.Element {
+  return (
+    <ChoiceGroup
+      name={name}
+      choices={choices.map((choice) => {
+        const pressed = chosenGlyph(icon, choice.glyph);
+        return (
+          <GlyphCell
+            key={choice.glyph}
+            Glyph={lucideGlyph(icons, choice.glyph)}
+            group={name}
+            glyph={choice.glyph}
+            label={choice.label}
+            pressed={pressed}
+            inked={pressed}
+            color={pressed && icon?.kind === TASK_SECTION_ICON_KIND.GLYPH ? icon.color : undefined}
+            starts={startingColor(icon, choice.glyph, undefined)}
+            stop={stop === choice.glyph}
+            open={opened === choice.glyph}
+            onOpen={onOpen}
+            onColor={onColor}
+            onClose={onClose}
+          />
+        );
+      })}
     />
   );
 });
 
-/** One glyph's choice in `group`, in the chosen icon's color where it is that icon and the text's own otherwise; a press opens its colors. */
-function glyphChoice(
-  icons: LucideIcons,
-  group: string,
-  choice: { glyph: string; label: string },
-  props: GridProps,
-  stop: boolean,
-): React.JSX.Element {
-  const pressed = chosenGlyph(props.icon, choice.glyph);
-  const color =
-    pressed && props.icon?.kind === TASK_SECTION_ICON_KIND.GLYPH ? props.icon.color : undefined;
-  return (
-    <GlyphCell
-      key={choice.glyph}
-      Glyph={lucideGlyph(icons, choice.glyph)}
-      group={group}
-      glyph={choice.glyph}
-      label={choice.label}
-      pressed={pressed}
-      color={color}
-      starts={startingColor(props.icon, choice.glyph, undefined)}
-      stop={stop}
-      onOpen={props.onOpen}
-    />
-  );
+/** The glyph of `choices` the grid's tab stop stands on: the one chosen where the chosen icon is shown anywhere, else `first` where it is among them. */
+function stopIn(
+  choices: readonly { glyph: string }[],
+  icon: TaskSectionIcon | undefined,
+  chosenShown: boolean,
+  first: string | undefined,
+): string | undefined {
+  if (!chosenShown) return choices.some((choice) => choice.glyph === first) ? first : undefined;
+  return choices.find((choice) => chosenGlyph(icon, choice.glyph))?.glyph;
+}
+
+/** The glyph whose colors stand open in `group`, none where they stand elsewhere. */
+function openedIn(group: string, opened: OpenedGlyph | undefined): string | undefined {
+  return opened?.group === group ? opened.glyph : undefined;
 }
 
 /** One emoji's choice, which a press chooses at once. */
@@ -616,33 +694,33 @@ function emojiChoice(
 }
 
 /** A recent icon's choice: an emoji chosen at once, a glyph in the color it was chosen in, whose press opens its colors starting there. */
-function recentChoice(one: TaskSectionIcon, props: GridProps, stop: boolean): React.JSX.Element {
+function recentChoice(
+  icons: LucideIcons,
+  one: TaskSectionIcon,
+  props: GridProps,
+  stop: boolean,
+): React.JSX.Element {
   if (one.kind === TASK_SECTION_ICON_KIND.EMOJI) {
     return emojiChoice({ emoji: one.emoji, name: one.emoji }, props, stop);
   }
-  const label = iconLabel(one);
   return (
-    <GridChoice
+    <GlyphCell
       key={one.glyph}
-      label={label}
+      Glyph={lucideGlyph(icons, one.glyph)}
+      group={RECENT}
+      glyph={one.glyph}
+      label={iconLabel(one)}
       pressed={chosenIcon(props.icon, one)}
+      inked
+      color={one.color}
+      starts={startingColor(props.icon, one.glyph, one.color)}
       stop={stop}
-      face={sectionGlyph(one)}
-      onPress={() =>
-        props.onOpen({
-          group: RECENT,
-          glyph: one.glyph,
-          label,
-          color: startingColor(props.icon, one.glyph, one.color),
-        })
-      }
+      open={props.opened?.group === RECENT && props.opened.glyph === one.glyph}
+      onOpen={props.onOpen}
+      onColor={props.onColor}
+      onClose={props.onCloseColors}
     />
   );
-}
-
-/** The glyph's name of each icon, an emoji standing as none, so a strip finds its row among them. */
-function glyphNames(icons: readonly TaskSectionIcon[]): string[] {
-  return icons.map((one) => (one.kind === TASK_SECTION_ICON_KIND.GLYPH ? one.glyph : ""));
 }
 
 /**
@@ -656,52 +734,58 @@ const GlyphPanel = memo(function GlyphPanel(
   const loaded = useQuery(lucideQuery);
   const icons = loaded.data;
   const choices = useMemo(() => glyphChoices(Object.keys(icons ?? {})), [icons]);
+  const suggested = useMemo(
+    () => choices.filter((choice) => isSuggestedGlyph(choice.glyph)),
+    [choices],
+  );
+  const rest = useMemo(
+    () => choices.filter((choice) => !isSuggestedGlyph(choice.glyph)),
+    [choices],
+  );
   if (icons === undefined) return <PanelNote loaded={loaded} tab={ICON_TAB.ICONS} />;
-  const suggested = choices.filter((choice) => isSuggestedGlyph(choice.glyph));
-  const rest = choices.filter((choice) => !isSuggestedGlyph(choice.glyph));
   const first = props.recent[0] ?? suggested[0];
   // Note that a glyph this Mac's Lucide does not know is chosen but shown nowhere, so the first choice keeps the stop.
   const chosenShown =
     props.recent.some((one) => chosenIcon(props.icon, one)) ||
     choices.some((choice) => chosenGlyph(props.icon, choice.glyph));
   const stopAt = (pressed: boolean, isFirst: boolean) => (chosenShown ? pressed : isFirst);
-  const named = (list: readonly { glyph: string }[]) => list.map((choice) => choice.glyph);
+  const firstGlyph = first !== undefined && "glyph" in first ? first.glyph : undefined;
   return (
     <>
       {props.recent.length === 0 ? null : (
         <ChoiceGroup
           name={RECENT}
           choices={props.recent.map((one) =>
-            recentChoice(one, props, stopAt(chosenIcon(props.icon, one), one === first)),
+            recentChoice(icons, one, props, stopAt(chosenIcon(props.icon, one), one === first)),
           )}
-          colors={colorsIn(RECENT, glyphNames(props.recent), props)}
         />
       )}
-      <ChoiceGroup
+      <GlyphGroup
         name={SUGGESTED}
-        choices={suggested.map((choice) =>
-          glyphChoice(
-            icons,
-            SUGGESTED,
-            choice,
-            props,
-            stopAt(chosenGlyph(props.icon, choice.glyph), choice === first),
-          ),
+        icons={icons}
+        choices={suggested}
+        icon={props.icon}
+        opened={openedIn(SUGGESTED, props.opened)}
+        stop={stopIn(
+          suggested,
+          props.icon,
+          chosenShown,
+          props.recent.length === 0 ? firstGlyph : undefined,
         )}
-        colors={colorsIn(SUGGESTED, named(suggested), props)}
+        onOpen={props.onOpen}
+        onColor={props.onColor}
+        onClose={props.onCloseColors}
       />
-      <ChoiceGroup
+      <GlyphGroup
         name={ALL_ICONS}
-        choices={rest.map((choice) =>
-          glyphChoice(
-            icons,
-            ALL_ICONS,
-            choice,
-            props,
-            stopAt(chosenGlyph(props.icon, choice.glyph), false),
-          ),
-        )}
-        colors={colorsIn(ALL_ICONS, named(rest), props)}
+        icons={icons}
+        choices={rest}
+        icon={props.icon}
+        opened={openedIn(ALL_ICONS, props.opened)}
+        stop={stopIn(rest, props.icon, chosenShown, undefined)}
+        onOpen={props.onOpen}
+        onColor={props.onColor}
+        onClose={props.onCloseColors}
       />
     </>
   );
@@ -741,7 +825,10 @@ const FoundPanel = memo(function FoundPanel(
   const emoji = useQuery(emojiQuery);
   const icons = lucide.data;
   const choices = useMemo(() => glyphChoices(Object.keys(icons ?? {})), [icons]);
-  const glyphs = icons === undefined ? [] : findGlyphs(choices, props.query);
+  const glyphs = useMemo(
+    () => (icons === undefined ? [] : findGlyphs(choices, props.query)),
+    [icons, choices, props.query],
+  );
   const groups = emoji.data === undefined ? [] : findEmoji(emoji.data, props.query);
   const typed = { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: props.query.trim() };
   const typedOne = isSectionIcon(typed) ? [{ emoji: typed.emoji, name: typed.emoji }] : [];
@@ -762,16 +849,16 @@ const FoundPanel = memo(function FoundPanel(
         <ChoiceGroup name="Emoji" choices={typedOne.map((one) => emojiChoice(one, props, true))} />
       ) : null}
       {icons === undefined || glyphs.length === 0 ? null : (
-        <ChoiceGroup
+        <GlyphGroup
           name={FOUND_ICONS}
-          choices={glyphs.map((choice, at) =>
-            glyphChoice(icons, FOUND_ICONS, choice, props, !firstEmoji && at === 0),
-          )}
-          colors={colorsIn(
-            FOUND_ICONS,
-            glyphs.map((choice) => choice.glyph),
-            props,
-          )}
+          icons={icons}
+          choices={glyphs}
+          icon={props.icon}
+          opened={openedIn(FOUND_ICONS, props.opened)}
+          stop={firstEmoji ? undefined : glyphs[0]?.glyph}
+          onOpen={props.onOpen}
+          onColor={props.onColor}
+          onClose={props.onCloseColors}
         />
       )}
       {found.length === typedOne.length ? null : (
@@ -815,7 +902,9 @@ function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
  */
 function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   const focused = event.target;
-  if (!(focused instanceof HTMLButtonElement)) return;
+  if (!(focused instanceof HTMLButtonElement) || focused.closest(".section-icon-colors") !== null) {
+    return;
+  }
   for (const stop of gridChoices(event.currentTarget, 'button:not([tabindex="-1"])')) {
     stop.tabIndex = -1;
   }
@@ -853,19 +942,19 @@ function SectionIconPicker({
     [ICON_TAB.ICONS]: useId(),
     [ICON_TAB.EMOJI]: useId(),
   } satisfies Record<IconTab, string>;
-  // Note that colors Escape closed hand the focus back to the glyph they opened from once they are gone.
+  // Note that colors Escape put away hand the focus back to the glyph they opened from once they are gone.
   useLayoutEffect(() => {
     if (opened !== undefined || !refocus.current) return;
     refocus.current = false;
     if (opener.current instanceof HTMLElement) opener.current.focus();
   });
-  const choose = useCallback(
-    (next: TaskSectionIcon) => {
-      keepRecent(next);
-      onIcon(next);
-    },
-    [onIcon],
-  );
+  // Note that the grid's doors read the latest owner and opened glyph through refs, so they stand the same from draw to draw and a press redraws none of the cells it reaches.
+  const latest = useRef({ onIcon, opened });
+  latest.current = { onIcon, opened };
+  const choose = useCallback((next: TaskSectionIcon) => {
+    keepRecent(next);
+    latest.current.onIcon(next);
+  }, []);
   // A glyph pressed again closes the colors it opened, as a disclosure does.
   const open = useCallback((next: OpenedGlyph) => {
     opener.current = document.activeElement;
@@ -873,12 +962,13 @@ function SectionIconPicker({
   }, []);
   const color = useCallback(
     (picked: TaskSectionIconColor | undefined) => {
-      if (opened !== undefined) choose(glyphIcon(opened.glyph, picked));
+      const glyph = latest.current.opened?.glyph;
+      if (glyph !== undefined) choose(glyphIcon(glyph, picked));
     },
-    [opened, choose],
+    [choose],
   );
-  const closeColors = useCallback(() => {
-    refocus.current = true;
+  const closeColors = useCallback((byKey: boolean) => {
+    refocus.current = byKey;
     setOpened(undefined);
   }, []);
   // Enter, shifted or not, presses the first thing found: an emoji is chosen, a glyph's colors open.

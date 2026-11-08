@@ -1173,7 +1173,9 @@ test("a pin dragged below the next one reorders the pins", async () => {
   assert.ok((asked.moves[0]?.position ?? "") > second.pinPosition, "it sorts after Pin review");
 });
 
-test("a glyph found by searching asks its color under its row, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+test("a glyph found by searching asks its color over the grid, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+  document.documentElement.setAttribute("data-ui-theme", "dark");
+  onTestFinished(() => document.documentElement.removeAttribute("data-ui-theme"));
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -1182,11 +1184,9 @@ test("a glyph found by searching asks its color under its row, and the color pre
   await settleLoaded();
   act(() => dialogButton("Telescope").click());
   const colors =
-    document.querySelector('fieldset[class*="section-icon-colors"]') ??
-    assert.fail("the glyph's colors are asked");
-  assert.equal(document.activeElement, colors.querySelector('[aria-label="No color"]'));
+    document.querySelector(".section-icon-colors") ?? assert.fail("the glyph's colors are asked");
+  assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
   act(() => dialogButton("Teal").click());
-  await settleLoaded();
   assert.equal(
     document.querySelector('input[aria-label="Search icons and emoji"]'),
     null,
@@ -1219,8 +1219,7 @@ test("Change icon opens a section's head with its picker open, where the glyph i
   assert.equal(telescope.getAttribute("aria-pressed"), "true");
   act(() => telescope.click());
   assert.equal(dialogButton("Teal").getAttribute("aria-pressed"), "true");
-  act(() => dialogButton("No color").click());
-  await settleLoaded();
+  act(() => dialogButton("Black").click());
   await press(sectionNameField(), "Enter");
 
   assert.deepEqual(writes, [
@@ -1304,15 +1303,14 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   await settleLoaded();
   await press(search, "Enter", true);
   const noColor = document.activeElement ?? assert.fail("nothing has the focus");
-  assert.equal(noColor.getAttribute("aria-label"), "No color");
+  assert.equal(noColor.getAttribute("aria-label"), "Black");
   await press(noColor as HTMLElement, "ArrowRight");
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Red");
   await press(document.activeElement as HTMLElement, "Escape");
-  assert.equal(document.querySelector('fieldset[class*="section-icon-colors"]'), null);
+  assert.equal(document.querySelector(".section-icon-colors"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
   act(() => dialogButton("Telescope").click());
   act(() => (document.activeElement as HTMLButtonElement).click());
-  await settleLoaded();
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
 
@@ -1375,8 +1373,8 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Heart");
 
   act(() => dialogButton("Star").click());
-  assert.equal(document.activeElement?.getAttribute("aria-label"), "No color");
-  assert.equal(document.querySelectorAll('fieldset[class*="section-icon-colors"]').length, 1);
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
+  assert.equal(document.querySelectorAll(".section-icon-colors").length, 1);
 });
 
 test("an emoji typed into the search is offered first, one the grid leaves out included", async () => {
