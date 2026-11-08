@@ -13,6 +13,7 @@ import type { Node as PmNode } from "@tiptap/pm/model";
 import { Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { enterSends, modEnterSends } from "../enter-sends.js";
+import { codeTitles } from "./code-title.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
   DESCRIPTION_PLACEHOLDER,
@@ -573,6 +574,7 @@ export function mountDescriptionEditor(
       ...extensions,
       Placeholder.configure({ placeholder: placeholderOf(placeholder, blocks !== undefined) }),
       commentAnchorMark,
+      codeTitles,
       ...(drawDiagram === undefined ? [] : [diagramPreview(drawDiagram)]),
       ...formatReports(format),
     ],

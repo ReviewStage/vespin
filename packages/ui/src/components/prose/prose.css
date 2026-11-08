@@ -25,7 +25,7 @@
     list-style: revert;
   }
 
-  .ui-prose code {
+  .ui-prose code:where(:not(.ui-code-card-body > code)) {
     padding: 0.1em 0.4em;
     border-radius: 0.4em;
     background: var(--ui-prose-tint, var(--ui-color-fill-hover));
@@ -124,8 +124,9 @@
   }
 
   /* A code span is the prose one above, on the note's own tint, a step
-     heavier because the thread's words are small. */
-  .ui-markdown code {
+     heavier because the thread's words are small, in a transcript's flow as
+     in a note's. */
+  .ui-markdown-flow :not(pre) > code {
     font-weight: var(--ui-type-label-weight);
     letter-spacing: 0;
   }
@@ -136,10 +137,13 @@
     color: var(--ui-color-accent-text);
   }
 
-  /* Code keeps each source line whole and scrolls only sideways: a wrapped
-     identifier reads as one the author never wrote. Left-aligned even inside
-     the centered caption, because indentation is part of what code says. */
-  .ui-markdown pre {
+  /* A fence a note draws bare, where a search's or a change's marks reach
+     into it (a fence is otherwise `@repo/ui`'s `CodeCard`, as a transcript's
+     is, which none of these reach). Code keeps each source line whole and
+     scrolls only sideways: a wrapped identifier reads as one the author
+     never wrote. Left-aligned even inside the centered caption, because
+     indentation is part of what code says. */
+  .ui-markdown pre:not(.ui-code-card-body) {
     margin: 0;
     padding: 0.6em 0.8em;
     border-radius: 0.7em;
@@ -152,7 +156,7 @@
   }
 
   /* A fence's code drops the span's dress, as the prose's does above. */
-  .ui-markdown pre code {
+  .ui-markdown pre:not(.ui-code-card-body) code {
     display: block;
     font-weight: var(--ui-type-body-weight);
     line-height: var(--ui-type-reading-leading);
@@ -223,7 +227,8 @@
     display: block;
   }
 
-  /* A table scrolls sideways rather than widening its column; a column's
+  /* A table, a note's and a transcript's alike, scrolls sideways rather than
+     widening its column; a column's
      alignment arrives as each cell's own inline style, from the delimiter
      row. Its edges fade where it hides columns past them, as the tab strip
      does, so a column cut at the edge reads as more to scroll to rather than
@@ -232,7 +237,7 @@
      inline timeline, which stands only while the table overflows. Note that
      the table is no `ScrollArea` itself, because a table's own box is what
      scrolls. */
-  .ui-markdown table {
+  .ui-markdown-flow table {
     display: block;
     max-width: 100%;
     border-collapse: collapse;
@@ -256,7 +261,7 @@
       calc(100% - var(--ui-scroll-fade)) 100%;
   }
 
-  .ui-markdown :is(th, td) {
+  .ui-markdown-flow :is(th, td) {
     padding: 0.3em 0.7em 0.3em 0;
     border-bottom: 1px solid var(--ui-markdown-edge);
     vertical-align: top;
@@ -266,17 +271,17 @@
      rather than splitting its words into letters. Note that it outranks the
      note's `p`, which an editor's cell holds its words in, and a list item
      around the table, whose words break anywhere. */
-  .ui-markdown :is(th, td),
-  .ui-markdown :is(th, td) > p {
+  .ui-markdown-flow :is(th, td),
+  .ui-markdown-flow :is(th, td) > p {
     overflow-wrap: normal;
   }
 
-  .ui-markdown th {
+  .ui-markdown-flow th {
     opacity: 0.8;
     font-weight: var(--ui-type-emphasis-weight);
   }
 
-  .ui-markdown tbody tr:last-child td {
+  .ui-markdown-flow tbody tr:last-child td {
     border-bottom: 0;
   }
 

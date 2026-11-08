@@ -429,7 +429,7 @@ test("a press on a diagram's Show code shows its code and opens no editor", asyn
 
   act(() => toggle.click());
 
-  assert.equal(container.querySelector(".description-diagram pre")?.textContent, `${code}\n`);
+  assert.equal(container.querySelector(".description-diagram pre")?.textContent, code);
   // Note that the check is a boolean, because a failing comparison would print the whole editor's DOM.
   assert.ok(container.querySelector(".description-document-editor") === null, "no editor opened");
 });

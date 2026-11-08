@@ -244,7 +244,7 @@ test("Show code puts the fence's code in the picture's place, and Show diagram b
   act(() => toggle(page).click());
 
   assert.deepEqual(pictures(page), []);
-  assert.equal(page.querySelector(".description-diagram pre")?.textContent, `${code}\n`);
+  assert.equal(page.querySelector(".description-diagram pre")?.textContent, code);
   assert.equal(toggle(page).textContent, "Show diagram");
 
   act(() => toggle(page).click());
@@ -264,7 +264,7 @@ test("a fence the diagram bundle refuses says it could not be drawn, over its co
     "This diagram could not be drawn.",
   );
   assert.equal(retry(page), undefined);
-  assert.equal(page.querySelector(".description-diagram pre")?.textContent, `${UNPARSED}\n`);
+  assert.equal(page.querySelector(".description-diagram pre")?.textContent, UNPARSED);
 });
 
 test("a diagram bundle that failed to load says so with Retry, which imports it again and draws the fence", async () => {
@@ -316,7 +316,7 @@ test("the diagram is drawn again in the window's new appearance when it flips", 
   assert.deepEqual(pictures(page), [pictureOf(code, DIAGRAM_APPEARANCE.DARK)]);
 });
 
-test("a fence in another language, and a Mermaid fence where the words are not a description's, stay code", async () => {
+test("a fence in another language, and a Mermaid fence where the words are not a description's, stay code, in the code card a transcript draws, headed by its language", async () => {
   const code = "flowchart LR\n  Caption --> Code";
   const shell = "```sh\npnpm install\n```";
 
@@ -324,9 +324,11 @@ test("a fence in another language, and a Mermaid fence where the words are not a
   const caption = await drawn(createElement(MarkdownMessage, { words: mermaidFence(code) }));
 
   assert.equal(page.querySelector(".description-diagram"), null);
-  assert.equal(page.querySelector("pre")?.textContent, "pnpm install\n");
+  assert.equal(page.querySelector("pre")?.textContent, "pnpm install");
+  assert.match(page.querySelector("figure > figcaption")?.textContent ?? "", /^Shell/u);
   assert.equal(caption.querySelector(".description-diagram"), null);
-  assert.equal(caption.querySelector("pre")?.textContent, `${code}\n`);
+  assert.equal(caption.querySelector("pre")?.textContent, code);
+  assert.match(caption.querySelector("figure > figcaption")?.textContent ?? "", /^mermaid/u);
 });
 
 test("a version draws a fence it left alone as its diagram, and one whose code it changed as its code with the changes marked", async () => {
