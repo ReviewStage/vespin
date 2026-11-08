@@ -315,7 +315,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
 
 it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
   it.effect(
-    "keeps the account's answers with their words beside Other, records them for PostHog's onboarding survey once, keeps no other account's, and refuses an answer no set offers or words beside no Other",
+    "keeps the account's answers with their words beside Other, records them for PostHog's onboarding survey once, keeps no key it does not name and no other account's, and refuses an answer no set offers or words beside no Other",
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts;
@@ -324,8 +324,13 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
           partOf(yield* ask(request(owner, { onboardingSurvey: answers })), "onboardingSurvey"),
           answers,
         );
-        // Note that the same answers written again, as a retry or another machine's sync writes them, post nothing more.
-        yield* ask(request(owner, { onboardingSurvey: answers }));
+        // Note that the same answers written again, as a retry or another machine's sync writes them, post nothing more, and a key the survey does not name is not kept.
+        const padded =
+          '{"referral":"other","referralOther":"A meetup","role":"founder","notes":"x"}';
+        assert.equal(
+          partOf(yield* ask(request(owner, { onboardingSurvey: padded })), "onboardingSurvey"),
+          answers,
+        );
         assert.equal(partOf(yield* ask(request(other)), "onboardingSurvey"), undefined);
 
         // Note that words beside no Other are refused as an answer no set offers is.

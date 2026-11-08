@@ -370,11 +370,14 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         write.turnNotifications = turnNotifications;
       }
       if (body.onboardingSurvey !== undefined) {
-        const onboardingSurvey = ownPreferenceFromWire("onboardingSurvey", body.onboardingSurvey);
+        // Note that the answers are stored as read, so a key the survey does not name is not kept.
+        const onboardingSurvey = onboardingSurveyFrom(
+          ownPreferenceFromWire("onboardingSurvey", body.onboardingSurvey),
+        );
         if (onboardingSurvey === undefined) {
           return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
         }
-        write.onboardingSurvey = onboardingSurvey;
+        write.onboardingSurvey = onboardingSurveyStored(onboardingSurvey);
       }
       if (body.agent !== undefined) {
         write.agent = yield* acceptedAgentChoice(seams, context.userId, body.agent);
