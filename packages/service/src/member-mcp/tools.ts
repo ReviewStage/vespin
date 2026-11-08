@@ -40,7 +40,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { ToolAnnotations } from "@modelcontextprotocol/server";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readAutomation } from "@repo/database/models/automation-store";
 import {
   actOnDescriptionCommentThread,
@@ -212,7 +212,6 @@ import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import {
   COMMENT_TOOL_REFUSAL,

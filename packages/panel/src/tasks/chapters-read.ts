@@ -81,15 +81,12 @@ export function useChaptersRead(
     if (out.current) return;
     out.current = true;
     setGenerating(Date.now());
-    latest.current.source
-      .generateChapters()
-      .catch(() => UNANSWERED)
-      .then((answer) => {
-        out.current = false;
-        setGenerating(undefined);
-        setGenerated({ of: latest.current.readAnswer, answer });
-        latest.current.refresh();
-      });
+    latest.current.source.generateChapters().then((answer) => {
+      out.current = false;
+      setGenerating(undefined);
+      setGenerated({ of: latest.current.readAnswer, answer });
+      latest.current.refresh();
+    });
   }, []);
   const answer =
     generated !== undefined && generated.of === readAnswer ? generated.answer : readAnswer;

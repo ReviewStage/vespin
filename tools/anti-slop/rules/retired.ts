@@ -39,8 +39,8 @@ const COMPARISONS: ReadonlySet<string> = new Set(["===", "!==", "==", "!="]);
  * a literal type, or the value of a JSX attribute other than `className`.
  */
 function couldBeClass(node: ESTree.Node): boolean {
-  const parent = (node as { parent?: ESTree.Node }).parent;
-  if (parent === undefined) return true;
+  const parent = node.parent;
+  if (!parent) return true;
   switch (parent.type) {
     case "ImportDeclaration":
     case "ExportNamedDeclaration":

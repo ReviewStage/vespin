@@ -18,6 +18,7 @@ import {
 import { absurd, Option, Schema } from "effect";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stripTabKept, stripTabStays } from "./strip-tab-kinds.js";
+import { MAIN_TAB } from "./task-tab-model.js";
 
 /**
  * use-main-tabs.ts -- the task's column's tabs: its Overview, each of its agents, and its draft agent, which is chosen, and the order they stand in, kept per task across launches.
@@ -69,13 +70,7 @@ import { stripTabKept, stripTabStays } from "./strip-tab-kinds.js";
  *
  * These facts are this window's preference rather than anything main
  * holds, so they are kept in the renderer's own storage, read once at
- * mount. The description's own tab, the Inbox, the task's Call, and its Chat once
- * stood here (`RETIRED_MAIN_TAB`), the description's under the word `plan`, which
- * is why Overview, holding the description now, is kept under a word of its own; what
- * a launch kept of them reads and is let go, so every other choice it holds
- * still stands. The agents' tabs once stood in
- * the side panel, whose record kept them; a window with no record of its own
- * reads theirs from there once. A fixture run neither reads nor writes
+ * mount. A fixture run neither reads nor writes
  * them: its tasks have no agents, and a capture must not depend on how the
  * last run left the column. ⌘T's ask for the column's "+" is a moment's,
  * kept nowhere.
@@ -86,15 +81,6 @@ import { stripTabKept, stripTabStays } from "./strip-tab-kinds.js";
  * developer closes or opens is no longer one of those.
  */
 
-/**
- * The column's own tabs, named by a word: the task's Overview, holding its
- * description, which leads the strip on every task. Note that it is not
- * spelled `plan`, the word a retired tab was kept under below.
- */
-export const MAIN_TAB = {
-  OVERVIEW: "overview",
-} as const;
-
 /** The task's Overview tab. */
 type OverviewTab = typeof MAIN_TAB.OVERVIEW;
 
@@ -103,32 +89,11 @@ export function isOverviewTab(tab: StripTab | undefined): tab is OverviewTab {
   return tab === MAIN_TAB.OVERVIEW;
 }
 
-/**
- * The column's own tabs an earlier version had and this one does not, which
- * what it kept may still name: the description's own, which Overview
- * holds now, and the Inbox, which stands in the side panel, the task's Call, whose calls every agent's tab takes
- * now, and the task's Chat, gone with Chat. Note that a
- * kind is retired here rather than deleted, because a kept state naming one
- * would otherwise not read at all and lose every other choice it holds.
- */
-const RETIRED_MAIN_TAB = {
-  // Note that the value is the name the description had, which is what an earlier version kept.
-  DESCRIPTION: "plan",
-  INBOX: "inbox",
-  CALL: "call",
-  CHAT: "chat",
-} as const;
-
-const RETIRED_MAIN_TABS: ReadonlySet<unknown> = new Set(Object.values(RETIRED_MAIN_TAB));
-
 /** A tab of the task's column: its Overview, one agent's, or the draft agent's. */
 export type MainTab = OverviewTab | AgentStripTab | DraftStripTab;
 
 /** Where the preference is kept in the renderer's storage. */
 const STORAGE_KEY = "app.mainTabs";
-
-/** Where the side panel keeps its own, which held the agents' tabs before this column did. */
-const SIDE_PANEL_KEY = "app.sidePanel";
 
 /**
  * How many agents whose tabs were closed are kept, the latest closed. Note
@@ -170,29 +135,11 @@ const keptTabSchema = Schema.Union([
 /** When a kept tab was last viewed, in epoch milliseconds. */
 const keptViewedSchema = Schema.Struct({ tab: keptTabSchema, at: Schema.Number });
 
-/** A tab as it is read: one of today's, or one retired, which reads and is then let go (`currentTasks`). */
-const readTabSchema = Schema.Union([
-  keptTabSchema,
-  Schema.Literals(Object.values(RETIRED_MAIN_TAB)),
-]);
-
-/**
- * One task's choices: the tabs viewed on it, the latest last, and its order
- * since a tab was first moved on it. Note that what an earlier version kept
- * of the description's tab, the Inbox, the Call, and whether the Chat was open
- * beside these is left unread.
- */
+/** One task's choices: the tabs viewed on it, the latest last, and its order since a tab was first moved on it. */
 const taskChoicesSchema = Schema.Struct({
   recent: Schema.optional(Schema.Array(keptTabSchema)),
   order: Schema.optional(Schema.Array(keptTabSchema)),
   viewedAt: Schema.optional(Schema.Array(keptViewedSchema)),
-});
-
-/** One task's choices as they are read, a retired tab among those viewed and moved. */
-const readChoicesSchema = Schema.Struct({
-  ...taskChoicesSchema.fields,
-  recent: Schema.optional(Schema.Array(readTabSchema)),
-  order: Schema.optional(Schema.Array(readTabSchema)),
 });
 
 /** The agents whose tabs were closed, every task's, those of them closed for being idle, the archived agents whose tabs were opened, and each task's choices, by task id. */
@@ -223,42 +170,8 @@ interface HeldState {
   readonly tasks: Readonly<Record<string, TaskChoices>>;
 }
 
-/** A side panel tab as an earlier version kept it: a fixed kind's word, or an agent's. */
-const sidePanelTabSchema = Schema.Union([
-  Schema.String,
-  storedStripTab(STRIP_TAB_KIND.AGENT, { agent: Schema.String }),
-]);
-
-/** Each task's agents' tabs as an earlier version's side panel record kept them. */
-const sidePanelTaskTabsSchema = Schema.optional(
-  Schema.Record(
-    Schema.String,
-    Schema.Struct({
-      recent: Schema.optional(Schema.Array(sidePanelTabSchema)),
-      order: Schema.optional(Schema.Array(sidePanelTabSchema)),
-    }),
-  ),
-);
-
-/** What of the side panel's record an earlier version kept of the agents' tabs, under `plans` before tasks had their name. */
-const sidePanelAgentsSchema = Schema.Struct({
-  closedAgents: Schema.optional(Schema.Array(Schema.String)),
-  tasks: sidePanelTaskTabsSchema,
-  plans: sidePanelTaskTabsSchema,
-});
-
-/** The kept preference as it is read: one written before tasks had their name keeps them under `plans`. */
-const keptMainTabsSchema = Schema.Struct({
-  closedAgents: Schema.Array(Schema.String),
-  dozing: Schema.optional(Schema.Array(Schema.String)),
-  openArchived: Schema.optional(Schema.Array(Schema.String)),
-  tasks: Schema.optional(Schema.Record(Schema.String, readChoicesSchema)),
-  plans: Schema.optional(Schema.Record(Schema.String, readChoicesSchema)),
-});
-
 const storedMainTabs = Schema.fromJsonString(mainTabsSchema);
-const decodeKept = Schema.decodeUnknownOption(Schema.fromJsonString(keptMainTabsSchema));
-const decodeSidePanel = Schema.decodeUnknownOption(Schema.fromJsonString(sidePanelAgentsSchema));
+const decodeKept = Schema.decodeUnknownOption(storedMainTabs);
 const encodeStored = Schema.encodeSync(storedMainTabs);
 
 /** A window that has kept nothing, and a fixture run's column. */
@@ -655,78 +568,18 @@ function storedText(key: string): string | null {
   }
 }
 
-/**
- * The agents' tabs as the side panel's record kept them before this column
- * held them: the agents whose tabs were closed, and each task's agents in
- * the order it moved and viewed them. Note that a fixed kind's word is the
- * side panel's and stays there.
- */
-function fromSidePanel(record: typeof sidePanelAgentsSchema.Type): HeldState {
-  const agentsIn = (tabs: readonly (typeof sidePanelTabSchema.Type)[] = []) =>
-    tabs.flatMap((tab) =>
-      typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.AGENT ? [agentTab(tab.agent)] : [],
-    );
-  const tasks = Object.entries(record.tasks ?? record.plans ?? {}).flatMap(
-    ([task, { recent, order }]) => {
-      const viewed = agentsIn(recent);
-      const moved = agentsIn(order);
-      if (viewed.length === 0 && moved.length === 0) return [];
-      const choices: TaskChoices = {
-        recent: viewed,
-        ...(moved.length === 0 ? undefined : { order: moved }),
-      };
-      return [[task, choices] as const];
-    },
-  );
-  return {
-    closedAgents: record.closedAgents ?? [],
-    dozing: [],
-    openArchived: [],
-    tasks: Object.fromEntries(tasks),
-  };
-}
-
-/** Whether a kept tab is of a kind this column still has: any but a retired one. */
-function current<T>(
-  tab: T,
-): tab is Exclude<T, (typeof RETIRED_MAIN_TAB)[keyof typeof RETIRED_MAIN_TAB]> {
-  return !RETIRED_MAIN_TABS.has(tab);
-}
-
-/** Each task's kept choices without the tabs retired since they were kept. */
-function currentTasks(
-  tasks: Readonly<Record<string, typeof readChoicesSchema.Type>>,
-): HeldState["tasks"] {
-  return Object.fromEntries(
-    Object.entries(tasks).map(([task, { recent, order, viewedAt }]) => [
-      task,
-      {
-        ...(recent === undefined ? undefined : { recent: recent.filter(current) }),
-        ...(order === undefined ? undefined : { order: order.filter(current) }),
-        ...(viewedAt === undefined ? undefined : { viewedAt }),
-      },
-    ]),
-  );
-}
-
-/** The kept preference, or what the side panel's record kept of the agents' tabs where none is, or nothing. */
+/** The kept preference, or nothing. */
 function readStored(): HeldState {
-  const kept = Option.map(
-    decodeKept(storedText(STORAGE_KEY)),
-    ({ closedAgents, dozing, openArchived, tasks, plans }): HeldState =>
+  return Option.match(decodeKept(storedText(STORAGE_KEY)), {
+    onNone: () => NOTHING_KEPT,
+    onSome: ({ closedAgents, dozing, openArchived, tasks }): HeldState =>
       withEveryDetailsLeft({
         closedAgents,
         dozing: dozing ?? [],
         openArchived: openArchived ?? [],
-        tasks: currentTasks(tasks ?? plans ?? {}),
+        tasks,
       }),
-  );
-  return Option.getOrElse(kept, () =>
-    Option.match(decodeSidePanel(storedText(SIDE_PANEL_KEY)), {
-      onNone: () => NOTHING_KEPT,
-      onSome: fromSidePanel,
-    }),
-  );
+  });
 }
 
 /**

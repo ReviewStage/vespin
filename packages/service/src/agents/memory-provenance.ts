@@ -21,7 +21,7 @@
  * as a call replayed after its turn settled, is refused nothing here.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   lineSendersOf,
@@ -37,7 +37,6 @@ import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "@repo/features/agent-t
 import { automationRun } from "@repo/features/model-label";
 import { toolPartName } from "@repo/wire/ui-messages";
 import { Effect } from "effect";
-import type { StoreFailure } from "../http/store-failure.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./coder-host/tool-set.js";
 
 /** Why a turn may keep no memory, in words the model can act on. */

@@ -11,6 +11,8 @@
  * address brought it.
  */
 
+import { Schema } from "effect";
+
 export const GITHUB_INSTALL_LANDING = {
   PATH: "/github-installed",
   STATUS_PARAM: "status",
@@ -38,12 +40,11 @@ export const GITHUB_INSTALL_STATUS = {
 export type GitHubInstallStatus =
   (typeof GITHUB_INSTALL_STATUS)[keyof typeof GITHUB_INSTALL_STATUS];
 
-const STATUSES: ReadonlySet<string> = new Set(Object.values(GITHUB_INSTALL_STATUS));
+const isGitHubInstallStatus = Schema.is(Schema.Literals(Object.values(GITHUB_INSTALL_STATUS)));
 
 /** The landing's status as the address spells it; anything else is no status. */
 export function githubInstallStatusFromWire(value: string | null): GitHubInstallStatus | undefined {
-  // SAFETY: membership in the set built from GITHUB_INSTALL_STATUS's values is what the union names.
-  return value !== null && STATUSES.has(value) ? (value as GitHubInstallStatus) : undefined;
+  return isGitHubInstallStatus(value) ? value : undefined;
 }
 
 /** The landing page's path for one status, relative so it lands on whichever host the browser is on. */

@@ -14,8 +14,7 @@ import { actPort } from "./base.js";
  *
  * Each stream a window opens has one publisher of its own (oRPC's
  * `MemoryPublisher`), the window's streams keyed by the platform's handle on
- * it, and a push to a window no stream of which stands is dropped, as a send
- * to a page with no listener was. The stream subscribes before the procedure
+ * it, and a push to a window no stream of which stands is dropped. The stream subscribes before the procedure
  * answers, so once a window's call resolves main is listening, and nothing
  * it pushes after that is lost; a stream's end, by the window's own
  * unsubscribe, its port closing with the window, or a reload replacing its

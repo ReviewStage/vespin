@@ -13,15 +13,10 @@
  * alone: the editor bundle reads the same words.
  */
 
-import type { TaskSkillSource } from "@repo/features/task-wire";
+import type { TaskSkill } from "@repo/features/task-wire";
 
 /** A skill as the composer offers it: its name, what it is for, where it comes from, and, for one of the repository's, its `SKILL.md`, named from the repository's root. */
-export interface SkillOption {
-  readonly name: string;
-  readonly description: string;
-  readonly source: TaskSkillSource;
-  readonly path?: string;
-}
+export type SkillOption = TaskSkill;
 
 /** A `/` word the caret stands at the end of: where its slash is, and the letters typed after it. */
 export interface SkillMention {

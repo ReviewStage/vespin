@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   actOnDescriptionCommentThread,
   DESCRIPTION_COMMENT_OUTCOME,
@@ -40,7 +40,7 @@ import {
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { logStoreFailure, type StoreFailure } from "../http/store-failure.js";
+import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import {
   askableAgent,

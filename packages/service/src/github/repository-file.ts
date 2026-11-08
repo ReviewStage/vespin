@@ -21,7 +21,6 @@ import {
   type GitHubUnavailable,
   githubRead,
   readBody,
-  readText,
   send,
 } from "./github-app.js";
 
@@ -127,43 +126,6 @@ export function readBranchHead(
         if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return undefined;
         const answer = yield* readBody(response, BranchRefSchema);
         return answer.object.sha;
-      }),
-    );
-  });
-}
-
-/** The media type GitHub answers a commit with as its sha alone, rather than the commit with its every file's patch. */
-const COMMIT_SHA_MEDIA_TYPE = "application/vnd.github.sha";
-
-/**
- * The commit a branch, tag, or commit of the repository names now
- * (`GET /repos/{owner}/{repo}/commits/{ref}`,
- * https://docs.github.com/en/rest/commits/commits#get-a-commit), so files
- * read at it are pinned to it; nothing where GitHub names no commit for it,
- * as it answers an unknown ref (404, or 422 for one it cannot read as a
- * ref). Asked for as its sha alone, which is all this reads. Read
- * anonymously where the token is `null`.
- */
-export function readCommitSha(
-  token: Redacted.Redacted | null,
-  repository: { readonly fullName: string },
-  ref: string,
-): Effect.Effect<string | undefined, GitHubUnavailable, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
-    const request = githubRead(
-      `/repos/${repository.fullName}/commits/${encodeURIComponent(ref)}`,
-      token,
-    ).pipe(HttpClientRequest.setHeader("accept", COMMIT_SHA_MEDIA_TYPE));
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        const response = yield* send(request);
-        if (
-          response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
-          response.status === GITHUB_HTTP_STATUS.UNPROCESSABLE
-        ) {
-          return undefined;
-        }
-        return (yield* readText(response)).trim();
       }),
     );
   });

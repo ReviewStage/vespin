@@ -12,6 +12,18 @@ import { DISPATCH_QUERY, ORPC_ROUTE_KEY } from "./function-dispatch.js";
 import type { FunctionDefinition } from "./function-durations.js";
 import { functionPublicPath, webFunctions } from "./function-layout.js";
 
+const TransformSchema = Schema.Struct({
+  type: Schema.Literal("request.headers"),
+  op: Schema.Literal("delete"),
+  target: Schema.Struct({ key: Schema.String }),
+});
+
+const RewriteSchema = Schema.Struct({
+  src: Schema.String,
+  dest: Schema.String,
+  transforms: Schema.optionalKey(Schema.Array(TransformSchema)),
+});
+
 /**
  * The `/api/` entries of the web service's `routes` in `vercel.json`, and the
  * few public paths outside `/api/` a route answers, generated from the
@@ -25,18 +37,10 @@ import { functionPublicPath, webFunctions } from "./function-layout.js";
  * config module's relative imports and evaluates it in plain Node, which can
  * take a JSON table and cannot take this module's dependencies.
  */
-export interface Rewrite {
-  readonly src: string;
-  readonly dest: string;
-  readonly transforms?: readonly Transform[];
-}
+export type Rewrite = typeof RewriteSchema.Type;
 
 /** A change Vercel makes to a request it passes on: here only a request header taken off it. */
-export interface Transform {
-  readonly type: "request.headers";
-  readonly op: "delete";
-  readonly target: { readonly key: string };
-}
+export type Transform = typeof TransformSchema.Type;
 
 /**
  * The routes that stay off the hosted oRPC router whose public paths carry a
@@ -273,18 +277,6 @@ export function generatedRewrites(definitions: readonly FunctionDefinition[]): r
 export const VERCEL_CONFIG_FILE = join("..", "..", "vercel.json");
 /** The committed generation of the `/api/` rewrites, which the web service's routes are assembled from. */
 export const API_REWRITES_FILE = join("server", "api-rewrites.json");
-
-const TransformSchema = Schema.Struct({
-  type: Schema.Literal("request.headers"),
-  op: Schema.Literal("delete"),
-  target: Schema.Struct({ key: Schema.String }),
-});
-
-const RewriteSchema = Schema.Struct({
-  src: Schema.String,
-  dest: Schema.String,
-  transforms: Schema.optionalKey(Schema.Array(TransformSchema)),
-});
 
 const decodeApiRewrites = Schema.decodeUnknownSync(
   Schema.fromJsonString(Schema.Array(RewriteSchema)),

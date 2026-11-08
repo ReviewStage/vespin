@@ -216,14 +216,14 @@ export function carriedWaits<Row>(
  * no wait; where the answer says none of them, the fields the write drew
  * are taken instead.
  */
-export interface RowWritten<Row, Answer> {
+interface RowWritten<Row, Answer> {
   readonly answer: Answer;
   readonly txid: string | undefined;
   readonly fields?: Partial<Row> | typeof ROW_GONE;
 }
 
 /** A write the service refused, which takes back what it drew, and what the caller answers for it. */
-export interface RowRefused<Answer> {
+interface RowRefused<Answer> {
   readonly refused: Answer;
 }
 
@@ -324,7 +324,7 @@ export function accountReads<Name extends string>(
 }
 
 /** How many reads no window holds any longer stay open, the latest let go kept, so a window stepping back to one draws it from where it stands rather than from cold. */
-export const RECENT_READS = 8;
+const RECENT_READS = 8;
 
 /** How a held lifetime keeps the reads no window holds any longer. */
 interface LetGo<Key> {

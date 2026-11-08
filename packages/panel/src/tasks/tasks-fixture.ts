@@ -61,13 +61,9 @@ import {
   settingsLaunchLink,
   settingsTasksView,
 } from "./settings-fixture.js";
+import { SIDE_PANEL_TABS, SIDE_PANEL_WIDTH } from "./task-tab-model.js";
 import type { MainTab } from "./use-main-tabs.js";
-import {
-  SIDE_PANEL_TABS,
-  SIDE_PANEL_WIDTH,
-  type SidePanelState,
-  type StagedSidePanel,
-} from "./use-side-panel.js";
+import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
 
 /**
  * tasks-fixture.ts -- the synthetic tasks a fixture run's Tasks tab draws in place of the service's.

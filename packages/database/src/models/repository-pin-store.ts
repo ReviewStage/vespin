@@ -3,10 +3,11 @@ import {
   type RepositoryPin,
   type RepositoryPinsWritten,
 } from "@repo/features/task-wire";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { user } from "../schemas/auth.js";
 import { repositoryPin } from "../schemas/repository-pin.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -29,17 +30,6 @@ const PinRowSchema = Schema.Struct({
 });
 
 const PinKeySchema = Schema.Struct({ userId: Schema.String, repository: Schema.String });
-
-/**
- * The id of the transaction that made a pin, read in the write's own
- * `RETURNING`, as Neon's mutations guide does it: a follower of the sidebar
- * waits for it to arrive on its live query. A write that changed no row
- * returns none, so there is nothing to wait for.
- */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
-/** The transaction a statement wrote its row in; no row where it changed none. */
-const WrittenSchema = Schema.Struct({ txid: Schema.String });
 
 const findPins = SqlSchema.findAll({
   Request: Schema.String,
@@ -66,20 +56,20 @@ const lockAccount = SqlSchema.findOneOption({
 
 const insertPin = SqlSchema.findAll({
   Request: Schema.Struct({ ...PinKeySchema.fields, now: Schema.Date }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: (write) =>
     Database.use((db) =>
       db
         .insert(repositoryPin)
         .values({ userId: write.userId, repository: write.repository, pinnedAt: write.now })
         .onConflictDoNothing()
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 const deletePin = SqlSchema.findAll({
   Request: PinKeySchema,
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: (key) =>
     Database.use((db) =>
       db
@@ -87,7 +77,7 @@ const deletePin = SqlSchema.findAll({
         .where(
           and(eq(repositoryPin.userId, key.userId), eq(repositoryPin.repository, key.repository)),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -116,7 +106,7 @@ export function setRepositoryPin(
       Effect.gen(function* () {
         const account = yield* lockAccount(userId);
         if (Option.isNone(account)) return Option.none();
-        const answer = (rows: readonly (typeof WrittenSchema.Type)[]) =>
+        const answer = (rows: readonly (typeof TxidRowSchema.Type)[]) =>
           Effect.map(listRepositoryPins(userId), (pins) => {
             const txid = rows[0]?.txid;
             return Option.some(txid === undefined ? { pins } : { pins, txid });

@@ -17,14 +17,14 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
-import { type Sandbox, touchSandbox } from "@repo/sandbox";
-import { Effect, Layer, Option } from "effect";
+import { Sandbox, touchSandbox } from "@repo/sandbox";
+import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
-import { AgentBrowser, agentBrowserLayer } from "../agents/browser/agent-browser.js";
+import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
-import type { AgentImage } from "../agents/coder-host/agent-image.js";
-import { sandboxPtyLayer } from "../agents/sandbox-pty.js";
+import { AgentImage } from "../agents/coder-host/agent-image.js";
+import { sandboxPtyOf } from "../agents/sandbox-pty.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
@@ -40,12 +40,8 @@ export const browserLiveDependencies: Effect.Effect<
   const context = yield* Effect.context<BrowserLiveServices>();
   const run = <A, E>(effect: Effect.Effect<A, E, BrowserLiveServices>) =>
     Effect.provideContext(effect, context);
-  const browser = yield* Effect.provide(
-    Effect.gen(function* () {
-      return yield* AgentBrowser;
-    }),
-    agentBrowserLayer.pipe(Layer.provide(sandboxPtyLayer)),
-  );
+  const sandbox = yield* Sandbox;
+  const browser = agentBrowserOver(sandbox, sandboxPtyOf(sandbox), yield* AgentImage);
   return {
     readTab: (userId, place, tabId) => run(readBrowserTab(userId, place, tabId)),
     // Note that the tab was read under the member's reach first, so its agent's conversation is read whoever started it.

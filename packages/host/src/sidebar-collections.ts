@@ -56,12 +56,12 @@ import { confirmWrite, type TxWait } from "./live-follow.js";
 import { callKey, TASK_QUEUED_WRITE, untaken, type WriteAnswers } from "./queued-writes.js";
 
 /** The account's sections and the rows in them as the pool holds them: one row, under the account's own id. */
-export interface SectionsRow extends TaskSections {
+interface SectionsRow extends TaskSections {
   readonly ownerId: string;
 }
 
 /** A change to the account's sections: what it leaves of them as they are drawn now. */
-export type SectionsChange = (sections: TaskSections) => TaskSections;
+type SectionsChange = (sections: TaskSections) => TaskSections;
 
 /**
  * The account's sections as the pool holds them, by the account's id, a
@@ -198,10 +198,10 @@ export function sidebarCollections(
 }
 
 /** A pin's write as it is asked: the repository, whether it is pinned, and the instant it was asked at, which a pin made here is stamped with. */
-export type RepositoryPinInput = TasksPinRepositoryParams & { readonly at: number };
+type RepositoryPinInput = TasksPinRepositoryParams & { readonly at: number };
 
 /** A drag's or a menu's section writes as they are asked: the writes as the service takes them, the account whose sections they change, and the instant they were asked at, which a section or an entry made here is stamped with. */
-export type SectionsInput = TasksWriteSectionParams & {
+type SectionsInput = TasksWriteSectionParams & {
   readonly ownerId: string | undefined;
   readonly at: number;
 };

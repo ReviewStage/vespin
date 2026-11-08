@@ -46,7 +46,11 @@ import {
   type TaskParentUnreached,
   type TaskStartCommitted,
 } from "@repo/database/models/task-store";
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import {
+  GITHUB_ACCESS,
+  type GitHubAccess,
+  sameRepository,
+} from "@repo/features/github-repositories-wire";
 import {
   TASK_CREATE_RELATION_KIND,
   type TaskBlockRelation,
@@ -93,12 +97,6 @@ export type TaskCreateRelationAsked =
     }
   | { readonly kind: TaskBlockRelation; readonly taskId: string };
 
-/** Whether a repository a start names is the other task's: GitHub's names match whatever their case, and none matches none. */
-function sameRepository(asked: string | null, held: string | null): boolean {
-  if (asked === null || held === null) return asked === held;
-  return asked.toLowerCase() === held.toLowerCase();
-}
-
 /** The block a kind names between the new task and the other, where the kind is a block's side. */
 function blockPairOf(taskId: string, otherId: string, kind: TaskBlockRelation): TaskBlockPair {
   return kind === TASK_CREATE_RELATION_KIND.BLOCKED_BY
@@ -114,7 +112,7 @@ function blockPairOf(taskId: string, otherId: string, kind: TaskBlockRelation): 
  * sub-task is the parent's own check (`taskParentOf`), so it answers
  * nothing here.
  */
-export const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
+const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   workspaceId: string,
   relation: TaskCreateRelation,
@@ -147,7 +145,7 @@ export const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
  * names the repository each later one must match, because a start naming
  * none would otherwise take one tree's repository and join another's.
  */
-export const relationsAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
+const relationsAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   workspaceId: string,
   relations: readonly TaskCreateRelation[],
@@ -194,7 +192,7 @@ const parentTaken = (
   });
 
 /** The relation written for the task just started, under its maker's transaction: the other task made its child, or a block on the side the kind names; refused as unreached where the other task is out of reach by now. */
-export function relationWritten(
+function relationWritten(
   userId: string,
   taskId: string,
   asked: TaskCreateRelationAsked,
@@ -247,7 +245,7 @@ function taskStarted(
  * a savepoint in, so the answer's `txid` still names the one commit a
  * follower waits for.
  */
-export function createTaskRelated(
+function createTaskRelated(
   userId: string,
   started: NewTask & { readonly id?: string },
   asked: readonly TaskCreateRelationAsked[],

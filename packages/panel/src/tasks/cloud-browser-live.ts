@@ -40,7 +40,7 @@ import {
   browserLiveServerMessageSchema,
 } from "@repo/features/browser-live-wire";
 import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
+import { cappedExponential, readEither } from "@repo/wire/effect";
 import {
   Data,
   Duration,
@@ -186,10 +186,9 @@ const SOCKET_ENDING = {
 
 type SocketEnding = (typeof SOCKET_ENDING)[keyof typeof SOCKET_ENDING];
 
-const RECONNECT_BACKOFF = Schedule.exponential(CLOUD_BROWSER_RECONNECT.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, CLOUD_BROWSER_RECONNECT.LONGEST)),
-  ),
+const RECONNECT_BACKOFF = cappedExponential(
+  CLOUD_BROWSER_RECONNECT.FIRST,
+  CLOUD_BROWSER_RECONNECT.LONGEST,
 );
 
 /** The reason each of the relay's close codes says. */

@@ -42,7 +42,12 @@ import {
   TERMINAL_RELAY_FRAME,
   terminalRelayResizeSchema,
 } from "@repo/features/terminal-wire";
-import { type InteractiveShell, SANDBOX_TOUCH_EVERY, type SandboxError } from "@repo/sandbox";
+import {
+  type InteractiveShell,
+  ptyExitSchema,
+  SANDBOX_TOUCH_EVERY,
+  type SandboxError,
+} from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -56,7 +61,6 @@ import {
   Ref,
   Result,
   Schedule,
-  Schema,
   type Scope,
   Stream,
 } from "effect";
@@ -153,11 +157,8 @@ const PIPE_END = {
 
 type PipeEnd = (typeof PIPE_END)[keyof typeof PIPE_END];
 
-/** The PTY server's exit frame, the one text frame it sends of its own. */
-const PtyExitSchema = Schema.Struct({ type: Schema.Literal("exit"), code: Schema.Int });
-
 const readResize = readEither(terminalRelayResizeSchema);
-const readPtyExit = readEither(PtyExitSchema);
+const readPtyExit = readEither(ptyExitSchema);
 
 /** The credential set at the firewall. */
 function setCredential(

@@ -35,11 +35,6 @@ export interface JsonStateFile<T> {
 /**
  * One small JSON record on disk, read and written synchronously, and no
  * writer here waits on anything a promise could carry.
- *
- * The synchronous `node:fs` face beside `jsonStateFileEffect` in
- * `@repo/host/effect`, for the callers that still read and write
- * synchronously: the desktop's own last-run-version file, read before
- * `whenReady` resolves (`apps/desktop/src/main/services/update-service-host.ts`).
  */
 export function jsonStateFile<T>(options: JsonStateFileOptions<T>): JsonStateFile<T> {
   const filePath = () => path.join(options.directory(), options.fileName);

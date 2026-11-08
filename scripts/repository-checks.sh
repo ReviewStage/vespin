@@ -34,9 +34,9 @@ if [[ -n "$engines_drift" ]]; then
     exit 1
 fi
 
-# The packages below the runtime (live, features) open
-# `@repo/runtime/vocabulary` precisely because it resolves no Node module
-# and no Effect layer that would carry one in. The renderer's own `node:` grep
+# The packages that import `@repo/runtime/vocabulary` open it precisely
+# because it resolves no Node module and no Effect layer that would carry one
+# in. The renderer's own `node:` grep
 # (below) can only see files inside one directory; this walks the door's
 # actual relative-import graph, so a later re-export cannot quietly reintroduce
 # `@effect/platform-node` or `effect/sql` a few files deep.
@@ -406,8 +406,7 @@ if [[ -n "$node_reaching_effect" ]]; then
 fi
 
 # The rules about the repository's state a lint rule cannot see: the agents'
-# pins against what is installed, the coding agent's tool files against its
-# registry, the probes' committed fixtures
+# pins against what is installed, the probes' committed fixtures
 # against their own leak guards, the lint rules' baselines against the files
 # they name, the catalog against `@repo/ui`'s components, the panel's launch
 # bundle, and the site's page heads and Tailwind entries. Each was a test that

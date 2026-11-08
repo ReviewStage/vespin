@@ -38,7 +38,7 @@ export const PICTURE_MEDIA_TYPE = {
   WEBM: WEBM_TYPE,
 } as const;
 
-export type PictureMediaType = (typeof PICTURE_MEDIA_TYPE)[keyof typeof PICTURE_MEDIA_TYPE];
+type PictureMediaType = (typeof PICTURE_MEDIA_TYPE)[keyof typeof PICTURE_MEDIA_TYPE];
 
 /** A kept picture's media type as the wire carries it: an image's or a video's. */
 export const pictureMediaTypeSchema = EffectSchema.Literals(Object.values(PICTURE_MEDIA_TYPE));

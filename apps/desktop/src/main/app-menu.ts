@@ -258,7 +258,7 @@ function mainWindowItem(appName: string, panel: PanelMenu): MenuItemConstructorO
 /**
  * Reload, which main runs itself rather than handing the window, on its key
  * as on a click, since no window's keymap claims ⌘R. It reloads the window
- * chosen over, the panel or the call card, once `reload` has asked about
+ * chosen over once `reload` has asked about
  * edits the page would lose; the system's own reload stands until it is
  * told, while no page has loaded to hold any.
  */

@@ -83,7 +83,7 @@ const attachmentIdOf = (request: Request) => uuidOf(request, QUERY.ATTACHMENT);
 /** The one picture the path named under `picture`. */
 const pictureIdOf = (request: Request) => uuidOf(request, QUERY.PICTURE);
 
-/** The delegation call the path named under `query`, or not found for one that is no call id. */
+/** The delegation call the path named under `call`, or not found for one that is no call id. */
 const callIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Request,
 ): Effect.fn.Return<string, HostedRefusal> {

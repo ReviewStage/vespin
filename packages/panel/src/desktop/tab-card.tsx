@@ -15,12 +15,9 @@ import { type InboxBoardView, NEEDS_YOU, needsYouWords } from "../tasks/inbox-mo
 import { PageCard, PageNameCard, PageNameSkeleton } from "../tasks/page-card.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { type PlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
+import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { openerOf } from "../tasks/use-link-standing.js";
-import {
-  type FixedSidePanelTab,
-  SIDE_PANEL_TAB,
-  SIDE_PANEL_TAB_KIND,
-} from "../tasks/use-side-panel.js";
+import { SIDE_PANEL_TAB_KIND } from "../tasks/use-side-panel.js";
 
 /**
  * tab-card.tsx -- the card each kind of tab hangs wherever the thing it shows is named: its tab in either strip, its row in the task's Overview, and a transcript's row that opens it.

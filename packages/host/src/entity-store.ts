@@ -97,7 +97,7 @@ export const KEPT_READ = {
   AUTOMATIONS: "automations",
 } as const;
 
-export type KeptRead = (typeof KEPT_READ)[keyof typeof KEPT_READ];
+type KeptRead = (typeof KEPT_READ)[keyof typeof KEPT_READ];
 
 /** The kept reads held per workspace, each workspace's rows under its id. */
 type KeptByWorkspace =

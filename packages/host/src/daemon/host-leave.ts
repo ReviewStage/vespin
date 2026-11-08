@@ -26,8 +26,6 @@ export const HOST_LEAVE_OUTCOME = {
   UNANSWERED: "unanswered",
 } as const;
 
-export type HostLeaveOutcome = (typeof HOST_LEAVE_OUTCOME)[keyof typeof HOST_LEAVE_OUTCOME];
-
 export interface HostLeaveInput {
   /** The daemon's state, where its device record stands. */
   readonly stateRoot: string;

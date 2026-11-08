@@ -67,6 +67,7 @@ import {
   useMentionAgentsReader,
   useSavedDescriptionText,
 } from "../tasks/task-mentions.js";
+import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import {
   cardTitle,
   placeOfTaskTarget,
@@ -83,11 +84,7 @@ import {
   placeOfMention,
   useLinkRouter,
 } from "../tasks/use-open-link.js";
-import {
-  type FileReads,
-  PULL_REQUEST_VIEW,
-  type SidePanelControl,
-} from "../tasks/use-side-panel.js";
+import type { FileReads, SidePanelControl } from "../tasks/use-side-panel.js";
 import { type HeldTaskInboxControl, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";

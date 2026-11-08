@@ -18,12 +18,10 @@ import {
   removeWorkspaceVariable,
   setWorkspaceVariable,
 } from "@repo/database/models/workspace-environment-store";
-import { type Workspace, workspaceOf } from "@repo/database/models/workspace-store";
 import type { WorkspaceEnvironmentAnswer } from "@repo/features/workspace-environment-wire";
-import { managesWorkspace } from "@repo/features/workspace-role";
-import { DateTime, Effect, Option, Redacted } from "effect";
+import { DateTime, Effect, Redacted } from "effect";
+import { answeredWorkspace, managedWorkspace } from "../accounts/workspace-access.js";
 import {
-  HOSTED_REFUSAL,
   type HostedRefusal,
   hostedStoreOrUnavailable,
   type UserIdResolver,
@@ -33,26 +31,6 @@ import { accountMiddleware, hosted, keyRingMiddleware } from "../orpc/base.js";
 export interface WorkspaceEnvironmentProcedureSeams {
   resolveUserId: UserIdResolver;
 }
-
-/** The workspace named, as the account sees it; one it is not in is not found. */
-const memberWorkspace = Effect.fn("web/workspaceEnvironmentWorkspace")(function* (
-  userId: string,
-  workspaceId: string,
-): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
-  const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, workspaceId));
-  if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  return workspace.value;
-});
-
-/** The workspace named, where the account is an owner or admin of it. */
-const administeredWorkspace = Effect.fn("web/workspaceEnvironmentAdministered")(function* (
-  userId: string,
-  workspaceId: string,
-) {
-  const workspace = yield* memberWorkspace(userId, workspaceId);
-  if (!managesWorkspace(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  return workspace;
-});
 
 /** The workspace's variable names as they stand, for the wire. */
 const environmentAnswer = Effect.fn("web/workspaceEnvironmentAnswer")(function* (
@@ -70,12 +48,12 @@ export function workspaceEnvironmentProcedures(seams: WorkspaceEnvironmentProced
   const keyed = signedIn.use(keyRingMiddleware);
   return {
     list: signedIn.list.effect(function* ({ input, context: { userId } }) {
-      const workspace = yield* memberWorkspace(userId, input.workspaceId);
+      const workspace = yield* answeredWorkspace(userId, input.workspaceId);
       return yield* environmentAnswer(workspace.id);
     }),
 
     put: keyed.put.effect(function* ({ input, context: { userId, ring } }) {
-      const workspace = yield* administeredWorkspace(userId, input.workspaceId);
+      const workspace = yield* managedWorkspace(userId, input.workspaceId);
       const owner = { organizationId: workspace.id, name: input.name };
       const sealed = sealWorkspaceVariable(ring, owner, Redacted.make(input.value));
       const now = yield* DateTime.nowAsDate;
@@ -84,7 +62,7 @@ export function workspaceEnvironmentProcedures(seams: WorkspaceEnvironmentProced
     }),
 
     delete: signedIn.delete.effect(function* ({ input, context: { userId } }) {
-      const workspace = yield* administeredWorkspace(userId, input.workspaceId);
+      const workspace = yield* managedWorkspace(userId, input.workspaceId);
       yield* hostedStoreOrUnavailable(removeWorkspaceVariable(workspace.id, input.name));
       return yield* environmentAnswer(workspace.id);
     }),

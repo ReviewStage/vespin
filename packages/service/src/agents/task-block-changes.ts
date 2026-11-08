@@ -86,7 +86,7 @@ export interface TaskBlockWrites {
 }
 
 /** A block the store refused or a task it did not reach, which takes the call's transaction back; its words are the model's. */
-export class TaskBlockRefused extends Data.TaggedError("TaskBlockRefused")<{
+class TaskBlockRefused extends Data.TaggedError("TaskBlockRefused")<{
   readonly words: string;
 }> {}
 

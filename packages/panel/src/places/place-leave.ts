@@ -51,9 +51,11 @@ export interface PlaceLeave {
    * while an ask stands, as to a task the window holds no address for yet,
    * `landed` asks first, since what it changes may still leave the page; its
    * Leave lets go of the ask, unless the move `stays` where the window stands,
-   * whose Leave leaves no page.
+   * whose Leave leaves no page. `move` is told whether nothing holds it, so a
+   * write past the router's blocker, as the history's visit, leaves no page
+   * unasked only then.
    */
-  readonly arrive: (move: () => void, landed: () => void) => void;
+  readonly arrive: (move: (free: boolean) => void, landed: () => void) => void;
   /** Says the move under way stays where the window stands, as a door asking for the place already standing does (`places/routed-exits.ts`'s `stay`). */
   readonly stays: () => void;
   /**
@@ -90,7 +92,11 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
   // where it goes, in the order the doors were made.
   const moves = useRef(0);
   const askedTo = useRef<string | undefined>(undefined);
-  const landings = useRef<{ readonly to: string | undefined; readonly landed: () => void }[]>([]);
+  // The last move the blocker held, by its count.
+  const heldMove = useRef(0);
+  const landings = useRef<
+    { readonly move: number; readonly to: string | undefined; readonly landed: () => void }[]
+  >([]);
   // What the last ask made up front by a door that could not move first lets go on Leave.
   const waiting = useRef<(() => void)[]>([]);
   const heard = useRef(onStanding);
@@ -129,7 +135,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
       pass,
       arrive: (move, landed) => {
         if (standing.current === undefined || passing.current) {
-          move();
+          move(true);
           landed();
           return;
         }
@@ -137,9 +143,15 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         const asked = moves.current;
         const waitingBefore = waiting.current;
         stayed.current = false;
-        move();
+        move(false);
         if (moves.current !== asked) {
-          landings.current.push({ to: askedTo.current, landed });
+          // Note that a move held while an earlier one waited takes its question, so only the later one is let go.
+          const move = moves.current;
+          const kept =
+            heldMove.current === move
+              ? landings.current.filter((each) => each.move === move)
+              : landings.current;
+          landings.current = [...kept, { move, to: askedTo.current, landed }];
           return;
         }
         // Note that a door within `move` that asked already holds this one too, since the page holds one question.
@@ -189,11 +201,13 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
       askedTo.current = next.pathname;
       if (standing.current === undefined || passing.current) return false;
       if (current.pathname === next.pathname) return false;
-      return !sameDraftAt(
+      const held = !sameDraftAt(
         router.matchRoutes(current.pathname),
         router.matchRoutes(next.pathname),
         accessNow.current,
       );
+      if (held) heldMove.current = moves.current;
+      return held;
     },
     [router],
   );

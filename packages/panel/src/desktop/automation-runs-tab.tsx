@@ -94,7 +94,7 @@ export function runsShownChoices(
 }
 
 /** The runs a narrowing keeps, in the order they came. */
-export function shownRuns(
+function shownRuns(
   runs: readonly AutomationWorkspaceRun[],
   shown: RunsShown,
 ): readonly AutomationWorkspaceRun[] {

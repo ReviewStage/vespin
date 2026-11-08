@@ -14,7 +14,7 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
  *
  * Only a panel draws the Pull request tab, so every ask is the panel's
  * alone. A refusal or a defect of the host's is drawn as the coding-agent
- * calls' unanswered failure, as a Generate was before it was declared. The
+ * calls' unanswered failure. The
  * hold and its Try again are a live follow, declared once
  * (`live-follow.ts`): a live read, not a plain act.
  */

@@ -51,11 +51,12 @@ import { agentForkDoors, ForkProvider } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
+import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import type { ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import type { MAIN_TAB, MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
+import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { type AgentTerminalDoors, useAgentActions } from "./agent-actions.js";
@@ -65,7 +66,6 @@ import {
   type AddEntry,
   type DocumentMenu,
   DoorsTab,
-  type HeldTranscripts,
   type ShownTab,
   type TabDoors,
   type TabLook,
@@ -126,9 +126,6 @@ import { WaitingCount } from "./task-row-parts.js";
  * tabs are closed, and those archived, stand behind History at the bar's
  * end (`agent-history.tsx`), which opens them again.
  */
-
-/** The section the task's agents stand under where they are listed among other things, as ⌘K lists them, and the details' way back names. */
-export const AGENTS_SECTION = "Agents";
 
 /** What the row that opens a draft says while a Start is out. */
 const NEW_AGENT_STARTING = "Starting…";
@@ -368,46 +365,6 @@ function agentTabs(input: {
           },
         ];
   return [...own, ...starting, ...drafts];
-}
-
-/**
- * Each of the task's agents in the order started, or of those given (`listed`), as History lists a closed
- * or an archived one (`agent-history.tsx`), the Overview's agents list it, and ⌘K finds it, in its
- * tab's look: its harness's mark wearing where it stands, and, where the
- * row draws one, a failure at its end, as its tab does. Picking an agent
- * whose tab is open chooses that tab rather than opening another, as a
- * browser's tab search does.
- */
-export function agentEntries(
-  main: Pick<MainTabsControl, "tab" | "onChoose">,
-  agents: AgentsControl,
-  held?: HeldTranscripts,
-  listed: readonly AgentSummary[] = agents.agents ?? [],
-): AddEntry[] {
-  return listed.map((agent) => {
-    const label = agentName(agent, agents.models);
-    const chosen = main.tab !== undefined && sameTab(agentTab(agent.id), main.tab);
-    return {
-      row: {
-        id: agent.id,
-        ...tabLook({ kind: TAB_KIND.AGENT, name: label, agent }),
-        section: AGENTS_SECTION,
-        replayMasked: true,
-      },
-      endMark: agentEndMark(agent, true),
-      // Note that a caller handing what its tabs hold gets the card its tab hangs; ⌘K and the summary hang theirs themselves.
-      card:
-        held === undefined ? undefined : (
-          <AgentTabCard
-            name={label}
-            models={agents.models ?? []}
-            read={agentCardReading(agent, label, held, chosen, agents)}
-          />
-        ),
-      onPick: () => main.onChoose(agentTab(agent.id)),
-      agent,
-    };
-  });
 }
 
 /** The task's Inbox as a row, its tray and its name, which picking opens through `onPick`. */

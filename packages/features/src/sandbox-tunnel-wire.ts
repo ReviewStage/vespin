@@ -65,7 +65,7 @@ export const TUNNEL_FRAME = {
 } as const;
 
 /** Why a channel closed, where it was not an ordinary end. */
-export const TUNNEL_CLOSE_REASON = {
+const TUNNEL_CLOSE_REASON = {
   /** Nothing listened on the port the bridge connects to. */
   REFUSED: "refused",
 } as const;

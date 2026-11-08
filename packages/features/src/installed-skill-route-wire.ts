@@ -4,6 +4,7 @@ import {
   installedSkillScopeSchema,
   installedSkillSourceSchema,
 } from "./installed-skill-wire.js";
+import { commitShaSchema } from "./link-grammar.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 import { SKILL_FILE_BOUNDS } from "./skill-file.js";
 
@@ -58,9 +59,6 @@ export const SKILL_PASTE_KIND = {
 const pasteText = EffectSchema.String.check(
   EffectSchema.isMaxLength(INSTALLED_SKILL_PASTE_MAX_CHARS),
 );
-
-/** A full commit sha, which pins a read to the tree a preview answered. */
-const commitShaSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9a-f]{40}$/u));
 
 /** A paste to preview, read in the workspace whose GitHub installation reaches its repository. */
 export const installedSkillPreviewRequestSchema = EffectSchema.Struct({

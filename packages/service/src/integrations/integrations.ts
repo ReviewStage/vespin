@@ -34,7 +34,7 @@ import { Option, Schema } from "effect";
 import { toolResultJson, toolResultTexts } from "./mcp-tools.js";
 
 /** Where a provider's API answers whose account a token is: the address read with the token, and the account's name in its JSON answer. */
-export interface AccountNameApiRead {
+interface AccountNameApiRead {
   readonly URL: string;
   /** The account's name in the provider's answer (an email, a workspace's, a team's), where it holds one. */
   readonly NAME: (answer: unknown) => Option.Option<string>;
@@ -45,7 +45,7 @@ export interface AccountNameApiRead {
  * it lists that only reads, called with the token its tools are, the
  * arguments it is called with, and the account's name in its result.
  */
-export interface AccountNameToolRead {
+interface AccountNameToolRead {
   readonly TOOL: string;
   readonly ARGUMENTS: WireRecord;
   /** The account's name in the tool's result (an organization's, a workspace's, an email), where it holds one. */

@@ -275,7 +275,7 @@ function useChangesMenu({
           disabled: patch === undefined,
           onSelect: () => {
             if (patch !== undefined) {
-              saveText(pullRequestPatchName(pullRequest.url), patch).catch(() => undefined);
+              void saveText(pullRequestPatchName(pullRequest.url), patch);
             }
           },
         },

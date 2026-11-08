@@ -155,7 +155,7 @@ import {
 const SEED_AUTH_SECRET = "demo-seed-better-auth-signs-nothing-with-this";
 
 /** What a step of the seed was refused, where a model answered that it wrote nothing. */
-export class DemoSeedRefused extends Data.TaggedError("DemoSeedRefused")<{
+class DemoSeedRefused extends Data.TaggedError("DemoSeedRefused")<{
   readonly step: string;
 }> {
   override get message(): string {

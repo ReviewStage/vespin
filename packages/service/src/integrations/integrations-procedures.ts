@@ -70,7 +70,7 @@
  * answers none.
  *
  * A provider's route names it as a path segment, read as words so a
- * provider this build has no route for is not found, as it was; every
+ * provider this build has no route for is not found; every
  * procedure resolves its caller before it reads its input, and a rename's
  * body is held to its own cap as it is read (`bodyCap` on its contract). Root AGENTS.md pins that no
  * credential travels in an answer: what each endpoint answers is status

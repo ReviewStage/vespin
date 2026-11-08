@@ -14,7 +14,7 @@ import { Cron, DateTime, Option, Result } from "effect";
  * the window that shows its next run read it the same way.
  */
 
-export const AUTOMATION_SCHEDULE = {
+const AUTOMATION_SCHEDULE = {
   /** The shortest gap a schedule may leave between two firings. */
   MIN_INTERVAL_MS: 15 * 60_000,
   /** How many firings ahead the floor is checked over. */

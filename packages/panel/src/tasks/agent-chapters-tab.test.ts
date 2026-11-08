@@ -63,8 +63,8 @@ import { agentsControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
+import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import type { AgentsControl } from "./use-agents.js";
-import { PULL_REQUEST_VIEW, type PullRequestView } from "./use-side-panel.js";
 
 /**
  * agent-chapters-tab.test.ts -- an agent's Pull request tab offers a

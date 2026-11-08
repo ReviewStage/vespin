@@ -34,7 +34,7 @@ const SNAPSHOT = "pg_current_snapshot()::text";
 export const NO_ROWS_DIGEST = createHash("md5").update("").digest("hex");
 
 /** Why a statement could not be answered: its rows, or their digest, could not be read. */
-export class SealRefused extends Data.TaggedError("SealRefused")<{ readonly reason: string }> {}
+class SealRefused extends Data.TaggedError("SealRefused")<{ readonly reason: string }> {}
 
 /** How a live read's statements are answered, and the address the answer names. */
 export interface LiveSealer {

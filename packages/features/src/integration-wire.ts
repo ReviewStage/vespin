@@ -205,12 +205,11 @@ export function integrationOfHost(host: string): IntegrationProvider | undefined
   );
 }
 
-const PROVIDERS: ReadonlySet<string> = new Set(INTEGRATION_PROVIDER_LIST);
+const isIntegrationProvider = EffectSchema.is(EffectSchema.Literals(INTEGRATION_PROVIDER_LIST));
 
 /** A provider as an address or a query spells it; anything else is no provider. */
 export function integrationProviderFromWire(value: string | null): IntegrationProvider | undefined {
-  // SAFETY: membership in the set built from INTEGRATION_PROVIDER's values is what the union names.
-  return value !== null && PROVIDERS.has(value) ? (value as IntegrationProvider) : undefined;
+  return isIntegrationProvider(value) ? value : undefined;
 }
 
 export const integrationProviderSchema = EffectSchema.Literals(INTEGRATION_PROVIDER_LIST);
@@ -538,8 +537,6 @@ export const integrationConnectAnswerSchema = EffectSchema.Struct({
   txid: writtenTxid,
 });
 
-export type IntegrationConnectAnswer = typeof integrationConnectAnswerSchema.Type;
-
 /** The page the browser lands on once a sign-in settled, and what its address carries. */
 export const INTEGRATION_LANDING = {
   PATH: "/integration-connected",
@@ -564,16 +561,15 @@ export const INTEGRATION_LANDING_STATUS = {
 export type IntegrationLandingStatus =
   (typeof INTEGRATION_LANDING_STATUS)[keyof typeof INTEGRATION_LANDING_STATUS];
 
-const LANDING_STATUSES: ReadonlySet<string> = new Set(Object.values(INTEGRATION_LANDING_STATUS));
+const isIntegrationLandingStatus = EffectSchema.is(
+  EffectSchema.Literals(Object.values(INTEGRATION_LANDING_STATUS)),
+);
 
 /** The landing's status as the address spells it; anything else is no status. */
 export function integrationLandingStatusFromWire(
   value: string | null,
 ): IntegrationLandingStatus | undefined {
-  // SAFETY: membership in the set built from INTEGRATION_LANDING_STATUS's values is what the union names.
-  return value !== null && LANDING_STATUSES.has(value)
-    ? (value as IntegrationLandingStatus)
-    : undefined;
+  return isIntegrationLandingStatus(value) ? value : undefined;
 }
 
 /**

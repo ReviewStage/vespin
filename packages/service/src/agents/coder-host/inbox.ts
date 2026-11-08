@@ -163,14 +163,14 @@ export type AgentAskLine =
       readonly steps?: readonly string[];
     });
 
-/** One message of a thread as the agent reads it back: who wrote it, you or a member by name, its words, its files by name, its ask, and the answer it carries. */
-interface AgentThreadLine {
+/** One message of a thread as an agent reads it back: who wrote it, its words, its files by name, its ask, and the answer it carries. Note that it is a type rather than an interface, because the record a member's thread answers as (`WireRecord`) takes an object type's keys and no interface's. */
+export type AgentThreadLine = {
   readonly from: string;
   readonly text: string;
   readonly files?: readonly string[];
   readonly ask?: AgentAskLine;
   readonly answers?: Omit<InboxAnswers, "ask">;
-}
+};
 
 /** One thread as the agent reads it back: its key, title, its mention, where it stands, and its messages in order. */
 interface AgentInboxLine {
@@ -277,10 +277,10 @@ export function answersLineOf(answers: InboxAnswers): Omit<InboxAnswers, "ask"> 
   return answered;
 }
 
-/** One message of a thread as the agent reads it back, its files by name, since a member's reached it with their message and its own it sent. */
-function threadLineOf(message: InboxMessage): AgentThreadLine {
+/** One message of a thread as an agent reads it back, written `from` whoever its reader names, its files by name, since a member's reached it with their message and its own it sent. */
+export function threadLineOf(message: InboxMessage, from: string): AgentThreadLine {
   return {
-    from: writerOf(message),
+    from,
     text: message.text,
     ...(message.files === undefined
       ? undefined
@@ -349,7 +349,7 @@ function lineOf(item: InboxItem, mention: string | undefined): AgentInboxLine {
     ...(mention === undefined ? undefined : { mention }),
     status: item.status,
     ...(earlier > 0 ? { earlier } : undefined),
-    thread: told.map(threadLineOf),
+    thread: told.map((message) => threadLineOf(message, writerOf(message))),
     ...closerOf(item),
     ...settlementOf(item, messages),
   };

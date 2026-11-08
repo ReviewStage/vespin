@@ -422,7 +422,7 @@ function spelledCall(step: ReplayStep): CallRead {
         : TOOL_STATE.OUTPUT_AVAILABLE,
     input,
     output: running || failed ? undefined : result,
-    errorText: failed ? result?.slice(CALL_PARTS.FAILED.length) : undefined,
+    errorText: failed ? result.slice(CALL_PARTS.FAILED.length) : undefined,
   };
 }
 

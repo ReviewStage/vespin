@@ -7,6 +7,7 @@ import { BROWSER_LIVE_PORT_CHANNEL } from "@repo/features/browser-live-acts";
 import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
 import {
   browserLiveProcedures,
+  clientSettingSideEffects,
   createActPortHandler,
   macShellProcedures,
   type PlatformActProcedures,
@@ -33,7 +34,6 @@ import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
 import { macTerminalProcedures } from "./mac-terminal-acts";
 import { whenPageGone } from "./page-gone";
-import { clientSettingSideEffects } from "./settings-side-effects";
 import { updateProcedures } from "./update-acts";
 import { windowSurfaceProcedures, windowSurfaceReports } from "./window-surface";
 

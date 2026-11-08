@@ -120,10 +120,10 @@ export function CloudBrowserCursor({
   // Mirrored about the tip where its body would reach past the page's edge.
   const flipX = placed.x > frame.width - ARROW_REACH;
   const flipY = placed.y > frame.height - ARROW_REACH;
-  const style = {
+  const style: CSSProperties = {
     "--cloud-browser-cursor-x": `${placed.x}px`,
     "--cloud-browser-cursor-y": `${placed.y}px`,
-  } as CSSProperties;
+  };
   return (
     <div
       className="cloud-browser-cursor ph-no-capture"

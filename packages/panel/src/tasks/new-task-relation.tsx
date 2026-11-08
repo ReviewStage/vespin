@@ -1,3 +1,4 @@
+import { sameRepository } from "@repo/features/github-repositories-wire";
 import {
   TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
@@ -145,12 +146,6 @@ function kindIcon(kind: TaskCreateRelationKind): React.JSX.Element {
     case TASK_CREATE_RELATION_KIND.BLOCKED_BY:
       return <OctagonMinusIcon aria-hidden="true" />;
   }
-}
-
-/** Two repositories as the service compares them: both none, or the same name in any case. */
-function sameRepository(one: string | null, other: string | null): boolean {
-  if (one === null || other === null) return one === other;
-  return one.toLowerCase() === other.toLowerCase();
 }
 
 /** Why `other` cannot take `kind` on a card standing at `place`, none chosen and none held judging no repository; none where it can. */

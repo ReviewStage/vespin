@@ -49,13 +49,14 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { and, count, countDistinct, eq, gte, inArray, notExists, sql } from "drizzle-orm";
-import { alias, type PgColumn } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import { Duration, Effect, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { CODER } from "../agents/coder-host/bounds.js";
 import { agentFailureOf, agentStatusOf } from "../agents/coder-host/status.js";
 import { DAY_MS, TURN_FAILURE, TURN_STATUS } from "../core.js";
 import { isAdminRole } from "./admin-access.js";
+import { utcDay } from "./admin-activity-queries.js";
 import { dayStart, lastNDayKeys } from "./admin-metrics.js";
 import {
   AdminMetricsScopeSchema,
@@ -108,11 +109,6 @@ const probeDatabase = Effect.map(
 /** How long a coding agent's first turn may take to land before the coder host reads it failed. */
 const STARTING_GRACE_MS = Duration.toMillis(CODER.STARTING_GRACE);
 
-/** The UTC day an instant column falls on, as the YYYY-MM-DD key the series is built from. */
-function utcDayOf(column: PgColumn) {
-  return sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD')`;
-}
-
 /** The conversation a child conversation was delegated from, to tell a coding agent's subagent from the app's. */
 const parentConversation = alias(conversations, "parent_conversation");
 
@@ -123,7 +119,7 @@ const WindowScopeSchema = Schema.Struct({
 
 type WindowScope = typeof WindowScopeSchema.Type;
 
-const TURN_DAY = utcDayOf(turns.settledAt);
+const TURN_DAY = utcDay(turns.settledAt);
 
 /**
  * Every ended turn of the window, by its day, its conversation's kind and
@@ -234,7 +230,7 @@ const findTurnlessAgents = SqlSchema.findAll({
     ),
 });
 
-const RUN_DAY = utcDayOf(automationRun.settledAt);
+const RUN_DAY = utcDay(automationRun.settledAt);
 
 const findAutomationOutcomes = SqlSchema.findAll({
   Request: WindowScopeSchema,

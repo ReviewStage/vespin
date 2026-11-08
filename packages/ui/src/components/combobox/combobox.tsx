@@ -448,7 +448,7 @@ export function ComboboxList({
   const bringIn = (index: number) => {
     const run = placed.findLastIndex(({ start }) => start <= index);
     const entry = placed[run];
-    const option = entry?.group.options[index - (entry?.start ?? 0)];
+    const option = entry?.group.options[index - entry.start];
     if (option !== undefined) runOf(run).current?.bringIn(option.id);
   };
 

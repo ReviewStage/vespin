@@ -58,21 +58,3 @@ export function texts(value: unknown, where: string): readonly string[] {
   }
   return [...(value as Iterable<unknown>)].map((item) => text(item, where));
 }
-
-/** What one list names and the other does not, each way, as problem lines. */
-export function setDrift(
-  label: string,
-  found: readonly string[],
-  expected: readonly string[],
-): readonly string[] {
-  const wanted = new Set(expected);
-  const present = new Set(found);
-  return [
-    ...[...present]
-      .filter((name) => !wanted.has(name))
-      .map((name) => `${label}: ${name} is not expected`),
-    ...[...wanted]
-      .filter((name) => !present.has(name))
-      .map((name) => `${label}: ${name} is missing`),
-  ].sort();
-}
