@@ -8,9 +8,12 @@
  * on them: `deleteUser`'s (`account-deletion.ts`) and the organization
  * plugin's `deleteOrganization`'s (`workspace-deletion.ts`), which an
  * account's deletion reaches from inside its own hook. A hook reached with
- * none handed refuses the delete rather than skip what it owes. A step that
- * fails rejects with the same shape an `Effect.tryPromise` would have
- * caught, so Better Auth answers it as the failure it is. What would end
+ * none handed refuses the delete rather than skip what it owes. A before
+ * step that fails rejects with the same shape an `Effect.tryPromise` would
+ * have caught, so Better Auth answers it as the failure it is. An after step
+ * runs once the row is already gone, so whatever escapes it, a defect
+ * included, is logged rather than rejected: a rejection there would answer a
+ * delete that happened as one that failed. What would end
  * this file's row among the permanent adaptors is a Better Auth that takes
  * an Effect hook.
  */
@@ -55,15 +58,24 @@ async function run<A, E>(effect: Effect.Effect<A, E, DeletionServices>): Promise
   return exit.value;
 }
 
+/** An after step, run once Better Auth has deleted the row, whatever escapes it logged. */
+function settled(effect: Effect.Effect<void, unknown, DeletionServices>): Promise<void> {
+  return run(
+    Effect.catchCause(effect, (cause) =>
+      Effect.logError("A deletion's settling failed after its row was deleted", cause),
+    ),
+  );
+}
+
 /** The account's deletion steps as Better Auth's `deleteUser` hooks await them (`auth-policy.ts`'s `accountDeletion`). */
 export const accountDeletionSteps = {
   before: (userId: string) => run(beforeAccountDeletion(userId)),
   after: (userId: string, pending: AccountDeletionPending) =>
-    run(afterAccountDeletion(userId, pending)),
+    settled(afterAccountDeletion(userId, pending)),
 };
 
 /** A workspace's deletion steps as the organization plugin's hooks await them (`auth-policy.ts`'s `workspaceDeletion`). */
 export const workspaceDeletionSteps = {
   before: (organizationId: string) => run(beforeWorkspaceDeletion(organizationId)),
-  after: (pending: WorkspaceDeletionPending) => run(afterWorkspaceDeletion(pending)),
+  after: (pending: WorkspaceDeletionPending) => settled(afterWorkspaceDeletion(pending)),
 };
