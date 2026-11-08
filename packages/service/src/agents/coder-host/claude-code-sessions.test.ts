@@ -1884,6 +1884,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const refusedRunners = api.commands
           .slice(commandsBefore)
           .filter((each) => each.command === "node");
+        assert.ok(refusedRunners.length > 0, "the refused relaunch started a runner");
         assert.ok(refusedRunners.every((each) => each.exitCode !== null));
 
         const next = yield* sentAndDelivered(

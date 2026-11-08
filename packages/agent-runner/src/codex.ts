@@ -1224,7 +1224,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       : restoreRollouts(store.store, store.codexHome, config.threadId)
   ).pipe(
     Effect.as(true),
-    Effect.orElseSucceed(() => false),
+    Effect.catchCause(() => Effect.succeed(false)),
     Effect.forkScoped,
   );
   const opened = yield* openAppServer(

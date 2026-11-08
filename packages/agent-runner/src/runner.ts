@@ -631,6 +631,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     )
     .pipe(Effect.result);
   if (Result.isFailure(started)) {
+    yield* Effect.logWarning(`agent-runner: the CLI could not start: ${started.failure}`);
     return { end: RUNNER_END.FAILED, failure: started.failure } satisfies LaunchOutcome;
   }
   const session = started.success.query(Stream.toAsyncIterable(Stream.fromQueue(prompts)));
