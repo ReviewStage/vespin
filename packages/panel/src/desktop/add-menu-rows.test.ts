@@ -9,7 +9,7 @@ import { NOTHING_HELD } from "../tasks/agent-ref.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
-import { agentEntries } from "./main-tabs.js";
+import { agentEntries } from "./agent-entries.jsx";
 import { type PanelCards, panelEntries } from "./side-panel.js";
 import { type AddEntry, AddTabButton } from "./strip-tabs.js";
 

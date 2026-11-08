@@ -25,7 +25,7 @@ import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import { rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { SUMMARY_GLYPH } from "./agent-archive.js";
-import { agentEntries } from "./main-tabs.js";
+import { agentEntries } from "./agent-entries.jsx";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 
 /**

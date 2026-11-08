@@ -100,10 +100,10 @@ import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { ArchivedAgents } from "./agent-archive.js";
+import { AGENTS_SECTION } from "./agent-entries.jsx";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
 import { DesktopHome } from "./desktop-home.js";
 import {
-  AGENTS_SECTION,
   AgentPane,
   DETAILS_WORDS,
   MainTabBars,
