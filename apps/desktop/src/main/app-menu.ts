@@ -40,7 +40,7 @@ import {
   shortcutWorkspaceExperiment,
 } from "@repo/settings/shortcuts";
 import { UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
-import { type BaseWindow, BrowserWindow, type MenuItemConstructorOptions } from "electron";
+import type { BaseWindow, BrowserWindow, MenuItemConstructorOptions } from "electron";
 import { windowPushes } from "./window/window-pushes";
 
 const SEPARATOR: MenuItemConstructorOptions = { type: "separator" };
@@ -133,6 +133,16 @@ function menuTitle(label: string): string {
 /** The command each item that only hands one to the window hands, by its click, so the gate can dim an item whose command nothing offers. */
 const HANDED = new WeakMap<NonNullable<MenuItemConstructorOptions["click"]>, AppCommand>();
 
+/**
+ * Whether the window chosen over is a browser window, the one kind with a
+ * page. Note that we ask for its `webContents` rather than `instanceof
+ * BrowserWindow`, because a value import of `electron` outside Electron
+ * resolves its binary's path, which downloads the binary where it is missing.
+ */
+function isBrowserWindow(window: BaseWindow | undefined): window is BrowserWindow {
+  return window !== undefined && "webContents" in window;
+}
+
 /** Hands a chosen item's command to the window it was chosen over. */
 function sendCommand(command: AppCommand): NonNullable<MenuItemConstructorOptions["click"]> {
   const hand: NonNullable<MenuItemConstructorOptions["click"]> = (
@@ -147,7 +157,7 @@ function sendCommand(command: AppCommand): NonNullable<MenuItemConstructorOption
     if (event.triggeredByAccelerator) return;
     // The window arrives as the base type, and only a browser window has a
     // page to hand the command to.
-    if (window instanceof BrowserWindow) {
+    if (isBrowserWindow(window)) {
       windowPushes.push(window.webContents, PUSH.MENU_COMMAND, command);
     }
   };
