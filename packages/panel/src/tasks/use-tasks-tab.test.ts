@@ -3288,27 +3288,6 @@ test("the repository chip's list for a workspace with GitHub connected is its re
   );
 });
 
-test("New workspace's cards opened before a sign-out stay put away when the account signs in again", () => {
-  const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-
-  act(() => tab.control().newWorkspace.onOpen());
-  const opened = tab.control().newWorkspace.open;
-  tab.stand({ signedIn: false });
-  tab.stand({ signedIn: true });
-
-  assert.equal(opened, true);
-  assert.equal(tab.control().newWorkspace.open, false);
-});
-
-test("Workspace settings opens Settings on the listed workspace's page", () => {
-  const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-
-  act(() => tab.control().onChooseWorkspace(ACME.id));
-  act(() => tab.control().onOpenWorkspaceSettings());
-
-  assert.deepEqual(tab.links, [{ page: SETTINGS_VIEW.WORKSPACE, workspaceId: ACME.id }]);
-});
-
 test("Connect GitHub under a plan opens Settings on the plan's workspace's GitHub, read off the open document where the list did not land", async () => {
   const tab = mount({
     shown: true,
@@ -3585,7 +3564,6 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
         ? undefined
         : { taskId: control.sectionReveal.taskId, anchor: control.sectionReveal.reveal.anchor },
     pin: control.chosenPin,
-    founding: control.newWorkspace.open,
   };
 }
 
@@ -3778,7 +3756,6 @@ const WORKSPACE_DOORS: [
     FROM_BOARD,
     false,
   ],
-  ["New workspace", (control) => control.newWorkspace.onOpen(), undefined],
 ];
 
 test.each(WORKSPACE_DOORS)(

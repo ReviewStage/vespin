@@ -18,7 +18,7 @@ import { useWelcomed } from "../desktop/desktop-welcome.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
 import { AgentConnectSection } from "../settings/agent-auth-section.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
+import { appStateQuery, selectAppSettingsView, selectWorkspacesFailed } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
 import { SETUP_GATE, SETUP_STEP, type SetupGate, setupGate, setupSteps } from "./setup-model.js";
@@ -58,9 +58,9 @@ const SETUP_START: SetupPlace = { audience: SETUP_AUDIENCE.ME, at: 0 };
 const INVITED_START: SetupPlace = { audience: SETUP_AUDIENCE.INVITED, at: 0 };
 
 /** Whether the account belongs to a team's workspace; nothing before its workspaces are read, and none where that read failed. */
-function invitedOf(tasks: TasksControl): boolean | undefined {
+function invitedOf(tasks: TasksControl, workspacesFailed: boolean): boolean | undefined {
   const { workspaces } = tasks.newTask;
-  if (workspaces.length === 0) return tasks.workspacesFailed ? false : undefined;
+  if (workspaces.length === 0) return workspacesFailed ? false : undefined;
   return workspaces.some((workspace) => workspace.personal !== true);
 }
 
@@ -78,6 +78,8 @@ export function useSetupGate(
   const [finishedOnDevice] = useKept(SETUP_FINISHED, []);
   const [startedHere, setStartedHere] = useState<string>();
   const settings = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data;
+  const workspacesFailed =
+    useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;
   const finishedOnAccount = settings?.setupFinished === true;
   // Note that this device's own record stands beside the account's, because the account's arrives only once its preferences are read, and a device clears them at every sign-out.
   const finished =
@@ -103,7 +105,7 @@ export function useSetupGate(
     started:
       accountId !== undefined &&
       (startedHere === accountId || setupPlaceFrom(settings?.setupPlace) !== undefined),
-    invited: invitedOf(tasks),
+    invited: invitedOf(tasks, workspacesFailed),
     agent,
   });
   // Setup once standing in this window stays until finished, whatever it connects meanwhile, though the account keeps its place only from its first move.
@@ -146,8 +148,10 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const [, , keepFinished] = useKept(SETUP_FINISHED, []);
   const stored = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.setupPlace;
   const kept = setupPlaceFrom(stored);
+  const workspacesFailed =
+    useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;
   // Note that where setup starts is decided as it first stands, so a team's workspace made midway keeps the steps it was making.
-  const start = invitedOf(tasks) === true ? INVITED_START : SETUP_START;
+  const start = invitedOf(tasks, workspacesFailed) === true ? INVITED_START : SETUP_START;
   const place = kept ?? start;
   const { audience, team } = place;
   const personal = tasks.newTask.workspaces.find((workspace) => workspace.personal === true)?.id;

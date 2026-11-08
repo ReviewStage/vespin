@@ -576,25 +576,12 @@ export interface TasksControl {
   };
   /** The workspaces the account is a member of, its first one first; none before the first read lands. */
   workspaces: readonly Workspace[];
-  /** Whether the last read of the workspaces did not land, those held still drawn. */
-  workspacesFailed: boolean;
-  /** Reads the workspaces again after a read that did not land. */
-  onRetryWorkspaces: () => void;
   /** The workspace the sidebar lists and New task starts in; absent while none is listed, when every task is listed. */
   workspace: Workspace | undefined;
   /** Lists another of the account's workspaces, and starts the next new task in it. */
   onChooseWorkspace: (workspaceId: string) => void;
   /** Lists the account's own workspace, else the first other, once one is left, and turns to the home page. */
   onLeftWorkspace: (workspaceId: string) => void;
-  /**
-   * New workspace's cards, standing alone in the window in the app's place
-   * while open (`new-workspace-steps.tsx`): opened from the switcher or a
-   * phone's account menu, and put away by their own Cancel or Close. Open
-   * only for the account that opened them, so a sign-out puts them away.
-   */
-  newWorkspace: { open: boolean; onOpen: () => void; onClose: () => void };
-  /** Opens Settings on its Workspace page, showing the listed workspace. */
-  onOpenWorkspaceSettings: () => void;
   activeTaskId: string | undefined;
   /**
    * The task the tab is on its way to: the one a press asked the host for,
@@ -1738,14 +1725,6 @@ export function useTasksTab(input: {
     [inboxWaiting, inboxTasks, tasks.tasks, listedWorkspaceId],
   );
   const signedIn = fixture !== undefined || input.signedIn;
-  // The account New workspace's cards were opened for, which alone they stand for.
-  const [founding, setFounding] = useState<{ accountId: string | undefined } | undefined>(
-    undefined,
-  );
-  // A sign-out, or another account, puts the cards away for good, so the same account signing in again does not find them open.
-  if (founding !== undefined && (!signedIn || founding.accountId !== input.accountId)) {
-    setFounding(undefined);
-  }
   const page = tasksPage(tasks);
   // The open task's description is held whenever a task is open, so a task held lately draws its description in
   // its first frame, and one never held reads; a name being typed draws over it as over the list.
@@ -4476,23 +4455,8 @@ export function useTasksTab(input: {
     listedAgents,
     pendingTasks,
     workspaces: viewed.workspaces,
-    workspacesFailed: viewed.workspacesStatus === TASKS_READ.FAILED,
-    // A failed read is taken as stale, so the refresh reads the workspaces again at once.
-    onRetryWorkspaces: () => refreshTasks(),
     workspace: listedWorkspace,
     onChooseWorkspace: chooseWorkspace,
-    newWorkspace: {
-      open: signedIn && founding !== undefined && founding.accountId === input.accountId,
-      // Note that the cards take the window in the page's place with no address of their own, so a page holding unsaved
-      // work asks first inside `arrive`, as leaving it does, and they open once Leave is pressed.
-      onOpen: () => placeLeave.arrive(NOTHING, () => setFounding({ accountId: input.accountId })),
-      onClose: () => setFounding(undefined),
-    },
-    onOpenWorkspaceSettings: () =>
-      input.onOpenSettings({
-        page: SETTINGS_VIEW.WORKSPACE,
-        ...(listedWorkspace === undefined ? undefined : { workspaceId: listedWorkspace.id }),
-      }),
     // A workspace left lands the window on the account's own workspace's
     // Home, since nothing of the one left is the reader's to show any more.
     // Note that it lists the workspace rather than switching to it, because a

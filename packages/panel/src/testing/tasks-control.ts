@@ -475,13 +475,9 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     },
     listedAgents: { standing: [], archived: [] },
     workspaces: [],
-    workspacesFailed: false,
-    onRetryWorkspaces: ignore,
     workspace: undefined,
     onChooseWorkspace: ignore,
     onLeftWorkspace: ignore,
-    newWorkspace: { open: false, onOpen: ignore, onClose: ignore },
-    onOpenWorkspaceSettings: ignore,
     onOpenWorkspaceGitHub: ignore,
     onMoveTask,
     // A question's move and delete are the same move and delete, as the test answers them.

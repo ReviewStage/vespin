@@ -95,6 +95,7 @@ import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
 import { useFloatDismiss } from "./hover-pane.js";
 import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
+import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
 import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
 import { PersonPageSkeleton } from "./person-frame.js";
@@ -806,7 +807,8 @@ export function DesktopShell({
   // The box the side panel's toggle stands in, which the panel's "+" menu hangs from where the toggle asks for it with nothing to show.
   const setToggleRoom = usePanelToggleRoom();
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
-  const founding = !gated && tasks.newWorkspace.open;
+  const newWorkspace = useNewWorkspace(tasks.placeLeave);
+  const founding = !gated && newWorkspace.open;
   usePlaceCommands(
     !gated && setup === SETUP_GATE.NONE && !founding,
     tab,
@@ -954,7 +956,7 @@ export function DesktopShell({
       <ScrollArea>
         <div className="desktop-onboarding relative">
           <div className="desktop-drag-strip absolute inset-x-0 top-0" />
-          <NewWorkspaceSteps tasks={tasks} onClose={tasks.newWorkspace.onClose} />
+          <NewWorkspaceSteps tasks={tasks} onClose={newWorkspace.onClose} />
         </div>
       </ScrollArea>
     );
@@ -987,9 +989,11 @@ export function DesktopShell({
     focusHolder,
   };
   return (
-    <ShellPlacesContext value={places}>
-      <Outlet />
-    </ShellPlacesContext>
+    <NewWorkspaceOpener value={newWorkspace.onOpen}>
+      <ShellPlacesContext value={places}>
+        <Outlet />
+      </ShellPlacesContext>
+    </NewWorkspaceOpener>
   );
 }
 

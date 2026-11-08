@@ -1,6 +1,6 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import {
   type AppStateDelivery,
   type AppStateSnapshot,
@@ -301,6 +301,10 @@ export const selectListedTasks = (state: AppStateSnapshot): TasksView =>
 /** Whether a fixture run's synthetic tasks stand in for the account's, so its writes go nowhere. */
 export const selectFixtureStaged = (state: AppStateSnapshot): boolean =>
   loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
+
+/** Whether the last read of the workspaces the window lists did not land, those held still drawn. */
+export const selectWorkspacesFailed = (state: AppStateSnapshot): boolean =>
+  selectListedTasks(state).workspacesStatus === TASKS_READ.FAILED;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;

@@ -133,6 +133,7 @@ import { useWindowFullScreen } from "./window-full-screen.js";
 import { useWindowZoom } from "./window-zoom.js";
 import { useExperimentsIn } from "./workspace-experiments.js";
 import { useHomeRoute, useRoutedViews, useUnknownWorkspaceRoute } from "./workspace-routes.js";
+import { useWorkspacesRead } from "./workspaces-read.js";
 
 /** No agent ended unseen, as the document reads before main has answered. */
 const NO_UNSEEN_AGENTS: readonly string[] = [];
@@ -757,6 +758,7 @@ function AppWindow(): React.JSX.Element {
     tasks.onLeftWorkspace(workspaceId);
     changeTab(PANEL_TAB.TASKS);
   });
+  const workspacesRead = useWorkspacesRead();
   // The Workspace page shows the workspace the sidebar lists, or one a link named.
   const workspace = useMemo(
     () => ({
@@ -765,15 +767,15 @@ function AppWindow(): React.JSX.Element {
       // A leave closes Settings onto the Tasks tab, whose Home the tab turns to.
       onLeft: leftWorkspace,
       // Note that the workspaces are followed apart from the tasks, so a task list that read says nothing of them.
-      listFailed: tasks.workspacesFailed,
-      onRetryList: tasks.onRetryWorkspaces,
+      listFailed: workspacesRead.failed,
+      onRetryList: workspacesRead.onRetry,
     }),
     [
       tasks.workspaces,
       settingsPlace.workspaceId,
       leftWorkspace,
-      tasks.workspacesFailed,
-      tasks.onRetryWorkspaces,
+      workspacesRead.failed,
+      workspacesRead.onRetry,
     ],
   );
   // What Settings and ⌘K answer through; the settings themselves they read where they draw them.
