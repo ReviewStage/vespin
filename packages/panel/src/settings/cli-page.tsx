@@ -17,10 +17,8 @@ import {
   COPY_FIELD_WIDTH,
   ConfirmDialog,
   CopyField,
-  ErrorState,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
-  SettingsLine,
   SettingsRow,
   SettingsRowStateLine,
   SettingsSection,
@@ -37,9 +35,10 @@ import { useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { confirmFailure, refusedShown, unreadShown } from "../failure-report.js";
+import { confirmFailure, refusedShown } from "../failure-report.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { appStateQuery, selectAccount, selectCapability } from "../use-app-state.js";
+import { ReadFailed } from "./marks.js";
 
 /**
  * cli-page.tsx -- Settings › CLI, the page named for our command: the `vespin` command's install, to copy and, in the desktop app, run here as VS Code installs `code`, and its sign-in, with Sign out everywhere once it holds one.
@@ -311,14 +310,11 @@ export function CliPage(): React.JSX.Element {
       <>
         <InstallSection installs={installs} />
         <SettingsSection title={SECTION_TITLE.SIGN_IN} anchor={SETTINGS_SEARCH_ROW.CLI_SIGN_IN}>
-          <SettingsLine>
-            <ErrorState
-              failure={unreadShown(FAILURE_SURFACE.MCP_CLIENTS_READ)}
-              onRetry={() => retry.mutate()}
-            >
-              {PAGE_LINE.READ_FAILED}
-            </ErrorState>
-          </SettingsLine>
+          <ReadFailed
+            line={PAGE_LINE.READ_FAILED}
+            surface={FAILURE_SURFACE.MCP_CLIENTS_READ}
+            onRetry={() => retry.mutate()}
+          />
         </SettingsSection>
       </>
     ) : (
