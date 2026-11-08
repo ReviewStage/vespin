@@ -31,6 +31,7 @@ import {
   ConfirmDialog,
   cn,
   type DialogQuestion,
+  dropBelowStart,
   ErrorState,
   FailureNote,
   IconButton,
@@ -435,7 +436,8 @@ const CLOSED_TOAST = {
  * as one of the controls beside it in the title's row (Preview, the merge
  * press), its tone said by the mark alone; a merged one is a static chip of
  * that height, with no edge, as a status beside them is, so no state
- * changes the row's height or baseline.
+ * changes the row's height or baseline. Its menu hangs from its start, since
+ * it leads the row.
  */
 export function PullRequestStateMenu({
   pullRequest,
@@ -541,7 +543,7 @@ export function PullRequestStateMenu({
         aria-label={label}
         aria-busy={writes.pending !== undefined}
         disabled={writes.pending !== undefined}
-        {...menu.trigger()}
+        {...menu.trigger(dropBelowStart)}
       >
         {mark}
         <ChipName>{shownWords}</ChipName>

@@ -47,7 +47,6 @@ import {
   AVATAR_SIZE,
   Avatar,
   BUTTON_VARIANT,
-  Button,
   ButtonLink,
   CHIP_LOOK,
   CHOICE_BAR_FOLD,
@@ -206,7 +205,7 @@ import {
 import { DiffListTopRoomContext } from "./diff-list.js";
 import { PierreDiff, useDiffLook } from "./file-diff.js";
 import type { TreeShown } from "./file-view.js";
-import { MergeControl } from "./merge-box.js";
+import { MergeControl, MergeStatus } from "./merge-box.js";
 import {
   PENDING_WORDS,
   type PendingActs,
@@ -2079,7 +2078,8 @@ function useViewActions(): {
 /**
  * The header's Preview, as stage-cli's header offers a pull request's
  * previews: one deployment serving an address opens at a press, and several
- * drop a menu naming each environment. Nothing stands until the checks land
+ * drop a menu naming each environment, from an outline chip ending in the
+ * menu's chevron, as every press in the header that drops a menu does. Nothing stands until the checks land
  * or where nothing serves an address, so a head still deploying offers no
  * door that leads nowhere.
  */
@@ -2117,15 +2117,16 @@ function PreviewControl({
   }));
   return (
     <span className="flex">
-      <Button
-        variant={BUTTON_VARIANT.OUTLINE}
-        icon={<ScanSearchIcon />}
-        label={PULL_REQUEST_WORDS.PREVIEWS}
-        trailing={formatCount(serving.length)}
+      <Chip
+        look={CHIP_LOOK.OUTLINE}
+        chevron
+        aria-label={PULL_REQUEST_WORDS.PREVIEWS}
         {...menu.trigger()}
       >
-        {PULL_REQUEST_WORDS.PREVIEW}
-      </Button>
+        <ScanSearchIcon aria-hidden="true" />
+        <ChipName>{PULL_REQUEST_WORDS.PREVIEW}</ChipName>
+        <ChipCount>{formatCount(serving.length)}</ChipCount>
+      </Chip>
       {menu.drawn === undefined ? null : (
         <ActionMenu
           label={PULL_REQUEST_WORDS.PREVIEWS}
@@ -3586,6 +3587,7 @@ function PullRequestTabBody({
                       </div>
                     )}
                     <div className="pull-request-title-actions">
+                      {overview === undefined ? null : <MergeStatus pullRequest={overview} />}
                       {phone ? null : (
                         <PreviewControl checks={landed(parts.checks)} shown={shown} />
                       )}

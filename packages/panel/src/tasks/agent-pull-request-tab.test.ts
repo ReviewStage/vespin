@@ -719,6 +719,11 @@ function mergeControl(tab: HTMLElement): HTMLElement | null {
   return tab.querySelector<HTMLElement>(".pull-request-title-row .merge-control");
 }
 
+/** Where the merge stands, leading the title row's controls, where it says anything. */
+function mergeStatus(tab: HTMLElement): HTMLElement | null {
+  return tab.querySelector<HTMLElement>(".pull-request-title-row .merge-chip");
+}
+
 /** What the toolbar's ⋯ offers for the tab, each item's words and whether it applies now. */
 function toolbarItems(tab: HTMLElement): string[] {
   return [...tab.querySelectorAll<HTMLButtonElement>("[data-toolbar] button")].map(
@@ -764,10 +769,10 @@ test("the tab draws the pull request as a page: its standing and branches, wheth
     ),
   );
   assert.equal(tab.querySelector(".pull-request-title")?.textContent, "Expire invitations #42");
-  const merge = mergeControl(tab) ?? assert.fail("an open pull request has a merge control");
-  assert.equal(merge.querySelector(".merge-chip .ui-chip")?.textContent, "Conflicts");
+  const merge = mergeStatus(tab) ?? assert.fail("an open pull request says where its merge stands");
+  assert.equal(merge.querySelector(".ui-chip")?.textContent, "Conflicts");
   assert.equal(
-    merge.querySelector(".merge-chip .ui-visually-hidden")?.textContent,
+    merge.querySelector(".ui-visually-hidden")?.textContent,
     ": Conflicts with main",
     "an open pull request says whether it would merge",
   );
@@ -2836,17 +2841,18 @@ function mergePresses(tab: HTMLElement): HTMLButtonElement[] {
 
 /** What the merge control shows: its chip's word, tone, and GitHub's sentence for a reader; its press, the press's look, and whether a chevron chooses the method. None where it shows nothing. */
 function mergeShown(tab: HTMLElement) {
-  const control = mergeControl(tab);
-  if (control === null) return undefined;
-  const badge = control.querySelector(".merge-chip .ui-chip");
+  const status = mergeStatus(tab);
+  if (mergeControl(tab) === null && status === null) return undefined;
+  const badge = status?.querySelector(".ui-chip");
   const [press] = mergePresses(tab);
   return {
     chip: badge?.textContent,
     tone: badge?.getAttribute("data-tone"),
-    sentence: control.querySelector(".merge-chip .ui-visually-hidden")?.textContent?.slice(2),
+    sentence: status?.querySelector(".ui-visually-hidden")?.textContent?.slice(2),
     press: press?.textContent,
     look: press?.getAttribute("data-variant"),
-    chevron: control.querySelector('[aria-label="Choose how to merge"]') !== null,
+    chevron:
+      (mergeControl(tab)?.querySelector('[aria-label="Choose how to merge"]') ?? null) !== null,
   };
 }
 
@@ -4482,11 +4488,7 @@ test("an open pull request GitHub holds in its merge queue says Queued and its p
     "queued",
   );
   assert.deepEqual(offered(tab), ["Close pull request"]);
-  assert.equal(
-    mergeControl(tab)?.querySelector(".merge-chip") === null,
-    true,
-    "no chip says it again",
-  );
+  assert.equal(mergeStatus(tab) === null, true, "no chip says it again");
   assert.deepEqual(
     mergePresses(tab).map((each) => each.textContent),
     ["Remove from queue"],
