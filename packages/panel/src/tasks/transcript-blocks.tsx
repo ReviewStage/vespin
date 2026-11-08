@@ -67,7 +67,13 @@ import {
   useDisclosureState,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
-import { githubShapes, INLINE_PICTURE, inlinePictures, wholeRendering } from "@repo/ui/github-html";
+import {
+  githubShapes,
+  INLINE_PICTURE,
+  inlinePictures,
+  pictureFor,
+  wholeRendering,
+} from "@repo/ui/github-html";
 import {
   AppWindowIcon,
   ArchiveIcon,
@@ -162,6 +168,7 @@ import {
   ToolSummary,
   ToolTerminal,
 } from "../ai-elements/tool.js";
+import { useDrawnDark } from "../drawn-dark.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -732,7 +739,11 @@ export type GitHubPictureDrawer = (
 /** Whether what is drawn stands inside a link of GitHub's words. */
 const InsideGitHubLink = createContext(false);
 
-/** A picture of GitHub's words, drawn by its place, or as its link where the place draws none. */
+/**
+ * A picture of GitHub's words, drawn by its place, or as its link where the
+ * place draws none; nothing where it is the other theme's alone
+ * (`pictureFor`), as GitHub hides one.
+ */
 function GitHubImage({
   src,
   alt,
@@ -745,7 +756,9 @@ function GitHubImage({
   picture: GitHubPictureDrawer;
 }): ReactNode {
   const linked = useContext(InsideGitHubLink);
-  return picture(src, alt, inWords || linked) ?? <GitHubPictureLink src={src} alt={alt} />;
+  const shown = pictureFor(src, useDrawnDark());
+  if (shown === undefined) return null;
+  return picture(shown, alt, inWords || linked) ?? <GitHubPictureLink src={shown} alt={alt} />;
 }
 
 /** A picture GitHub's rendering names that its place draws none of: a link to where it points, as a transcript's picture is. */

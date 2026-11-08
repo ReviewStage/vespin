@@ -13,10 +13,11 @@ import {
  * whole, and what GitHub dresses its way is reshaped into what the window
  * draws its own: a highlighted block into a fenced one in its language, and
  * a diagram into a fenced mermaid block of its source, a themed picture
- * into its `<img>` alone, and a picture GitHub links to itself into the
- * picture alone; and a picture sharing its line with words is marked to
+ * into an `<img>` for each theme, and a picture GitHub links to itself into
+ * the picture alone; and a picture sharing its line with words is marked to
  * stand in it. The trees are as the parse leaves them. And a place that
- * opens the rendering's pictures itself reads those no other link takes.
+ * opens the rendering's pictures itself reads those no other link takes, in
+ * the theme it is drawn in.
  */
 
 /** A node of the parsed tree, as the step reads it. */
@@ -78,8 +79,8 @@ test("a diagram becomes a fenced mermaid block of its source", () => {
   ]);
 });
 
-test("a themed picture keeps its image alone, so no source names an address the window would read itself", () => {
-  const badge = element("img", { src: "https://camo.githubusercontent.com/light", alt: "Review" });
+test("a themed picture becomes an image for each theme, each marked as its theme's alone, so no source names an address the window would read itself", () => {
+  const badge = (src: string) => element("img", { src, alt: "Review" });
   const picture = element("picture", {}, [
     element("source", {
       media: "(prefers-color-scheme: dark)",
@@ -89,10 +90,15 @@ test("a themed picture keeps its image alone, so no source names an address the 
       media: "(prefers-color-scheme: light)",
       srcSet: ["https://camo.githubusercontent.com/light"],
     }),
-    badge,
+    badge("https://camo.githubusercontent.com/light"),
   ]);
   assert.deepEqual(shaped(element("a", { href: "https://example.com/review" }, [picture])), [
-    element("a", { href: "https://example.com/review" }, [element("picture", {}, [badge])]),
+    element("a", { href: "https://example.com/review" }, [
+      element("picture", {}, [
+        badge("https://camo.githubusercontent.com/light#gh-light-mode-only"),
+        badge("https://camo.githubusercontent.com/dark#gh-dark-mode-only"),
+      ]),
+    ]),
   ]);
 });
 
@@ -185,7 +191,7 @@ test("the pictures a place opens are each one in no link, and each one alone in 
     `<p><a href="${upload}" target="_blank"> <img src="https://private-user-images.githubusercontent.com/signed" alt="shot" style="max-width: 100%;"> </a></p>`,
     '<p><a href="https://example.com/ci"><img src="https://camo.githubusercontent.com/badge" alt="CI"></a></p>',
   ].join("\n");
-  assert.deepEqual(renderingPictures(html), [
+  assert.deepEqual(renderingPictures(html, false), [
     {
       src: "https://camo.githubusercontent.com/plain",
       original: "https://camo.githubusercontent.com/plain",
@@ -196,5 +202,24 @@ test("the pictures a place opens are each one in no link, and each one alone in 
       original: upload,
       alt: "shot",
     },
+  ]);
+});
+
+test("the pictures a place opens are those of the theme it is drawn in, a themed picture's source for that theme and a picture marked as the other theme's left out", () => {
+  const html = [
+    "<p><picture>",
+    '<source media="(prefers-color-scheme: dark)" srcset="https://camo.githubusercontent.com/dark 2x">',
+    '<img src="https://camo.githubusercontent.com/light" alt="chart">',
+    "</picture></p>",
+    '<p><img src="https://github.com/user-attachments/assets/0b6f3a9c-1d2e-4f5a-8b7c-9d0e1f2a3b4c#gh-light-mode-only" alt="light logo"></p>',
+  ].join("");
+  const opened = (dark: boolean) => renderingPictures(html, dark).map(({ src, alt }) => [src, alt]);
+  assert.deepEqual(opened(true), [["https://camo.githubusercontent.com/dark", "chart"]]);
+  assert.deepEqual(opened(false), [
+    ["https://camo.githubusercontent.com/light", "chart"],
+    [
+      "https://github.com/user-attachments/assets/0b6f3a9c-1d2e-4f5a-8b7c-9d0e1f2a3b4c",
+      "light logo",
+    ],
   ]);
 });

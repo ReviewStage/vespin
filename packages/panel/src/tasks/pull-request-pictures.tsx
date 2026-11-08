@@ -8,6 +8,7 @@ import { PICTURE_STATE, type PictureRead, usePicture } from "@repo/ui/picture-re
 import { useQueries } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { askAct } from "../act.js";
+import { useDrawnDark } from "../drawn-dark.js";
 import { pictureUnread } from "../failure-report.js";
 import { PictureBlock } from "../picture-block.js";
 import { type PictureReader, pictureQuery } from "../picture-query.js";
@@ -62,15 +63,15 @@ export function useGitHubImageRead(): PictureReader {
 
 /**
  * The pictures GitHub's rendering names that the tab reads and draws with
- * a press of their own, in the order they stand, each once, beside the
- * address GitHub linked each to, which Open on GitHub opens: a lasting
+ * a press of their own in the theme given, in the order they stand, each
+ * once, beside the address GitHub linked each to, which Open on GitHub opens: a lasting
  * upload's page where the picture is drawn from a signed address that
  * expires. A picture inside a link the words keep is the link's
  * (`renderingPictures`).
  */
-function picturesOf(html: string): readonly RenderingPicture[] {
+function picturesOf(html: string, dark: boolean): readonly RenderingPicture[] {
   const seen = new Set<string>();
-  return renderingPictures(html).filter(({ src }) => {
+  return renderingPictures(html, dark).filter(({ src }) => {
     if (seen.has(src) || githubImageOf(src) === undefined) return false;
     seen.add(src);
     return true;
@@ -159,7 +160,8 @@ export function EntryPictures({
   html: string;
   children: ReactNode;
 }): React.JSX.Element {
-  const pictures = useMemo(() => picturesOf(html), [html]);
+  const dark = useDrawnDark();
+  const pictures = useMemo(() => picturesOf(html, dark), [html, dark]);
   const [viewing, setViewing] = useState<{ readonly agentId: string; readonly src: string }>();
   const door = useMemo<EntryViewerDoor>(
     () => ({ open: (agentId, src) => setViewing({ agentId, src }) }),

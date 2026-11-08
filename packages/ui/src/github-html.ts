@@ -17,12 +17,16 @@
  * GitHub writes as a table of rows its own stylesheet tints, becomes a
  * fenced block of its lines (`SUGGESTED_CHANGE_LANGUAGE`), each removed one
  * marked `-` and each added one `+`, which the window tints itself, so none
- * of GitHub's classes need reach the sanitizer. It also drops every `<source>`, the themed
- * pictures a bot's badge is written as (`<picture>` with a dark and a light
- * `<source srcset>`) among them, because a browser draws a matching source
- * in place of its `<img>`: the window would ask GitHub's image proxy itself,
- * which its policy refuses, rather than draw the `<img>` the place reads
- * through the service, and the picture would stand broken. And it lets go
+ * of GitHub's classes need reach the sanitizer. It also drops every `<source>`,
+ * because a browser draws a matching source in place of its `<img>`: the
+ * window would ask GitHub's image proxy itself, which its policy refuses,
+ * rather than draw the `<img>` the place reads through the service, and the
+ * picture would stand broken. A themed picture, as a bot's badge is written
+ * (`<picture>` with a dark and a light `<source srcset>`), becomes an `<img>`
+ * for each theme instead, its address marked with the fragment GitHub marks
+ * a picture of one theme alone with (`#gh-dark-mode-only`), so the place
+ * draws the one its theme matches (`pictureFor`), as it does a picture its
+ * author marked so. And it lets go
  * of the link GitHub wraps every picture in, where it leads to the picture
  * itself or to another of GitHub's own image addresses, so the picture is
  * the place's to open (the Pull request tab's viewer) rather than a link out
@@ -91,6 +95,78 @@ function fenced(language: string, code: string): HtmlNode {
       },
     ],
   };
+}
+
+/** The fragment GitHub marks a picture drawn in one theme alone with, at the end of its address. */
+const THEME_ONLY = {
+  DARK: "#gh-dark-mode-only",
+  LIGHT: "#gh-light-mode-only",
+} as const;
+
+/** The theme a themed picture's `<source>` names in its media: `(prefers-color-scheme: dark)`. */
+const SOURCE_THEME = /prefers-color-scheme:\s*(dark|light)/u;
+
+/** Whether a node is an element of the tag named. */
+function isTag(node: HtmlNode, tagName: string): boolean {
+  return node.type === "element" && node.tagName === tagName;
+}
+
+/** The address a themed picture's `<source>` names for the theme given, its first candidate's; none where none does. */
+function sourceFor(sources: readonly HtmlNode[], theme: string): string | undefined {
+  const source = sources.find(
+    (each) => SOURCE_THEME.exec(String(each.properties?.media ?? ""))?.[1] === theme,
+  );
+  const set = source?.properties?.srcSet;
+  const first = Array.isArray(set) ? set[0] : set;
+  const address =
+    String(first ?? "")
+      .trim()
+      .split(/\s+/u)[0] ?? "";
+  return address === "" ? undefined : address;
+}
+
+/** A picture's `<img>` drawn from `address` alone in the theme `mark` names. */
+function themeOnly(image: HtmlNode, address: string, mark: string): HtmlNode {
+  const bare = address.split("#")[0] ?? address;
+  return { ...image, properties: { ...image.properties, src: `${bare}${mark}` } };
+}
+
+/**
+ * A `<picture>`'s children with no `<source>`: its `<img>` alone, or, where
+ * its sources name another address for a theme than the `<img>` does, an
+ * `<img>` for each theme, the light first, each marked as that theme's
+ * alone. A theme no source names draws the `<img>`'s own address, as a
+ * browser does.
+ */
+function themedImages(picture: HtmlNode): HtmlNode[] {
+  const children = picture.children ?? [];
+  const sources = children.filter((child) => isTag(child, "source"));
+  const kept = children.filter((child) => !isTag(child, "source"));
+  const image = kept.find((child) => isTag(child, "img"));
+  if (image === undefined) return kept;
+  const own = String(image.properties?.src ?? "");
+  const light = sourceFor(sources, "light") ?? own;
+  const dark = sourceFor(sources, "dark") ?? own;
+  if (light === dark) return kept;
+  return kept.flatMap((child) =>
+    child === image
+      ? [themeOnly(image, light, THEME_ONLY.LIGHT), themeOnly(image, dark, THEME_ONLY.DARK)]
+      : [child],
+  );
+}
+
+/**
+ * The address a picture GitHub's rendering names is drawn from in the
+ * theme given, with no theme's mark, or none where its address marks it
+ * the other theme's alone (`#gh-light-mode-only` in the dark), as GitHub
+ * hides one.
+ */
+export function pictureFor(src: string, dark: boolean): string | undefined {
+  const [own, other] = dark
+    ? [THEME_ONLY.DARK, THEME_ONLY.LIGHT]
+    : [THEME_ONLY.LIGHT, THEME_ONLY.DARK];
+  if (src.endsWith(other)) return undefined;
+  return src.endsWith(own) ? src.slice(0, -own.length) : src;
 }
 
 /** The class GitHub wears on a suggested change, the diff table it renders a review comment's ```suggestion as. */
@@ -228,6 +304,11 @@ function reshaped(node: HtmlNode): readonly HtmlNode[] {
   if (node.type !== "element") return [node];
   // A source is an address the window would read itself; its picture's `<img>` stands alone.
   if (node.tagName === "source") return [];
+  // A themed picture draws an `<img>` for each theme, each its theme's alone.
+  if (node.tagName === "picture") {
+    node.children = reshapeChildren(themedImages(node));
+    return [node];
+  }
   // A picture GitHub links to itself stands alone, the place's to open.
   const picture = node.tagName === "a" ? selfLinkedPicture(node) : undefined;
   if (picture !== undefined) return [picture];
@@ -260,13 +341,24 @@ export interface RenderingPicture {
   readonly alt: string;
 }
 
-/** The pictures under a node that stand in no link but the one `link` names, each beside where it opens. */
-function picturesUnder(node: HtmlNode, link: HtmlNode | undefined): readonly RenderingPicture[] {
+/**
+ * The pictures under a node drawn in the theme given that stand in no link
+ * but the one `link` names, each beside where it opens.
+ */
+function picturesUnder(
+  node: HtmlNode,
+  link: HtmlNode | undefined,
+  dark: boolean,
+): readonly RenderingPicture[] {
   if (node.type !== "element" && node.type !== "root") return [];
   const within = node.tagName === "a" ? node : link;
-  return (node.children ?? []).flatMap((child) => {
-    if (child.type !== "element" || child.tagName !== "img") return picturesUnder(child, within);
-    const src = String(child.properties?.src ?? "");
+  const children = node.tagName === "picture" ? themedImages(node) : (node.children ?? []);
+  return children.flatMap((child) => {
+    if (child.type !== "element" || child.tagName !== "img") {
+      return picturesUnder(child, within, dark);
+    }
+    const src = pictureFor(String(child.properties?.src ?? ""), dark);
+    if (src === undefined) return [];
     const alt = String(child.properties?.alt ?? "");
     if (within === undefined) return [{ src, original: src, alt }];
     // A picture in a link stands alone in it, GitHub's own wrapping, or is the link's.
@@ -281,13 +373,14 @@ export function renderingText(html: string): string {
 }
 
 /**
- * The pictures GitHub's rendering names that a place opens itself, in the
- * order they stand: each in no link, opening on its own address, or alone
- * in the link GitHub wraps it in (`selfLinkedPicture`), opening where that
- * link leads. A picture inside any other link is the link's.
+ * The pictures GitHub's rendering names that a place opens itself in the
+ * theme given, in the order they stand, each by the address it is drawn
+ * from (`pictureFor`): each in no link, opening on its own address, or
+ * alone in the link GitHub wraps it in (`selfLinkedPicture`), opening where
+ * that link leads. A picture inside any other link is the link's.
  */
-export function renderingPictures(html: string): readonly RenderingPicture[] {
-  return picturesUnder(renderingTree(html), undefined);
+export function renderingPictures(html: string, dark: boolean): readonly RenderingPicture[] {
+  return picturesUnder(renderingTree(html), undefined, dark);
 }
 
 /** The step that hands the words to the HTML steps whole, as one HTML node, never read as markdown. */
