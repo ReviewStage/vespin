@@ -375,7 +375,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
   stand: () => () => undefined,
   pass: (leave) => leave(),
   arrive: (move, landed) => {
-    move();
+    move(true);
     landed();
   },
   stays: ignore,

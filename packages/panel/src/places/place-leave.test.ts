@@ -213,27 +213,20 @@ test.each<[string, (window: ReturnType<typeof mount>) => void]>([
   },
 );
 
-test.each<[string, (place: PlaceLeave) => void]>([
-  ["a door's move", (place) => place.arrive(() => place.stays(), NOTHING)],
-  // As a link to the automation being edited, which the window opens past an ask made up front (`app.tsx`'s `openAppLink`).
-  ["a link's leave asked up front", (place) => place.transitionalLeaveFirst(() => place.stays())()],
-])(
-  "Leave on %s to the place already standing keeps the page's ask, so the window's next move asks again",
-  async (_door, press) => {
-    const window = mount(memoryAt(AUTOMATION));
+test("Leave on a door's move to the place already standing keeps the page's ask, so the window's next move asks again", async () => {
+  const window = mount(memoryAt(AUTOMATION));
 
-    act(() => press(window.place()));
-    await settleQueries();
-    act(() => window.asked[0]?.leave());
-    await settleQueries();
-    assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
+  act(() => window.place().arrive(() => window.place().stays(), NOTHING));
+  await settleQueries();
+  act(() => window.asked[0]?.leave());
+  await settleQueries();
+  assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
 
-    act(() => window.history.push(LIST));
-    await settleQueries();
-    assert.equal(window.asked.length, 2, "the next move asks again");
-    assert.equal(window.history.location.pathname, AUTOMATION);
-  },
-);
+  act(() => window.history.push(LIST));
+  await settleQueries();
+  assert.equal(window.asked.length, 2, "the next move asks again");
+  assert.equal(window.history.location.pathname, AUTOMATION);
+});
 
 test("Leave on Admin's open of the view already standing keeps the page's ask, so the window's next move asks again", async () => {
   const held = windowRouter(memoryAt(ADMIN));

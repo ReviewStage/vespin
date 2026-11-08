@@ -423,3 +423,43 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
       if (shows !== undefined) assert.match(drawn(), shows);
     }),
 );
+
+it.effect.each<[string, (automationId: string, runId: string) => ShownLink]>([
+  [
+    "a link to the automation being edited",
+    (automationId) => ({
+      workspace: "personal",
+      place: { kind: LINK_PLACE.AUTOMATION, automationId },
+    }),
+  ],
+  [
+    "a link to the run of it standing",
+    (automationId, runId) => ({
+      workspace: "personal",
+      place: { kind: LINK_PLACE.AUTOMATION_RUN, automationId, runId },
+    }),
+  ],
+])("%s asks nothing and stands it, edit and all, with no step of Home between", ([_link, linkTo]) =>
+  Effect.gen(function* () {
+    const router = yield* editedAutomation();
+    const standing = router.addresses().slice(0, router.at() + 1);
+    const [, , , automationId = "", , runId = ""] = router.history.location.pathname.split("/");
+
+    yield* handLink(linkTo(automationId, runId));
+
+    assert.equal(
+      [...document.querySelectorAll("button")].some((button) => button.textContent === "Leave"),
+      false,
+      "nothing asks",
+    );
+    const since = router.addresses().slice(standing.length - 1, router.at() + 1);
+    assert.ok(
+      since.every((address) => address.startsWith(`/personal/automation/${automationId}`)),
+      `no other page stood between: ${since.join(", ")}`,
+    );
+    assert.equal(
+      document.querySelector<HTMLInputElement>("input[aria-label='Automation name']")?.value,
+      "Check each deploy, edited",
+    );
+  }),
+);

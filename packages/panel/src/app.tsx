@@ -330,7 +330,7 @@ function AppWindow(): React.JSX.Element {
   useEffect(() => {
     appPlatform().unsavedDescriptionWords?.(descriptionWordsUnsaved);
   }, [descriptionWordsUnsaved]);
-  const { arrive, transitionalLeaveFirst: leaveFirst } = placeLeave;
+  const { arrive } = placeLeave;
   /**
    * Opens Settings at the place a link names (`settings-link.ts`), and once
    * the move lands, counts the tab changed where Settings was not standing,
@@ -357,6 +357,12 @@ function AppWindow(): React.JSX.Element {
     },
     [arrive],
   );
+  // The Tasks tab counted as brought forward over a place standing beside its own.
+  const countTasksTab = useCallback(() => {
+    appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
+      panel_tab: PANEL_TAB.TASKS,
+    });
+  }, []);
   // Note that Home and the task's own place are the Tasks tab's own places, of no task bound and of the task bound, so neither is a routed place the tab leaves.
   const routedStanding =
     routedHere !== undefined &&
@@ -376,12 +382,10 @@ function AppWindow(): React.JSX.Element {
       if (!routedStanding) return;
       arrive(NOTHING_MORE, () => {
         routedExits.leave();
-        appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.PANEL_TAB_CHANGE, {
-          panel_tab: PANEL_TAB.TASKS,
-        });
+        countTasksTab();
       });
     },
-    [arrive, goSettings, routedStanding, routedExits],
+    [arrive, goSettings, routedStanding, routedExits, countTasksTab],
   );
   /**
    * Opens Settings at the place a link names: the workspace it names, which
@@ -591,17 +595,14 @@ function AppWindow(): React.JSX.Element {
       // Admin is the router's place, which its link opens as a navigation from wherever the window stands.
       openAdmin(adminViewOfLink(place));
     } else {
-      // Note that the Inbox, an agent's page, and a workspace not there are left by the door the link opens, as it stands what the link names,
-      // rather than up front, because an agent's link reads where its agent stands first, and a leave before that read lands would write a
-      // step of the place under it.
-      const leftByDoor =
+      // Note that the link's own move leaves the routed place standing, its door going over it, so the window only counts
+      // the Tasks tab brought forward once that move lands, where a place other than one standing in the task's place, the
+      // Inbox, an agent's page, and a workspace not there, stood.
+      const inTaskPlace =
         routedHere?.place === ROUTED_PLACE.INBOX ||
         routedHere?.place === ROUTED_PLACE.AGENT ||
         routedHere?.place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
-      leaveFirst(() => {
-        if (!leftByDoor) changeTab(PANEL_TAB.TASKS);
-        tasks.onOpenLink(link);
-      })();
+      tasks.onOpenLink(link, routedStanding && !inTaskPlace ? countTasksTab : undefined);
     }
   });
   // An app link the system handed the app opens once sign-in no longer stands in the way, and

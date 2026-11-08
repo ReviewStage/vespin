@@ -51,9 +51,11 @@ export interface PlaceLeave {
    * while an ask stands, as to a task the window holds no address for yet,
    * `landed` asks first, since what it changes may still leave the page; its
    * Leave lets go of the ask, unless the move `stays` where the window stands,
-   * whose Leave leaves no page.
+   * whose Leave leaves no page. `move` is told whether nothing holds it, so a
+   * write past the router's blocker, as the history's visit, leaves no page
+   * unasked only then.
    */
-  readonly arrive: (move: () => void, landed: () => void) => void;
+  readonly arrive: (move: (free: boolean) => void, landed: () => void) => void;
   /** Says the move under way stays where the window stands, as a door asking for the place already standing does (`places/routed-exits.ts`'s `stay`). */
   readonly stays: () => void;
   /**
@@ -129,7 +131,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
       pass,
       arrive: (move, landed) => {
         if (standing.current === undefined || passing.current) {
-          move();
+          move(true);
           landed();
           return;
         }
@@ -137,7 +139,7 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
         const asked = moves.current;
         const waitingBefore = waiting.current;
         stayed.current = false;
-        move();
+        move(false);
         if (moves.current !== asked) {
           landings.current.push({ to: askedTo.current, landed });
           return;

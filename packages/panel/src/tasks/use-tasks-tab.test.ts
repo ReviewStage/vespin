@@ -3735,6 +3735,33 @@ test.each(TAB_DOORS)(
   async (_door, press) => askedOver(press, () => automationsDoor?.open()),
 );
 
+/** A link to each family of places, opened in the Tasks tab as the window hands it one, each naming the task the doors above go to. */
+const ON_BILLING = `${LINK_ORIGIN}/personal/task/${BILLING.id}`;
+const LINK_DOORS: [string, string][] = [
+  ["a comment thread's link", `${ON_BILLING}?comment=thread-1`],
+  ["a section's link", `${ON_BILLING}#rollout`],
+  ["a page's link", `${ON_BILLING}/page/page-1`],
+  ["an agent's link", `${ON_BILLING}/agent/${AGENT_ID}`],
+  ["a message's link", `${ON_BILLING}/agent/${AGENT_ID}/message/msg-7`],
+  ["a worker's link", `${ON_BILLING}/agent/${AGENT_ID}/worker/toolu_1`],
+  ["a Changes link", `${ON_BILLING}/agent/${AGENT_ID}/changes`],
+  ["a review thread's link", `${ON_BILLING}/agent/${AGENT_ID}/changes/files/thread/PRRT_1`],
+  ["a task's link", ON_BILLING],
+  ["a version's link", `${ON_BILLING}/version/1`],
+  ["Home's link in another workspace", `${LINK_ORIGIN}/acme`],
+  ["the Board's link in another workspace", `${LINK_ORIGIN}/acme/tasks`],
+  ["a person's link in another workspace", `${LINK_ORIGIN}/acme/person/user-ada`],
+  ["the Automations link in another workspace", `${LINK_ORIGIN}/acme/automations`],
+  ["an automation's link in another workspace", `${LINK_ORIGIN}/acme/automation/a1`],
+  ["the Inbox's link in another workspace", `${LINK_ORIGIN}/acme/inbox`],
+  ["an Inbox item's link under its task", `${ON_BILLING}/inbox/${ITEM_ID}`],
+];
+
+test.each(LINK_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the link does with no ask",
+  async (_door, href) => askedOver((control) => control.onOpenLink(linkAt(href)), FROM_BOARD),
+);
+
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();
   const asks: (() => void)[] = [];
