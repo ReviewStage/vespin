@@ -37,7 +37,9 @@ import { useAutomationRuns } from "./use-automation-runs.js";
  * An agent an automation's run started stands on a page of its own with no
  * task to place it, so its bar leads with where it came from, Automations
  * and then its automation, each a press back to that page (the
- * automation's editor), the agent's own name last. Under the bar the run's
+ * automation's editor) wearing the automation's glyph, so the two are drawn
+ * alike, as the editor's own bar draws its way back, the agent's own name
+ * last. Under the bar the run's
  * own bar, a tab's (`PaneBar`), says what fired its run, as the automation's runs panel says it (the
  * firing's glyph and words), when it fired, and where the agent stands as a
  * badge, whose hint is the run's line as that panel reads it. At the bar's
@@ -81,6 +83,7 @@ export function automationTrail(
     automations,
     {
       label: name,
+      icon: <GLYPH.AUTOMATION />,
       onPress: () => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     },
   ];

@@ -32,7 +32,10 @@
  * names they go by now and a person's card by the name the workspace's
  * members give them, each falling back to what was kept as it stood, the
  * column's agent wearing its glyph as its tab drew it (`switcher-looks.ts`),
- * at work or failed as everywhere.
+ * at work or failed as everywhere. An agent's page is named by the agent,
+ * on a task or with none, wearing its glyph as its tab would, and an
+ * automation's agent by its automation under it, as its page's bar leads
+ * with it.
  * Its preview is a still of the whole work area, taken once the window
  * settles on the screen and again as ⌃Tab leaves it: main takes a downscaled
  * picture of that part of the window (`window.capture`). A still is a picture
@@ -42,12 +45,15 @@
  * glyph.
  */
 
+import type { AgentSummary } from "@repo/features/agent-wire";
+import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type WorkspaceMember, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
 import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { STRIP_TAB_KIND, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
@@ -159,6 +165,14 @@ function tabWordLook(tab: SidePanelTab | MainTab, task: TaskSummary | undefined)
   return tabLook(stripTabLook(tab, { plan }));
 }
 
+/** What an automation's agent's card says under its name: the automation whose run started it, wearing its glyph, as the agent's page leads its bar with it (`automation-agent-run.tsx`); nothing for any other agent. */
+function automationDetail(agent: AgentSummary): Pick<CardLook, "detail" | "detailIcon"> {
+  const name = automationRun(agent)?.name;
+  return name === undefined
+    ? { detail: undefined }
+    : { detail: name, detailIcon: <GLYPH.AUTOMATION /> };
+}
+
 /** The task's name, as the window lists it. */
 function taskName(tasks: TasksControl, taskId: string): string | undefined {
   return tasks.tasks.find((task) => task.id === taskId)?.name;
@@ -213,7 +227,12 @@ function cardLook(
     }
     case STOP_KIND.AGENT: {
       const { standing, archived } = tasks.listedAgents;
-      const agent = [...standing, ...archived].find((each) => each.id === stop.agentId);
+      const taskless = [...standing, ...archived].find((each) => each.id === stop.agentId);
+      // Note that an agent on a task, an automation's run's among them, has no row of its own in the sidebar, so it is read off every agent the list carries.
+      const agent =
+        taskless === undefined
+          ? tasks.liveAgents?.find((each) => each.id === stop.agentId)
+          : tasklessRowSubject(taskless, tasks.agents).agent;
       if (agent === undefined) {
         return {
           ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
@@ -221,10 +240,9 @@ function cardLook(
           detail: undefined,
         };
       }
-      const subject = tasklessRowSubject(agent, tasks.agents);
       return {
-        ...tabLook({ kind: TAB_KIND.AGENT, name: subject.name, agent: subject.agent }),
-        detail: undefined,
+        ...tabLook({ kind: TAB_KIND.AGENT, name: agentName(agent, tasks.agents.models), agent }),
+        ...automationDetail(agent),
         endMark: agentEndMark(agent, false),
       };
     }
