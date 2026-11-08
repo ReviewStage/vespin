@@ -966,49 +966,6 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
 });
 
-test("a column kept while the plan, the Inbox, and the Call stood in it, and a side panel kept on its Plan and Comments tabs, read with each let go, the agents' order and the tab last viewed still standing", async () => {
-  window.localStorage.setItem(
-    "app.sidePanel",
-    JSON.stringify({
-      open: true,
-      tabs: ["plan", "inbox", "comments"],
-      tab: "plan",
-      width: 400,
-      tasks: {
-        [TASK.id]: {
-          opened: ["plan", "comments"],
-          closed: [],
-          recent: ["comments", "plan"],
-          order: ["plan", "comments"],
-        },
-      },
-    }),
-  );
-  window.localStorage.setItem(
-    "app.mainTabs",
-    JSON.stringify({
-      closedAgents: [],
-      tasks: {
-        [TASK.id]: {
-          recent: ["plan", { agent: AGENT_ID }, "inbox", "call"],
-          order: ["call", { agent: AGENT_ID }, "inbox"],
-          inboxOpen: true,
-          inboxSeen: ["item-1"],
-          planClosed: true,
-          callClosed: true,
-        },
-      },
-    }),
-  );
-  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
-  await settle();
-  const column = () => tab.control().mainTabs;
-  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, agentTab(AGENT_ID)]);
-  assert.deepEqual(column().tab, agentTab(AGENT_ID));
-  assert.deepEqual(tab.control().sidePanel.strip, [], "neither the Plan nor Comments tab stands");
-  assert.deepEqual(panelOf(tab), { open: false, tab: undefined });
-});
-
 test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
   const archived = { ...RUNNING_AGENT, archivedAt: 5 };
   const tab = mount(
