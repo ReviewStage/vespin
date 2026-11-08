@@ -10,6 +10,7 @@ import { TestClock } from "effect/testing";
 import { Sandbox, type SandboxService } from "../sandbox.js";
 import { SANDBOX_CALL, type SandboxCall, type SandboxError } from "../vocabulary.js";
 import {
+  driveAnswered,
   fixtureToken,
   sandboxDeleted,
   sandboxFetchOver,
@@ -237,20 +238,24 @@ const sandboxAnswer = (method: string) =>
     method === "DELETE" ? sandboxDeleted(STOPPED_SANDBOX) : sandboxFound(STOPPED_SANDBOX),
   );
 
+/** Whether a call was one on a drive. */
+const onDrive = (url: URL) => url.pathname.includes("/drives/");
+
 it.effect(
   "a delete wakes no stopped sandbox, takes its orphan snapshots, counts one gone as deleted, and names Vercel's refusal",
   () =>
     Effect.gen(function* () {
       const asked: { readonly method: string; readonly url: URL }[] = [];
-      let answer: (method: string) => Response = sandboxAnswer;
+      let answer: (method: string, url: URL) => Response = (method, url) =>
+        onDrive(url) ? refusedWith(404)() : sandboxAnswer(method);
       const api = yield* apiOver((url, init) => {
         const method = init.method ?? "GET";
         asked.push({ method, url: new URL(url) });
-        return answer(method);
+        return answer(method, new URL(url));
       });
 
       yield* api.delete(NAME);
-      const [lookup, deletion] = asked;
+      const [lookup, deletion] = asked.filter((each) => !onDrive(each.url));
       assert.equal(lookup?.url.searchParams.get("resume"), "false");
       assert.equal(deletion?.method, "DELETE");
       assert.equal(deletion?.url.searchParams.get("deleteOrphanSnapshots"), "true");
@@ -263,6 +268,37 @@ it.effect(
       assert.equal(failure.call, SANDBOX_CALL.DELETE);
       assert.equal(detailOf(failure), `Vercel answered 400: ${REFUSAL.code}: ${REFUSAL.message}`);
       assert.equal(failure.message.includes(fixtureToken()), false);
+    }),
+);
+
+it.effect(
+  "a delete of a sandbox that owns a drive stops its running session, then deletes the drive it owns, then the sandbox",
+  () =>
+    Effect.gen(function* () {
+      const writes: string[] = [];
+      const api = yield* apiOver((url, init) => {
+        const method = init.method ?? "GET";
+        const { pathname } = new URL(url);
+        // The path as Vercel's REST reference spells it, past the SDK's own prefix.
+        if (method !== "GET") writes.push(`${method} ${pathname.replace(/^\/api/u, "")}`);
+        if (onDrive(new URL(url))) {
+          return Response.json(driveAnswered({ id: "drv_own", name: `${NAME}-drive` }));
+        }
+        if (pathname.endsWith("/stop")) {
+          return Response.json(sessionAnswered({ id: SESSION, status: "stopped" }));
+        }
+        return Response.json(
+          method === "DELETE" ? sandboxDeleted(RUNNING_SANDBOX) : sandboxFound(RUNNING_SANDBOX),
+        );
+      });
+
+      yield* api.delete(NAME);
+
+      assert.deepEqual(writes, [
+        `POST /v2/sandboxes/sessions/${SESSION}/stop`,
+        `DELETE /v2/sandboxes/drives/${NAME}-drive`,
+        `DELETE /v2/sandboxes/${NAME}`,
+      ]);
     }),
 );
 

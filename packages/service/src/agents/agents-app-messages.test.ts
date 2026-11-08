@@ -391,7 +391,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.equal(archived.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(yield* Queue.poll(sandboxes.stops), Option.none());
+        assert.deepEqual(yield* Queue.poll(sandboxes.deletes), Option.none());
       }),
   );
 

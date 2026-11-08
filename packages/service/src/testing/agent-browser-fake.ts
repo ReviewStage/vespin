@@ -296,7 +296,6 @@ export const FAKE_SANDBOX = {
 /** The agents' image the fake's browser makes a sandbox again from. */
 export const FAKE_IMAGE: AgentImageService = {
   reference: Effect.succeed("agent-image:fixture"),
-  base: Effect.succeed("agent-image-base:fixture"),
   runner: Effect.succeed([]),
 };
 

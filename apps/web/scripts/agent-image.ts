@@ -13,11 +13,8 @@
  * (`.github/workflows/ci.yml`'s `agent-image` job), and the web build computes
  * the same reference and ships it beside each function that opens a sandbox
  * (`bundle-functions.ts`), so a deploy names the image its own commit built.
- * Beside it go a digest of the context without the runner's unit, which a
- * base snapshot is keyed on, and the unit itself, in its folder, which each
- * launch installs whole in the sandbox
- * (`@repo/service/agents/coder-host/agent-image`), so a runner's change
- * alone leaves every base snapshot standing.
+ * Beside it goes the unit itself, in its folder, which each launch installs
+ * whole in the sandbox (`@repo/service/agents/coder-host/agent-image`).
  *
  * Run as `tsx scripts/agent-image.ts <directory>`, it writes the context into
  * the directory and prints the tag.
@@ -30,7 +27,6 @@ import { pathToFileURL } from "node:url";
 import { RUNNER_UNIT } from "@repo/agent-runner/pins";
 import { RECORDING_CURSOR_SOURCE } from "@repo/service/agents/browser/recording-cursor";
 import {
-  AGENT_IMAGE_BASE_FILE,
   AGENT_IMAGE_FILE,
   AGENT_IMAGE_REPOSITORY,
   AGENT_RUNNER_FOLDER,
@@ -96,8 +92,8 @@ function agentImageTag(context: readonly ContextFile[]): string {
 
 /**
  * The files each function that opens a sandbox ships: the image as a deploy
- * names it to Vercel, its repository in the project's registry and its tag; a
- * digest of the context without the runner's unit; and that unit, in its folder.
+ * names it to Vercel, its repository in the project's registry and its tag;
+ * and the runner's unit, in its folder.
  */
 export function shippedBesideFunctions(context: readonly ContextFile[]): readonly ContextFile[] {
   const runner = RUNNER_FILES.map(({ inContext }) => {
@@ -105,15 +101,10 @@ export function shippedBesideFunctions(context: readonly ContextFile[]): readonl
     if (file === undefined) throw new Error(`the image's context holds no ${inContext}`);
     return file;
   });
-  const withoutRunner = context.filter((file) => !runner.includes(file));
   return [
     {
       name: AGENT_IMAGE_FILE,
       contents: Buffer.from(`${AGENT_IMAGE_REPOSITORY}:${agentImageTag(context)}\n`, "utf8"),
-    },
-    {
-      name: AGENT_IMAGE_BASE_FILE,
-      contents: Buffer.from(`${agentImageTag(withoutRunner)}\n`, "utf8"),
     },
     ...runner,
   ];

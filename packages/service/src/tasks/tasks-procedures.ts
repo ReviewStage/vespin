@@ -104,7 +104,7 @@ import { type StartReach, startRequestedAgent } from "../agents/coder-host/start
 import { everyStoppedForGood, summaryOf } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { retiredBeforeDelete, retiringReach } from "../agents/retire-sessions.js";
-import type { SandboxStopReach } from "../agents/session-sandboxes.js";
+import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
 import { listTasklessAgents, withTaskAgents } from "../agents/task-agents.js";
 import { TASK_LIST_ARCHIVED } from "../core.js";
@@ -129,7 +129,7 @@ import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "./task-ch
 import { createTaskAsked, type TaskCreateRelationRefused } from "./task-create-relation.js";
 import { moveTaskRelation, type TaskRelationRefused } from "./task-relation.js";
 
-export interface TasksProcedureSeams extends SandboxStopReach {
+export interface TasksProcedureSeams extends SandboxDeleteReach {
   resolveUserId: UserIdResolver;
   /** The plugin's write that makes an account's first workspace, the first time a start needs it. */
   workspaces: WorkspaceSeams;

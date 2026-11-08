@@ -6,8 +6,7 @@
  * (`apps/web/scripts/agent-image.ts`), the runner's unit among it. The web
  * build computes the same reference and ships it beside each function that
  * opens a sandbox (`apps/web/scripts/bundle-functions.ts`), under the names
- * below, with a digest of the image without the runner's unit, which a base
- * snapshot is keyed on (`../base-snapshot.ts`), and the runner's unit itself
+ * below, with the runner's unit itself
  * (`@repo/agent-runner/pins`'s `RUNNER_UNIT`) in a folder of its own, which
  * each launch installs whole in the sandbox over whatever runner its disk
  * holds. The function reads each from the directory its own entry stands in,
@@ -25,9 +24,6 @@ export const AGENT_IMAGE_REPOSITORY = "agent-image";
 /** The file the web build writes the image's reference into, beside each function that opens a sandbox. */
 export const AGENT_IMAGE_FILE = "agent-image.txt";
 
-/** The file the web build writes a digest of the image without the runner's unit into, beside the reference. */
-export const AGENT_IMAGE_BASE_FILE = "agent-image-base.txt";
-
 /** The folder the runner's unit stands in, in the image's context and beside each function that opens a sandbox. */
 export const AGENT_RUNNER_FOLDER = "agent-runner";
 
@@ -43,8 +39,6 @@ export interface RunnerFile {
 export interface AgentImageService {
   /** The image as Vercel resolves it in the deployment's own project: its repository and tag. */
   readonly reference: Effect.Effect<string, AgentImageMissing>;
-  /** A digest of the image without the runner's unit: what a base snapshot made on it holds. */
-  readonly base: Effect.Effect<string, AgentImageMissing>;
   /** The runner's unit the deploy launches, every file of it, installed whole in each sandbox at launch. */
   readonly runner: Effect.Effect<readonly RunnerFile[], AgentImageMissing>;
 }
@@ -72,19 +66,14 @@ const cachedRunner = (directory: string) =>
     ),
   );
 
-/** The reference, the base digest, and the runner's unit, each read from the directory given at its first use. */
+/** The reference and the runner's unit, each read from the directory given at its first use. */
 export function agentImageFromDirectory(directory: string): Layer.Layer<AgentImage> {
   return Layer.effect(
     AgentImage,
     Effect.map(
-      Effect.all([
-        cachedRead(directory, AGENT_IMAGE_FILE),
-        cachedRead(directory, AGENT_IMAGE_BASE_FILE),
-        cachedRunner(directory),
-      ]),
-      ([reference, base, runner]) => ({
+      Effect.all([cachedRead(directory, AGENT_IMAGE_FILE), cachedRunner(directory)]),
+      ([reference, runner]) => ({
         reference: Effect.map(reference, (bytes) => bytes.toString("utf8").trim()),
-        base: Effect.map(base, (bytes) => bytes.toString("utf8").trim()),
         runner,
       }),
     ),

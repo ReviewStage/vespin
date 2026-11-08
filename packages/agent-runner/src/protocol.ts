@@ -159,15 +159,15 @@ export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS]
 
 /**
  * How a message reached its runner, as the launch's trace names it: a place
- * created from its source agent's snapshot, its repository's base snapshot,
- * or the agents' image; one resumed from its own snapshot; the runner
+ * created from its source agent's snapshot, with a fork of its repository's
+ * base drive, or from the agents' image alone; one resumed from its own snapshot; the runner
  * launched again in a place still up; a place made anew where the one found
  * was gone; or a runner already up. The last four are spelled as the
  * service's hand-off event spells them (`SERVER_HANDOFF_PATH`).
  */
 export const LAUNCH_PATH = {
   SOURCE_SNAPSHOT: "source_snapshot",
-  BASE_SNAPSHOT: "base_snapshot",
+  BASE_DRIVE: "base_drive",
   IMAGE: "image",
   RESUMED: "resumed",
   RELAUNCHED: "relaunched",

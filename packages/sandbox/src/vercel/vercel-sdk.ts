@@ -2,7 +2,8 @@
  * vercel-sdk.ts -- `Sandbox` as Vercel Sandbox answers it: every call made through `@vercel/sandbox` under the deployment's own OIDC token, and Vercel's answers read as the package's own words.
  *
  * Everything a caller asks of a sandbox — one deleted, stopped, resumed, or
- * got or created from an image or a snapshot, a user made in it and a
+ * got or created from an image or a snapshot, the drive it opens with
+ * made, forked, mounted and deleted with it, a user made in it and a
  * command started as that user, a short command, a PTY, a network policy, a
  * snapshot, its tags and its public ports — is asked here, of the SDK at the
  * version the catalog pins, which loads in a function's bundle. The SDK
@@ -19,6 +20,12 @@
  * sandbox no longer in it answers as Vercel answers a session it no longer
  * holds.
  *
+ * A drive is a Vercel Drive (https://vercel.com/docs/sandbox/concepts/drives),
+ * mounted read-write at the path the ask names in the drive's region: a
+ * base drive got or created by its name for a fill, or a sandbox's own drive,
+ * named after the sandbox (`ownDriveName`), forked from its origin as the
+ * sandbox is created and deleted with the sandbox.
+ *
  * A sandbox is found by a tag its caller gave it, whose value names few
  * sandboxes, so the first page is all of them. What is sent is a tag, a
  * name, and the argv of a command a caller wrote; what a failure carries is
@@ -32,6 +39,7 @@ import { EXCESS_KEYS, unparsedWire, valueFromJsonText } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import {
   APIError,
+  Drive,
   type NetworkPolicy as SdkNetworkPolicy,
   Sandbox as SdkSandbox,
   type Session,
@@ -64,6 +72,7 @@ import {
   SANDBOX_STATUS,
   type SandboxCall,
   type SandboxCreate,
+  type SandboxDrive,
   SandboxEnding,
   type SandboxError,
   SandboxGone,
@@ -74,6 +83,7 @@ import {
   SandboxUnavailable,
   type SandboxUser,
   SnapshotGone,
+  UP_STATUSES,
 } from "../vocabulary.js";
 import { deploymentOidcToken, type OidcTokenRead } from "./oidc.js";
 import { openPtySocket } from "./pty.js";
@@ -117,6 +127,25 @@ const SESSION_ENDING = {
  * finishes (https://vercel.com/docs/sandbox/concepts/images).
  */
 const IMAGE_NOT_READY_CODE = "image_not_ready";
+
+/**
+ * Vercel's error codes for a drive: one still mounted in a running sandbox,
+ * which it refuses to delete, and one never written, which it refuses to
+ * fork. Note that the first comes with the 409 a name taken comes with, so it
+ * is told apart by its code.
+ */
+const DRIVE_CODE = {
+  ATTACHED: "drive_attached",
+  NOT_INITIALIZED: "drive_not_initialized",
+} as const;
+
+/**
+ * What a sandbox's own drive is named after the sandbox's name: the name
+ * and this, so a delete of the name finds its drive whether the sandbox
+ * still stands or not, and no base drive a caller names, which never ends so,
+ * is taken for one.
+ */
+const OWN_DRIVE_SUFFIX = "-drive";
 
 /** The statuses past which Vercel's answer says it may take the call another time: busy, or at fault. */
 const AGAIN_STATUS = { TOO_MANY_REQUESTS: 429, SERVER_ERROR: 500 } as const;
@@ -217,8 +246,12 @@ function refusalDetail(refusal: Refused): string | undefined {
 /** A refusal in the package's words: what was named gone, its name taken, its snapshot gone, its run ending, its image not ready, or the call unavailable. */
 function neutralOf(refusal: Refused): SandboxError {
   const { call, status, code } = refusal;
-  if (status === NOT_FOUND_STATUS) return new SandboxGone({ call });
-  if (status === NAME_TAKEN_STATUS) return new SandboxNameTaken({ call });
+  if (status === NOT_FOUND_STATUS || code === DRIVE_CODE.NOT_INITIALIZED) {
+    return new SandboxGone({ call });
+  }
+  if (status === NAME_TAKEN_STATUS && code !== DRIVE_CODE.ATTACHED) {
+    return new SandboxNameTaken({ call });
+  }
   if (status === SNAPSHOT_GONE.STATUS && code === SNAPSHOT_GONE.CODE) {
     return new SnapshotGone({ call });
   }
@@ -484,12 +517,112 @@ async function madeUser(
   if (closed.exitCode !== 0) throw new Error(`${user.homeDir} could not be closed`);
 }
 
-/** A create as `@vercel/sandbox` takes it: persistent, each run `SANDBOX_IDLE` long, from the image or the snapshot the ask names, keeping its newest snapshot alone (`KEPT_SNAPSHOTS`), on the open internet. */
-function createParams(ask: SandboxCreate) {
+/** A sandbox's own drive's name (`OWN_DRIVE_SUFFIX`). */
+function ownDriveName(sandboxName: string): string {
+  return `${sandboxName}${OWN_DRIVE_SUFFIX}`;
+}
+
+/** The credentials and the `fetch` every SDK call is made under. */
+interface Under {
+  readonly token: string;
+  readonly projectId: string;
+  readonly teamId: string;
+  readonly fetch: typeof globalThis.fetch;
+}
+
+/** What a create mounts: the drive, the path it is mounted at, and whether this call forked it. */
+interface MountedDrive {
+  readonly drive: Drive;
+  readonly at: string;
+  readonly forked: boolean;
+}
+
+/** Nothing where the SDK's failure was Vercel's not-found, else the failure thrown on. */
+function absentIfNotFound(failure: unknown): undefined {
+  if (failure instanceof APIError && failure.response.status === NOT_FOUND_STATUS) return undefined;
+  throw failure;
+}
+
+/**
+ * The drive a create opens with, ready to mount: for a fill, the base drive
+ * got or created by its name; for a fork, the sandbox's own where it stands,
+ * as after a create whose snapshot lapsed, else forked from its origin,
+ * which Vercel answers as not found where it is missing.
+ */
+async function driveFor(
+  name: string,
+  asked: SandboxDrive,
+  under: Under,
+  signal: AbortSignal,
+): Promise<MountedDrive> {
+  if ("fill" in asked) {
+    const drive = await Drive.getOrCreate({ ...under, name: asked.fill, signal });
+    return { drive, at: asked.at, forked: false };
+  }
+  const own = ownDriveName(name);
+  const standing = await Drive.get({ ...under, name: own, signal }).catch(absentIfNotFound);
+  if (standing !== undefined) return { drive: standing, at: asked.at, forked: false };
+  const origin = await Drive.get({
+    ...under,
+    name: "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy),
+    signal,
+  });
+  return { drive: await origin.fork({ name: own, signal }), at: asked.at, forked: true };
+}
+
+/**
+ * The sandbox `open` answers, opened with the drive its ask names made
+ * ready first (`driveFor`); `open` calls `stands` once the sandbox stands.
+ * Note that a drive this call forked for a sandbox that never stood is
+ * deleted again, because the caller may open the name next from another
+ * origin, which a fork left behind would stand in for.
+ */
+async function openedWithDrive(
+  ask: SandboxCreate,
+  under: Under,
+  signal: AbortSignal,
+  open: (mounted: MountedDrive | undefined, stands: () => void) => Promise<SdkSandbox>,
+): Promise<SdkSandbox> {
+  const mounted =
+    ask.drive === undefined ? undefined : await driveFor(ask.name, ask.drive, under, signal);
+  let stood = false;
+  try {
+    return await open(mounted, () => {
+      stood = true;
+    });
+  } catch (failure) {
+    if (mounted?.forked === true && !stood) {
+      await mounted.drive.delete({ signal }).catch(() => undefined);
+    }
+    throw failure;
+  }
+}
+
+/** Whether a resume's failure says no sandbox stands to resume: none under the name, or one whose snapshot is gone, which a create replaces. */
+function noneToResume(failure: unknown): boolean {
+  if (!(failure instanceof APIError)) return false;
+  const { status } = failure.response;
+  return (
+    status === NOT_FOUND_STATUS ||
+    (status === SNAPSHOT_GONE.STATUS && errorCode(failure.text ?? "") === SNAPSHOT_GONE.CODE)
+  );
+}
+
+/**
+ * A create as `@vercel/sandbox` takes it: persistent, each run `SANDBOX_IDLE`
+ * long, from the image or the snapshot the ask names, with the drive mounted
+ * read-write at its path in the drive's own region where it opens with one,
+ * as Vercel's drives must be, keeping its newest snapshot alone
+ * (`KEPT_SNAPSHOTS`), on the open internet.
+ */
+function createParams(ask: SandboxCreate, mounted: MountedDrive | undefined) {
   return {
     ...("image" in ask.from
       ? { image: ask.from.image }
       : { source: { type: "snapshot" as const, snapshotId: ask.from.snapshotId } }),
+    ...(mounted === undefined
+      ? undefined
+      : { mounts: { [mounted.at]: mounted.drive }, region: mounted.drive.region }),
     name: ask.name,
     persistent: true,
     tags: { ...ask.tags },
@@ -719,7 +852,9 @@ function vercelSandbox(
       said(
         Effect.map(
           asked(SANDBOX_CALL.CREATE, (signal, under) =>
-            SdkSandbox.create({ ...under, ...createParams(ask), signal }),
+            openedWithDrive(ask, under, signal, (mounted) =>
+              SdkSandbox.create({ ...under, ...createParams(ask, mounted), signal }),
+            ),
           ),
           openedOf,
         ),
@@ -728,34 +863,55 @@ function vercelSandbox(
       said(
         Effect.map(
           asked(SANDBOX_CALL.GET_OR_CREATE, async (signal, under) => {
-            /** A sandbox this call created, set up as the ask says before it is handed back. */
-            const setUp = async (created: SdkSandbox) => {
-              if (ask.user !== undefined) await madeUser(created, ask.user, signal);
-              await onCreate?.(openedOf(created));
-            };
-            try {
-              const opened = await SdkSandbox.getOrCreate({
-                ...under,
-                ...createParams(ask),
-                resume: true,
-                signal,
-                onCreate: setUp,
-              });
-              return await idleTimed(opened, signal);
-            } catch (failure) {
-              // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw.
-              if (!(failure instanceof APIError) || failure.response.status !== NAME_TAKEN_STATUS) {
-                throw failure;
-              }
-              const joined = await SdkSandbox.get({
+            // Note that a sandbox standing under the name resumes with the drive it was created with,
+            // so the drive an ask names is made ready only where none stands to resume.
+            if (ask.drive !== undefined) {
+              const standing = await SdkSandbox.get({
                 ...under,
                 name: ask.name,
                 resume: true,
                 signal,
+              }).catch((failure: unknown) => {
+                if (noneToResume(failure)) return undefined;
+                throw failure;
               });
-              await setUp(joined);
-              return await idleTimed(joined, signal);
+              if (standing !== undefined) return await idleTimed(standing, signal);
             }
+            return await openedWithDrive(ask, under, signal, async (mounted, stands) => {
+              /** A sandbox this call created, set up as the ask says before it is handed back. */
+              const setUp = async (created: SdkSandbox) => {
+                stands();
+                if (ask.user !== undefined) await madeUser(created, ask.user, signal);
+                await onCreate?.(openedOf(created));
+              };
+              try {
+                const opened = await SdkSandbox.getOrCreate({
+                  ...under,
+                  ...createParams(ask, mounted),
+                  resume: true,
+                  signal,
+                  onCreate: setUp,
+                });
+                stands();
+                return await idleTimed(opened, signal);
+              } catch (failure) {
+                // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw.
+                if (
+                  !(failure instanceof APIError) ||
+                  failure.response.status !== NAME_TAKEN_STATUS
+                ) {
+                  throw failure;
+                }
+                const joined = await SdkSandbox.get({
+                  ...under,
+                  name: ask.name,
+                  resume: true,
+                  signal,
+                });
+                await setUp(joined);
+                return await idleTimed(joined, signal);
+              }
+            });
           }),
           openedOf,
         ),
@@ -764,8 +920,19 @@ function vercelSandbox(
       said(
         asked(SANDBOX_CALL.DELETE, async (signal, under) => {
           // Note that the lookup asks no resume, because a sandbox on its way out is never woken to be deleted.
-          const sandbox = await SdkSandbox.get({ ...under, name, resume: false, signal });
-          await sandbox.delete({ deleteOrphanSnapshots: true, signal });
+          const [sandbox, own] = await Promise.all([
+            SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
+            Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
+          ]);
+          if (own !== undefined) {
+            // Vercel refuses to delete a drive mounted in a running sandbox, and a stop lets go of it at once.
+            const session = sandbox?.currentSession();
+            if (session !== undefined && UP_STATUSES.has(STATUS_OF_VERCEL.get(session.status))) {
+              await session.stop({ signal });
+            }
+            await own.delete({ signal });
+          }
+          await sandbox?.delete({ deleteOrphanSnapshots: true, signal });
         }).pipe(Effect.catchIf(isGone, () => Effect.void)),
       ),
     stop: (target) =>

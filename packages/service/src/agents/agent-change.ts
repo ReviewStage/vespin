@@ -30,7 +30,7 @@ import { recordServerEvent, SERVER_AGENT_SETTING, SERVER_EVENT } from "../events
 import { hostedStoreOrUnavailable } from "../http/http-effect.js";
 import { runnerChoiceApplied } from "./coder-host/runtime-sessions.js";
 import { stoppedForGood } from "./coder-host/stop.js";
-import { type SandboxStopReach, stoppedInBackground } from "./session-sandboxes.js";
+import { deletedInBackground, type SandboxDeleteReach } from "./session-sandboxes.js";
 
 /** The changes asked of an agent, each already read, and a choice already the catalog's; any left out stands. */
 export interface AgentChanges {
@@ -117,12 +117,13 @@ export const changedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
  * The agent archived by who the stamp names, or brought back. An archived
  * agent works on unseen, so a turn still running is stopped before the
  * stamp, refused where none can be stopped yet (`stoppedForGood`); once the
- * archive stands its sandbox is stopped, not deleted, so an unarchive resumes
- * it from its snapshot, and a local agent is let go of on its device.
+ * archive stands its sandbox is deleted with the drive it owns, so an
+ * unarchive opens one afresh from its repository's base drive and its pushed
+ * branch, and a local agent is let go of on its device.
  * Nothing where the agent left the account's reach.
  */
 export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
-  reach: SandboxStopReach,
+  reach: SandboxDeleteReach,
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agent: Agent,
@@ -134,7 +135,7 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     archiveAgentCommitted(userId, agent.id, archived, archivedBy),
   );
   if (!archived || Option.isNone(written)) return written;
-  yield* stoppedInBackground(reach, [agent]);
+  yield* deletedInBackground(reach, [agent]);
   // Counted only where this write archived an agent standing unarchived, under the member it archived for.
   if (written.value.archivedNow) {
     yield* recordServerEvent(

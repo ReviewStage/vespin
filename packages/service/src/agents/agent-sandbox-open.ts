@@ -6,7 +6,8 @@
  * is resumed, one is created where none stands, and one whose snapshot is
  * gone is deleted and created again under the same name: from the agents'
  * image, or from the snapshot a launch names
- * (`machine/sandbox-machine.ts`), whose disk already holds a checkout.
+ * (`machine/sandbox-machine.ts`), with the drive of its own a launch has it
+ * fork (`base-drive.ts`), whose files already hold a checkout.
  * Whichever caller opens it, a message's
  * launch (`machine/sandbox-machine.ts`), the Terminal, or the agent's browser,
  * opens it here, so a sandbox any of them creates is the same sandbox: the
@@ -18,7 +19,7 @@
 
 import { createHash } from "node:crypto";
 import { AGENT_USER, CODEX_PIN } from "@repo/agent-runner/pins";
-import { type OpenedSandbox, Sandbox, SandboxUnavailable } from "@repo/sandbox";
+import { type OpenedSandbox, Sandbox, type SandboxDrive, SandboxUnavailable } from "@repo/sandbox";
 import { Duration, Effect, Schedule } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
@@ -80,7 +81,7 @@ export function agentSandboxTags(sessionId: string, agentId: string): Record<str
 /**
  * A snapshot an agent's sandbox is created from in place of the image, and
  * whether the `agent` user stands in it already, as in a snapshot of another
- * agent's sandbox; a repository's base snapshot holds none.
+ * agent's sandbox.
  */
 export interface AgentSnapshotSource {
   readonly snapshotId: string;
@@ -90,7 +91,8 @@ export interface AgentSnapshotSource {
 /**
  * What an agent's sandbox is opened as: its session, its tags, how many
  * vCPUs it runs on, the provider's default where unsaid, and the snapshot it is
- * created from where it is created, the image where unsaid. A launch names
+ * created from where it is created, the image where unsaid, with the drive
+ * it opens with where it names one. A launch names
  * the agent's own (`agentSandboxTags`, `sandboxVcpus`); a caller that opens
  * one already standing again names those it stands with.
  */
@@ -99,6 +101,7 @@ export interface AgentSandboxOf {
   readonly tags: Readonly<Record<string, string>>;
   readonly vcpus: number | undefined;
   readonly snapshot?: AgentSnapshotSource;
+  readonly drive?: SandboxDrive;
 }
 
 /**
@@ -126,6 +129,7 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
       {
         name: agentSandboxName(of.sessionId),
         from,
+        ...(of.drive === undefined ? undefined : { drive: of.drive }),
         tags: of.tags,
         ...(of.vcpus === undefined ? undefined : { vcpus: of.vcpus }),
         env: SANDBOX_ENV,

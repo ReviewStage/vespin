@@ -134,7 +134,7 @@ const EXTRA_CHECKOUT_SCRIPT = [
 ].join("\n");
 
 /**
- * A whole checkout a base snapshot holds (`base-snapshot.ts`) brought
+ * A whole checkout a base drive holds (`base-drive.ts`) brought
  * up to its branch as GitHub has it now: the branch fetched through
  * the credential the caller set at the firewall and checked out at what was
  * fetched, its writes the group's (`GROUP_WRITES`), and the record
@@ -351,8 +351,8 @@ export const cloneExtraRepository = /* @__PURE__ */ Effect.fn("web/cloneExtraRep
 );
 
 /**
- * What a base snapshot's checkout records it is of: the repository as GitHub
- * spells it, lower-cased, so a base snapshot and the refresh of it agree
+ * What a base drive's checkout records it is of: the repository as GitHub
+ * spells it, lower-cased, so a base drive and the refresh of it agree
  * whatever case a row spells the repository in.
  */
 export function snapshotRecordOf(fullName: string): string {
@@ -360,11 +360,11 @@ export function snapshotRecordOf(fullName: string): string {
 }
 
 /**
- * The checkout a base snapshot holds brought up to the branch named,
+ * The checkout a base drive holds brought up to the branch named,
  * with the token at the firewall for the fetch alone, as for a clone
  * (`underCloneCredential`), and recorded under the name the caller keeps;
  * refused, in git's own words where it said any, where the checkout is not
- * the base snapshot's of that repository or the fetch failed.
+ * the base drive's of that repository or the fetch failed.
  */
 export const refreshRepository = /* @__PURE__ */ Effect.fn("web/refreshRepository")(function* (
   sandbox: RepositorySandbox,

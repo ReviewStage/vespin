@@ -246,7 +246,10 @@ data with:
 
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
-Vercel Sandboxes and in snapshots kept for up to thirty days after last use.
+Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
+checkout on a drive of its own, and a copy of each workspace repository's
+default branch, with its dependencies installed, on a drive its agents start
+from.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -262,14 +265,18 @@ affected users and relevant authorities as required by applicable law.
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Their sandboxes and those sandboxes' snapshots expire and are
-removed seven days after they were last used. When you delete your account:
+agent deletes its transcript at once. Deleting or archiving an agent deletes
+its sandbox and the drive holding its checkout; a sandbox's snapshots
+otherwise expire and are removed seven days after they were last used. A
+repository's default-branch drive is kept for the workspace's agents until we
+remove it. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, and integration records) is deleted at once.
-- **Your tasks, descriptions, transcripts, and inbox items** are deleted at once, and
-  your agents' sandboxes and their snapshots expire and are removed seven days
-  after they were last used.
+- **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
+  your agents' sandboxes and the drives holding their checkouts are deleted,
+  and their snapshots otherwise expire and are removed seven days after they
+  were last used.
 - **Workspaces you own**, and the memories, comments, and description text you left in
   them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it

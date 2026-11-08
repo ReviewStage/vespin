@@ -27,6 +27,7 @@ import {
   commandAnswered,
   commandLogsStreamed,
   commandRunStreamed,
+  fakeDrives,
   sandboxDeleted,
   sandboxesListed,
   sandboxFound,
@@ -71,6 +72,8 @@ export interface FakeSandbox {
   createdAt: number;
   /** The snapshot it resumes from, which its last snapshot made; none before one is taken. */
   currentSnapshotId?: string;
+  /** What its create mounted, as the create sent it, which the drives read back (`fakeDrives`). */
+  mounted?: unknown;
 }
 
 export interface FakeCommand {
@@ -188,6 +191,10 @@ function asUserCommand(command: string, args: readonly string[]) {
 /** Vercel Sandbox's REST API, as a store of the sandboxes and commands it was asked for. */
 export function runnerSandboxApi() {
   const sandboxes: FakeSandbox[] = [];
+  // A drive a running sandbox mounts is one Vercel refuses to delete.
+  const drives = fakeDrives((mountsIt) =>
+    sandboxes.some((each) => !each.deleted && each.status === "running" && mountsIt(each.mounted)),
+  );
   /** How many stdin writes with data the API refuses next, and with what status: a passing outage by default. */
   const failStdin = { remaining: 0, status: 502 };
   /**
@@ -296,6 +303,11 @@ export function runnerSandboxApi() {
       }
       const tagsRefused = sandboxTagsRefusal(asked.tags);
       if (tagsRefused !== undefined) return tagsRefused;
+      const mounted = drives.mountsSent(asked);
+      // A drive mounted must stand, as Vercel mounts only a drive it holds.
+      if (!drives.mountable(mounted)) {
+        return Response.json({ error: { code: "not_found" } }, { status: 404 });
+      }
       const source: string | undefined = asked.source?.snapshotId;
       // A snapshot that lapsed or was deleted is refused as Vercel refuses it.
       if (source !== undefined && goneSnapshots.has(source)) {
@@ -308,6 +320,7 @@ export function runnerSandboxApi() {
         tags: asked.tags,
         image: asked.image,
         ...(source === undefined ? undefined : { sourceSnapshotId: source }),
+        ...(mounted === undefined ? undefined : { mounted }),
         deleted: false,
         createdAt: sandboxes.length + 1,
         timeout: asked.timeout,
@@ -325,6 +338,8 @@ export function runnerSandboxApi() {
       );
       return Response.json(sandboxesListed(found.map(listed)));
     }
+    const onDrive = await drives.answer(path, method, body);
+    if (onDrive !== undefined) return onDrive;
     const named = /^\/api\/v2\/sandboxes\/([^/]+)$/u.exec(path);
     if (named !== null) {
       // A name deleted and taken again is the new sandbox's, as Vercel holds one sandbox per name.
@@ -546,6 +561,9 @@ export function runnerSandboxApi() {
     respond,
     policyAtStart,
     sandboxes,
+    drives: drives.drives,
+    mountedAt: (sandbox: FakeSandbox | undefined, at: string) =>
+      drives.mountedAt(sandbox?.mounted, at),
     commands,
     snapshots,
     goneSnapshots,
