@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -10,21 +10,25 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { fakeActPort } from "../testing/app-bridge.js";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { handState, stateWith } from "../testing/app-state.js";
+import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { ToastHost } from "../toast.js";
+import { UNDO_RAN, undoLast } from "../undo-stack.js";
 import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-inbox-read-marks.js";
 
 /**
  * use-inbox-read-marks.test.ts -- the Inbox's read marks say a refusal
- * once, unless the caller says it itself, and Mark all as read names the
- * unread items it marks, which the host draws read. Synthetic plan and
- * items.
+ * once, unless the caller says it itself, Mark all as read names the
+ * unread items it marks, which the host draws read, and ⌘Z puts back the
+ * reminder a new one replaced. Synthetic plan and items.
  */
 
 const TASK: TaskSummary = {
@@ -162,4 +166,45 @@ test("a refused mark from a caller that says the refusal itself toasts nothing, 
   await hook.sent[0]?.answer(true);
   assert.equal(answered, false);
   assert.deepEqual(hook.toasts(), []);
+});
+
+test("⌘Z puts back the reminder a new one replaced, through the undo stack", async () => {
+  const EARLIER = Date.UTC(2026, 10, 9, 9);
+  const LATER = Date.UTC(2026, 10, 16, 9);
+  // The window's document holds the item in the account's feed, reminded as given, as the host draws a reminder the moment it is asked.
+  const holding = (remindAt: number): AppStateSnapshot =>
+    stateWith(
+      {},
+      {
+        [LIVE_READ.INBOX_ITEMS]: {
+          rows: {
+            [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [{ ...item(X, false), remindAt }] },
+            [INBOX_SCOPE_KIND.AGENT]: {},
+          },
+        },
+      },
+    );
+  const sent: (number | null)[] = [];
+  fakeActPort({
+    [ACT_KIND.AGENTS_INBOX_REMIND]: ({ itemId, until }) => {
+      sent.push(until);
+      writeAppState(holding(until ?? 0));
+      return Promise.resolve({ id: itemId, unread: false });
+    },
+  });
+  handState({}, holding(EARLIER));
+  writeAppState(holding(EARLIER));
+  let control: InboxReadMarks | undefined;
+  function Harness() {
+    control = useInboxReadMarks({ workspaceId: TASK.workspaceId });
+    return createElement(Fragment, null, createElement(ToastHost));
+  }
+  root = createRoot(document.createElement("div"));
+  act(() => root?.render(withQueryClient(createElement(Harness))));
+
+  await act(() => control?.onRemind({ ...item(X, false), remindAt: EARLIER }, LATER));
+  const undone = await act(() => undoLast());
+
+  assert.equal(undone, UNDO_RAN.APPLIED);
+  assert.deepEqual(sent, [LATER, EARLIER]);
 });

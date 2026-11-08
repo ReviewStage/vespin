@@ -5,10 +5,11 @@ import { GLYPH } from "@repo/ui/icons";
 import { useRef } from "react";
 import { firstRefusal, type Kept } from "../act.js";
 import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import { type InboxResolver, RESOLVE } from "./inbox-close.js";
 import { type InboxListed, isUnread } from "./inbox-model.js";
 import { type InboxRemindMany, REMIND_ME, remindManyGroups } from "./inbox-remind.js";
+import { keptToast, useInboxPresses } from "./inbox-writes.js";
 import { type MarkSaying, markedNote } from "./use-inbox-read-marks.js";
 
 /**
@@ -25,8 +26,8 @@ import { type MarkSaying, markedNote } from "./use-inbox-read-marks.js";
  * item, with Clear reminders where one holds a reminder
  * (`inbox-remind.tsx`); and Resolve while one is open. Each mark goes as the
  * row's own does, one item at a time (`use-inbox-read-marks.ts`), and
- * answers with one toast once the service did, whose Undo puts each item
- * it took back as it stood, and which names how many it refused. Resolve
+ * answers with one toast once the service did, whose Undo, as ⌘Z, puts each
+ * item it took back as it stood, and which names how many it refused. Resolve
  * resolves the open items without an answer as the row's own does, at once,
  * with one toast whose Undo takes them all back before any agent is told
  * (`inbox-close.tsx`). Each act lets the selection go.
@@ -71,25 +72,32 @@ export function useInboxSelection({
   chosenNow.current = listed;
   const open = listed.filter(({ item }) => item.status === INBOX_STATUS.OPEN);
 
-  // Note that each item's mark goes on its own, there being no act marking several, and one toast answers them all once each did.
-  const markAll = (marking: readonly InboxListed[], unread: boolean, undoable: boolean) => {
+  const { mark: pressMark } = useInboxPresses();
+
+  // Note that each item's mark goes on its own, there being no act marking several, and one toast answers them all once each did, its Undo, as ⌘Z, taking back each the service took that still holds the mark (`inbox-writes.ts`).
+  const markAll = (marking: readonly InboxListed[], unread: boolean) => {
     if (onMark === undefined || marking.length === 0) return;
+    const pressed = pressMark(
+      marking.map(({ item }) => item),
+      unread,
+    );
     void Promise.all(marking.map((entry) => onMark(entry, unread, { quiet: true }))).then(
       (taken) => {
         const landed = marking.filter((_, at) => taken[at]?.kept === true);
-        const refused = marking.length - landed.length;
-        if (undoable && landed.length > 0) {
-          const note = markedNote(unread, landed.length, refused);
-          toast({
-            ...undoToast(note, () => markAll(landed, !unread, false)),
-            replayUnmasked: true,
-          });
+        const note = markedNote(unread, landed.length, marking.length - landed.length);
+        if (landed.length > 0) {
+          const kept = new Set(landed.map(({ item }) => item.id));
+          toast(
+            keptToast(
+              note,
+              pressed.keep(note, (id) => kept.has(id)),
+            ),
+          );
           return;
         }
-        if (refused === 0) return;
         toast({
           replayUnmasked: true,
-          words: markedNote(unread, landed.length, refused),
+          words: note,
           tone: STATUS_TONE.DANGER,
           hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause: firstRefusal(taken) },
@@ -115,9 +123,7 @@ export function useInboxSelection({
           {
             label: commandWords(mark, COMMAND_PLACE.MENU),
             icon: mark.icon,
-            onAct: acted(() =>
-              unread.length > 0 ? markAll(unread, false, true) : markAll(read, true, true),
-            ),
+            onAct: acted(() => (unread.length > 0 ? markAll(unread, false) : markAll(read, true))),
           },
         ]),
     ...(onRemindMany === undefined || first === undefined

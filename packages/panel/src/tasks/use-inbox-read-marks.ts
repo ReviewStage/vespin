@@ -11,9 +11,10 @@ import { firstRefusal, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import { acknowledgedOnOpen, type InboxListed, isUnread } from "./inbox-model.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
+import { keptToast, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
 /**
@@ -60,7 +61,7 @@ export interface InboxReadMarks {
   readonly onMarkAll: (items: readonly InboxItem[]) => void;
   /** Marks every item given that is unread as read, each on its own, as a task's are marked, the rest of the workspace's left as they are. */
   readonly onMarkEach: (items: readonly InboxItem[]) => void;
-  /** Sets one item's reminder for an instant, offering Undo, or cancels it where none is given, leaving whether it is read alone; a refusal is toasted. */
+  /** Sets one item's reminder for an instant, offering Undo, or cancels it where none is given, leaving whether it is read alone; answers whether the service took it, and a refusal is toasted. */
   readonly onRemind: InboxReminder;
 }
 
@@ -148,10 +149,12 @@ export function useInboxReadMarks({
     },
     [onMark, workspaceId, refused],
   );
-  // Note that a reminder reaches the reader alone and is undone by canceling it, so it asks nothing and offers Undo, as the panel's other such acts do.
+  const { remind } = useInboxPresses();
+  // Note that a reminder reaches the reader alone and is undone by putting back what it replaced, so it asks nothing and offers Undo through the undo stack, as the panel's other such acts do.
   const onRemind = useCallback(
-    (item: InboxItem, until: number | null, saying?: RemindSaying): void => {
-      void sendRemind({ itemId: item.id, until })
+    (item: InboxItem, until: number | null, saying?: RemindSaying): Promise<Kept> => {
+      const pressed = until === null || saying?.quiet === true ? undefined : remind([item], until);
+      return sendRemind({ itemId: item.id, until })
         .catch(unreached)
         .then((answer) => {
           if ("failure" in answer) {
@@ -159,19 +162,16 @@ export function useInboxReadMarks({
               inboxItemId: item.id,
               workspaceId,
             });
-            return;
+            return notKept(answer);
           }
-          if (until !== null && saying?.quiet !== true) {
-            toast({
-              ...undoToast(`Reminder set for ${remindWords(until, Date.now())}`, () =>
-                onRemind(item, null),
-              ),
-              replayUnmasked: true,
-            });
+          if (pressed !== undefined && until !== null) {
+            const words = `Reminder set for ${remindWords(until, Date.now())}`;
+            toast(keptToast(words, pressed.keep(words)));
           }
+          return KEPT;
         });
     },
-    [sendRemind, workspaceId, refused, toast],
+    [sendRemind, remind, workspaceId, refused, toast],
   );
   return useMemo(
     () => ({ onMark, onMarkAll, onMarkEach, onRemind }),

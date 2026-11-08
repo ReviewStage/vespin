@@ -4,9 +4,10 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { dropBelowStart, STATUS_TONE, useMenu } from "@repo/ui";
 import { GLYPH, InboxIcon } from "@repo/ui/icons";
 import { type RefObject, useCallback } from "react";
+import type { Kept } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import {
   DATE_PICKER_CLOSE,
   type DatePicked,
@@ -14,6 +15,7 @@ import {
   useDatePicker,
 } from "./date-picker.js";
 import { hasReminder } from "./inbox-model.js";
+import { keptToast, useInboxPresses } from "./inbox-writes.js";
 
 /**
  * inbox-remind.tsx -- setting a reminder on an Inbox item: the times its menus offer, the menu H opens on the chosen row, and the date picker for a time of the reader's own.
@@ -28,7 +30,7 @@ import { hasReminder } from "./inbox-model.js";
  * Remind Me does, the row saying when it comes due rather than the menu.
  * Several items chosen together are offered the same times, set on every
  * one, and Clear reminders where any holds one, answered by one toast whose
- * Undo puts each back as it stood. What a reminder does to the item, and
+ * Undo, as ⌘Z, puts each back as it stood. What a reminder does to the item, and
  * how it comes back, is `inbox-model.ts`'s `inboxAtNow`.
  */
 
@@ -115,8 +117,12 @@ export interface RemindSaying {
 /** A reminder set among several, which their caller answers with one toast. */
 const QUIET: RemindSaying = { quiet: true };
 
-/** How an item's reminder is set: for an instant, or cleared where it is null. */
-export type InboxReminder = (item: InboxItem, until: number | null, saying?: RemindSaying) => void;
+/** How an item's reminder is set: for an instant, or cleared where it is null; answers whether the service took it. */
+export type InboxReminder = (
+  item: InboxItem,
+  until: number | null,
+  saying?: RemindSaying,
+) => Promise<Kept>;
 
 /** What a Remind me menu acts through: the reminder, and the date picker for a time of the reader's own, where the menu's surface holds one. */
 export interface RemindDoors {
@@ -191,24 +197,35 @@ export function remindManyGroups(
 
 /**
  * Sets the reminder of several items at once, or clears it on those that
- * hold one, each quietly, and answers with one toast whose Undo puts each
- * back as it stood; a refusal is still each item's own to say.
+ * hold one, each quietly, and answers once the service did with one toast
+ * whose Undo, as ⌘Z, puts back as it stood each item it took that still
+ * holds what was set (`inbox-writes.ts`); a refusal is still each item's own
+ * to say.
  */
 export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindMany {
   const toast = useToast();
+  const { remind } = useInboxPresses();
   return useCallback(
     (items, until) => {
       const touched = until === null ? items.filter(hasReminder) : items;
       if (onRemind === undefined || touched.length === 0) return;
-      for (const item of touched) onRemind(item, until, QUIET);
-      const undo = () => {
-        for (const item of touched) onRemind(item, item.remindAt ?? null, QUIET);
-      };
+      const pressed = remind(touched, until);
       const words =
         until === null ? WORDS.CLEARED : `Reminder set for ${remindWords(until, Date.now())}`;
-      toast({ ...undoToast(words, undo), replayUnmasked: true });
+      void Promise.all(touched.map((item) => onRemind(item, until, QUIET))).then((taken) => {
+        const kept = new Set(
+          touched.filter((_, at) => taken[at]?.kept === true).map(({ id }) => id),
+        );
+        if (kept.size === 0) return;
+        toast(
+          keptToast(
+            words,
+            pressed.keep(words, (id) => kept.has(id)),
+          ),
+        );
+      });
     },
-    [onRemind, toast],
+    [onRemind, remind, toast],
   );
 }
 
