@@ -72,27 +72,30 @@
      bubble's accent without a per-speaker override. Blocks are spaced by
      margin rather than a flex gap: the caption's root is an ordinary block
      whose wrapped height is measured. */
-  .ui-markdown {
+  :is(.ui-markdown, .ui-markdown-flow) {
     --ui-markdown-tint: color-mix(in srgb, currentColor 13%, transparent);
     --ui-markdown-edge: color-mix(in srgb, currentColor 28%, transparent);
     --ui-prose-tint: var(--ui-markdown-tint);
   }
 
-  /* A note's blocks stand a paragraph's gap apart, and a divider a gap and
-     a half from what it divides (below), as a transcript's do (Streamdown's
-     own rhythm), so every rendered text reads with one look. Note that the
-     gap outranks the element resets below (a paragraph's, a list's, a
-     fence's) by its `:not()`, and leaves a divider to its own rule. */
-  .ui-markdown > :not(:first-child, hr) {
-    margin-top: 1em;
-  }
-
-  .ui-markdown li > * + * {
+  /* The flow a note and a transcript share (`.ui-markdown-flow`), so every
+     rendered text reads with one look: a loose list item's blocks a half
+     gap apart, a paragraph bare of the browser's margins, strong words at
+     the emphasis weight, a list's gutter and markers, and a divider's line.
+     The gaps between a flow's own blocks stand below, outside this layer. */
+  .ui-markdown-flow li > * + * {
     margin-top: 0.5em;
   }
 
-  .ui-markdown p {
+  .ui-markdown-flow p {
     margin: 0;
+  }
+
+  .ui-markdown-flow strong {
+    font-weight: var(--ui-type-emphasis-weight);
+  }
+
+  .ui-markdown p {
     overflow-wrap: anywhere;
   }
 
@@ -156,17 +159,20 @@
     white-space: pre;
   }
 
-  /* A list's gutter and markers are the prose's above. */
-  .ui-markdown :is(ul, ol) {
+  /* A list's gutter and markers, the prose's own (above), in a transcript
+     too, whose root is no prose. */
+  .ui-markdown-flow :is(ul, ol) {
     margin: 0;
+    padding-left: 1.5em;
+    list-style: revert;
     text-align: left;
   }
 
-  .ui-markdown li + li {
+  .ui-markdown-flow li + li {
     margin-top: 0.25em;
   }
 
-  .ui-markdown li::marker {
+  .ui-markdown-flow li::marker {
     opacity: 0.7;
     font-variant-numeric: tabular-nums;
   }
@@ -179,12 +185,12 @@
      and box wear the same classes, so opening a section moves nothing. Note
      that the box takes the words' size, because a control's own is the
      browser's. */
-  .ui-markdown li.task-list-item {
+  .ui-markdown-flow li.task-list-item {
     position: relative;
     list-style: none;
   }
 
-  .ui-markdown li.task-list-item input[type="checkbox"] {
+  .ui-markdown-flow li.task-list-item input[type="checkbox"] {
     position: absolute;
     top: calc((1lh - 0.95em) / 2);
     left: -1.45em;
@@ -202,8 +208,8 @@
      description's editor draws its box the same, in the same place. A loose list's
      item holds its words in a paragraph, the box among them, which stands in
      the same gutter. */
-  .ui-markdown li.task-list-item > .ui-markdown-task,
-  .ui-markdown li.task-list-item > p:first-child > .ui-markdown-task {
+  .ui-markdown-flow li.task-list-item > .ui-markdown-task,
+  .ui-markdown-flow li.task-list-item > p:first-child > .ui-markdown-task {
     position: absolute;
     top: calc((1lh - 0.95em) / 2);
     left: -1.45em;
@@ -212,7 +218,7 @@
     height: 0.95em;
   }
 
-  .ui-markdown li.task-list-item > .ui-markdown-task input[type="checkbox"] {
+  .ui-markdown-flow li.task-list-item > .ui-markdown-task input[type="checkbox"] {
     position: static;
     display: block;
   }
@@ -274,11 +280,7 @@
     border-bottom: 0;
   }
 
-  /* Note that two dividers in a row stand the same gap and a half apart,
-     their margins collapsing, so they read as two, and an editor's caret
-     has room to stand between them. */
-  .ui-markdown hr {
-    margin: 1.5em 0;
+  .ui-markdown-flow hr {
     border: 0;
     border-top: 1px solid var(--ui-markdown-edge);
   }
@@ -306,7 +308,7 @@
      would make its line taller, pushing the words below the item's box,
      which stands in the gutter at the line's top. The words then stand as
      they do in the description's editor, which holds them in a paragraph. */
-  .ui-markdown li > .link-glued {
+  .ui-markdown-flow li > .link-glued {
     margin-top: 0;
   }
 
@@ -418,4 +420,28 @@ blockquote.markdown-quote > * {
 
 blockquote.markdown-quote > * + * {
   margin-top: 0.5em;
+}
+
+/* A flow's blocks (`.ui-markdown-flow`, a note's and a transcript's alike)
+   stand a paragraph's gap apart, a heading close over what it names, and a
+   divider a gap and a half from what it divides. Two dividers in a row stand
+   that same gap and a half apart, their margins collapsing, so they read as
+   two and an editor's caret has room between them. Note that these stand
+   outside the components layer, as the quote's do above and for the same
+   reason: a transcript's blocks are children of Streamdown's root, whose
+   `space-y-4` utility would otherwise set their margins. */
+.ui-markdown-flow > * {
+  margin-block: 0;
+}
+
+.ui-markdown-flow > :not(:first-child, hr) {
+  margin-top: 1em;
+}
+
+.ui-markdown-flow > .ui-markdown-heading + :not(hr) {
+  margin-top: 0.25em;
+}
+
+.ui-markdown-flow > hr {
+  margin-block: 1.5em;
 }

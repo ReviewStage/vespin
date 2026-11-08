@@ -143,7 +143,7 @@ import {
 import remarkBreaks from "remark-breaks";
 import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
 import { FoldBody } from "../ai-elements/fold.js";
-import { MessageResponse, PANEL_MARKDOWN_COMPONENTS } from "../ai-elements/message.js";
+import { MessageResponse } from "../ai-elements/message.js";
 import {
   REASONING_BODY_CLASS,
   REASONING_WORDS_CLASS,
@@ -707,7 +707,6 @@ function LinkGlueElement({ children }: MarkdownNodeProps & { children?: ReactNod
  * nothing said on a call or written by a model should make one.
  */
 const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
-  ...PANEL_MARKDOWN_COMPONENTS,
   ...TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   a: ({ href, children, node }) => (
     <TranscriptLink href={href} words={node === undefined ? "" : wordsOf(node)}>

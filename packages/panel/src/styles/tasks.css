@@ -1499,32 +1499,9 @@
   margin-top: var(--ui-item-gap);
 }
 
-/* A description with no words, where the member may write them, says so
-   where the editor's placeholder will, in its type. */
-.pull-request-description-text.description-document-text > * {
-  margin-block: 0;
-}
-
-.pull-request-description-text.description-document-text > * + * {
-  margin-top: var(--ui-section-gap);
-}
-
-.pull-request-description-text.description-document-text > :is(h1, h2):first-child {
-  margin-top: var(--ui-block-gap);
-}
-
-.pull-request-description-text.description-document-text > :is(h3, h4, h5, h6):first-child {
-  margin-top: var(--ui-control-gap);
-}
-
-.pull-request-description-text :is(ul, ol) {
-  padding-left: var(--ui-space-20);
-}
-
-.pull-request-description-text li + li {
-  margin-top: var(--ui-list-gap);
-}
-
+/* The description's editor flows as its drawn words do (`@repo/ui`'s
+   `.ui-markdown-flow`), so nothing moves as it opens; a task list open in it
+   stands its boxes in the bullets' place, as drawn below. */
 .pull-request-description-text ul[data-type="taskList"] {
   padding-left: 0;
 }
@@ -1693,14 +1670,6 @@
 .transcript-markdown {
   overflow-wrap: anywhere;
   user-select: text;
-}
-
-.transcript-heading {
-  margin: var(--ui-control-gap) 0 var(--ui-tight-gap);
-}
-
-.transcript-heading:where([data-level="1"], [data-level="2"]) {
-  margin-top: var(--ui-block-gap);
 }
 
 .transcript-markdown > :first-child {
