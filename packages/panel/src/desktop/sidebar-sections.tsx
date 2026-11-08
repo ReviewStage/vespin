@@ -50,7 +50,13 @@ import {
 } from "@repo/ui";
 import { FolderPlusIcon, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { type DrawnTaskRow, TASK_ROW, type TaskRow, taskRowKey } from "@repo/ui/task-list-model";
+import {
+  type DrawnTaskRow,
+  TASK_ROW,
+  type TaskRow,
+  type TasksById,
+  taskRowKey,
+} from "@repo/ui/task-list-model";
 import {
   memberSection,
   placeAllWrites,
@@ -582,6 +588,8 @@ interface SectionContext {
   readonly onToggle: (sectionId: string) => void;
   /** Whether a task's child tasks stand open under its row, folded until first opened. */
   readonly opened: (taskId: string) => boolean;
+  /** Every listed task by its id, through which a child task under a parent the view hides is walked to the ancestor it stands under. */
+  readonly every: TasksById;
   /** A task's row or an agent's, as it stands in any list of the sidebar, at the depth it stands nested at and in its place among its siblings (`nestsOf`). */
   readonly row: (
     row: DrawnTaskRow,
@@ -660,7 +668,7 @@ function SectionRows({
   rows: readonly TaskRow[];
   folded: boolean;
 }): React.JSX.Element {
-  const nested = useNestedRows(rows, context.opened, context.current);
+  const nested = useNestedRows(rows, context.opened, context.current, context.every);
   // Note that a row on its way out has no place among the rows a drag or a menu moves.
   const shown = useLeaving(nested, ({ row }) => taskRowKey(row));
   const keys = useMemo(() => shown.map(({ key }) => key), [shown]);

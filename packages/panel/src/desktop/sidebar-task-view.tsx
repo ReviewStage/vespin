@@ -13,7 +13,7 @@ import {
 import { ACTOR_KIND, type Actor, actorName, creatorActor, memberActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ASSIGNED_TO, type AssignedTo, TASK_GROUPING } from "@repo/ui/task-list-model";
-import { FolderGitIcon, SlidersHorizontalIcon } from "lucide-react";
+import { FolderGitIcon, ListChecksIcon, SlidersHorizontalIcon } from "lucide-react";
 import { useAppCommand } from "../app-commands.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useMemberDirectory } from "../member-directory.js";
@@ -24,11 +24,13 @@ import type { TaskListViewControl } from "./task-list-view.js";
 import { FILTERED } from "./tasks-page-options.js";
 
 /**
- * sidebar-task-view.tsx -- the Tasks head's View options: how the list groups its tasks, and whose it holds.
+ * sidebar-task-view.tsx -- the Tasks head's View options: how the list groups its tasks, whose it holds, and whether it shows finished sub-tasks.
  *
  * The sidebar lists the work under way, browsing left to the Tasks page, so
  * its one button, the Inbox's own sliders at the Tasks head's end, drops the
- * window's menu with two choices: Group by, Repository or None, and, in a
+ * window's menu: Group by repository, a switch; Show finished sub-tasks, a
+ * switch that stands each parent's finished sub-tasks back under it, muted,
+ * as Linear's Always hide completed sub-issues turned off does; and, in a
  * shared workspace, Assigned to: Me, Anyone, or each member by face. The
  * head itself says whose tasks the list holds, "My tasks", "Everyone's
  * tasks", or one member's, and while it holds anything but the reader's own
@@ -50,6 +52,9 @@ const ASSIGNED_TO_PLACEHOLDER = "Search members";
 
 /** The switch that groups the list under its repositories' headers, or lists it in one run. */
 const GROUP_BY_REPOSITORY = "Group by repository";
+
+/** The switch that stands each parent's finished sub-tasks under it, or leaves them out. */
+const SHOW_FINISHED_SUB_TASKS = "Show finished sub-tasks";
 
 /** What the Tasks head says for Me and Anyone; a member's list is called by their name (`tasksHeadWords`). */
 const TASKS_HEAD_WORDS = {
@@ -106,7 +111,7 @@ function assignedToChoices(
   ];
 }
 
-/** The menu's choices: how the list groups, and, where the workspace is shared, whose tasks it holds. */
+/** The menu's choices: how the list groups, whether it shows finished sub-tasks, and, where the workspace is shared, whose tasks it holds. */
 function viewEntries(
   control: TaskListViewControl,
   shared: boolean,
@@ -124,9 +129,18 @@ function viewEntries(
     onSelect: () =>
       control.onGrouping(byRepository ? TASK_GROUPING.NONE : TASK_GROUPING.REPOSITORY),
   };
+  const finished: MenuAction = {
+    label: SHOW_FINISHED_SUB_TASKS,
+    icon: <ListChecksIcon />,
+    checked: view.finishedSubTasks,
+    mark: MENU_ITEM_MARK.SWITCH,
+    stays: true,
+    onSelect: () => control.onFinishedSubTasks(!view.finishedSubTasks),
+  };
   return [
     [
       grouping,
+      finished,
       ...(shared
         ? [
             // Note that a workspace's members may run to hundreds, so they are searched in a panel that draws only those near its view.
@@ -216,9 +230,9 @@ function offer(offered: boolean, changes: boolean, run: () => void): (() => void
 
 /**
  * The view's choices as ⌘K offers them, each only while it would change
- * the list: Group tasks by repository, or in one list; and in a shared
- * workspace Show my tasks and Show everyone's tasks. They act as the View
- * options menu's choices do.
+ * the list: Group tasks by repository, or in one list; Show or Hide
+ * finished sub-tasks; and in a shared workspace Show my tasks and Show
+ * everyone's tasks. They act as the View options menu's choices do.
  */
 export function useTaskViewCommands({
   offered,
@@ -230,13 +244,17 @@ export function useTaskViewCommands({
   control: TaskListViewControl;
   shared: boolean;
 }): void {
-  const { grouping, assignedTo } = control.view;
+  const { grouping, assignedTo, finishedSubTasks } = control.view;
   const group = (to: typeof grouping) =>
     offer(offered, grouping !== to, () => control.onGrouping(to));
   const assign = (to: AssignedTo) =>
     offer(offered && shared, assignedTo.kind !== to.kind, () => control.onAssignedTo(to));
   useAppCommand(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY, group(TASK_GROUPING.REPOSITORY));
   useAppCommand(APP_COMMAND.LIST_TASKS_UNGROUPED, group(TASK_GROUPING.NONE));
+  const finished = (shown: boolean) =>
+    offer(offered, finishedSubTasks !== shown, () => control.onFinishedSubTasks(shown));
+  useAppCommand(APP_COMMAND.SHOW_FINISHED_SUB_TASKS, finished(true));
+  useAppCommand(APP_COMMAND.HIDE_FINISHED_SUB_TASKS, finished(false));
   useAppCommand(APP_COMMAND.SHOW_MY_TASKS, assign({ kind: ASSIGNED_TO.ME }));
   useAppCommand(APP_COMMAND.SHOW_EVERYONES_TASKS, assign({ kind: ASSIGNED_TO.ANYONE }));
 }

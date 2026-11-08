@@ -21,7 +21,13 @@
  */
 
 import type { ListRowFold, ListRowNest } from "@repo/ui";
-import { type DrawnTaskRow, drawnTaskRows, TASK_ROW, type TaskRow } from "@repo/ui/task-list-model";
+import {
+  type DrawnTaskRow,
+  drawnTaskRows,
+  TASK_ROW,
+  type TaskRow,
+  type TasksById,
+} from "@repo/ui/task-list-model";
 import { useRef } from "react";
 
 /** The words a parent's fold is named by, before its name. */
@@ -150,8 +156,9 @@ export function useNestedRows(
   rows: readonly TaskRow[],
   opened: (taskId: string) => boolean,
   standing: (row: TaskRow) => boolean,
+  every: TasksById,
 ): readonly DrawnTaskRow[] {
-  const drawn = drawnTaskRows(rows, opened, standing);
+  const drawn = drawnTaskRows(rows, opened, standing, every);
   const held = useRef(drawn);
   // Note that the ref follows the drawing as it renders, so a list that changed is handed on the same frame.
   if (!sameDrawn(held.current, drawn)) held.current = drawn;

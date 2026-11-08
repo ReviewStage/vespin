@@ -44,7 +44,7 @@ import { type AssigneeFace, accountActor, assigneeFace, creatorActor } from "@re
 import { confirmAsked } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { type ChildTaskCount, repositoryLabel } from "@repo/ui/task-list-model";
+import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/ui/task-list-model";
 import {
   DOCUMENT_REGION,
   RENAME_FAILED_NOTE,
@@ -1007,7 +1007,9 @@ function SidebarTaskCard({
  * and no face where its group is its creator's. Its time is the one the
  * list's order chooses. Pin
  * and Mark done stand in place of all of it while the row is hovered or
- * reached from the keyboard.
+ * reached from the keyboard. A finished sub-task nested under its parent,
+ * which the view shows only when asked, is muted, so the open work stands
+ * out among them.
  * A press opens it, and its actions are one menu opened alike by the row's ⋯,
  * a right-click, a long press, and the menu key (`ListRow`'s `menu`). A
  * finger's row draws neither its ⋯ nor Pin and Mark done, as a phone's
@@ -1171,6 +1173,7 @@ export function SidebarTask({
           }
           current={current ? LIST_ROW_CURRENT.PAGE : undefined}
           unread={unread}
+          muted={depth !== undefined && depth > 0 && taskFinished(task)}
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}

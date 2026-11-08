@@ -317,6 +317,24 @@ test("a pinned parent's child tasks stand under it in Pinned, folded until opene
   assert.deepEqual(rowNames(sidebar, "My tasks"), []);
 });
 
+test("a finished sub-task the view hides hands its open child tasks to the nearest parent the sidebar draws, which folds them", () => {
+  const sidebar = mountSidebar(
+    tasksControl({
+      tasks: [
+        family("Onboarding", undefined, { status: TASK_STATUS.IN_PROGRESS }),
+        family("Audit", "Onboarding", { status: TASK_STATUS.DONE }),
+        family("Delete", "Audit", { status: TASK_STATUS.IN_PROGRESS }),
+        family("Keep", "Delete", { status: TASK_STATUS.TODO }),
+      ],
+    }),
+  );
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding"]);
+
+  act(() => childFold(sidebar, "Onboarding").click());
+  act(() => childFold(sidebar, "Delete").click());
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding", "Delete", "Keep"]);
+});
+
 test("a canceled parent the view hides takes its child tasks to do out of the sidebar with it", () => {
   const sidebar = mountSidebar(
     tasksControl({

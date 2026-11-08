@@ -149,18 +149,26 @@ test("a sidebar never folded opens", () => {
   expect(draw(() => useSidebarCollapse(false, false)).now().collapsed).toBe(false);
 });
 
-test("a task list view kept with no Assigned to opens on the reader's own tasks, and Anyone chosen is kept", () => {
+test("a task list view kept with no Assigned to opens on the reader's own tasks, its finished sub-tasks hidden, and Anyone chosen is kept", () => {
   keep("app.sidebarTaskViews", '{"w1":{"grouping":"repository"},"w2":{"grouping":"none"}}');
   const list = draw(() => ({
     w1: useTaskListView("w1", false),
     w2: useTaskListView("w2", false),
   }));
-  expect(list.now().w1.view).toEqual({ grouping: "repository", assignedTo: { kind: "me" } });
-  expect(list.now().w2.view).toEqual({ grouping: "none", assignedTo: { kind: "me" } });
+  expect(list.now().w1.view).toEqual({
+    grouping: "repository",
+    assignedTo: { kind: "me" },
+    finishedSubTasks: false,
+  });
+  expect(list.now().w2.view).toEqual({
+    grouping: "none",
+    assignedTo: { kind: "me" },
+    finishedSubTasks: false,
+  });
   act(() => list.now().w2.onAssignedTo({ kind: "anyone" }));
   expect(JSON.parse(kept("app.sidebarTaskViews") ?? "{}")).toEqual({
     w1: { grouping: "repository" },
-    w2: { grouping: "none", assignee: { kind: "anyone" } },
+    w2: { grouping: "none", assignee: { kind: "anyone" }, finished: false },
   });
   // A later launch reads Anyone back.
   act(() => root?.unmount());

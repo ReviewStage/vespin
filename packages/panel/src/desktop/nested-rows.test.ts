@@ -31,6 +31,7 @@ const DRAWN = drawnTaskRows(
   KEPT,
   () => true,
   () => false,
+  new Map(),
 );
 const at = (name: string) => DRAWN.findIndex(({ row }) => taskRowName(row) === name);
 
