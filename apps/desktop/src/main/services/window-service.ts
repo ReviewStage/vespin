@@ -197,7 +197,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   /**
    * Every wait this service schedules — the settling a display change waits
    * out — held so the quit can take them back. Each opens a window when it
-   * fires, and the teardown now runs for seconds with the drain behind it, so
+   * fires, and the teardown runs for seconds with the drain behind it, so
    * one landing afterwards would re-open what the teardown had just given
    * back.
    */

@@ -132,9 +132,7 @@ export class NativeHelper {
 
   #finish(): void {
     if (this.#ended) return;
-    // A process exit cannot complete a partially written event. In particular,
-    // treating `down` without its newline as a press can leave hold-to-talk
-    // without the matching release the dying helper owed.
+    // A process exit cannot complete a partially written line, so it is dropped.
     this.#buffer = "";
     this.#ended = true;
     this.#child = undefined;
