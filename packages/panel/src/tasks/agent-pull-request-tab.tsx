@@ -1908,7 +1908,7 @@ function PullRequestHead({
   const { author, opened, merged } = facts;
   return (
     <PeopleLine>
-      <span className="pull-request-branch-row flex min-w-0 max-w-full items-center gap-control-gap">
+      <span className="pull-request-branch-row flex min-w-0 max-w-full flex-wrap items-center gap-control-gap">
         <PullRequestBranches base={facts.base} head={facts.head} headOwner={facts.headOwner} />
         {pullRequest === undefined ? null : (
           <PullRequestStack stack={pullRequest.stack ?? []} number={pullRequest.number} />

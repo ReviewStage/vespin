@@ -104,17 +104,25 @@ export function PullRequestStack({
   });
   return (
     <>
-      <Tooltip label={label}>
-        <Chip look={CHIP_LOOK.OUTLINE} chevron aria-label={label} {...menu.trigger(dropBelowStart)}>
-          <LayersIcon aria-hidden="true" />
-          <ChipName>
-            Stack{" "}
-            <span className="text-muted-foreground tabular-nums">
-              {at + 1}/{stack.length}
-            </span>
-          </ChipName>
-        </Chip>
-      </Tooltip>
+      {/* Note that the chip keeps its words whole where the row runs short, as the base branch does, because a cut "Sta…" says nothing; the head gives way instead. */}
+      <span className="pull-request-stack inline-flex flex-none">
+        <Tooltip label={label}>
+          <Chip
+            look={CHIP_LOOK.OUTLINE}
+            chevron
+            aria-label={label}
+            {...menu.trigger(dropBelowStart)}
+          >
+            <LayersIcon aria-hidden="true" />
+            <ChipName>
+              Stack{" "}
+              <span className="text-muted-foreground tabular-nums">
+                {at + 1}/{stack.length}
+              </span>
+            </ChipName>
+          </Chip>
+        </Tooltip>
+      </span>
       {menu.drawn === undefined ? null : (
         <ActionMenu
           replayUnmasked
