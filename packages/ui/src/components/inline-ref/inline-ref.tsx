@@ -173,11 +173,19 @@ function rootClass({
   return parts.join(" ");
 }
 
-/** A token's glyph, centered in a box the line's size; a pill's in the muted ink. */
+/**
+ * A token's glyph, centered in a box the line's size; a pill's in the muted
+ * ink. Note that a pill's box is a line of words tall and at least as wide,
+ * and a mark drawn at its own size (an agent's 16px tile, a pull request's
+ * 12px mark) stands centered on it, spilling evenly above and below rather
+ * than hanging from its corner, and widens it, so its name keeps its gap.
+ */
 function glyphClass(look: InlineRefLook): string {
   const glyph =
-    "ui-inline-ref-glyph inline-grid flex-none place-items-center empty:hidden [&>svg]:size-[1em]";
-  return look === INLINE_REF_LOOK.PILL ? `${glyph} size-[1em] text-muted-foreground` : glyph;
+    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [&>svg]:size-[1em]";
+  return look === INLINE_REF_LOOK.PILL
+    ? `${glyph} h-[1em] min-w-[1em] text-muted-foreground`
+    : glyph;
 }
 
 /** A token's name, alone on the words' baseline: struck through where gone, a link's name underlined under the pointer, and a wash's at least a mark tall. */
