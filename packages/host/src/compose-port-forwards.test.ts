@@ -135,6 +135,8 @@ function subject(options: { taken?: number[] } = {}) {
       share: composer.acts.PORT_SHARE_SET,
       /** The service closed the agent's link, as it closes one no one visited. */
       expire: (agentId: string) => void shares.delete(agentId),
+      /** The port the service reads as shared for the agent, with its link. */
+      shared: (agentId: string) => shares.get(agentId),
       /** How forwarding stands, as the windows were last told. */
       told: () => told.last,
       composer,
@@ -315,4 +317,18 @@ it.effect(
       assert.equal(tunnels.length, 2);
       assert.deepEqual(tunnels[1]?.sent.map(readFrame), [{ type: TUNNEL_FRAME.OPEN, channel: 0 }]);
     }),
+);
+
+it.effect("turning forwarding off closes the agent's public link", () =>
+  Effect.gen(function* () {
+    const { set, share, serve, shared } = yield* subject();
+    serve(AGENT_ID, [3000]);
+    yield* set({ agentId: AGENT_ID, on: true });
+    yield* settle;
+    yield* share({ agentId: AGENT_ID, port: 3000 });
+
+    yield* set({ agentId: AGENT_ID, on: false });
+
+    assert.equal(shared(AGENT_ID), undefined);
+  }),
 );

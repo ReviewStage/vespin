@@ -313,12 +313,27 @@ export function composePortForwards(
         yield* tell;
       });
 
+    /** The ending agent's public link closed, a close the service refuses logged rather than holding forwarding on. */
+    const unshared = (ending: Forwarding) =>
+      Effect.gen(function* () {
+        if (ending.shared === undefined) return;
+        const answer = yield* withHttp(client.unshare(ending.agentId));
+        if ("failure" in answer)
+          yield* Effect.logWarning(
+            `port-forwards: a shared link was not closed (${answer.failure})`,
+          );
+      });
+
+    /** Forwarding turned off, and its public link with it, since nothing closes one once forwarding is off. */
     const turnOff = Effect.suspend(() => {
       const ending = forwarding;
       forwarding = undefined;
       return ending === undefined
         ? Effect.void
-        : Effect.andThen(Scope.close(ending.scope, Exit.void), tell);
+        : unshared(ending).pipe(
+            Effect.andThen(Scope.close(ending.scope, Exit.void)),
+            Effect.andThen(tell),
+          );
     });
 
     /** Forwarding let go for the agent it was on, unless another agent has taken it since. */
