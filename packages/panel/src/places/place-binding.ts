@@ -238,10 +238,14 @@ export interface TaskAsking {
 /** The task the host binds the window to, `open`, as the window asks for another (see the module's head). */
 export function useTaskAsk(open: string | undefined): TaskAsking {
   const [asked, setAsked] = useState<TaskAsk | undefined>(undefined);
-  const boundFor = asked !== undefined && asked.over === open ? asked.taskId : open;
   // Note that what is bound for is read at the call too, from the ask as it was last made or taken back rather than as it
   // was last drawn, since an arrival may be drawn before the ask that led there is.
   const latest = useRef<TaskAsk | undefined>(undefined);
+  // Note that the host's next move answers the ask, so it is let go there, because an ask kept would stand again where
+  // the host binds back the task it was asked over, as a delete of a task opened from Home binds none again.
+  if (asked !== undefined && asked.over !== open) setAsked(undefined);
+  if (latest.current !== undefined && latest.current.over !== open) latest.current = undefined;
+  const boundFor = asked !== undefined && asked.over === open ? asked.taskId : open;
   const openNow = useRef(open);
   openNow.current = open;
   // Note that the ask stands over the task open as it is made, though the door making it was handed long before, as a toast's is.
