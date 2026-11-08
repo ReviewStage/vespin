@@ -73,9 +73,9 @@ import {
 } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { CURRENT_TXID } from "../core/txid.js";
 import { conversations, messages, turnlessUserLine, turns } from "../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
-import { LOST_TURNS } from "./abandoned-turns.js";
 import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
 import { EpochMillisColumnSchema, InstantColumnSchema, nullable } from "./columns.js";
 import {
@@ -244,6 +244,13 @@ export const STORE_WRITE_EFFECT = {
   REPEATED: "repeated",
   IGNORED: "ignored",
 } as const;
+
+/**
+ * How long a withdrawn line no turn took is kept before the writer deletes
+ * it: a day and an hour, far past the longest a runner holds a line before
+ * it opens the turn that takes it.
+ */
+export const WITHDRAWN_LINE_KEEP_MS = 25 * 60 * 60 * 1000;
 
 type StoreWriteEffect = (typeof STORE_WRITE_EFFECT)[keyof typeof STORE_WRITE_EFFECT];
 
@@ -636,9 +643,6 @@ const RowIdSchema = Schema.Struct({ id: Schema.String });
 
 /** A message row as its insert answers it: its id, and the transaction that wrote it, which Neon Realtime names the change by. */
 const InsertedRowSchema = Schema.Struct({ id: Schema.String, txid: Schema.String });
-
-/** The id of the transaction a statement runs in, read in its own `RETURNING`, as a decimal string so its 64 bits stay exact. */
-const CURRENT_TXID = sql<string>`pg_current_xact_id()::text`;
 
 /**
  * The `jsonb` field a stored spoken line is told apart by, which the builder
@@ -1917,7 +1921,7 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* deleteWithdrawnLine({ conversationId: context.target.conversationId, clientId });
   yield* deleteStaleWithdrawnLines({
     conversationId: context.target.conversationId,
-    before: new Date(context.now.getTime() - LOST_TURNS.WITHDRAWN_LINE_KEEP_MS),
+    before: new Date(context.now.getTime() - WITHDRAWN_LINE_KEEP_MS),
   });
   // A line already under the key is the send a lost answer was for: the runtime has it, and hears nothing again.
   const standing = yield* messageByClientId(context, clientId);
@@ -2001,7 +2005,7 @@ const deleteWithdrawnLine = SqlSchema.void({
 
 /**
  * Deletes the conversation's withdrawn lines no turn took, withdrawn before
- * the instant given (`LOST_TURNS.WITHDRAWN_LINE_KEEP_MS` ago). Note that the
+ * the instant given (`WITHDRAWN_LINE_KEEP_MS` ago). Note that the
  * runtime hands a line it took to the turn under way or to one it opens at
  * once, so a line withdrawn that long ago is one no turn will ever take,
  * which every read already leaves out.

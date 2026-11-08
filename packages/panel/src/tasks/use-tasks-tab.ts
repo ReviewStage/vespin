@@ -2521,43 +2521,7 @@ export function useTasksTab(input: {
     });
   };
 
-  // An agent's tab an earlier version pinned on this Mac becomes the agent's
-  // own pin on the account, standing where it was dragged, as a Plan tab's
-  // becomes its task's: once the list followed live names the task it was
-  // pinned on, asked after that agent's pins already in flight, so an Unpin
-  // pressed at launch is not undone by it. It leaves this Mac only once the
-  // account's pin landed, archived agents among those pinned, and a refusal
-  // keeps it for a later launch, drawn nowhere. Note that a refusal of an
-  // agent the service says it reads none of keeps it too, because the
-  // service answers so as well for an agent the account cannot see just now,
-  // its access to the agent's repository gone for a while, and only the pin
-  // kept here would bring it back. An agent the account already pinned only
-  // lets it go. Each agent is asked once a launch.
-  const carriedAsked = useRef(new Set<string>());
-  const { carried, onCarried } = sidePanel;
-  const { taskAgents, taskAgentPins = NO_TASK_AGENT_PINS } = tasks;
-  const askCarried = useRef(askAgentPin);
-  askCarried.current = askAgentPin;
-  useEffect(() => {
-    if (fixture !== undefined || taskAgents === undefined) return;
-    for (const pin of carried) {
-      if (carriedAsked.current.has(pin.agent)) continue;
-      if (!tasks.tasks.some((task) => task.id === pin.task)) continue;
-      carriedAsked.current.add(pin.agent);
-      const pinned =
-        taskAgentPins.some((each) => each.agentId === pin.agent) ||
-        (tasklessAgents ?? []).some(
-          (agent) => agent.id === pin.agent && agent.pinnedAt !== undefined,
-        );
-      if (pinned) {
-        onCarried(pin.agent);
-        continue;
-      }
-      askCarried.current(pin.agent, true, pin.position).then((asked) => {
-        if (asked === AGENT_PIN_ASKED.CHANGED) onCarried(pin.agent);
-      });
-    }
-  }, [fixture, carried, tasks.tasks, taskAgents, taskAgentPins, tasklessAgents, onCarried]);
+  const { taskAgentPins = NO_TASK_AGENT_PINS } = tasks;
 
   // A fixture's pins are moved nowhere, as they are pinned nowhere. Each pin
   // a drop gave a place is asked of the service, which main draws at once: a

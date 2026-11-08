@@ -16,6 +16,7 @@
 
 import { randomUUID } from "node:crypto";
 import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { TXID_RETURNING, TxidRowSchema } from "@repo/database/core/txid";
 import {
   INTEGRATION_ROW_STATUS,
   type IntegrationRowStatus,
@@ -30,12 +31,6 @@ import {
 import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-
-/** The transaction a write committed in, as Postgres names it, which a live read that carries it says it holds. */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
-/** The transaction a write committed in, as a statement answers it. */
-const TxidSchema = Schema.Struct({ txid: Schema.String });
 
 export type IntegrationStoreEffect<A> = Effect.Effect<
   A,
@@ -222,7 +217,7 @@ const BeginSchema = Schema.Struct({
  */
 const upsertSignIn = SqlSchema.findAll({
   Request: BeginSchema,
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ id, userId, provider, connectionName, connectSubject, state, at }) =>
     Database.use((db) =>
       db
@@ -243,7 +238,7 @@ const upsertSignIn = SqlSchema.findAll({
           set: { state, stateIssuedAt: at, updatedAt: at },
           setWhere: eq(integrationConnection.connectSubject, connectSubject),
         })
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -348,14 +343,14 @@ const RenameSchema = Schema.Struct({
 
 const updateLabel = SqlSchema.findAll({
   Request: RenameSchema,
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ at, label, ...account }) =>
     Database.use((db) =>
       db
         .update(integrationConnection)
         .set({ label, updatedAt: at })
         .where(ofAccount(account))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -460,13 +455,13 @@ const HeldAccountSchema = Schema.Struct({
 
 const deleteHeld = SqlSchema.findAll({
   Request: HeldAccountSchema,
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ id, ...account }) =>
     Database.use((db) =>
       db
         .delete(integrationConnection)
         .where(and(ofAccount(account), eq(integrationConnection.id, id)))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -485,7 +480,7 @@ export function deleteIntegrationAccount(
 
 const deleteUnfinished = SqlSchema.findAll({
   Request: CompleteSchema,
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ state, ...account }) =>
     Database.use((db) =>
       db
@@ -497,20 +492,20 @@ const deleteUnfinished = SqlSchema.findAll({
             eq(integrationConnection.status, INTEGRATION_ROW_STATUS.PENDING),
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 const clearState = SqlSchema.findAll({
   Request: CompleteSchema,
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ at, state, ...account }) =>
     Database.use((db) =>
       db
         .update(integrationConnection)
         .set({ state: null, stateIssuedAt: null, updatedAt: at })
         .where(and(ofAccount(account), eq(integrationConnection.state, state)))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 

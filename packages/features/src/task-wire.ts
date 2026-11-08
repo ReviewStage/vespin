@@ -1072,8 +1072,6 @@ export type TaskAgentRefusal = typeof taskAgentRefusalSchema.Type;
 export const taskStartAnswerSchema = EffectSchema.Struct({
   plan: taskSchema,
   agent: EffectSchema.optionalKey(agentSummarySchema),
-  /** Retired, and kept optional so every answer decodes (`agentAnswerSchema`'s). */
-  notice: EffectSchema.optionalKey(EffectSchema.String),
   agentRefusal: EffectSchema.optionalKey(taskAgentRefusalSchema),
   txid: EffectSchema.optionalKey(taskTxidSchema),
 });

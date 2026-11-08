@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
@@ -14,7 +14,6 @@ import { roleOf, WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { and, asc, eq, gt, ne, sql } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import type { StoreFailure } from "../http/store-failure.js";
 
 /**
  * github-installations.ts -- the GitHub App installations connected to a workspace.

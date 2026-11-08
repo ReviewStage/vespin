@@ -107,7 +107,7 @@ const DeviceCodesJson = Schema.fromJsonString(
 );
 
 /** What a poll answers: how the login stands, and whether this poll is the one that connected it. */
-export interface ChatGptDevicePoll {
+interface ChatGptDevicePoll {
   readonly outcome: ChatGptDeviceLoginOutcome;
   readonly connectedNow: boolean;
 }

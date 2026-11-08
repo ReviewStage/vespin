@@ -141,7 +141,7 @@ const DARK_STYLE = [
 ].join("\n");
 
 /** One invitation as its email tells it. */
-export interface InvitationLetter {
+interface InvitationLetter {
   /** The address invited, the email's one recipient. */
   readonly email: string;
   /** The accept page's address for this invitation, on the service's own origin. */

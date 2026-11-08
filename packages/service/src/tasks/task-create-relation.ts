@@ -114,7 +114,7 @@ function blockPairOf(taskId: string, otherId: string, kind: TaskBlockRelation): 
  * sub-task is the parent's own check (`taskParentOf`), so it answers
  * nothing here.
  */
-export const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
+const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   workspaceId: string,
   relation: TaskCreateRelation,
@@ -147,7 +147,7 @@ export const relationAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
  * names the repository each later one must match, because a start naming
  * none would otherwise take one tree's repository and join another's.
  */
-export const relationsAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
+const relationsAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   workspaceId: string,
   relations: readonly TaskCreateRelation[],
@@ -194,7 +194,7 @@ const parentTaken = (
   });
 
 /** The relation written for the task just started, under its maker's transaction: the other task made its child, or a block on the side the kind names; refused as unreached where the other task is out of reach by now. */
-export function relationWritten(
+function relationWritten(
   userId: string,
   taskId: string,
   asked: TaskCreateRelationAsked,
@@ -247,7 +247,7 @@ function taskStarted(
  * a savepoint in, so the answer's `txid` still names the one commit a
  * follower waits for.
  */
-export function createTaskRelated(
+function createTaskRelated(
   userId: string,
   started: NewTask & { readonly id?: string },
   asked: readonly TaskCreateRelationAsked[],

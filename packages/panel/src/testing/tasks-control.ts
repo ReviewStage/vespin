@@ -510,8 +510,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       closedTabs: [],
       used: DRAWN_KINDS,
       pins: [],
-      carried: [],
-      onCarried: ignore,
       subagents: [],
       files: [],
       changes: [],

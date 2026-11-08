@@ -58,6 +58,7 @@ import {
   readConcurrency,
   type StoreFailure,
 } from "../core/query.js";
+import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import { agentTable, type StoredArchive } from "../schemas/agent.js";
 import { agentRepository } from "../schemas/agent-repository.js";
 import { attachment } from "../schemas/attachment.js";
@@ -455,17 +456,6 @@ const findPin = SqlSchema.findOneOption({
 });
 
 /** The reader's pin of the plan, from now; one already standing keeps its instant. */
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * task list waits for that transaction to arrive before it confirms the
- * write.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
-
-/** The transaction a pin's write committed in; none where the pin stood as asked already. */
-const TxidRowSchema = Schema.Struct({ txid: Schema.String });
-
 const insertPin = SqlSchema.findOneOption({
   Result: TxidRowSchema,
   Request: Schema.Struct({ userId: Schema.String, taskId: Schema.String, now: Schema.Date }),
@@ -475,7 +465,7 @@ const insertPin = SqlSchema.findOneOption({
         .insert(taskPin)
         .values({ userId, taskId, pinnedAt: now })
         .onConflictDoNothing()
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -494,7 +484,7 @@ const placePin = SqlSchema.findOneOption({
         .insert(taskPin)
         .values({ userId, taskId, position, pinnedAt: now })
         .onConflictDoUpdate({ target: [taskPin.userId, taskPin.taskId], set: { position } })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -507,7 +497,7 @@ const removePin = SqlSchema.findOneOption({
       db
         .delete(taskPin)
         .where(and(eq(taskPin.userId, userId), eq(taskPin.taskId, taskId)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -524,7 +514,7 @@ const markRead = SqlSchema.findOneOption({
           target: [taskRead.userId, taskRead.taskId],
           set: { readThrough: now, markedUnread: false },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -541,7 +531,7 @@ const markSeen = SqlSchema.findOneOption({
           target: [taskRead.userId, taskRead.taskId],
           set: { readThrough: now },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -559,7 +549,7 @@ const markUnread = SqlSchema.findOneOption({
           set: { markedUnread: true },
           setWhere: sql`not ${taskRead.markedUnread}`,
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -892,7 +882,7 @@ const insertTask = SqlSchema.findOne({
       db
         .insert(task)
         .values(taskValues(write))
-        .returning({ ...TASK_COLUMNS, txid: TXID }),
+        .returning({ ...TASK_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -906,7 +896,7 @@ const insertTaskOnce = SqlSchema.findOneOption({
         .insert(task)
         .values(taskValues(write))
         .onConflictDoNothing({ target: task.id })
-        .returning({ ...TASK_COLUMNS, txid: TXID }),
+        .returning({ ...TASK_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1183,7 +1173,7 @@ const applyChanges = SqlSchema.findOne({
         .update(task)
         .set(changes)
         .where(reachableTask(userId, taskId))
-        .returning({ ...TASK_COLUMNS, txid: TXID }),
+        .returning({ ...TASK_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1192,7 +1182,10 @@ const removeTask = SqlSchema.findOneOption({
   Result: Schema.Struct({ id: Schema.String, txid: Schema.String }),
   execute: ({ userId, taskId }) =>
     Database.use((db) =>
-      db.delete(task).where(reachableTask(userId, taskId)).returning({ id: task.id, txid: TXID }),
+      db
+        .delete(task)
+        .where(reachableTask(userId, taskId))
+        .returning({ id: task.id, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2134,7 +2127,7 @@ const assignUnassigned = SqlSchema.findOneOption({
         .update(task)
         .set({ assigneeId: userId })
         .where(and(reachableTask(userId, taskId), isNull(task.assigneeId)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2166,7 +2159,7 @@ const beginTask = SqlSchema.findOneOption({
         .update(task)
         .set({ status: TASK_STATUS.IN_PROGRESS, completedAt: null, doneBy: null })
         .where(and(reachableTask(userId, taskId), ne(task.status, TASK_STATUS.IN_PROGRESS)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 

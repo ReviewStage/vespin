@@ -79,7 +79,7 @@ const ANTHROPIC_VERSION_POINT = "-";
  * service tier, which it sends as the API's `priority` and which the catalog
  * prices a GPT fast slug at (its base model's `service_tiers.priority`).
  */
-export const FAST_PROVIDERS: ReadonlySet<ModelProvider> = new Set([
+const FAST_PROVIDERS: ReadonlySet<ModelProvider> = new Set([
   MODEL_PROVIDER.ANTHROPIC,
   MODEL_PROVIDER.OPENAI,
 ]);
@@ -141,7 +141,7 @@ export class ModelCatalogUnavailable extends Data.TaggedError("ModelCatalogUnava
 }> {}
 
 /** Why a model choice is refused. */
-export const MODEL_CHOICE_REFUSAL = {
+const MODEL_CHOICE_REFUSAL = {
   /** No offered model carries this id. */
   UNKNOWN_MODEL: "unknown-model",
   /** The model is offered, and does not list this effort. */

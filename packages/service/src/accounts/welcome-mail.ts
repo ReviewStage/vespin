@@ -53,7 +53,7 @@ const WELCOME_TEMPLATE = {
 } as const;
 
 /** One new account as its note addresses it. */
-export interface WelcomeLetter {
+interface WelcomeLetter {
   /** The new account's address, the email's one recipient. */
   readonly email: string;
   /** The account's name as its sign-in gave it; empty where it has none. */

@@ -29,6 +29,7 @@ import { eq, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { CURRENT_TXID } from "../core/txid.js";
 import { user } from "../schemas/auth.js";
 import { accountPreference } from "../schemas/preferences.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -347,7 +348,7 @@ const upsertPreference = SqlSchema.findOne({
         .insert(accountPreference)
         .values({ userId: write.userId, ...columns })
         .onConflictDoUpdate({ target: accountPreference.userId, set: merged })
-        .returning({ ...PREFERENCE_COLUMNS, txid: sql<string>`pg_current_xact_id()::text` }),
+        .returning({ ...PREFERENCE_COLUMNS, txid: CURRENT_TXID }),
     );
   },
 });

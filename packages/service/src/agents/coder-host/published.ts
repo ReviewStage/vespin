@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type AgentRepositoryEntry,
   readAgentRepositories,
@@ -42,7 +42,6 @@ import {
   pullRequestOfBranch,
 } from "../../github/pull-requests.js";
 import { agentMember, agentWorkspace } from "../../github/workspace-repository.js";
-import type { StoreFailure } from "../../http/store-failure.js";
 import { settleTaskIfFinished } from "../../tasks/task-finish.js";
 import { CODER } from "./bounds.js";
 
