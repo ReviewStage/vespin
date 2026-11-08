@@ -171,6 +171,7 @@ interface RemovedComment {
  */
 const COMMENT_REMOVAL = {
   words: PAGE_REVIEW_WORDS.REMOVED,
+  unmasked: () => true,
   act: (lines, { clientKey }) =>
     lines.set((now) => now.filter((comment) => comment.clientKey !== clientKey)),
   undo: (lines, { at, gone }) => lines.set((now) => [...now.slice(0, at), gone, ...now.slice(at)]),

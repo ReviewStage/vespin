@@ -150,6 +150,7 @@ const resetWrite = (
   ResetAnswer
 > => ({
   words: RESET_NOTES[scope],
+  unmasked: () => true,
   kind: ACT_KIND.SETTINGS_RESET,
   read: (_settings, reset) => reset,
   // Note that the reset keeps every field of its group but those it takes back, so nothing else moves.

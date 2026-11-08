@@ -124,6 +124,7 @@ test("⌘Z leaves a pin taken back since, on another Mac, as it stands, and send
 /** The pin as a declared write, its inverse an unpin of its own, held while the task drawn is pinned. */
 const PIN_WRITE = {
   words: "Task pinned",
+  unmasked: () => true,
   kind: ACT_KIND.TASKS_PIN,
   read: (_rows, taskId) => taskId,
   act: (send, taskId) => send({ taskId, pinned: true }),
@@ -215,6 +216,7 @@ test("once the account changes, an undo queued behind another sends nothing, and
 /** A line of held words as a window holds them alone, and its removal of one by key. */
 const HELD_REMOVAL = {
   words: "Removed",
+  unmasked: () => true,
   act: (held, word) => held.delete(word),
   undo: (held, word) => held.add(word),
   holds: (held, word) => !held.has(word),

@@ -692,6 +692,7 @@ function holdsWords(draft: AgentDraft, words: ClosedDraft["words"]): boolean {
  */
 const DRAFT_CLOSING = {
   words: DRAFT_CLOSED,
+  unmasked: () => true,
   act: ({ letGo }, { choices }) => letGo(choices.id),
   undo: ({ restore }, closed) => restore(closed),
   holds: ({ startsOn, draft }, { on, choices }) => on === startsOn && draft?.id !== choices.id,

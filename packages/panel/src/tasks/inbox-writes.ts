@@ -84,6 +84,7 @@ const INBOX_WRITE = {
     holds: (now, wanted) => now.unread === wanted.unread,
     kind: ACT_KIND.AGENTS_INBOX_READ_STATE,
     send: (send, itemId, { unread }) => inboxKept(send({ itemId, unread })),
+    unmasked: true,
     surface: FAILURE_SURFACE.INBOX_MARK,
     refused: (_itemId, { unread }, kept, refused) => ({ words: markedNote(unread, kept, refused) }),
   } satisfies RowWrite<InboxRows, MarkFields, typeof ACT_KIND.AGENTS_INBOX_READ_STATE>,
@@ -95,6 +96,7 @@ const INBOX_WRITE = {
     holds: (now, wanted) => now.remindAt === wanted.remindAt,
     kind: ACT_KIND.AGENTS_INBOX_REMIND,
     send: (send, itemId, { remindAt }) => inboxKept(send({ itemId, until: remindAt })),
+    unmasked: true,
     surface: FAILURE_SURFACE.INBOX_MARK,
     // Note that several items refused say it once, each refusal's words being the same.
     refused: (itemId, { remindAt }) => ({

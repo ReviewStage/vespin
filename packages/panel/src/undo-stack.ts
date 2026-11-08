@@ -14,7 +14,9 @@
  * still out then keeps nothing, and a run still waiting sends nothing. Only
  * this module builds an Undo toast, so every Undo runs an entry, bar the
  * writes `TOAST_ONLY_UNDO` declares; an entry pushed off a list past its
- * bound withdraws its toast, whose Undo would find nothing.
+ * bound withdraws its toast, whose Undo would find nothing. A toast's words
+ * are masked in session replay unless its declaration says they are all the
+ * app's own (`unmasked`), which every declaration must say.
  *
  * A row entry (`pressRows`) is built from a declaration of its write's kind
  * (`ROW_WRITE`): the fields the act sets, read off the rows its caller
@@ -215,7 +217,7 @@ function undoToast(words: string, undo: () => void): ToastNotice {
 
 /** The toast a write that happened at once says it with where nothing is left to take back: its words alone. */
 function doneToast(words: string): ToastNotice {
-  return { words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE, replayUnmasked: true };
+  return { words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE };
 }
 
 /** Says what a run came to: a refusal and a row changed since, always; a key's run that applied names its entry, and one from its own toast says nothing more. */
@@ -367,6 +369,8 @@ export interface RowWrite<Rows, Fields extends object, Kind extends PortActKind>
   readonly kind: Kind;
   /** Sends `id`'s row the fields `fields` names on `send`, answering whether the service kept it. */
   readonly send: (send: RowSend<Kind>, id: string, fields: Fields) => Promise<Kept>;
+  /** Whether the words its callers keep it with are all the app's own, which a screen recording shows as they read; one quoting a name leaves this false. */
+  readonly unmasked: boolean;
   /** What a refusal of it is reported as. */
   readonly surface: FailureSurface;
   /** What a run's refusal says and is about, of the first row refused, the fields sent it, and how many rows the run sent were kept and refused; the stack's own words where none. */
@@ -510,7 +514,7 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
     keep: (words, kept = () => true) => {
       if (since !== generation) return undefined;
       const landed = changes.filter((change) => kept(change.id));
-      if (landed.length === 0) return doneToast(words);
+      if (landed.length === 0) return { ...doneToast(words), replayUnmasked: write.unmasked };
       const toast = undoable({
         words,
         undo: () =>
@@ -530,7 +534,7 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
             (each) => each.after,
           ),
       });
-      return { ...toast, replayUnmasked: true };
+      return { ...toast, replayUnmasked: write.unmasked };
     },
   };
 }
@@ -545,8 +549,8 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
 export interface UndoWrite<Rows, Asked, Change, Kind extends PortActKind, Answer> {
   /** What its toast says once the act is kept, and what ⌘Z's toast calls it: the same for every press, or of what the press changed. */
   readonly words: string | ((change: Change) => string);
-  /** Whether its toast's words are all the app's own, for session replay to show; they are where it names none. */
-  readonly unmasked?: (change: Change) => boolean;
+  /** Whether its toast's words are all the app's own, which a screen recording shows as they read; one quoting a name answers false. */
+  readonly unmasked: (change: Change) => boolean;
   /** The act its write and its inverse are sent on, whose mutation a caller's doors send it on. */
   readonly kind: Kind;
   /** What `asked` changes as `rows` show it, read as the press is made; none where there is nothing to change. */
@@ -674,7 +678,7 @@ function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
     undo: () => run(write.holds, write.undo),
     redo: () => run(write.undone, write.act),
   });
-  say({ ...toast, replayUnmasked: write.unmasked?.(change) ?? true });
+  say({ ...toast, replayUnmasked: write.unmasked(change) });
 }
 
 /** What a refusal of a held write says, and what it is reported as. */
@@ -823,6 +827,8 @@ export function pressHeld<Doors, Change, Answer, Released>(
 export interface LocalWrite<Doors, Change> {
   /** What its toast says, and what ⌘Z's toast calls it. */
   readonly words: string;
+  /** Whether its toast's words are all the app's own, which a screen recording shows as they read; one quoting a name answers false. */
+  readonly unmasked: (change: Change) => boolean;
   /** Makes the write. */
   readonly act: (doors: Doors, change: Change) => void;
   /** Makes its inverse. */
@@ -868,7 +874,7 @@ export function pressLocal<Doors, Change>(
   });
   showToast({
     ...toast,
-    replayUnmasked: true,
+    replayUnmasked: write.unmasked(change),
     ...(subject === undefined ? undefined : { subject }),
   });
 }
@@ -949,6 +955,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.TASKS_RENAME,
     send: (send, taskId, { name }) => askKept(send({ taskId, name })),
+    unmasked: true,
     surface: FAILURE_SURFACE.TASK_RENAME,
   } satisfies RowWrite<TaskRows, { readonly name: string }, typeof ACT_KIND.TASKS_RENAME>,
   TASK_STANDING: {
@@ -978,6 +985,7 @@ export const ROW_WRITE = {
               : { assigneeId: assignee.userId, assigneeName: assignee.name }),
         }),
       ),
+    unmasked: true,
     surface: FAILURE_SURFACE.TASK_STANDING,
   } satisfies RowWrite<TaskRows, StandingFields, typeof ACT_KIND.TASKS_SET_STANDING>,
   TASK_PIN: {
@@ -989,6 +997,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.TASKS_PIN,
     send: (send, taskId, pin) => askKept(send({ taskId, ...pinSent(pin) })),
+    unmasked: true,
     surface: FAILURE_SURFACE.TASK_MARK,
   } satisfies RowWrite<TaskRows, PinFields, typeof ACT_KIND.TASKS_PIN>,
   AGENT_PIN: {
@@ -996,6 +1005,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.AGENTS_PIN,
     send: (send, agentId, pin) => agentKept(send({ agentId, ...pinSent(pin) })),
+    unmasked: true,
     surface: FAILURE_SURFACE.AGENT_PIN,
   } satisfies RowWrite<TaskRows, PinFields, typeof ACT_KIND.AGENTS_PIN>,
   AGENT_ARCHIVE: {
@@ -1006,6 +1016,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.AGENTS_ARCHIVE,
     send: (send, agentId, { archived }) => agentKept(send({ agentId, archived })),
+    unmasked: true,
     surface: FAILURE_SURFACE.AGENT_ARCHIVE,
   } satisfies RowWrite<
     readonly AgentSummary[],

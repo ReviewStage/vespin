@@ -199,6 +199,7 @@ function lineStands(text: string, { known }: PictureLine): boolean {
  */
 const PICTURE_ADD = {
   words: ADD_WORDS.ADDED,
+  unmasked: () => true,
   kind: ACT_KIND.TASKS_EDIT,
   read: (_text, asked) => asked,
   act: (send, change) =>

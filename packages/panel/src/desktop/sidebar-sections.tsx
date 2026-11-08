@@ -288,6 +288,7 @@ function sectionStands(sections: TaskSections, sectionId: string): boolean {
 const SECTION_UNDO = {
   DELETE: {
     words: SECTION_DELETED,
+    unmasked: () => true,
     kind: ACT_KIND.TASKS_WRITE_SECTION,
     read: (before, section) => ({ section, before }),
     act: (send, { section }) =>
