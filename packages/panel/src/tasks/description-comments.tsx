@@ -1944,8 +1944,6 @@ function blockAt(
   if (unit === null) return undefined;
   // A list is commented on a bullet at a time, its innermost one under the pointer, and the gaps between them offer none.
   if (target.tagName === "UL" || target.tagName === "OL") return undefined;
-  // A divider holds no words for a thread to stand on, so it offers no button.
-  if (target.tagName === "HR") return undefined;
   const item = target.closest<HTMLElement>("li");
   if (item !== null && unit.contains(item)) return { block: item, unit };
   let block: HTMLElement | null = target;
@@ -2253,6 +2251,11 @@ export function DescriptionCommentLayer({
           ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
           : null;
       setPointed(marked?.dataset.threads?.split(" ")[0]);
+      // A divider holds no words for a thread to stand on, so it offers no button, and the block's it came from goes.
+      if (target instanceof HTMLHRElement) {
+        setHovered(undefined);
+        return;
+      }
       const found = blockAt(target, unitClass);
       if (found === undefined) return;
       // Note that a block whose words a thread already covers is commented on through that thread, so it offers no button.

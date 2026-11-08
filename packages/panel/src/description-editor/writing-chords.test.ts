@@ -139,6 +139,28 @@ test("a divider selected whole holds no words, so the toolbar is told none and �
   assert.equal(links.count, 0);
 });
 
+test("Enter on a divider selected whole opens an empty line under it, even where it is the text's first block", () => {
+  const { element, editor, handle } = mount("---\n\nBelow the rule.\n");
+  act(() => {
+    editor.commands.setNodeSelection(0);
+  });
+  act(() => {
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  act(() => {
+    editor.commands.insertContent("Above the words.");
+  });
+  assert.equal(handle.markdown().trim(), "---\n\nAbove the words.\n\nBelow the rule.");
+});
+
 test("⇧⌘X strikes the description's words", () => {
   const { ran, handle, element } = mount("Ship the invite flow.\n");
   press(element, "x", { shift: true });
