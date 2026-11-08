@@ -25,30 +25,25 @@ import {
   type TasksBlockAnswer,
   type TasksChangeRelationAnswer,
   type TasksSetParentAnswer,
+  type TasksView,
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
 import { repositoryChangeFailureNote } from "@repo/ui/tasks-model";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import {
-  heldTask,
-  pressWrite,
-  type RowDoors,
-  type TaskRows,
-  taskRow,
-  type UndoWrite,
-} from "../undo-stack.js";
+import { heldTask, pressWrite, type TaskRows, taskRow, type UndoWrite } from "../undo-stack.js";
 import {
   appStateIn,
   appStateQuery,
   selectFixtureStaged,
   selectListedTasks,
 } from "../use-app-state.js";
+import { useTaskRowDoors } from "./task-row-doors.js";
 
 /** What the toast says when the service kept no change to a task's blocks, which stand as they were. */
 const BLOCK_REFUSED_NOTE = "That relation could not be changed. Try again.";
@@ -186,13 +181,15 @@ const RELATION_WRITE = {
   >,
 } as const;
 
-/** The tasks the window lists as they stand now, and the plans the host holds for it, which ⌘Z reads a press's rows from (`undo-stack.ts`). */
-function rowsIn(queryClient: QueryClient): TaskRows {
+/**
+ * The tasks the window lists as they stand now, a fixture run's among them.
+ * Note that a name being typed is not drawn over them, as the Tasks tab's
+ * own view draws it, because a relation's rows read its parent and blocks
+ * alone.
+ */
+function listedIn(queryClient: QueryClient): TasksView {
   const state = appStateIn(queryClient);
-  return {
-    tasks: state === undefined ? IDLE_TASKS_VIEW : selectListedTasks(state),
-    held: state?.[LIVE_READ.DESCRIPTION_DOCUMENT],
-  };
+  return state === undefined ? IDLE_TASKS_VIEW : selectListedTasks(state);
 }
 
 /** A task's repository and relation writes, each said in a toast where the service refused it. */
@@ -232,66 +229,57 @@ export function useTaskRelationWrites(): TaskRelationWrites {
   const { mutateAsync: sendTaskRepository } = useMutation(
     actMutation(ACT_KIND.TASKS_SET_REPOSITORY),
   );
-  const { mutateAsync: sendBlock } = useMutation(actMutation(ACT_KIND.TASKS_BLOCK));
-  const { mutateAsync: sendParent } = useMutation(actMutation(ACT_KIND.TASKS_SET_PARENT));
+  // ⌘Z reads a removal's rows off the tasks listed as it runs (`task-row-doors.ts`).
+  const listedNow = useCallback(() => listedIn(queryClient), [queryClient]);
+  const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK, listedNow);
+  const parentDoors = useTaskRowDoors(ACT_KIND.TASKS_SET_PARENT, listedNow);
   const { mutateAsync: sendRelation } = useMutation(actMutation(ACT_KIND.TASKS_CHANGE_RELATION));
   const toast = useToast();
-  return useMemo(() => {
-    // The relation writes' one recipe.
-    const askRelation = (
-      surface: FailureSurface,
-      taskId: string,
-      asked: () => Promise<RelationAnswer>,
-    ) => {
-      if (staged) return;
-      void relationAsked(asked()).then((answer) => {
-        const words = relationRefused(answer);
-        if (words === undefined) return;
-        toast({
-          replayUnmasked: true,
-          words,
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface, cause: answer, about: { taskId } },
-        });
+  const { send: sendBlock } = blockDoors;
+  const { send: sendParent } = parentDoors;
+  // The relation writes' one recipe.
+  const askRelation = (
+    surface: FailureSurface,
+    taskId: string,
+    asked: () => Promise<RelationAnswer>,
+  ) => {
+    if (staged) return;
+    void relationAsked(asked()).then((answer) => {
+      const words = relationRefused(answer);
+      if (words === undefined) return;
+      toast({
+        replayUnmasked: true,
+        words,
+        tone: STATUS_TONE.DANGER,
+        hold: TOAST_HOLD.FAILED,
+        failure: { surface, cause: answer, about: { taskId } },
       });
-    };
-    const rows = () => rowsIn(queryClient);
-    const blockDoors: RowDoors<TaskRows, typeof ACT_KIND.TASKS_BLOCK> = { rows, send: sendBlock };
-    const parentDoors: RowDoors<TaskRows, typeof ACT_KIND.TASKS_SET_PARENT> = {
-      rows,
-      send: sendParent,
-    };
-    return {
-      onSetRepository: (taskId, repository) => {
-        if (staged) return Promise.resolve(undefined);
-        return sendTaskRepository({ taskId, repository }).then(
-          (answer) =>
-            "failure" in answer ? repositoryChangeFailureNote(answer.failure) : undefined,
-          (refused: Error) => refused.message,
-        );
-      },
-      onSetTaskBlock: (taskId, block) =>
-        askRelation(FAILURE_SURFACE.TASK_BLOCK, taskId, () => sendBlock({ taskId, block })),
-      onSetTaskParent: (taskId, parentTaskId) =>
-        askRelation(FAILURE_SURFACE.TASK_PARENT, taskId, () =>
-          sendParent({ taskId, parentTaskId }),
-        ),
-      // A relation's kind moves in one call, so a refusal leaves it as it stood.
-      onChangeTaskRelation: (taskId, relation) =>
-        askRelation(FAILURE_SURFACE.TASK_RELATION, taskId, () =>
-          sendRelation({ taskId, relation }),
-        ),
-      onRemoveTaskBlock: (taskId, relation, otherId) => {
-        if (staged) return;
-        void pressWrite(RELATION_WRITE.BLOCK_REMOVAL, blockDoors, { taskId, relation, otherId });
-      },
-      onRemoveTaskParent: (taskId) => {
-        if (staged) return;
-        void pressWrite(RELATION_WRITE.PARENT_REMOVAL, parentDoors, { taskId });
-      },
-    };
-  }, [queryClient, staged, sendTaskRepository, sendBlock, sendParent, sendRelation, toast]);
+    });
+  };
+  return {
+    onSetRepository: (taskId, repository) => {
+      if (staged) return Promise.resolve(undefined);
+      return sendTaskRepository({ taskId, repository }).then(
+        (answer) => ("failure" in answer ? repositoryChangeFailureNote(answer.failure) : undefined),
+        (refused: Error) => refused.message,
+      );
+    },
+    onSetTaskBlock: (taskId, block) =>
+      askRelation(FAILURE_SURFACE.TASK_BLOCK, taskId, () => sendBlock({ taskId, block })),
+    onSetTaskParent: (taskId, parentTaskId) =>
+      askRelation(FAILURE_SURFACE.TASK_PARENT, taskId, () => sendParent({ taskId, parentTaskId })),
+    // A relation's kind moves in one call, so a refusal leaves it as it stood.
+    onChangeTaskRelation: (taskId, relation) =>
+      askRelation(FAILURE_SURFACE.TASK_RELATION, taskId, () => sendRelation({ taskId, relation })),
+    onRemoveTaskBlock: (taskId, relation, otherId) => {
+      if (staged) return;
+      void pressWrite(RELATION_WRITE.BLOCK_REMOVAL, blockDoors, { taskId, relation, otherId });
+    },
+    onRemoveTaskParent: (taskId) => {
+      if (staged) return;
+      void pressWrite(RELATION_WRITE.PARENT_REMOVAL, parentDoors, { taskId });
+    },
+  };
 }
 
 /**
@@ -305,10 +293,13 @@ export function useOpenWorkspaceGitHub(
   const queryClient = useQueryClient();
   return useCallback(
     (taskId: string) => {
-      const rows = rowsIn(queryClient);
+      const listed = listedIn(queryClient);
+      const held = appStateIn(queryClient)?.[LIVE_READ.DESCRIPTION_DOCUMENT];
       const workspaceId =
-        rows.tasks.tasks.find((task) => task.id === taskId)?.workspaceId ??
-        (rows.tasks.activeTaskId === taskId ? heldTask(rows, taskId)?.workspaceId : undefined);
+        listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
+        (listed.activeTaskId === taskId
+          ? heldTask({ tasks: listed, held }, taskId)?.workspaceId
+          : undefined);
       onOpenSettings({
         page: SETTINGS_VIEW.WORKSPACE,
         section: SETTINGS_SECTION.GITHUB_REPOSITORIES,

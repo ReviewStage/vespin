@@ -89,15 +89,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { absurd } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  askAct,
-  askKept,
-  firstRefusal,
-  type Kept,
-  notKept,
-  sendAct,
-  unreachedAs,
-} from "../act.js";
+import { askAct, askKept, firstRefusal, type Kept, notKept, sendAct, unreachedAs } from "../act.js";
 import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
 import { useAdminRoute } from "../admin/admin-route.js";
 import { adminViewOfLink } from "../admin/routing.js";
