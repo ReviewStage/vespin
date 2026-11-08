@@ -284,7 +284,8 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * Every turn under way among a workspace's agents stopped before the
  * workspace's delete, as each agent's own starter would stop it, a few at
- * once (`everySettled`); an agent with no turn to stop is left as it stands.
+ * once (`everySettled`); an agent with no turn to stop is left as it stands,
+ * its queue unpaused, and where the turns cannot be read, none is stopped.
  * Nothing here cannot be undone, so a delete refused after it leaves the
  * workspace's agents as usable as a Stop leaves one: what is lost goes after
  * the delete has committed, where its hooks delete every agent's sandbox
@@ -303,7 +304,19 @@ export const everyTurnStoppedByStarter = /* @__PURE__ */ Effect.fnUntraced(funct
   agents: readonly Agent[],
 ): Effect.fn.Return<void, never, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const sessionsOf = yield* sessionsRouter;
-  yield* everySettled(agents, (agent) =>
+  // Note that only an agent with a turn to stop is touched, read for all at once, because a Stop
+  // pauses the agent's queue first, which a delete refused after it would otherwise leave paused.
+  const standing = yield* standingsOf(agents.map((agent) => agent.conversationId)).pipe(
+    Effect.catch((refusal) =>
+      Effect.as(
+        Effect.logWarning(`a deleted workspace's agents' turns were not read: ${refusal.error}`),
+        undefined,
+      ),
+    ),
+  );
+  if (standing === undefined) return;
+  const running = agents.filter((agent) => stoppable(standing(agent.conversationId).turn));
+  yield* everySettled(running, (agent) =>
     canceledTurn(Effect.succeed(sessionsOf(agent.userId)), writer, agent).pipe(
       Effect.asVoid,
       Effect.catch((refusal) =>

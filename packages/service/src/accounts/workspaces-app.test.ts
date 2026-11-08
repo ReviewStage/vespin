@@ -6,6 +6,7 @@ import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
 } from "@repo/database/github-installation-vocabulary";
+import { agentQueueNow, queueAgentMessage } from "@repo/database/models/agent-queue-store";
 import { createAgent } from "@repo/database/models/agent-store";
 import { createAutomation } from "@repo/database/models/automation-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
@@ -1651,7 +1652,7 @@ it.effect(
 );
 
 it.effect(
-  "a delete the plugin refuses once the turns are stopped leaves an agent still starting with its session as it was, and the workspace standing",
+  "a delete the plugin refuses once the turns are stopped leaves an agent still starting with its session and its queue as they were, and the workspace standing",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -1675,6 +1676,8 @@ it.effect(
             .set({ runtimeSessionId: sessionId })
             .where(eq(conversations.id, (agent ?? assert.fail("no agent")).conversationId)),
         );
+        // A message waits in its queue, which a Stop would pause.
+        yield* queueAgentMessage(grace, agentId, { id: randomUUID(), text: "Then the docs" });
         const refusing = {
           ...plugin,
           deleteWorkspace: () => Effect.fail(new OrganizationRefused({ status: 403 })),
@@ -1690,6 +1693,7 @@ it.effect(
           RESETS.filter((reset) => reset.sessionId === sessionId),
           [],
         );
+        assert.equal((yield* agentQueueNow(agentId)).paused, undefined);
         assert.equal((yield* membersOf(acme)).length, 2);
       }).pipe(Effect.provide(plugin.database));
     }),
