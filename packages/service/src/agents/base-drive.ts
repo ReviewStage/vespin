@@ -81,7 +81,7 @@ const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json"] as const;
 /** The variable the read past the base reads the base's commit from, so no commit is written into a command. */
 const BASE_COMMIT_VARIABLE = "APP_BASE_COMMIT";
 
-/** The read past the base's exit where the lockfiles differ, as `git diff --quiet` exits. */
+/** The lockfile diff's exit where the lockfiles differ, as `git diff --quiet` exits. */
 const DIFFERS_EXIT = 1;
 
 /** How many milliseconds a second of a commit's time holds. */
@@ -99,6 +99,9 @@ const INSTALL_SCRIPT = [
   "if [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi",
 ].join("\n");
 
+/** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
+const LOCKFILE_DIFF_SCRIPT = `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`;
+
 /**
  * What the checkout's HEAD holds past the base's commit: on stdout, the
  * commit time, in seconds, of the first commit the default branch took past
@@ -109,7 +112,7 @@ const INSTALL_SCRIPT = [
  */
 const PAST_BASE_SCRIPT = [
   `git log --first-parent --format=%ct "$${BASE_COMMIT_VARIABLE}..HEAD" | tail -n 1`,
-  `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`,
+  LOCKFILE_DIFF_SCRIPT,
 ].join("\n");
 
 /** What a fill clones through: a read token for the one repository, and whose it is. */
@@ -239,6 +242,25 @@ export const checkoutCommit = (sandbox: RepositorySandbox) =>
   );
 
 /**
+ * Whether the checkout's lockfiles stand as they stood at the commit given,
+ * so an install made there still matches; a diff git could not make reads
+ * as a move.
+ */
+const lockfilesUnmoved = (sandbox: RepositorySandbox, since: string) =>
+  Effect.map(
+    runInSandbox(
+      sandbox,
+      {
+        command: LOCKFILE_DIFF_SCRIPT,
+        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
+        env: { [BASE_COMMIT_VARIABLE]: since },
+      },
+      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+    ),
+    (ran) => ran.exitCode === 0,
+  );
+
+/**
  * Why the base the checkout was at the commit given of is to be filled
  * again, as the checkout's fast-forward to the default branch finds it: the
  * lockfiles moved, so the base's install no longer matches; or the first
@@ -276,8 +298,8 @@ export const baseRefillPast = (sandbox: RepositorySandbox, since: string) =>
  * its fork found none, or its fast-forward moved a lockfile or found the
  * base stale. Its span records where the base stood and why it was filled.
  * A name another launch took first is that launch's fill, and this one does
- * nothing. `open` is the sandbox as the
- * clone reaches it, over the caller's runner.
+ * nothing. `open` is the sandbox as the clone reaches it, over the caller's
+ * runner.
  */
 export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
   of: BaseDriveOf,
@@ -330,10 +352,7 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
         const stillMatches =
           !cloned &&
           before !== undefined &&
-          (yield* Effect.orElseSucceed(
-            baseRefillPast(sandbox, before),
-            () => BASE_WANTED.LOCKFILE_MOVED,
-          )) !== BASE_WANTED.LOCKFILE_MOVED;
+          (yield* Effect.orElseSucceed(lockfilesUnmoved(sandbox, before), () => false));
         if (!stillMatches) yield* installDependencies(sandbox);
       }),
   );

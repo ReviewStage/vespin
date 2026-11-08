@@ -37,6 +37,10 @@ const { VARIABLE } = REPOSITORY_SANDBOX_CONTRACT;
 const isInstall = (command: MemoryCommand) =>
   command.ask.args.some((arg) => arg.includes("pnpm install"));
 
+/** Whether a command was the lockfile diff. */
+const isLockfileDiff = (command: MemoryCommand) =>
+  command.ask.args.some((arg) => arg.includes("git diff --quiet"));
+
 /** Whether a command was the clone, or the refresh of a checkout standing. */
 const isClone = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.URL);
 const isRefresh = (command: MemoryCommand) =>
@@ -44,10 +48,10 @@ const isRefresh = (command: MemoryCommand) =>
 
 /**
  * The sandboxes kept in memory, each command a success but these: a refresh
- * on a drive no clone has filled, which holds no checkout to refresh, and the
- * install where it is to fail.
+ * on a drive no clone has filled, which holds no checkout to refresh, the
+ * install where it is to fail, and the lockfile diff as it is to exit.
  */
-function fixture(installExit = 0) {
+function fixture(installExit = 0, diffExit = 0) {
   const install = { exit: installExit };
   const cloned = new Set<string>();
   /** Every drive a command ran on, and where it was mounted. */
@@ -58,9 +62,11 @@ function fixture(installExit = 0) {
     if (isClone(command)) cloned.add(drive);
     const exitCode = isInstall(command)
       ? install.exit
-      : isRefresh(command) && !cloned.has(drive)
-        ? 1
-        : 0;
+      : isLockfileDiff(command)
+        ? diffExit
+        : isRefresh(command) && !cloned.has(drive)
+          ? 1
+          : 0;
     return { exitCode, stdout: "", stderr: "" };
   };
   const memory = memorySandbox({ run: ran });
@@ -140,13 +146,14 @@ it.effect("launches that fill at once leave one base drive and fail none", () =>
 );
 
 it.effect.each([
-  { refill: BASE_WANTED.LOCKFILE_MOVED, installs: true },
-  { refill: BASE_WANTED.STALE, installs: false },
+  { refill: BASE_WANTED.LOCKFILE_MOVED, diffExit: 0, installs: true },
+  { refill: BASE_WANTED.STALE, diffExit: 0, installs: false },
+  { refill: BASE_WANTED.STALE, diffExit: 128, installs: true },
 ])(
-  "a refill for $refill brings the checkout standing up to the default branch, cloning nothing, and installs again only where it is not stale alone with no lockfile moved",
-  ({ refill, installs }) =>
+  "a refill for $refill whose lockfile diff exits $diffExit brings the checkout standing up to the default branch, cloning nothing, and installs again only where it is stale alone with the lockfiles read unmoved",
+  ({ refill, diffExit, installs }) =>
     Effect.gen(function* () {
-      const { memory, state } = fixture();
+      const { memory, state } = fixture(0, diffExit);
       yield* filled(memory, BASE_WANTED.MISSING);
       const before = state.commands.length;
 
