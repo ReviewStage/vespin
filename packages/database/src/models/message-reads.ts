@@ -1,4 +1,3 @@
-import { toolPartType } from "@repo/features/turn-run";
 import {
   MESSAGE_ROLE,
   type MessageRole,
@@ -1335,70 +1334,5 @@ export function turnsBefore(
       ...(place === undefined ? undefined : { before: place }),
     });
     return { turns: newestFirst.slice(0, size).reverse(), earlier: newestFirst.length > size };
-  });
-}
-
-const findJournalsCalling = SqlSchema.findAll({
-  Request: Schema.Struct({
-    userId: Schema.String,
-    conversationId: Schema.String,
-    partType: Schema.String,
-    seq: Schema.Number,
-    limit: Schema.Number,
-  }),
-  Result: SelectedMessageRowSchema,
-  execute: (options) =>
-    Database.use((db) =>
-      db
-        .select(MESSAGE_FIELDS)
-        .from(messages)
-        .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
-        .where(
-          and(
-            eq(messages.conversationId, options.conversationId),
-            eq(messages.userId, options.userId),
-            eq(messages.role, MESSAGE_ROLE.ASSISTANT),
-            gt(messages.seq, options.seq),
-            sql`${messages.parts} @> ${JSON.stringify([{ type: options.partType }])}::jsonb`,
-          ),
-        )
-        .orderBy(asc(messages.seq))
-        .limit(options.limit),
-    ),
-});
-
-/**
- * Every turn journal of the account's standing conversation that holds a
- * call of the tool named, oldest first, read a page at a time. Note that the
- * journals are picked by their parts in the statement, because a long
- * conversation's other journals are most of its bytes and none of the
- * answer. A page holding a row this build cannot read refuses the read, as
- * every page here does.
- */
-export function listJournalsCalling(
-  userId: string,
-  conversationId: string,
-  tools: ToolSet,
-  toolName: string,
-): Effect.Effect<MessageListRead, StoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const read: StoredMessageRecord[] = [];
-    let seq = -1;
-    let full = true;
-    while (full) {
-      const selected = yield* findJournalsCalling({
-        userId,
-        conversationId,
-        partType: toolPartType(toolName),
-        seq,
-        limit: MAXIMUM_READ_PAGE,
-      });
-      const page = yield* readSelected(selected, tools);
-      if (!page.ok) return page;
-      read.push(...page.value);
-      seq = selected.at(-1)?.seq ?? seq;
-      full = selected.length === MAXIMUM_READ_PAGE;
-    }
-    return { ok: true, value: read };
   });
 }

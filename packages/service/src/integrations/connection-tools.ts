@@ -70,11 +70,6 @@ export function connectionToolEntries(): ReadonlyArray<readonly [string, Tool]> 
   ];
 }
 
-/** Whether a name is the retired runtime's qualified name for a remote tool, of whatever connection. */
-export function isRemoteToolName(name: string): boolean {
-  return name.includes(QUALIFIED_SEPARATOR);
-}
-
 /** A remote tool of one integration's account: the integration, the connection and its place among the integration's accounts, and the tool's own name. */
 interface RemoteTool {
   readonly provider: IntegrationProvider;

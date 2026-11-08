@@ -671,8 +671,3 @@ export const automationWorkspaceRunSchema = EffectSchema.Struct({
 });
 
 export type AutomationWorkspaceRun = typeof automationWorkspaceRunSchema.Type;
-
-/** Every run of a workspace's automations the account may read, newest first. */
-export const automationWorkspaceRunsAnswerSchema = EffectSchema.Struct({
-  runs: EffectSchema.Array(automationWorkspaceRunSchema),
-});

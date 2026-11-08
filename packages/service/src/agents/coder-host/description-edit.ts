@@ -198,30 +198,9 @@ export interface NotesTaken {
   readonly count: number;
 }
 
-export const NO_NOTES_TAKEN: NotesTaken = { count: 0 };
-
 /** How many notes the turn given has taken; a record of another turn counts for nothing. */
 export function takenInTurn(taken: NotesTaken, turnId: string): number {
   return taken.turnId === turnId ? taken.count : 0;
-}
-
-/**
- * The record with a call's notes reserved against the turn's cap before the
- * save goes out, because two calls one step makes run at once and each would
- * otherwise read the count the other has not yet raised.
- */
-export function reserveNotes(taken: NotesTaken, turnId: string, requested: number): NotesTaken {
-  return { turnId, count: takenInTurn(taken, turnId) + requested };
-}
-
-/** The record settled once the save answered: the reservation replaced by what was taken, which is nothing for a refused call. */
-export function settleNotes(
-  taken: NotesTaken,
-  turnId: string,
-  requested: number,
-  saved: number,
-): NotesTaken {
-  return { turnId, count: Math.max(0, takenInTurn(taken, turnId) - requested + saved) };
 }
 
 /** The task a call names, or nothing where it names none that reads, which refuses it whole. */

@@ -2554,4 +2554,4 @@ export const DEMO_MEMBER_THREADS: readonly DemoMemberThread[] = [
 /** How long before the seed's start the people joined. */
 export const DEMO_JOINED_AGO = 45 * DAY;
 
-export { DAY as DEMO_DAY, HOUR as DEMO_HOUR, MINUTE as DEMO_MINUTE };
+export { MINUTE as DEMO_MINUTE };

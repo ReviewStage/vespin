@@ -304,21 +304,3 @@ export function evictGrantToken(
       return Effect.void;
   }
 }
-
-/**
- * One account's token for the user account the session was admitted for,
- * or the sentence saying why there is none: its grant
- * (`integrationGrant`), then the token on it.
- */
-export function integrationAccessToken(
-  account: IntegrationAccountRef,
-  admission: IntegrationAdmission,
-): Effect.Effect<IntegrationTokenAnswer, never, IntegrationTokenServices> {
-  return Effect.flatMap(
-    integrationGrant(account, admission),
-    (grant): Effect.Effect<IntegrationTokenAnswer, never, IntegrationTokenServices> =>
-      Result.isSuccess(grant)
-        ? grantAccessToken(grant.success)
-        : Effect.succeed(Result.fail(grant.failure)),
-  );
-}
