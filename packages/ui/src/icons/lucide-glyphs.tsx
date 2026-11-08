@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  FastForward,
   FileText,
   Folder,
   Heading1,
@@ -50,15 +51,21 @@ import {
   Monitor,
   PanelLeft,
   PanelRight,
+  Pause,
   Pencil,
   Pin,
   PinOff,
+  Play,
   Plug,
   Plus,
+  Rewind,
   RotateCw,
   Search,
   SearchX,
   Settings,
+  SkipBack,
+  SkipForward,
+  Square,
   SquareCode,
   SquarePen,
   SquareTerminal,
@@ -334,6 +341,31 @@ export const FoldChevronIcon = lucideGlyph(ChevronRight, "ui-disclosure-chevron"
 
 /** Points into a submenu beside a menu row, in the chevron's own stroke. */
 export const ChevronRightIcon = lucideGlyph(ChevronRight, "settings-chevron");
+
+/*
+ * The transport, in Lucide's outlines as every other glyph is.
+ */
+
+/** Starts a run: the triangle every transport draws for play. */
+export const PlayIcon = lucideGlyph(Play, "control-icon");
+
+/** Holds what is playing: the two bars every transport draws for pause. */
+export const PauseIcon = lucideGlyph(Pause, "control-icon");
+
+/** Steps a paused video back one frame: a bar and the play triangle turned toward it. */
+export const PreviousFrameIcon = lucideGlyph(SkipBack, "control-icon");
+
+/** Steps a paused video on one frame: the play triangle and a bar it stops at. */
+export const NextFrameIcon = lucideGlyph(SkipForward, "control-icon");
+
+/** A video sent back a few seconds: the two triangles every transport draws for rewind. */
+export const RewindIcon = lucideGlyph(Rewind, "control-icon");
+
+/** A video sent on a few seconds: the mirror of `RewindIcon`, every transport's fast-forward. */
+export const FastForwardIcon = lucideGlyph(FastForward, "control-icon");
+
+/** Stops what is playing or running: Lucide's square, filled, because an outline square reads as a checkbox at a control's size. */
+export const StopIcon = lucideGlyph(Square, "control-icon fill-current");
 
 /**
  * Takes one attachment back off the note: Lucide's X at a stroke of its own,

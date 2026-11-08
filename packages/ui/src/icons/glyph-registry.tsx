@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import React from "react";
 
-import { McpIcon, StopIcon } from "../face/glyphs.js";
+import { McpIcon } from "../face/glyphs.js";
 import { MARK_PROVIDER, ProviderMark } from "../marks/provider-mark.js";
 import { lucideGlyph } from "./lucide-glyph.js";
 import {
@@ -71,6 +71,7 @@ import {
   PlusIcon,
   RetryIcon,
   SearchIcon,
+  StopIcon,
   TerminalIcon,
   TrashIcon,
   UnarchiveIcon,

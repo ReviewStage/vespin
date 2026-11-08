@@ -10,9 +10,7 @@ import {
   useState,
 } from "react";
 import { cn } from "../../cn.js";
-import { ICON_STROKE_WIDTH } from "../../icons/icon-size.js";
-import { Square } from "../../icons/icons.js";
-import { ArrowUpIcon, ArrowUpRightIcon, CheckIcon } from "../../icons/lucide-glyphs.js";
+import { ArrowUpIcon, ArrowUpRightIcon, CheckIcon, StopIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_FACE, PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { replayMotion } from "../../replay-motion.js";
@@ -757,15 +755,7 @@ function submitGlyph(state: SubmitState): React.JSX.Element {
         </span>
       );
     case SUBMIT_STATE.STREAMING:
-      // Note that Stop is filled, as every chat app draws it; an outline reads as a checkbox at this size.
-      return (
-        <Square
-          className="fill-current"
-          strokeWidth={ICON_STROKE_WIDTH}
-          aria-hidden="true"
-          focusable="false"
-        />
-      );
+      return <StopIcon />;
   }
 }
 

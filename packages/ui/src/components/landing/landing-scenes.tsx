@@ -2,7 +2,6 @@ import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, type RefObject, useRef } from "react";
-import { PlayIcon } from "../../face/glyphs.js";
 import {
   CheckIcon,
   GLYPH,
@@ -17,6 +16,7 @@ import {
 import {
   ComposeIcon,
   MicrophoneIcon,
+  PlayIcon,
   PlusIcon,
   SearchIcon,
   SidebarIcon,
