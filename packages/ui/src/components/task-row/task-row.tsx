@@ -148,12 +148,15 @@ export type TaskRowEdges = (typeof TASK_ROW_EDGES)[keyof typeof TASK_ROW_EDGES];
 const TASK_ROW_CELL_ORDER: readonly TaskRowCell[] = Object.values(TASK_ROW_CELL);
 
 /** The cells drawn before a row's name, each in a column of its own. */
-const LEADING: readonly TaskRowCell[] = [
+const LEADING = [
   TASK_ROW_CELL.RELATION,
   TASK_ROW_CELL.PRIORITY,
   TASK_ROW_CELL.KEY,
   TASK_ROW_CELL.STATUS,
-];
+] as const satisfies readonly TaskRowCell[];
+
+/** A cell drawn before a row's name. */
+type LeadingCell = (typeof LEADING)[number];
 
 /** The cells after the name packed into its trailing run, one column for them all; the time and the owner's end keep a column each after it. */
 const TRAILING: readonly TaskRowCell[] = [
@@ -283,7 +286,7 @@ const COLUMN_ORDER = {
   [TRAIL]: "order-5 justify-end",
   [TASK_ROW_CELL.UPDATED]: "order-6 justify-end",
   [TASK_ROW_CELL.END]: "order-7",
-} as const;
+} as const satisfies Record<LeadingCell | AfterColumn, string>;
 
 /** A cell after the name, which steps aside while the ⋯ stands at rest over the last on a screen with no hover (`task-row.css`). */
 const AFTER = "ui-task-row-after";
@@ -370,6 +373,11 @@ const ROWS =
 /** Which way a key asks a row's fold to stand: → open, ← folded. */
 const FOLD_KEY_OPENS: Readonly<Record<string, boolean>> = { ArrowRight: true, ArrowLeft: false };
 
+/** Whether a cell is drawn before the row's name, in a column of its own. */
+function leads(cell: TaskRowCell): cell is LeadingCell {
+  return LEADING.some((each) => each === cell);
+}
+
 /** The cells of a row in its list's order, whatever order its owner names them in. */
 function inOrder(cells: readonly TaskRowCell[]): readonly TaskRowCell[] {
   return TASK_ROW_CELL_ORDER.filter((cell) => cells.includes(cell));
@@ -378,7 +386,7 @@ function inOrder(cells: readonly TaskRowCell[]): readonly TaskRowCell[] {
 /** The columns after the name a list of `cells` stands: the trailing run where it draws any cell after the name but its end, then the time and the end where it draws them. */
 function afterColumns(cells: readonly TaskRowCell[]): readonly AfterColumn[] {
   const drawn = inOrder(cells);
-  const trails = drawn.some((cell) => !LEADING.includes(cell) && cell !== TASK_ROW_CELL.END);
+  const trails = drawn.some((cell) => !leads(cell) && cell !== TASK_ROW_CELL.END);
   const columns: AfterColumn[] = trails ? [TRAIL] : [];
   if (drawn.includes(TASK_ROW_CELL.UPDATED)) columns.push(TASK_ROW_CELL.UPDATED);
   if (drawn.includes(TASK_ROW_CELL.END)) columns.push(TASK_ROW_CELL.END);
@@ -407,7 +415,7 @@ function RowCell({
   placed,
   children,
 }: {
-  column: TaskRowCell | typeof TRAIL;
+  column: LeadingCell | AfterColumn;
   /** Whether it stands over the row's press (`CELL_PRESS`). */
   press: string;
   underMore: AfterColumn | undefined;
@@ -415,12 +423,12 @@ function RowCell({
   placed: boolean;
   children: ReactNode;
 }): React.JSX.Element {
-  const leading = column !== TRAIL && LEADING.includes(column);
+  const leading = column !== TRAIL && leads(column);
   const fit = placed && column !== TRAIL ? CELL_FIT[column] : undefined;
   return (
     <span
       style={fit}
-      className={`${CELL} ${column === underMore ? CELL_LEAST.UNDER_MORE : CELL_LEAST.REST} ${press} ${COLUMN_ORDER[column as keyof typeof COLUMN_ORDER]}${leading ? "" : ` ${AFTER}`}`}
+      className={`${CELL} ${column === underMore ? CELL_LEAST.UNDER_MORE : CELL_LEAST.REST} ${press} ${COLUMN_ORDER[column]}${leading ? "" : ` ${AFTER}`}`}
       data-cell={column}
       data-under-more={column === underMore ? "true" : undefined}
     >
@@ -451,19 +459,17 @@ function RowCells({
   const drawn = inOrder(cells);
   return (
     <>
-      {drawn
-        .filter((cell) => LEADING.includes(cell))
-        .map((cell) => (
-          <RowCell
-            key={cell}
-            column={cell}
-            press={CELL_PRESS[cell]}
-            underMore={underMore}
-            placed={placed}
-          >
-            {content[cell]}
-          </RowCell>
-        ))}
+      {drawn.filter(leads).map((cell) => (
+        <RowCell
+          key={cell}
+          column={cell}
+          press={CELL_PRESS[cell]}
+          underMore={underMore}
+          placed={placed}
+        >
+          {content[cell]}
+        </RowCell>
+      ))}
       {afterColumns(cells).map((column) =>
         column === TRAIL ? (
           <RowCell
@@ -581,7 +587,7 @@ export function taskRowFit(rows: readonly TaskRowWords[]): CSSProperties {
  */
 export function taskRowColumns(cells: readonly TaskRowCell[], more = true): string {
   const before = inOrder(cells)
-    .filter((cell) => LEADING.includes(cell))
+    .filter(leads)
     .map(() => "auto");
   const after = afterColumns(cells).map(() => "auto");
   const moreColumn = more && columnUnderMore(cells) === undefined ? [MORE_COLUMN] : [];
