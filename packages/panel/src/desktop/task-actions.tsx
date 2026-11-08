@@ -247,7 +247,7 @@ export interface TaskRowTab
   readonly tasksNow: () => readonly TaskSummary[];
   /** Copies the open description, as Copy description does. */
   readonly onCopyDescription: () => void;
-  readonly onOpenHistory: TasksControl["history"]["onOpen"];
+  readonly onOpenHistory: TasksControl["onOpenHistory"];
   /** Opens a repository's page on GitHub. */
   readonly onOpenGitHub: TasksControl["repositories"]["openGitHub"];
   /** Whether a repository is drawn by its owner's picture. */
@@ -281,7 +281,7 @@ export function taskRowTab(
     onWriteSections: tasks.onWriteSections,
     tasksNow,
     onCopyDescription: tasks.copy.onPress,
-    onOpenHistory: tasks.history.onOpen,
+    onOpenHistory: tasks.onOpenHistory,
     onOpenGitHub: tasks.repositories.openGitHub,
     pictures: tasks.repositories.pictures,
   };
@@ -971,7 +971,7 @@ export function TaskActions({
   useAppCommand(
     APP_COMMAND.VERSION_HISTORY,
     useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS)
-      ? () => tasks.history.onOpen(task.id)
+      ? () => tasks.onOpenHistory(task.id)
       : undefined,
   );
   return actions.dialog;

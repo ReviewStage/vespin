@@ -231,9 +231,6 @@ function versionHistoryControl(
 ): VersionHistoryControl {
   return {
     open: false,
-    onOpen: ignore,
-    onPreload: ignore,
-    onClose: ignore,
     list: { kind: HISTORY_READ.READING },
     selected: undefined,
     viewing: undefined,
@@ -566,6 +563,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     taskView: { taskId: undefined },
     onArriveTask: ignore,
     onShowAgent: ignore,
+    onOpenHistory: ignore,
     onShowColumnTab: ignore,
     onShowPanelTab: ignore,
     onShowSource: ignore,

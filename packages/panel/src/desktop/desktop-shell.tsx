@@ -61,6 +61,7 @@ import {
   useBoardDoor,
   useInboxDoor,
   usePersonDoor,
+  useVersionHistoryDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
@@ -1313,7 +1314,8 @@ export function VersionHistoryFrame({
   children: (exit: () => void) => React.ReactNode;
 }): React.JSX.Element {
   const { tasks, history, room, mentionedAgents, chipCards, newTaskDialog } = useShellPlaces();
-  const exitHistory = history.canGoBack ? history.onBack : tasks.history.onClose;
+  const historyDoor = useVersionHistoryDoor(tasks);
+  const exitHistory = history.canGoBack ? history.onBack : historyDoor.close;
   return (
     <div className="desktop-shell" data-room={room}>
       <MentionedAgents value={mentionedAgents}>

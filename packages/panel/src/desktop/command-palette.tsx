@@ -1557,7 +1557,7 @@ function taskCommandRows(
   const commands: readonly { item: PanelCommand; run: () => void }[] = [
     ...(renamed === undefined ? [] : [{ item: PANEL_COMMAND.RENAME_TASK, run: renamed }]),
     ...(historyOffered
-      ? [{ item: PANEL_COMMAND.VERSION_HISTORY, run: () => tasks.history.onOpen(task.id) }]
+      ? [{ item: PANEL_COMMAND.VERSION_HISTORY, run: () => tasks.onOpenHistory(task.id) }]
       : []),
     {
       item: PANEL_COMMAND.NEW_CHILD_TASK,

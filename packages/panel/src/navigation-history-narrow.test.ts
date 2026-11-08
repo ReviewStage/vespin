@@ -171,7 +171,6 @@ function tasksTab(
       onList: () => {
         if (versions.spot !== undefined) versions.onMove({ ...versions.spot, listed: true });
       },
-      onClose: versions.onClose,
     },
   });
 }

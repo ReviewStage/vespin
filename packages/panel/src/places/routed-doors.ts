@@ -1,5 +1,5 @@
 /**
- * routed-doors.ts -- the doors into and out of the Board, a person's page, Admin, the Automations pages, and the Inbox, each its route's move held by the window's leave guard.
+ * routed-doors.ts -- the doors into and out of the Board, a person's page, Admin, the Automations pages, the Inbox, and a version history, each its route's move held by the window's leave guard.
  *
  * A routed place's open and close are its route's moves (`workspace-routes.ts`,
  * `admin/admin-route.ts`, `automations-route.ts`, `inbox-route.ts`)
@@ -15,9 +15,15 @@
  * row's item and widening its list. Going back to the Inbox's list from its
  * item is the tab's (`TasksControl.inboxView.onClear`), so the window's
  * history can take that way back (`navigation-history.ts`'s `throughHistory`).
+ * A version history's close and read ahead are its route's own, unasked, as
+ * they have always been; opening one opens its task under it and seeks the
+ * version a save made, which only the Tasks tab can, so that door is the
+ * tab's (`TasksControl.onOpenHistory`).
  */
 
+import { taskLinkStep } from "@repo/features/link-grammar";
 import type { Workspace } from "@repo/features/workspace-wire";
+import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
 import { useAutomationsRoute } from "../automations-route.js";
@@ -25,6 +31,7 @@ import { type InboxAt, useInboxRoute } from "../inbox-route.js";
 import { beginPanelSpan, PANEL_SPAN } from "../panel-spans.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import { useVersionHistoryRoute } from "../version-history-route.js";
 import { useBoardRoute, usePersonRoute } from "../workspace-routes.js";
 
 /** A way of landing that does nothing more than the move. */
@@ -33,6 +40,33 @@ const NOTHING = (): void => undefined;
 /** The step a workspace's address names it by: its slug, or its id where an older service answered none. */
 function stepOf(workspace: Pick<Workspace, "id" | "slug">): string {
   return workspace.slug ?? workspace.id;
+}
+
+/** Where a version history's address names its task: its workspace's step, and the task's own step in it. */
+export interface VersionHistoryAddress {
+  readonly workspace: string;
+  readonly task: string;
+}
+
+/**
+ * The address of `taskId`'s version history, named as its links name it, under its workspace: the one `named` where the
+ * window holds no such task, else the listed one; a workspace not yet read is named by its id, as a link names one.
+ */
+export function versionHistoryAddressOf(
+  held: Pick<TasksControl, "tasks" | "region" | "workspaces" | "workspace">,
+  taskId: string,
+  named?: string,
+): VersionHistoryAddress | undefined {
+  const { region } = held;
+  const task =
+    held.tasks.find((each) => each.id === taskId) ??
+    (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId ? region.task : undefined);
+  const home = held.workspaces.find((each) => each.id === task?.workspaceId);
+  const listedStep = held.workspace === undefined ? undefined : stepOf(held.workspace);
+  const under = home === undefined ? (named ?? task?.workspaceId ?? listedStep) : stepOf(home);
+  return under === undefined
+    ? undefined
+    : { workspace: under, task: task === undefined ? taskId : taskLinkStep(task) };
 }
 
 /** The listed workspace's Board: the presses that open and leave it, and its read ahead of a press. */
@@ -169,5 +203,28 @@ export function useInboxDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
     openItem: (chosen) => stand(true, chosen),
     choose: (chosen) => route.onChoose(chosen),
     widen: route.onWiden,
+  };
+}
+
+/** A version history: the press that leaves it, and its read ahead of a press. */
+export interface VersionHistoryDoor {
+  /** Leaves the version history for its task, its side panel as it was. */
+  readonly close: () => void;
+  /** Reads the history of `taskId` ahead of a press the pointer says is coming. */
+  readonly preload: (taskId: string) => void;
+}
+
+/** A version history's doors, its task named as the tab holds it. */
+export function useVersionHistoryDoor(
+  tasks: Pick<TasksControl, "tasks" | "region" | "workspaces" | "workspace">,
+): VersionHistoryDoor {
+  // Note that the room reaches only the moves within the history standing, which no door here makes.
+  const route = useVersionHistoryRoute({ narrow: false });
+  return {
+    close: route.onClose,
+    preload: (taskId) => {
+      const address = versionHistoryAddressOf(tasks, taskId);
+      if (address !== undefined) route.onPreload(address.workspace, address.task);
+    },
   };
 }

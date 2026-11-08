@@ -1386,8 +1386,8 @@ export function useWindowHistory(input: {
   onSettingsList: () => void;
   /** What the history reads of the Automations pages beyond where they stand: the automations deleted, and an automation's setup under its runs (`automations-route.ts`). */
   automations: Pick<AutomationsRoute, "deletedNow" | "setupAddress">;
-  /** What the history reads of a version history beyond where it stands: the list under a narrow room's version (`version-history-route.ts`). */
-  versionHistory: Pick<VersionHistoryRoute, "listAddress">;
+  /** What the history reads of a version history beyond where it stands, the list under a narrow room's version, and its way out to its task (`version-history-route.ts`). */
+  versionHistory: Pick<VersionHistoryRoute, "listAddress" | "onClose">;
   /** What the history reads of the Inbox beyond where it stands: the list under its item, the item chosen, and the doors that stand its list (`inbox-route.ts`). */
   inbox: Pick<InboxRoute, "open" | "listAddress" | "chosen" | "choiceOf" | "onOpen" | "onClear">;
   /** Home as the router stands it, which a routed place left with no task bound opens (`workspace-routes.ts`). */
@@ -1820,7 +1820,7 @@ export function useWindowHistory(input: {
           ? undefined
           : taskPlace(taskAddress ?? NO_LINK_ADDRESS, { taskId: boundFor });
       if (task !== undefined && backTo(task)) return;
-      tasks.history.onClose();
+      versionHistory.onClose();
     },
     onLeave: () => {
       if (!stepAway()) tasks.onGoHome();

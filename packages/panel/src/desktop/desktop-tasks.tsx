@@ -54,7 +54,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
-import { useAutomationsDoor } from "../places/routed-doors.js";
+import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
 import { HERE } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -487,6 +487,7 @@ function DescriptionDocument({
   // The clock the plan's tab's card counts its update back from.
   const now = useMinute();
   const { open: onOpenAutomations } = useAutomationsDoor(tasks);
+  const historyDoor = useVersionHistoryDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
@@ -722,11 +723,11 @@ function DescriptionDocument({
     (draft) => openColumnTab(draftTab(draft)),
   );
   const showHistory = useSteadyDoor((save: number | undefined) => {
-    if (opened !== undefined) tasks.history.onOpen(opened.id, save);
+    if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
   });
   // The pointer on a way into the history reads its chunk ahead rather than at the press.
   const preloadHistory = useSteadyDoor(() => {
-    if (opened !== undefined) tasks.history.onPreload(opened.id);
+    if (opened !== undefined) historyDoor.preload(opened.id);
   });
   const descriptionEdit = opened === undefined ? undefined : tasks.descriptionEdit(opened.id);
   // Note that the plan's title reads its rename's answer, on the same mutation the header's field draws its refusal from.

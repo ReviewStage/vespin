@@ -2362,7 +2362,7 @@ test("a version history opened on a held task lists its versions in its first fr
   const tab = mount({ shown: true, tasks: OPEN });
   await settle();
 
-  act(() => tab.control().history.onOpen(TASK.id));
+  act(() => tab.control().onOpenHistory(TASK.id));
   await settle();
 
   assert.deepEqual(tab.control().history.list, {
@@ -3653,7 +3653,7 @@ const ROUTED_DOORS: [
     (control) => control.onShowInbox({ taskId: BILLING.id, itemId: ITEM_ID }),
     FROM_BOARD,
   ],
-  ["the version history, sought to a version", (control) => control.history.onOpen(BILLING.id, 1)],
+  ["the version history, sought to a version", (control) => control.onOpenHistory(BILLING.id, 1)],
   ["the Board's close", () => boardDoor?.close(), FROM_BOARD],
   [
     "a person's page's close",

@@ -164,6 +164,7 @@ import {
 import type { LinkRead } from "../places/link-reads.js";
 import { PLACE_BINDING, useTaskAsk } from "../places/place-binding.js";
 import type { PlaceLeave } from "../places/place-leave.js";
+import { versionHistoryAddressOf } from "../places/routed-doors.js";
 import type { RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import type { RenameShape } from "../rename-write.js";
@@ -602,6 +603,13 @@ export interface TasksControl {
   agents: AgentsControl;
   /** The open description's version history: whether it stands, its versions, the one drawn, and its restore. */
   history: VersionHistoryControl;
+  /**
+   * Opens a description's version history on the description as it stands, or, given the
+   * moment of a save, on the revision that made it, opening the task first
+   * where it is not the open one. Its close and read ahead are its route's
+   * (`places/routed-doors.ts`'s `useVersionHistoryDoor`).
+   */
+  onOpenHistory: (taskId: string, save?: number) => void;
   /** Opens a task on its description: what a chip, a link, the Tasks list, the Board, the Inbox, a crumb, or a related task's row asks. */
   onSelect: (taskId: string) => void;
   /** Opens a task the developer goes back to work on, from a sidebar row, ⌘K, or Recent, on the agent waiting on them, else one at work, else the one last active, else its description. */
@@ -887,18 +895,8 @@ export interface TasksControl {
 
 /** The open description's history as the window opens and draws it, over what is read of it. */
 export interface VersionHistoryControl extends DescriptionHistoryControl {
-  /** Whether the description's version history takes the window in its place. */
+  /** Whether the description's version history takes the window in its place: its route stands and its task has opened under it. */
   open: boolean;
-  /**
-   * Opens a description's version history on the description as it stands, or, given the
-   * moment of a save, on the revision that made it, opening the task first
-   * where it is not the open one.
-   */
-  onOpen: (taskId: string, save?: number) => void;
-  /** Reads a description's version history ahead, as the pointer comes to a way into it. */
-  onPreload: (taskId: string) => void;
-  /** Leaves the version history for the task, its side panel as it was. */
-  onClose: () => void;
 }
 
 /** The save a version history opened on, on its task, whose revision it seeks. */
@@ -3284,23 +3282,7 @@ export function useTasksTab(input: {
 
   // A description's version history opens over the task, so another task opens first.
   // Note that a task's versions are its description's, so while Descriptions is off whatever would open them, a link to a version among them, opens the task's Overview.
-  // A task's history's address names it as its links do, under its workspace, the one a link named where the window holds no such task, else the listed one;
-  // a workspace not yet read is named by its id, as a link names one.
-  const historyAddressOf = (taskId: string, workspace: string | undefined) => {
-    const task =
-      tasksNow.find((each) => each.id === taskId) ??
-      (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId
-        ? region.task
-        : undefined);
-    const home = viewed.workspaces.find((each) => each.id === task?.workspaceId);
-    const listedStep = listedWorkspace === undefined ? undefined : stepOf(listedWorkspace);
-    const under =
-      home === undefined ? (workspace ?? task?.workspaceId ?? listedStep) : stepOf(home);
-    return under === undefined
-      ? undefined
-      : { workspace: under, task: task === undefined ? taskId : taskLinkStep(task) };
-  };
-  // It is opened at its address (`version-history-route.ts`).
+  // It is opened at its address (`version-history-route.ts`), its task named as its links name it (`places/routed-doors.ts`).
   const openHistory = (
     taskId: string,
     opening: {
@@ -3313,7 +3295,11 @@ export function useTasksTab(input: {
       showOverview({ kind: LINK_PLACE.TASK, planId: taskId });
       return;
     }
-    const address = historyAddressOf(taskId, opening.workspace);
+    const address = versionHistoryAddressOf(
+      { tasks: tasksNow, region, workspaces: viewed.workspaces, workspace: listedWorkspace },
+      taskId,
+      opening.workspace,
+    );
     if (address === undefined) return;
     // Note that its task and the version sought follow the move, so a move kept at a page's leave ask changes neither.
     placeLeave.arrive(
@@ -4243,20 +4229,12 @@ export function useTasksTab(input: {
     unreadTabs,
     pages: taskPages,
     agents,
-    history: {
-      ...history,
-      open: historyOpen,
-      // The history takes the window from whatever stood, its move asking first while a page holds unsaved work; with
-      // descriptions off, its task's Overview stands in its place, as a tab of the task does.
-      onOpen: (taskId: string, save?: number) => {
-        if (descriptionsOnFor(taskId)) openHistory(taskId, { save });
-        else arriveAt(taskId, () => openHistory(taskId, { save }));
-      },
-      onPreload: (taskId) => {
-        const address = historyAddressOf(taskId, undefined);
-        if (address !== undefined) historyRoute.onPreload(address.workspace, address.task);
-      },
-      onClose: historyRoute.onClose,
+    history: { ...history, open: historyOpen },
+    // The history takes the window from whatever stood, its move asking first while a page holds unsaved work; with
+    // descriptions off, its task's Overview stands in its place, as a tab of the task does.
+    onOpenHistory: (taskId: string, save?: number) => {
+      if (descriptionsOnFor(taskId)) openHistory(taskId, { save });
+      else arriveAt(taskId, () => openHistory(taskId, { save }));
     },
     // Note that the pin's own task opened by its row is the task the
     // sidebar marks again rather than the pin; another task's lets the pin
