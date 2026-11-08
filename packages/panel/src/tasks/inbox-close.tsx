@@ -171,6 +171,8 @@ const RESOLVE_WRITE = {
     const [first] = refused;
     if (first === undefined) return undefined;
     return {
+      // Note that a close the service never answered may still be held, so only a refusal of every one is whole.
+      whole: answers.every((answer) => !("failure" in answer) && !answer.taken),
       words:
         items.length === 1
           ? first.words

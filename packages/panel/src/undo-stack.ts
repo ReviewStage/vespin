@@ -543,6 +543,11 @@ export interface HeldRefusal {
   readonly failure: ShownFailure;
 }
 
+/** What a refusal of a held write's act says, and whether the service took none of it, so nothing is left for ⌘Z to take back. */
+export interface HeldActRefusal extends HeldRefusal {
+  readonly whole: boolean;
+}
+
 /** What a refusal of a held write's inverse says, and, where part of it was not reached, what asking again takes back and what that action is called. */
 export interface HeldUndoRefusal<Change> extends HeldRefusal {
   readonly retry?: { readonly label: string; readonly change: Change };
@@ -570,7 +575,7 @@ export interface HeldWrite<Doors, Change, Answer, Released> {
   /** Lets the hold go unsent, which takes the write back while the host still holds it. */
   readonly undo: (doors: Doors, change: Change) => Promise<Released>;
   /** What a refusal of the act says, of its answer; none where the service took it. */
-  readonly refused: (change: Change, answer: Answer) => HeldRefusal | undefined;
+  readonly refused: (change: Change, answer: Answer) => HeldActRefusal | undefined;
   /** What a refusal of its inverse says, of its answer; none where the write was taken back. */
   readonly unheld: (change: Change, released: Released) => HeldUndoRefusal<Change> | undefined;
 }
@@ -660,6 +665,10 @@ export function pressHeld<Doors, Change, Answer, Released>(
     // Note that a write taken back answers nothing worth saying, since the reader undid it.
     const refusal = taken ? undefined : write.refused(change, answer);
     if (refusal === undefined) return;
+    // Note that a write the service took none of leaves the list, so ⌘Z takes back the one before it rather than saying it was too late.
+    if (refusal.whole) {
+      undoLine.setState((now) => ({ ...now, undo: now.undo.filter((each) => each !== entry) }));
+    }
     showToast({
       replayUnmasked: true,
       words: refusal.words,
