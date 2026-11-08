@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "4867b4be-3611-4513-9e46-d2cd8a53eb1e",
-  "prevIds": ["ac3a7ac5-14a1-499a-a273-bc272de99bda", "d4bad51a-1d7c-48ff-9235-7829416e8815"],
+  "id": "8a600a8b-ce49-4c16-871c-6a9d0ed2a61e",
+  "prevIds": ["e9546369-67b3-4c06-adbc-a6c8beeabe6d"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -403,6 +403,12 @@
     {
       "isRlsEnabled": false,
       "name": "sandbox_firewall",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "sandbox_port_share",
       "entityType": "tables",
       "schema": "public"
     },
@@ -9187,6 +9193,45 @@
       "table": "sandbox_firewall"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "sandbox_port_share"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "port",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "sandbox_port_share"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "shared_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "sandbox_port_share"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -17951,6 +17996,14 @@
       "name": "runner_line_pkey",
       "schema": "public",
       "table": "runner_line",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["session_id"],
+      "nameExplicit": false,
+      "name": "sandbox_port_share_pkey",
+      "schema": "public",
+      "table": "sandbox_port_share",
       "entityType": "pks"
     },
     {
