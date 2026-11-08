@@ -5,8 +5,9 @@ import {
 } from "@repo/features/workspace-invitation-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
-  CHOICE_BAR_LOOK,
-  ChoiceBar,
+  CHOICE_LOOK,
+  ChoiceList,
+  type ChoiceOption,
   DIALOG_TONE,
   Dialog,
   DialogActions,
@@ -38,12 +39,36 @@ import { replayMaskedError } from "./marks.js";
  * card saying why with that address and those after it left in the field
  * for another try, the ones before it already invited and listed under the
  * members. The role is
- * the owner's to choose, since only the owner invites an admin; an admin's
- * card offers none and invites a member.
+ * chosen from a list that says what each one may do, Member first, as most
+ * workspace tools offer it. Every reader sees both roles: only the owner
+ * invites an admin, so an admin's card shows Admin stepped back with why
+ * rather than hiding the choice.
  */
 
-/** The roles an invitation offers, in the order the bar draws them, the default first. */
+/** The roles an invitation offers, in the order the list draws them, the default first. */
 const INVITATION_ROLES = [INVITATION_ROLE.MEMBER, INVITATION_ROLE.ADMIN] as const;
+
+/** What each role may do, the line under its name. */
+const ROLE_DETAIL = {
+  [INVITATION_ROLE.MEMBER]: "Works on the workspace's tasks and agents.",
+  [INVITATION_ROLE.ADMIN]: "Also invites people and manages members and integrations.",
+} as const satisfies Record<WorkspaceInvitation["role"], string>;
+
+/** Why Admin is stepped back on a card that is not the owner's. */
+const ADMIN_OWNER_ONLY = "Only the owner can invite an admin.";
+
+/** The role options the card offers its reader, Admin unavailable unless the reader is the `owner`. */
+function roleOptions(owner: boolean): ChoiceOption<WorkspaceInvitation["role"]>[] {
+  return INVITATION_ROLES.map((one) => {
+    const ownerOnly = one === INVITATION_ROLE.ADMIN && !owner;
+    return {
+      value: one,
+      label: ROLE_WORDS[one],
+      detail: ownerOnly ? ADMIN_OWNER_ONLY : ROLE_DETAIL[one],
+      disabled: ownerOnly,
+    };
+  });
+}
 
 function refused(reason: string): ActionResult {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
@@ -55,7 +80,7 @@ export interface InviteAsk {
   dialog: React.JSX.Element;
 }
 
-/** The Invite card for `workspaceName`, its role chosen only where the reader is the `owner`. */
+/** The Invite card for `workspaceName`, Admin offered only where the reader is the `owner`. */
 export function useInviteDialog({
   workspaceId,
   workspaceName,
@@ -171,17 +196,19 @@ export function useInviteDialog({
             </ReplayMask>
           )}
         </FormField>
-        {owner ? (
-          <ChoiceBar<WorkspaceInvitation["role"]>
-            label="Role"
-            items={INVITATION_ROLES.map((one) => ({ value: one, label: ROLE_WORDS[one] }))}
-            value={role}
-            look={CHOICE_BAR_LOOK.SEGMENTED}
-            stretch
-            disabled={form.settling}
-            onChange={setRole}
-          />
-        ) : null}
+        <FormField label="Role">
+          {(control) => (
+            <ChoiceList<WorkspaceInvitation["role"]>
+              legend="Role"
+              describedBy={control["aria-describedby"]}
+              options={roleOptions(owner)}
+              value={[owner ? role : INVITATION_ROLE.MEMBER]}
+              look={CHOICE_LOOK.MARKED}
+              disabled={form.settling}
+              onChange={(picked) => setRole(picked[0] ?? INVITATION_ROLE.MEMBER)}
+            />
+          )}
+        </FormField>
       </Stack>
     </Dialog>
   );
