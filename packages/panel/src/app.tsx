@@ -359,7 +359,7 @@ function AppWindow(): React.JSX.Element {
         });
       })();
     },
-    [leaveFirst, goSettings, routedStanding],
+    [leaveFirst, goSettings, routedStanding, routedExits],
   );
   /**
    * Opens Settings at the place a link names: the workspace it names, which
@@ -493,7 +493,7 @@ function AppWindow(): React.JSX.Element {
       routedExits.leave();
       onGoHome();
     });
-  }, [accountKey, leavePast, onGoHome]);
+  }, [accountKey, leavePast, onGoHome, routedExits]);
   // Session replay starts once the renderer is idle, filed under the workspace the sidebar lists.
   useSessionReplay(
     run,
