@@ -5,7 +5,15 @@ import { GLYPH } from "../../icons/glyph-registry.js";
 import { useWait } from "../../wait.js";
 import { ANNOUNCE, type Announce, announce, type Retire } from "../announcer/announcer.js";
 import { type ButtonSize, IconButton } from "../button/button.js";
-import { CHIP_CUT, CHIP_LOOK, CHIP_SIZE, Chip, ChipName } from "../chip/chip.js";
+import {
+  CHIP_CUT,
+  CHIP_LOOK,
+  CHIP_SIZE,
+  Chip,
+  type ChipLook,
+  ChipName,
+  type ChipSize,
+} from "../chip/chip.js";
 import { TOAST_HOLD } from "../toast/toast.js";
 import { Tooltip } from "../tooltip/hint.js";
 
@@ -31,7 +39,10 @@ import { Tooltip } from "../tooltip/hint.js";
  * own face, and a chip (`COPY_LOOK.CHIP`) for a name that is shown and
  * copied, a pull request's branch: the compact pill's face, the words it
  * copies in the code face, cut in their middle where long, with its own
- * glyph (`lead`) before them. The lead stands at rest; under the pointer or
+ * glyph (`lead`) before them. Its face (`face`) is that pill, or a toolbar
+ * chip's at a control's height, its lead at a control's glyph size: the
+ * name standing as words, washed under the pointer and the press, for a
+ * line of facts whose names may be copied. The lead stands at rest; under the pointer or
  * the keyboard it gives way to the copy glyph, saying what a press does,
  * and the answer's check or alert stands in the same square for its hold,
  * so the chip never moves. A chip's hint is the whole name at rest.
@@ -55,6 +66,28 @@ export const COPY_LOOK = {
 } as const;
 
 export type CopyLook = (typeof COPY_LOOK)[keyof typeof COPY_LOOK];
+
+/** The faces a copy chip comes in: the compact pill, or a toolbar chip's at a control's height, words at rest with a wash under the pointer. */
+export const COPY_CHIP_LOOK = {
+  PILL: "pill",
+  TOOLBAR: "toolbar",
+} as const;
+
+export type CopyChipLook = (typeof COPY_CHIP_LOOK)[keyof typeof COPY_CHIP_LOOK];
+
+/** Each copy chip face's chip look and size, and the size of its lead's square, its chip's glyph size. */
+const CHIP_FACE = {
+  [COPY_CHIP_LOOK.PILL]: {
+    look: CHIP_LOOK.PILL,
+    size: CHIP_SIZE.COMPACT,
+    lead: "size-chip-chevron [&_svg]:size-chip-chevron",
+  },
+  [COPY_CHIP_LOOK.TOOLBAR]: {
+    look: CHIP_LOOK.TOOLBAR,
+    size: CHIP_SIZE.CONTROL,
+    lead: "size-control-icon [&_svg]:size-control-icon",
+  },
+} as const satisfies Record<CopyChipLook, { look: ChipLook; size: ChipSize; lead: string }>;
 
 /** What a copy button shows: its resting glyph, the check, or the alert. */
 const COPY_STATE = {
@@ -138,22 +171,27 @@ export type CopyButtonProps = CopyButtonBase &
         look: typeof COPY_LOOK.CHIP;
         /** The glyph a chip leads with at rest: a branch's. */
         lead: () => React.JSX.Element;
+        /** The chip's face, the compact pill's where none is named. */
+        face?: CopyChipLook | undefined;
       }
   );
 
 /** A chip's lead: its own glyph at rest, the copy's own answer in the same square under the pointer, the keyboard, and once it lands. */
 function ChipLead({
   Lead,
+  size,
   state,
   turns,
 }: {
   Lead: () => React.JSX.Element;
+  /** Its square's size, and its glyphs', as the chip draws a glyph. */
+  size: string;
   state: CopyState;
   turns: number;
 }): React.JSX.Element {
   return (
     <span
-      className="ui-copy-lead inline-grid size-chip-chevron flex-none text-muted-foreground *:[grid-area:1/1] *:place-self-center *:transition-opacity *:duration-(--ui-duration-quick) *:ease-motion-exit [&_svg]:size-chip-chevron"
+      className={`ui-copy-lead inline-grid flex-none text-muted-foreground *:[grid-area:1/1] *:place-self-center *:transition-opacity *:duration-(--ui-duration-quick) *:ease-motion-exit ${size}`}
       data-state={state}
     >
       <span className="ui-copy-lead-mark" aria-hidden="true">
@@ -223,16 +261,17 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
   const { state, turns } = shown;
   const hint = state === COPY_STATE.IDLE ? label : COPY_ANSWER[state];
   if (props.look === COPY_LOOK.CHIP) {
+    const face = CHIP_FACE[props.face ?? COPY_CHIP_LOOK.PILL];
     return (
       <Tooltip label={state === COPY_STATE.IDLE ? text : COPY_ANSWER[state]}>
         <Chip
-          look={CHIP_LOOK.PILL}
-          size={CHIP_SIZE.COMPACT}
+          look={face.look}
+          size={face.size}
           aria-label={label}
           disabled={disabled}
           onClick={press}
         >
-          <ChipLead Lead={props.lead} state={state} turns={turns} />
+          <ChipLead Lead={props.lead} size={face.lead} state={state} turns={turns} />
           <ChipName mono cut={CHIP_CUT.MIDDLE}>
             {text}
           </ChipName>

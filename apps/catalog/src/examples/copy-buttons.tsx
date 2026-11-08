@@ -1,5 +1,6 @@
 import {
   BUTTON_SIZE,
+  COPY_CHIP_LOOK,
   COPY_FIELD_PROMPT,
   COPY_FIELD_WIDTH,
   COPY_LOOK,
@@ -18,7 +19,8 @@ import { CatalogSection } from "../section";
  * lands and turns to the check, one the clipboard refuses and turns to the
  * alert, compact, one with nothing to copy, and the chip look that names
  * what it copies, a branch, and a development build's chip, led by its
- * color; and a block that shows what it copies, at a control's width,
+ * color; the chip in its toolbar face, words at a control's height washed
+ * under the pointer, as a pull request's branches stand; and a block that shows what it copies, at a control's width,
  * across its row with the shell's prompt, and too long for its width. The
  * catalog's copy act is the browser's own clipboard; an app hands in its
  * shell's.
@@ -66,6 +68,29 @@ function CopyButtons(): React.JSX.Element {
             text="agent/copy-button-chip-look-for-the-branch-chips"
             what="branch agent/copy-button-chip-look-for-the-branch-chips"
             copy={refuse}
+          />
+        </Inline>
+      </CatalogSection>
+      <CatalogSection
+        id="copy-button-chip-toolbar"
+        title="A toolbar chip: words, washed under the pointer"
+      >
+        <Inline gap={GAP.CONTROL}>
+          <CopyButton
+            look={COPY_LOOK.CHIP}
+            face={COPY_CHIP_LOOK.TOOLBAR}
+            lead={GLYPH.BRANCH}
+            text="main"
+            what="branch main"
+            copy={copyToClipboard}
+          />
+          <CopyButton
+            look={COPY_LOOK.CHIP}
+            face={COPY_CHIP_LOOK.TOOLBAR}
+            lead={GLYPH.BRANCH}
+            text="agent/match-pr-header-second-row"
+            what="branch agent/match-pr-header-second-row"
+            copy={copyToClipboard}
           />
         </Inline>
       </CatalogSection>

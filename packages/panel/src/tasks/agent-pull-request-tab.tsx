@@ -1958,7 +1958,7 @@ function HeadPeople({
   const open =
     pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT;
   return (
-    <span className="pull-request-reviewers inline-flex items-center gap-list-gap">
+    <span className="pull-request-reviewers inline-flex items-center gap-control-gap">
       {reviewers.length === 0 ? null : <HeaderReviewers reviewers={reviewers} />}
       {open ? <ReviewerPicker author={author} writes={writes} {...editing} /> : null}
       <LabelPicker writes={writes} {...editing} />

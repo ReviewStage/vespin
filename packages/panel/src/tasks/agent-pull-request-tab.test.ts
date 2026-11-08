@@ -3426,7 +3426,59 @@ test("a pull request with no labels spends no line on them: its label picker sta
   assert.deepEqual(pickers(), ["Reviewer", "Label"]);
 });
 
-test("a head on a fork is named as GitHub names it: the fork's account, then its branch", async () => {
+it.effect(
+  "each branch is a chip that copies its name: a button the keyboard reaches, named for what it copies, its glyph turning to the check and saying Copied once the clipboard took it",
+  () =>
+    Effect.gen(function* () {
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      const copied: string[] = [];
+      fakeAppPlatform({ ...DESKTOP_LINKS, ...copyingInto(copied) });
+      const tab = yield* Effect.promise(() =>
+        draw(controlAnswering(), PULL_REQUEST_VIEW.CONVERSATION),
+      );
+      const branches =
+        tab.querySelector<HTMLElement>(".pull-request-header .pull-request-branches") ??
+        assert.fail("the branches stand");
+      const chips = [...branches.querySelectorAll<HTMLButtonElement>("button")];
+      const head = chips[1] ?? assert.fail("the head's chip stands");
+
+      assert.deepEqual(
+        chips.map((chip) => [
+          chip.getAttribute("aria-label"),
+          chip.type,
+          chip.disabled,
+          chip.tabIndex,
+        ]),
+        [
+          ["Copy branch main", "button", false, 0],
+          ["Copy branch luke/expiry-job", "button", false, 0],
+        ],
+      );
+
+      yield* Effect.promise(async () => {
+        await act(async () => head.click());
+        await settle();
+      });
+      assert.deepEqual(copied, ["luke/expiry-job"]);
+      assert.equal(
+        head.getAttribute("aria-label"),
+        "Copy branch luke/expiry-job",
+        "its name stays",
+      );
+
+      yield* Effect.promise(async () => {
+        await act(async () => chips[0]?.click());
+        await settle();
+      });
+      assert.deepEqual(copied, ["luke/expiry-job", "main"]);
+      act(() => root?.unmount());
+      root = undefined;
+    }),
+);
+
+test("a head on a fork is named, and copied, as GitHub names it: the fork's account, then its branch", async () => {
+  const copied: string[] = [];
+  fakeAppPlatform({ ...DESKTOP_LINKS, ...copyingInto(copied) });
   const tab = await draw(
     controlAnswering({
       pullRequest: () =>
@@ -3435,12 +3487,13 @@ test("a head on a fork is named as GitHub names it: the fork's account, then its
         }),
     }),
   );
-  await vi.waitFor(() =>
-    assert.equal(
-      tab.querySelector(".pull-request-branches")?.textContent,
-      "main ← octocat:patch-1",
-    ),
-  );
+  const head =
+    tab.querySelector<HTMLButtonElement>('[aria-label="Copy branch octocat:patch-1"]') ??
+    assert.fail("the head's chip names its fork");
+  assert.equal(tab.querySelector(".pull-request-branches")?.textContent, "main ← octocat:patch-1");
+  await act(async () => head.click());
+  await settle();
+  assert.deepEqual(copied, ["octocat:patch-1"]);
 });
 
 test("who opened it reads as one phrase with when: opened a while ago, or, once merged, opened · merged a while ago", async () => {

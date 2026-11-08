@@ -1403,10 +1403,13 @@
   flex: 0 1 auto;
 }
 
-/* The branches' glyph at a caption's glyph size, as the words it leads. */
-.pull-request-branches-mark > svg {
-  width: var(--ui-icon-12);
-  height: var(--ui-icon-12);
+/* The reviewers' faces stand a press's inset further from the pickers
+   after them, because a subtle press's words sit that inset inside its
+   fill: so the faces and the first picker's words stand as far apart as two
+   pickers' words do, and a picker's fill under the pointer or its open menu
+   never meets the faces. */
+.pull-request-reviewers > .actor-stack {
+  margin-inline-end: var(--ui-space-8);
 }
 
 /* The labels at the end of the header's line of people, after the
