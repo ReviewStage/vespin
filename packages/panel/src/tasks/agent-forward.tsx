@@ -20,7 +20,7 @@ import { useEffect, useRef } from "react";
 import { pressAct } from "../act.js";
 import { appPlatform } from "../app-platform.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
-import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectCapability, selectPortForwarding } from "../use-app-state.js";
 
@@ -43,16 +43,16 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
  * Cursor's cloud agents wear one: while the agent is forwarded it wears a
  * dot in the complete tone, and its hint says the address,
  * "Forwarding to localhost:3000". Its menu holds the Forward to localhost
- * switch and, while on, one row per port, "localhost:3000", whose press
- * opens it in the default browser, with where it came from beside it where
- * the Mac's port differs ("from :3000"). Under them, a port may be shared
- * by a public link (`PORT_SHARE_SET`): one row per port, "Share :3000",
- * and while one is shared, its link, which opens it, Copy, and Stop
- * sharing, as the host keeps the link beside the ports. The switch, a
+ * switch and, while on, one row per port, "localhost:3000", whose submenu
+ * beside it holds Open, which opens it in the default browser (saying where
+ * it came from, "from :3000", where the Mac's port differs), and Share,
+ * which shares it by a public link (`PORT_SHARE_SET`). The one shared port
+ * wears a link glyph, and its submenu holds Open, Open link, Copy link, and
+ * Stop sharing, as the host keeps the link beside the ports. The switch, a
  * setting, leaves the menu standing as every menu's switch does, so the
- * ports appear under it; every other row is an action and closes it. Every word drawn
- * but the link is the app's own, port numbers among them, so a screen
- * recording shows them as they read.
+ * ports appear under it; every action in a port's submenu closes it. Every
+ * word drawn is the app's own, port numbers among them, and the link is
+ * never drawn, so a screen recording shows them as they read.
  */
 
 /** What an agent forwarding is off for reads. */
@@ -71,7 +71,8 @@ const WORDS = {
   FROM_SANDBOX: "From the agent's sandbox",
   OPEN: "Open",
   SHARE: "Share",
-  COPY: "Copy",
+  OPEN_LINK: "Open link",
+  COPY_LINK: "Copy link",
   STOP_SHARING: "Stop sharing",
 } as const;
 
@@ -139,59 +140,22 @@ export function useForwardToast(agent: Pick<AgentSummary, "id" | "machine">): vo
   }, [first, ports.length, toast]);
 }
 
-/** One row of the chip's menu per port: the address it opens, or why it has none; the line saying none listens yet where none does. */
-function portRows(answer: PortForwardingAnswer): MenuAction[] {
-  if (answer.ports.length === 0)
-    return [{ label: WORDS.WAITING, disabled: true, onSelect: () => {} }];
-  return answer.ports.map(({ port, localPort, state }) =>
-    localPort === undefined || state === PORT_FORWARD_STATE.UNAVAILABLE
-      ? {
-          key: port,
-          label: `:${port}`,
-          icon: <GlobeIcon aria-hidden="true" />,
-          detail: WORDS.BUSY,
-          detailPlace: MENU_DETAIL.BESIDE,
-          disabled: true,
-          onSelect: () => {},
-        }
-      : {
-          key: port,
-          label: localAddress(localPort),
-          icon: <GlobeIcon aria-hidden="true" />,
-          ...(localPort === port
-            ? {}
-            : { detail: `from :${port}`, detailPlace: MENU_DETAIL.BESIDE }),
-          onSelect: () => openLocal(localPort),
-        },
-  );
-}
-
-/** The share rows: one per port, or the shared port's link, Copy, and Stop sharing. */
-function shareRows(
+/** What a shared port's submenu offers beyond Open: its link, Copy, and Stop sharing. */
+function sharedItems(
   agentId: string,
-  answer: PortForwardingAnswer,
+  url: string,
   copy: (words: string, label: string) => void,
 ): MenuAction[] {
-  const { shared } = answer;
-  if (shared === undefined)
-    return answer.ports.map(({ port }) => ({
-      key: port,
-      label: `${WORDS.SHARE} :${port}`,
-      icon: <LinkIcon aria-hidden="true" />,
-      onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
-    }));
   return [
     {
-      label: shared.url,
-      // Note that the link opens the port to anyone holding it, so a screen recording keeps it masked.
-      replayMasked: true,
-      icon: <GlobeIcon aria-hidden="true" />,
-      onSelect: () => appPlatform().openWeb(shared.url),
+      label: WORDS.OPEN_LINK,
+      icon: <LinkIcon aria-hidden="true" />,
+      onSelect: () => appPlatform().openWeb(url),
     },
     {
-      label: WORDS.COPY,
+      label: WORDS.COPY_LINK,
       icon: <CopyIcon aria-hidden="true" />,
-      onSelect: () => copy(shared.url, LINK_COPY.COPIED),
+      onSelect: () => copy(url, LINK_COPY.COPIED),
     },
     {
       label: WORDS.STOP_SHARING,
@@ -199,6 +163,71 @@ function shareRows(
       onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port: null }),
     },
   ];
+}
+
+/**
+ * One row of the chip's menu per port, its actions in a submenu beside it:
+ * Open, and Share, or, for the shared port, its link, Copy link, and Stop
+ * sharing; a busy port that is not shared is a dimmed row, and the line
+ * saying none listens yet stands where none does.
+ */
+function portRows(
+  agentId: string,
+  answer: PortForwardingAnswer,
+  copy: (words: string, label: string) => void,
+): MenuEntry[] {
+  const { shared } = answer;
+  const rows = answer.ports.map(({ port, localPort, state }): MenuEntry => {
+    const reachable = localPort !== undefined && state !== PORT_FORWARD_STATE.UNAVAILABLE;
+    const isShared = shared?.port === port;
+    if (!reachable && !isShared)
+      return {
+        key: port,
+        label: `:${port}`,
+        icon: <GlobeIcon aria-hidden="true" />,
+        detail: WORDS.BUSY,
+        detailPlace: MENU_DETAIL.BESIDE,
+        disabled: true,
+        onSelect: () => {},
+      };
+    const open: MenuAction[] = reachable
+      ? [
+          {
+            label: WORDS.OPEN,
+            icon: <GlobeIcon aria-hidden="true" />,
+            // Note that the submenu's row names the Mac's port, so where it differs Open says the sandbox's.
+            ...(localPort === port
+              ? {}
+              : { detail: `from :${port}`, detailPlace: MENU_DETAIL.BESIDE }),
+            onSelect: () => openLocal(localPort),
+          },
+        ]
+      : [];
+    return {
+      label: reachable ? localAddress(localPort) : `:${port}`,
+      icon: isShared ? <LinkIcon aria-hidden="true" /> : <GlobeIcon aria-hidden="true" />,
+      items:
+        shared !== undefined && isShared
+          ? [...open, ...sharedItems(agentId, shared.url, copy)]
+          : [
+              ...open,
+              {
+                label: WORDS.SHARE,
+                icon: <LinkIcon aria-hidden="true" />,
+                onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
+              },
+            ],
+    };
+  });
+  // Note that a shared port the sandbox no longer lists keeps a row, so its link can still be stopped.
+  if (shared !== undefined && !answer.ports.some(({ port }) => port === shared.port))
+    rows.push({
+      label: `:${shared.port}`,
+      icon: <LinkIcon aria-hidden="true" />,
+      items: sharedItems(agentId, shared.url, copy),
+    });
+  if (rows.length === 0) return [{ label: WORDS.WAITING, disabled: true, onSelect: () => {} }];
+  return rows;
 }
 
 /**
@@ -221,7 +250,7 @@ export function ForwardChip({
     : first === undefined
       ? WORDS.FORWARDING
       : `${WORDS.FORWARDING_TO} ${localAddress(first)}`;
-  const groups: MenuAction[][] = [
+  const groups: MenuEntry[][] = [
     [
       {
         label: WORDS.SWITCH,
@@ -232,10 +261,7 @@ export function ForwardChip({
         onSelect: () => setForwarding(agent.id, !answer.on),
       },
     ],
-    ...(answer.on ? [portRows(answer)] : []),
-    ...(answer.on && (answer.shared !== undefined || answer.ports.length > 0)
-      ? [shareRows(agent.id, answer, copy)]
-      : []),
+    ...(answer.on ? [portRows(agent.id, answer, copy)] : []),
   ];
   const chip = (
     <Chip
