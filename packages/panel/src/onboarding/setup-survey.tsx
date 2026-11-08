@@ -3,38 +3,60 @@ import {
   PRODUCT_ROLE,
   PRODUCT_SIGNUP_INTENT,
   PRODUCT_SURFACE_EVENT,
-  type ProductReferralSource,
-  type ProductRole,
-  type ProductSignupIntent,
+  PRODUCT_SURVEY_ANSWER,
 } from "@repo/features/analytics";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { CHOICE_LOOK, ChoiceList, type ChoiceOption, FormField, GAP, Stack } from "@repo/ui";
+import { ACT_KIND } from "@repo/host/acts";
+import {
+  APP_SETTING_SCHEMA,
+  type OnboardingSurvey,
+  onboardingSurveyFrom,
+  onboardingSurveyStored,
+  SURVEY_OTHER_MAX_CHARS,
+} from "@repo/settings";
+import {
+  CHOICE_LOOK,
+  ChoiceList,
+  type ChoiceOption,
+  FormField,
+  GAP,
+  Stack,
+  TextField,
+} from "@repo/ui";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { actMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
+import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 
 /**
- * setup-survey.tsx -- setup's survey step: how a new account heard of us, its role, and what it hopes we help with, each a row of pills to pick one from.
+ * setup-survey.tsx -- setup's survey step: how a new account heard of us, its role, and what it hopes we help with, each a row of pills to pick one from, and a line for its own words under any Other picked.
  *
- * Every question may be left, and the step skipped whole. The answers are
- * counted, as one `onboarding:survey` event, where the account shares usage
- * data, never kept on the account: each answer is one of a fixed set, and
- * "Other" takes no words, so nothing typed has a shape it could travel in.
- * They are counted as setup goes on past the step, and again only where
- * Back led to them changed, so a walk back and forth counts one answer.
+ * Every question may be left, and the step skipped whole. As setup goes on
+ * past the step, the answers are kept on the account
+ * (`APP_SETTING_SCHEMA.onboardingSurvey`), so they stand with the account
+ * they came from and setup on another machine finds them as they were left,
+ * and counted, as one `onboarding:survey` event, where the account shares
+ * usage data. The words beside an Other are kept on the account alone: the
+ * count says only `other`, since a counted value is one of a fixed set. A
+ * walk back and forth keeps and counts the answers again only where they
+ * changed.
  */
 
-/* Each question's answers, bar the `skipped` it is counted as while unanswered. */
-type Referral = Exclude<ProductReferralSource, typeof PRODUCT_REFERRAL_SOURCE.SKIPPED>;
-type Role = Exclude<ProductRole, typeof PRODUCT_ROLE.SKIPPED>;
-type Intent = Exclude<ProductSignupIntent, typeof PRODUCT_SIGNUP_INTENT.SKIPPED>;
+/* Each question's answers, as the account keeps them. */
+type Referral = NonNullable<OnboardingSurvey["referral"]>;
+type Role = NonNullable<OnboardingSurvey["role"]>;
+type Intent = NonNullable<OnboardingSurvey["intent"]>;
 
 const REFERRALS: readonly ChoiceOption<Referral>[] = [
+  { value: PRODUCT_REFERRAL_SOURCE.FRIEND_OR_COLLEAGUE, label: "Friend or colleague" },
+  { value: PRODUCT_REFERRAL_SOURCE.X, label: "X (Twitter)" },
+  { value: PRODUCT_REFERRAL_SOURCE.LINKEDIN, label: "LinkedIn" },
   { value: PRODUCT_REFERRAL_SOURCE.HACKER_NEWS, label: "Hacker News" },
-  { value: PRODUCT_REFERRAL_SOURCE.X, label: "X" },
+  { value: PRODUCT_REFERRAL_SOURCE.YOUTUBE, label: "YouTube" },
   { value: PRODUCT_REFERRAL_SOURCE.GITHUB, label: "GitHub" },
-  { value: PRODUCT_REFERRAL_SOURCE.WORD_OF_MOUTH, label: "A colleague or friend" },
-  { value: PRODUCT_REFERRAL_SOURCE.SEARCH, label: "Search" },
-  { value: PRODUCT_REFERRAL_SOURCE.ARTICLE, label: "An article or post" },
+  { value: PRODUCT_REFERRAL_SOURCE.SEARCH_ENGINE, label: "Search engine" },
   { value: PRODUCT_REFERRAL_SOURCE.OTHER, label: "Other" },
 ];
 
@@ -48,90 +70,126 @@ const ROLES: readonly ChoiceOption<Role>[] = [
 
 const INTENTS: readonly ChoiceOption<Intent>[] = [
   { value: PRODUCT_SIGNUP_INTENT.PARALLEL_AGENTS, label: "Running many agents at once" },
-  { value: PRODUCT_SIGNUP_INTENT.CLOUD_AGENTS, label: "Running agents in the cloud" },
+  { value: PRODUCT_SIGNUP_INTENT.AGENT_INBOX, label: "Inbox for agents" },
+  { value: PRODUCT_SIGNUP_INTENT.CLOUD_AGENTS, label: "Cloud agents" },
   { value: PRODUCT_SIGNUP_INTENT.TEAM_AGENTS, label: "Working with my team's agents" },
-  { value: PRODUCT_SIGNUP_INTENT.REVIEW_AGENT_WORK, label: "Reviewing what agents write" },
   { value: PRODUCT_SIGNUP_INTENT.EXPLORING, label: "Just exploring" },
   { value: PRODUCT_SIGNUP_INTENT.OTHER, label: "Other" },
 ];
 
-/** What the survey's questions were answered with so far; a question left has none. */
-interface SurveyAnswers {
-  readonly referral?: Referral | undefined;
-  readonly role?: Role | undefined;
-  readonly intent?: Intent | undefined;
-}
-
 /** The survey as setup holds it across its steps. */
 export interface Survey {
-  readonly answers: SurveyAnswers;
+  readonly answers: OnboardingSurvey;
   /** Whether any question is answered, which turns the step's Skip into Continue. */
   readonly answered: boolean;
-  readonly answer: (change: SurveyAnswers) => void;
-  /** Counts the answers, unless they are the ones last counted. */
-  readonly count: () => void;
+  readonly answer: (change: OnboardingSurvey) => void;
+  /** Keeps the answers on the account and counts them, unless they are the ones last kept. */
+  readonly keep: () => void;
 }
 
-/** Whether two sets of answers answer every question alike. */
-function sameAnswers(one: SurveyAnswers | undefined, other: SurveyAnswers): boolean {
-  return (
-    one !== undefined &&
-    one.referral === other.referral &&
-    one.role === other.role &&
-    one.intent === other.intent
-  );
+/** The answers as they are kept: words only beside an Other picked, trimmed, and none where none were written. */
+function kept(answers: OnboardingSurvey): OnboardingSurvey {
+  const words = (picked: string | undefined, other: string | undefined) => {
+    const trimmed = other?.trim();
+    return picked === PRODUCT_SURVEY_ANSWER.OTHER && trimmed ? trimmed : undefined;
+  };
+  const referralOther = words(answers.referral, answers.referralOther);
+  const roleOther = words(answers.role, answers.roleOther);
+  const intentOther = words(answers.intent, answers.intentOther);
+  return {
+    ...(answers.referral === undefined ? undefined : { referral: answers.referral }),
+    ...(referralOther === undefined ? undefined : { referralOther }),
+    ...(answers.role === undefined ? undefined : { role: answers.role }),
+    ...(roleOther === undefined ? undefined : { roleOther }),
+    ...(answers.intent === undefined ? undefined : { intent: answers.intent }),
+    ...(intentOther === undefined ? undefined : { intentOther }),
+  };
 }
 
-/** One question: its words over its pills. */
+/** Whether two sets of answers answer every question alike, in the same words. */
+function sameAnswers(one: OnboardingSurvey | undefined, other: OnboardingSurvey): boolean {
+  return one !== undefined && onboardingSurveyStored(one) === onboardingSurveyStored(other);
+}
+
+/** One question: its words over its pills, and a line for the person's own words under Other once picked. */
 function Question<Value extends string>({
   label,
   options,
   value,
+  other,
   onPick,
+  onOther,
 }: {
   label: string;
   options: readonly ChoiceOption<Value>[];
   value: Value | undefined;
+  other: string | undefined;
   onPick: (picked: Value) => void;
+  onOther: (words: string) => void;
 }): React.JSX.Element {
   return (
-    <FormField label={label}>
-      {(control) => (
-        <ChoiceList
-          legend={label}
-          describedBy={control["aria-describedby"]}
-          options={options}
-          value={value === undefined ? [] : [value]}
-          look={CHOICE_LOOK.PILL}
-          onChange={([picked]) => {
-            if (picked !== undefined) onPick(picked);
-          }}
-        />
-      )}
-    </FormField>
+    <Stack gap={GAP.TIGHT}>
+      <FormField label={label}>
+        {(control) => (
+          <ChoiceList
+            legend={label}
+            describedBy={control["aria-describedby"]}
+            options={options}
+            value={value === undefined ? [] : [value]}
+            look={CHOICE_LOOK.PILL}
+            onChange={([picked]) => {
+              if (picked !== undefined) onPick(picked);
+            }}
+          />
+        )}
+      </FormField>
+      {value === PRODUCT_SURVEY_ANSWER.OTHER ? (
+        <ReplayMask>
+          <TextField
+            label={`${label} Other`}
+            value={other ?? ""}
+            placeholder="Tell us more"
+            maxLength={SURVEY_OTHER_MAX_CHARS}
+            autoFocus
+            onChange={onOther}
+          />
+        </ReplayMask>
+      ) : null}
+    </Stack>
   );
 }
 
-/** The survey's answers, held by setup so Back finds them as they were left. */
+/** The survey's answers, held by setup so Back finds them as they were left, and the account's once kept. */
 export function useSurvey(): Survey {
-  const [answers, setAnswers] = useState<SurveyAnswers>({});
-  const counted = useRef<SurveyAnswers | undefined>(undefined);
+  const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
+  const stored = onboardingSurveyFrom(
+    useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.onboardingSurvey,
+  );
+  const [draft, setDraft] = useState<OnboardingSurvey>();
+  const last = useRef<OnboardingSurvey | undefined>(undefined);
+  // Note that the account's answers stand until a pick here, so setup on another machine opens on them.
+  const answers = draft ?? stored ?? {};
   const answered =
     answers.referral !== undefined || answers.role !== undefined || answers.intent !== undefined;
-  const count = () => {
-    if (!answered || sameAnswers(counted.current, answers)) return;
-    counted.current = answers;
+  const keep = () => {
+    const keeping = kept(answers);
+    if (!answered || sameAnswers(last.current ?? stored, keeping)) return;
+    last.current = keeping;
+    updateSetting({
+      field: APP_SETTING_SCHEMA.onboardingSurvey.field,
+      value: onboardingSurveyStored(keeping),
+    });
     appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.ONBOARDING_SURVEY, {
-      referral_source: answers.referral ?? PRODUCT_REFERRAL_SOURCE.SKIPPED,
-      role: answers.role ?? PRODUCT_ROLE.SKIPPED,
-      signup_intent: answers.intent ?? PRODUCT_SIGNUP_INTENT.SKIPPED,
+      referral_source: keeping.referral ?? PRODUCT_REFERRAL_SOURCE.SKIPPED,
+      role: keeping.role ?? PRODUCT_ROLE.SKIPPED,
+      signup_intent: keeping.intent ?? PRODUCT_SIGNUP_INTENT.SKIPPED,
     });
   };
   return {
     answers,
     answered,
-    answer: (change) => setAnswers((held) => ({ ...held, ...change })),
-    count,
+    answer: (change) => setDraft({ ...answers, ...change }),
+    keep,
   };
 }
 
@@ -144,19 +202,25 @@ export function SurveyQuestions({ survey }: { survey: Survey }): React.JSX.Eleme
         label={`How did you hear about ${PRODUCT_NAME}?`}
         options={REFERRALS}
         value={answers.referral}
+        other={answers.referralOther}
         onPick={(referral) => answer({ referral })}
+        onOther={(referralOther) => answer({ referralOther })}
       />
       <Question
         label="What's your role?"
         options={ROLES}
         value={answers.role}
+        other={answers.roleOther}
         onPick={(role) => answer({ role })}
+        onOther={(roleOther) => answer({ roleOther })}
       />
       <Question
         label={`What do you hope ${PRODUCT_NAME} helps with?`}
         options={INTENTS}
         value={answers.intent}
+        other={answers.intentOther}
         onPick={(intent) => answer({ intent })}
+        onOther={(intentOther) => answer({ intentOther })}
       />
     </Stack>
   );

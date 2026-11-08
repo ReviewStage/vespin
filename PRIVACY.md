@@ -20,7 +20,9 @@ accordance with this policy.
 When you sign in with Google or GitHub, we collect your name, email address,
 profile picture address, and which provider you used. We also store the
 records that keep you signed in, each with the IP address and browser or app
-it came from, and a daily count of your dictation use. Signing in with GitHub,
+it came from, and a daily count of your dictation use. If you answer the
+optional questions in setup, we keep your answers, and anything you write
+beside "Other", with your account. Signing in with GitHub,
 or linking GitHub later, authorizes the Vespin GitHub App; we store its
 OAuth tokens encrypted on the Service and never send them to your Mac or
 browser.
@@ -124,8 +126,9 @@ fixed list of event names and values, under your account's name and email.
 They never include anything you type or say, titles, branches, file paths,
 prompts, or error text. If you answer the optional questions in setup (how
 you heard about Vespin, your role, and what you hope it helps with), your
-picks are sent the same way, each from a fixed list. The Service counts work
-done through it (such as tasks created and agents started) the same way.
+picks are sent the same way, each from a fixed list; anything you write beside
+"Other" is not. The Service counts work done through it (such as tasks
+created and agents started) the same way.
 Counts are grouped by workspace, with each workspace's name and creation date.
 
 While you are signed in, the Mac app and the web app record how you use

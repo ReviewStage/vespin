@@ -31,8 +31,8 @@ import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
  *
  * Each card is the sign-in's own, so setup reads as the sign-in going on,
  * and each offers a quiet Sign out, since setup stands with no sidebar.
- * An account invited into a team's workspace starts on Connect an agent
- * alone. An agent is required: its step goes on only once Claude or Codex
+ * An account invited into a team's workspace walks the survey and Connect
+ * an agent alone. An agent is required: its step goes on only once Claude or Codex
  * is connected. A team's workspace is required too, once With my team is
  * chosen, since Back leads to Just me for anyone who changed their mind;
  * once made, its step coming back holds it to change rather than make again.
@@ -262,7 +262,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
                 ? {
                     label: "Continue",
                     onPress: () => {
-                      survey.count();
+                      survey.keep();
                       forward();
                     },
                   }

@@ -319,18 +319,26 @@ export type ProductExperimentScope =
 
 /**
  * Setup's survey, one fixed set of answers per question, each with `skipped`
- * for a question left unanswered beside others answered. "Other" takes no
- * words, so nothing typed has a shape it could travel in.
+ * for a question left unanswered beside others answered. The words a person
+ * writes beside "Other" stay on their account (`@repo/settings`'s
+ * `OnboardingSurvey`) and are never counted, so nothing typed has a shape it
+ * could travel in here.
  */
-export const PRODUCT_REFERRAL_SOURCE = {
-  HACKER_NEWS: "hacker_news",
-  X: "x",
-  GITHUB: "github",
-  WORD_OF_MOUTH: "word_of_mouth",
-  SEARCH: "search",
-  ARTICLE: "article",
+export const PRODUCT_SURVEY_ANSWER = {
   OTHER: "other",
   SKIPPED: "skipped",
+} as const;
+
+export const PRODUCT_REFERRAL_SOURCE = {
+  FRIEND_OR_COLLEAGUE: "friend_or_colleague",
+  X: "x",
+  LINKEDIN: "linkedin",
+  HACKER_NEWS: "hacker_news",
+  YOUTUBE: "youtube",
+  GITHUB: "github",
+  SEARCH_ENGINE: "search_engine",
+  OTHER: PRODUCT_SURVEY_ANSWER.OTHER,
+  SKIPPED: PRODUCT_SURVEY_ANSWER.SKIPPED,
 } as const;
 
 export type ProductReferralSource =
@@ -341,20 +349,20 @@ export const PRODUCT_ROLE = {
   ENGINEERING_MANAGER: "engineering_manager",
   FOUNDER: "founder",
   PRODUCT_MANAGER: "product_manager",
-  OTHER: "other",
-  SKIPPED: "skipped",
+  OTHER: PRODUCT_SURVEY_ANSWER.OTHER,
+  SKIPPED: PRODUCT_SURVEY_ANSWER.SKIPPED,
 } as const;
 
 export type ProductRole = (typeof PRODUCT_ROLE)[keyof typeof PRODUCT_ROLE];
 
 export const PRODUCT_SIGNUP_INTENT = {
   PARALLEL_AGENTS: "parallel_agents",
+  AGENT_INBOX: "agent_inbox",
   CLOUD_AGENTS: "cloud_agents",
   TEAM_AGENTS: "team_agents",
-  REVIEW_AGENT_WORK: "review_agent_work",
   EXPLORING: "exploring",
-  OTHER: "other",
-  SKIPPED: "skipped",
+  OTHER: PRODUCT_SURVEY_ANSWER.OTHER,
+  SKIPPED: PRODUCT_SURVEY_ANSWER.SKIPPED,
 } as const;
 
 export type ProductSignupIntent =

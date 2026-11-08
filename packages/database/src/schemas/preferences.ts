@@ -68,6 +68,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   completionSound: text("completion_sound").$type<CompletionSound>(),
   /**
+   * What the account answered in setup's survey, as its JSON
+   * (`@repo/settings`'s `OnboardingSurvey`: how it heard of us, its role,
+   * what it hopes we help with, and its words beside any Other); null until
+   * it answers. A part of the snapshot of its own, as the link choice is.
+   */
+  onboardingSurvey: text("onboarding_survey"),
+  /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both
    * means the account has never chosen and starts on the catalog's default.

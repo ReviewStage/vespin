@@ -18,6 +18,7 @@ export {
   PRODUCT_SIGNUP_INTENT,
   PRODUCT_SURFACE,
   PRODUCT_SURFACE_EVENT,
+  PRODUCT_SURVEY_ANSWER,
   PRODUCT_UPDATE_ACTION,
   type ProductAccountAction,
   ProductAccountActionSchema,

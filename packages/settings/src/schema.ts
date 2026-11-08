@@ -45,6 +45,7 @@ import {
   MAC_COMMAND_MODE_LIST,
   MAC_COMMANDS_LABEL,
 } from "./mac-commands.js";
+import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
   accountHiddenSetting,
   accountToggleSetting,
@@ -418,6 +419,21 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: the window reads it as it draws setup.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     guard: isSetupPlaceJson,
+  }),
+  /*
+   * What the account answered in setup's survey, as its JSON
+   * (`onboarding-survey.ts`), so its answers stand with the account it came
+   * from. An account preference riding a part of the snapshot of its own, as
+   * setup's place does; drawn nowhere, since only setup's survey writes it.
+   */
+  onboardingSurvey: accountHiddenSetting({
+    field: "onboardingSurvey",
+    id: APP_SETTING_ID.ONBOARDING_SURVEY,
+    page: SETTINGS_PAGE.ACCOUNT,
+    order: 920,
+    // Nothing to run per write: setup reads it as it draws the survey.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isOnboardingSurveyJson,
   }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",

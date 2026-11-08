@@ -279,7 +279,8 @@ export function accountProcedures(seams: AccountProcedureSeams) {
      * agent's box while it works, `commitAuthor`, who authors an agent's
      * commits, `setupFinished`, whether the account
      * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
-     * `completionSound`, when and which sound plays as an agent finishes, `agent`, a choice the catalog
+     * `completionSound`, when and which sound plays as an agent finishes,
+     * `onboardingSurvey`, what it answered in setup's survey, `agent`, a choice the catalog
      * accepts, moved only to a model the account pays for, `chaptersModel`, one of the chapters' fixed set, and `experiments`, each experiment's on or off merged over
      * what stood — and answers the snapshot as it then stands. A body
      * carrying none of them asks for nothing and is refused.
@@ -296,6 +297,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         body.setupPlace === undefined &&
         body.soundWhen === undefined &&
         body.completionSound === undefined &&
+        body.onboardingSurvey === undefined &&
         body.agent === undefined &&
         body.chaptersModel === undefined &&
         body.experiments === undefined
@@ -345,6 +347,13 @@ export function accountProcedures(seams: AccountProcedureSeams) {
           return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
         }
         write.completionSound = completionSound;
+      }
+      if (body.onboardingSurvey !== undefined) {
+        const onboardingSurvey = ownPreferenceFromWire("onboardingSurvey", body.onboardingSurvey);
+        if (onboardingSurvey === undefined) {
+          return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+        }
+        write.onboardingSurvey = onboardingSurvey;
       }
       if (body.agent !== undefined) {
         write.agent = yield* acceptedAgentChoice(seams, context.userId, body.agent);

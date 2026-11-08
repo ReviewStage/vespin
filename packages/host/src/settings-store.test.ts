@@ -204,6 +204,8 @@ const SAMPLE_VALUE = {
   soundWhen: SOUND_WHEN.BACKGROUND,
   // The chime is the default, so another sound is the choice that has to survive a reopen.
   completionSound: COMPLETION_SOUND.QUACK,
+  // Unanswered is the default, so answers given in setup's survey are the state that has to survive a reopen.
+  onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,

@@ -295,6 +295,31 @@ it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
   );
 });
 
+it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
+  it.effect(
+    "keeps the account's answers with their words beside Other, no other account's, and refuses an answer no set offers",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, ask } = yield* openAccounts;
+        const answers = '{"referral":"other","referralOther":"A meetup","role":"founder"}';
+        assert.equal(
+          partOf(yield* ask(request(owner, { onboardingSurvey: answers })), "onboardingSurvey"),
+          answers,
+        );
+        assert.equal(partOf(yield* ask(request(other)), "onboardingSurvey"), undefined);
+
+        assert.deepEqual(
+          yield* ask(request(owner, { onboardingSurvey: '{"referral":"a billboard"}' })),
+          {
+            status: HOSTED_HTTP_STATUS.BAD_REQUEST,
+            body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
+          },
+        );
+        assert.equal(partOf(yield* ask(request(owner)), "onboardingSurvey"), answers);
+      }),
+  );
+});
+
 it.layer(getTestDB())("the preferences snapshot's chapters model part", (it) => {
   it.effect(
     "is Haiku until the account chooses, and a choice written is the one read back, OpenAI's model of a tier among them",
