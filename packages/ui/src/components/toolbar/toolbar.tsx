@@ -514,7 +514,6 @@ export function Toolbar({
                       unmasked={titleReplayUnmasked}
                       press={titlePress}
                       menu={titleMenu}
-                      barType={barType}
                     />
                   )
                 }
