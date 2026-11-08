@@ -663,15 +663,17 @@ test("a screen picked past unsaved work is restored only once the leave is confi
   const guarded = {
     stand: () => () => undefined,
     pass: (leave: () => void) => leave(),
-    arrive: (move: (free: boolean) => void, landed: () => void) => {
-      move(true);
-      landed();
-    },
+    // Note that the fake's doors move nothing a blocker could hold, so the move held at the ask is the whole door.
+    arrive: (move: (free: boolean) => void, landed: () => void) =>
+      asks.push(() => {
+        move(false);
+        landed();
+      }),
     stays: () => undefined,
     transitionalLeaveFirst:
       <Args extends readonly unknown[]>(leave: (...args: Args) => void) =>
       (...args: Args) =>
-        asks.push(() => leave(...args)),
+        leave(...args),
   };
   const window = await mounted();
   await window.draw(onTask(README, told, { placeLeave: guarded }, agentTab("x")));

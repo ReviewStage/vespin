@@ -1900,14 +1900,10 @@ function SidebarColumn({
     tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
   const openTask = (taskId: string) => arriveFor(() => tasks.onResume(taskId));
   // Note that New task's card stands over whatever place stands, so it leaves only Settings, which takes the window, for
-  // it; the leave and the card are one way out, asked once, because a page holding unsaved work holds one question.
+  // it: the leave is the move, and the card is opened once it lands, so a leave kept at the ask opens no card. The two
+  // are asked once, because a page holding unsaved work holds one question (`places/place-leave.ts`'s `arrive`).
   const newTaskOver = (door: () => void) =>
-    onTasks
-      ? door()
-      : tasks.placeLeave.transitionalLeaveFirst(() => {
-          onTabChange(PANEL_TAB.TASKS);
-          door();
-        })();
+    onTasks ? door() : tasks.placeLeave.arrive(() => onTabChange(PANEL_TAB.TASKS), door);
   const newTask = () => newTaskOver(() => tasks.onNewTask());
   const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.

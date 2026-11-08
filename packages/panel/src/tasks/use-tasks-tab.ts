@@ -609,8 +609,8 @@ export interface TasksControl {
   onSelect: (taskId: string) => void;
   /** Opens a task the developer goes back to work on, from a sidebar row, ⌘K, or Recent, on the agent waiting on them, else one at work, else the one last active, else its description. */
   onResume: (taskId: string) => void;
-  /** Opens a task on its own place as it last stood, as ⌃Tab's card asks, the panes its screen held stood by the card itself. */
-  onRestoreTask: (taskId: string) => void;
+  /** Opens a task on its own place as it last stood, as ⌃Tab's card asks, the panes its screen held stood by the card itself; `over` a place standing beside the task's place too. */
+  onRestoreTask: (taskId: string, over?: boolean) => void;
   /** Stands the own place of the task bound, whatever stands in its place giving way, as a version history over it does. */
   onStandTask: () => void;
   /** The task's own place as the router stands it: the task its address names, among the tasks the window holds. */
@@ -619,10 +619,10 @@ export interface TasksControl {
   onArriveTask: (taskId: string) => void;
   /** Opens a task on one agent's tab: what a row's press or the call card's way back asks. */
   onShowAgent: (taskId: string, agentId: string) => void;
-  /** Opens a task on a tab of its column, as it last stood: what ⌃Tab's card asks (`tab-switcher.tsx`). */
-  onShowColumnTab: (taskId: string, tab: MainTab) => void;
-  /** Opens a task on a tab of its side panel, opening the panel where it was shut: what ⌃Tab's card asks. */
-  onShowPanelTab: (taskId: string, tab: SidePanelTab) => void;
+  /** Opens a task on a tab of its column, as it last stood: what ⌃Tab's card asks (`tab-switcher.tsx`), `over` a place standing beside the task's place too. */
+  onShowColumnTab: (taskId: string, tab: MainTab, over?: boolean) => void;
+  /** Opens a task on a tab of its side panel, opening the panel where it was shut: what ⌃Tab's card asks, `over` a place standing beside the task's place too. */
+  onShowPanelTab: (taskId: string, tab: SidePanelTab, over?: boolean) => void;
   /** Leaves the version history for the place that wrote a version: its agent's tab. */
   onShowSource: (taskId: string, source: RevisionSource) => void;
   /** Opens a task on its own document tab, out from under its version history and a side panel filling the window: the call card's way back. */
@@ -4385,7 +4385,7 @@ export function useTasksTab(input: {
     // ⌘K, or Home's Recent leaves whatever place stands for it.
     onSelect: (taskId) => arriveAt(taskId, () => selectListed(taskId)),
     onResume: (taskId) => arriveAt(taskId, () => resumeListed(taskId), true),
-    onRestoreTask: (taskId) => arriveAt(taskId, () => openUnpinned(taskId)),
+    onRestoreTask: (taskId, over) => arriveAt(taskId, () => openUnpinned(taskId), over),
     onStandTask: () => {
       if (boundFor !== undefined) standTaskPlace(boundFor);
     },
@@ -4403,8 +4403,9 @@ export function useTasksTab(input: {
       arriveAt(taskId, () =>
         openOnTask(taskId, { kind: LINK_PLACE.AGENT, planId: taskId, agentId }),
       ),
-    onShowColumnTab: (taskId, tab) => arriveAt(taskId, () => showColumnTab(taskId, tab)),
-    onShowPanelTab: (taskId, tab) => arriveAt(taskId, () => showPanelTab(taskId, tab)),
+    onShowColumnTab: (taskId, tab, over) =>
+      arriveAt(taskId, () => showColumnTab(taskId, tab), over),
+    onShowPanelTab: (taskId, tab, over) => arriveAt(taskId, () => showPanelTab(taskId, tab), over),
     inbox: input.inboxWaiting,
     inboxShown: shownInbox,
     inboxTasks: input.inboxTasks,

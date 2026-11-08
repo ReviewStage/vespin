@@ -482,29 +482,28 @@ export function TabSwitcher({
     );
   });
 
-  // Goes to a stop through the window's own doors, as any move there would, all of it past one ask of the leave guard, so a leave canceled moves nothing, the stops' order included.
+  // Goes to a stop through the window's own doors, as any move there would: the stop's own door moves the window first,
+  // and the rest of its screen, and the stops' order, follow once that move lands, so a leave kept at the ask moves
+  // nothing, the stops' order included (`places/place-leave.ts`'s `arrive`). Note that where nothing holds the move it is
+  // made as it always was, a routed place standing, Settings or Admin, left first for the stop; where an ask holds it,
+  // only the stop's door moves, over whatever place stands, so the one move held is the one the ask is about, and the
+  // routed place is left as the move lands, as the sidebar's rows leave it.
   const go = (stop: Stop) => {
     const { tasks: control, onTabChange: changeTab, places: placeDoors } = doors.current;
-    control.placeLeave.transitionalLeaveFirst(() => {
-      // A routed place standing, Settings or Admin, is left for the stop.
-      changeTab(PANEL_TAB.TASKS);
-      switch (stop.kind) {
-        case STOP_KIND.TASK:
-          showTask(control, stop);
-          break;
-        case STOP_KIND.AGENT:
-          control.agentView.onOpen(stop.agentId);
-          break;
-        case STOP_KIND.PERSON:
-          control.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
-          break;
-        case STOP_KIND.PLACE:
-          openPlace(control, placeDoors, stop.place);
-          break;
-      }
-      // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
-      stops.current = [stop, ...stops.current.filter((each) => !sameStop(each, stop))];
-    })();
+    let held = false;
+    control.placeLeave.arrive(
+      (free) => {
+        held = !free;
+        if (free) changeTab(PANEL_TAB.TASKS);
+        openStop(control, placeDoors, stop, held);
+      },
+      () => {
+        if (held) changeTab(PANEL_TAB.TASKS);
+        if (stop.kind === STOP_KIND.TASK) standScreen(doors.current.tasks, stop);
+        // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
+        stops.current = [stop, ...stops.current.filter((each) => !sameStop(each, stop))];
+      },
+    );
   };
 
   // The stops that still stand: no tab the open task no longer holds, as its strips' own state says, and no task the window no longer lists.
@@ -661,26 +660,53 @@ export function TabSwitcher({
 }
 
 /**
- * Opens a task on the screen a stop held: its column's tab and its side
- * panel's, through the doors that show a tab on a task, opening it first
- * where it is another; the panel shut where the stop had it shut, and
- * filling the window where it did. It is run whole past the leave guard's
- * ask (`go`), so a canceled leave changes neither pane.
+ * Opens a stop through its own door, which moves the window there: a task's
+ * on the screen's column tab where the screen had the column in sight, else
+ * on its panel's tab, else as it last stood; `over` a place standing beside
+ * the task's place too, as a move an ask holds is made (`go`).
  */
-function showTask(tasks: TasksControl, stop: Extract<Stop, { kind: typeof STOP_KIND.TASK }>): void {
+function openStop(
+  tasks: TasksControl,
+  doors: Parameters<typeof openPlace>[1],
+  stop: Stop,
+  over: boolean,
+): void {
+  switch (stop.kind) {
+    case STOP_KIND.TASK: {
+      const { taskId, column, panel, fullScreen } = stop;
+      // Note that the column's own door gives up a panel filling the window, so it is used only where the screen had the column in sight.
+      if (column !== undefined && !fullScreen) tasks.onShowColumnTab(taskId, column, over);
+      else if (panel !== undefined) tasks.onShowPanelTab(taskId, panel, over);
+      else tasks.onRestoreTask(taskId, over);
+      break;
+    }
+    case STOP_KIND.AGENT:
+      tasks.agentView.onOpen(stop.agentId);
+      break;
+    case STOP_KIND.PERSON:
+      tasks.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
+      break;
+    case STOP_KIND.PLACE:
+      openPlace(tasks, doors, stop.place);
+      break;
+  }
+}
+
+/**
+ * Stands the rest of the screen a task's stop held, once its door's move has
+ * landed (`openStop`): its side panel's tab beside the column's, the panel
+ * shut where the stop had it shut, and filling the window where it did.
+ */
+function standScreen(
+  tasks: TasksControl,
+  stop: Extract<Stop, { kind: typeof STOP_KIND.TASK }>,
+): void {
   const { taskId, column, panel, fullScreen } = stop;
   const { sidePanel, mainTabs } = tasks;
-  // Note that the column's own door gives up a panel filling the window, so it is used only where the screen had the column in sight.
   const columnShown = column !== undefined && !fullScreen;
-  if (columnShown) tasks.onShowColumnTab(taskId, column);
-  if (panel !== undefined) {
-    // Note that the panel's own door is used beside the column's, so the task is opened once.
-    if (columnShown) sidePanel.onShow(taskId, panel);
-    else tasks.onShowPanelTab(taskId, panel);
-  } else {
-    if (!columnShown) tasks.onRestoreTask(taskId);
-    if (sidePanel.open) sidePanel.onSetOpen(false);
-  }
+  // Note that the panel's own door is used beside the column's, so the task is opened once.
+  if (panel !== undefined && columnShown) sidePanel.onShow(taskId, panel);
+  if (panel === undefined && sidePanel.open) sidePanel.onSetOpen(false);
   if (column !== undefined && fullScreen) mainTabs.onShow(taskId, column);
   // Note that a narrow room's panel fills the window whenever it stands, and its toggle shuts it, so it is left as it opens.
   const filling = columnShown || !sidePanel.open ? false : sidePanel.fullScreen;

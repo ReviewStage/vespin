@@ -3695,6 +3695,12 @@ test.each<[string, (control: TasksControl) => void]>([
   async (_door, press) => askedOver(press),
 );
 
+test("the tab switcher's task, moved over an automation holding unsaved work, which its own place then stands in, asks once, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask", async () =>
+  askedOver(
+    (control) => control.onShowColumnTab(BILLING.id, agentTab(AGENT_ID), true),
+    () => automationsDoor?.open(),
+  ));
+
 test.each(TAB_DOORS)(
   "%s over an automation holding unsaved work, which the task opens under, asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
   async (_door, press) => askedOver(press, () => automationsDoor?.open()),
