@@ -3846,7 +3846,12 @@ export function PageCommentLayer({
       </RectFloat>
       <RectFloat
         open={review !== undefined && heldThere.length > 0}
-        anchor={() => (heldOpen === undefined ? undefined : pinBox(heldPins.current, heldOpen))}
+        anchor={() =>
+          heldOpen === undefined
+            ? undefined
+            : (pinBox(heldPins.current, heldOpen) ??
+              inWindow(room.current, marks.get(heldOpen) ?? undefined))
+        }
         side={POPOVER_SIDE.BELOW}
         // Note that an edit standing open in the card holds it, so its words are never lost to a stray press.
         onPressAway={() => {
