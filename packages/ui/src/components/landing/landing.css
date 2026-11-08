@@ -310,26 +310,29 @@
     text-wrap: balance;
   }
 
-  /* A stage: a panel a step above the ground, lit along its top edge,
-     holding the feature's screen, which runs off its foot where the screen
-     is a window. */
+  /* A stage: the feature's screen standing on the page's own ground, with
+     no panel round it, so no ground stands empty. A window runs past the
+     column's end and below the stage's foot, and fades into the ground at
+     both, as the hero's Inbox fades at its foot, rather than being cut off. */
   .ui-landing-stage {
     position: relative;
     margin-top: 56px;
-    padding: 56px 6%;
-    overflow: hidden;
-    border: 1px solid var(--ui-display-landing-rule);
-    border-radius: var(--ui-display-landing-stage-radius);
-    background: var(--ui-color-overlay);
-    box-shadow: var(--ui-display-landing-edge);
   }
 
   .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
-    padding-bottom: 0;
+    aspect-ratio: 16 / 9;
+    /* Note that a clip, unlike a scroll, leaves the box its content's least
+       height, which the ratio would then only floor. */
+    min-height: 0;
+    overflow: clip;
+    mask-image:
+      linear-gradient(to bottom, black 60%, transparent),
+      linear-gradient(to right, black 70%, transparent);
+    mask-composite: intersect;
   }
 
   .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-window {
-    margin-bottom: -56px;
+    width: 112%;
   }
 
   /* The foot's wordmark in dots, pressed faintly in the muted words' warm
@@ -1070,10 +1073,6 @@
      window's height, nine tenths of it, and the phone's 393:852 make the
      phone 0.26 of the window's width, so a window 86% of the row puts the
      phone's last 22% at the row's end, a third of it over the window. */
-  .ui-landing-stage[data-scene="devices"] {
-    padding: 64px 6% 72px;
-  }
-
   .ui-landing-devices {
     position: relative;
   }
@@ -1123,7 +1122,6 @@
 
   .ui-landing-keys {
     max-width: 520px;
-    margin: 0 auto;
     background: transparent;
   }
 
@@ -1175,10 +1173,9 @@
      stage that holds one alone shows the one moment that sells it instead:
      the desktop app as it is, laid out at 1280 by 800, cut to that moment's
      box and scaled so the box spans the stage, about three quarters of the
-     app's size on a phone. It stands in from the stage's top and start, on
-     the drifting dots, its corner the window's, and runs off the stage's
-     end and foot as a wide stage's window runs off its foot; the stage is
-     as tall as the box, so no ground stands empty. A window names its box
+     app's size on a phone. Its corner is the window's, and it fades into the
+     ground at the stage's end and foot as a wide stage's window does; the
+     stage is as tall as the box. A window names its box
      in its own pixels: where it starts
      (`--ui-landing-crop-x`, `--ui-landing-crop-y`) and how wide and tall it
      is (`--ui-landing-crop-w`, `--ui-landing-crop-h`); a margin's percentage
@@ -1244,12 +1241,14 @@
 
     .ui-landing-stage {
       margin-top: 28px;
-      padding: 28px 5%;
     }
 
+    /* The box is the moment itself, so the fade keeps to its last edge. */
     .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) {
-      padding: var(--ui-space-24) 0 0 var(--ui-space-20);
       aspect-ratio: var(--ui-landing-crop-w) / var(--ui-landing-crop-h);
+      mask-image:
+        linear-gradient(to bottom, black 85%, transparent),
+        linear-gradient(to right, black 85%, transparent);
     }
 
     .ui-landing-stage:is([data-scene="inbox"], [data-scene="agents"]) .ui-landing-scene {
@@ -1285,10 +1284,6 @@
 
     .ui-landing-beside {
       grid-template-columns: minmax(0, 1fr);
-    }
-
-    .ui-landing-stage[data-scene="devices"] {
-      padding: 28px 5% 36px;
     }
 
     .ui-landing-close {

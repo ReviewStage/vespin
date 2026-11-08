@@ -16,7 +16,7 @@ export { SiteBarPages } from "./site-frame.js";
  * rails, the bar that floats once the page scrolls, and the foot over the
  * wordmark; every section opens under a rule across the rails with a cross
  * where they meet. A section is a heading and a sentence over a
- * stage, a panel a step above the near-black ground holding the feature's screen, the
+ * stage, the feature's screen standing on the near-black ground with no panel round it, the
  * app's own components playing a short story (`landing-scenes.tsx`), with
  * an aside beside it where the caller gives one. The close carries the
  * page's last call.

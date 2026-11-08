@@ -39,10 +39,10 @@
   --ui-display-landing-feature-size: 2.75rem;
   --ui-display-landing-feature-tracking: -0.026em;
 
-  /* The landing's warmth over the brand's warm near-black: the hairline a
-     stage is ruled in and the line of light along its top edge, both of the
-     warm gray, and the soft warm-gray glow round a product screen. */
-  --ui-display-landing-rule: color-mix(in srgb, var(--ui-color-text-muted) 18%, transparent);
+  /* The landing's warmth over the brand's warm near-black: the line of
+     light along the top edge of the floating bar and the hero's Inbox, of the
+     warm gray, and the soft
+     warm-gray glow round a product screen. */
   --ui-display-landing-edge: inset 0 1px 0
     color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-display-landing-screen-glow:
@@ -51,8 +51,6 @@
   /* The bar over the page: the page's own warm ground, a share see-through,
      so what scrolls under it blurs rather than shows. */
   --ui-display-landing-bar: color-mix(in srgb, var(--ui-color-ground) 76%, transparent);
-  /* A stage's corners, rounder than a card's, so the panel reads soft. */
-  --ui-display-landing-stage-radius: 1.375rem;
 
   /* The landing's devices: a Mac window's corners, and a phone's outer
      corners and its screen's, which follow them inside the bezel, as
