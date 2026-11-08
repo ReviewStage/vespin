@@ -244,7 +244,7 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   assert.deepEqual(asked.shownAgents, []);
 });
 
-test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu", async () => {
+test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field", async () => {
   const { page } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumb = (at: number) =>
@@ -280,6 +280,12 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   for (const item of ["Copy link", "Rename", "Archive"]) {
     assert.ok(offered().includes(item), `the agent's crumb offers ${item}`);
   }
+  chooseMenuItem("Rename");
+  await settle();
+  assert.ok(
+    page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Agent name"]'),
+    "the agent's crumb stands as its name field",
+  );
 });
 
 /** What an intersection observer reports of the heading it watches: in the thread's view, or scrolled up past its top. */

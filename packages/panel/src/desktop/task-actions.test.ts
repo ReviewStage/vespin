@@ -983,8 +983,11 @@ test("the open task's topbar and its sidebar row offer the one menu, Status, Pri
   );
 
   unmountAll();
-  const other: TaskSummary = { ...OTHER, ...STANDING };
-  rightClick(mountSidebarTask(tasksControl({ tasks: [other] }), other, asked), 40, 60);
+  rightClick(mountSidebarTask(standing, standing.tasks[1] as TaskSummary, asked), 40, 60);
+  const row = menuItems().map(itemLabel);
+  for (const item of ["Version history", "Change repository"]) {
+    assert.ok(row.includes(item), `another task's row offers ${item}`);
+  }
   assert.deepEqual(
     itemChords(),
     [
