@@ -86,7 +86,7 @@ test("a workspace reached through the App draws the App's card checked, its done
   });
 });
 
-test("a paste too short to be a token says GitHub's invalid words on the token's card, and is sent nowhere", async () => {
+test("a paste too short to be a token says GitHub's invalid words on the token's card until it is edited, and is sent nowhere", async () => {
   holdRepositoryLists(handHostReads({}).deliverRepositoryLists, () => ({
     repositories: {
       installed: false,
@@ -123,13 +123,12 @@ test("a paste too short to be a token says GitHub's invalid words on the token's
   const field =
     [...container.querySelectorAll("label")].find((each) => each.textContent === "Classic token")
       ?.control ?? assert.fail("no token field");
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
-      field,
-      "ghp_bad",
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  const type = (value: string) =>
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  type("ghp_bad");
   act(() =>
     (
       [...container.querySelectorAll("button")].find((each) => each.textContent === "Save") ??
@@ -140,6 +139,9 @@ test("a paste too short to be a token says GitHub's invalid words on the token's
 
   assert.match(container.textContent ?? "", /GitHub rejected this token\./u);
   assert.deepEqual(saved, []);
+
+  type("ghp_bad2");
+  assert.doesNotMatch(container.textContent ?? "", /GitHub rejected/u, "an edit clears the words");
 });
 
 /** A repository as the workspace's listing answers it, reached through `access`. */
