@@ -3,9 +3,8 @@
  *
  * A screen of plans and threads draws every pull request link as a chip, and
  * each chip asks `GET /api/github/repositories/pull-request` as it mounts,
- * so one desktop asks for the same pull request in bursts. Each ask read
- * the installation, minted or found a token, and read GitHub, and a burst
- * of them is what GitHub's secondary rate limit answers 403 to.
+ * so one desktop asks for the same pull request in bursts, and a burst of
+ * reads is what GitHub's secondary rate limit answers 403 to.
  *
  * So the answer is kept on the instance, per pull request as one member
  * asked for it: concurrent asks join the one read under way, an answer is

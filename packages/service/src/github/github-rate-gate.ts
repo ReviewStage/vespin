@@ -434,9 +434,7 @@ export const githubRateGate: Layer.Layer<
       if (!toGitHubApi(request)) return sent;
       const identity = identityOf(request);
       // Note that the hold is read once the lane is had, because a request
-      // that queued behind the refusal must not be sent after it; this
-      // instance's own hold is read first, and the shared one only where
-      // that holds nothing.
+      // that queued behind the refusal must not be sent after it.
       const writes = MUTATIVE_METHODS.has(request.method);
       const send = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;

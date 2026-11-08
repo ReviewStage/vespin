@@ -69,10 +69,8 @@
  * answers none, as an unreached repository does, so a link to an issue
  * there draws its address.
  *
- * Every caller is resolved, and the claim's body bound checked, on the
- * resource's implementer rather than the procedure's, so they run before
- * oRPC reads the input, as the old groups resolved the caller before they
- * read a query or a body.
+ * Every caller is resolved on the resource's implementer rather than the
+ * procedure's, so it runs before oRPC decodes the input against its schema.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -145,7 +143,6 @@ const UNLINK_REFUSAL = {
 export interface GitHubProcedureSeams {
   resolveUserId: UserIdResolver;
   resolveSessionUserId: SessionUserIdResolver;
-  /** Removes the GitHub link of the session the headers carry. */
   unlinkGitHub: GitHubUnlink;
 }
 

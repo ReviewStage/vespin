@@ -12,7 +12,7 @@
  *
  * Who a pull request names rides beside its files and is never what the
  * files wait on: a read of the people that fails is said once in the log and
- * leaves them out, as a service before them did. A pull request's overview
+ * leaves them out. A pull request's overview
  * is named the same way, where naming its people is never what it waits
  * on either: a naming that fails names everyone as themself on GitHub. The
  * overview's two reads that name anyone, the pull request itself and its

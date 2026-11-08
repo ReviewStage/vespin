@@ -7,7 +7,7 @@
  * the member may do on GitHub bounds what they do through the service. A write is
  * one call of GitHub's GraphQL API (`githubWrite`), or, for its requested
  * reviewers and its labels, of its REST API (`githubRestWrite`), composed
- * over the App module's own kit (`githubPost`, `send`), so a token leaves
+ * over the App module's own kit (`githubPost`, `githubSendRequest`, `send`), so a token leaves
  * this module no more than it leaves that one. What GitHub answers is told apart three
  * ways: a token GitHub will not take (401), which the member mends by
  * signing in with GitHub again; a change GitHub refused, in its own words,
@@ -68,7 +68,6 @@ class GitHubWriteRefused extends Data.TaggedError("GitHubWriteRefused")<{
   }
 }
 
-/** What a write on a member's token can fail with. */
 export type GitHubWriteFailure = GitHubTokenRefused | GitHubWriteRefused | GitHubUnavailable;
 
 /** A GraphQL answer's frame: its data, which the caller's schema reads, and its errors, each with its words. */
@@ -136,8 +135,8 @@ const readWrite = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
 
 /**
  * One call of GitHub's GraphQL API on the member's token: the document and
- * its variables, its data read under the schema given. Every write on a
- * pull request goes through here, so every one tells GitHub's refusals
+ * its variables, its data read under the schema given. Every GraphQL call
+ * on a pull request goes through here, so every one tells GitHub's refusals
  * apart the same way.
  */
 const githubWrite = <A>(
@@ -851,11 +850,7 @@ export const setPullRequestDescription = /* @__PURE__ */ Effect.fn("web/setPullR
   },
 );
 
-/**
- * The pull request what a reaction names is on, read on the member's token:
- * the pull request itself, a comment on it, one of its reviews, or a
- * review's comment, each by its GraphQL id.
- */
+/** The pull request what a reaction names is on, by the subject's GraphQL id. */
 const SUBJECT_PULL_REQUEST_QUERY = `query($id: ID!) {
   node(id: $id) {
     ... on PullRequest { id }

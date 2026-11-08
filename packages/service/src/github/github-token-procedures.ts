@@ -17,10 +17,9 @@
  * token never leaves the function.
  *
  * A deployment holding no ring, or one it cannot parse, answers every
- * request unavailable. The caller, the ring, and the save's
- * body bound are each checked on the resource's implementer, in that order,
- * so they run before oRPC reads the save's body, as the old group checked
- * them before it read one. A save is braked per member, ten an hour, as the
+ * request unavailable. The caller and then the ring are checked on the
+ * resource's implementer, so they run before oRPC decodes the save's body
+ * against its schema. A save is braked per member, ten an hour, as the
  * provider keys' is, so the endpoint is no oracle for tokens that are not
  * the caller's.
  */

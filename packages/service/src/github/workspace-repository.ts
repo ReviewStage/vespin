@@ -13,7 +13,7 @@
  * in, it names that workspace, since an installation stands for one
  * workspace alone and moving the task there is the one thing that reaches the
  * repository again: a task written in a workspace before its repositories
- * came only from its own installation (#2524) is left that way.
+ * came only from its own installation is left that way.
  *
  * Where no installation reaches it, the acting member's own GitHub token may
  * (`github-app.ts`), and the access a read found, the App's or the token's,

@@ -95,7 +95,7 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * (`packages/service/src/automations/automation-github.ts`): a pull request or issue opened or
  * labeled, a check suite that failed, or a push queues a run, under the
  * delivery's own id, for each automation listing the repository that
- * listens for it, and the minute sweep starts each one's agent. And a
+ * listens for it, which the automation-runs queue's consumer starts. And a
  * review, a comment on a pull request, or a check that failed on an
  * agent's branch is told to the agents on that pull request as a message
  * from GitHub (`agent-wakes.ts`), and so is every check on an agent's head

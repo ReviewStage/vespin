@@ -10,7 +10,7 @@
  * to the landing page with one word of status.
  *
  * Where the install began as a workspace's connect, the address also carries
- * the connect intent's `state` (`workspaces-app.ts`), and the installation is
+ * the connect intent's `state` (`workspace-github-procedures.ts`), and the installation is
  * linked to that intent's workspace. The `installation_id` is never trusted
  * on its own, since anyone can put any id on this address: GitHub's own
  * guidance for the Setup URL is to generate a user access token for the user
