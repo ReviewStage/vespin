@@ -56,6 +56,15 @@ catalogs:
   # two trees never meet in one bundle: Metro bundles the app's own React, and
   # nothing of `@repo/panel` or `@repo/ui` is drawn in it. Move the default
   # catalog to 19.3 and delete this one once the web and desktop apps take it.
+  #
+  # Note that `packages/service` declares the default catalog's `react` as a
+  # devDependency it never imports, because pnpm resolves a peer a workspace
+  # leaves undeclared to the highest version in the lockfile: once this
+  # catalog put a second React there, the service's `better-auth`, whose
+  # React peer is optional, resolved it to 19.3 while the web app's resolved
+  # 19.2, and the two copies of `better-auth` that made did not share their
+  # routes (the desktop's OAuth sign-in answered 404 under test). Declaring
+  # it from the root does not reach that peer; the service's own does.
   mobile:
     react: 19.3.0
     "@types/react": 19.3.0
