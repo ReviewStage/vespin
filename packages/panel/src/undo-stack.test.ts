@@ -196,13 +196,18 @@ test("once the account changes, an undo queued behind another sends nothing, and
     window.doors,
     TASK_ID,
   );
+  const pressed = pressRows(ROW_WRITE.TASK_PIN, window.doors, [
+    { id: TASK_ID, after: { pinned: true, position: null } },
+  ]);
 
   forgetUndo();
   open();
   await Promise.all([first, queued, pinning]);
+  const said = pressed.keep("Task pinned");
   const after = await undoLast();
 
   assert.deepEqual(sent, ["act item-1", "act item-2", "undo item-2"]);
+  assert.equal(said, undefined);
   assert.equal(after, undefined);
   assert.deepEqual(window.sent, [{ taskId: TASK_ID, pinned: true }]);
 });

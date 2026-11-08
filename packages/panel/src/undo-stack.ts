@@ -511,7 +511,7 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
       if (since !== generation) return undefined;
       const landed = changes.filter((change) => kept(change.id));
       if (landed.length === 0) return doneToast(words);
-      return undoable({
+      const toast = undoable({
         words,
         undo: () =>
           rowsRun(
@@ -530,6 +530,7 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
             (each) => each.after,
           ),
       });
+      return { ...toast, replayUnmasked: true };
     },
   };
 }
