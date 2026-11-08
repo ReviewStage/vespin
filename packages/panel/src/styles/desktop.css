@@ -597,6 +597,29 @@ body,
   --ui-toolbar-height: var(--task-tabs-height);
   --ui-toolbar-top-inset: 0px;
   --ui-toolbar-block-inset: var(--task-tabs-gap);
+  /* The row ends short of the side panel's toggle, which stands at its end
+     (below), and of the panel's full-screen button before it while the
+     panel is drawn. */
+  --ui-toolbar-end-at: var(--panel-toggle-clearance);
+}
+
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main):has(> .side-panel)
+  .task-tabs {
+  --ui-toolbar-end-at: calc(var(--panel-toggle-clearance) + var(--ui-control-height));
+}
+
+/* So the side panel's toggle and its full-screen button stand on one row, a
+   task's page stands them at the end of the agents' tabs' row rather than
+   the title bar's: its tabs stand flush under the topbar, which is two
+   title-bar middles tall. Where the task's details stand in that row's
+   place, the toggle keeps to the title bar. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell:has(> .desktop-main .desktop-task > .task-tabs)
+  > .title-bar-controls[data-edge="end"] {
+  top: calc(2 * var(--title-bar-middle));
 }
 
 :where(:root):not([data-ui-room="narrow"])
