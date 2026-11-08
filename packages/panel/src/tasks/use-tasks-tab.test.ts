@@ -74,13 +74,6 @@ import { type AutomationsRoute, useAutomationsRoute } from "../automations-route
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import {
-  type HistoryBehind,
-  type TaskVisits,
-  useRoutedStanding,
-  useWindowHistory,
-  type WindowHistory,
-} from "../navigation-history.js";
-import {
   installPanelSpanRecorder,
   PANEL_SPAN,
   PANEL_SPAN_ATTRIBUTE,
@@ -105,6 +98,13 @@ import {
 } from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
+import {
+  type HistoryBehind,
+  type TaskVisits,
+  useRoutedStanding,
+  useWindowHistory,
+  type WindowHistory,
+} from "../places/window-history.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useTaskRoute } from "../task-route.js";
 import {

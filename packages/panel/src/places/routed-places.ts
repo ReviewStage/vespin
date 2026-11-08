@@ -703,7 +703,7 @@ export interface WindowPlace {
  * itself rather than the router's matches as they load, because the history
  * moves at once while those matches wait on a route's chunk still on its
  * way, and the window must know a routed place stands from the moment its
- * entry is written (`navigation-history.ts`).
+ * entry is written (`window-history.ts`).
  */
 export function useWindowPlace(): WindowPlace {
   const router = useRouter();

@@ -13,42 +13,42 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { type AdminRoute, useAdminRoute } from "./admin/admin-route.js";
-import { type AgentRoute, useAgentRoute } from "./agent-route.js";
-import { runAppCommand } from "./app-commands.js";
-import { type AutomationsRoute, useAutomationsRoute } from "./automations-route.js";
-import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
-import { useCopyLink } from "./links-at-hand.js";
+import { type AdminRoute, useAdminRoute } from "../admin/admin-route.js";
+import { type AgentRoute, useAgentRoute } from "../agent-route.js";
+import { runAppCommand } from "../app-commands.js";
+import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
+import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
+import { useCopyLink } from "../links-at-hand.js";
+import { type SettingsRoute, useSettingsRoute } from "../settings-link.js";
+import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { useTaskRoute } from "../task-route.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
+import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
+import { deliveryOf, handState, stateWith, withExperiments } from "../testing/app-state.js";
+import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { tasksControl } from "../testing/tasks-control.js";
+import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
+import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
+import { useHomeRoute } from "../workspace-routes.js";
+import { useNarrowBacks } from "./narrow-backs.js";
+import { PLACE_BINDING, usePlaceBinding } from "./place-binding.js";
+import { usePlaceLeave } from "./place-leave.js";
+import { useRoutedExits } from "./routed-exits.js";
+import { ROUTED_PLACE } from "./routed-places.js";
+import { taskAtOf } from "./task-step.js";
 import {
   type HistoryBehind,
   useRoutedStanding,
   useWindowHistory,
   type WindowHistory,
-} from "./navigation-history.js";
-import { useNarrowBacks } from "./places/narrow-backs.js";
-import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
-import { usePlaceLeave } from "./places/place-leave.js";
-import { useRoutedExits } from "./places/routed-exits.js";
-import { ROUTED_PLACE } from "./places/routed-places.js";
-import { taskAtOf } from "./places/task-step.js";
-import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
-import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
-import { useTaskRoute } from "./task-route.js";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
-import { SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
-import type { SidePanelTab } from "./tasks/use-side-panel.js";
-import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
-import { fakeAppBridge, fakeAppBridgeCalls } from "./testing/app-bridge.js";
-import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
-import { deliveryOf, handState, stateWith, withExperiments } from "./testing/app-state.js";
-import { DOCUMENT_TASK } from "./testing/document-task.js";
-import { tasksControl } from "./testing/tasks-control.js";
-import { type TestWindowRouter, windowRouter } from "./testing/window-router.js";
-import { useVersionHistoryRoute, type VersionHistoryRoute } from "./version-history-route.js";
-import { useHomeRoute } from "./workspace-routes.js";
+} from "./window-history.js";
 
 /**
- * navigation-history-narrow.test.ts -- on a stage as narrow as a phone's,
+ * window-history-narrow.test.ts -- on a stage as narrow as a phone's,
  * each pane opened over another is a step of its own: the side panel over
  * the plan, an Inbox item, a Settings page, and a version over their lists, and an automation's runs over its setup. Back returns to the pane before, Forward opens it again, each
  * place's way back from its pane (`places/narrow-backs.ts`) goes through the

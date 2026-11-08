@@ -42,8 +42,8 @@ import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
-import type { NavigationHistory } from "../navigation-history.js";
 import { SettingsPageLink } from "../open-settings.js";
+import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
   settingsGroupHeadingOf,

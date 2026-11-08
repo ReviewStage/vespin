@@ -2,7 +2,7 @@
  * tab-switcher-model.ts -- what ⌃Tab steps through: the window's tabs and places in the order they were last used, across every task, and how a press, a hold, and a let-go move through them.
  *
  * A stop is a whole screen the window stood on, the same unit as a step of
- * Back's (`navigation-history.ts`): a task with the tab its column showed
+ * Back's (`places/window-history.ts`): a task with the tab its column showed
  * and the tab its side panel showed, either of them none, or a place the
  * window shows in the task's place, Home, the Inbox, the Board,
  * Automations, an agent's own page, or a person's. Settings and a

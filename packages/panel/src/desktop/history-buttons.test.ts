@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import type { NavigationHistory } from "../navigation-history.js";
+import type { NavigationHistory } from "../places/window-history.js";
 import type { HistoryStep } from "../places/window-steps.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
@@ -42,17 +42,17 @@ afterEach(() => {
 
 const BACK: readonly HistoryStep[] = [
   {
-    at: 2,
+    number: 2,
     title: { label: "Auth refactor", detail: "Fix token refresh · Code" },
     page: { kind: "task", of: "a" },
   },
   {
-    at: 1,
+    number: 1,
     title: { label: "Auth refactor", detail: "Fix token refresh · Plan" },
     page: { kind: "task", of: "a" },
   },
   {
-    at: 0,
+    number: 0,
     title: { label: "Inbox", detail: "Desktop shell" },
     page: { kind: "routed", of: "/acme/inbox" },
   },
@@ -68,7 +68,7 @@ function mount(steps: readonly HistoryStep[]) {
     onBack: () => pressed.push("back"),
     onForward: () => pressed.push("forward"),
     steps: { back: steps, forward: [] },
-    onGoTo: (at) => went.push(at),
+    onGoTo: (number) => went.push(number),
   };
   const container = document.createElement("div");
   document.body.append(container);
@@ -179,14 +179,14 @@ test("Back held opens its list and its release takes no step, while a quick pres
 test("repeated steps named nothing are listed in separate page groups, one for each time the window returned to the page", () => {
   const home = { kind: "routed", of: "/acme" } as const;
   const window = mount([
-    { at: 3, title: undefined, page: home },
-    { at: 2, title: undefined, page: home },
+    { number: 3, title: undefined, page: home },
+    { number: 2, title: undefined, page: home },
     {
-      at: 1,
+      number: 1,
       title: { label: "Inbox", detail: "Desktop shell" },
       page: { kind: "routed", of: "/acme/inbox" },
     },
-    { at: 0, title: undefined, page: home },
+    { number: 0, title: undefined, page: home },
   ]);
   act(() => {
     window.back.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));

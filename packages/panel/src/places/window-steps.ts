@@ -10,18 +10,19 @@
  * from before each was the router's, and tabs saved before they carried
  * their kind (`savedStepOf`).
  *
- * The rules here read the trail the window keeps (`navigation-history.ts`)
- * and write nothing: whether a visit pushes a step of its own or takes the
- * standing step's place (`visitWrite`), which steps Back and Forward can
- * still reach (`nearest`, `useStepReach`), the step a page's way out goes
- * back to (`awayFrom`), and the lists Back and Forward draw, each step named
- * as its place's declaration names it now (`useStepNames`).
+ * The rules here read the steps the window knows its router's history
+ * holds (`window-history.ts`) and write nothing: whether a visit pushes a
+ * step of its own or takes the standing step's place (`visitWrite`), which
+ * steps Back and Forward can still reach (`nearest`, `useStepReach`), the
+ * step a page's way out goes back to (`awayFrom`), and the lists Back and
+ * Forward draw, each step named as its place's declaration names it now
+ * (`useStepNames`).
  *
  * One rule of a step lives with its door instead: a task's own place opened
  * with `takesStepless` replaces an entry holding no saved step (`savesStep`),
- * as a launch's entry is (`task-route.ts`'s `onOpen`), which is the trail's
- * own rule that a push on an empty trail takes the entry it stands on
- * (`navigation-history.ts`'s `recordTrail`).
+ * as a launch's entry is (`task-route.ts`'s `onOpen`), which mirrors the
+ * window's own rule that a push on an entry holding no step takes that entry
+ * (`window-history.ts`'s `writeStep`).
  */
 
 import { linkOf, type ReadLink, taskLinkStep } from "@repo/features/link-grammar";
@@ -101,7 +102,7 @@ export function taskPlace(address: string, task: TaskStep): TaskPlace {
   return { kind: ROUTED_KIND, address, task };
 }
 
-/** What a step is called where the trail is listed: what stood in the window, and what it showed there, such as a task and its tabs. */
+/** What a step is called where Back's and Forward's lists name it: what stood in the window, and what it showed there, such as a task and its tabs. */
 export interface StepTitle {
   readonly label: string;
   readonly detail?: string | undefined;
@@ -118,33 +119,41 @@ interface StepPanes {
 /** A place with what it was called as the window stood on it, which no comparison of steps reads. */
 export type Titled = Place & { readonly title?: StepTitle | undefined };
 
-/** One step the window has stood on: the address its entry is held at, and the place it reopens. */
-export interface TrailEntry {
+/** One step the window has heard its router's history hold: its number (`SavedStep`), the address its entry is held at, and the place it reopens. */
+export interface StepEntry {
+  readonly number: number;
   readonly address: string;
-  readonly state: Place;
+  readonly place: Place;
 }
 
-/** The steps the window has stood on, oldest first, and the one standing; `at` is -1 while none is. */
-export interface Trail {
-  readonly entries: readonly TrailEntry[];
+/** The steps the window knows its router's history holds, by their numbers in order, and the one standing: `at` is its index among them, -1 while the entry standing holds none. */
+export interface KnownSteps {
+  readonly entries: readonly StepEntry[];
   readonly at: number;
 }
 
-/** How a step is written into the trail: a visit after the step standing, or in its place. */
-export const TRAIL_WRITE = {
+/** How a step is written into the router's history: a visit after the step standing, or in its place. */
+export const STEP_WRITE = {
   PUSH: "push",
   REPLACE: "replace",
 } as const;
 
-export type TrailWriteKind = (typeof TRAIL_WRITE)[keyof typeof TRAIL_WRITE];
+type StepWriteKind = (typeof STEP_WRITE)[keyof typeof STEP_WRITE];
 
-/** A write of the trail: `entry` after the step standing, or in its place. */
-export interface TrailWrite {
-  readonly kind: TrailWriteKind;
-  readonly entry: TrailEntry;
+/** A write of a step: `place` at `address`, after the step standing or in its place. */
+export interface StepWrite {
+  readonly kind: StepWriteKind;
+  readonly address: string;
+  readonly place: Place;
 }
 
-/** What a window saves in each entry of its router's history: the place the step reopens, and the step's number among the window's own. */
+/**
+ * What a window saves in each entry of its router's history: the place the
+ * step reopens, and the step's number among the window's own, one past the
+ * step it was pushed after and the same as the one it took the place of, so
+ * a move along the history lands on the step its number says. A build that
+ * kept a trail of its own beside the history saved the same number there.
+ */
 export interface SavedStep {
   readonly place: Place;
   readonly index: number;
@@ -250,55 +259,54 @@ export function addressOf(link: ReadLink): string {
  * place is a visit, whichever door opened it.
  */
 export function visitWrite(
-  trail: Trail,
+  steps: KnownSteps,
   place: Place,
   address: string,
   up: Place | undefined,
   pressed: boolean,
   opened: boolean,
   onTaskRoute: (address: string) => boolean,
-): TrailWrite | undefined {
-  const standing = trail.entries[trail.at];
-  const entry: TrailEntry = { address, state: place };
+): StepWrite | undefined {
+  const standing = steps.entries[steps.at];
   const wentUp = up !== undefined && sameStep(up, place);
   // An entry the router wrote on a task's own place, as a door's navigation or a gate's redirect writes one, holding none of
   // the task's step, is that task's step, which the window writes only once the task bound for is the one its address names.
   const routedHere =
     standing !== undefined &&
-    standing.state.task === undefined &&
+    standing.place.task === undefined &&
     place.task !== undefined &&
     (standing.address === address || onTaskRoute(standing.address));
   // What the place shows within the page standing, as a step of its own, the window settling, or the step standing (`places/task-step.ts`).
   const within =
-    standing !== undefined && samePage(standing.state, place)
-      ? stepWithin(shownOf(standing.state), shownOf(place), { pressed, opened })
+    standing !== undefined && samePage(standing.place, place)
+      ? stepWithin(shownOf(standing.place), shownOf(place), { pressed, opened })
       : STEP_WITHIN.VISIT;
   if (standing !== undefined && (wentUp || within === STEP_WITHIN.SETTLE || routedHere)) {
-    return { kind: TRAIL_WRITE.REPLACE, entry };
+    return { kind: STEP_WRITE.REPLACE, address, place };
   }
   if (standing !== undefined && within === STEP_WITHIN.SAME) {
     const moved =
-      !stoodAlike(shownOf(standing.state), shownOf(place)) ||
-      !sameTitle(standing.state, place) ||
+      !stoodAlike(shownOf(standing.place), shownOf(place)) ||
+      !sameTitle(standing.place, place) ||
       standing.address !== address;
-    return moved ? { kind: TRAIL_WRITE.REPLACE, entry } : undefined;
+    return moved ? { kind: STEP_WRITE.REPLACE, address, place } : undefined;
   }
-  return { kind: TRAIL_WRITE.PUSH, entry };
+  return { kind: STEP_WRITE.PUSH, address, place };
 }
 
 /**
- * The nearest step one way along the trail the window can still go to,
+ * The nearest step one way along the history the window can still go to, by its index among the steps known,
  * skipping any it cannot reach and any that is the step it already stands
  * on, so a deleted task between two visits of one page is passed over whole.
  */
 export function nearest(
-  trail: Trail,
+  steps: KnownSteps,
   step: -1 | 1,
   reachable: (place: Place) => boolean,
 ): number | undefined {
-  const standing = trail.entries[trail.at]?.state;
-  for (let at = trail.at + step; at >= 0 && at < trail.entries.length; at += step) {
-    const place = trail.entries[at]?.state;
+  const standing = steps.entries[steps.at]?.place;
+  for (let at = steps.at + step; at >= 0 && at < steps.entries.length; at += step) {
+    const place = steps.entries[at]?.place;
     if (place !== undefined && reachable(place) && !sameStep(standing, place)) return at;
   }
   return undefined;
@@ -309,10 +317,13 @@ export function nearest(
  * can still be gone to, passing over the standing page's own steps, its
  * narrow panes and its tabs among them; none where no such step stands.
  */
-export function awayFrom(trail: Trail, reachable: (place: Place) => boolean): number | undefined {
-  const standing = trail.entries[trail.at]?.state;
-  for (let at = trail.at - 1; at >= 0; at -= 1) {
-    const place = trail.entries[at]?.state;
+export function awayFrom(
+  steps: KnownSteps,
+  reachable: (place: Place) => boolean,
+): number | undefined {
+  const standing = steps.entries[steps.at]?.place;
+  for (let at = steps.at - 1; at >= 0; at -= 1) {
+    const place = steps.entries[at]?.place;
     if (place === undefined || !reachable(place)) continue;
     if (standing === undefined || !samePage(standing, place)) return at;
   }
@@ -334,9 +345,10 @@ export interface HistoryPage {
   readonly of: string | undefined;
 }
 
-/** One step of the trail as Back's and Forward's lists draw it: where it stands on the trail, what it is called now, and which page it was. */
+/** One step of the history as Back's and Forward's lists draw it: its number, what it is called now, and which page it was. */
 export interface HistoryStep {
-  readonly at: number;
+  /** Its number (`SavedStep`), which going to it moves the history to. */
+  readonly number: number;
   readonly title: StepTitle | undefined;
   /** The page it stood on, so the list can gather a page's steps together (`sameHistoryPage`). */
   readonly page: HistoryPage;
@@ -364,24 +376,24 @@ export function sameHistoryPage(one: HistoryPage, other: HistoryPage): boolean {
 }
 
 /**
- * The steps one way along the trail the window can go to, nearest first, as
+ * The steps one way along the history the window can go to, nearest first, as
  * Back's or Forward's list draws them: each one Back or Forward would reach
  * pressed again and again, so a step it cannot reach and a run of one step
  * held twice are passed over, as `nearest` passes over them.
  */
 function listedSteps(
-  trail: Trail,
+  steps: KnownSteps,
   way: -1 | 1,
   reachable: (place: Place) => boolean,
   named: (place: Place) => StepTitle | undefined,
 ): HistoryStep[] {
   const listed: HistoryStep[] = [];
-  let from = trail.at;
+  let from = steps.at;
   while (listed.length < LISTED_STEPS) {
-    const at = nearest({ entries: trail.entries, at: from }, way, reachable);
-    const place = at === undefined ? undefined : trail.entries[at]?.state;
-    if (at === undefined || place === undefined) break;
-    listed.push({ at, title: named(place), page: pageOf(place) });
+    const at = nearest({ entries: steps.entries, at: from }, way, reachable);
+    const entry = at === undefined ? undefined : steps.entries[at];
+    if (at === undefined || entry === undefined) break;
+    listed.push({ number: entry.number, title: named(entry.place), page: pageOf(entry.place) });
     from = at;
   }
   return listed;
@@ -392,7 +404,7 @@ export interface AwayStep {
   readonly title: StepTitle | undefined;
 }
 
-/** What Back and Forward draw of a trail: whether each can go, the steps each lists, and the step a page's way out goes back to. */
+/** What Back and Forward draw of the steps known: whether each can go, the steps each lists, and the step a page's way out goes back to. */
 export interface HistoryReading {
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
@@ -401,18 +413,18 @@ export interface HistoryReading {
 }
 
 export function readingOf(
-  trail: Trail,
+  steps: KnownSteps,
   reachable: (place: Place) => boolean,
   named: (place: Place) => StepTitle | undefined,
 ): HistoryReading {
   return {
-    canGoBack: nearest(trail, -1, reachable) !== undefined,
-    canGoForward: nearest(trail, 1, reachable) !== undefined,
+    canGoBack: nearest(steps, -1, reachable) !== undefined,
+    canGoForward: nearest(steps, 1, reachable) !== undefined,
     steps: {
-      back: listedSteps(trail, -1, reachable, named),
-      forward: listedSteps(trail, 1, reachable, named),
+      back: listedSteps(steps, -1, reachable, named),
+      forward: listedSteps(steps, 1, reachable, named),
     },
-    away: awayStep(trail, reachable, named),
+    away: awayStep(steps, reachable, named),
   };
 }
 
@@ -433,7 +445,7 @@ function sameSteps(one: readonly HistoryStep[], other: readonly HistoryStep[]): 
       const theirs = other[index];
       return (
         theirs !== undefined &&
-        step.at === theirs.at &&
+        step.number === theirs.number &&
         sameHistoryPage(step.page, theirs.page) &&
         sameStepTitle(step.title, theirs.title)
       );
@@ -455,12 +467,12 @@ export function sameReading(one: HistoryReading, other: HistoryReading): boolean
 
 /** The step behind on another page (`awayFrom`), as a way out names it now. */
 function awayStep(
-  trail: Trail,
+  steps: KnownSteps,
   reachable: (place: Place) => boolean,
   named: (place: Place) => StepTitle | undefined,
 ): AwayStep | undefined {
-  const at = awayFrom(trail, reachable);
-  const place = at === undefined ? undefined : trail.entries[at]?.state;
+  const at = awayFrom(steps, reachable);
+  const place = at === undefined ? undefined : steps.entries[at]?.place;
   return place === undefined ? undefined : { title: named(place) };
 }
 
@@ -610,8 +622,8 @@ export function useStepReach(input: {
  * place's declaration names it, by the ids its address names, a task's by
  * what its step holds (`liveStepTitle`), else as the window called it there.
  * The workspace's members, who name a person's page, are read only while
- * such a page stands on the trail; the place standing counts as on the
- * trail already, so its visit, written after it draws, draws the window no
+ * such a page stands among the steps known; the place standing counts as
+ * among them already, so its visit, written after it draws, draws the window no
  * second time.
  */
 export function useStepNames(input: {
@@ -625,10 +637,10 @@ export function useStepNames(input: {
   readonly historyTaskOf: StepReach["historyTaskOf"];
   /** Whether a person's page stands now. */
   readonly personStanding: boolean;
-  /** Hears every change of the trail; answers the way to stop. */
+  /** Hears every change of the steps known; answers the way to stop. */
   readonly subscribe: (listener: () => void) => () => void;
-  /** The steps the trail holds as it stands. */
-  readonly entries: () => readonly TrailEntry[];
+  /** The steps known as they stand. */
+  readonly entries: () => readonly StepEntry[];
 }): (to: Place) => StepTitle | undefined {
   const { access, tasks, inbox, historyTaskOf, personStanding, entries } = input;
   const router = useRouter();

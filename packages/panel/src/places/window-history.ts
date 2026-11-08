@@ -1,5 +1,5 @@
 /**
- * navigation-history.ts -- the window's back and forward: the places it has stood on, and the moves between them.
+ * window-history.ts -- the window's back and forward: the places it has stood on, and the moves between them.
  *
  * A place is a task's page or a routed place, Home, the Inbox, Settings,
  * Admin, a workspace's Board, a person's page, the Automations pages, or a
@@ -11,29 +11,40 @@
  * through the history is the window arriving where the history already
  * stands. It lives as long as the window does, the way a browser tab's does.
  *
- * The history is written into the router history the window's root mounts
- * (`panel-router.tsx`), each place saved in its entry's state as what a step
- * back reopens it from, the way a browser's `history.state` stands beside
- * its URL, and the path of its app link as its address: the link Copy link names for
- * the step (`links-at-hand.ts`), so the two never disagree. A task whose
- * link is not drawn yet stands at the address its links name it by, and one
- * whose workspace is not known writes no step until it is, so a link loaded
- * before the account's workspaces are read waits on its own route and its
- * step takes the entry it loaded on. The step standing takes its address again whenever that
- * link changes, as when a workspace's slug is read after the visit; a step
- * behind takes it when the window is back on it. The desktop's router keeps
- * its history in memory, and nothing there reads an address; the web's is
- * the tab's own. The router's history names only the entry standing, so the
- * trail of steps around it is kept here beside it (`WindowTrail`). What a
- * step holds, how it is saved and read back, and the rules that read the
- * trail, which visit is a step of its own, which steps can still be gone to,
- * and how Back and Forward list and name them, are the steps' own
- * (`places/window-steps.ts`).
+ * Each step is an entry of the router history the window's root mounts
+ * (`panel-router.tsx`), the place it reopens saved in the entry's state, the
+ * way a browser's `history.state` stands beside its URL, and the path of its
+ * app link as its address: the link Copy link names for the step
+ * (`links-at-hand.ts`), so the two never disagree. A task whose link is not
+ * drawn yet stands at the address its links name it by, and one whose
+ * workspace is not known writes no step until it is, so a link loaded before
+ * the account's workspaces are read waits on its own route and its step
+ * takes the entry it loaded on. The step standing takes its address again
+ * whenever that link changes, as when a workspace's slug is read after the
+ * visit; a step behind takes it when the window is back on it. The desktop's
+ * router keeps its history in memory, and nothing there reads an address;
+ * the web's is the tab's own.
+ *
+ * Each step is numbered by the window's own number in its state
+ * (`SavedStep`): one past the step it was pushed after, the same as the one
+ * it took the place of. The router's history names only the entry standing,
+ * so what it tells its subscribers of each entry is kept beside it, by that
+ * number (`StepRecord`), a push letting go of every step past it, and Back's
+ * and Forward's lists, and their passing over a step that can no longer be
+ * reached, read that record. A move along the history, by Back, Forward, a
+ * step of their lists, Escape, or the mouse's own buttons, is the router
+ * history's own `go`, through the place module's one door for it
+ * (`place-leave.ts`'s `along`), and wherever the history lands, by the
+ * window's move or a browser's, the window stands what that entry saved.
+ * What a step holds, how it is saved and read back, and the rules that read
+ * the steps, which visit is a step of its own, which steps can still be gone
+ * to, and how Back and Forward list and name them, are the steps' own
+ * (`window-steps.ts`).
  *
  * Every place is the router's (`panel-router.tsx`), declared in the place
- * module (`places/routed-places.ts`): Home, Settings, Admin, the Board, a
+ * module (`routed-places.ts`): Home, Settings, Admin, the Board, a
  * person's page, an agent's own page, and a version history are written as
- * the router navigates there, and the trail follows each write as a routed
+ * the router navigates there, and the window stamps each write as a routed
  * step, which holds only its address, stands where the router's history
  * stands, and is reachable as its declaration says (`routedStepStands`). A
  * task's own place is a routed step too, which a door opening a task
@@ -100,7 +111,7 @@
  * sub-step from the step alone, so a move the history makes by itself, as a
  * browser's Back does, lands on the screen the step was. The screens' own
  * ways back to their lists, the side panel's ways out among them, are each
- * place's own (`places/narrow-backs.ts`), which read this history through
+ * place's own (`narrow-backs.ts`), which read this history through
  * `behind`: a step back where the list is the step behind, and otherwise
  * the list taking the step standing in place, which a list a narrow screen
  * went up to takes (`upTo`), so shutting a panel opened over the plan steps
@@ -129,26 +140,32 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import type { AutomationsRoute } from "./automations-route.js";
-import type { InboxRoute } from "./inbox-route.js";
-import type { BackStep, StepsBehind } from "./places/narrow-backs.js";
-import type { PlaceLeave } from "./places/place-leave.js";
-import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
+import type { AutomationsRoute } from "../automations-route.js";
+import type { InboxRoute } from "../inbox-route.js";
+import { useRouteAccess } from "../route-gates.js";
+import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { useSteadyDoors } from "../steady-door.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import { useSurfaceOpen } from "../use-surface-open.js";
+import type { VersionHistoryRoute } from "../version-history-route.js";
+import type { BackStep, StepsBehind } from "./narrow-backs.js";
+import type { PlaceLeave } from "./place-leave.js";
+import { type PlaceParams, placeParamsOf } from "./place-params.js";
 import {
   ROUTED_PLACE,
   type RoutedPlace,
   routedPlaceOf,
-  sameDraftAt,
   tabSurface,
   useWindowPlace,
-} from "./places/routed-places.js";
-import type { LinkStep, PanelStep, SideStep, TaskAt, TaskStep } from "./places/task-step.js";
+} from "./routed-places.js";
+import type { LinkStep, PanelStep, SideStep, TaskAt, TaskStep } from "./task-step.js";
 import {
   type AwayStep,
   addressOf,
   awayFrom,
   type HistoryReading,
   isTaskPlace,
+  type KnownSteps,
   type ListedSteps,
   MOUSE_BUTTON,
   nearest,
@@ -156,30 +173,21 @@ import {
   pathOf,
   readingOf,
   routedPlace,
-  type SavedStep,
+  STEP_WRITE,
+  type StepEntry,
   type StepTitle,
+  type StepWrite,
   samePage,
   samePlaceSubStep,
   sameReading,
   sameStep,
   savedStepOf,
   type Titled,
-  TRAIL_WRITE,
-  type Trail,
-  type TrailEntry,
-  type TrailWrite,
-  type TrailWriteKind,
   taskPlace,
   useStepNames,
   useStepReach,
   visitWrite,
-} from "./places/window-steps.js";
-import { useRouteAccess } from "./route-gates.js";
-import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
-import { useSteadyDoors } from "./steady-door.js";
-import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
-import { useSurfaceOpen } from "./use-surface-open.js";
-import type { VersionHistoryRoute } from "./version-history-route.js";
+} from "./window-steps.js";
 
 /** Where the router says the window stands, while it stands on a routed place: the place, the address it stands at, and the params its routes read there. */
 export interface RoutedStanding {
@@ -197,10 +205,8 @@ export function useRoutedStanding(): RoutedStanding | undefined {
   );
 }
 
-/** The most steps a window's trail holds, dropping the oldest first. */
-const TRAIL_LIMIT = 50;
-
-const EMPTY_TRAIL: Trail = { entries: [], at: -1 };
+/** The most steps a window keeps a record of, letting go of the oldest first, which Back and Forward then go no further than. */
+const STEPS_KEPT = 50;
 
 /**
  * The address the window is handed while it stands on no place, at which no
@@ -208,55 +214,18 @@ const EMPTY_TRAIL: Trail = { entries: [], at: -1 };
  */
 const NO_LINK_ADDRESS = PANEL_PATH;
 
+/**
+ * How the window writes its steps into the router's history: past the
+ * leave's blocker (`place-leave.ts`), because each write records a move the
+ * window already made, or one its ask already let go, so a blocker asking
+ * there would ask after the fact.
+ */
+const PAST_BLOCKER = { ignoreBlocker: true } as const;
+
 /** The task an Inbox item stands on, or for an agent with no task its agent, whose side panel stands beside it. */
 function choiceHolder(choice: InboxChoice): string | undefined {
   if ("taskId" in choice) return choice.taskId;
   return "agentId" in choice ? choice.agentId : undefined;
-}
-
-/** The trail as `write` leaves it: a push clearing the steps ahead and dropping the oldest past the bound, a replace in the standing step's place, either the trail's one step where none stands. */
-function written(trail: Trail, write: TrailWrite): Trail {
-  if (trail.at < 0) return { entries: [write.entry], at: 0 };
-  if (write.kind === TRAIL_WRITE.REPLACE) {
-    return { entries: trail.entries.with(trail.at, write.entry), at: trail.at };
-  }
-  const entries = [...trail.entries.slice(0, trail.at + 1), write.entry].slice(-TRAIL_LIMIT);
-  return { entries, at: entries.length - 1 };
-}
-
-/** The trail as it stands once the visit to `place` is written on it; the trail itself where the visit writes nothing. */
-function afterVisit(
-  trail: Trail,
-  place: Place,
-  address: string,
-  up: Place | undefined,
-  pressed: boolean,
-  opened: boolean,
-  onTaskRoute: (address: string) => boolean,
-): Trail {
-  const write = visitWrite(trail, place, address, up, pressed, opened, onTaskRoute);
-  return write === undefined ? trail : written(trail, write);
-}
-
-/**
- * How a step to `to` asks: as the window's leave guard asks up front, unless
- * it moves only within the draft standing, between a narrow room's sub-steps
- * or within one automation, between its setup, its runs, and a run
- * (`sameDraft`), which leaves no page and so loses nothing written on it;
- * that way out is taken as it is.
- */
-function asking(
-  latest: {
-    readonly place: Place | undefined;
-    readonly leaveFirst: PlaceLeave["transitionalLeaveFirst"];
-    readonly sameDraft: (one: Place, other: Place) => boolean;
-  },
-  to: Place | undefined,
-): PlaceLeave["transitionalLeaveFirst"] {
-  const { place } = latest;
-  return place !== undefined && to !== undefined && latest.sameDraft(place, to)
-    ? (leave) => leave
-    : latest.leaveFirst;
 }
 
 /** The window's history as its buttons and keys use it. */
@@ -267,8 +236,8 @@ export interface NavigationHistory {
   onForward: () => void;
   /** The steps Back and Forward can still go to, nearest first, as their lists draw them. */
   steps: ListedSteps;
-  /** Goes straight to a step of the lists, asking first as any step does. */
-  onGoTo: (at: number) => void;
+  /** Goes straight to a step of the lists, by its number, asking first as any step does. */
+  onGoTo: (number: number) => void;
 }
 
 /** The window's history, with the way a restore leaves a description's version history and a page's way out. */
@@ -286,7 +255,7 @@ export interface WindowHistory extends NavigationHistory {
   onLeave: () => void;
 }
 
-/** The history as the narrow rooms' ways back read it (`places/narrow-backs.ts`), which the root hands the window's routed exits. */
+/** The history as the narrow rooms' ways back read it (`narrow-backs.ts`), which the root hands the window's routed exits. */
 export interface HistoryBehind {
   behind: StepsBehind;
 }
@@ -304,281 +273,212 @@ export interface TaskVisits {
   onVisitTask: (at: TaskAt, step: LinkStep) => boolean;
 }
 
+/** What the steps known heard of the router's history: a step written, or a move along it from the step numbered `from`. */
+type StepsHeard = { readonly moved: false } | { readonly moved: true; readonly from: number };
+
 /**
- * The trail a window keeps beside its router's history, whose public face
- * names only the entry standing. Each step is written into the router's
- * history at its address, its place and number saved beside it
- * (`SavedStep`), so a reload or a browser's Back and Forward land on the
- * step it was. `base` is the number of the first step held, so the step at
- * `n` is saved as `base + n`, and a number never seen is minted past every
- * one that was (`highest`), so a step written after landing somewhere
- * unknown never takes the number of one the history still holds. A move
- * along a browser's history lands later, on its `popstate`: the trail stands
- * at once, and a write made before the move lands waits for it
- * (`traveling`, `waiting`), because the browser would put it on the entry it
- * is leaving. `writing` marks the window's own writes, which its listener
- * does not follow.
+ * What the window has heard its router's history hold, kept beside that
+ * history for as long as it is: each step it told of, by its number, and the
+ * number of the entry standing, which holds no step where the window has
+ * written none there yet, as a page loaded at its address. `state` is the
+ * state of the entry last heard, so a move that left the history where it
+ * stood, as a browser's Back its blocker kept, moves nothing here.
  */
-interface WindowTrail {
+interface StepRecord {
   readonly history: RouterHistory;
-  trail: Trail;
-  base: number;
-  highest: number;
-  traveling: number | undefined;
-  readonly waiting: (() => void)[];
-  writing: boolean;
-  /** Whether the trail is following a write the router made of its own, which the window already stands on. */
-  routing: boolean;
-  readonly listeners: Set<() => void>;
+  readonly steps: Map<number, StepEntry>;
+  standing: number;
+  state: HistoryLocation["state"];
+  /** The steps known as they stand, in order, made again on every change so a reader can tell one. */
+  known: KnownSteps;
+  readonly listeners: Set<(heard: StepsHeard) => void>;
 }
 
-/** What a router history tells its listeners moved it: a push, a replace, or a move along it. */
-type HistoryMove = Parameters<Parameters<RouterHistory["subscribe"]>[0]>[0]["action"];
+/** Each router history's record, kept for as long as the history is. */
+const records = new WeakMap<RouterHistory, StepRecord>();
 
-/** Each router history's trail, kept for as long as the history is. */
-const trails = new WeakMap<RouterHistory, WindowTrail>();
-
-/** Stands the trail on `next`, telling every listener, unless it is the trail standing. */
-function standTrail(held: WindowTrail, next: Trail): void {
-  if (next.entries === held.trail.entries && next.at === held.trail.at) return;
-  held.trail = next;
-  for (const listener of [...held.listeners]) listener();
+/** The steps a record holds, in order, and the one standing among them. */
+function knownOf(record: StepRecord): KnownSteps {
+  const entries = [...record.steps.values()].sort((one, other) => one.number - other.number);
+  return { entries, at: entries.findIndex((entry) => entry.number === record.standing) };
 }
 
-/**
- * How the trail writes and moves the router's history: past the leave's
- * blocker (`places/place-leave.ts`), because each write records a move the
- * window already made, or one its ask already let go, so a blocker asking
- * there would ask after the fact.
- */
-const PAST_BLOCKER = { ignoreBlocker: true } as const;
+/** Tells every listener what the record heard, once the steps known stand as it left them. */
+function tell(record: StepRecord, heard: StepsHeard): void {
+  record.known = knownOf(record);
+  for (const listener of [...record.listeners]) listener(heard);
+}
 
-/** Runs what waits on the router's history, in order, until a move travels. */
-function drainTrail(held: WindowTrail): void {
-  while (held.traveling === undefined) {
-    const next = held.waiting.shift();
-    if (next === undefined) return;
-    next();
+/** The record standing alone on `location`'s entry, numbered `number` where it saved no step, as a page loaded there starts. */
+function standAlone(record: StepRecord, location: HistoryLocation, number: number): void {
+  const saved = savedStepOf(location);
+  record.steps.clear();
+  record.standing = saved?.index ?? number;
+  if (saved !== undefined) {
+    record.steps.set(saved.index, {
+      number: saved.index,
+      address: location.href,
+      place: saved.place,
+    });
   }
 }
 
-/** Runs `step` on the router's history once no move of the window's travels. */
-function inTurn(held: WindowTrail, step: () => void): void {
-  held.waiting.push(step);
-  drainTrail(held);
+/** How far a move along the router's history went, as the history tells it. */
+function deltaOf(action: { readonly type: string; readonly index?: number }): number {
+  if (action.type === "BACK") return -1;
+  if (action.type === "FORWARD") return 1;
+  return action.index ?? 0;
 }
 
-/** Writes `entry` into the router's history as the trail's step at `at`, its place and number saved beside it. */
-function writeThrough(
-  held: WindowTrail,
-  kind: TrailWriteKind,
-  entry: TrailEntry,
-  at: number,
+/**
+ * The record hearing the router's history. A write that saved a step is
+ * that step, a push letting go of every step past it, and a write the router
+ * made of its own, a navigation to a routed place or a gate's redirect, is
+ * stamped in place with the routed step and its number, since the router
+ * saved none. A move lands on the step its number says: one the record
+ * knows, or the one the move's distance counts to, else the record stands
+ * alone there, as on an entry a page loaded fresh.
+ */
+function hear(
+  record: StepRecord,
+  location: HistoryLocation,
+  action: Parameters<Parameters<RouterHistory["subscribe"]>[0]>[0]["action"],
 ): void {
-  const step: SavedStep = { place: entry.state, index: held.base + at };
-  held.highest = Math.max(held.highest, step.index);
-  inTurn(held, () => {
-    held.writing = true;
-    try {
-      if (kind === TRAIL_WRITE.PUSH) held.history.push(entry.address, { step }, PAST_BLOCKER);
-      else held.history.replace(entry.address, { step }, PAST_BLOCKER);
-    } finally {
-      held.writing = false;
+  const saved = savedStepOf(location);
+  const from = record.standing;
+  if (action.type === "PUSH" || action.type === "REPLACE") {
+    record.state = location.state;
+    const pushed = action.type === "PUSH";
+    const number = saved?.index ?? (pushed ? from + 1 : from);
+    if (pushed) {
+      for (const known of record.steps.keys()) {
+        if (known >= number || known <= number - STEPS_KEPT) record.steps.delete(known);
+      }
     }
-  });
-}
-
-/** Stands `entries` with `at` among them, dropping the oldest past the bound. */
-function keepTrail(held: WindowTrail, entries: readonly TrailEntry[], at: number): Trail {
-  const dropped = Math.max(0, entries.length - TRAIL_LIMIT);
-  held.base += dropped;
-  return { entries: entries.slice(dropped), at: at - dropped };
-}
-
-/** The trail on `location`'s entry with none around it known, as a page reloaded there starts; empty on an entry holding no step. */
-function aloneOn(held: WindowTrail, location: HistoryLocation): Trail {
-  const saved = savedStepOf(location);
-  if (saved === undefined) {
-    held.highest += 1;
-    held.base = held.highest;
-    return EMPTY_TRAIL;
-  }
-  held.highest = Math.max(held.highest, saved.index);
-  held.base = saved.index;
-  return { entries: [{ address: location.href, state: saved.place }], at: 0 };
-}
-
-/** Where the router's history landing on `location` leaves the trail: on a step held, beside the steps held, or alone. */
-function landedOn(held: WindowTrail, location: HistoryLocation): Trail {
-  const saved = savedStepOf(location);
-  if (saved === undefined) return aloneOn(held, location);
-  held.highest = Math.max(held.highest, saved.index);
-  const { entries } = held.trail;
-  const at = saved.index - held.base;
-  if (at >= 0 && at < entries.length) return { entries, at };
-  const entry: TrailEntry = { address: location.href, state: saved.place };
-  if (at === -1) {
-    held.base -= 1;
-    return { entries: [entry, ...entries].slice(0, TRAIL_LIMIT), at: 0 };
-  }
-  if (at === entries.length) return keepTrail(held, [...entries, entry], at);
-  return aloneOn(held, location);
-}
-
-/**
- * The trail following a write the router made of its own, a navigation to a
- * routed place or a gate's redirect: a step after the
- * one standing, or in its place, as the router wrote it, its entry then
- * stamped with the step's number in place, since the router wrote none.
- */
-function followRouted(held: WindowTrail, kind: TrailWriteKind, location: HistoryLocation): void {
-  const entry: TrailEntry = {
-    address: location.href,
-    state: routedPlace(location.href),
-  };
-  const next = written(held.trail, { kind, entry });
-  if (kind === TRAIL_WRITE.PUSH && held.trail.at >= 0) {
-    held.base += held.trail.at + 2 - next.entries.length;
-  }
-  writeThrough(held, TRAIL_WRITE.REPLACE, entry, next.at);
-  held.routing = true;
-  try {
-    standTrail(held, next);
-  } finally {
-    held.routing = false;
-  }
-}
-
-/** How a write of the router's history went, where it was a write rather than a move along it. */
-function writeKindOf(action: HistoryMove): TrailWriteKind | undefined {
-  if (action.type === "PUSH") return TRAIL_WRITE.PUSH;
-  return action.type === "REPLACE" ? TRAIL_WRITE.REPLACE : undefined;
-}
-
-/**
- * The trail following the router's history where something other than the
- * window moved it: a browser's Back or Forward, or the arrival of a move of
- * the window's own, which already stands and only lets what waits on it
- * through. Landing elsewhere than that move went is the browser's word over
- * the window's: with nothing waiting the steps held stay around where it
- * landed, and otherwise what waited to be written after the move is dropped,
- * and with it what the steps around knew.
- */
-function hear(held: WindowTrail, location: HistoryLocation, action: HistoryMove): void {
-  if (held.writing) return;
-  const write = writeKindOf(action);
-  if (write !== undefined && savedStepOf(location) === undefined) {
-    followRouted(held, write, location);
+    record.standing = number;
+    if (saved === undefined) {
+      const step = { place: routedPlace(location.href), index: number };
+      record.history.replace(location.href, { step }, PAST_BLOCKER);
+      return;
+    }
+    record.steps.set(number, { number, address: location.href, place: saved.place });
+    tell(record, { moved: false });
     return;
   }
-  if (write !== undefined || held.traveling === undefined) {
-    standTrail(held, landedOn(held, location));
-    return;
+  if (location.state === record.state) return;
+  record.state = location.state;
+  const landed = from + deltaOf(action);
+  if (saved !== undefined && (record.steps.has(saved.index) || saved.index === landed)) {
+    record.standing = saved.index;
+    record.steps.set(saved.index, {
+      number: saved.index,
+      address: location.href,
+      place: saved.place,
+    });
+  } else {
+    standAlone(record, location, Number.isFinite(landed) ? landed : from);
   }
-  const arrived = savedStepOf(location)?.index === held.traveling;
-  held.traveling = undefined;
-  if (!arrived) {
-    standTrail(
-      held,
-      held.waiting.length === 0 ? landedOn(held, location) : aloneOn(held, location),
-    );
-    held.waiting.length = 0;
-  }
-  drainTrail(held);
+  tell(record, { moved: true, from });
 }
 
-/** The trail kept beside `history`, made as the window first reads it, on the step a reloaded page's entry saved. */
-function trailOf(history: RouterHistory): WindowTrail {
-  const kept = trails.get(history);
+/** The record kept beside `history`, made as the window first reads it, on the step a reloaded page's entry saved. */
+function recordOf(history: RouterHistory): StepRecord {
+  const kept = records.get(history);
   if (kept !== undefined) return kept;
-  const held: WindowTrail = {
+  const record: StepRecord = {
     history,
-    trail: EMPTY_TRAIL,
-    base: 0,
-    highest: 0,
-    traveling: undefined,
-    waiting: [],
-    writing: false,
-    routing: false,
+    steps: new Map(),
+    standing: 0,
+    state: history.location.state,
+    known: { entries: [], at: -1 },
     listeners: new Set(),
   };
-  held.trail = aloneOn(held, history.location);
-  history.subscribe(({ location, action }) => hear(held, location, action));
-  trails.set(history, held);
-  return held;
+  standAlone(record, history.location, 0);
+  record.known = knownOf(record);
+  history.subscribe(({ location, action }) => hear(record, location, action));
+  records.set(history, record);
+  return record;
 }
 
-/** Hears every change of the trail; answers the way to stop. */
-function listenTo(held: WindowTrail, listener: () => void): () => void {
-  held.listeners.add(listener);
-  return () => held.listeners.delete(listener);
+/** Hears every change of the steps known; answers the way to stop. */
+function listenTo(record: StepRecord, listener: (heard: StepsHeard) => void): () => void {
+  record.listeners.add(listener);
+  return () => record.listeners.delete(listener);
 }
 
-/** Writes `write` into the trail and through to the router's history; a push on an empty trail takes the entry the history stands on, which holds no step. */
-function recordTrail(held: WindowTrail, write: TrailWrite): void {
-  const pushed = write.kind === TRAIL_WRITE.PUSH && held.trail.at >= 0;
-  const next = written(held.trail, write);
-  if (pushed) held.base += held.trail.at + 2 - next.entries.length;
-  writeThrough(held, pushed ? TRAIL_WRITE.PUSH : TRAIL_WRITE.REPLACE, write.entry, next.at);
-  standTrail(held, next);
+/** The step the router's history stands on, where it holds one. */
+function standingStep(record: StepRecord): StepEntry | undefined {
+  return record.steps.get(record.standing);
 }
 
 /**
- * Stands the trail `delta` steps along and moves the router's history there,
- * once what was written before it has reached the browser (`flush`), so the
- * move counts from the entry the trail counts from; nothing where no step
- * stands there.
+ * Writes `write` into the router's history, numbered as it goes: a push one
+ * past the step standing, a replace in its place; a push where the entry
+ * standing holds no step takes that entry, as a page loaded there.
  */
-function goAlong(held: WindowTrail, delta: number): void {
-  const at = held.trail.at + delta;
-  if (delta === 0 || at < 0 || at >= held.trail.entries.length) return;
-  const target = held.base + at;
-  inTurn(held, () => {
-    held.traveling = target;
-    held.history.flush();
-    held.history.go(delta, PAST_BLOCKER);
-  });
-  standTrail(held, { entries: held.trail.entries, at });
+function writeStep(record: StepRecord, write: StepWrite): void {
+  const pushes = write.kind === STEP_WRITE.PUSH && standingStep(record) !== undefined;
+  const step = { place: write.place, index: pushes ? record.standing + 1 : record.standing };
+  if (pushes) record.history.push(write.address, { step }, PAST_BLOCKER);
+  else record.history.replace(write.address, { step }, PAST_BLOCKER);
 }
 
-/** The entry a trail stands on, while one does. */
-function standingOf(trail: Trail): TrailEntry | undefined {
-  return trail.entries[trail.at];
+/** The number of the step at `at` among the steps known, where one stands there. */
+function numberAt(known: KnownSteps, at: number | undefined): number | undefined {
+  return at === undefined ? undefined : known.entries[at]?.number;
+}
+
+/** The steps known as they stand once `write` is written, which Back and Forward draw before it is. */
+function afterWrite(record: StepRecord, write: StepWrite): KnownSteps {
+  const { entries, at } = record.known;
+  const standing = entries[at];
+  const number = standing === undefined ? record.standing : standing.number;
+  const pushes = write.kind === STEP_WRITE.PUSH && standing !== undefined;
+  const entry: StepEntry = {
+    number: pushes ? number + 1 : number,
+    address: write.address,
+    place: write.place,
+  };
+  if (!pushes) return { entries: at < 0 ? [entry] : entries.with(at, entry), at: Math.max(at, 0) };
+  const kept = [...entries.slice(0, at + 1), entry].filter(
+    (each) => each.number > entry.number - STEPS_KEPT,
+  );
+  return { entries: kept, at: kept.length - 1 };
 }
 
 /**
- * The history over where the window stands, held in the trail kept beside
- * the window's router history (`WindowTrail`). `place` is nothing until the window knows where it is, so a
- * launch records no page it never showed. `reachable` says whether a place
- * can still be gone to — a deleted task cannot — and `go` takes the window
- * there; the move's own arrival is then recognized as the place the history
- * already stands on, and records nothing.
+ * The history over where the window stands, read from the record kept
+ * beside the window's router history (`StepRecord`). `place` is nothing
+ * until the window knows where it is, so a launch records no page it never
+ * showed. `reachable` says whether a place can still be gone to — a deleted
+ * task cannot — and `stand` stands the window there; a move goes through the
+ * leave's one door for it (`PlaceLeave.along`), and the window stands the
+ * step it lands on, whose own arrival is then recognized as the step the
+ * history already stands on, and records nothing.
  *
  * The router's history may move by itself, as a browser's Back and Forward
- * move it, and the window follows: it goes to the step the trail lands on, so its
- * arrival records nothing and the steps ahead are kept. A step it cannot
- * reach is passed over the way the move went, as the window's own step
- * passes over one, and an entry holding no step at all is a page loaded
- * there, which opens on Home. Note that such a move has already asked
- * before the window hears it, while a page holds unsaved work, because the
- * leave's blocker holds the router's history (`places/place-leave.ts`). A window whose trail
- * already stands on a step when it first knows where it is, as a reloaded
- * tab's does, goes there rather than recording where it first stood.
+ * move it, and the window follows it the same way, so the steps ahead are
+ * kept. A step it cannot reach is passed over the way the move went, as the
+ * window's own step passes over one, and an entry holding no step at all is
+ * a page loaded there, which the router stands as its address says. Note
+ * that such a move has already asked before the window hears it, while a
+ * page holds unsaved work, because the leave's blocker holds a browser's
+ * move along its history (`place-leave.ts`). A window whose history already
+ * stands on a step when it first knows where it is, as a reloaded tab's
+ * does, goes there rather than recording where it first stood.
  */
-function useHistory(input: {
-  /** The trail kept beside the window's router history. */
-  held: WindowTrail;
+function useWindowSteps(input: {
+  /** The record kept beside the window's router history. */
+  record: StepRecord;
   place: Place | undefined;
   /** The address the place stands at. */
   address: string;
   reachable: (place: Place) => boolean;
   /** What a place is called as Back's and Forward's lists name it now. */
   named: (place: Place) => StepTitle | undefined;
-  go: (place: Place) => void;
-  /** Asks first, while a page holds unsaved work, before a step moves the trail at all. */
-  leaveFirst: PlaceLeave["transitionalLeaveFirst"];
-  /** Whether two places hold one draft, which a step between asks nothing for. */
-  sameDraft: (one: Place, other: Place) => boolean;
+  stand: (place: Place) => void;
+  /** The leave's door for a move along the history, which asks first while a page holds unsaved work, and its way past it. */
+  placeLeave: Pick<PlaceLeave, "along" | "pass">;
   /** How many times a door naming a thing opened it in the side panel (`SidePanelControl.opened`). */
   opened: number;
   /** Whether an address is on a task's own place. */
@@ -595,38 +495,20 @@ function useHistory(input: {
   /** Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`), answering whether the window held a step to write it after; it writes none where it holds none yet. */
   visit: (to: Place) => boolean;
 } {
-  const { held, place, address, reachable, named, leaveFirst, sameDraft, opened, onTaskRoute } =
-    input;
-  // Note that the presses read the trail as they land, because a
-  // key can land between a move and the render that shows it, and the latest
-  // `place`, `reachable`, `go`, and the leave's ask through a ref, so a press stays the same
-  // function across renders.
-  const latest = useRef({
-    place,
-    reachable,
-    go: input.go,
-    leaveFirst,
-    sameDraft,
-    opened,
-    onTaskRoute,
-  });
+  const { record, place, address, reachable, named, placeLeave, opened, onTaskRoute } = input;
+  // Note that the presses read the steps known as they land, because a key can land between a move and the render that
+  // shows it, and the latest `place`, `reachable`, `stand`, and the leave's door through a ref, so a press stays the
+  // same function across renders.
+  const latest = useRef({ place, reachable, stand: input.stand, placeLeave, opened, onTaskRoute });
   useLayoutEffect(() => {
-    latest.current = {
-      place,
-      reachable,
-      go: input.go,
-      leaveFirst,
-      sameDraft,
-      opened,
-      onTaskRoute,
-    };
+    latest.current = { place, reachable, stand: input.stand, placeLeave, opened, onTaskRoute };
   });
   // The list a narrow screen went up to with no step behind, which the next visit takes in place.
   const wentUp = useRef<Place | undefined>(undefined);
-  // How many presses and keys the window has heard, and how many it had as it last wrote the trail.
+  // How many presses and keys the window has heard, and how many it had as it last wrote a step.
   const presses = useRef(0);
   const pressesWritten = useRef(0);
-  // How many opens the side panel had as the window last wrote the trail.
+  // How many opens the side panel had as the window last wrote a step.
   const openedWritten = useRef(opened);
   useEffect(() => {
     const heard = () => {
@@ -639,51 +521,47 @@ function useHistory(input: {
       window.removeEventListener("keydown", heard, true);
     };
   }, []);
-  // The entry the window stands on, as it last wrote or followed the trail, and whether it is writing it now.
-  const standing = useRef<TrailEntry | undefined>(undefined);
-  const writing = useRef(false);
-  // What Back and Forward draw, read from the trail as it stands once the
-  // visit to `place` below is written, and held while it reads the same.
-  // Note that the window follows this reading rather than the trail itself,
-  // because the visit is written after the place has drawn, and a trail
-  // followed whole draws the whole window again, mid-glide, for the step it
-  // already drew; a write that reads otherwise still draws it.
+  // Whether the window has written or stood on a step since it knew where it stands.
+  const started = useRef(false);
+  // What Back and Forward draw, read from the steps known as they stand once the visit to `place` below is written, and
+  // held while it reads the same. Note that the window follows this reading rather than the record itself, because the
+  // visit is written after the place has drawn, and a record followed whole draws the whole window again, mid-glide,
+  // for the step it already drew; a write that reads otherwise still draws it.
   const drawn = useRef<HistoryReading | undefined>(undefined);
   // The place and address the visit below last ran for, which it runs for again only once either moves.
   const visited = useRef<{ place: Place | undefined; address: string } | undefined>(undefined);
-  const subscribe = useCallback((listener: () => void) => listenTo(held, listener), [held]);
+  const subscribe = useCallback(
+    (listener: () => void) => listenTo(record, () => listener()),
+    [record],
+  );
   const reading = useSyncExternalStore(subscribe, () => {
-    const trailNow = held.trail;
+    const known = record.known;
     const moved = visited.current?.place !== place || visited.current?.address !== address;
-    // A window first knowing where it stands on a trail that already stands somewhere goes there rather than writing.
-    const writes =
-      place !== undefined &&
-      moved &&
-      (standing.current !== undefined || standingOf(trailNow) === undefined);
+    // A window first knowing where it stands on a history that already stands on a step goes there rather than writing.
+    const writes = place !== undefined && moved && (started.current || known.at < 0);
     const pressed = presses.current !== pressesWritten.current;
     const opens = opened !== openedWritten.current;
-    const trail = writes
-      ? afterVisit(trailNow, place, address, wentUp.current, pressed, opens, onTaskRoute)
-      : trailNow;
-    const next = readingOf(trail, reachable, named);
+    const write = writes
+      ? visitWrite(known, place, address, wentUp.current, pressed, opens, onTaskRoute)
+      : undefined;
+    const next = readingOf(
+      write === undefined ? known : afterWrite(record, write),
+      reachable,
+      named,
+    );
     if (drawn.current === undefined || !sameReading(drawn.current, next)) drawn.current = next;
     return drawn.current;
   });
 
-  // A write of the window's own, which the trail's listener below is not to follow.
-  const own = useCallback(
-    (write: () => void) => {
-      writing.current = true;
-      try {
-        write();
-      } finally {
-        writing.current = false;
-      }
+  // A step of the window's own, after which what it heard and opened since is written.
+  const wrote = useCallback(
+    (write: StepWrite) => {
+      started.current = true;
       pressesWritten.current = presses.current;
       openedWritten.current = latest.current.opened;
-      standing.current = standingOf(held.trail);
+      writeStep(record, write);
     },
-    [held],
+    [record],
   );
 
   useEffect(() => {
@@ -691,19 +569,19 @@ function useHistory(input: {
     const up = wentUp.current;
     wentUp.current = undefined;
     if (place === undefined) return;
-    const loaded = standingOf(held.trail);
-    if (standing.current === undefined && loaded !== undefined) {
-      standing.current = loaded;
-      if (latest.current.reachable(loaded.state)) latest.current.go(loaded.state);
+    const loaded = standingStep(record);
+    if (!started.current && loaded !== undefined) {
+      started.current = true;
+      if (latest.current.reachable(loaded.place)) latest.current.stand(loaded.place);
       return;
     }
     // Note that a routed place the router moved off since the window was drawn, as a door earlier in the same commit moves
     // it, is no visit, since the window is drawn again where the router stands.
-    if (!isTaskPlace(place) && place.address !== held.history.location.href) return;
+    if (!isTaskPlace(place) && place.address !== record.history.location.href) return;
     const pressed = presses.current !== pressesWritten.current;
     const opens = latest.current.opened !== openedWritten.current;
     const write = visitWrite(
-      held.trail,
+      record.known,
       place,
       address,
       up,
@@ -711,95 +589,82 @@ function useHistory(input: {
       opens,
       latest.current.onTaskRoute,
     );
-    if (write !== undefined) own(() => recordTrail(held, write));
-  }, [held, place, address, own]);
+    if (write !== undefined) wrote(write);
+  }, [record, place, address, wrote]);
 
-  useEffect(() => {
-    // An entry holding no step is a page loaded there, which the router stands on as its address says: a routed place, Home at
-    // `/app` among them, writes its step there as it stands, and a task's address is its link, which opens it again
-    // (`load-link.ts`); the window already there writes its step on it.
-    const arriveNowhere = (was: TrailEntry) => {
-      if (was.address !== held.history.location.href) return;
-      own(() => recordTrail(held, { kind: TRAIL_WRITE.PUSH, entry: was }));
-    };
-    // The window following the trail where the router's history moved it, or standing it back on the window's step where it may not go.
-    const follow = (moved: Trail, was: TrailEntry) => {
-      const from = moved.entries.indexOf(was);
-      const arrived = standingOf(moved);
-      const way = from >= 0 && moved.at > from ? 1 : -1;
-      const { reachable: canReach } = latest.current;
-      const at =
-        arrived === undefined || canReach(arrived.state) ? moved.at : nearest(moved, way, canReach);
-      const target = at === undefined ? undefined : moved.entries[at];
-      // Back to the window's step: along the trail where it still holds it, else written again after where the trail stands.
-      const back = () =>
-        own(() =>
-          from >= 0
-            ? goAlong(held, from - held.trail.at)
-            : recordTrail(held, { kind: TRAIL_WRITE.PUSH, entry: was }),
-        );
-      if (arrived !== undefined && target === undefined) {
-        back();
-        return;
-      }
-      // Note that the router's own move asked already, as its blocker holds every move of its history while a page holds unsaved work.
-      if (target === undefined) {
-        arriveNowhere(was);
-        return;
-      }
-      const now = held.trail;
-      const to = now.entries.indexOf(target);
-      if (to >= 0 && to !== now.at) own(() => goAlong(held, to - now.at));
-      else standing.current = target;
-      latest.current.go(target.state);
-    };
-    return listenTo(held, () => {
-      const moved = held.trail;
-      // A routed place the router went to of its own already stands, so the window only stands with it.
-      if (held.routing) {
-        standing.current = standingOf(moved);
-        return;
-      }
-      const was = standing.current;
-      if (writing.current || was === undefined || standingOf(moved) === was) return;
-      follow(moved, was);
-    });
-  }, [held, own]);
+  // Moves `delta` steps along the history to the step at `to`, through the leave's one door for it.
+  const along = useCallback(
+    (delta: number, to: StepEntry) => latest.current.placeLeave.along(delta, pathOf(to.address)),
+    [],
+  );
 
-  // Note that the whole step is what asks, the trail's move with the window's, so a step
-  // canceled at the ask leaves the trail standing where the window still stands. It
-  // answers whether a step stood there, asked about or taken.
+  useEffect(
+    () =>
+      listenTo(record, (heard) => {
+        // A step written, the window's own or one the router wrote of its own and the record stamped, stands where the
+        // window does, so the window stands with it from then on.
+        if (!heard.moved) {
+          started.current = true;
+          return;
+        }
+        if (!started.current) return;
+        const known = record.known;
+        const landed = known.entries[known.at];
+        const { reachable: canReach, stand, place: here } = latest.current;
+        // An entry holding no step is a page loaded there, which the router stands on as its address says: a routed place,
+        // Home at `/app` among them, writes its step there as it stands, and a task's address is its link, which opens it
+        // again (`link-landings.ts`); the window already there writes its step on it.
+        if (landed === undefined) {
+          if (here !== undefined && here.address === record.history.location.href) {
+            wrote({ kind: STEP_WRITE.PUSH, address: here.address, place: here });
+          }
+          return;
+        }
+        if (canReach(landed.place)) {
+          stand(landed.place);
+          return;
+        }
+        // Note that a step it cannot reach is passed over the way the move went, and where none that way can be gone to,
+        // the window goes back to the step it stood on, or writes it again where the history no longer holds it; each of
+        // these finishes a move that already asked, so it passes the leave's ask.
+        const at = nearest(known, heard.from < landed.number ? 1 : -1, canReach);
+        const target = at === undefined ? undefined : known.entries[at];
+        const was = record.steps.get(heard.from);
+        const { pass } = latest.current.placeLeave;
+        if (target !== undefined) pass(() => along(target.number - landed.number, target));
+        else if (was !== undefined) pass(() => along(was.number - landed.number, was));
+        else if (here !== undefined) {
+          wrote({ kind: STEP_WRITE.PUSH, address: here.address, place: here });
+        }
+      }),
+    [record, wrote, along],
+  );
+
+  // Goes to the step numbered `number`, answering whether one stood there to go to, though the leave ask may yet hold it.
   const goTo = useCallback(
-    (at: number | undefined): boolean => {
-      const target = at === undefined ? undefined : held.trail.entries[at]?.state;
-      if (at === undefined || target === undefined || !latest.current.reachable(target)) {
-        return false;
-      }
-      asking(
-        latest.current,
-        target,
-      )(() => {
-        own(() => goAlong(held, at - held.trail.at));
-        latest.current.go(target);
-      })();
+    (number: number | undefined): boolean => {
+      const target = number === undefined ? undefined : record.steps.get(number);
+      if (target === undefined || !latest.current.reachable(target.place)) return false;
+      along(target.number - record.standing, target);
       return true;
     },
-    [held, own],
+    [record, along],
   );
   const step = useCallback(
-    (by: -1 | 1): boolean => goTo(nearest(held.trail, by, latest.current.reachable)),
-    [held, goTo],
+    (by: -1 | 1): boolean =>
+      goTo(numberAt(record.known, nearest(record.known, by, latest.current.reachable))),
+    [record, goTo],
   );
 
   // Note that a link's step is written as the window would write it on arriving, read from the presses and opens heard
   // since the last write, so the window arriving there finds it standing and writes nothing more.
   const visit = (to: Place): boolean => {
     // Note that a window that has written no step yet, as a link said as the page loads finds it, leaves the loaded entry to its own first write.
-    if (standingOf(held.trail) === undefined) return false;
+    if (standingStep(record) === undefined) return false;
     const pressed = presses.current !== pressesWritten.current;
     const opens = latest.current.opened !== openedWritten.current;
     const write = visitWrite(
-      held.trail,
+      record.known,
       to,
       to.address,
       undefined,
@@ -807,15 +672,15 @@ function useHistory(input: {
       opens,
       latest.current.onTaskRoute,
     );
-    if (write !== undefined) own(() => recordTrail(held, write));
+    if (write !== undefined) wrote(write);
     return true;
   };
 
   // A step back to `to`'s step only, answering whether it was the one behind.
   const backTo = (to: Place): boolean => {
-    const trail = held.trail;
-    const at = nearest(trail, -1, latest.current.reachable);
-    if (at === undefined || !sameStep(trail.entries[at]?.state, to)) return false;
+    const known = record.known;
+    const at = nearest(known, -1, latest.current.reachable);
+    if (at === undefined || !sameStep(known.entries[at]?.place, to)) return false;
     step(-1);
     return true;
   };
@@ -846,7 +711,7 @@ function useHistory(input: {
     upTo,
     stepBack: () => step(-1),
     away: reading.away,
-    stepAway: () => goTo(awayFrom(held.trail, latest.current.reachable)),
+    stepAway: () => goTo(numberAt(record.known, awayFrom(record.known, latest.current.reachable))),
     visit,
   };
 }
@@ -937,7 +802,7 @@ export function useWindowHistory(input: {
   });
   const routedAddress = routed?.address;
   // Note that a task's own place naming another task than the one bound for is no step, because the binding is about to
-  // move one or the other: the host asked for the task arrived on, or the window to the task bound (`places/place-binding.ts`).
+  // move one or the other: the host asked for the task arrived on, or the window to the task bound (`place-binding.ts`).
   const taskAhead =
     (input.routed === undefined || input.routed.place === ROUTED_PLACE.TASK) &&
     tasks.taskView.taskId !== undefined &&
@@ -984,7 +849,7 @@ export function useWindowHistory(input: {
     // A workspace's address naming none of the reader's is no place of theirs to come back to, so it is no step, and the tab keeps its address.
     if (!known || unknownWorkspace) return undefined;
     // Note that Home with a task still bound is no step, because the binding is about to move one or the other: the task
-    // leaves Home, or arriving on Home lets go of the task (`places/place-binding.ts`).
+    // leaves Home, or arriving on Home lets go of the task (`place-binding.ts`).
     if (homeBound) return undefined;
     if (routedAddress !== undefined) {
       // Note that an Inbox item's step and an agent page's hold the side panel beside them, as a task's does, which no address says.
@@ -998,7 +863,7 @@ export function useWindowHistory(input: {
     // show until then is the task before it's (`onVisitTask`).
     if (linkedStands && openNow !== boundFor) return undefined;
     // Note that with no task bound and no routed place standing the window stands on no place yet: a link's task waiting on
-    // its open, or the host's binding of none on its way to Home (`places/place-binding.ts`).
+    // its open, or the host's binding of none on its way to Home (`place-binding.ts`).
     if (taskAhead || boundFor === undefined || taskAddress === undefined) return undefined;
     return taskPlace(taskAddress, {
       taskId: boundFor,
@@ -1057,7 +922,7 @@ export function useWindowHistory(input: {
     const unnamed = titleColumn === undefined && titleSide === undefined;
     return { ...untitled, title: unnamed ? label : { ...label, panes } };
   }, [untitled, titleLabel, titleDetail, titleColumn, titleSide]);
-  const go = (to: Place) => {
+  const stand = (to: Place) => {
     // Note that a routed place is the router's to draw, which follows its history to it by itself, and a task's step stands
     // the task it holds, with its tabs, as the host binds it; the Board, a person's page, and the Automations pages stand
     // over the plan's place as they always have, so whatever stood in it gives way, as opening any of them has it.
@@ -1074,7 +939,7 @@ export function useWindowHistory(input: {
     const holder = chosen === undefined ? agentId : choiceHolder(chosen);
     standSide(holder, itemId ?? agentId, to.side);
   };
-  // The task a step holds, with the tabs its panes showed; its task is asked for as the window arrives on its place (`places/place-binding.ts`).
+  // The task a step holds, with the tabs its panes showed; its task is asked for as the window arrives on its place (`place-binding.ts`).
   const goToTask = (to: TaskStep) => {
     if (to.column !== undefined) tasks.mainTabs.onShow(to.taskId, to.column);
     if (to.panel !== undefined) standPanel(to.taskId, to.panel);
@@ -1094,45 +959,34 @@ export function useWindowHistory(input: {
     if (panel.open && panel.tab !== undefined) sidePanel.onShow(taskId, panel.tab);
     else if (taskId === sidePanel.stop) sidePanel.onSetOpen(panel.open);
   };
-  const held = trailOf(router.history);
-  const subscribeTrail = useCallback((listener: () => void) => listenTo(held, listener), [held]);
+  const record = recordOf(router.history);
+  const subscribeSteps = useCallback(
+    (listener: () => void) => listenTo(record, () => listener()),
+    [record],
+  );
   const named = useStepNames({
     access,
     tasks,
     inbox,
     historyTaskOf,
     personStanding: routed?.place === ROUTED_PLACE.PERSON,
-    subscribe: subscribeTrail,
-    entries: () => held.trail.entries,
+    subscribe: subscribeSteps,
+    entries: () => record.known.entries,
   });
-  // Whether two places hold one draft: one page, or two steps of one routed place's draft, as its declaration says (`sameDraftAt`).
-  const sameDraft = useCallback(
-    (one: Place, other: Place) =>
-      samePage(one, other) ||
-      (!isTaskPlace(one) &&
-        !isTaskPlace(other) &&
-        sameDraftAt(
-          router.matchRoutes(pathOf(one.address)),
-          router.matchRoutes(pathOf(other.address)),
-          access,
-        )),
-    [router, access],
-  );
   // Whether an address is on a task's own place, whose entry the router wrote before the window wrote the task's step in it.
   const onTaskRoute = useCallback(
     (address: string) =>
       routedPlaceOf(router.matchRoutes(pathOf(address)), access) === ROUTED_PLACE.TASK,
     [router, access],
   );
-  const { backTo, upTo, stepBack, stepAway, visit, ...history } = useHistory({
-    held,
+  const { backTo, upTo, stepBack, stepAway, visit, ...history } = useWindowSteps({
+    record,
     place,
     address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
     reachable,
     named,
-    go,
-    leaveFirst: tasks.placeLeave.transitionalLeaveFirst,
-    sameDraft,
+    stand,
+    placeLeave: tasks.placeLeave,
     opened: tasks.sidePanel.opened,
     onTaskRoute,
   });

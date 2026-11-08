@@ -126,7 +126,6 @@ import { DraftMark } from "../draft-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
-import type { NavigationHistory } from "../navigation-history.js";
 import {
   endWindowSpan,
   leaveWindowSpan,
@@ -141,6 +140,7 @@ import {
   useInboxDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
+import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
@@ -299,18 +299,18 @@ const UNNAMED_STEP = "Earlier page";
  */
 function historyGroups(
   steps: readonly HistoryStep[],
-  onGoTo: (at: number) => void,
+  onGoTo: (number: number) => void,
 ): (readonly MenuAction[])[] {
   const groups: MenuAction[][] = [];
   let page: HistoryPage | undefined;
   for (const step of steps) {
     const item: MenuAction = {
-      // Note that a step is keyed by its place on the trail, because two steps of one page may be called alike, as a task's Plan and Code are.
-      key: step.at,
+      // Note that a step is keyed by its number, because two steps of one page may be called alike, as a task's Plan and Code are.
+      key: step.number,
       label: step.title?.label ?? UNNAMED_STEP,
       detail: step.title?.detail,
       replayMasked: true,
-      onSelect: () => onGoTo(step.at),
+      onSelect: () => onGoTo(step.number),
     };
     if (page !== undefined && sameHistoryPage(step.page, page)) groups.at(-1)?.push(item);
     else groups.push([item]);
@@ -339,7 +339,7 @@ function HistoryButton({
   able: boolean;
   onPress: () => void;
   steps: readonly HistoryStep[];
-  onGoTo: (at: number) => void;
+  onGoTo: (number: number) => void;
 }): React.JSX.Element {
   const menu = useMenu(able);
   const button = useRef<HTMLButtonElement>(null);

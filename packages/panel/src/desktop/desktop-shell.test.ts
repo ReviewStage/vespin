@@ -403,7 +403,11 @@ function drawLoadingNarrow(
               onBack: () => went.push("back"),
               steps: {
                 back: [
-                  { at: 0, title: { label: "Inbox" }, page: { kind: "routed", of: "/acme/inbox" } },
+                  {
+                    number: 0,
+                    title: { label: "Inbox" },
+                    page: { kind: "routed", of: "/acme/inbox" },
+                  },
                 ],
                 forward: [],
               },

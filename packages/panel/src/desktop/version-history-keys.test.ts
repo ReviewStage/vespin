@@ -139,7 +139,7 @@ function drawn(
                   ? []
                   : [
                       {
-                        at: 0,
+                        number: 0,
                         title: { label: stepBehind },
                         page: { kind: "routed", of: "/acme/inbox" },
                       },

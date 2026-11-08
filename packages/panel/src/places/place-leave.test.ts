@@ -147,6 +147,21 @@ test("the browser's own Back asks while a page stands its ask, and Stay keeps th
   assert.equal(window.history.location.pathname, AUTOMATION, "Stay stands the address back");
 });
 
+test("the window's own Back over an automation being edited asks on the desktop's memory history, whose move along it asks no blocker, and Stay keeps it", async () => {
+  const window = mount(createMemoryHistory({ initialEntries: [LIST, AUTOMATION] }));
+
+  act(() => window.place().along(-1, LIST));
+  await settleQueries();
+  assert.equal(window.asked.length, 1, "Back asks");
+  assert.equal(window.history.location.pathname, AUTOMATION, "and waits on the answer");
+
+  act(() => window.asked[0]?.stay());
+  assert.equal(window.history.location.pathname, AUTOMATION);
+  act(() => window.place().along(-1, LIST));
+  act(() => window.asked[1]?.leave());
+  assert.equal(window.history.location.pathname, LIST, "Leave takes the step");
+});
+
 test("the shell hears the ask while a page stands it, which asks the page, and nothing once it is down", () => {
   const window = mount(memoryAt(AUTOMATION));
   const left: string[] = [];

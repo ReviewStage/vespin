@@ -24,7 +24,7 @@ import { groupCount } from "./sidebar-fold.js";
  * beside a compose button.
  *
  * The Inbox is a phone's first place, the one it opens on
- * (`navigation-history.ts`). Tasks is the Tasks page, which a phone draws
+ * (`places/window-history.ts`). Tasks is the Tasks page, which a phone draws
  * as the sidebar's tree of tasks, the pinned and each section, standing in
  * place above the bar (`desktop-shell.tsx`), a list sized for a finger
  * rather than the page's list or board. Search opens the command palette,

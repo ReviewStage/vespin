@@ -11,42 +11,28 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { type AdminRoute, useAdminRoute } from "./admin/admin-route.js";
-import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "./admin/routing.js";
-import { runAppCommand } from "./app-commands.js";
-import { type AutomationsRoute, useAutomationsRoute } from "./automations-route.js";
-import { stepTitle } from "./history-titles.js";
-import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
-import { useCopyLink } from "./links-at-hand.js";
-import {
-  type HistoryBehind,
-  useHistoryMouseButtons,
-  useRoutedStanding,
-  useWindowHistory,
-  type WindowHistory,
-} from "./navigation-history.js";
-import { type NarrowBacks, useNarrowBacks } from "./places/narrow-backs.js";
-import { PLACE_BINDING, usePlaceBinding } from "./places/place-binding.js";
-import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./places/place-leave.js";
-import { useRoutedExits } from "./places/routed-exits.js";
-import type { RoutedPlace } from "./places/routed-places.js";
-import { taskAtOf, taskOfAt } from "./places/task-step.js";
-import { MOUSE_BUTTON, type StepTitle, sameHistoryPage, savesStep } from "./places/window-steps.js";
-import { SHELL_ROOM } from "./shell-room.js";
-import { useTaskRoute } from "./task-route.js";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
-import { SIDE_PANEL_TAB } from "./tasks/task-tab-model.js";
-import { isOverviewTab } from "./tasks/use-main-tabs.js";
-import type { SidePanelTab } from "./tasks/use-side-panel.js";
-import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
-import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
-import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
-import { handHostReads } from "./testing/app-state.js";
-import { settleQueries, withQueryClient } from "./testing/copy-feedback.js";
-import { DOCUMENT_TASK } from "./testing/document-task.js";
-import { agentsControl, listedAgent, tasksControl } from "./testing/tasks-control.js";
-import { type TestWindowRouter, windowRouter } from "./testing/window-router.js";
-import { useVersionHistoryRoute, type VersionHistoryRoute } from "./version-history-route.js";
+import { type AdminRoute, useAdminRoute } from "../admin/admin-route.js";
+import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
+import { runAppCommand } from "../app-commands.js";
+import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
+import { stepTitle } from "../history-titles.js";
+import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
+import { useCopyLink } from "../links-at-hand.js";
+import { SHELL_ROOM } from "../shell-room.js";
+import { useTaskRoute } from "../task-route.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
+import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import { isOverviewTab } from "../tasks/use-main-tabs.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
+import { handHostReads } from "../testing/app-state.js";
+import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
+import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
+import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
   type BoardRoute,
   type PersonRoute,
@@ -55,7 +41,21 @@ import {
   useHomeRoute,
   usePersonRoute,
   useRoutedViews,
-} from "./workspace-routes.js";
+} from "../workspace-routes.js";
+import { type NarrowBacks, useNarrowBacks } from "./narrow-backs.js";
+import { PLACE_BINDING, usePlaceBinding } from "./place-binding.js";
+import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./place-leave.js";
+import { useRoutedExits } from "./routed-exits.js";
+import type { RoutedPlace } from "./routed-places.js";
+import { taskAtOf, taskOfAt } from "./task-step.js";
+import {
+  type HistoryBehind,
+  useHistoryMouseButtons,
+  useRoutedStanding,
+  useWindowHistory,
+  type WindowHistory,
+} from "./window-history.js";
+import { MOUSE_BUTTON, type StepTitle, sameHistoryPage, savesStep } from "./window-steps.js";
 
 const TASK_ID = "0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60";
 const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
@@ -346,7 +346,7 @@ test("a press of the mouse's Back or Forward button takes one step and cancels t
   assert.equal(press(0).defaultPrevented, false, "any other button keeps its own");
 });
 
-test("a step back canceled at the leave ask leaves the trail where the window stands, so the next step is the same step", () => {
+test("a step back canceled at the leave ask leaves the history where the window stands, so the next step is the same step", () => {
   const asked: (() => void)[] = [];
   const homes: string[] = [];
   const window = mount(listedTab());
@@ -363,7 +363,7 @@ test("a step back canceled at the leave ask leaves the trail where the window st
   window.standAsk(asked);
   act(() => window.history().onBack());
   assert.deepEqual(homes, [], "the step waits on the ask");
-  assert.equal(window.history().canGoBack, true, "and the trail has not moved");
+  assert.equal(window.history().canGoBack, true, "and the history has not moved");
   assert.equal(window.history().canGoForward, false);
 
   act(() => asked[0]?.());
@@ -464,7 +464,7 @@ test("Escape on a task whose step back is canceled at the leave ask moves nothin
   window.escape();
   assert.notEqual(window.at(), "/acme/inbox", "the step waits on the ask");
   assert.deepEqual(left, [], "and the task is not left in its place");
-  assert.equal(window.history().canGoBack, true, "and the trail has not moved");
+  assert.equal(window.history().canGoBack, true, "and the history has not moved");
 
   act(() => asked[0]?.());
   assert.equal(window.at(), "/acme/inbox", "Leave takes the step it asked about");
@@ -1146,7 +1146,7 @@ test("Back's and Forward's steps are listed the nearest first, each named as the
   assert.ok(!sameHistoryPage(second.page, third.page));
   assert.deepEqual(window.history().steps.forward, []);
 
-  const toA = listed[1]?.at;
+  const toA = listed[1]?.number;
   assert.ok(toA !== undefined);
   act(() => window.history().onGoTo(toA));
   assert.deepEqual(shown, ["column:agent-a", "side:shut"], "the step listed is gone to at once");

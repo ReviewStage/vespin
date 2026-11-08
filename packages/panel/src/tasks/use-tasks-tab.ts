@@ -1303,7 +1303,7 @@ export function useTasksTab(input: {
   arrivals: () => number;
   /** Begins a link's read of the service, answering whether it is still the window's to act on (`places/link-reads.ts`). */
   linkReads: LinkRead;
-  /** Writes the step a link opens on a task's own place before the window stands there, as one move (`navigation-history.ts`'s `onVisitTask`). */
+  /** Writes the step a link opens on a task's own place before the window stands there, as one move (`places/window-history.ts`'s `onVisitTask`). */
   visitTask: (at: TaskAt, step: LinkStep) => boolean;
 }): TasksControl {
   const { shown, placeLeave } = input;

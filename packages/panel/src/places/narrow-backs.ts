@@ -3,7 +3,7 @@
  *
  * A narrow room, a phone's, stands the window one pane at a time
  * (`shell-room.ts`), and there each pane opened over another is a step of
- * its own (`navigation-history.ts`): the side panel over the plan, an Inbox
+ * its own (`window-history.ts`): the side panel over the plan, an Inbox
  * item over its list, a Settings page or a version over its list, and an
  * automation's runs over its setup. Which of a place's panes is such a step,
  * and in which rooms, is its declaration's answer (`ROUTED_PLACE`'s
