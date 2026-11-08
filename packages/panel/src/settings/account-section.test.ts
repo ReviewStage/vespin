@@ -3,7 +3,11 @@
 import assert from "node:assert/strict";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL, ACT_KIND } from "@repo/host/acts";
+import {
+  ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL,
+  ACCOUNT_DELETE_UNCONFIRMED_REFUSAL,
+  ACT_KIND,
+} from "@repo/host/acts";
 import { accountActor } from "@repo/ui/actor-model";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -217,6 +221,10 @@ test.each([
   {
     refusal: ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL,
     says: /Sign out and back in, then delete it again\./u,
+  },
+  {
+    refusal: ACCOUNT_DELETE_UNCONFIRMED_REFUSAL,
+    says: /Couldn't confirm whether the account was deleted\./u,
   },
   { refusal: "Could not delete that account on this system.", says: /Try again\./u },
 ])("a delete refused with $refusal says what gets past it", async ({ refusal, says }) => {

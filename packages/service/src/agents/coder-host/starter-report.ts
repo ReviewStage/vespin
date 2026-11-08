@@ -91,9 +91,7 @@ function reportLine(
 
 /**
  * The starter the agent reports to: the agent that started it, where it
- * stands unarchived; none otherwise. Note that a pilot a continue took over
- * moved its agents to the pilot that took over (`agent-store.ts`'s
- * `updateTakenOver`), so the row already names it.
+ * stands unarchived; none otherwise.
  */
 const starterOf = (agent: Agent) =>
   Effect.gen(function* () {

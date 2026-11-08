@@ -2,9 +2,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
-  archiveAgentCommitted,
   listPublishedAgentsById,
-  readAgent,
   readAgentByKey,
   readAgentContext,
   readAgentRouting,
@@ -14,13 +12,10 @@ import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
-import type { StoredArchive } from "@repo/database/schemas/agent";
 import { type NoteFiles, type Replay, stepsBytes, summaryBytes } from "@repo/features/agent-replay";
 import {
-  AGENT_ARCHIVER,
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
-  AGENT_KIND,
   AGENT_MACHINE,
   type AgentAlsoRepository,
   type AgentAttachment,
@@ -30,7 +25,6 @@ import {
   CONTEXT_WINDOW,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { bothInOrder } from "@repo/runtime/effect";
 import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
@@ -43,7 +37,6 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
-import { logStoreFailure } from "../../http/store-failure.js";
 import { ModelCatalog } from "../../providers/model-catalog.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { agentSandboxOf } from "../agent-sandbox-open.js";
@@ -98,17 +91,10 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  * in the new agent; a fork leaves its source running, and a source that
  * could not be stopped is logged, never the Start's failure. A continue
  * stops its source, so one its starter's plan pays for is continued only by
- * those the plan's policy admits (`admitsPlanWriter`). A continue of a pilot
- * is a pilot too, and takes over from its source: the account's agents the
- * source started that stand unarchived report to the new pilot from the
- * transaction that makes it (`createAgent`), those of any pilot that took
- * over from it before among them, and once stopped the source is archived,
- * by the coding agent that continued it or else the member, which is logged
- * where it fails; a source its harness would not stop stands unarchived. A fork of a
- * pilot takes over nothing. A member's continue of an agent a pilot started,
- * such as a sub-pilot, reports to that pilot as its source did; every other
- * Start records only the coding agent whose `start_agent` asks as its
- * starter, the one its note tells it to report to.
+ * those the plan's policy admits (`admitsPlanWriter`). A continue or fork
+ * of an agent stored as a pilot, from before Pilot was removed, makes a coder
+ * like any other. Every Start records only the coding agent whose
+ * `start_agent` asks as its starter, the one its note tells it to report to.
  *
  * The rules are decided once, from the source and the ask, with no read
  * (`takeoverRules`), so `start.ts` reads what a Start inherits rather than
@@ -124,7 +110,7 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 /** How a Start stands to the agent it starts from: none, a continue of its whole work, or a fork at one of its messages. */
 export const TAKEOVER = { FRESH: "fresh", CONTINUE: "continue", FORK: "fork" } as const;
 
-export type Takeover = (typeof TAKEOVER)[keyof typeof TAKEOVER];
+type Takeover = (typeof TAKEOVER)[keyof typeof TAKEOVER];
 
 /** What a takeover reads of a Start's ask: where it goes, its key, its source, and the values a source stands in for where the ask names none. */
 export type TakeoverAsk = StartWhere & {
@@ -178,10 +164,6 @@ export interface TakeoverRules {
   readonly attachments: readonly AgentAttachment[];
   readonly disabledServers: readonly string[] | undefined;
   readonly title: string | undefined;
-  /** The pilot a continue of a pilot takes over, whose agents report to the new one, a pilot on a task; none otherwise. */
-  readonly takesOver: Agent | undefined;
-  /** Whether the new agent reports to the pilot that started its source: a member's continue alone. */
-  readonly readsPilotStarter: boolean;
   /** Whether the source is stopped once the new agent's session opened: a continue alone. */
   readonly stopsSource: boolean;
   /** The branch the source was started on, which the new agent is cloned at where GitHub still holds it and the ask names none. */
@@ -298,8 +280,7 @@ export function whereOf(place: StartWhere): StartWhere {
  * for one from another agent, the source's choice, servers, branch, and
  * place where the ask names none, its brief's files ahead of the ask's, and
  * its extra repositories; and for a continue alone, the plan-writer check,
- * the title after its source's, the source's stop, the pilot it takes over,
- * and, for a member's, the pilot its source reported to.
+ * the title after its source's and the source's stop.
  */
 export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): TakeoverRules {
   const own = ask.attachments ?? [];
@@ -312,8 +293,6 @@ export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): Ta
       attachments: own,
       disabledServers: ask.disabledServers,
       title: ask.title,
-      takesOver: undefined,
-      readsPilotStarter: false,
       stopsSource: false,
       branch: null,
       carriesExtras: false,
@@ -339,8 +318,6 @@ export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): Ta
     attachments: [...from.attachments, ...own],
     disabledServers: ask.disabledServers ?? from.disabledServers,
     title: ask.title ?? (continued ? continuedTitle(source.title) : undefined),
-    takesOver: continued && source.kind === AGENT_KIND.PILOT ? source : undefined,
-    readsPilotStarter: continued && ask.startedBy === undefined,
     stopsSource: continued,
     branch: source.startBranch,
     carriesExtras: ask.alsoRepositories === undefined,
@@ -542,20 +519,6 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * The pilot a continue keeps as its starter: the one that started its
- * source, where that is a pilot, so a continued sub-pilot still reports up
- * to its parent; none for a source no pilot started.
- */
-const pilotStarterOf = (userId: string, source: Agent) =>
-  source.startedByAgentId === null
-    ? Effect.succeed(undefined)
-    : Effect.map(hostedStoreOrUnavailable(readAgent(userId, source.startedByAgentId)), (starter) =>
-        Option.isSome(starter) && starter.value.kind === AGENT_KIND.PILOT
-          ? starter.value.id
-          : undefined,
-      );
-
-/**
  * What a Start takes over from, read before anything it makes: the agent
  * its key already made where it is a retry of this Start, a fresh one's in
  * the place asked and one from another agent's before its source is read,
@@ -753,8 +716,7 @@ const carriedExtrasOf = Effect.fnUntraced(function* (
  * A Start's accepted choice and its landing, with what it inherits fitted
  * to them: a fresh Start's landing does not wait on its choice, so the two
  * are read together; one from another agent is first held to its source's
- * plan's policy where it stops that source and reads the pilot its source
- * reported to where its rules say, then fits that agent's replay to the
+ * plan's policy where it stops that source, then fits that agent's replay to the
  * choice's window, its transcript carried whole in place of its replayed
  * steps where the service keeps it on the harness `runtimeOf` decides, so
  * its landing waits on it, and once landed carries the repositories its
@@ -785,8 +747,6 @@ export const landedInheriting = <
     readonly read: A;
     readonly landing: L;
     readonly carried: readonly AgentAlsoRepository[] | undefined;
-    /** The pilot that started the source, for a member's continue of an agent a pilot started; none otherwise. */
-    readonly pilotStarter: string | undefined;
   },
   E1 | E2 | HostedRefusal,
   R1 | R2 | DatabaseServices | ModelCatalog
@@ -797,14 +757,10 @@ export const landedInheriting = <
       read,
       landing,
       carried: undefined,
-      pilotStarter: undefined,
     }));
   }
   return Effect.gen(function* () {
     if (rules.checksPlanWriter) yield* admitsPlanWriter(userId, from.source);
-    const pilotStarter = rules.readsPilotStarter
-      ? yield* pilotStarterOf(userId, from.source)
-      : undefined;
     const read = yield* accepted;
     const session = yield* carriedSessionOf(ask, from, runtimeOf(read.choice.model, read.keys));
     const handedFrom = session === undefined ? from : carryingTranscript(from, session);
@@ -820,7 +776,7 @@ export const landedInheriting = <
     const carried = rules.carriesExtras
       ? yield* carriedExtrasOf(userId, from.source, landing.repository)
       : undefined;
-    return { read, landing, carried, pilotStarter };
+    return { read, landing, carried };
   });
 };
 
@@ -858,30 +814,10 @@ const stoppedSource = (
   );
 
 /**
- * The pilot a continue took over from archived once it is stopped, by the
- * coding agent whose `start_agent` continued it or else by the member, and
- * the transaction it was archived in; none where it was not, which is
- * logged, since the new pilot stands either way.
- */
-const archivedPilot = (userId: string, pilot: Agent, by: Agent | undefined) => {
-  const archiver: StoredArchive =
-    by === undefined
-      ? { by: AGENT_ARCHIVER.MEMBER, userId }
-      : { by: AGENT_ARCHIVER.AGENT, userId, agentId: by.id, agentName: agentName(by) };
-  return archiveAgentCommitted(userId, pilot.id, true, archiver).pipe(
-    Effect.map(Option.flatMap(({ txid }) => Option.fromNullishOr(txid))),
-    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none<string>())),
-  );
-};
-
-/**
  * The new agent's `opening` run around what it inherits: the source's CLI
  * transcript made the new agent's own before its first open forks it, then
  * the opening, and once that succeeded the source of a continue stopped,
- * since the work goes on in the new agent, and a pilot it took over archived
- * where the stop held, since one its harness would not stop still runs and stands
- * where its messages still reach it. Answers the transaction the pilot was
- * archived in; none where none was, as for every fresh Start, which only opens.
+ * since the work goes on in the new agent.
  */
 export const openedTakingOver = <E, R>(
   agentSessions: Effect.Effect<
@@ -889,16 +825,11 @@ export const openedTakingOver = <E, R>(
     HostedRefusal,
     HttpClient.HttpClient | DatabaseServices
   >,
-  userId: string,
   startedBy: Agent | undefined,
   inherited: Inherited,
   agent: Agent,
   opening: Effect.Effect<void, E, R>,
-): Effect.Effect<
-  Option.Option<string>,
-  E | HostedRefusal,
-  R | DatabaseServices | HttpClient.HttpClient | Sandbox
-> =>
+): Effect.Effect<void, E | HostedRefusal, R | DatabaseServices | HttpClient.HttpClient | Sandbox> =>
   Effect.gen(function* () {
     const { from, rules } = inherited;
     if (from !== undefined && agent.startedFrom?.session !== undefined) {
@@ -910,8 +841,6 @@ export const openedTakingOver = <E, R>(
       );
     }
     yield* opening;
-    if (from === undefined || !rules.stopsSource) return Option.none<string>();
-    const stopped = yield* stoppedSource(agentSessions, from.source, startedBy?.id);
-    if (rules.takesOver === undefined || !stopped) return Option.none<string>();
-    return yield* archivedPilot(userId, rules.takesOver, startedBy);
+    if (from === undefined || !rules.stopsSource) return;
+    yield* stoppedSource(agentSessions, from.source, startedBy?.id);
   });

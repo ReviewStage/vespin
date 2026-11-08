@@ -159,7 +159,6 @@ function buildAgentOrigins(
       const agents = agentsOf(origin);
       return { origin, agents, share: shareOf(agents, agentsStarted) };
     }),
-    pilots: over(DAILY_COUNT.PILOTS_STARTED),
   };
 }
 

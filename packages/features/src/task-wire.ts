@@ -52,8 +52,9 @@ import { trimmedText } from "./text-schema.js";
  * the workspace it starts in, or none for the account's first one.
  * A task may be the child of another, to any depth, which its summary names
  * by id.
- * A task is worked by its agents or by a pilot (`TASK_MODE`), which its
- * summary names.
+ * A task is worked by its agents (`TASK_MODE`), which its summary names; a
+ * task stored in pilot mode before Pilot was removed is worked by its agents
+ * too.
  * A task opened whole also names, by id, the tasks it waits on and the tasks
  * that wait on it, as Linear's blocked-by and blocks.
  * The starting account and the conversation a task resumes in are the
@@ -141,10 +142,9 @@ export const TASK_PRIORITY_ORDER: readonly TaskPriority[] = [
 ];
 
 /**
- * How a task is worked: by the agents its members start on it, or by one
- * pilot agent that breaks it into child tasks and runs agents on them. A
- * task's mode is fixed as it starts; every task from before it is worked by
- * agents.
+ * How a task is worked: by the agents its members start on it. A task
+ * stored in pilot mode, from before Pilot was removed, keeps that value and
+ * is worked by its agents like any other; nothing writes it now.
  */
 export const TASK_MODE = {
   AGENT: "agent",
@@ -358,9 +358,9 @@ function relationsEachOnce(request: {
  * takes one relation to another, and any other task out of reach is not
  * found. `relation` is the old door, which desktop builds already released
  * send: it reads as `relations` of one, and naming both is refused.
- * A task is worked by its agents unless `mode` names a pilot, which the
- * service refuses from an account without the Pilot experiment, and which
- * stands as the task was started.
+ * A released desktop may still send `mode`, from when a task could be
+ * worked by a pilot, which is accepted and ignored: every task started is
+ * worked by its agents.
  * A released desktop may still send `linearIssueId` or `issues`, from when a
  * task could link issues, which are accepted and ignored. An `id` makes the
  * task under the id its maker chose (`chosenIdSchema`); one sent again

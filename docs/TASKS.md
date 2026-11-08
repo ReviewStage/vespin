@@ -465,7 +465,7 @@ in the way of the agent's own words.
 An agent writes the task's description with its `edit_description` tool
 (`packages/service/src/agents/coder-host/description-edit.ts`), whose every call
 names the task by its id, so it writes any other description of its workspace too,
-as a pilot fixes a child task's description, where it meets something the description
+where it meets something the description
 does not settle, finds a fact the description has wrong, or makes a decision the
 description left open. Its saves go through `saveNotes` (`packages/service/src/tasks/description-notes.ts`),
 the description's one write.

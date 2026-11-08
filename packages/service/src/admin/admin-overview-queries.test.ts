@@ -9,10 +9,10 @@ import {
 import { agentTable, type StoredPullRequest } from "@repo/database/schemas/agent";
 import { session, user } from "@repo/database/schemas/auth";
 import { automation, automationRun } from "@repo/database/schemas/automation";
+import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { integrationConnection } from "@repo/database/schemas/integration";
-import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { conversations } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
@@ -24,12 +24,7 @@ import {
   REACH_FEATURE,
 } from "@repo/features/admin-overview-vocabulary";
 import { ADMIN_METRICS_SCOPE, ADMIN_METRICS_WINDOW } from "@repo/features/admin-wire";
-import {
-  AGENT_KIND,
-  AGENT_SOURCE,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { AGENT_SOURCE, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -373,7 +368,7 @@ it.layer(getTestDB())("the overview's reads", (it) => {
       }),
   );
 
-  it.effect("count each agent under the first origin that fits, and pilots beside them", () =>
+  it.effect("count each agent under the first origin that fits", () =>
     Effect.gen(function* () {
       const dee = yield* openAccount("dee", "2026-09-01T09:00:00Z");
       const workspace = yield* openWorkspace(dee);
@@ -386,12 +381,12 @@ it.layer(getTestDB())("the overview's reads", (it) => {
         firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: Date.parse(when) },
         prompt: "",
       };
-      const pilot = yield* startAgent(dee, workspace, when, { kind: AGENT_KIND.PILOT });
-      const startedByPilot = { startedByAgentId: pilot };
+      const starter = yield* startAgent(dee, workspace, when);
+      const startedByAgent = { startedByAgentId: starter };
       yield* startAgent(dee, workspace, when, { automationOrigin, ...slack });
       yield* startAgent(dee, workspace, when, slack);
-      yield* startAgent(dee, workspace, when, { ...slack, ...startedByPilot });
-      yield* startAgent(dee, workspace, when, startedByPilot);
+      yield* startAgent(dee, workspace, when, { ...slack, ...startedByAgent });
+      yield* startAgent(dee, workspace, when, startedByAgent);
       yield* startAgent(dee, workspace, when);
 
       const source = yield* readAdminOverviewSource({
@@ -401,12 +396,11 @@ it.layer(getTestDB())("the overview's reads", (it) => {
       });
       const on = (count: DailyCount) => source.daily.get(count)?.get(day) ?? 0;
 
-      // Six started: the pilot and the plain coder by hand, the rest by the first origin that fits.
+      // Six started: the starter and the plain coder by hand, the rest by the first origin that fits.
       assert.equal(on(DAILY_COUNT.AGENTS_STARTED), 6);
       assert.equal(on(DAILY_COUNT.AGENTS_FROM_AUTOMATIONS), 1);
       assert.equal(on(DAILY_COUNT.AGENTS_FROM_SLACK), 2);
       assert.equal(on(DAILY_COUNT.AGENTS_FROM_AGENTS), 1);
-      assert.equal(on(DAILY_COUNT.PILOTS_STARTED), 1);
     }),
   );
 });

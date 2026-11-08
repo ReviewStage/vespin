@@ -84,6 +84,7 @@ import { GLYPH_STATE, glyphStateWords, stateEndMark } from "../state-glyph.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
+import { useWorkspacesRead } from "../workspaces-read.js";
 import { rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
 import {
@@ -626,10 +627,11 @@ function ListPage({
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
+  const workspacesRead = useWorkspacesRead();
   const { read, reload, toggle } = automations;
   const groups =
     read !== undefined && "automations" in read ? automationGroups(read.automations) : [];
-  const workspacesUnread = workspace === undefined && tasks.workspacesFailed;
+  const workspacesUnread = workspace === undefined && workspacesRead.failed;
   const deletion = useRowDeletion(groups, (automationId) =>
     door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
   );
@@ -647,7 +649,7 @@ function ListPage({
           workspacesUnread ? (
             <ErrorState
               failure={unreadShown(FAILURE_SURFACE.WORKSPACES_READ)}
-              onRetry={tasks.onRetryWorkspaces}
+              onRetry={workspacesRead.onRetry}
               placement={ERROR_STATE_PLACEMENT.CENTERED}
             >
               {WORKSPACES_UNREAD_LINE}
@@ -758,6 +760,7 @@ function RunsPage({
   const now = useMinute();
   const workspace = tasks.workspace;
   const { read, reload } = useWorkspaceRuns(workspace?.id);
+  const workspacesRead = useWorkspacesRead();
   const [shown, setShown] = useState<RunsShown>(RUNS_SHOWN.ALL);
   const listed =
     automations.read !== undefined && "automations" in automations.read
@@ -766,7 +769,7 @@ function RunsPage({
   // Note that an automation the list does not hold yet is taken for the reader's own, so no run names a creator it may not have.
   const mine = (automationId: string) =>
     listed.find((automation) => automation.id === automationId)?.mine !== false;
-  const workspacesUnread = workspace === undefined && tasks.workspacesFailed;
+  const workspacesUnread = workspace === undefined && workspacesRead.failed;
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -791,7 +794,7 @@ function RunsPage({
           workspacesUnread ? (
             <ErrorState
               failure={unreadShown(FAILURE_SURFACE.WORKSPACES_READ)}
-              onRetry={tasks.onRetryWorkspaces}
+              onRetry={workspacesRead.onRetry}
               placement={ERROR_STATE_PLACEMENT.CENTERED}
             >
               {WORKSPACES_UNREAD_LINE}
@@ -1006,6 +1009,7 @@ function AutomationsPages({
   // until one is, rather than calling the list empty or an automation gone;
   // a workspaces read that did not land says so instead.
   const automations = useAutomations(workspace?.id);
+  const workspacesRead = useWorkspacesRead();
   // The automation the new page made, whose page is that same editor still, so what was typed while it was made stands.
   const [made, setMade] = useState<string | undefined>(undefined);
   const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
@@ -1017,12 +1021,12 @@ function AutomationsPages({
     return <RunsPage tasks={tasks} automations={automations} room={room} />;
   }
   const { read, reload } = automations;
-  if (workspace === undefined && tasks.workspacesFailed) {
+  if (workspace === undefined && workspacesRead.failed) {
     return (
       <UnreadPage
         line={WORKSPACES_UNREAD_LINE}
         onBack={back}
-        onRetry={tasks.onRetryWorkspaces}
+        onRetry={workspacesRead.onRetry}
         phone={room === SHELL_ROOM.NARROW}
       />
     );

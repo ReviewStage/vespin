@@ -173,7 +173,7 @@ function onLedger(agent: AgentSummary): TasklessAgent {
 
 /** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents on no task. */
 function tasksView(): TasksView {
-  return agentListRefused
+  const listed: TasksView = agentListRefused
     ? { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED }
     : {
         ...IDLE_TASKS_VIEW,
@@ -181,6 +181,7 @@ function tasksView(): TasksView {
         taskAgents: [],
         tasklessAgents: workspaceAgents,
       };
+  return workspacesRefused ? { ...listed, workspacesStatus: TASKS_READ.FAILED } : listed;
 }
 
 let root: Root | undefined;
@@ -254,6 +255,10 @@ let catalogRefused = false;
 let catalogUnconnected = false;
 /** Whether the task list failed before it carried the workspace's agents. */
 let agentListRefused = false;
+/** Whether the read of the workspaces failed, which every read of the task list answers until a test says otherwise. */
+let workspacesRefused = false;
+/** How many times the task list, and the workspaces with it, were asked to be read again. */
+let tasksRefreshes = 0;
 /** Lays the task list on the window again, as the host does once it reads it. */
 let deliverTasks: (next: TasksView) => void = () => undefined;
 /** Lays the models on the window again, as the host does once it asks them again. */
@@ -366,6 +371,8 @@ beforeEach(() => {
   catalogReads = 0;
   catalogRefused = false;
   catalogUnconnected = false;
+  workspacesRefused = false;
+  tasksRefreshes = 0;
   agentListRefused = false;
   agentSearchRefused = false;
   changeRefusal = undefined;
@@ -495,6 +502,7 @@ beforeEach(() => {
         });
       }
       if (request.kind === ACT_KIND.TASKS_REFRESH) {
+        tasksRefreshes += 1;
         agentListRefused = false;
         deliverTasks(tasksView());
         return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
@@ -1893,21 +1901,15 @@ test("what is typed while a save is out stands, unsaved, once the save lands", a
 });
 
 test("with no workspace listed because the workspaces could not be read, the list and a linked automation say so, and Retry reads them again", async () => {
-  let retries = 0;
-  const unread = () =>
-    tasksControl({
-      workspace: undefined,
-      workspacesFailed: true,
-      onRetryWorkspaces: () => {
-        retries += 1;
-      },
-    });
+  workspacesRefused = true;
+  const unread = () => tasksControl({ workspace: undefined });
   const page = mount(unread());
   await settle();
   assert.match(page.textContent ?? "", /The workspaces could not be read\./u);
   assert.equal(page.querySelector("[role=status][aria-busy=true]") === null, true);
   act(() => button("Retry").click());
-  assert.equal(retries, 1);
+  await settle();
+  assert.equal(tasksRefreshes, 1);
 
   // The read Retry asked for lands, listing the workspace, whose automations are then read.
   render(tasksControl({ workspace: WORKSPACE }));
@@ -1923,7 +1925,8 @@ test("with no workspace listed because the workspaces could not be read, the lis
   assert.match(linked.textContent ?? "", /The workspaces could not be read\./u);
   assert.doesNotMatch(linked.textContent ?? "", /Reading the automation/u);
   act(() => button("Retry").click());
-  assert.equal(retries, 2);
+  await settle();
+  assert.equal(tasksRefreshes, 2);
 });
 
 test("an automation's page whose list could not be read says so with Retry, rather than calling it gone", async () => {

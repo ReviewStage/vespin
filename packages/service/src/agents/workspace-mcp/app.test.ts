@@ -613,11 +613,10 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const names = listed.tools.map((tool) => tool.name);
         assert.deepEqual([...names].sort(), [...SERVED_TOOLS].sort());
         for (const native of HARNESS_TOOLS) assert.ok(!names.includes(native), native);
-        // Pilot stays off in the agent's workspace, so its tools are listed in the words of that variant.
         const standingOn = {
           agent: Option.none(),
           open: new Set<ToolGate>(),
-          experiments: { descriptionsOn: true, memoryOn: true, pilotOn: false },
+          experiments: { descriptionsOn: true, memoryOn: true },
         };
         for (const tool of listed.tools) {
           const served = isServedTool(tool.name) ? TOOL_CATALOG.get(tool.name) : undefined;
@@ -630,7 +629,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "tools/list names no task description, pilot, or memory in any tool's words or input where the agent's workspace has every experiment off",
+    "tools/list names no task description or memory in any tool's words or input where the agent's workspace has every experiment off",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;

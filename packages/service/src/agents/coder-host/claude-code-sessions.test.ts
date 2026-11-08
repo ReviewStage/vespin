@@ -1818,7 +1818,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       const target = { userId, conversationId: agent.conversationId };
       // The session opened with every experiment of its workspace off, and took one step.
       yield* recordNativeTurnHanded(target, {
-        experiments: { descriptionsOn: false, pilotOn: false, memoryOn: false },
+        experiments: { descriptionsOn: false, memoryOn: false },
       });
       yield* (yield* Database).insert(messages).values({
         id: randomUUID(),
@@ -1930,7 +1930,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // The session opened on what the workspace now has: Task descriptions on alone.
         yield* recordNativeTurnHanded(
           { userId, conversationId: agent.conversationId },
-          { experiments: { descriptionsOn: true, pilotOn: false, memoryOn: false } },
+          { experiments: { descriptionsOn: true, memoryOn: false } },
         );
         const db = yield* Database;
         const line = yield* writtenLine(agent, "Now the emails.");

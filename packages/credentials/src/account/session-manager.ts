@@ -29,8 +29,9 @@ import {
   type AccountIdentity,
   accessTokenNeedsRefresh,
   accountFailureAction,
+  accountNotFound,
   deletionNeedsNewSession,
-  deletionSessionGone,
+  deletionSessionRefused,
   type StoredAccount,
   withIssuedAccountTokens,
 } from "./client.js";
@@ -123,6 +124,24 @@ function signInFailed(outcome: {
 export class NoStoredAccount extends Data.TaggedError("NoStoredAccount")<{
   readonly message: string;
 }> {}
+
+/**
+ * A deletion refused under a session the service no longer takes, where
+ * nothing the Mac holds could tell whether the account is gone: it is
+ * neither said deleted nor signed in again, and the Mac stays as it was.
+ */
+export class DeletionUnconfirmed extends Data.TaggedError("DeletionUnconfirmed")<{
+  readonly message: string;
+}> {}
+
+/** What the Mac's own tokens say of the account a refused deletion was asked for. */
+const ACCOUNT_STANDING = {
+  STANDS: "stands",
+  GONE: "gone",
+  UNKNOWN: "unknown",
+} as const;
+
+type AccountStanding = (typeof ACCOUNT_STANDING)[keyof typeof ACCOUNT_STANDING];
 
 /**
  * A step of the sign-out whose failure is written down and never held against
@@ -284,7 +303,10 @@ export class AccountSessionManager {
     });
   }
 
-  deleteEverywhere(): Effect.Effect<AccountSnapshot, NoStoredAccount | AccountClientFailure> {
+  deleteEverywhere(): Effect.Effect<
+    AccountSnapshot,
+    NoStoredAccount | DeletionUnconfirmed | AccountClientFailure
+  > {
     return Effect.gen({ self: this }, function* () {
       const stored = yield* this.#options.store.readAccount();
       if (!stored) {
@@ -296,9 +318,19 @@ export class AccountSessionManager {
       const held = stored.sessionToken ?? (yield* this.#freshSession());
       const deleted = yield* Effect.result(this.#deleteHosted(held));
       if (Result.isFailure(deleted)) {
-        // A session the service no longer takes, as after a deletion whose answer was lost, signs out rather than in, where a sign-in could make a new account.
-        if (deletionSessionGone(deleted.failure)) return yield* this.signOut();
-        if (!deletionNeedsNewSession(deleted.failure)) return yield* Effect.fail(deleted.failure);
+        if (deletionSessionRefused(deleted.failure)) {
+          // Note that a session the service no longer takes may be one a lost answer's deletion ended, or one that lapsed, so the account is looked for first: a sign-in for an account that is gone would make a new one.
+          const standing = yield* this.#accountStanding(stored);
+          if (standing === ACCOUNT_STANDING.GONE) return yield* this.signOut();
+          if (standing === ACCOUNT_STANDING.UNKNOWN) {
+            return yield* new DeletionUnconfirmed({
+              message:
+                "The service no longer takes this Mac's session, and the account could not be looked for",
+            });
+          }
+        } else if (!deletionNeedsNewSession(deleted.failure)) {
+          return yield* Effect.fail(deleted.failure);
+        }
         yield* this.#deleteHosted(yield* this.#freshSession());
       }
       return yield* this.signOut();
@@ -748,6 +780,35 @@ export class AccountSessionManager {
     return generation === this.#generation;
   }
 
+  /**
+   * Whether the account still stands, as the Mac's own tokens find it: its
+   * identity read, and once more after one refresh grant where the access
+   * token is refused. Only the provider's own answer that the account is
+   * gone counts as gone; a refused grant, an outage, or another person
+   * counts as unknown, since a revoked grant answers as a deleted account's
+   * does. A renewal's rotated tokens are kept, as `#renew` keeps them.
+   */
+  #accountStanding(stored: StoredAccount): Effect.Effect<AccountStanding> {
+    return Effect.gen({ self: this }, function* () {
+      const generation = this.#generation;
+      const client = this.#options.client;
+      const standingOf = (failure: AccountClientFailure) =>
+        accountNotFound(failure) ? ACCOUNT_STANDING.GONE : ACCOUNT_STANDING.UNKNOWN;
+      const read = yield* Effect.result(client.userInfo(stored.accessToken, stored.provider));
+      if (Result.isSuccess(read)) return identityStanding(stored, read.success);
+      if (!accessTokenNeedsRefresh(read.failure)) return standingOf(read.failure);
+      const renewed = yield* Effect.result(client.refresh(stored.refreshToken));
+      if (Result.isFailure(renewed)) return standingOf(renewed.failure);
+      yield* this.#storeCurrent(generation, { ...stored, ...renewed.success });
+      const again = yield* Effect.result(
+        client.userInfo(renewed.success.accessToken, stored.provider),
+      );
+      return Result.isSuccess(again)
+        ? identityStanding(stored, again.success)
+        : standingOf(again.failure);
+    });
+  }
+
   #deleteHosted(sessionToken: string): Effect.Effect<void, AccountClientFailure> {
     return this.#options.client.deleteUser(sessionToken);
   }
@@ -774,6 +835,11 @@ function sameAccount(stored: StoredAccount, identity: AccountIdentity): boolean 
   return stored.id !== undefined && identity.id !== undefined
     ? stored.id === identity.id
     : stored.email === identity.email;
+}
+
+/** The account standing where the service names the stored account's person, unknown where it names anyone else. */
+function identityStanding(stored: StoredAccount, identity: AccountIdentity): AccountStanding {
+  return sameAccount(stored, identity) ? ACCOUNT_STANDING.STANDS : ACCOUNT_STANDING.UNKNOWN;
 }
 
 /** Whether the stored identity already says all the service does; a stored account missing the service's id is not, so a refresh records it. */

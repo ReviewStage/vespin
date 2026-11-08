@@ -172,7 +172,10 @@ const MAXIMUM_AGENTS_PER_DELIVERY = 10;
 /** How many of those reads run at once. */
 const READ_CONCURRENCY = 4;
 
-const RepositorySchema = Schema.Struct({ full_name: Schema.String });
+const RepositorySchema = Schema.Struct({
+  full_name: Schema.String,
+  default_branch: Schema.optionalKey(Schema.String),
+});
 const HeadSchema = Schema.Struct({ head: Schema.Struct({ ref: Schema.String }) });
 
 /** A delivery as far as it is read: what happened, and the repository and branches it names. */
@@ -265,9 +268,23 @@ function signatureMatches(
   return offered.length === wanted.length && timingSafeEqual(offered, wanted);
 }
 
-/** Each branch named once, the null a detached head leaves dropped. */
-function branchesOf(named: readonly (string | null)[]): readonly string[] {
-  return [...new Set(named.filter((branch): branch is string => branch !== null))];
+/**
+ * Each branch named once, the null a detached head leaves dropped, and the
+ * repository's default branch dropped too. Note that the default branch
+ * is never dropped where a delivery names none, and that an agent standing
+ * on it has published nothing from it (`coder-host/published.ts`), so
+ * reading every such agent again on each check of the default branch cost
+ * a few queries an agent and could only answer nothing.
+ */
+function branchesOf(
+  named: readonly (string | null)[],
+  defaultBranch: string | undefined,
+): readonly string[] {
+  return [
+    ...new Set(
+      named.filter((branch): branch is string => branch !== null && branch !== defaultBranch),
+    ),
+  ];
 }
 
 /** The repository and branches the delivery is about, where its event and action are ones that move a pull request's row; nothing otherwise. */
@@ -279,7 +296,10 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
         return undefined;
       return {
         repository: read.success.repository.full_name,
-        branches: [read.success.pull_request.head.ref],
+        branches: branchesOf(
+          [read.success.pull_request.head.ref],
+          read.success.repository.default_branch,
+        ),
       };
     }
     case WEBHOOK_EVENT.CHECK_SUITE: {
@@ -288,7 +308,10 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
       const suite = read.success.check_suite;
       return {
         repository: read.success.repository.full_name,
-        branches: branchesOf([suite.head_branch, ...suite.pull_requests.map((pr) => pr.head.ref)]),
+        branches: branchesOf(
+          [suite.head_branch, ...suite.pull_requests.map((pr) => pr.head.ref)],
+          read.success.repository.default_branch,
+        ),
       };
     }
     case WEBHOOK_EVENT.STATUS: {
@@ -296,7 +319,10 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
       if (Result.isFailure(read)) return undefined;
       return {
         repository: read.success.repository.full_name,
-        branches: branchesOf(read.success.branches.map((branch) => branch.name)),
+        branches: branchesOf(
+          read.success.branches.map((branch) => branch.name),
+          read.success.repository.default_branch,
+        ),
       };
     }
     default:

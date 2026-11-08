@@ -1,8 +1,11 @@
 import type { Workspace } from "@repo/features/workspace-wire";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { ChevronDownIcon, dropBelowStart, GearIcon, NavItem, PlusIcon, useMenu } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useOpenSettings } from "../open-settings.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
+import { useOpenNewWorkspace } from "./new-workspace.js";
 import { sharedWords, WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
 import { WorkspaceTile } from "./workspace-tile.js";
 
@@ -31,8 +34,23 @@ import { WorkspaceTile } from "./workspace-tile.js";
  * before then the sidebar's head is the app's.
  */
 
-/** The menu's items: every workspace by its tile, with who shares it under its name, the listed one checked; then New workspace and Workspace settings. */
-export function workspaceMenuGroups(listed: Workspace, tasks: TasksControl): MenuAction[][] {
+/** What the menu's last two items open: New workspace's cards, and Settings. */
+export interface WorkspaceMenuDoors {
+  readonly onNewWorkspace: () => void;
+  readonly onOpenSettings: (link: SettingsLink) => void;
+}
+
+/** The window's doors the menu's last two items open, read where the menu is drawn. */
+export function useWorkspaceMenuDoors(): WorkspaceMenuDoors {
+  return { onNewWorkspace: useOpenNewWorkspace(), onOpenSettings: useOpenSettings() };
+}
+
+/** The menu's items: every workspace by its tile, with who shares it under its name, the listed one checked; then New workspace and Workspace settings, which opens Settings on the listed workspace's page. */
+export function workspaceMenuGroups(
+  listed: Workspace,
+  tasks: TasksControl,
+  doors: WorkspaceMenuDoors,
+): MenuAction[][] {
   const first = tasks.workspaces[0]?.id;
   const choices = tasks.workspaces.map(
     (workspace): MenuAction => ({
@@ -53,8 +71,13 @@ export function workspaceMenuGroups(listed: Workspace, tasks: TasksControl): Men
   return [
     choices,
     [
-      { label: "New workspace", icon: <PlusIcon />, onSelect: tasks.newWorkspace.onOpen },
-      { label: "Workspace settings", icon: <GearIcon />, onSelect: tasks.onOpenWorkspaceSettings },
+      { label: "New workspace", icon: <PlusIcon />, onSelect: doors.onNewWorkspace },
+      {
+        label: "Workspace settings",
+        icon: <GearIcon />,
+        onSelect: () =>
+          doors.onOpenSettings({ page: SETTINGS_VIEW.WORKSPACE, workspaceId: listed.id }),
+      },
     ],
   ];
 }
@@ -69,6 +92,7 @@ export function WorkspaceSwitcher({
   inSight: boolean;
 }): React.JSX.Element | null {
   const menu = useMenu(tasks.shown && inSight);
+  const doors = useWorkspaceMenuDoors();
   const listed = tasks.workspace;
   if (listed === undefined) return null;
   const personal = tasks.workspaces[0]?.id === listed.id;
@@ -89,7 +113,7 @@ export function WorkspaceSwitcher({
           label="Workspaces"
           replayUnmasked
           menu={menu.drawn}
-          groups={workspaceMenuGroups(listed, tasks)}
+          groups={workspaceMenuGroups(listed, tasks, doors)}
           onClose={menu.close}
         />
       )}

@@ -42,8 +42,8 @@ import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
  * Those agents come first, then those at work, then the newest started; an
  * archived agent is not listed. New agent follows them at every width, as
  * the strip's "+" offers it (`newAgentStarts`), so the group stands even on a
- * task with no agent, a fresh plan's one next step; a task that starts none
- * of its own, an archived or a pilot one, with no agent, draws no group.
+ * task with no agent, a fresh plan's one next step; an archived task with no
+ * agent draws no group.
  *
  * On a phone, Overview is the task's one page, with no strip, summary, or
  * Inbox tab beside it (`task-pane-switcher.tsx`), so the group holds the rest

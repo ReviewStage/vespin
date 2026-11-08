@@ -1,4 +1,3 @@
-import type { AccountFailedRun } from "@repo/features/account-inbox-wire";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import type {
   AgentAttachment,
@@ -19,7 +18,6 @@ import {
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
-import { LIVE_READ } from "@repo/features/live-wire";
 import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import type { PageLine } from "@repo/features/page-wire";
@@ -43,7 +41,6 @@ import {
   type TaskBlockRequest,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
-  type TaskMode,
   type TaskRelationChangeRequest,
   type TaskRelationKind,
   type TaskRunsOnRequest,
@@ -67,13 +64,7 @@ import {
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type {
-  AppInboxAgentHolding,
-  AppInboxTask,
-  AppInboxTaskHolding,
-  AppInboxTasklessItem,
-  AppStateSnapshot,
-} from "@repo/host/app-state";
+import type { AppInboxTask, AppInboxTaskHolding, AppStateSnapshot } from "@repo/host/app-state";
 import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn } from "@repo/settings";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
@@ -117,7 +108,6 @@ import {
   workspaceReaches,
 } from "@repo/ui/tasks-model";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
   mutationOptions,
   type QueryClient,
@@ -129,7 +119,6 @@ import { useRouter } from "@tanstack/react-router";
 import { absurd } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type ActedResult,
   askAct,
   askKept,
   firstRefusal,
@@ -151,7 +140,6 @@ import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
 import { type InboxAt, listedInboxChoice, useInboxRoute } from "../inbox-route.js";
 import {
   descriptionDocumentQuery,
-  descriptionDocumentRetryMutation,
   historyQuery,
   historyRetryMutation,
   pagesQuery,
@@ -176,7 +164,6 @@ import type { PlaceLeave } from "../places/place-leave.js";
 import { versionHistoryAddressOf } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
-import type { RenameShape } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
@@ -186,17 +173,11 @@ import {
   pressRows,
   pressWrite,
   ROW_WRITE,
-  type RowDoors,
   type TaskRows,
   taskRow,
   type UndoWrite,
 } from "../undo-stack.js";
-import {
-  appStateIn,
-  appStateQuery,
-  selectAppSettingsView,
-  selectWorkspaces,
-} from "../use-app-state.js";
+import { appStateQuery, selectAppSettingsView, selectWorkspaces } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import { workspaceExperimentChoices } from "../workspace-experiments.js";
 import {
@@ -212,7 +193,6 @@ import {
   localAgentRefusalWords,
   openingLineOf,
   type SentLine,
-  startsOwnAgents,
 } from "./agent-model.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
@@ -225,10 +205,6 @@ import {
 } from "./closed-tabs.js";
 import { useCloudBrowserDrafts, useCloudBrowserTabs } from "./cloud-browser-tabs.js";
 import type { SectionReveal } from "./description-body.js";
-import {
-  type DescriptionEditMutation,
-  descriptionEditMutation,
-} from "./description-edit-mutation.js";
 import type { RevisionSource } from "./description-history-model.js";
 import { holdsAsk } from "./inbox-model.js";
 import type { MessageReveal } from "./message-links.js";
@@ -253,6 +229,7 @@ import {
   TAB_PRESS,
   useColumnKeys,
 } from "./tab-press.js";
+import { useTaskRowDoors } from "./task-row-doors.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture } from "./tasks-fixture-loader.js";
 import type { ThreadReveal } from "./thread-reveal.js";
@@ -541,8 +518,6 @@ export interface NewTaskStart {
   /** The relations the start makes its task in, from the new task's side, written with it in one transaction; none for a task related to none. */
   readonly relations?: readonly TaskCreateRelation[];
   readonly handed?: NewTaskAgent;
-  /** How the task is worked, where the card's choice named it while the Pilot experiment is on; by its agents otherwise. */
-  readonly mode?: TaskMode;
   /** What the card held as it pressed Start, which it opens again on where an agent's start is refused after the card closed. */
   readonly card?: NewTaskCardKept;
 }
@@ -583,25 +558,12 @@ export interface TasksControl {
   };
   /** The workspaces the account is a member of, its first one first; none before the first read lands. */
   workspaces: readonly Workspace[];
-  /** Whether the last read of the workspaces did not land, those held still drawn. */
-  workspacesFailed: boolean;
-  /** Reads the workspaces again after a read that did not land. */
-  onRetryWorkspaces: () => void;
   /** The workspace the sidebar lists and New task starts in; absent while none is listed, when every task is listed. */
   workspace: Workspace | undefined;
   /** Lists another of the account's workspaces, and starts the next new task in it. */
   onChooseWorkspace: (workspaceId: string) => void;
   /** Lists the account's own workspace, else the first other, once one is left, and turns to the home page. */
   onLeftWorkspace: (workspaceId: string) => void;
-  /**
-   * New workspace's cards, standing alone in the window in the app's place
-   * while open (`new-workspace-steps.tsx`): opened from the switcher or a
-   * phone's account menu, and put away by their own Cancel or Close. Open
-   * only for the account that opened them, so a sign-out puts them away.
-   */
-  newWorkspace: { open: boolean; onOpen: () => void; onClose: () => void };
-  /** Opens Settings on its Workspace page, showing the listed workspace. */
-  onOpenWorkspaceSettings: () => void;
   activeTaskId: string | undefined;
   /**
    * The task the tab is on its way to: the one a press asked the host for,
@@ -615,8 +577,6 @@ export interface TasksControl {
   region: DocumentRegion;
   /** Copies the description drawn as Markdown, answered with a toast, since its press stands in a menu. */
   copy: { onPress: () => void };
-  /** The writes to a description's document, as each place writing them holds its own mutation (`descriptionEditMutation`): saved, a conflict with the text as it stands now, or why not. */
-  descriptionEdit: (taskId: string) => DescriptionEditMutation;
   /** The task's column's tabs: its agents' and its draft's, and which is shown. */
   mainTabs: MainTabsControl;
   /** The side panel beside the open task's column: shown or not, its tab, and its width. */
@@ -710,12 +670,6 @@ export interface TasksControl {
   inboxShown: string | null;
   /** Every task holding an inbox item, waiting or settled, the task whose item changed latest first: what the window's Inbox lists. */
   inboxTasks: readonly AppInboxTaskHolding[];
-  /** What waits on the developer from agents with no task, as main's read last answered: what the window's Inbox counts beside the tasks'. */
-  inboxTaskless: readonly AppInboxTasklessItem[];
-  /** Every agent with no task holding an inbox item, waiting or settled, the agent whose item changed latest first: what the window's Inbox lists beside the tasks. */
-  inboxAgents: readonly AppInboxAgentHolding[];
-  /** The newest run of each of the account's own automations that failed to start lately, every workspace's, which marks the sidebar's Automations of the run's workspace until that automation is opened. */
-  failedRuns: readonly AccountFailedRun[];
   /** The window's Inbox: whether it stands in the task's place, the task chosen in it, and its presses. */
   inboxView: InboxViewControl;
   /** Says which agent's card in the column shows its threads in its transcript's place (`agent-threads.tsx`), none while it shows its transcript, so main is not told that transcript is on screen. */
@@ -791,7 +745,6 @@ export interface TasksControl {
   /** The same move, as a question asking it first holds its own mutation over it. */
   moveTask: TaskMoveMutation;
   onRetryList: () => void;
-  onRetryDocument: () => void;
   /** Opens the New task dialog over whatever stands open, which it leaves standing; on Home, hands Home's own composer the caret instead (`newTask.homeAsks`). */
   onNewTask: () => void;
   /** New task with a repository already chosen in the dialog: what a repository group's + asks. */
@@ -866,8 +819,8 @@ export interface TasksControl {
   onLeaveRouted: () => void;
   /** Asks the host to bind no task, as arriving on Home does (`places/place-binding.ts`); no door of its own. */
   onUnbindTask: () => void;
-  /** The options a surface renaming a task holds its own mutation over (`taskRenameMutation`). */
-  renameTask: TaskRenameMutation;
+  /** The tasks the tab draws as they stand at the call, names being typed among them, which a row write reads its rows off (`task-row-doors.ts`). */
+  drawnTasks: () => TasksView;
   /**
    * Draws a name being typed for a task everywhere the task is named, before
    * any of it is saved, or none, which draws its saved name again.
@@ -918,12 +871,6 @@ export interface TasksControl {
    * service refuses one.
    */
   onWriteSections: (writes: readonly TaskSectionWrite[]) => void;
-  /** Deletes a task, which ends its call and returns to the home page if it is the open one; answers whether it was deleted. */
-  onDeleteTask: (taskId: string) => Promise<ActionResult>;
-  /** The same delete, as a question asking it first holds its own mutation over it. */
-  deleteTask: TaskDeleteMutation;
-  /** Several deletes at once, as a selection's question holds its own mutation over them. */
-  deleteTasks: TasksDeleteMutation;
   /**
    * Steps back one layer, the window's Escape, answering whether there was one
    * to step back from: a side panel filling the window back beside the
@@ -1091,63 +1038,6 @@ const PARENT_REMOVED_NOTE = "Parent removed";
 /** What the toast says once a block is removed, offering Undo. */
 const BLOCK_REMOVED_NOTE = "Relation removed";
 
-/** What ⌘Z's toast calls a task's rename it takes back or puts back. */
-const TASK_RENAMED_NOTE = "Task renamed";
-
-/** A task's rename as a mutation asks it: the task, and the name already trimmed and changed. */
-interface TaskRenameAsk {
-  readonly taskId: string;
-  readonly name: string;
-}
-
-/**
- * A task's rename as each surface renaming one holds it, a mutation of its
- * own over these options: sent through `send`, drawn under the new name at
- * once, and under its old name again by the host where the service refuses,
- * answering whether it was renamed. A rename the service kept is ⌘Z's to
- * take back, through `doors`; none where nothing is drawn to take back.
- */
-export function taskRenameMutation(
-  send: (asked: TaskRenameAsk) => Promise<boolean>,
-  doors: RowDoors<TaskRows, typeof ROW_WRITE.TASK_RENAME.kind> | undefined,
-) {
-  return mutationOptions({
-    mutationKey: [ROW_WRITE.TASK_RENAME.kind],
-    mutationFn: send,
-    onMutate: (asked) =>
-      doors === undefined
-        ? undefined
-        : pressRows(ROW_WRITE.TASK_RENAME, doors, [
-            { id: asked.taskId, after: { name: asked.name } },
-          ]),
-    onSuccess: (renamed, _asked, pressed) => {
-      if (renamed) pressed?.keep(TASK_RENAMED_NOTE);
-    },
-  });
-}
-
-/** A task's rename as a surface holds it (`taskRenameMutation`). */
-type TaskRenameMutation = ReturnType<typeof taskRenameMutation>;
-
-/** A task's delete as each place asking it holds its own mutation over it, run through `run`, answering whether it was deleted. */
-export function taskDeleteMutation(run: (taskId: string) => Promise<ActedResult>) {
-  return mutationOptions({ mutationKey: [ACT_KIND.TASKS_DELETE], mutationFn: run });
-}
-
-/** A task's delete, as a place asking it holds it. */
-type TaskDeleteMutation = ReturnType<typeof taskDeleteMutation>;
-
-/** Several tasks deleted at once, as a selection's question holds its own mutation over them, each through `run`, answering each in the order asked. */
-export function tasksDeleteMutation(run: (taskId: string) => Promise<ActedResult>) {
-  return mutationOptions({
-    mutationKey: [ACT_KIND.TASKS_DELETE],
-    mutationFn: (taskIds: readonly string[]) => Promise.all(taskIds.map(run)),
-  });
-}
-
-/** Several tasks deleted at once, as a selection's question holds it. */
-type TasksDeleteMutation = ReturnType<typeof tasksDeleteMutation>;
-
 /** A task moved to another workspace, and whether a refusal goes unsaid, as the Move dialog says it under its list. */
 interface TaskMoveAsk {
   readonly taskId: string;
@@ -1162,13 +1052,6 @@ export function taskMoveMutation(run: (asked: TaskMoveAsk) => Promise<boolean>) 
 
 /** A task's move, as a place asking it holds it. */
 type TaskMoveMutation = ReturnType<typeof taskMoveMutation>;
-
-/** How a task's rename is asked and read back, its refusal the answer that it was not renamed. */
-export const TASK_RENAME_SHAPE: RenameShape<boolean, TaskRenameAsk> = {
-  ask: (taskId, name) => ({ taskId, name }),
-  asked: ({ taskId, name }) => ({ subjectId: taskId, name }),
-  refused: (renamed) => !renamed,
-};
 
 /** What ⌘Z's toast calls a task's pin it takes back or puts back, by what was asked. */
 const TASK_MARKED_NOTES = {
@@ -1323,15 +1206,6 @@ function backNote(workspace: string): string {
   return `Back to ${workspace}`;
 }
 
-/** Why a delete the service did not carry was refused. */
-const DELETE_REFUSED_NOTE = "The task could not be deleted. Try again.";
-
-/** What a delete the service did not carry answers, so the task stays and says why. */
-const DELETE_REFUSED: ActionResult = {
-  status: ACTION_RESULT_STATUS.REJECTED,
-  reason: DELETE_REFUSED_NOTE,
-};
-
 /*
  * What the Inbox holds, by workspace. Main reads what waits across every
  * task the account can reach, and the window lists one workspace at a time,
@@ -1411,12 +1285,6 @@ export function useTasksTab(input: {
   inboxWaiting: readonly AppInboxTask[];
   /** Every task main says holds an inbox item, waiting or settled. */
   inboxTasks: readonly AppInboxTaskHolding[];
-  /** What main says waits on the developer from agents with no task. */
-  inboxTaskless: readonly AppInboxTasklessItem[];
-  /** Every agent with no task main says holds an inbox item, waiting or settled. */
-  inboxAgents: readonly AppInboxAgentHolding[];
-  /** The newest run of each of the account's own automations main says failed to start lately. */
-  failedRuns: readonly AccountFailedRun[];
   /** Opens Settings on its Integrations page, where an agent's MCP server is connected. */
   onOpenIntegrations: () => void;
   /** Opens Settings on its Agents page at the provider's harness row, where the developer's key for it is. */
@@ -1454,14 +1322,10 @@ export function useTasksTab(input: {
   const queryClient = useQueryClient();
   const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
   const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
-  const { mutateAsync: sendTaskRename } = useMutation(actMutation(ROW_WRITE.TASK_RENAME.kind));
-  const { mutateAsync: sendTaskPin } = useMutation(actMutation(ROW_WRITE.TASK_PIN.kind));
   const { mutateAsync: sendRepositoryPin } = useMutation(
     actMutation(ACT_KIND.TASKS_PIN_REPOSITORY),
   );
-  const { mutateAsync: sendAgentPin } = useMutation(actMutation(ROW_WRITE.AGENT_PIN.kind));
   const { mutateAsync: sendSections } = useMutation(actMutation(ACT_KIND.TASKS_WRITE_SECTION));
-  const { mutateAsync: sendStandingRow } = useMutation(actMutation(ROW_WRITE.TASK_STANDING.kind));
   const { mutateAsync: sendTaskRepository } = useMutation(
     actMutation(ACT_KIND.TASKS_SET_REPOSITORY),
   );
@@ -1757,25 +1621,13 @@ export function useTasksTab(input: {
     [inboxWaiting, inboxTasks, tasks.tasks, listedWorkspaceId],
   );
   const signedIn = fixture !== undefined || input.signedIn;
-  // The account New workspace's cards were opened for, which alone they stand for.
-  const [founding, setFounding] = useState<{ accountId: string | undefined } | undefined>(
-    undefined,
-  );
-  // A sign-out, or another account, puts the cards away for good, so the same account signing in again does not find them open.
-  if (founding !== undefined && (!signedIn || founding.accountId !== input.accountId)) {
-    setFounding(undefined);
-  }
   const page = tasksPage(tasks);
   // The open task's description is held whenever a task is open, so a task held lately draws its description in
   // its first frame, and one never held reads; a name being typed draws over it as over the list.
   const heldDescription = useQuery(descriptionDocumentQuery(viewed.activeTaskId));
   const heldDescriptionRows = heldDescription.data;
   const heldDescriptionFailed = heldDescription.isError;
-  const { mutate: retryDescriptionAct } = useMutation(descriptionDocumentRetryMutation());
   const openedTaskId = viewed.activeTaskId;
-  const retryDescription = useCallback(() => {
-    if (openedTaskId !== undefined) retryDescriptionAct({ taskId: openedTaskId });
-  }, [retryDescriptionAct, openedTaskId]);
   const region = useMemo(
     () =>
       renamedRegion(
@@ -1812,7 +1664,6 @@ export function useTasksTab(input: {
       ? liveAgents
       : undefined,
     listedPullRequests: tasks.agentPullRequests,
-    modeOf: (planId) => tasks.tasks.find((task) => task.id === planId)?.mode,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,
@@ -1843,18 +1694,15 @@ export function useTasksTab(input: {
   );
   mainRef.current = mainTabs;
   // A task opens on its agents, so one with no agent's tab standing, once its agents are read,
-  // opens a new agent's draft, its composer ready; one that starts none of its own, an archived
-  // task's or a pilot's, and any in a narrow room, shows its details instead. Note that the draft
+  // opens a new agent's draft, its composer ready; an archived task, and any in a narrow room,
+  // shows its details instead. Note that the draft
   // is not chosen but stands as the column's last tab, which it falls to, so it is not counted
   // viewed: an agent coming back, as a refused archive brings it, is shown again over it.
   const columnEmpty =
     viewed.activeTaskId !== undefined &&
     agents.agentIds !== undefined &&
     mainTabs.tab === undefined;
-  const opensDraft =
-    input.room !== SHELL_ROOM.NARROW &&
-    agents.onUnarchive === undefined &&
-    startsOwnAgents(agents.mode);
+  const opensDraft = input.room !== SHELL_ROOM.NARROW && agents.onUnarchive === undefined;
   const fillColumn = useSteadyDoor(() => {
     if (opensDraft) agents.onNewDraft();
     else mainTabs.onChoose(MAIN_TAB.OVERVIEW);
@@ -2579,49 +2427,19 @@ export function useTasksTab(input: {
     if (taskId !== boundFor) select(taskId, true);
   };
 
-  // A fixture's tasks are deleted nowhere, as they are read from nowhere. A
-  // delete that landed says nothing, since the task leaving the list says it;
-  // a refusal is said where the question that asked it stands, or in a toast
-  // where the task leaving took it away (`use-refusal-heard.ts`).
-  const sendDeleteTask = async (taskId: string): Promise<ActedResult> => {
-    if (fixture !== undefined) return DELETE_REFUSED;
-    const deleted = await askKept(sendAct(ACT_KIND.TASKS_DELETE, { taskId }));
-    if (deleted.kept) return { status: ACTION_RESULT_STATUS.ACCEPTED };
-    return { ...DELETE_REFUSED, cause: deleted.cause };
-  };
-  const deleteTaskOptions = taskDeleteMutation(sendDeleteTask);
-  const { mutateAsync: deleteTask } = useMutation(deleteTaskOptions);
-
   // The tasks the tab draws as they stand at each call, and each row write's
-  // mutation, which ⌘Z reads a press's rows and sends its writes through (`undo-stack.ts`).
+  // doors, which ⌘Z reads a press's rows and sends its writes through (`undo-stack.ts`).
   const drawnTasks = useRef(tasks);
   drawnTasks.current = tasks;
-  const drawnRows = (): TaskRows => ({
-    tasks: drawnTasks.current,
-    held: appStateIn(queryClient)?.[LIVE_READ.DESCRIPTION_DOCUMENT],
-  });
-  const renameDoors: RowDoors<TaskRows, typeof ROW_WRITE.TASK_RENAME.kind> = {
-    rows: drawnRows,
-    send: sendTaskRename,
-  };
-  const taskPinDoors: RowDoors<TaskRows, typeof ROW_WRITE.TASK_PIN.kind> = {
-    rows: drawnRows,
-    send: sendTaskPin,
-  };
-  const agentPinDoors: RowDoors<TaskRows, typeof ROW_WRITE.AGENT_PIN.kind> = {
-    rows: drawnRows,
-    send: sendAgentPin,
-  };
-  const standingDoors: RowDoors<TaskRows, typeof ROW_WRITE.TASK_STANDING.kind> = {
-    rows: drawnRows,
-    send: sendStandingRow,
-  };
-
-  // A fixture's tasks are renamed nowhere, as they are read from nowhere.
-  const renameTask =
-    fixture === undefined
-      ? taskRenameMutation((asked) => sendAct(ROW_WRITE.TASK_RENAME.kind, asked), renameDoors)
-      : taskRenameMutation(() => Promise.resolve(false), undefined);
+  const drawnNow = useCallback(() => drawnTasks.current, []);
+  const taskPinDoors = useTaskRowDoors(ROW_WRITE.TASK_PIN.kind, drawnNow);
+  const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind, drawnNow);
+  const standingDoors = useTaskRowDoors(ROW_WRITE.TASK_STANDING.kind, drawnNow);
+  const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK, drawnNow);
+  const parentDoors = useTaskRowDoors(ACT_KIND.TASKS_SET_PARENT, drawnNow);
+  const sendTaskPin = taskPinDoors.send;
+  const sendAgentPin = agentPinDoors.send;
+  const sendStandingRow = standingDoors.send;
 
   // The open task as it stands when a move is answered, which may be
   // another than the one open when it was pressed.
@@ -2998,14 +2816,6 @@ export function useTasksTab(input: {
   // Remove relation and Remove parent ask nothing, since either can be added
   // back: once the service keeps it, ⌘Z and its toast's Undo add it again,
   // while the task still stands as the removal left it (`undo-stack.ts`).
-  const blockDoors: RowDoors<TaskRows, typeof ACT_KIND.TASKS_BLOCK> = {
-    rows: drawnRows,
-    send: sendBlock,
-  };
-  const parentDoors: RowDoors<TaskRows, typeof ACT_KIND.TASKS_SET_PARENT> = {
-    rows: drawnRows,
-    send: sendParent,
-  };
   const removeTaskBlock = (taskId: string, relation: TaskBlockRelation, otherId: string) => {
     if (fixture !== undefined) return;
     void pressWrite(RELATION_WRITE.BLOCK_REMOVAL, blockDoors, { taskId, relation, otherId });
@@ -3055,14 +2865,6 @@ export function useTasksTab(input: {
     workspaceId: string,
     told?: { readonly quiet: boolean },
   ): Promise<boolean> => sendTaskMove({ taskId, workspaceId, quiet: told?.quiet === true });
-
-  // A fixture's tasks are read from nowhere, so an edit of one is never saved.
-  const descriptionEdit = (taskId: string) =>
-    descriptionEditMutation(taskId, (request) =>
-      fixture === undefined
-        ? sendAct(ACT_KIND.TASKS_EDIT, { taskId, edit: request })
-        : Promise.resolve({ failure: TASK_CALL_FAILURE.UNANSWERED }),
-    );
 
   // The chip's menu stands on the open task's toolbar, so another task's is
   // opened first; the ask is counted so each press opens it again.
@@ -3307,7 +3109,6 @@ export function useTasksTab(input: {
       ...(from.runsOn === undefined || from.handed !== undefined
         ? undefined
         : { runsOn: from.runsOn }),
-      ...(from.mode === undefined ? undefined : { mode: from.mode }),
       ...(from.relations === undefined || from.relations.length === 0
         ? undefined
         : { relations: from.relations }),
@@ -4495,23 +4296,8 @@ export function useTasksTab(input: {
     listedAgents,
     pendingTasks,
     workspaces: viewed.workspaces,
-    workspacesFailed: viewed.workspacesStatus === TASKS_READ.FAILED,
-    // A failed read is taken as stale, so the refresh reads the workspaces again at once.
-    onRetryWorkspaces: () => refreshTasks(),
     workspace: listedWorkspace,
     onChooseWorkspace: chooseWorkspace,
-    newWorkspace: {
-      open: signedIn && founding !== undefined && founding.accountId === input.accountId,
-      // Note that the cards take the window in the page's place with no address of their own, so a page holding unsaved
-      // work asks first inside `arrive`, as leaving it does, and they open once Leave is pressed.
-      onOpen: () => placeLeave.arrive(NOTHING, () => setFounding({ accountId: input.accountId })),
-      onClose: () => setFounding(undefined),
-    },
-    onOpenWorkspaceSettings: () =>
-      input.onOpenSettings({
-        page: SETTINGS_VIEW.WORKSPACE,
-        ...(listedWorkspace === undefined ? undefined : { workspaceId: listedWorkspace.id }),
-      }),
     // A workspace left lands the window on the account's own workspace's
     // Home, since nothing of the one left is the reader's to show any more.
     // Note that it lists the workspace rather than switching to it, because a
@@ -4530,7 +4316,6 @@ export function useTasksTab(input: {
     listRead: tasks.listStatus === TASKS_READ.READY,
     region,
     copy: { onPress: pressCopy },
-    descriptionEdit,
     mainTabs: { ...mainTabs, onClose: closeColumnTab },
     sidePanel: { ...sidePanel, ...panelWays },
     unreadTabs,
@@ -4588,9 +4373,6 @@ export function useTasksTab(input: {
     inbox: input.inboxWaiting,
     inboxShown: shownInbox,
     inboxTasks: input.inboxTasks,
-    inboxTaskless: input.inboxTaskless,
-    inboxAgents: input.inboxAgents,
-    failedRuns: input.failedRuns,
     onThreadsShown: setThreadsShown,
     // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {
@@ -4711,7 +4493,6 @@ export function useTasksTab(input: {
       });
     },
     onRetryList: () => refreshTasks(),
-    onRetryDocument: retryDescription,
     onNewTask: newTask,
     onNewTaskIn: (repository) => newTaskWith({ repository }),
     onNewRelatedTask: (taskId, kind) => {
@@ -4756,7 +4537,7 @@ export function useTasksTab(input: {
     onUnbindTask: unbindTask,
     atHome: homeOpen && boundFor === undefined,
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
-    renameTask,
+    drawnTasks: drawnNow,
     onDraftName: draftName,
     onMarkTask: (taskId, mark) => markTask(taskId, mark),
     onSettleTasks: settleTasks,
@@ -4769,9 +4550,6 @@ export function useTasksTab(input: {
     liveAgents,
     listedPullRequests: tasks.agentPullRequests,
     onMovePins: movePins,
-    onDeleteTask: deleteTask,
-    deleteTask: deleteTaskOptions,
-    deleteTasks: tasksDeleteMutation(sendDeleteTask),
     back: escapeTask,
     placeLeave,
   });

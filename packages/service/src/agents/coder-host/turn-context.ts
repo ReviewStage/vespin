@@ -47,7 +47,6 @@ export const TurnHandedSchema = Schema.Struct({
   experiments: Schema.optionalKey(
     Schema.Struct({
       descriptionsOn: Schema.Boolean,
-      pilotOn: Schema.Boolean,
       memoryOn: Schema.Boolean,
     }),
   ),

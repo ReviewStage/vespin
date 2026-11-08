@@ -10,7 +10,6 @@ import {
 } from "@repo/features/agent-wire";
 import { DEVICE_SETUP } from "@repo/features/device-agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
-import { TASK_MODE } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { act, createElement } from "react";
@@ -162,7 +161,6 @@ test("an agent on a device the service did not name is offered the cloud alone",
 
 test("Move to is offered nowhere while the agent works, where no Continue is offered, or with Bring your own host off", async () => {
   const working = { ...AT_REST, status: AGENT_STATUS.RUNNING };
-  const pilotsHelper = controlOf(AT_REST, { mode: TASK_MODE.PILOT });
   const otherTasks = controlOf(AT_REST, { agents: [] });
   const noStart = controlOf(AT_REST, { continueAgent: undefined });
   const archived = { ...AT_REST, archivedAt: 2 };
@@ -170,12 +168,11 @@ test("Move to is offered nowhere while the agent works, where no Continue is off
   assert.deepEqual(
     [
       moveTo(await menuOf(working, controlOf(working))),
-      moveTo(await menuOf(AT_REST, pilotsHelper)),
       moveTo(await menuOf(AT_REST, otherTasks)),
       moveTo(await menuOf(AT_REST, noStart)),
       moveTo(await menuOf(archived, controlOf(archived))),
       moveTo(await menuOf(AT_REST, controlOf(AT_REST), false)),
     ],
-    [undefined, undefined, undefined, undefined, undefined, undefined],
+    [undefined, undefined, undefined, undefined, undefined],
   );
 });

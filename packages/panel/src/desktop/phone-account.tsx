@@ -6,7 +6,7 @@ import { runAppCommand } from "../app-commands.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu, type MenuEntry } from "./action-menu.js";
 import { AccountAvatar, AccountHeading, useAccountMenuGroups } from "./sidebar-foot.js";
-import { workspaceMenuGroups } from "./workspace-switcher.js";
+import { useWorkspaceMenuDoors, workspaceMenuGroups } from "./workspace-switcher.js";
 
 /**
  * phone-account.tsx -- a phone's account: the reader's face in the start corner of a place's head, opening one menu of their workspaces and their account.
@@ -44,8 +44,9 @@ export function PhoneAccount({
       onSelect: () => runAppCommand(APP_COMMAND.SEND_FEEDBACK),
     },
   ];
+  const doors = useWorkspaceMenuDoors();
   const listed = tasks.workspace;
-  const workspaceGroups = listed === undefined ? [] : workspaceMenuGroups(listed, tasks);
+  const workspaceGroups = listed === undefined ? [] : workspaceMenuGroups(listed, tasks, doors);
   return (
     <>
       <IconButton

@@ -1,4 +1,4 @@
-import { accountGateOpen, SignInFailed } from "@repo/credentials";
+import { accountGateOpen, DeletionUnconfirmed, SignInFailed } from "@repo/credentials";
 import {
   ACCOUNT_STATUS,
   type AccountSnapshot,
@@ -11,7 +11,10 @@ import { carried, GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal } from "@repo/ga
 import { Effect, FiberSet, Result, type Scope, Stream } from "effect";
 import { AccountAccessClient, accountAccessHolder } from "./account-access-client.js";
 import { type AccountSession, DeletionSessionExpired } from "./account-source.js";
-import { ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL } from "./acts.js";
+import {
+  ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL,
+  ACCOUNT_DELETE_UNCONFIRMED_REFUSAL,
+} from "./acts.js";
 import type { AppAccessSlice, SessionReplayState } from "./app-state.js";
 import type { SettingsComposer } from "./compose-settings.js";
 import type { Composer } from "./composer.js";
@@ -333,10 +336,14 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         const deleted = yield* Effect.result(session.deleteEverywhere());
         if (Result.isFailure(deleted)) {
           report(`${DELETE_REFUSED}: ${deleted.failure.message}`);
-          // Note that a session too old to delete under is refused in a sentence of its own, since only a new sign-in answers it and the act's own says to try again.
-          return yield* deleted.failure instanceof DeletionSessionExpired
-            ? new ActRefused({ sentence: ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL })
-            : new RefusedRefusal({ message: DELETE_REFUSED });
+          // Note that a session too old to delete under, and a deletion the Mac could not confirm, are refused in sentences of their own, since the act's own says only that it failed.
+          if (deleted.failure instanceof DeletionSessionExpired) {
+            return yield* new ActRefused({ sentence: ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL });
+          }
+          if (deleted.failure instanceof DeletionUnconfirmed) {
+            return yield* new ActRefused({ sentence: ACCOUNT_DELETE_UNCONFIRMED_REFUSAL });
+          }
+          return yield* new RefusedRefusal({ message: DELETE_REFUSED });
         }
         const snapshot = deleted.success;
         // Only a deletion that landed stands recording down for the run.

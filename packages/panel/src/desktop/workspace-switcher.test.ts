@@ -3,12 +3,15 @@
 import assert from "node:assert/strict";
 import { MOTION_DELAY_MS } from "@repo/brand";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
+import { OpenSettingsProvider } from "../open-settings.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { NewWorkspaceOpener } from "./new-workspace.js";
 import { WorkspaceSwitcher } from "./workspace-switcher.js";
 
 /**
@@ -47,8 +50,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** The switcher over the tasks given, in sight or folded away. */
-function mount(tasks: Partial<TasksControl>) {
+/** The switcher over the tasks given, in sight or folded away, under the window's doors to New workspace and Settings. */
+function mount(
+  tasks: Partial<TasksControl>,
+  doors: { onNewWorkspace: () => void; onOpenSettings: (link: SettingsLink) => void } = {
+    onNewWorkspace: () => undefined,
+    onOpenSettings: () => undefined,
+  },
+) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -57,10 +66,18 @@ function mount(tasks: Partial<TasksControl>) {
     act(() =>
       root.render(
         withQueryClient(
-          createElement(WorkspaceSwitcher, {
-            tasks: { ...tasksControl(), ...tasks },
-            inSight,
-          }),
+          createElement(
+            OpenSettingsProvider,
+            { value: doors.onOpenSettings },
+            createElement(
+              NewWorkspaceOpener,
+              { value: doors.onNewWorkspace },
+              createElement(WorkspaceSwitcher, {
+                tasks: { ...tasksControl(), ...tasks },
+                inSight,
+              }),
+            ),
+          ),
         ),
       ),
     );
@@ -98,15 +115,19 @@ function choose(label: string): void {
   act(() => item.click());
 }
 
-test("the menu offers the workspaces, the listed one checked, New workspace, and Workspace settings, and nothing else", () => {
-  const pressed: string[] = [];
-  const page = mount({
-    workspaces: [PERSONAL, CONNECTED],
-    workspace: CONNECTED,
-    onChooseWorkspace: (workspaceId) => pressed.push(`choose:${workspaceId}`),
-    onOpenWorkspaceSettings: () => pressed.push("settings"),
-    newWorkspace: { open: false, onOpen: () => pressed.push("new"), onClose: () => undefined },
-  });
+test("the menu offers the workspaces, the listed one checked, New workspace, and Workspace settings, which opens Settings on the listed workspace's page, and nothing else", () => {
+  const pressed: unknown[] = [];
+  const page = mount(
+    {
+      workspaces: [PERSONAL, CONNECTED],
+      workspace: CONNECTED,
+      onChooseWorkspace: (workspaceId) => pressed.push(`choose:${workspaceId}`),
+    },
+    {
+      onNewWorkspace: () => pressed.push("new"),
+      onOpenSettings: (link) => pressed.push(link),
+    },
+  );
 
   open(page.switcher());
   const offered = menuItems().map((item) => [labelOf(item), item.getAttribute("aria-checked")]);
@@ -123,7 +144,11 @@ test("the menu offers the workspaces, the listed one checked, New workspace, and
     ["New workspace", null],
     ["Workspace settings", null],
   ]);
-  assert.deepEqual(pressed, [`choose:${PERSONAL.id}`, "new", "settings"]);
+  assert.deepEqual(pressed, [
+    `choose:${PERSONAL.id}`,
+    "new",
+    { page: SETTINGS_VIEW.WORKSPACE, workspaceId: CONNECTED.id },
+  ]);
 });
 
 test("a workspace's row hangs its card while the pointer rests on it: its name and who shares it", () => {

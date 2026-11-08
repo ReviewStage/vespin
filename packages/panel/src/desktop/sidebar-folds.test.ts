@@ -10,7 +10,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, handInboxTaskless, tasksControl } from "../testing/tasks-control.js";
 import { ArchivedAgents } from "./agent-archive.js";
 
 /**
@@ -187,6 +187,34 @@ test("a repository's header folds on its name, says its pin, counts its plans fo
 });
 
 test("the Inbox row counts what waits on a plan and what waits from an agent with no plan alike, and not a teammate's agent's with no plan, which waits on them", () => {
+  handInboxTaskless([
+    {
+      id: "item-2",
+      agentId: "agent-2",
+      title: "Quarantine the flaky test?",
+      postedAt: 2,
+      updatedAt: 2,
+      agentTitle: null,
+      agentModel: "anthropic/claude-opus-5.5",
+      automationId: null,
+      automationName: null,
+      repository: "acme/relay",
+      startedBy: "user-dean",
+    },
+    {
+      id: "item-3",
+      agentId: "agent-3",
+      title: "Bump the Node image?",
+      postedAt: 3,
+      updatedAt: 3,
+      agentTitle: null,
+      agentModel: "anthropic/claude-opus-5.5",
+      automationId: null,
+      automationName: null,
+      repository: "acme/relay",
+      startedBy: "user-charles",
+    },
+  ]);
   const page = mountSidebar(
     tasksControl({
       me: "user-dean",
@@ -195,34 +223,6 @@ test("the Inbox row counts what waits on a plan and what waits from an agent wit
         {
           taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
           items: [{ id: "item-1", agentId: "agent-1", title: "Retry?", postedAt: 1 }],
-        },
-      ],
-      inboxTaskless: [
-        {
-          id: "item-2",
-          agentId: "agent-2",
-          title: "Quarantine the flaky test?",
-          postedAt: 2,
-          updatedAt: 2,
-          agentTitle: null,
-          agentModel: "anthropic/claude-opus-5.5",
-          automationId: null,
-          automationName: null,
-          repository: "acme/relay",
-          startedBy: "user-dean",
-        },
-        {
-          id: "item-3",
-          agentId: "agent-3",
-          title: "Bump the Node image?",
-          postedAt: 3,
-          updatedAt: 3,
-          agentTitle: null,
-          agentModel: "anthropic/claude-opus-5.5",
-          automationId: null,
-          automationName: null,
-          repository: "acme/relay",
-          startedBy: "user-charles",
         },
       ],
     }),

@@ -3,12 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SHARED_FILES_DIRECTORY } from "@repo/agent-runner/pins";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import {
-  AGENT_BRIEF,
-  AGENT_KIND,
-  type AgentBrief,
-  type AgentKind,
-} from "@repo/features/agent-wire";
+import { AGENT_BRIEF, type AgentBrief } from "@repo/features/agent-wire";
 import { Schema } from "effect";
 import { test } from "vitest";
 import { standingFor } from "../../testing/agent-standing.js";
@@ -133,7 +128,6 @@ test("a local agent is told its folders on its machine, and no browser", () => {
         null,
         false,
         harness,
-        undefined,
         MAC,
       );
       const label = `${harness} ${repository ?? "no repository"}`;
@@ -150,7 +144,6 @@ test("a local agent is told its folders on its machine, and no browser", () => {
     null,
     false,
     CODER_HARNESS.CODEX,
-    undefined,
     MAC,
   );
   // Codex is pointed at the skills its member installed where the Mac keeps them.
@@ -180,7 +173,6 @@ test("a local agent is told it runs straight on its machine with full access to 
       null,
       false,
       CODER_HARNESS.CLAUDE_CODE,
-      undefined,
       HOST,
     );
     const label = repository ?? "no repository";
@@ -322,21 +314,14 @@ test("every agent on a task is told how to update its description, one handed a 
 
 test("an agent on a task with no repository names what it decided in its message, never in a pull request's description, which it opens none of", () => {
   const IN_PULL_REQUEST = "pull request's description";
-  const decided = (repository: string | null, kind: AgentKind) =>
+  const decided = (repository: string | null) =>
     coderInstructions(
       repository,
       AGENT_BRIEF.DESCRIPTION,
       TASK_ADDRESS,
       standingFor(repository),
-      undefined,
-      null,
-      false,
-      CODER_HARNESS.CLAUDE_CODE,
-      kind,
     ).includes(IN_PULL_REQUEST);
-  for (const kind of [AGENT_KIND.CODER, AGENT_KIND.PILOT]) {
-    assert.deepEqual([decided("Acme/Relay", kind), decided(null, kind)], [true, false], kind);
-  }
+  assert.deepEqual([decided("Acme/Relay"), decided(null)], [true, false]);
 });
 
 test("every agent on a task is told to keep its task's status with update_task, moving it back to in progress and on to done, a helper on its starter's task leaving it to the starter and one on a task of its own keeping that one's, and one on no task told of no status", () => {
@@ -604,7 +589,6 @@ test("with Memory off the instructions say nothing of the workspace's memory; wi
       null,
       false,
       CODER_HARNESS.CLAUDE_CODE,
-      AGENT_KIND.CODER,
     );
     assert.ok(!off.includes("## The workspace's memory"), brief);
     assert.ok(!off.includes(`\`${AGENT_TOOL.SAVE_MEMORY}\``), brief);
@@ -639,7 +623,6 @@ test("with Task descriptions off the instructions say nothing of a description: 
         null,
         false,
         CODER_HARNESS.CLAUDE_CODE,
-        AGENT_KIND.CODER,
       );
     const on = told(true);
     const off = told(false);
@@ -667,76 +650,4 @@ test("with Task descriptions off the instructions say nothing of a description: 
     DESCRIPTION_WORDS.filter((words) => !planned.includes(words)),
     [],
   );
-});
-
-test("with Task descriptions off a pilot plans on a page it shows, says a task is too small in its thread, and starts each child task's agent with its spec as its prompt, naming no description", () => {
-  const PILOT_DESCRIPTION_WORDS = [
-    `\`${AGENT_TOOL.EDIT_DESCRIPTION}\``,
-    "your task's description",
-    "so its description is its brief",
-    "Change a child task's description",
-  ];
-  const told = (descriptionsOn: boolean) =>
-    coderInstructions(
-      "Acme/Relay",
-      AGENT_BRIEF.PROMPT,
-      TASK_LINK,
-      standingFor("Acme/Relay", { descriptions: descriptionsOn }),
-      undefined,
-      null,
-      false,
-      CODER_HARNESS.CLAUDE_CODE,
-      AGENT_KIND.PILOT,
-    );
-  const on = told(true);
-  const off = told(false);
-
-  assert.deepEqual(
-    PILOT_DESCRIPTION_WORDS.filter((words) => !on.includes(words)),
-    [],
-  );
-  assert.deepEqual(
-    PILOT_DESCRIPTION_WORDS.filter((words) => off.includes(words)),
-    [],
-  );
-  assert.ok(off.includes(`Write your plan as a page with \`${AGENT_TOOL.SHOW_PAGE}\``));
-  assert.ok(off.includes("in the thread that asks for your go"));
-  assert.ok(off.includes("a `prompt` carrying its full spec from the plan page"));
-});
-
-/** A pilot's instructions, recorded byte for byte: an agent of kind pilot, handed a prompt, on a task and a repository. */
-const PILOT_PATH = fileURLToPath(
-  new URL("../../../fixtures/coder-instructions/pilot.json", import.meta.url),
-);
-
-/** A pilot's instructions as its session composes them. */
-function pilotInstructions(): string {
-  return coderInstructions(
-    "Acme/Relay",
-    AGENT_BRIEF.PROMPT,
-    TASK_LINK,
-    standingFor("Acme/Relay"),
-    undefined,
-    null,
-    false,
-    CODER_HARNESS.CLAUDE_CODE,
-    AGENT_KIND.PILOT,
-  );
-}
-
-// Note that the golden is written again only under APP_UPDATE_FIXTURES=1, and the diff explained in the PR.
-if (process.env.APP_UPDATE_FIXTURES === "1") {
-  writeFileSync(PILOT_PATH, `${JSON.stringify({ pilot: pilotInstructions() }, null, 2)}\n`);
-}
-
-const PILOT_GOLDEN = Schema.decodeUnknownSync(Schema.Struct({ pilot: Schema.String }))(
-  JSON.parse(readFileSync(PILOT_PATH, "utf8")),
-);
-
-test("a pilot's instructions are the golden's, byte for byte: its own job in place of a coder's, and a coder's publishing only for a task too small to split", () => {
-  const pilot = pilotInstructions();
-  assert.equal(pilot, PILOT_GOLDEN.pilot);
-  assert.ok(pilot.includes("Too small to split; I'll do it myself"));
-  assert.ok(pilot.includes("## Doing a task yourself"));
-  assert.ok(!pilot.includes("makes a task of its own, for the developer"));
 });

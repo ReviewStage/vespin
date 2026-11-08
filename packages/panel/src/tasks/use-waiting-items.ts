@@ -8,6 +8,7 @@ import {
   taskHoldings,
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";
+import { useInboxAgents } from "./use-inbox-slices.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -51,16 +52,14 @@ function useListedInboxGroups(tasks: TasksControl): {
     () => inboxTasks.filter((holding) => listed.some((task) => task.id === holding.taskId)),
     [inboxTasks, listed],
   );
+  const agents = useInboxAgents();
   const read = useHolderInboxItems(
-    useMemo(
-      () => [...taskHoldings(holdings), ...agentHoldings(tasks.inboxAgents)],
-      [holdings, tasks.inboxAgents],
-    ),
+    useMemo(() => [...taskHoldings(holdings), ...agentHoldings(agents)], [holdings, agents]),
   );
   const groups = inboxGroups(read.items, {
     tasks: holdings,
     listed,
-    agents: tasks.inboxAgents,
+    agents,
     workspaceId: tasks.workspace?.id,
   });
   return { groups, read };

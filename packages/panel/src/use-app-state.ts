@@ -1,6 +1,6 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { TasksView } from "@repo/features/tasks-view";
+import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import {
   type AppStateDelivery,
   type AppStateSnapshot,
@@ -277,6 +277,9 @@ export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
 export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
+export const selectInboxTaskless = (state: AppStateSnapshot) => state.inbox.taskless;
+export const selectInboxAgents = (state: AppStateSnapshot) => state.inbox.agents;
+export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 export const selectMacCommands = (state: AppStateSnapshot) => state.macCommands;
@@ -298,6 +301,10 @@ export const selectListedTasks = (state: AppStateSnapshot): TasksView =>
 /** Whether a fixture run's synthetic tasks stand in for the account's, so its writes go nowhere. */
 export const selectFixtureStaged = (state: AppStateSnapshot): boolean =>
   loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
+
+/** Whether the last read of the workspaces the window lists did not land, those held still drawn. */
+export const selectWorkspacesFailed = (state: AppStateSnapshot): boolean =>
+  selectListedTasks(state).workspacesStatus === TASKS_READ.FAILED;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;

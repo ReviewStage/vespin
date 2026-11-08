@@ -387,22 +387,27 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
       Effect.gen(function* () {
         const userId = yield* openUser;
         const task = yield* startTask(userId, { name: "Teammate invitations" });
-        const pilot = yield* openAgent(userId, task.id);
+        const finisher = yield* openAgent(userId, task.id);
         const teammate = yield* openAgent(userId, task.id);
         yield* turnOf(teammate, TURN_STATUS.SETTLED);
-        const answering = yield* turnOf(pilot, TURN_STATUS.RUNNING);
+        const answering = yield* turnOf(finisher, TURN_STATUS.RUNNING);
 
-        // The pilot's update_task moves the task to Done as the pilot, for its member.
+        // The agent's update_task moves the task to Done as that agent, for its member.
         yield* updateTask(userId, task.id, { status: TASK_STATUS.DONE }, undefined, {
-          archivedBy: { by: AGENT_ARCHIVER.AGENT, userId, agentId: pilot.id, agentName: "Pilot" },
+          archivedBy: {
+            by: AGENT_ARCHIVER.AGENT,
+            userId,
+            agentId: finisher.id,
+            agentName: "Finisher",
+          },
           idle: idleStandingAgents,
         });
         assert.equal(yield* archived(userId, teammate.id), true);
-        assert.equal(yield* archived(userId, pilot.id), false);
+        assert.equal(yield* archived(userId, finisher.id), false);
 
         yield* settle(answering);
-        yield* settleTaskAfterTurn(userId, task.id, pilot.id);
-        assert.equal(yield* archived(userId, pilot.id), false);
+        yield* settleTaskAfterTurn(userId, task.id, finisher.id);
+        assert.equal(yield* archived(userId, finisher.id), false);
       }),
   );
 });

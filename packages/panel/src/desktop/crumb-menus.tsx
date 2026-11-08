@@ -6,9 +6,10 @@ import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
 import { renameWrite } from "../rename-write.js";
 import { agentName } from "../tasks/agent-model.js";
+import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
-import { TASK_RENAME_SHAPE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
@@ -47,7 +48,7 @@ export function TaskCrumbMenu({
   children: (held: CrumbHeld) => React.ReactNode;
 }): React.JSX.Element {
   const menu = useMenu(tasks.shown);
-  const renaming = useMutation(tasks.renameTask);
+  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const unread = useUnreadTasks({ staged: false })(task);

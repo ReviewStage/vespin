@@ -6,11 +6,10 @@ import {
   readAgentRepositories,
   recordAgentRepositoryHead,
 } from "@repo/database/models/agent-repositories";
-import { listAgents, readAgent, readAgentByKey } from "@repo/database/models/agent-store";
+import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
-import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import {
   type QueuedAgentTurn,
   QueuedTurnListener,
@@ -26,7 +25,6 @@ import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { EXPERIMENT } from "@repo/settings";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
@@ -71,8 +69,8 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * starts one as well, an account outside it starts nothing, and a
  * repository the workspace's installation does not reach is refused before
  * the harness is asked, and a Start whose session never opened leaves no agent. An agent started on a task moves it into progress from the
- * backlog or to do, and on a task worked in pilot mode the first is its pilot,
- * refused to an account with Pilot off. The agent's sessions are a fake, GitHub a script,
+ * backlog or to do, and on a task stored in pilot mode it is a coder. The
+ * agent's sessions are a fake, GitHub a script,
  * the catalog fixed, and the store PGlite. Synthetic accounts and words
  * throughout.
  */
@@ -517,57 +515,25 @@ it.layer(SUITE)("an agent started on a task", (it) => {
       }),
   );
 
-  /** A task of the workspace worked in pilot mode, as the composer's Pilot starts one. */
-  const pilotTask = (owner: string, workspaceId: string) =>
+  it.effect("on a task stored in pilot mode with no agent, a Start makes a coder", () =>
     Effect.gen(function* () {
+      const { owner, workspaceId } = yield* openConnectedWorkspace;
       const made = yield* createTask(owner, {
         organizationId: workspaceId,
         name: "Invites",
         repository: RELAY_REPOSITORY,
       });
-      const db = yield* Database;
-      yield* db.update(task).set({ mode: TASK_MODE.PILOT }).where(eq(task.id, made.id));
-      return made;
-    });
-
-  it.effect(
-    "on a task worked in pilot mode, the first Start makes its pilot and the next a coder",
-    () =>
-      Effect.gen(function* () {
-        const { owner, workspaceId } = yield* openConnectedWorkspace;
-        yield* setWorkspaceExperiment({
-          organizationId: workspaceId,
-          experiment: EXPERIMENT.PILOT,
-          on: true,
-          by: owner,
-        });
-        const piloted = yield* pilotTask(owner, workspaceId);
-        const { agentSessions } = fakeAgentSessions();
-
-        const first = yield* startAgent(agentSessions, owner, taskAsk(piloted.id)).pipe(
-          Effect.provide(services),
-        );
-        const next = yield* startAgent(agentSessions, owner, taskAsk(piloted.id)).pipe(
-          Effect.provide(services),
-        );
-
-        assert.deepEqual([first.agent.kind, next.agent.kind], [AGENT_KIND.PILOT, AGENT_KIND.CODER]);
-      }),
-  );
-
-  it.effect("refuses a pilot task's pilot to an account with Pilot off, and makes no agent", () =>
-    Effect.gen(function* () {
-      const { owner, workspaceId } = yield* openConnectedWorkspace;
-      const piloted = yield* pilotTask(owner, workspaceId);
+      // Note that nothing writes pilot mode now, so the task is made one in place, as a release before stored it.
+      yield* Database.use((db) =>
+        db.update(task).set({ mode: TASK_MODE.PILOT }).where(eq(task.id, made.id)),
+      );
       const { agentSessions } = fakeAgentSessions();
 
-      const refused = yield* Effect.result(
-        startAgent(agentSessions, owner, taskAsk(piloted.id)).pipe(Effect.provide(services)),
+      const started = yield* startAgent(agentSessions, owner, taskAsk(made.id)).pipe(
+        Effect.provide(services),
       );
 
-      assert.ok(Result.isFailure(refused));
-      assert.deepEqual(refused.failure, HOSTED_REFUSAL.NOT_PERMITTED);
-      assert.deepEqual(yield* listAgents(owner, piloted.id), []);
+      assert.equal(started.agent.kind, AGENT_KIND.CODER);
     }),
   );
 });
