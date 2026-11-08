@@ -21,6 +21,9 @@ import { type PlaceLeave, type ShellLeaveAsk, usePlaceLeave } from "./place-leav
 const AUTOMATION = "/acme/automation/5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 const LIST = "/acme/automations";
 
+/** A door's landing that does nothing. */
+const NOTHING = (): void => undefined;
+
 const roots: Root[] = [];
 
 beforeEach(() => fakeAppPlatform(QUIET_PANEL));
@@ -207,24 +210,24 @@ test.each<[string, (window: ReturnType<typeof mount>) => void]>([
   },
 );
 
-test("Leave on a door to the place already standing keeps the page's ask, so the window's next move asks again", async () => {
-  const window = mount(memoryAt(AUTOMATION));
-  const landed: string[] = [];
+test.each<[string, (place: PlaceLeave) => void]>([
+  ["a door's move", (place) => place.arrive(() => place.stays(), NOTHING)],
+  // As a link to the automation being edited, which the window opens past an ask made up front (`app.tsx`'s `openAppLink`).
+  ["a link's leave asked up front", (place) => place.transitionalLeaveFirst(() => place.stays())()],
+])(
+  "Leave on %s to the place already standing keeps the page's ask, so the window's next move asks again",
+  async (_door, press) => {
+    const window = mount(memoryAt(AUTOMATION));
 
-  act(() =>
-    window.place().arrive(
-      () => window.place().stays(),
-      () => landed.push(AUTOMATION),
-    ),
-  );
-  await settleQueries();
-  act(() => window.asked[0]?.leave());
-  await settleQueries();
-  assert.deepEqual(landed, [AUTOMATION], "the door's landing runs on Leave");
-  assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
+    act(() => press(window.place()));
+    await settleQueries();
+    act(() => window.asked[0]?.leave());
+    await settleQueries();
+    assert.notEqual(window.shell.heard, undefined, "the shell still hears the ask");
 
-  act(() => window.history.push(LIST));
-  await settleQueries();
-  assert.equal(window.asked.length, 2, "the next move asks again");
-  assert.equal(window.history.location.pathname, AUTOMATION);
-});
+    act(() => window.history.push(LIST));
+    await settleQueries();
+    assert.equal(window.asked.length, 2, "the next move asks again");
+    assert.equal(window.history.location.pathname, AUTOMATION);
+  },
+);

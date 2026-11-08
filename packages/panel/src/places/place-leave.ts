@@ -58,8 +58,9 @@ export interface PlaceLeave {
   readonly stays: () => void;
   /**
    * Transitional: a door that changes the window's state before it navigates,
-   * asking first while an ask stands. Each door on it moves to a navigation
-   * the router's blocker holds, and the last one deletes it.
+   * asking first while an ask stands, whose Leave lets go of the ask unless
+   * what it did `stays` where the window stands. Each door on it moves to a
+   * navigation the router's blocker holds, and the last one deletes it.
    */
   readonly transitionalLeaveFirst: <Args extends readonly unknown[]>(
     leave: (...args: Args) => void,
@@ -171,9 +172,11 @@ export function usePlaceLeave(onStanding?: (ask: ShellLeaveAsk | undefined) => v
             leave(...args);
             return;
           }
+          // Note that a leave that opens the place already standing leaves no page, so the page's ask stands on.
           ask(() => {
-            release(ask);
+            stayed.current = false;
             pass(() => leave(...args));
+            if (!stayed.current) release(ask);
           }, NOTHING);
         },
     };
