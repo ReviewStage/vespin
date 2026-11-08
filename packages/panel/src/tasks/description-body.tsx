@@ -1053,15 +1053,12 @@ export interface DescriptionRoom {
 }
 
 /**
- * The open task's one rename door as its title reads it (`desktop-tasks.tsx`):
- * how many times Rename was asked for, each putting the caret in the title,
- * the name a refused rename asked for, which the title goes on drawing until
- * the next, and how the title's ⋯ asks.
+ * The open task's rename as its title reads it (`desktop-tasks.tsx`): the
+ * name a refused rename asked for, which the title goes on drawing until the
+ * next.
  */
 export interface TitleRename {
-  readonly asks: number;
   readonly asked: string | undefined;
-  readonly onBegin: () => void;
 }
 
 /**
@@ -1069,8 +1066,8 @@ export interface TitleRename {
  * byline's "Edited", on the description as it stands, and from a section's, on the
  * revision of the save it names. With `edit`, the text is edited whole in
  * place, and with `onRename` the title too, its words drawn as the task's
- * name through `onDraftName` as they are typed, and with `rename` the title's ⋯
- * offers Rename through the open task's door; without them the document is
+ * name through `onDraftName` as they are typed, and with `rename` the title
+ * draws the name a refused rename asked for; without them the document is
  * drawn read-only. A date chip in an editable description's words at rest opens
  * its picker where it stands, and a date changed there saves the description
  * through `edit` with the date written anew (`SectionDates`), as a task
@@ -1112,7 +1109,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   onRename?: ((name: string) => Promise<boolean>) | undefined;
   /** Draws the name typed into the title wherever the task is named, or none once it is left. */
   onDraftName?: ((name: string | undefined) => void) | undefined;
-  /** The open task's rename door, whose asks put the caret in the title. */
+  /** The open task's rename, whose refused name the title goes on drawing. */
   rename?: TitleRename | undefined;
   looks?: TaskLooks;
   /** What the task's own page does with its sections' links; without it, sections have none and mentions are words. */
@@ -1475,7 +1472,6 @@ export const DescriptionBody = memo(function DescriptionBody({
               entry={entry === EDITOR_PLACE.TITLE}
               editing={editing}
               alone={!documented}
-              renaming={rename?.asks ?? 0}
               actions={titleMenu}
               onRename={onRename}
               onDraft={onDraftName}

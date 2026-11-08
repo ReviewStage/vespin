@@ -434,29 +434,37 @@ function descriptionTitle(container: HTMLElement): HTMLElement | null {
   return container.querySelector<HTMLElement>('[role="textbox"][aria-label="Task name"]');
 }
 
-test("on a wide window the topbar's ⋯ › Rename puts the caret in the description's own title, and draws no phone's field", () => {
+/** The title bar's field over the task's name, which a wide window renames the task in. */
+function titleBarField(container: HTMLElement): HTMLInputElement | null {
+  return container.querySelector<HTMLInputElement>(
+    '.ui-toolbar-title-edit input[aria-label="Task name"]',
+  );
+}
+
+test("on a wide window the topbar's ⋯ › Rename edits the task's name in the title bar, where Return renames it and hands the focus back to the name", async () => {
   const page = mount(SHELL_ROOM.WIDE);
   chooseOverviewRename(page.container);
 
-  assert.ok(descriptionTitle(page.container), "the description's title is drawn");
-  assert.ok(
-    document.activeElement === descriptionTitle(page.container),
-    "the caret is in the description's title",
-  );
-  assert.equal(page.container.querySelector('input[aria-label="Task name"]'), null);
+  const field = titleBarField(page.container);
+  assert.ok(field, "the title bar's name is its field");
+  assert.equal(field.value, TASK.name);
+  assert.equal(document.activeElement, field);
+  field.value = "Invite teammates";
+  await act(async () => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  assert.deepEqual(page.told, [`rename ${TASK.id} Invite teammates`]);
+  assert.equal(titleBarField(page.container), null);
+  assert.ok(document.activeElement?.closest(".ui-toolbar-title-press"), "the name has the focus");
 });
 
-test("on a wide window whose column shows an agent, the rename ⌘K asks shows Overview and puts the caret in the description's title once it stands", () => {
+test("on a wide window whose column shows an agent, the rename ⌘K asks edits the name in the title bar and leaves the agent shown", () => {
   const page = mount(SHELL_ROOM.WIDE, false, undefined, false, true);
   page.renameFromPalette();
-  assert.deepEqual(page.told, [`column "${MAIN_TAB.OVERVIEW}"`]);
 
-  page.draw(false, undefined, undefined, false);
-
-  assert.ok(
-    document.activeElement === descriptionTitle(page.container),
-    "the caret is in the description's title",
-  );
+  assert.deepEqual(page.told, []);
+  assert.equal(document.activeElement, titleBarField(page.container));
 });
 
 /** A wide window's task whose renames are all refused, its name drawn as the title's words are typed, as the window draws a draft. */

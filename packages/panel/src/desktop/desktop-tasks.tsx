@@ -496,33 +496,21 @@ function DescriptionDocument({
   const taskId = region.kind === DOCUMENT_REGION.READY ? region.task.id : undefined;
   const renaming = useMutation(tasks.renameTask);
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
-  // The open task's one rename door, which its toolbar's ⋯, its title's ⋯,
-  // and ⌘K all ask. On a phone it opens the head's field; wider, it puts the
-  // caret in the description's own title, showing the description first where the panel
-  // hides it. Note that the title is asked once the description stands, because a
-  // title drawn afresh takes only the asks that come after it.
-  const [titleAsked, setTitleAsked] = useState(false);
-  const [titleAsks, setTitleAsks] = useState(0);
+  // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
+  const barRenaming = useMutation(tasks.renameTask);
+  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
   // The description is shown while the column is on Overview, with no panel filling the window over it.
   const descriptionShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
   const { onChoose: chooseColumnTab } = tasks.mainTabs;
-  useEffect(() => {
-    if (!titleAsked || !descriptionShown) return;
-    setTitleAsked(false);
-    setTitleAsks((count) => count + 1);
-  }, [titleAsked, descriptionShown]);
   // Overview shown, a panel filling the window over the column giving way, as a row opening a tab of the column does.
   const showOverview = useSteadyDoor(() => {
     if (tasks.sidePanel.fullScreen) tasks.sidePanel.onToggleFullScreen();
     chooseColumnTab(MAIN_TAB.OVERVIEW);
   });
+  // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
   const beginRename = useSteadyDoor(() => {
-    if (room === SHELL_ROOM.NARROW) {
-      rename.begin();
-      return;
-    }
-    if (!descriptionShown) showOverview();
-    setTitleAsked(true);
+    if (room === SHELL_ROOM.NARROW) rename.begin();
+    else barRename.begin();
   });
   useOfferTaskRename(taskId, beginRename);
   // A terminal shown hands the keys to the side panel, where it stands; an
@@ -738,10 +726,7 @@ function DescriptionDocument({
         ? Promise.resolve(true)
         : renaming.mutateAsync(TASK_RENAME_SHAPE.ask(taskId, name)).catch(() => false),
   );
-  const titleRename = useMemo<TitleRename>(
-    () => ({ asks: titleAsks, asked: rename.asked, onBegin: beginRename }),
-    [titleAsks, rename.asked, beginRename],
-  );
+  const titleRename = useMemo<TitleRename>(() => ({ asked: rename.asked }), [rename.asked]);
   const draftNameDoor = useSteadyDoor(
     opened === undefined
       ? undefined
@@ -1336,10 +1321,11 @@ function DescriptionDocument({
                         phone ? undefined : { shown: overviewShown, onToggle: toggleDetails }
                       }
                       descriptionMenu={phone ? undefined : descriptionMenu}
+                      rename={phone ? undefined : barRename}
                       shown={tasks.shown}
                       actions={
                         <>
-                          {rename.refused ? (
+                          {rename.refused || barRename.refused ? (
                             <FailureNote
                               failure={failureShown({
                                 surface: FAILURE_SURFACE.TASK_RENAME,

@@ -538,9 +538,7 @@ function boundTitle(element: HTMLElement): void {
  * again. Its words are the name's own but while they are typed, so a
  * refused rename puts the saved name back here and everywhere, unless words
  * were typed since it was asked for, which are the newest and are kept for
- * the next pause to ask for again. Each Rename chosen from the title's ⋯
- * puts the caret at its end, as ↑ from the text's first line does. Over
- * no text, as while Descriptions is off, Return and ↓ save it and select it as Esc
+ * the next pause to ask for again. Over no text, as while Descriptions is off, Return and ↓ save it and select it as Esc
  * does, since there is no text to go into.
  */
 export function EditableTitle({
@@ -548,7 +546,6 @@ export function EditableTitle({
   entry,
   editing,
   alone = false,
-  renaming = 0,
   actions,
   onRename,
   onDraft,
@@ -559,8 +556,6 @@ export function EditableTitle({
   editing: DescriptionEditing;
   /** Whether no text stands under the title to go into. */
   alone?: boolean;
-  /** How many times Rename was chosen; each change is an ask of its own. */
-  renaming?: number;
   /** The title's ⋯, at the end of its line. */
   actions?: ReactNode;
   /** Renames the task, answering whether the name was taken. */
@@ -590,13 +585,6 @@ export function EditableTitle({
   const asking = useRef(0);
   const markUnsaved = useMarkTitleUnsaved();
   const tellUnsaved = () => markUnsaved(typed.current || asking.current > 0);
-  // The Rename last answered, so only a newer one puts the caret here.
-  const renamed = useRef(renaming);
-  useEffect(() => {
-    if (renaming === renamed.current || text.current === null) return;
-    renamed.current = renaming;
-    caretAtEnd(text.current);
-  }, [renaming]);
   useLayoutEffect(() => {
     const element = text.current;
     if (element === null || name === echo.current) return;

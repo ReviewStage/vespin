@@ -182,7 +182,6 @@
   --spacing-inline-edit-lift: 3px;
   --spacing-inline-edit-reach: calc(-1 * var(--ui-space-8) - 1px);
   --radius-control-compact: calc(var(--ui-control-radius) - var(--ui-space-2));
-  --radius-inline-edit: calc(var(--ui-radius-6) - 1px);
   --shadow-selected-edge: inset 0 0 0 1px var(--ui-color-border-selected);
   /* A row's ring while its menu stands open (`--ui-color-border-menu-open`). */
   --shadow-menu-open-edge: inset 0 0 0 1px var(--ui-color-border-menu-open);

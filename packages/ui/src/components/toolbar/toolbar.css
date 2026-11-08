@@ -62,14 +62,16 @@
 
   /* Only the desktop's window is dragged by its bar, and what stands on the
      bar keeps its presses: the actions, a title that opens what it names,
-     a title holding the page's menu, and the buttons of a lead. */
+     a title holding the page's menu, a title being renamed, and the
+     buttons of a lead. */
   [data-ui-profile="desktop"] .ui-toolbar {
     -webkit-app-region: drag;
   }
 
   [data-ui-profile="desktop"] .ui-toolbar-actions,
   [data-ui-profile="desktop"] .ui-toolbar-title-press,
-  [data-ui-profile="desktop"] .ui-toolbar-title-menu {
+  [data-ui-profile="desktop"] .ui-toolbar-title-menu,
+  [data-ui-profile="desktop"] .ui-toolbar-title-edit {
     -webkit-app-region: no-drag;
   }
 

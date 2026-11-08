@@ -18,14 +18,11 @@ import {
   ErrorState,
   FILL_ELEMENT,
   Fill,
-  InlineEdit,
+  type InlineEditEnd,
   MoreButton,
   moreLabel,
   NOT_FOUND_THING,
   NotFound,
-  ONE_LINE_ELEMENT,
-  ONE_LINE_END,
-  OneLine,
   ProviderMark,
   SidePanelIcon,
   STATUS_TONE,
@@ -309,22 +306,15 @@ function AgentPageBar({
     section,
   });
   const { rename } = actions;
-  const title =
-    rename?.editing === true ? (
-      <OneLine as={ONE_LINE_ELEMENT.H1} end={ONE_LINE_END.ELLIPSIS} className="ui-toolbar-title">
-        <InlineEdit
-          value={rename.asked ?? label}
-          label={NAME_LABEL}
-          maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-          editing
-          onEnd={(edit) => {
-            rename.end(edit.value);
-          }}
-        />
-      </OneLine>
-    ) : (
-      label
-    );
+  const renaming = rename?.editing === true;
+  const title = renaming ? (rename.asked ?? label) : label;
+  const titleEdit = renaming
+    ? {
+        label: NAME_LABEL,
+        maxLength: AGENT_BOUNDS.MAX_TITLE_CHARS,
+        onEnd: (edit: InlineEditEnd) => rename.end(edit.value),
+      }
+    : undefined;
   // The agent's menu: a right-click on its name, or a phone's ⋯, which has no right-click to offer it on.
   const drawnMenu =
     menu.drawn === undefined ? null : (
@@ -367,6 +357,7 @@ function AgentPageBar({
         place="agent"
         start={<PhoneBack back={phone.back} />}
         title={title}
+        titleEdit={titleEdit}
         end={
           <>
             <MoreButton thing={ACTIONS_THING} {...menu.trigger()} />
@@ -380,6 +371,7 @@ function AgentPageBar({
     <>
       <Toolbar
         title={title}
+        titleEdit={titleEdit}
         trail={trail}
         titleMenu={{ contextMenu: menu.contextMenu(), keyMenu: menu.keyMenu }}
         actions={steps}
