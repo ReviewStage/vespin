@@ -200,7 +200,7 @@ function useScriptDialog(
           label="Script"
           description={
             repository === undefined
-              ? "Bash, run with sudo from the sandbox's home folder."
+              ? "Bash, run with sudo from /workspace."
               : "Bash, run from the repository's checkout."
           }
           error={replayMaskedError(form.refusal)}
