@@ -268,10 +268,15 @@ const findMemberByEmail = SqlSchema.findOneOption({
     ),
 });
 
+const MemberConnectionSchema = Schema.Struct({
+  userId: Schema.String,
+  connectSubject: Schema.String,
+});
+
 /** The Slack accounts the workspace's members connected themselves, of each member whose Slack id is not kept: never looked up, or missed. */
 const findUnresolvedConnections = SqlSchema.findAll({
   Request: Schema.String,
-  Result: Schema.Struct({ userId: Schema.String, connectSubject: Schema.String }),
+  Result: MemberConnectionSchema,
   execute: (organizationId) =>
     Database.use((db) =>
       db
@@ -740,10 +745,7 @@ export function slackMemberByEmail(
 }
 
 /** A Slack account a member connected themselves, by the subject Connect holds its grant under. */
-export interface SlackMemberConnection {
-  readonly userId: string;
-  readonly connectSubject: string;
-}
+export type SlackMemberConnection = typeof MemberConnectionSchema.Type;
 
 /** The Slack accounts the workspace's members connected under Settings › Integrations, of each member whose Slack id the bot does not keep. */
 export function slackUnresolvedConnections(

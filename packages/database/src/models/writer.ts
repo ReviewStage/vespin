@@ -74,12 +74,7 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { conversations, messages, turnlessUserLine, turns } from "../schemas/storage.js";
-import {
-  CONVERSATION_KIND,
-  MESSAGE_SENDER,
-  type MessageSender,
-  messageSenderSchema,
-} from "../storage-vocabulary.js";
+import { CONVERSATION_KIND, MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
 import { LOST_TURNS } from "./abandoned-turns.js";
 import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
 import { EpochMillisColumnSchema, InstantColumnSchema, nullable } from "./columns.js";
@@ -190,10 +185,7 @@ const toolsRefusingUnknownOutcome = (tools: ToolSet): Effect.Effect<readonly str
     (names) => names.filter((name) => name !== undefined),
   );
 
-export interface ConversationTarget {
-  readonly userId: string;
-  readonly conversationId: string;
-}
+export type ConversationTarget = typeof ConversationTargetSchema.Type;
 
 interface StoreWriterOptions {
   /** The catalog's `tool()` declarations by name: what a stored tool part may name, and what its input is held to. */
@@ -437,13 +429,7 @@ type AwaitingLineWritten = Result.Result<
 >;
 
 /** One of the developer's lines the agent's failed turn never took, as a resend of it hands it to its dispatch: the row, the id its runner names it back by, its parts, and who sent it. */
-export interface LostLine {
-  readonly id: string;
-  readonly clientId: string;
-  readonly parts: StoredUIMessage["parts"];
-  readonly sender: MessageSender | null;
-  readonly senderUserId: string | null;
-}
+export type LostLine = typeof LostLineSchema.Type;
 
 /** What resending lost lines did: the rows the runtime took, in order, and whether one it did not take, or whose hand-over ran past its deadline, stopped the resend there; or a refusal. */
 type LostLinesResent = Result.Result<
@@ -2114,15 +2100,17 @@ const takenLater = alias(messages, "taken_later");
  * (`noReceiptOfLine`) and a line typed into a call are left out, as the take
  * leaves them out.
  */
+const LostLineSchema = Schema.Struct({
+  id: Schema.String,
+  clientId: Schema.String,
+  parts: StoredPartsColumnSchema,
+  sender: Schema.NullOr(messageSenderSchema),
+  senderUserId: Schema.NullOr(Schema.String),
+});
+
 const findLostLines = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    clientId: Schema.String,
-    parts: StoredPartsColumnSchema,
-    sender: Schema.NullOr(messageSenderSchema),
-    senderUserId: Schema.NullOr(Schema.String),
-  }),
+  Request: ConversationTargetSchema,
+  Result: LostLineSchema,
   execute: (key) =>
     Database.use((db) =>
       db

@@ -30,10 +30,7 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
 export type TaskBlockEffect<A, E = never> = Effect.Effect<A, StoreFailure | E, DatabaseServices>;
 
 /** The two tasks a block joins: the blocker, and the task it blocks. */
-export interface TaskBlockPair {
-  readonly blockerTaskId: string;
-  readonly blockedTaskId: string;
-}
+export type TaskBlockPair = typeof PairSchema.Type;
 
 /** A task's blocks as its reader reads them, each task by its id, the earliest added first. */
 export interface TaskBlocks {

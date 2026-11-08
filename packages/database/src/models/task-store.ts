@@ -166,13 +166,7 @@ export interface TaskDeleteGuard {
 export type TaskMoveGuard<E, R> = (repository: string | null) => Effect.Effect<void, E, R>;
 
 /** One of the task's standing agents as a finish reads it, under its conversation's lock. */
-export interface TaskStandingAgent {
-  readonly id: string;
-  readonly conversationId: string;
-  readonly createdAt: Date;
-  /** Whether it was started blank, handed neither the description nor a prompt. */
-  readonly blank: boolean;
-}
+export type TaskStandingAgent = typeof TaskStandingAgentSchema.Type;
 
 /**
  * What a finish of a task's work runs under the task's lock: whether every
@@ -200,11 +194,7 @@ export interface TaskDoneArchive<R> {
 }
 
 /** One agent a task's Done archived with it: the member who started it, under whom its device lets it go, and its conversation, whose sandbox is stopped. */
-export interface TaskArchivedAgent {
-  readonly id: string;
-  readonly userId: string;
-  readonly conversationId: string;
-}
+export type TaskArchivedAgent = typeof TaskArchivedAgentSchema.Type;
 
 /** One save a coding agent made, with the agent named as its row names it now. */
 export interface LabeledAgentEdit extends DescriptionAgentEdit {
@@ -1707,6 +1697,20 @@ const followingAgentsAndInbox = Effect.fnUntraced(function* (
   );
 });
 
+const TaskStandingAgentSchema = Schema.Struct({
+  id: Schema.String,
+  conversationId: Schema.String,
+  createdAt: InstantColumnSchema,
+  /** Whether it was started blank, handed neither the description nor a prompt. */
+  blank: Schema.Boolean,
+});
+
+const TaskArchivedAgentSchema = Schema.Struct({
+  id: Schema.String,
+  userId: Schema.String,
+  conversationId: Schema.String,
+});
+
 /**
  * The task's agents still standing unarchived, or the one named among them,
  * each with its conversation locked, the lock every write of its lines and
@@ -1717,12 +1721,7 @@ const followingAgentsAndInbox = Effect.fnUntraced(function* (
  */
 const lockStandingAgents = SqlSchema.findAll({
   Request: Schema.Struct({ taskId: Schema.String, agentId: Schema.optionalKey(Schema.String) }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    conversationId: Schema.String,
-    createdAt: InstantColumnSchema,
-    blank: Schema.Boolean,
-  }),
+  Result: TaskStandingAgentSchema,
   execute: ({ taskId, agentId }) =>
     Database.use((db) =>
       db
@@ -1753,11 +1752,7 @@ const stampArchivedWithTask = SqlSchema.findAll({
     archivedAt: Schema.Date,
     archivedBy: ArchivedByColumnSchema,
   }),
-  Result: Schema.Struct({
-    id: Schema.String,
-    userId: Schema.String,
-    conversationId: Schema.String,
-  }),
+  Result: TaskArchivedAgentSchema,
   execute: ({ agentIds, archivedAt, archivedBy }) =>
     Database.use((db) =>
       db

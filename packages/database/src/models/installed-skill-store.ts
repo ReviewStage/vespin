@@ -104,10 +104,7 @@ const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
 const WRITTEN_SKILL_COLUMNS = { ...INSTALLED_SKILL_COLUMNS, ...TXID };
 
 /** One file of an installed skill: its path from the skill's folder, such as `SKILL.md` or `scripts/run.sh`, and its bytes. */
-export interface InstalledSkillFile {
-  readonly path: string;
-  readonly bytes: Uint8Array;
-}
+export type InstalledSkillFile = typeof InstalledSkillFileSchema.Type;
 
 /** One installed skill with its files, in path order. */
 export interface InstalledSkillWithFiles extends InstalledSkill {
@@ -273,10 +270,12 @@ const insertSkill = SqlSchema.findAll({
     ),
 });
 
+const InstalledSkillFileSchema = Schema.Struct({ path: Schema.String, bytes: Schema.Uint8Array });
+
 const insertFiles = SqlSchema.void({
   Request: Schema.Struct({
     skillId: Schema.String,
-    files: Schema.Array(Schema.Struct({ path: Schema.String, bytes: Schema.Uint8Array })),
+    files: Schema.Array(InstalledSkillFileSchema),
   }),
   execute: ({ skillId, files }) =>
     Database.use((db) =>

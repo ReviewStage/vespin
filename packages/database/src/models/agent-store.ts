@@ -1040,13 +1040,15 @@ const markTurnFastRefused = SqlSchema.void({
 /** The turn a reservation of description notes is held against, as the subquery of the update names it apart from the row it updates. */
 const runningTurn = alias(turns, "running_turn");
 
+const TurnDescriptionNotesSchema = Schema.Struct({ turnId: Schema.String, taken: Schema.Int });
+
 const reserveTurnNotes = SqlSchema.findOneOption({
   Request: Schema.Struct({
     userId: Schema.String,
     conversationId: Schema.String,
     requested: Schema.Int,
   }),
-  Result: Schema.Struct({ turnId: Schema.String, taken: Schema.Int }),
+  Result: TurnDescriptionNotesSchema,
   execute: ({ userId, conversationId, requested }) =>
     Database.use((db) =>
       db
@@ -1468,12 +1470,15 @@ const findOpenSandboxes = SqlSchema.findAll({
     ),
 });
 
+const NativeRouteSchema = Schema.Struct({
+  runtime: Schema.Literals(NATIVE_RUNTIMES),
+  /** Null for an agent from before the column. */
+  payer: Schema.NullOr(PayerColumnSchema),
+});
+
 const findNativeRoute = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String }),
-  Result: Schema.Struct({
-    runtime: Schema.Literals(NATIVE_RUNTIMES),
-    payer: Schema.NullOr(PayerColumnSchema),
-  }),
+  Result: NativeRouteSchema,
   execute: ({ conversationId }) =>
     Database.use((db) =>
       db
@@ -1557,14 +1562,16 @@ const updateAgentCompaction = SqlSchema.void({
     ),
 });
 
+const AgentContextRowSchema = Schema.Struct({
+  model: Schema.String,
+  contextWindow: contextWindowSchema,
+  lastStep: Schema.NullOr(AgentStepColumnSchema),
+  compactedAt: Schema.NullOr(InstantColumnSchema),
+});
+
 const findAgentContext = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({
-    model: Schema.String,
-    contextWindow: contextWindowSchema,
-    lastStep: Schema.NullOr(AgentStepColumnSchema),
-    compactedAt: Schema.NullOr(InstantColumnSchema),
-  }),
+  Result: AgentContextRowSchema,
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
@@ -3152,10 +3159,7 @@ export function recordTurnFastRefused(userId: string, turnId: string): AgentStor
 }
 
 /** A turn's count of description notes, as a reservation left it: the turn, and every note it has taken or holds reserved, the reservation's own among them. */
-export interface TurnDescriptionNotes {
-  readonly turnId: string;
-  readonly taken: number;
-}
+export type TurnDescriptionNotes = typeof TurnDescriptionNotesSchema.Type;
 
 /**
  * Reserves a call's description notes against the conversation's running turn
@@ -3608,11 +3612,7 @@ export function openSandboxesOfReached(
 }
 
 /** A native agent's runtime and who pays for it, which together decide the models it may move to (`runtimeModelRule`). */
-export interface NativeRoute {
-  readonly runtime: (typeof NATIVE_RUNTIMES)[number];
-  /** Null for an agent from before the column. */
-  readonly payer: AgentPayer | null;
-}
+export type NativeRoute = typeof NativeRouteSchema.Type;
 
 /**
  * The native runtime of the agent of the conversation named and its payer;
@@ -3813,12 +3813,7 @@ export function readAgentHeaderOfConversation(
 }
 
 /** What the agent's own conversation holds in its model's context: the model it runs on now, its newest step, and when its harness last compacted it; null for each of the last two before it happens. */
-export interface AgentContextRow {
-  readonly model: string;
-  readonly contextWindow: ContextWindow;
-  readonly lastStep: StoredAgentStep | null;
-  readonly compactedAt: Date | null;
-}
+export type AgentContextRow = typeof AgentContextRowSchema.Type;
 
 /** The newest model step of the agent's own conversation, which replaces the one before it; nothing written for an agent of a workspace the account is not in. */
 export function recordAgentStep(

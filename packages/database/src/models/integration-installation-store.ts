@@ -68,10 +68,7 @@ const InstallationRowSchema = Schema.Struct({
 export type IntegrationInstallation = typeof InstallationRowSchema.Type;
 
 /** The account and workspace an install intent was minted for. */
-export interface IntegrationInstallIntent {
-  readonly userId: string;
-  readonly organizationId: string;
-}
+export type IntegrationInstallIntent = typeof InstallIntentSchema.Type;
 
 /** A state's stored form. */
 function stateHashOf(state: string): string {
@@ -233,9 +230,11 @@ const deleteExpiredIntents = SqlSchema.void({
     ),
 });
 
+const InstallIntentSchema = Schema.Struct({ userId: Schema.String, organizationId: Schema.String });
+
 const deleteIntent = SqlSchema.findOneOption({
   Request: Schema.Struct({ stateHash: Schema.String, provider: ProviderSchema, now: Schema.Date }),
-  Result: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
+  Result: InstallIntentSchema,
   execute: ({ stateHash, provider, now }) =>
     Database.use((db) =>
       db
