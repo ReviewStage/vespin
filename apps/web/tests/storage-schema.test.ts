@@ -126,6 +126,8 @@ const DECLARED_TABLES = [
   "workspace_environment_variable",
   "workspace_experiment",
   "workspace_former_slug",
+  "workspace_install_script",
+  "workspace_repository_setup",
   "workspace_token_repository",
   "write_receipt",
 ].sort();
