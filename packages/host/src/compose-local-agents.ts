@@ -32,6 +32,7 @@ import {
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_REFRESH } from "@repo/features/host-wire";
+import { cappedExponential } from "@repo/wire/effect";
 import {
   Clock,
   Config,
@@ -221,11 +222,7 @@ const RETRY_AFTER = {
   LONGEST: Duration.minutes(5),
 } as const;
 
-const RETRY = Schedule.exponential(RETRY_AFTER.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, RETRY_AFTER.LONGEST)),
-  ),
-);
+const RETRY = cappedExponential(RETRY_AFTER.FIRST, RETRY_AFTER.LONGEST);
 /** How long a device whose setup failed waits before it tries again. */
 const SETUP_RETRY = Duration.minutes(1);
 /** How often a device following its agents beats, which the service's and the window's presence reads are derived from (`DEVICE_BEAT`). */

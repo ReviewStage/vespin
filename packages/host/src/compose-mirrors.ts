@@ -30,7 +30,7 @@ import {
 import { SENTRY_MIRROR_SPAN } from "@repo/features/sentry-tracing";
 import { GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal, readParams } from "@repo/gateway";
 import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
+import { cappedExponential, readEither } from "@repo/wire/effect";
 import {
   Clock,
   Data,
@@ -161,11 +161,7 @@ const WORKTREE_FOLDER = "repository";
 /** The one channel a mirror opens on its tunnel. */
 const CHANNEL = 0;
 
-const RECONNECT = Schedule.exponential(MIRROR_RECONNECT.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, MIRROR_RECONNECT.LONGEST)),
-  ),
-);
+const RECONNECT = cappedExponential(MIRROR_RECONNECT.FIRST, MIRROR_RECONNECT.LONGEST);
 
 /** How one tunnel's life ended, where the mirror does not try again on its own schedule. */
 const TUNNEL_ENDING = {

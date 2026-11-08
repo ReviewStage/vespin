@@ -21,7 +21,7 @@ import {
 } from "@repo/features/terminal-wire";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal, readParams } from "@repo/gateway";
 import { unparsedWire, type WireValue } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
+import { cappedExponential, readEither } from "@repo/wire/effect";
 import {
   Clock,
   Data,
@@ -163,11 +163,7 @@ const SERVER_ERROR_STATUS = 500;
 /** The status of an upgrade to a path the deployment does not serve, which the relay never answers of an agent or shell. */
 const NOT_FOUND_STATUS = 404;
 
-const RECONNECT_BACKOFF = Schedule.exponential(TERMINAL_RECONNECT.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, TERMINAL_RECONNECT.LONGEST)),
-  ),
-);
+const RECONNECT_BACKOFF = cappedExponential(TERMINAL_RECONNECT.FIRST, TERMINAL_RECONNECT.LONGEST);
 
 /** The wait before the ask after `asked` asks that still answered starting over an open sandbox, doubling to the longest. */
 function openingWait(asked: number): Duration.Duration {

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { cappedExponential } from "@repo/wire/effect";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { Data, DateTime, Duration, Effect, Option, Schedule, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -68,10 +69,7 @@ export class DispatchClaimHeld extends Data.TaggedError("DispatchClaimHeld")<
 
 /** How a claimant asks again for a claim to clear: soon at first, then a little less often, for as long as the bound. */
 export function claimRetry(bound: Duration.Duration) {
-  return Schedule.exponential(DISPATCH_CLAIM.FIRST_RETRY).pipe(
-    Schedule.modifyDelay(({ duration }) =>
-      Effect.succeed(Duration.min(duration, DISPATCH_CLAIM.LONGEST_RETRY)),
-    ),
+  return cappedExponential(DISPATCH_CLAIM.FIRST_RETRY, DISPATCH_CLAIM.LONGEST_RETRY).pipe(
     Schedule.upTo({ duration: bound }),
   );
 }
