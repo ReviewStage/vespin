@@ -43,6 +43,7 @@ const DECLARED_TABLES = [
   "agent_browser_tab",
   "agent_delegation",
   "agent_pin",
+  "agent_pull_request",
   "agent_queue",
   "agent_read",
   "agent_repository",

@@ -2,7 +2,7 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "agent_pull_request";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "agent_pull_request";
 --> statement-breakpoint
-CREATE TABLE "agent_pull_request" (
+CREATE TABLE IF NOT EXISTS "agent_pull_request" (
 	"agent_id" uuid,
 	"repository" text,
 	"number" integer,
@@ -13,8 +13,9 @@ CREATE TABLE "agent_pull_request" (
 	CONSTRAINT "agent_pull_request_pkey" PRIMARY KEY("agent_id","repository","number")
 );
 --> statement-breakpoint
-CREATE INDEX "agent_pull_request_on_number" ON "agent_pull_request" (lower("repository"),"number");--> statement-breakpoint
-CREATE INDEX "agent_pull_request_on_head" ON "agent_pull_request" (lower("repository"),"head_branch");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_pull_request_on_number" ON "agent_pull_request" (lower("repository"),"number");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_pull_request_on_head" ON "agent_pull_request" (lower("repository"),"head_branch");--> statement-breakpoint
+ALTER TABLE "agent_pull_request" DROP CONSTRAINT IF EXISTS "agent_pull_request_agent_id_agent_id_fkey";--> statement-breakpoint
 ALTER TABLE "agent_pull_request" ADD CONSTRAINT "agent_pull_request_agent_id_agent_id_fkey" FOREIGN KEY ("agent_id") REFERENCES "agent"("id") ON DELETE CASCADE;--> statement-breakpoint
 INSERT INTO "agent_pull_request" ("agent_id", "repository", "number", "head_branch", "pull_request", "created_at")
 SELECT "id", "repository", ("published" ->> 'number')::int, coalesce("published_read" ->> 'branch', "branch"), "published", "created_at"
