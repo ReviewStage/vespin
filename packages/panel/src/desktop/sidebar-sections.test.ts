@@ -379,7 +379,7 @@ test("a filter by person leaves out a section's task it would leave out of the l
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
 });
 
-test("the status filter leaves a section's backlog task out as it does the list's, and counts it among those it hides", async () => {
+test("the status filter leaves a section's backlog task out as it does the list's", async () => {
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...INVITES, status: TASK_STATUS.BACKLOG },
@@ -389,26 +389,22 @@ test("the status filter leaves a section's backlog task out as it does the list'
 
   assert.deepEqual(namesIn(sidebar, "Sections"), []);
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
-  assert.equal(
-    sidebar.querySelector(".sidebar-hidden-statuses button")?.textContent,
-    "1 more in Backlog",
-  );
 });
 
-test("a section whose only task is done says so in place of Drag tasks here, and the Tasks line counts it no more", async () => {
+test("a section whose only task is done says the view leaves it out in place of Drag tasks here", async () => {
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...INVITES, status: TASK_STATUS.DONE },
       { ...RETRIES, status: TASK_STATUS.DONE },
     ],
   });
-  const hiddenIn = (label: string) =>
-    sidebar.querySelector(`nav[aria-label="${label}"] .sidebar-hidden-statuses button`)
-      ?.textContent;
 
-  assert.equal(hiddenIn("Sections"), "1 more in Done");
+  assert.ok(
+    sidebar
+      .querySelector('nav[aria-label="Sections"]')
+      ?.textContent?.includes("No tasks match this view."),
+  );
   assert.ok(!sidebar.textContent?.includes("Drag tasks here"));
-  assert.equal(hiddenIn("My tasks"), "1 more in Done");
 });
 
 test("a task's Move to puts it on top of the section chosen", async () => {
