@@ -20,9 +20,7 @@ accordance with this policy.
 When you sign in with Google or GitHub, we collect your name, email address,
 profile picture address, and which provider you used. We also store the
 records that keep you signed in, each with the IP address and browser or app
-it came from, and a daily count of your dictation use. If you answer the
-optional questions in setup, we keep your answers, and anything you write
-beside "Other", with your account. Signing in with GitHub,
+it came from, and a daily count of your dictation use. Signing in with GitHub,
 or linking GitHub later, authorizes the Vespin GitHub App; we store its
 OAuth tokens encrypted on the Service and never send them to your Mac or
 browser.
@@ -124,12 +122,9 @@ transcript says to sign in with `gh auth login` or set up SSH.
 The Mac app and the web app send counts of which features you use, from a
 fixed list of event names and values, under your account's name and email.
 They never include anything you type or say, titles, branches, file paths,
-prompts, or error text. If you answer the optional questions in setup (how
-you heard about Vespin, your role, and what you hope it helps with), your
-picks are sent the same way, each from a fixed list; anything you write beside
-"Other" is not. The Service counts work done through it (such as tasks
-created and agents started) the same way.
-Counts are grouped by workspace, with each workspace's name and creation date.
+prompts, or error text. The Service counts work done through it (such as
+tasks created and agents started) the same way. Counts are grouped by
+workspace, with each workspace's name and creation date.
 
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
@@ -167,6 +162,14 @@ sends Sentry nothing.
 
 If you send feedback, we receive your words, any screenshots you attach, and,
 unless you untick it, your name and email.
+
+### Setup questions
+
+If you answer the optional questions in setup (how you heard about Vespin,
+your role, and what you hope it helps with), we keep your answers, and
+anything you write beside "Other", with your account. We also record them in
+PostHog under your account's name and email, whether or not you share usage
+data, and post them to our team's Slack.
 
 ### Information stored on your Mac
 
@@ -234,11 +237,11 @@ data with:
   check for updates and load avatars.
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
-  data, screen recordings, and feedback), Sentry (error and performance
-  monitoring), Resend (email: for the onboarding emails a new account is sent,
+  data, screen recordings, feedback, and setup answers), Sentry (error and
+  performance monitoring), Resend (email: for the onboarding emails a new account is sent,
   Resend is told your email address, your first name, when you signed up, whether
   you accepted a workspace invitation, and on which days you started a task),
-  and Slack (feedback and Vespin's Slack bot).
+  and Slack (feedback, setup answers, and Vespin's Slack bot).
 - **Integrations and connected apps:** the services and MCP clients you connect
   receive what your agents send them, or what our tools answer, and keep it
   under their own policies.

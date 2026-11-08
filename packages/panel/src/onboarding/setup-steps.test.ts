@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_ACT_KIND } from "@repo/host/contract";
 import { appSettingsWire, settingsView } from "@repo/settings/testing";
@@ -10,7 +9,6 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeActPort, refusedOnPort } from "../testing/app-bridge.js";
-import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { tasksControl } from "../testing/tasks-control.js";
@@ -20,8 +18,8 @@ import { SetupSteps } from "./setup-steps.js";
  * Setup's Welcome as the developer walks back to it: a team's workspace
  * made and then left for Just me lists the account's own workspace again,
  * so GitHub is not installed on the team's. And its survey, kept on the
- * account and counted once for each set of answers setup goes on with.
- * Synthetic throughout.
+ * account once for each set of answers setup goes on with. Synthetic
+ * throughout.
  */
 
 const ACCOUNT = "account-dana";
@@ -47,7 +45,6 @@ const roots: Root[] = [];
 
 beforeEach(() => {
   fakeActPort({});
-  fakeAppPlatform(QUIET_PANEL);
 });
 
 /** Types `words` into `input` as a reader does, through the prototype's setter, which React reads a change by. */
@@ -106,7 +103,7 @@ test("Just me after a team's workspace was made lists the account's own workspac
   assert.deepEqual(chosen, [OWN.id]);
 });
 
-test("the survey keeps its answers on the account, again after a refusal, and counts them once, Other's words kept and never counted", async () => {
+test("the survey keeps its answers on the account, Other's words among them, and again after a refusal", async () => {
   // Setup stands at the survey, for the account alone, as the account keeps it.
   const place = JSON.stringify({ audience: "me", at: 1 });
   writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
@@ -121,11 +118,6 @@ test("the survey keeps its answers on the account, again after a refusal, and co
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
-  });
-  const counted: unknown[] = [];
-  fakeAppPlatform({
-    ...QUIET_PANEL,
-    recordSurfaceEvent: (name, properties) => counted.push({ name, properties }),
   });
   const base = tasksControl();
   const container = document.body.appendChild(document.createElement("div"));
@@ -145,7 +137,7 @@ test("the survey keeps its answers on the account, again after a refusal, and co
 
   act(() => buttonStarting(container, "Other").click());
   typeInto(container.querySelector<HTMLInputElement>('input[aria-label$="Other"]'), "  A meetup ");
-  act(() => buttonStarting(container, "Founder or CTO").click());
+  act(() => buttonStarting(container, "Founder").click());
   // Note that the account's place comes back from no write here, so Continue leaves setup at the survey to be pressed again.
   const answers = { referral: "other", referralOther: "A meetup", role: "founder" };
   act(() => buttonStarting(container, "Continue").click());
@@ -159,10 +151,4 @@ test("the survey keeps its answers on the account, again after a refusal, and co
   await act(() => Promise.resolve());
 
   assert.deepEqual(kept, [answers, answers], "answers kept are not kept again");
-  assert.deepEqual(counted, [
-    {
-      name: PRODUCT_SURFACE_EVENT.ONBOARDING_SURVEY,
-      properties: { referral_source: "other", role: "founder", signup_intent: "skipped" },
-    },
-  ]);
 });

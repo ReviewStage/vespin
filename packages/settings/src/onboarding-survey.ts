@@ -2,50 +2,106 @@
  * onboarding-survey.ts -- what a new account answered in setup's survey: how it heard of us, its role, and what it hopes we help with, and its own words beside any answered Other.
  *
  * The answers are the account's (`APP_SETTING_SCHEMA.onboardingSurvey`), so
- * each is kept with the account it came from whether or not the account
- * shares usage data, and setup on another machine finds them as they were
- * left. They are stored as their JSON, because a setting holds one plain
- * value. Each answer is one of the counted event's own sets
- * (`@repo/features/analytics`), bar the `skipped` a question left is counted
- * as; the words beside Other are kept here alone, never counted.
+ * each is kept with the account it came from, and setup on another machine
+ * finds them as they were left. They are stored as their JSON, because a
+ * setting holds one plain value. The questions and each answer's words are
+ * here too, read by the survey setup draws and by the service, which records
+ * each set of answers kept as a response to our onboarding survey in PostHog
+ * (`packages/service/src/accounts/onboarding-survey-response.ts`).
  */
 
-import {
-  PRODUCT_REFERRAL_SOURCE,
-  PRODUCT_ROLE,
-  PRODUCT_SIGNUP_INTENT,
-  PRODUCT_SURVEY_ANSWER,
-} from "@repo/features/analytics";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
 import { Option, Schema } from "effect";
 
+/** The answer every question offers last, which takes the person's own words. */
+export const SURVEY_OTHER = "other";
+
+export const SURVEY_REFERRAL = {
+  FRIEND_OR_COLLEAGUE: "friend_or_colleague",
+  X: "x",
+  LINKEDIN: "linkedin",
+  HACKER_NEWS: "hacker_news",
+  GITHUB: "github",
+  SEARCH_ENGINE: "search_engine",
+  OTHER: SURVEY_OTHER,
+} as const;
+
+export type SurveyReferral = (typeof SURVEY_REFERRAL)[keyof typeof SURVEY_REFERRAL];
+
+export const SURVEY_ROLE = {
+  ENGINEER: "engineer",
+  ENGINEERING_MANAGER: "engineering_manager",
+  FOUNDER: "founder",
+  PRODUCT_MANAGER: "product_manager",
+  OTHER: SURVEY_OTHER,
+} as const;
+
+export type SurveyRole = (typeof SURVEY_ROLE)[keyof typeof SURVEY_ROLE];
+
+export const SURVEY_INTENT = {
+  PARALLEL_AGENTS: "parallel_agents",
+  AGENT_INBOX: "agent_inbox",
+  CLOUD_AGENTS: "cloud_agents",
+  TEAM_AGENTS: "team_agents",
+  EXPLORING: "exploring",
+  OTHER: SURVEY_OTHER,
+} as const;
+
+export type SurveyIntent = (typeof SURVEY_INTENT)[keyof typeof SURVEY_INTENT];
+
+/** Each answer's words, in the order the survey offers them. */
+export const SURVEY_REFERRAL_LABEL = {
+  [SURVEY_REFERRAL.FRIEND_OR_COLLEAGUE]: "Friend or colleague",
+  [SURVEY_REFERRAL.X]: "X (Twitter)",
+  [SURVEY_REFERRAL.LINKEDIN]: "LinkedIn",
+  [SURVEY_REFERRAL.HACKER_NEWS]: "Hacker News",
+  [SURVEY_REFERRAL.GITHUB]: "GitHub",
+  [SURVEY_REFERRAL.SEARCH_ENGINE]: "Search engine",
+  [SURVEY_REFERRAL.OTHER]: "Other",
+} as const satisfies Record<SurveyReferral, string>;
+
+export const SURVEY_ROLE_LABEL = {
+  [SURVEY_ROLE.ENGINEER]: "Software engineer",
+  [SURVEY_ROLE.ENGINEERING_MANAGER]: "Engineering manager",
+  [SURVEY_ROLE.FOUNDER]: "Founder",
+  [SURVEY_ROLE.PRODUCT_MANAGER]: "Product manager",
+  [SURVEY_ROLE.OTHER]: "Other",
+} as const satisfies Record<SurveyRole, string>;
+
+export const SURVEY_INTENT_LABEL = {
+  [SURVEY_INTENT.PARALLEL_AGENTS]: "Running many agents at once",
+  [SURVEY_INTENT.AGENT_INBOX]: "Inbox for agents",
+  [SURVEY_INTENT.CLOUD_AGENTS]: "Cloud agents",
+  [SURVEY_INTENT.TEAM_AGENTS]: "Working with my team's agents",
+  [SURVEY_INTENT.EXPLORING]: "Just exploring",
+  [SURVEY_INTENT.OTHER]: "Other",
+} as const satisfies Record<SurveyIntent, string>;
+
+/** The survey's questions, as setup asks them and our PostHog survey names them. */
+export const SURVEY_QUESTION = {
+  REFERRAL: `How did you hear about ${PRODUCT_NAME}?`,
+  ROLE: "What's your role?",
+  INTENT: `What do you hope ${PRODUCT_NAME} helps with?`,
+} as const;
+
 /** The most characters the words beside an answered Other hold. */
 export const SURVEY_OTHER_MAX_CHARS = 100;
-
-/** One of a set's values, bar the `skipped` the counted event says of a question left. */
-function answeredOf<Value extends string>(values: Record<string, Value>) {
-  return Schema.Literals(
-    Object.values(values).filter(
-      (value): value is Exclude<Value, typeof PRODUCT_SURVEY_ANSWER.SKIPPED> =>
-        value !== PRODUCT_SURVEY_ANSWER.SKIPPED,
-    ),
-  );
-}
 
 const otherWords = Schema.String.check(Schema.isMaxLength(SURVEY_OTHER_MAX_CHARS));
 
 /** Whether words stand only beside the Other they belong to; an Other may stand without them. */
 function wordsBesideOther(answer: string | undefined, words: string | undefined): boolean {
-  return words === undefined || answer === PRODUCT_SURVEY_ANSWER.OTHER;
+  return words === undefined || answer === SURVEY_OTHER;
 }
 
 /** What the account answered; a question left has no answer, and an Other may carry words. */
 const onboardingSurveySchema = Schema.Struct({
-  referral: Schema.optionalKey(answeredOf(PRODUCT_REFERRAL_SOURCE)),
+  referral: Schema.optionalKey(Schema.Literals(Object.values(SURVEY_REFERRAL))),
   referralOther: Schema.optionalKey(otherWords),
-  role: Schema.optionalKey(answeredOf(PRODUCT_ROLE)),
+  role: Schema.optionalKey(Schema.Literals(Object.values(SURVEY_ROLE))),
   roleOther: Schema.optionalKey(otherWords),
-  intent: Schema.optionalKey(answeredOf(PRODUCT_SIGNUP_INTENT)),
+  intent: Schema.optionalKey(Schema.Literals(Object.values(SURVEY_INTENT))),
   intentOther: Schema.optionalKey(otherWords),
 }).check(
   Schema.makeFilter(

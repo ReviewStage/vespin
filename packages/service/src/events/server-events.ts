@@ -72,6 +72,13 @@ import { DEPLOYMENT_VARIABLE, deploymentNamed, WORKSPACE_GROUP_TYPE } from "./ev
  * its name and email ride each event's `$set`, never a property, so an
  * account's sign-up, which comes before any client of its own has named it,
  * already says who signed up.
+ *
+ * One record leaves that rule on purpose: a response to one of our PostHog
+ * surveys (`recordSurveyResponse`), which carries the person's own answers,
+ * words they wrote among them, because answering a survey is telling us
+ * something. It is filed under the same person, so the answers stand beside
+ * the account's counts, and a PostHog destination posts it to the team's
+ * Slack. `PRIVACY.md` says so.
  */
 
 export const SERVER_EVENT = {
@@ -588,9 +595,64 @@ function workspaceGroupItem(
   };
 }
 
+/** One answer of a survey response: the question as PostHog's survey names it, under its own response key, and what was answered, or nothing for a question left. */
+export interface SurveyAnswer {
+  readonly id: string;
+  /** PostHog's property for this question's answer, `$survey_response_` and the question's id. */
+  readonly responseKey: string;
+  readonly question: string;
+  readonly response: string | undefined;
+}
+
+/** One response to one of our PostHog surveys, from one account. */
+export interface SurveyResponse {
+  readonly userId: string;
+  readonly surveyId: string;
+  readonly surveyName: string;
+  readonly answers: readonly SurveyAnswer[];
+}
+
+/** The event PostHog's survey SDKs record a response as. */
+const SURVEY_SENT_EVENT = "survey sent";
+
+/**
+ * The item a survey response posts, in the shape PostHog's own survey SDKs
+ * send one, under its person and the same stamps a server event carries.
+ */
+function surveyResponseItem(
+  response: SurveyResponse,
+  person: PosthogPerson,
+  now: number,
+  environment: string,
+): PosthogBatchItem {
+  const answered = response.answers.filter((answer) => answer.response !== undefined);
+  return {
+    event: SURVEY_SENT_EVENT,
+    distinct_id: response.userId,
+    timestamp: new Date(now).toISOString(),
+    properties: stamped(
+      {
+        $survey_id: response.surveyId,
+        $survey_name: response.surveyName,
+        $survey_completed: answered.length === response.answers.length,
+        $survey_questions: response.answers.map((answer) => ({
+          id: answer.id,
+          question: answer.question,
+          response: answer.response ?? null,
+        })),
+        ...Object.fromEntries(answered.map((answer) => [answer.responseKey, answer.response])),
+        $set: person,
+      },
+      environment,
+    ),
+  };
+}
+
 interface ProductAnalyticsValues {
   /** Records one event, or does nothing; it never fails and never names the key. */
   readonly capture: (event: ServerEvent) => Effect.Effect<void>;
+  /** Records one survey response under its person, or does nothing; never fails. */
+  readonly respond: (response: SurveyResponse) => Effect.Effect<void>;
   /** Names one workspace's group now, however lately it was named, as a rename asks; never fails. */
   readonly nameWorkspace: (userId: string, workspaceId: string) => Effect.Effect<void>;
 }
@@ -622,7 +684,11 @@ const productAnalyticsOfEnvironment = Layer.effect(
     const database = yield* Effect.context<DatabaseServices>();
     const key = environment.posthogProjectApiKey;
     if (key === undefined) {
-      return { capture: () => Effect.void, nameWorkspace: () => Effect.void };
+      return {
+        capture: () => Effect.void,
+        respond: () => Effect.void,
+        nameWorkspace: () => Effect.void,
+      };
     }
     const host = environment.posthogIngestHost;
     // Vercel's own variable, read as the layer is built, as `/api/events` reads it per request.
@@ -683,6 +749,23 @@ const productAnalyticsOfEnvironment = Layer.effect(
             [item],
             now,
           );
+        }).pipe(Effect.ignore),
+      respond: (response: SurveyResponse) =>
+        Effect.gen(function* () {
+          // A deleted account's person must not be posted back.
+          const person = yield* readAccountPerson(response.userId).pipe(
+            Effect.provideContext(database),
+          );
+          if (person === undefined) return;
+          const now = yield* Clock.currentTimeMillis;
+          yield* post([
+            surveyResponseItem(
+              response,
+              { name: person.name, email: person.email },
+              now,
+              deployment,
+            ),
+          ]);
         }).pipe(Effect.ignore),
       nameWorkspace: (userId: string, workspaceId: string) =>
         Effect.gen(function* () {
@@ -789,6 +872,18 @@ export function workspaceRenamed(userId: string, workspaceId: string): Effect.Ef
   );
 }
 
+/**
+ * Records one survey response once the request has answered, as a count is
+ * (`recordServerEvent`); a runtime without `ProductAnalytics` records none.
+ */
+export function recordSurveyResponse(response: SurveyResponse): Effect.Effect<void> {
+  return Effect.flatMap(Effect.serviceOption(ProductAnalytics), (analytics) =>
+    Option.isNone(analytics)
+      ? Effect.void
+      : afterResponse(SURVEY_SENT_EVENT, analytics.value.respond(response)),
+  );
+}
+
 /** What a settled turn's row says of how it ended, in the count's words. */
 function turnOutcomeOf(turn: SettledAgentTurn): Values<typeof SERVER_TURN_OUTCOME> {
   if (turn.status === TURN_STATUS.SETTLED) return SERVER_TURN_OUTCOME.COMPLETED;
@@ -871,12 +966,14 @@ export const productAnalyticsFromEnvironment = productAnalyticsOfEnvironment;
  */
 export function recordingProductAnalytics() {
   const recorded: ServerEvent[] = [];
+  const responses: SurveyResponse[] = [];
   const layer = Layer.merge(
     Layer.succeed(ProductAnalytics, {
       capture: (event) => Effect.sync(() => void recorded.push(event)),
+      respond: (response) => Effect.sync(() => void responses.push(response)),
       nameWorkspace: () => Effect.void,
     }),
     turnEndCounting,
   );
-  return { layer, recorded };
+  return { layer, recorded, responses };
 }

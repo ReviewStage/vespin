@@ -72,8 +72,21 @@ export interface PosthogPerson {
 /** A group's key under each group type (`$groups`), or the properties a `$groupidentify` sets on one (`$group_set`). */
 export type PosthogGroupFields = Readonly<Record<string, string>>;
 
+/** One question of a survey response (`$survey_questions`), as PostHog's survey SDKs list it: its id, its words, and what was answered, or null where it was left. */
+interface PosthogSurveyQuestion {
+  readonly id: string;
+  readonly question: string;
+  readonly response: string | null;
+}
+
 /** Every kind of value one of this build's event properties may hold. */
-type PosthogPropertyValue = string | number | boolean | PosthogPerson | PosthogGroupFields;
+type PosthogPropertyValue =
+  | string
+  | number
+  | boolean
+  | PosthogPerson
+  | PosthogGroupFields
+  | readonly PosthogSurveyQuestion[];
 
 /** One item of the documented batch document, as this build builds it. */
 export interface PosthogBatchItem {

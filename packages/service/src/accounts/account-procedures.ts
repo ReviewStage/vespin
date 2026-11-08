@@ -57,6 +57,7 @@ import {
   accountPreferencesParts,
   experimentChoicesFrom,
   NO_EXPERIMENTS,
+  onboardingSurveyFrom,
   ownPreferenceFromWire,
 } from "@repo/settings";
 import type { UnparsedWireValue } from "@repo/wire";
@@ -86,6 +87,7 @@ import {
 } from "../providers/model-catalog.js";
 import { forgetPosthogPersonEffect } from "../providers/posthog.js";
 import { memoriesProcedures } from "./memories-procedures.js";
+import { onboardingSurveyAnswered } from "./onboarding-survey-response.js";
 import { providerKeysProcedures } from "./provider-keys-procedures.js";
 
 export interface AccountProcedureSeams {
@@ -371,6 +373,9 @@ export function accountProcedures(seams: AccountProcedureSeams) {
       }
 
       const row = yield* hostedStoreOrUnavailable(seams.writePreferences(context.userId, write));
+      // The survey's answers, once kept, are recorded as a response to our onboarding survey.
+      const answered = onboardingSurveyFrom(write.onboardingSurvey);
+      if (answered !== undefined) yield* onboardingSurveyAnswered(context.userId, answered);
       return { ...snapshotAnswer(row, yield* snapshotAgent(context.userId, row)), txid: row.txid };
     }),
 

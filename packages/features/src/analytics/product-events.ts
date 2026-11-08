@@ -48,8 +48,6 @@ export const PRODUCT_EVENT = {
   MIRROR_FAIL: "mirror:fail",
   /** A cloud agent's mirror on this Mac heard its first header since the host started keeping it. */
   MIRROR_READY: "mirror:ready",
-  /** A new account answered setup's questions about itself, counted once for each set of answers it goes on with. */
-  ONBOARDING_SURVEY: "onboarding:survey",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -61,7 +59,7 @@ export const ProductEventNameSchema = Schema.Literals(Object.values(PRODUCT_EVEN
  * what the surface channel carries. Everything else is emitted where the action
  * itself happens, in the main process; these are surface motion the main
  * process cannot see — which tab is drawn, which page a row opened, whether a
- * search field was summoned — and setup's survey, whose answers no act carries. Keeping the set small and separate is what makes
+ * search field was summoned. Keeping the set small and separate is what makes
  * the channel narrow: the handler validates against this union rather than
  * against every name, so a compromised renderer gains no reach into the actions.
  */
@@ -70,7 +68,6 @@ export const PRODUCT_SURFACE_EVENT = {
   SETTINGS_VIEW_OPEN: PRODUCT_EVENT.SETTINGS_VIEW_OPEN,
   SEARCH_OPEN: PRODUCT_EVENT.SEARCH_OPEN,
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
-  ONBOARDING_SURVEY: PRODUCT_EVENT.ONBOARDING_SURVEY,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -106,9 +103,6 @@ export const PRODUCT_EVENT_PROPERTY = {
   MIRROR_FAILURE: "mirror_failure",
   ATTEMPT: "attempt",
   ELAPSED_SECONDS: "elapsed_seconds",
-  REFERRAL_SOURCE: "referral_source",
-  ROLE: "role",
-  SIGNUP_INTENT: "signup_intent",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -318,57 +312,6 @@ export type ProductExperimentScope =
   (typeof PRODUCT_EXPERIMENT_SCOPE)[keyof typeof PRODUCT_EXPERIMENT_SCOPE];
 
 /**
- * Setup's survey, one fixed set of answers per question, each with `skipped`
- * for a question left unanswered beside others answered. The words a person
- * writes beside "Other" stay on their account (`@repo/settings`'s
- * `OnboardingSurvey`) and are never counted, so nothing typed has a shape it
- * could travel in here.
- */
-export const PRODUCT_SURVEY_ANSWER = {
-  OTHER: "other",
-  SKIPPED: "skipped",
-} as const;
-
-export const PRODUCT_REFERRAL_SOURCE = {
-  FRIEND_OR_COLLEAGUE: "friend_or_colleague",
-  X: "x",
-  LINKEDIN: "linkedin",
-  HACKER_NEWS: "hacker_news",
-  YOUTUBE: "youtube",
-  GITHUB: "github",
-  SEARCH_ENGINE: "search_engine",
-  OTHER: PRODUCT_SURVEY_ANSWER.OTHER,
-  SKIPPED: PRODUCT_SURVEY_ANSWER.SKIPPED,
-} as const;
-
-export type ProductReferralSource =
-  (typeof PRODUCT_REFERRAL_SOURCE)[keyof typeof PRODUCT_REFERRAL_SOURCE];
-
-export const PRODUCT_ROLE = {
-  ENGINEER: "engineer",
-  ENGINEERING_MANAGER: "engineering_manager",
-  FOUNDER: "founder",
-  PRODUCT_MANAGER: "product_manager",
-  OTHER: PRODUCT_SURVEY_ANSWER.OTHER,
-  SKIPPED: PRODUCT_SURVEY_ANSWER.SKIPPED,
-} as const;
-
-export type ProductRole = (typeof PRODUCT_ROLE)[keyof typeof PRODUCT_ROLE];
-
-export const PRODUCT_SIGNUP_INTENT = {
-  PARALLEL_AGENTS: "parallel_agents",
-  AGENT_INBOX: "agent_inbox",
-  CLOUD_AGENTS: "cloud_agents",
-  TEAM_AGENTS: "team_agents",
-  EXPLORING: "exploring",
-  OTHER: PRODUCT_SURVEY_ANSWER.OTHER,
-  SKIPPED: PRODUCT_SURVEY_ANSWER.SKIPPED,
-} as const;
-
-export type ProductSignupIntent =
-  (typeof PRODUCT_SIGNUP_INTENT)[keyof typeof PRODUCT_SIGNUP_INTENT];
-
-/**
  * The rungs every count travels on. A raw count is a weak fingerprint —
  * "137 Codex sessions" identifies a machine across days — where a rung says
  * the same thing about adoption and says it about a crowd rather than a
@@ -451,9 +394,6 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: MirrorFailure;
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: ProductElapsedSeconds;
-  [PRODUCT_EVENT_PROPERTY.REFERRAL_SOURCE]: ProductReferralSource;
-  [PRODUCT_EVENT_PROPERTY.ROLE]: ProductRole;
-  [PRODUCT_EVENT_PROPERTY.SIGNUP_INTENT]: ProductSignupIntent;
 }
 
 /**
@@ -485,9 +425,6 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT]: Object.values(PRODUCT_EXPERIMENT),
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
-  [PRODUCT_EVENT_PROPERTY.REFERRAL_SOURCE]: Object.values(PRODUCT_REFERRAL_SOURCE),
-  [PRODUCT_EVENT_PROPERTY.ROLE]: Object.values(PRODUCT_ROLE),
-  [PRODUCT_EVENT_PROPERTY.SIGNUP_INTENT]: Object.values(PRODUCT_SIGNUP_INTENT),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -527,11 +464,6 @@ const PRODUCT_EVENT_PROPERTIES = {
   [PRODUCT_EVENT.MIRROR_READY]: [
     PRODUCT_EVENT_PROPERTY.ATTEMPT,
     PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS,
-  ],
-  [PRODUCT_EVENT.ONBOARDING_SURVEY]: [
-    PRODUCT_EVENT_PROPERTY.REFERRAL_SOURCE,
-    PRODUCT_EVENT_PROPERTY.ROLE,
-    PRODUCT_EVENT_PROPERTY.SIGNUP_INTENT,
   ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 

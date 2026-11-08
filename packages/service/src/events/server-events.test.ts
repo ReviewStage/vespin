@@ -15,6 +15,7 @@ import { DEPLOYMENT_VARIABLE } from "./events.js";
 import {
   productAnalyticsFromEnvironment,
   recordServerEvent,
+  recordSurveyResponse,
   SERVER_AGENT_START_KIND,
   SERVER_AGENT_STARTER,
   SERVER_EVENT,
@@ -147,6 +148,59 @@ it.layer(getTestDB())("server events", (it) => {
                   },
                 },
               ],
+            },
+          },
+        ]);
+      }).pipe(Effect.provide(processor.layer));
+    },
+  );
+
+  it.effect(
+    "posts a survey response as PostHog's survey SDKs do, under the account's person, keyed by each answered question",
+    () => {
+      vi.stubEnv(DEPLOYMENT_VARIABLE, "production");
+      const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+      return Effect.gen(function* () {
+        yield* TestClock.setTime(NOW);
+        const userId = yield* openUser;
+        yield* recordSurveyResponse({
+          userId,
+          surveyId: "survey-onboarding",
+          surveyName: "Onboarding",
+          answers: [
+            {
+              id: "q-where",
+              responseKey: "$survey_response_q-where",
+              question: "Where?",
+              response: "A meetup",
+            },
+            {
+              id: "q-why",
+              responseKey: "$survey_response_q-why",
+              question: "Why?",
+              response: undefined,
+            },
+          ],
+        });
+        expect(itemsOf(processor.posted)).toEqual([
+          {
+            event: "survey sent",
+            distinct_id: userId,
+            timestamp: "2026-08-19T12:00:00.000Z",
+            properties: {
+              $survey_id: "survey-onboarding",
+              $survey_name: "Onboarding",
+              $survey_completed: false,
+              $survey_questions: [
+                { id: "q-where", question: "Where?", response: "A meetup" },
+                { id: "q-why", question: "Why?", response: null },
+              ],
+              "$survey_response_q-where": "A meetup",
+              $set: { name: "Test User", email: `${userId}@app.test` },
+              $geoip_disable: true,
+              platform: "server",
+              environment: "production",
+              $lib: "vespin-service",
             },
           },
         ]);
