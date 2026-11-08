@@ -417,7 +417,7 @@ function cardDoorAround(anchor: HTMLElement): CardDoor | undefined {
  * where it takes no focus and holds words.
  */
 function heardOver(element: HTMLElement, label: string): Heard {
-  const name = element.getAttribute("aria-label") ?? element.textContent ?? "";
+  const name = element.getAttribute("aria-label") ?? element.textContent;
   if (name.replace(SPACING, "").includes(label.replace(SPACING, ""))) return HEARD.NAMED;
   const spoken = !element.matches(TAKES_FOCUS) && !element.matches(HOLDS_NO_WORDS);
   return spoken ? HEARD.SPOKEN : HEARD.DESCRIBED;

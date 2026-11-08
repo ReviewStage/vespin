@@ -510,7 +510,7 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
         {
           tag: "span[data-chip]",
           getAttrs: (element) => {
-            const name = (element.textContent ?? "").replace(/^\//u, "");
+            const name = element.textContent.replace(/^\//u, "");
             return known(name) ? { name } : false;
           },
         },
@@ -554,7 +554,7 @@ function quoteNode(drawQuote: ComposerEditorProps["drawQuote"]) {
       return [
         {
           tag: "blockquote[data-quote]",
-          getAttrs: (element) => ({ words: element.textContent ?? "" }),
+          getAttrs: (element) => ({ words: element.textContent }),
         },
       ];
     },

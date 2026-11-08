@@ -446,8 +446,7 @@ function labelOf(element: HTMLElement): string {
   return (
     element.getAttribute("aria-label") ??
     element.getAttribute("placeholder") ??
-    element.textContent?.trim() ??
-    ""
+    element.textContent.trim()
   );
 }
 

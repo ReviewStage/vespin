@@ -172,7 +172,7 @@ function useWholeFileFind(
       read.current.notes.map((note) => ({
         key: note.key,
         line: note.line,
-        words: noteElement(note.key).textContent ?? "",
+        words: noteElement(note.key).textContent,
       }));
     // Note that a card is watched while a query stands, since it draws its own words anew, its age among them, with no draw of the file's.
     const watchNotes = () => {

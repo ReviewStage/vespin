@@ -516,12 +516,12 @@ function caretAtEnd(element: HTMLElement): void {
 
 /** The title's words as a name: trimmed, and cut to the bound as the name field's own `maxLength` cuts a paste. */
 function typedName(element: HTMLElement): string {
-  return (element.textContent ?? "").trim().slice(0, TASK_BOUNDS.MAX_NAME_CHARS).trim();
+  return element.textContent.trim().slice(0, TASK_BOUNDS.MAX_NAME_CHARS).trim();
 }
 
 /** The title's words held to the bound as they are typed, as the name field's `maxLength` holds its own, so no word stands past what is saved. */
 function boundTitle(element: HTMLElement): void {
-  const words = element.textContent ?? "";
+  const words = element.textContent;
   if (words.length <= TASK_BOUNDS.MAX_NAME_CHARS) return;
   element.textContent = words.slice(0, TASK_BOUNDS.MAX_NAME_CHARS);
   caretAtEnd(element);

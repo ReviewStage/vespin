@@ -1860,7 +1860,7 @@ function threadedWhole(block: HTMLElement): boolean {
       (mark) =>
         own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null,
     )
-    .map((mark) => mark.textContent ?? "")
+    .map((mark) => mark.textContent)
     .join("");
   const words = own.toString().replace(/\s+/gu, "");
   return words !== "" && marked.replace(/\s+/gu, "") === words;
@@ -1877,7 +1877,7 @@ function sourceSpan(
   section: DescriptionSection,
   drawn: { readonly from: number; readonly to: number },
 ): { readonly from: number; readonly to: number } | undefined {
-  const span = textChange(unit.textContent ?? "", section.text)(drawn);
+  const span = textChange(unit.textContent, section.text)(drawn);
   return span === undefined
     ? undefined
     : { from: section.from + span.from, to: section.from + span.to };
