@@ -6,7 +6,7 @@
  * with no payload and one sent anything is refused. A write that answers
  * whether the service took it answers a boolean, and one the panel reads
  * nothing of answers `void`; a refusal or a defect of the host's is drawn as
- * the answer each drew before it was declared: `false`, nothing, or the
+ * its answer: `false`, nothing, or the
  * task calls' unanswered failure. Each live read the tab holds is a live
  * follow (`live-follow.ts`), relayed by `act-port/live-follows.ts`; each
  * address opened in the browser stays a procedure of its own

@@ -19,7 +19,7 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
  *
  * Only a panel draws the Automations pages, so every ask is the panel's
  * alone. A refusal or a defect of the host's is drawn as the automation
- * calls' unanswered failure, as every one was before it was declared. A
+ * calls' unanswered failure. A
  * workspace's automations and the runs are one live follow, declared once
  * (`live-follow.ts`), told on the slice of what its key names.
  */

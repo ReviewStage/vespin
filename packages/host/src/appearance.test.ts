@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { WINDOW_MATERIAL, windowMaterialFor } from "./window-material";
+import { WINDOW_MATERIAL, windowMaterialFor } from "./appearance.js";
 
 /**
- * window-material.test.ts -- a Mac from Tahoe on draws the window on Liquid
+ * appearance.test.ts -- a Mac from Tahoe on draws the window on Liquid
  * Glass, and one before it, or one whose version cannot be read, keeps the
  * sidebar material.
  */

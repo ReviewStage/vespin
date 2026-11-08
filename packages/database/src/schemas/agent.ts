@@ -142,7 +142,7 @@ import { task } from "./task.js";
  * prefix cache read or wrote, and the estimates of what the step read that
  * the provider does not count apart, the instructions, the tool
  * definitions, and the plan or task the agent was handed, each estimated
- * as its JSON's bytes over four (`coder-host/token-estimate.ts`); a
+ * as its JSON's bytes over four (`native-events/runner-events-app.ts`); a
  * native step estimates the plan or task alone and tells the rest as 0.
  * `at` is the epoch milliseconds the step's end was relayed.
  */

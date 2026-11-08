@@ -4,10 +4,11 @@ import {
   WORKSPACE_EXPERIMENT_LIST,
   type WorkspaceExperiment,
 } from "@repo/settings";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { DateTime, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { InstantColumnSchema } from "./columns.js";
 
@@ -48,9 +49,6 @@ const StandingRowSchema = Schema.Struct({
 });
 
 const WorkspaceExperimentSchema = Schema.Literals(WORKSPACE_EXPERIMENT_LIST);
-
-/** The transaction a statement wrote its row in. */
-const WrittenSchema = Schema.Struct({ txid: Schema.String });
 
 const findStandings = SqlSchema.findAll({
   Request: Schema.String,
@@ -95,7 +93,7 @@ const upsertStanding = SqlSchema.findAll({
     by: Schema.String,
     now: Schema.Date,
   }),
-  Result: WrittenSchema,
+  Result: TxidRowSchema,
   execute: (write) =>
     Database.use((db) =>
       db
@@ -113,7 +111,7 @@ const upsertStanding = SqlSchema.findAll({
           // A write that leaves it as it stands, a retry or a second press, keeps who turned it so and when.
           setWhere: ne(workspaceExperiment.on, write.on),
         })
-        .returning({ txid: sql<string>`pg_current_xact_id()::text` }),
+        .returning(TXID_RETURNING),
     ),
 });
 

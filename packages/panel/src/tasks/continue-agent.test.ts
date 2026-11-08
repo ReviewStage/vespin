@@ -208,8 +208,8 @@ async function drawnTab(input: {
   messages?: readonly AgentTranscriptMessage[];
   /** Whether the tab's place opens the continue as a draft, as the task's column does. */
   drafts?: boolean;
-  /** What the first page says the agent and its newest turn cost, the latter as a service older than this window sent it. */
-  usage?: Pick<AgentMessagesAnswer, "usage" | "turnUsage">;
+  /** What the first page says the agent cost. */
+  usage?: Pick<AgentMessagesAnswer, "usage">;
   /** Where the first page says the agent's launch stands, or stopped once it failed. */
   launch?: AgentLaunch;
   /** Where the end line's key press turns, by the provider it names. */
@@ -507,7 +507,7 @@ test("the sign-in card's Move to cloud continues the agent in the cloud while Br
   assert.equal(off.named(offCard, "Move to cloud"), undefined);
 });
 
-test("a failed turn's end line names no price, even from a service that sent the turn's, while the model menu's foot still says the whole run's", async () => {
+test("a failed turn's end line names no price, while the model menu's foot still says the whole run's", async () => {
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SANDBOX,
@@ -519,7 +519,6 @@ test("a failed turn's end line names no price, even from a service that sent the
         costUsd: 2.41,
         payer: AGENT_PAYER.API_KEY,
       },
-      turnUsage: { inputTokens: 40_000, outputTokens: 900, cachedInputTokens: 0, costUsd: 0.08 },
     },
   });
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
@@ -533,7 +532,6 @@ test("a failed turn's end line names no price, even from a service that sent the
   await settle();
   const menu = tab.container.querySelector(".ui-searchable-menu") ?? assert.fail("the menu opens");
   assert.match(menu.textContent ?? "", /API key · \$2\.41 so far/);
-  assert.doesNotMatch(menu.textContent ?? "", /\$0\.08/);
 });
 
 test("a failed end line's row ends on Continue where only a new agent goes on, also once another continued it, and not beside a closed box's own press", () => {

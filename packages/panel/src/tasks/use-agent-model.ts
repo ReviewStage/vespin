@@ -1,4 +1,3 @@
-import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import type { AgentRuntime, AgentSummary } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { useRef, useState } from "react";
@@ -60,16 +59,13 @@ export function useAgentModel(input: {
     writes.current += 1;
     const write = writes.current;
     setHeld((was) => ({ ...was, note: undefined }));
-    latest.current
-      .choose(agent.id, next)
-      .catch((): AgentAgentAnswer => ({ failure: AGENT_CALL_FAILURE.UNANSWERED }))
-      .then((answer) => {
-        if (write !== writes.current || latest.current.agent.id !== agent.id) return;
-        setHeld((was) => ({
-          ...was,
-          note: "failure" in answer ? chooseFailureNote(answer.failure) : undefined,
-        }));
-      });
+    latest.current.choose(agent.id, next).then((answer) => {
+      if (write !== writes.current || latest.current.agent.id !== agent.id) return;
+      setHeld((was) => ({
+        ...was,
+        note: "failure" in answer ? chooseFailureNote(answer.failure) : undefined,
+      }));
+    });
   };
 
   return {

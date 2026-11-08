@@ -52,12 +52,8 @@ import {
   useCloudBrowserDrafts,
   useCloudBrowserTabs,
 } from "./cloud-browser-tabs.js";
-import {
-  type OpenTask,
-  SIDE_PANEL_TABS,
-  type SidePanelControl,
-  useSidePanel,
-} from "./use-side-panel.js";
+import { SIDE_PANEL_TABS } from "./task-tab-model.js";
+import { type OpenTask, type SidePanelControl, useSidePanel } from "./use-side-panel.js";
 import { WindowAccountContext, windowAccountOf } from "./window-account.js";
 
 /**

@@ -303,7 +303,7 @@ const PRESSABLE_CURSOR = "cursor-press disabled:cursor-default";
 /** What a button is drawn with: the shadcn button's box and shape, and the classes its look and state add. */
 interface ButtonLook {
   readonly size: BoxSize;
-  readonly shape: "square" | "round";
+  readonly shape: ButtonShape;
   readonly className: string;
 }
 
@@ -336,7 +336,7 @@ function buttonLook({
   const box = boxSize(variant, size, iconOnly);
   return {
     size: box,
-    shape: shape === BUTTON_SHAPE.ROUND ? "round" : "square",
+    shape: shape ?? BUTTON_SHAPE.SQUARE,
     className: cn(
       "ui-button",
       busy ? "cursor-progress" : settled ? "cursor-default" : PRESSABLE_CURSOR,

@@ -34,7 +34,7 @@ export interface BridgeHostDependencies {
   ipcMain: Pick<IpcMain, "handle" | "on">;
   /** Only this build's own renderer may reach any channel here. */
   trustedSender: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
-  /** Which of the three surfaces asked, decided by the windows this process opened. */
+  /** Whether a panel asked, decided by the windows this process opened. */
   senderOf: (sender: WebContents) => ActSender<WebContents>;
   /** The act port's server, which every window's port is upgraded with. */
   actPort: ActPortHandler<WebContents>;

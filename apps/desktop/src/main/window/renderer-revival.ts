@@ -80,7 +80,7 @@ export class RendererRevival {
       this.#timer = undefined;
       if (!this.#stopped) this.#options.revive();
     }, REVIVAL_DELAY_MS);
-    this.#timer.unref?.();
+    this.#timer.unref();
   }
 
   /** Stands the renderer back up at once with a fresh count, as a person asks after it gave up. */

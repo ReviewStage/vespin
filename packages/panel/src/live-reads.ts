@@ -111,7 +111,7 @@ type LiveReadId = string | number;
 type LiveReadKey<Read extends LiveReadName> = readonly [Read, ...LiveReadId[]];
 
 /** The read a live read's query stands for: the host could not answer it before it ever had. */
-export class LiveReadFailed extends Error {
+class LiveReadFailed extends Error {
   constructor(readonly read: LiveReadName) {
     super(`The host could not read ${read}.`);
     this.name = "LiveReadFailed";
@@ -432,7 +432,7 @@ function firstAnswer<Read extends LiveReadName>(
     stop = client.getQueryCache().subscribe((event) => {
       if (isAppState(event.query)) settle();
     });
-    return Effect.sync(() => stop?.());
+    return Effect.sync(() => stop());
   });
 }
 
@@ -796,7 +796,7 @@ function writeLiveReads(client: QueryClient): void {
  * header says. Mounted once at each root, which follows the document (`followAppState`), and
  * beside a test's own client (`testing/copy-feedback.ts`).
  */
-export function useLiveReadSubscription(): void {
+function useLiveReadSubscription(): void {
   const client = useQueryClient();
   useEffect(() => {
     const cache = client.getQueryCache();

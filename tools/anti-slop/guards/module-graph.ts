@@ -13,7 +13,7 @@ import { parseSync } from "oxc-parser";
  */
 
 /** One `import` or re-export a module states: the specifier, and the names it binds or passes on. */
-export interface ModuleEdge {
+interface ModuleEdge {
   readonly specifier: string;
   /** Whether every name the edge carries is a type, so no bundler follows it. */
   readonly typeOnly: boolean;

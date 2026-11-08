@@ -68,6 +68,8 @@ export interface AutomationsRoute extends AutomationsStanding {
   readonly setupAddress: string | undefined;
   /** Opens `to` under the workspace whose address step is `workspace`. */
   readonly onOpen: (to: AutomationsPlace, workspace: string) => void;
+  /** Whether the page `to` under `workspace` is the one standing, which opening it moves nothing to. */
+  readonly standsAt: (to: AutomationsPlace, workspace: string) => boolean;
   /** Stands the automation's runs alone as a step of their own, or its setup again in the step's place. */
   readonly onRuns: (shown: boolean) => void;
   readonly onClose: () => void;
@@ -136,13 +138,15 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
   // Only grows: every automation the window has seen deleted.
   const deleted = useRoutedMemory().deletedAutomations;
   const { standingIn } = standing;
+  const standsAt = (to: AutomationsPlace, workspace: string) =>
+    router.buildLocation(navigationTo(to, workspace)).href === router.history.location.href;
   const onOpen = (to: AutomationsPlace, workspace: string) => {
     const gone = to.kind === AUTOMATIONS_PAGE.LIST ? to.deleted : undefined;
     if (gone !== undefined) deleted.setState((held) => new Map(held).set(gone, true));
     const options = navigationTo(to, workspace);
     // Opening the page already standing moves nothing, as pressing the place standing always has,
-    // and keeps it standing where the door that asked for it left the routed place first, as a link's and ⌘K's do.
-    if (router.buildLocation(options).href === router.history.location.href) {
+    // and keeps it standing where the door that asked for it left the routed place first, as ⌘K's does.
+    if (standsAt(to, workspace)) {
       exits.stay();
       return;
     }
@@ -180,6 +184,7 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
     setupAddress:
       setup === undefined || !standing.runs ? undefined : router.buildLocation(setup).href,
     onOpen,
+    standsAt,
     onRuns,
     onClose: () => exits.leave(),
     onTurn,

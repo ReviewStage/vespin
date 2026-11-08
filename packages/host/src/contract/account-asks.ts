@@ -30,8 +30,7 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
  * window calls it with no payload and one sent anything is refused. A save's
  * key and a dictated clip each pass through to the host once and are noted
  * nowhere, and a refusal or a defect of the host's is drawn as the
- * coding-agent calls' unanswered failure, as every one was before it was
- * declared. A workspace's memories, the account's provider keys, and its
+ * coding-agent calls' unanswered failure. A workspace's memories, the account's provider keys, and its
  * GitHub token are live follows, each declared once (`live-follow.ts`).
  */
 

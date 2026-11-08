@@ -33,8 +33,7 @@ import {
   type TaskDraws,
   untitledStripTab,
 } from "./strip-tab-kinds.js";
-import { MAIN_TAB } from "./use-main-tabs.js";
-import { SIDE_PANEL_TAB } from "./use-side-panel.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 
 /**
  * What each kind of strip tab is called, wears, shows, and links to, and how

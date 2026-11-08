@@ -1,6 +1,5 @@
 import { Schema as EffectSchema } from "effect";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
-import { HOSTED_API_ERROR } from "./service-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
@@ -113,13 +112,3 @@ export const repositoryUnreachedSchema = EffectSchema.Union([
 ]);
 
 export type RepositoryUnreached = typeof repositoryUnreachedSchema.Type;
-
-/**
- * A `repository-not-reachable` refusal with its reason. A service from
- * before the reasons answers none, and a reader that cannot read the
- * reason, a newer one among them, reads the refusal as one with none.
- */
-export const repositoryNotReachableSchema = EffectSchema.Struct({
-  error: EffectSchema.Literal(HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE),
-  unreached: repositoryUnreachedSchema,
-});

@@ -11,7 +11,6 @@ import {
   ANNOUNCE,
   CONFIRM_LOSS,
   ConfirmDialog,
-  ErrorState,
   type MenuRow,
   repositoryMenuRow,
   SettingsLine,
@@ -22,7 +21,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { type UseQueryResult, useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
-import { confirmFailure, unreadShown } from "../failure-report.js";
+import { confirmFailure } from "../failure-report.js";
 import {
   githubTokenQuery,
   repositoryListsQuery,
@@ -36,6 +35,7 @@ import { CheckedRepositoryChip } from "../tasks/repository-chip.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { AddMenuButton } from "./add-menu-button.js";
+import { ReadFailed } from "./marks.js";
 import { GitHubOwnerRow, repositoryCount } from "./workspace-github-accounts.js";
 
 /**
@@ -86,8 +86,7 @@ export const TOKEN_REPOSITORIES_READ = {
   READY: "ready",
 } as const;
 
-export type TokenRepositoriesRead =
-  (typeof TOKEN_REPOSITORIES_READ)[keyof typeof TOKEN_REPOSITORIES_READ];
+type TokenRepositoriesRead = (typeof TOKEN_REPOSITORIES_READ)[keyof typeof TOKEN_REPOSITORIES_READ];
 
 /** The workspace's token repositories as last read, and the change that moves them. */
 export interface TokenRepositories {
@@ -447,14 +446,11 @@ export function TokenOwnerRows({
   }
   if (repositories.read === TOKEN_REPOSITORIES_READ.FAILED) {
     return (
-      <SettingsLine>
-        <ErrorState
-          failure={unreadShown(FAILURE_SURFACE.WORKSPACE_REPOSITORIES_READ)}
-          onRetry={repositories.retry}
-        >
-          {WORDS.ROWS_NOT_READ}
-        </ErrorState>
-      </SettingsLine>
+      <ReadFailed
+        line={WORDS.ROWS_NOT_READ}
+        surface={FAILURE_SURFACE.WORKSPACE_REPOSITORIES_READ}
+        onRetry={repositories.retry}
+      />
     );
   }
   return (

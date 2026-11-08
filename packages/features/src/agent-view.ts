@@ -344,7 +344,7 @@ function factsUnheard<
 }
 
 /** The models the service offers, as the window hears them: the list and the Mac a Start may run on where it offers one (`modelsAnswerSchema`), or why there is none. */
-export const agentModelsAnswerSchema = answerView(modelsContract.list);
+const agentModelsAnswerSchema = answerView(modelsContract.list);
 
 export type AgentModelsAnswer = typeof agentModelsAnswerSchema.Type;
 
@@ -371,12 +371,12 @@ export const chaptersProviderAnswerViewSchema = EffectSchema.Union([
 export type ChaptersProviderAnswer = typeof chaptersProviderAnswerViewSchema.Type;
 
 /** The account's hosts, as the window hears them read (`host-wire.ts`): the list and the install script's address, or why there is none. */
-export const hostsAnswerViewSchema = answerView(hostsContract.list);
+const hostsAnswerViewSchema = answerView(hostsContract.list);
 
 export type HostsAnswerView = typeof hostsAnswerViewSchema.Type;
 
 /** How long ago the reader's devices last beat, as the window hears it read, or why not. */
-export const devicePresenceAnswerViewSchema = answerView(hostsContract.presence);
+const devicePresenceAnswerViewSchema = answerView(hostsContract.presence);
 
 export type DevicePresenceAnswerView = typeof devicePresenceAnswerViewSchema.Type;
 
@@ -393,8 +393,6 @@ export const thisMacHostSetParamsSchema = EffectSchema.Struct({
   on: EffectSchema.Boolean,
   deleteFolders: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
-
-export type ThisMacHostSetParams = typeof thisMacHostSetParamsSchema.Type;
 
 /** The account's own provider keys, as the window hears them read, saved, or removed: the keys as they stand, or why there are none. */
 export const providerKeysAnswerViewSchema = answerView(accountContract.providerKeys);
@@ -428,8 +426,6 @@ export const chatGptDeviceWaitParamsSchema = EffectSchema.Struct({
     EffectSchema.isLessThanOrEqualTo(CHATGPT_DEVICE_INTERVAL_MAX_SECONDS),
   ),
 });
-
-export type ChatGptDeviceWaitParams = typeof chatGptDeviceWaitParamsSchema.Type;
 
 /** How a device-code login stands, as the window hears a wait or a cancel end: its outcome, a failure's fixed sentence, and the keys once connected; or why there is no answer. */
 export const chatGptDevicePollAnswerViewSchema = answerView(accountContract.pollChatGptDeviceLogin);
@@ -474,8 +470,6 @@ export const memoriesFollowParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
 });
 
-export type MemoriesFollowParams = typeof memoriesFollowParamsSchema.Type;
-
 /** Forgetting a memory, as the window asks it: its workspace and the memory's id. */
 export const memoryForgetParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
@@ -499,8 +493,6 @@ export const agentListParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
   includeArchived: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
-
-export type AgentListParams = typeof agentListParamsSchema.Type;
 
 /** A workspace's agents asked for, narrowed to one repository where one is named: what an automation's Same agent is chosen from. */
 export const agentWorkspaceListParamsSchema = EffectSchema.Struct({
@@ -540,7 +532,6 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
     agent: agentSummarySchema,
     txid: agentAnswerSchema.fields.txid,
-    notice: agentAnswerSchema.fields.notice,
     addedCheckout: agentAnswerSchema.fields.addedCheckout,
   }),
   failedReaching,
@@ -666,8 +657,6 @@ export const agentMessageParamsSchema = EffectSchema.Struct({
   ...agentMessageRequestSchema.fields,
 });
 
-export type AgentMessageParams = typeof agentMessageParamsSchema.Type;
-
 /** One agent's model and effort changed for its next step, as the window asks it: the agent and the choice. */
 export const agentChooseParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -698,8 +687,6 @@ export const agentAddRepositoryParamsSchema = EffectSchema.Struct({
   ...agentAddRepositoryRequestSchema.fields,
 });
 
-export type AgentAddRepositoryParams = typeof agentAddRepositoryParamsSchema.Type;
-
 /** One agent archived or brought back, as the window asks it: the agent, and which. */
 export const agentArchiveParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -729,22 +716,16 @@ export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
 
-export type AgentStopParams = typeof agentStopParamsSchema.Type;
-
 /** One agent taken back to just before one of the developer's lines, as the window names the line by its message id. */
 export const agentRewindParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   messageId: EffectSchema.NonEmptyString,
 });
 
-export type AgentRewindParams = typeof agentRewindParamsSchema.Type;
-
 /** One agent, as the window asks to read it whole as its own page, on a task or with none. */
 export const agentPageParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
-
-export type AgentPageParams = typeof agentPageParamsSchema.Type;
 
 /** One agent as its own page, as the window hears it: the agent, or why there is no answer. */
 export const agentPageAnswerViewSchema = answerView(agentsContract.read);
@@ -755,8 +736,6 @@ export type AgentPageAnswerView = typeof agentPageAnswerViewSchema.Type;
 export const agentPullRequestParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
-
-export type AgentPullRequestParams = typeof agentPullRequestParamsSchema.Type;
 
 /**
  * One agent's Pull request tab, as the window reads its pull request: the
@@ -791,7 +770,7 @@ export const pullRequestPartParamsSchema = EffectSchema.Struct({
 export type PullRequestPartParams = typeof pullRequestPartParamsSchema.Type;
 
 /** What the agent published, as the window hears it: its branch and pull request as GitHub holds them, or why there is no answer. */
-export const agentPullRequestAnswerViewSchema = answerView(agentPullRequestsContract.pullRequest, {
+const agentPullRequestAnswerViewSchema = answerView(agentPullRequestsContract.pullRequest, {
   as: AGENT_NOT_FOUND_RENAMES,
 });
 
@@ -805,7 +784,7 @@ export const agentChangesAnswerViewSchema = answerView(agentsContract.changes, {
 export type AgentChangesAnswerView = typeof agentChangesAnswerViewSchema.Type;
 
 /** One agent's pull request itself as its overview draws it, as the window hears it: the pull request, why there is none yet, or why there is no answer. */
-export const agentOverviewPullRequestAnswerViewSchema = answerView(
+const agentOverviewPullRequestAnswerViewSchema = answerView(
   agentPullRequestsContract.overviewPullRequest,
   {
     as: AGENT_NOT_FOUND_RENAMES,
@@ -816,17 +795,14 @@ export type AgentOverviewPullRequestAnswerView =
   typeof agentOverviewPullRequestAnswerViewSchema.Type;
 
 /** The checks on one agent's pull request's head, as the window hears them: the checks, why there are none yet, or why there is no answer. */
-export const agentOverviewChecksAnswerViewSchema = answerView(
-  agentPullRequestsContract.overviewChecks,
-  {
-    as: AGENT_NOT_FOUND_RENAMES,
-  },
-);
+const agentOverviewChecksAnswerViewSchema = answerView(agentPullRequestsContract.overviewChecks, {
+  as: AGENT_NOT_FOUND_RENAMES,
+});
 
 export type AgentOverviewChecksAnswerView = typeof agentOverviewChecksAnswerViewSchema.Type;
 
 /** One agent's pull request's conversation, as the window hears it: the conversation, why there is none yet, or why there is no answer. */
-export const agentOverviewConversationAnswerViewSchema = answerView(
+const agentOverviewConversationAnswerViewSchema = answerView(
   agentPullRequestsContract.overviewConversation,
   {
     as: AGENT_NOT_FOUND_RENAMES,
@@ -837,12 +813,12 @@ export type AgentOverviewConversationAnswerView =
   typeof agentOverviewConversationAnswerViewSchema.Type;
 
 /** Which of our own tools an agent is offered and where its `run_on_mac` stands, as the window hears it: the answer, or why there is none. */
-export const agentWorkspaceToolsAnswerViewSchema = answerView(agentsContract.workspaceTools);
+const agentWorkspaceToolsAnswerViewSchema = answerView(agentsContract.workspaceTools);
 
 export type AgentWorkspaceToolsAnswerView = typeof agentWorkspaceToolsAnswerViewSchema.Type;
 
 /** What the reviewer and label pickers of an agent's Pull request tab offer, as the window hears it: the labels, users, and teams, or why there is no answer. */
-export const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {
+const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {
   as: AGENT_NOT_FOUND_RENAMES,
 });
 
@@ -855,8 +831,6 @@ export const agentPullRequestActionParamsSchema = EffectSchema.Struct({
   request: pullRequestActionRequestSchema,
 });
 
-export type AgentPullRequestActionParams = typeof agentPullRequestActionParamsSchema.Type;
-
 /** How GitHub took a change to an agent's pull request, as the window hears it: made, the member to sign in with GitHub again, GitHub's refusal in its words, or why there is no answer. */
 export const agentPullRequestWriteAnswerViewSchema = answerView(agentPullRequestsContract.action, {
   as: PULL_REQUEST_WRITE_VIEW_RENAMES,
@@ -865,7 +839,7 @@ export const agentPullRequestWriteAnswerViewSchema = answerView(agentPullRequest
 export type AgentPullRequestWriteAnswerView = typeof agentPullRequestWriteAnswerViewSchema.Type;
 
 /** Which of an agent's pull request's files the member marked viewed on GitHub, as the window hears it: each file's mark, the member to sign in with GitHub again, GitHub's refusal in its words, or why there is no answer. */
-export const agentPullRequestViewedAnswerViewSchema = answerView(agentPullRequestsContract.viewed, {
+const agentPullRequestViewedAnswerViewSchema = answerView(agentPullRequestsContract.viewed, {
   as: PULL_REQUEST_WRITE_VIEW_RENAMES,
 });
 
@@ -937,14 +911,10 @@ export const agentInboxCloseReleaseParamsSchema = EffectSchema.Struct({
   send: EffectSchema.Boolean,
 });
 
-export type AgentInboxCloseReleaseParams = typeof agentInboxCloseReleaseParamsSchema.Type;
-
 /** What letting a held close go found: whether it was still held, which an Undo that came too late hears as false. */
 export const agentInboxCloseReleasedViewSchema = EffectSchema.Struct({
   held: EffectSchema.Boolean,
 });
-
-export type AgentInboxCloseReleasedView = typeof agentInboxCloseReleasedViewSchema.Type;
 
 /** A message on one item's thread, as the window asks it: the item, and the message request the service takes, its key the window's own. */
 export const agentInboxMessageParamsSchema = EffectSchema.Struct({
@@ -968,8 +938,6 @@ export type AgentInboxStartParams = typeof agentInboxStartParamsSchema.Type;
 export const agentInboxItemHomeParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
 });
-
-export type AgentInboxItemHomeParams = typeof agentInboxItemHomeParamsSchema.Type;
 
 /** Where one item stands, as the window hears it: its agent, its task, and its workspace, or why there is no answer, not found for one the account may not read. */
 export const agentInboxItemHomeViewSchema = answerView(inboxContract.home);
@@ -1041,8 +1009,6 @@ export const agentPictureParamsSchema = EffectSchema.Struct({
   callId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
 });
 
-export type AgentPictureParams = typeof agentPictureParamsSchema.Type;
-
 /** One part of a message of an agent's transcript, or one of its workers' where `callId` names the delegation call that started it, by the message's id and the part's index among its parts: what the page carried cut (`cutParts`). */
 export const agentPartParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -1086,8 +1052,6 @@ export const agentGitHubImageParamsSchema = EffectSchema.Struct({
     EffectSchema.isMaxLength(GITHUB_IMAGE_BOUNDS.MAX_URL_CHARS),
   ),
 });
-
-export type AgentGitHubImageParams = typeof agentGitHubImageParamsSchema.Type;
 
 /** The media types an image read from GitHub may be. */
 export const githubImageTypeSchema = EffectSchema.Literals(Object.values(GITHUB_IMAGE_TYPE));

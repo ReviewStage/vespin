@@ -58,7 +58,7 @@ const ACCEPTED = 202;
  * same, as the client has always read it as its own failure. A queue full or
  * out of order is an invalid request.
  */
-const MESSAGE_REFUSALS = [
+export const MESSAGE_REFUSALS = [
   HOSTED_API_ERROR.NOT_FOUND,
   HOSTED_API_ERROR.NOT_PERMITTED,
   HOSTED_API_ERROR.MESSAGE_TOO_LONG,

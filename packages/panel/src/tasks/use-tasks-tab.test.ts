@@ -146,10 +146,9 @@ import { REVISION_SOURCE } from "./description-history-model.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import { ofPullRequestTab } from "./pull-request-number.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
+import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadTasksFixture } from "./tasks-fixture-loader.js";
 import { HISTORY_READ } from "./use-description-history.js";
-import { MAIN_TAB } from "./use-main-tabs.js";
-import { PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./use-side-panel.js";
 import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
@@ -964,49 +963,6 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)] } });
   await settle();
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the agent once they are read");
-});
-
-test("a column kept while the plan, the Inbox, and the Call stood in it, and a side panel kept on its Plan and Comments tabs, read with each let go, the agents' order and the tab last viewed still standing", async () => {
-  window.localStorage.setItem(
-    "app.sidePanel",
-    JSON.stringify({
-      open: true,
-      tabs: ["plan", "inbox", "comments"],
-      tab: "plan",
-      width: 400,
-      tasks: {
-        [TASK.id]: {
-          opened: ["plan", "comments"],
-          closed: [],
-          recent: ["comments", "plan"],
-          order: ["plan", "comments"],
-        },
-      },
-    }),
-  );
-  window.localStorage.setItem(
-    "app.mainTabs",
-    JSON.stringify({
-      closedAgents: [],
-      tasks: {
-        [TASK.id]: {
-          recent: ["plan", { agent: AGENT_ID }, "inbox", "call"],
-          order: ["call", { agent: AGENT_ID }, "inbox"],
-          inboxOpen: true,
-          inboxSeen: ["item-1"],
-          planClosed: true,
-          callClosed: true,
-        },
-      },
-    }),
-  );
-  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
-  await settle();
-  const column = () => tab.control().mainTabs;
-  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, agentTab(AGENT_ID)]);
-  assert.deepEqual(column().tab, agentTab(AGENT_ID));
-  assert.deepEqual(tab.control().sidePanel.strip, [], "neither the Plan nor Comments tab stands");
-  assert.deepEqual(panelOf(tab), { open: false, tab: undefined });
 });
 
 test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
@@ -3545,14 +3501,21 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
 /** The task the doors below go to, listed beside the open one in the open one's workspace. */
 const BILLING = row("billing", 2);
 
-/** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead. */
-async function onInbox(away: (control: TasksControl) => void = () => inboxDoorNow().open()) {
+/** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead; over none where `bound` says so. */
+async function onInbox(
+  away: (control: TasksControl) => void = () => inboxDoorNow().open(),
+  bound = true,
+) {
   const tab = mount(
     {
       shown: true,
       // Note that the window's history stands beside the tab, since a door's step is written through it.
       history: true,
-      tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+      tasks: {
+        ...TWO_WORKSPACES,
+        tasks: [row("notes", 4), BILLING],
+        ...(bound ? { activeTaskId: "notes" } : undefined),
+      },
     },
     {
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
@@ -3590,6 +3553,7 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
         ? undefined
         : { taskId: control.sectionReveal.taskId, anchor: control.sectionReveal.reveal.anchor },
     pin: control.chosenPin,
+    founding: control.newWorkspace.open,
   };
 }
 
@@ -3735,6 +3699,115 @@ test.each(TAB_DOORS)(
   async (_door, press) => askedOver(press, () => automationsDoor?.open()),
 );
 
+/** The workspace doors, each pressed from `away`'s place over Personal's open task, or over no task where `bound` is false. */
+const WORKSPACE_DOORS: [
+  string,
+  (control: TasksControl) => void,
+  ((control: TasksControl) => void) | undefined,
+  boolean?,
+][] = [
+  [
+    "another workspace chosen, which leaves the open task",
+    (control) => control.onChooseWorkspace(ACME.id),
+    () => undefined,
+  ],
+  [
+    "another workspace chosen over the Inbox",
+    (control) => control.onChooseWorkspace(ACME.id),
+    undefined,
+  ],
+  [
+    "another workspace chosen over the Inbox with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    undefined,
+    false,
+  ],
+  [
+    "another workspace chosen over an automation with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    () => automationsDoor?.open(EDIT),
+    false,
+  ],
+  [
+    "another workspace chosen over the Board with no task open, which turns it",
+    (control) => control.onChooseWorkspace(ACME.id),
+    FROM_BOARD,
+    false,
+  ],
+  ["New workspace", (control) => control.newWorkspace.onOpen(), undefined],
+];
+
+test.each(WORKSPACE_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
+  async (_door, press, away, bound) => askedOver(press, away, bound),
+);
+
+/** A link to each family of places, opened in the Tasks tab as the window hands it one, each naming the task the doors above go to. */
+const ON_BILLING = `${LINK_ORIGIN}/personal/task/${BILLING.id}`;
+const LINK_DOORS: [string, string][] = [
+  ["a comment thread's link", `${ON_BILLING}?comment=thread-1`],
+  ["a section's link", `${ON_BILLING}#rollout`],
+  ["a page's link", `${ON_BILLING}/page/page-1`],
+  ["an agent's link", `${ON_BILLING}/agent/${AGENT_ID}`],
+  ["a message's link", `${ON_BILLING}/agent/${AGENT_ID}/message/msg-7`],
+  ["a worker's link", `${ON_BILLING}/agent/${AGENT_ID}/worker/toolu_1`],
+  ["a Changes link", `${ON_BILLING}/agent/${AGENT_ID}/changes`],
+  ["a review thread's link", `${ON_BILLING}/agent/${AGENT_ID}/changes/files/thread/PRRT_1`],
+  ["a task's link", ON_BILLING],
+  ["a version's link", `${ON_BILLING}/version/1`],
+  ["Home's link in another workspace", `${LINK_ORIGIN}/acme`],
+  ["the Board's link in another workspace", `${LINK_ORIGIN}/acme/tasks`],
+  ["a person's link in another workspace", `${LINK_ORIGIN}/acme/person/user-ada`],
+  ["the Automations link in another workspace", `${LINK_ORIGIN}/acme/automations`],
+  ["an automation's link in another workspace", `${LINK_ORIGIN}/acme/automation/a1`],
+  ["the Inbox's link in another workspace", `${LINK_ORIGIN}/acme/inbox`],
+  ["an Inbox item's link under its task", `${ON_BILLING}/inbox/${ITEM_ID}`],
+];
+
+test.each(LINK_DOORS)(
+  "%s over a page holding unsaved work asks, Cancel leaves the window as it stood, and Leave arrives as the link does with no ask",
+  async (_door, href) => askedOver((control) => control.onOpenLink(linkAt(href)), FROM_BOARD),
+);
+
+test("a link to a task number the service finds none for, over an automation holding unsaved work, keeps the page's ask once Leave leaves it standing", async () => {
+  const tab = mount(
+    {
+      shown: true,
+      history: true,
+      tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+    },
+    {
+      [ACT_KIND.TASKS_FIND]: () => Promise.resolve({ failure: TASK_CALL_FAILURE.UNANSWERED }),
+      [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false),
+    },
+  );
+  await settle();
+  act(() => automationsDoor?.open(EDIT));
+  await settle();
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  act(() => tab.control().onOpenLink(linkAt(`${LINK_ORIGIN}/personal/task/99`)));
+  await settle();
+  act(() => asks[0]?.());
+  await settle();
+  const stays = views?.automations !== undefined;
+  act(() => boardDoor?.open());
+  await settle();
+
+  assert.equal(stays, true, "the automation still stands, its work unsaved");
+  assert.equal(asks.length, 2, "leaving it later still asks");
+});
+
+test("a version's link from the Board, with Descriptions off, stands its task's own place on its Overview", async () => {
+  handState(experimentsOn());
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onOpenLink(linkAt(`${ON_BILLING}/version/1`)));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();
   const asks: (() => void)[] = [];
@@ -3758,8 +3831,9 @@ test("a section's mention over a page holding unsaved work asks the section into
 async function askedOver(
   press: (control: TasksControl) => void,
   away?: (control: TasksControl) => void,
+  bound?: boolean,
 ) {
-  const unasked = await onInbox(away);
+  const unasked = await onInbox(away, bound);
   act(() => press(unasked.control()));
   await settle();
   const arrived = windowOf(unasked);
@@ -3767,7 +3841,7 @@ async function askedOver(
   // Note that the second window starts as the first did, with nothing the first chose kept for it.
   window.localStorage.clear();
 
-  const tab = await onInbox(away);
+  const tab = await onInbox(away, bound);
   const asks: { readonly leave: () => void; readonly stay: () => void }[] = [];
   act(() => void tab.control().placeLeave.stand((leave, stay) => asks.push({ leave, stay })));
   await settle();
@@ -3959,79 +4033,6 @@ test("a Plan tab an earlier version pinned to the sidebar becomes the task's own
     [TASK.id],
     "the refused task's tab stays pinned, the pinned task's goes",
   );
-});
-
-/** An agent pin's payload, read back as the act's own schema admits it. */
-const readAgentPin = Schema.decodeUnknownOption(
-  Schema.Struct({
-    agentId: Schema.String,
-    pinned: Schema.Boolean,
-    position: Schema.optionalKey(Schema.String),
-  }),
-);
-
-test("an agent's tab an earlier version pinned on this Mac becomes the agent's own pin on the account, where it was dragged, once the list followed live names its task, and leaves this Mac only once that pin landed or the account already pinned it", async () => {
-  const kept = () =>
-    window.localStorage.setItem(
-      "app.sidePanel",
-      JSON.stringify({
-        open: true,
-        tabs: ["plan"],
-        width: 320,
-        pins: [{ task: TASK.id, tab: { agent: AGENT_ID }, label: "Agent", at: 1, position: "a3" }],
-      }),
-    );
-  const storedPins = () =>
-    JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}").pins as unknown[];
-  const asked = (tab: ReturnType<typeof mount>) =>
-    tab.payloads
-      .filter((each) => each.kind === ACT_KIND.AGENTS_PIN)
-      .map((each) => Option.getOrUndefined(readAgentPin(each.payload)));
-  const live = { ...listRead([listed()]), taskAgents: [listedAgent(RUNNING_AGENT)] };
-  const carriedPin = [{ agent: AGENT_ID, task: TASK.id, position: "a3" }];
-  /** A launch over the kept pin, the service answering its pin as `answer` does. */
-  const launch = async (
-    tasks: TasksView,
-    answer: () => Promise<PortActResult<typeof ACT_KIND.AGENTS_PIN>>,
-  ) => {
-    kept();
-    const tab = mount({ shown: true, tasks }, { [ACT_KIND.AGENTS_PIN]: answer });
-    await settle();
-    return tab;
-  };
-
-  const pending = Promise.withResolvers<PortActResult<typeof ACT_KIND.AGENTS_PIN>>();
-  const landed = await launch(listRead([listed()]), () => pending.promise);
-  assert.deepEqual(asked(landed), [], "nothing is asked before the list is followed live");
-  landed.stand({ tasks: live });
-  await settle();
-  assert.deepEqual(asked(landed), [{ agentId: AGENT_ID, pinned: true, position: "a3" }]);
-  assert.deepEqual(landed.control().sidePanel.carried, carriedPin, "kept while its pin is out");
-  assert.equal(storedPins().length, 1);
-  await act(async () => pending.resolve({ agent: RUNNING_AGENT }));
-  assert.deepEqual(landed.control().sidePanel.carried, []);
-  assert.deepEqual(storedPins(), [], "nor does it stay on this Mac");
-  closeWindow();
-
-  // The service answers so as well for an agent the account cannot see just now.
-  const refused = await launch(live, () =>
-    Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
-  );
-  assert.equal(asked(refused).length, 1);
-  assert.deepEqual(
-    refused.control().sidePanel.carried,
-    carriedPin,
-    "a refused pin keeps the tab's for the next launch",
-  );
-  closeWindow();
-
-  const already = await launch(
-    { ...live, taskAgentPins: [{ agentId: AGENT_ID, taskId: TASK.id, pinnedAt: 5 }] },
-    () => Promise.resolve({ agent: RUNNING_AGENT }),
-  );
-  assert.deepEqual(asked(already), [], "an agent already pinned is asked nothing");
-  assert.deepEqual(already.control().sidePanel.carried, []);
-  assert.deepEqual(storedPins(), []);
 });
 
 /** A start's agent, read back where it names one. */

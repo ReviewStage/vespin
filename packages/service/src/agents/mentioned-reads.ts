@@ -1,7 +1,7 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { listPublishedAgentsById, taskNamesOf } from "@repo/database/models/agent-store";
-import { listPages } from "@repo/database/models/task-pages";
 import { taskIdOfNumber } from "@repo/database/models/task-number-store";
+import { listPages } from "@repo/database/models/task-pages";
 import { numberedTasksIn } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import type { PageLine, PageOwner } from "@repo/features/page-wire";
@@ -9,7 +9,6 @@ import type { Task } from "@repo/features/task-wire";
 import { Effect, Option, Schema } from "effect";
 import { listMembers } from "../accounts/workspace-members.js";
 import { wireUuidSchema } from "../core.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import {
   type MentionedAgent,
   type MentionedPerson,

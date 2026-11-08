@@ -190,7 +190,7 @@ export const SERVER_TURN_DURATION = {
  * Why a failed turn failed: the store's own failure word, or `unknown` where
  * the settled row names none of them.
  */
-export const SERVER_TURN_FAILURE = {
+const SERVER_TURN_FAILURE = {
   ...TURN_FAILURE,
   UNKNOWN: "unknown",
 } as const;
@@ -326,7 +326,7 @@ export const SERVER_AGENT_TOOL = {
 type Values<T> = T[keyof T];
 
 /** Where a task came to rest: done or canceled, the two a finish counts. */
-export type ServerTaskFinishStatus = typeof TASK_STATUS.DONE | typeof TASK_STATUS.CANCELED;
+type ServerTaskFinishStatus = typeof TASK_STATUS.DONE | typeof TASK_STATUS.CANCELED;
 
 export type ServerAgentStartFailure = Values<typeof SERVER_AGENT_START_FAILURE>;
 
@@ -689,7 +689,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
           const now = yield* Clock.currentTimeMillis;
           const naming = yield* groupItems(userId, workspaceId, now);
           if (naming.length > 0) yield* postNaming(workspaceId, naming, [], now);
-        }).pipe(Effect.ignore),
+        }),
     };
   }),
 );

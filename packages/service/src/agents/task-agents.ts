@@ -55,7 +55,6 @@ import {
  * on.
  */
 
-/** The statuses under which an agent is at work. */
 const WORKING_STATUSES: ReadonlySet<AgentStatus> = new Set([
   AGENT_STATUS.STARTING,
   AGENT_STATUS.RUNNING,

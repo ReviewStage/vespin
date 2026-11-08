@@ -50,10 +50,7 @@ export const CHAPTER_CLAIM_OUTCOME = {
 } as const;
 
 /** The generation a claim took: the row, and the claim it holds, which its finish or failure names. */
-export interface ChapterClaim {
-  readonly id: string;
-  readonly claim: string;
-}
+export type ChapterClaim = typeof ClaimRowSchema.Type;
 
 export type ChapterClaimAnswer =
   | { readonly outcome: typeof CHAPTER_CLAIM_OUTCOME.CLAIMED; readonly claim: ChapterClaim }

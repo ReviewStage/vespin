@@ -671,7 +671,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
        */
       armed: Effect.gen(function* () {
         if (account.capabilitiesActive()) yield* openCapabilities;
-        yield* Effect.forkScoped(Effect.ignore(account.session.refreshOnce()));
+        yield* Effect.forkScoped(account.session.refreshOnce());
       }),
       drain,
     };

@@ -184,7 +184,7 @@ function timedRequest(
       orElse: () => Effect.fail(new DOMException("The request timed out", "TimeoutError")),
     }),
     Effect.provide(client),
-    Effect.catch((error) => Effect.fail(transportError(error))),
+    Effect.mapError(transportError),
     Effect.catchDefect((defect) => Effect.fail(transportError(defect))),
   );
 }

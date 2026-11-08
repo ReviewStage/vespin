@@ -38,10 +38,7 @@ export interface PictureToKeep {
 }
 
 /** A kept picture as a read answers it: the type it is served under, and its bytes. */
-export interface StoredPicture {
-  readonly contentType: ConversationMediaType;
-  readonly bytes: Uint8Array;
-}
+export type StoredPicture = typeof StoredPictureSchema.Type;
 
 const KeptRowSchema = Schema.Struct({
   id: Schema.String,
@@ -107,9 +104,14 @@ const insertPicture = SqlSchema.findAll({
     ),
 });
 
+const StoredPictureSchema = Schema.Struct({
+  contentType: conversationMediaTypeSchema,
+  bytes: Schema.Uint8Array,
+});
+
 const findPicture = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, id: Schema.String }),
-  Result: Schema.Struct({ contentType: conversationMediaTypeSchema, bytes: Schema.Uint8Array }),
+  Result: StoredPictureSchema,
   execute: ({ conversationId, id }) =>
     Database.use((db) =>
       db

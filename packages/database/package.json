@@ -11,6 +11,7 @@
     "./core/neon-compute-limit": "./src/core/neon-compute-limit.js",
     "./core/query": "./src/core/query.js",
     "./core/sql-client": "./src/core/sql-client.js",
+    "./core/txid": "./src/core/txid.js",
     "./github-installation-vocabulary": "./src/github-installation-vocabulary.js",
     "./integration-vocabulary": "./src/integration-vocabulary.js",
     "./models/abandoned-turns": "./src/models/abandoned-turns.js",

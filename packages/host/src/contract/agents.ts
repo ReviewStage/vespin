@@ -11,7 +11,7 @@
  * here too, by the code its link named, as Settings › Hosts asks. Only a
  * panel draws a task's agents, so every ask is the panel's alone, and a
  * refusal or a defect of the host's is drawn as the ask's unanswered
- * failure, as every one was before it was declared. Every hold and its Try
+ * failure. Every hold and its Try
  * again is a live follow, declared once (`live-follow.ts`); the notes of
  * which agent is shown and seen stay procedures of their own.
  */

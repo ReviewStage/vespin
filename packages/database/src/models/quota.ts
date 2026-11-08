@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { Effect, Option, Schema } from "effect";
+import { type Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { hostedUsage } from "../schemas/usage.js";
@@ -13,18 +13,6 @@ export function utcDayKey(now: number): string {
 export type QuotaEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /**
- * A row a statement had to answer. Its absence is this module's own
- * invariant broken — an upsert that returned nothing — which is a defect
- * rather than an outcome a caller could act on.
- */
-function required<A>(row: Option.Option<A>, absent: string): Effect.Effect<A> {
-  return Option.match(row, { onNone: () => Effect.die(new Error(absent)), onSome: Effect.succeed });
-}
-
-const HostedUsageWriteSchema = Schema.Struct({ userId: Schema.String, day: Schema.String });
-const HostedUsageCallsRowSchema = Schema.Struct({ calls: Schema.Number });
-
-/**
  * The day's count as the conflicting row already has it, counted up. This is
  * the one conflicting update that cannot set what the insert carried: the new
  * value is a function of the standing row rather than of the values offered,
@@ -32,40 +20,6 @@ const HostedUsageCallsRowSchema = Schema.Struct({ calls: Schema.Number });
  * increment is a fragment inside the one rendered statement.
  */
 const ONE_MORE_CALL = sql`${hostedUsage.calls} + 1`;
-
-const spendHostedUsage = SqlSchema.findOneOption({
-  Request: HostedUsageWriteSchema,
-  Result: HostedUsageCallsRowSchema,
-  execute: (write) =>
-    Database.use((db) =>
-      db
-        .insert(hostedUsage)
-        .values({ userId: write.userId, day: write.day, calls: 1 })
-        .onConflictDoUpdate({
-          target: [hostedUsage.userId, hostedUsage.day],
-          set: { calls: ONE_MORE_CALL },
-        })
-        .returning({ calls: hostedUsage.calls }),
-    ),
-});
-
-/**
- * Counts one hosted use against the account's UTC day and answers the day's
- * count so far. The increment is a single atomic upsert taken before the
- * upstream call, so the counter records what was asked whether or not the
- * call then succeeded. Nothing is refused on the count: the admin pages read
- * it, and the OpenAI project's own spend limit is the backstop.
- */
-export function spendHostedMeter(input: {
-  readonly userId: string;
-  readonly now: number;
-}): Effect.Effect<number, StoreFailure, DatabaseServices> {
-  const day = utcDayKey(input.now);
-  return spendHostedUsage({ userId: input.userId, day }).pipe(
-    Effect.flatMap((row) => required(row, "The usage upsert returned no row.")),
-    Effect.map((row) => row.calls),
-  );
-}
 
 const DictationUsageWriteSchema = Schema.Struct({
   userId: Schema.String,

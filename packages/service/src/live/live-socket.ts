@@ -140,7 +140,7 @@ export function answerLiveSocket(
 }
 
 /** Whether an upgrade is this service's to take, read from its address and headers alone, against the deployment's own origins: refused, or the credential it carries. */
-export function admitLiveSocketUpgrade(
+function admitLiveSocketUpgrade(
   url: string | undefined,
   headers: IncomingHttpHeaders,
   ownOrigins: ReadonlySet<string>,

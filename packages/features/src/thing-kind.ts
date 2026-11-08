@@ -128,7 +128,7 @@ export interface ThingSaid {
 }
 
 /** What a thing is called now, where the window holds it, and whether that wins over the words it was written with. */
-export interface ThingName<T> {
+interface ThingName<T> {
   /**
    * Whether the name held wins over the words the thing was written with,
    * which name it as it was then; otherwise the words win, and the name
@@ -155,7 +155,7 @@ export const NOTHING_SAID: ThingSaid = {
 };
 
 /** A kind the window holds no name of, which is called by the words it was written with. */
-export const NO_LIVE_NAME: ThingName<Thing> = { live: false, held: () => undefined };
+const NO_LIVE_NAME: ThingName<Thing> = { live: false, held: () => undefined };
 
 /** A provider's page, called by the key and title its provider answered, where it was written bare. */
 const ANSWERED_NAME: ThingName<Thing> = {
@@ -202,7 +202,7 @@ function byAgent(words: string, agentId: string, known: KnownNames): string | un
 }
 
 /** What each kind is called now. */
-export const THING_NAME: ThingNames = {
+const THING_NAME: ThingNames = {
   [THING_KIND.PLAN]: { live: true, held: (plan, known) => known.tasks.get(plan.taskId) },
   [THING_KIND.SECTION]: { live: true, held: (_section, _known, { heading }) => heading },
   [THING_KIND.VERSION]: {

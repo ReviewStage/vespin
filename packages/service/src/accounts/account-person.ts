@@ -16,13 +16,10 @@ import { eq } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 
-/** The account's own name and email, as its user row holds them. */
-export interface AccountPerson {
-  readonly name: string;
-  readonly email: string;
-}
-
 const PersonRowSchema = Schema.Struct({ name: Schema.String, email: Schema.String });
+
+/** The account's own name and email, as its user row holds them. */
+export type AccountPerson = typeof PersonRowSchema.Type;
 
 const findPerson = SqlSchema.findOneOption({
   Request: Schema.String,

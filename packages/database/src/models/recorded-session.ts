@@ -204,13 +204,8 @@ const findStandingSessions = SqlSchema.findAll({
     ),
 });
 
-type ConversationKind = (typeof CONVERSATION_KIND)[keyof typeof CONVERSATION_KIND];
-
 /** A runtime session a standing conversation of the account runs in, and the kind of conversation. */
-export interface StandingSession {
-  readonly sessionId: string;
-  readonly kind: ConversationKind;
-}
+export type StandingSession = typeof StandingSessionRowSchema.Type;
 
 /**
  * The runtime sessions the account's standing conversations run in: every one

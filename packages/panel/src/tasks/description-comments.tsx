@@ -2959,7 +2959,7 @@ function ThreadList({
 }
 
 /** The class of the description's Comments toggle, which the list stands under. */
-export const COMMENTS_TOGGLE_CLASS = "comments-toggle";
+const COMMENTS_TOGGLE_CLASS = "comments-toggle";
 
 /** What the description's list calls the threads it can show. */
 const LISTING_WORDS = {

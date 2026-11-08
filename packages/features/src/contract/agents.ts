@@ -201,9 +201,6 @@ const agentChangeRequestSchema = EffectSchema.Union([
   modelChoiceSchema,
 ]);
 
-/** A change as it travels. */
-export type AgentChangeRequest = typeof agentChangeRequestSchema.Encoded;
-
 /** A Start's answer: its status, and the agent. */
 const startAnswerSchema = EffectSchema.Struct({
   status: EffectSchema.Literals(Object.values(AGENT_START_STATUS)),

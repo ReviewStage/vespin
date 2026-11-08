@@ -103,7 +103,7 @@ export interface WorkspaceMembersDependencies {
   /** The sync engine's pool, which each held workspace's people stand in while it is followed. */
   readonly pool: EntityPool;
   /** The signed-in account's lists kept on disk, which a workspace's people are drawn from before its read first answers, and each answer is kept in; none where nothing keeps them. */
-  readonly entities?: () => EntityStore | undefined;
+  readonly entities: () => EntityStore | undefined;
 }
 
 /** The workspaces' people the windows hold, and the member writes drawn over them. */
@@ -177,7 +177,7 @@ function followPeople(
       const waits = yield* carriedWaits(() => people.synced());
       yield* dependencies.stand(waits);
       // Note that the people kept on disk are drawn as the service last answered them, until the read answers anew.
-      const kept = dependencies.entities?.()?.storedIn(KEPT_READ.MEMBERS, workspaceId);
+      const kept = dependencies.entities()?.storedIn(KEPT_READ.MEMBERS, workspaceId);
       if (kept !== undefined) {
         yield* people.answer([{ workspaceId, ...kept }]);
         answered = true;
@@ -202,7 +202,7 @@ function followPeople(
           (rows) =>
             Effect.gen(function* () {
               yield* people.answer([{ workspaceId, ...rows }]);
-              yield* dependencies.entities?.()?.keepIn(KEPT_READ.MEMBERS, workspaceId, rows) ??
+              yield* dependencies.entities()?.keepIn(KEPT_READ.MEMBERS, workspaceId, rows) ??
                 Effect.void;
               answered = true;
               yield* waits.answered;
@@ -245,9 +245,7 @@ export function workspaceMembersReads(
         followPeople(workspaceId, answers, {
           seal: dependencies.seal,
           pool: dependencies.pool,
-          ...(dependencies.entities === undefined
-            ? undefined
-            : { entities: dependencies.entities }),
+          entities: dependencies.entities,
           stand: stand(workspaceId),
         }),
     });

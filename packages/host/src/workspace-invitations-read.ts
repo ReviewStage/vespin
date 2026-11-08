@@ -72,7 +72,7 @@ const WORKSPACE_INVITATION = fieldKind((row: PooledInvitation) => row.id);
 type Unsealed = { readonly failure: string; readonly gone?: boolean };
 
 /** What a cancel's service answered: the caller's answer, or the caller's answer for a refusal. */
-export type InvitationCanceled<Answer> = { readonly answer: Answer } | { readonly refused: Answer };
+type InvitationCanceled<Answer> = { readonly answer: Answer } | { readonly refused: Answer };
 
 export interface WorkspaceInvitationsDependencies {
   /** Whether the account gate stands open, so a follow may read. */
@@ -89,7 +89,7 @@ export interface WorkspaceInvitationsDependencies {
   /** The sync engine's pool, which each held workspace's invitations stand in while it is followed. */
   readonly pool: EntityPool;
   /** The signed-in account's lists kept on disk, which a workspace's invitations are drawn from before its read first answers, and each answer is kept in; none where nothing keeps them. */
-  readonly entities?: () => EntityStore | undefined;
+  readonly entities: () => EntityStore | undefined;
 }
 
 /** The workspaces' invitations the windows hold, and the invitation writes drawn over them. */
@@ -168,7 +168,7 @@ function followInvitations(
       const waits = yield* carriedWaits(() => invitations.synced());
       yield* dependencies.stand(waits);
       // Note that the invitations kept on disk are drawn as the service last answered them, on the origin it answered, until the read answers anew.
-      const kept = dependencies.entities?.()?.storedIn(KEPT_READ.INVITATIONS, workspaceId);
+      const kept = dependencies.entities()?.storedIn(KEPT_READ.INVITATIONS, workspaceId);
       if (kept !== undefined) {
         yield* invitations.answer(kept.invitations.map((row) => ({ workspaceId, ...row })));
         origin = kept.origin;
@@ -194,7 +194,7 @@ function followInvitations(
             Effect.gen(function* () {
               yield* invitations.answer(rows.invitations.map((row) => ({ workspaceId, ...row })));
               origin = first.origin;
-              yield* dependencies.entities?.()?.keepIn(KEPT_READ.INVITATIONS, workspaceId, {
+              yield* dependencies.entities()?.keepIn(KEPT_READ.INVITATIONS, workspaceId, {
                 origin: first.origin,
                 invitations: rows.invitations,
               }) ?? Effect.void;
@@ -239,9 +239,7 @@ export function workspaceInvitationsReads(
         followInvitations(workspaceId, answers, {
           seal: dependencies.seal,
           pool: dependencies.pool,
-          ...(dependencies.entities === undefined
-            ? undefined
-            : { entities: dependencies.entities }),
+          entities: dependencies.entities,
           stand: stand(workspaceId),
         }),
     });

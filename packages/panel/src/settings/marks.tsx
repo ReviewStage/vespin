@@ -1,6 +1,14 @@
-import { SavedTick, SettingsAttentionMark, SettingsChangedMark } from "@repo/ui";
+import type { FailureAbout, FailureSurface } from "@repo/features/shown-failure";
+import {
+  ErrorState,
+  SavedTick,
+  SettingsAttentionMark,
+  SettingsChangedMark,
+  SettingsLine,
+} from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { unreadShown } from "../failure-report.js";
 
 /**
  * The word beside a row's name while its value differs from the default,
@@ -44,6 +52,29 @@ export function SettingMarks({
  */
 export function AttentionMark({ note }: { note: string }): React.JSX.Element {
   return <SettingsAttentionMark note={note} />;
+}
+
+/** A card's line where the read of its rows did not land: the read failure, then Retry, in the rows' place. */
+export function ReadFailed({
+  line,
+  surface,
+  about,
+  onRetry,
+}: {
+  line: string;
+  /** Where the read failed, which its report names. */
+  surface: FailureSurface;
+  /** The ids the read was about, which its report names too. */
+  about?: FailureAbout;
+  onRetry?: (() => void) | undefined;
+}): React.JSX.Element {
+  return (
+    <SettingsLine>
+      <ErrorState failure={unreadShown(surface, about)} onRetry={onRetry}>
+        {line}
+      </ErrorState>
+    </SettingsLine>
+  );
 }
 
 /**

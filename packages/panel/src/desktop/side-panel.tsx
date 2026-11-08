@@ -151,6 +151,13 @@ import {
   TAB_KIND,
   tabLook,
 } from "../tasks/tab-look.js";
+import {
+  type FixedSidePanelTab,
+  PULL_REQUEST_VIEW,
+  type PullRequestView,
+  SIDE_PANEL_TAB,
+  SIDE_PANEL_WIDTH,
+} from "../tasks/task-tab-model.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
@@ -174,15 +181,10 @@ import {
   type FileHistoryStep,
   type FileReadPlace,
   type FileReads,
-  type FixedSidePanelTab,
   isPinnable,
   type OpenFile,
   type OpenPage,
   type PinHolder,
-  PULL_REQUEST_VIEW,
-  type PullRequestView,
-  SIDE_PANEL_TAB,
-  SIDE_PANEL_WIDTH,
   type SidePanelControl,
   type SidePanelTab,
   sameHolder,
