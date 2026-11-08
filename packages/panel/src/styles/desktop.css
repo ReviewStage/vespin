@@ -549,8 +549,14 @@ body,
    buttons at either end (`main-tabs.tsx`'s `TaskTopbar`), and its column's
    tabs and its side panel's on one row under it, on the frame: each starts
    and ends on one line with its sheet's edge below it, however the sidebar
-   stands and whether or not the panel is open. */
-:where(:root):not([data-ui-room="narrow"]) .desktop-shell > .desktop-main .desktop-task-main {
+   stands and whether or not the panel is open. Note that the agents' row
+   stands beside the column rather than in it, across the page, so it is
+   named here too, or it would start at the column's inset and end clear of
+   the panel's toggle, which stands over the topbar and not over it. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  :is(.desktop-task-main, .desktop-task > .task-tabs) {
   --ui-toolbar-start-at: 0px;
   --ui-toolbar-end-at: 0px;
 }

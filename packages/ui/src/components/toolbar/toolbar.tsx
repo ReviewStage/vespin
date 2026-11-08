@@ -158,10 +158,11 @@ const TITLE_PRESS_HEADING =
  * title is in Notion, and no fill while what it opens stands. It is laid as
  * a tab is (`tabs.tsx`): a control high, its mark at a tab's start inset and
  * icon gap, so a bar that starts at its column's edge (`TOOLBAR_INSET.COLUMN`)
- * stands its mark and words over the first tab's under it.
+ * stands its mark and words over the first tab's under it, and its wash
+ * eases in and out on a tab's timing.
  */
 const TITLE_PRESS =
-  "ui-toolbar-title-press inline-flex h-control max-w-full items-center gap-icon-gap rounded-control bg-transparent px-ui-8 hover:bg-muted [&_svg]:size-control-icon";
+  "ui-toolbar-title-press inline-flex h-control max-w-full items-center gap-icon-gap rounded-control bg-transparent px-ui-8 transition-colors duration-(--ui-duration-hover) ease-motion-exit hover:bg-muted [&_svg]:size-control-icon";
 
 /**
  * A title renamed where it stands: the press's box with nothing to press, or
