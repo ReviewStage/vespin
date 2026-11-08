@@ -470,8 +470,6 @@ export const TASK_BLOCK_CHANGE = {
   REMOVE: "remove",
 } as const;
 
-export type TaskBlockChange = (typeof TASK_BLOCK_CHANGE)[keyof typeof TASK_BLOCK_CHANGE];
-
 /**
  * One block of the task the path names, added or taken away (POST): the
  * other task, of the same workspace, and the side it stands on. A block is
@@ -1082,8 +1080,6 @@ export type TaskStartAnswer = typeof taskStartAnswerSchema.Type;
 
 /** The task a link names by its workspace and its number (GET), by its id, which every other read names it by. */
 export const taskFoundAnswerSchema = EffectSchema.Struct({ taskId: EffectSchema.String });
-
-export type TaskFoundAnswer = typeof taskFoundAnswerSchema.Type;
 
 /** A deleted task (DELETE): its row, its document, and its association are gone. */
 export const taskDeleteAnswerSchema = EffectSchema.Struct({

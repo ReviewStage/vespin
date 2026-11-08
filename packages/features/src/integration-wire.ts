@@ -538,8 +538,6 @@ export const integrationConnectAnswerSchema = EffectSchema.Struct({
   txid: writtenTxid,
 });
 
-export type IntegrationConnectAnswer = typeof integrationConnectAnswerSchema.Type;
-
 /** The page the browser lands on once a sign-in settled, and what its address carries. */
 export const INTEGRATION_LANDING = {
   PATH: "/integration-connected",

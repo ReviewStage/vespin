@@ -17,8 +17,6 @@ export const RUN_ON_MAC_OFF = {
   MAC_AWAY: "mac-away",
 } as const;
 
-export type RunOnMacOff = (typeof RUN_ON_MAC_OFF)[keyof typeof RUN_ON_MAC_OFF];
-
 /** The member whose Mac the agent's commands run on. */
 const runOnMacOwnerSchema = EffectSchema.Struct({
   userId: EffectSchema.String,

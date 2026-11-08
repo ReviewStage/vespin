@@ -30,9 +30,6 @@ export const INTEGRATION_CALL_FAILURE = {
   NOT_OPENED: "not-opened",
 } as const;
 
-export type IntegrationCallFailure =
-  (typeof INTEGRATION_CALL_FAILURE)[keyof typeof INTEGRATION_CALL_FAILURE];
-
 /**
  * The one account a Connect, a Cancel, a Disconnect, or a tools read is
  * about, as the window names it to the host: the provider, the account by

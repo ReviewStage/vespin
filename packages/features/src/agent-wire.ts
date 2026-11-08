@@ -968,8 +968,6 @@ export type AgentQueueChange = typeof agentQueueChangeSchema.Type;
 /** What a change to the queue answers: the queue as it then stands. */
 export const agentQueueAnswerSchema = EffectSchema.Struct({ queue: agentQueueSchema });
 
-export type AgentQueueAnswer = typeof agentQueueAnswerSchema.Type;
-
 /**
  * Rewinding an agent (POST): the developer's line it goes back to just
  * before, by its message id, dropping that line and everything after it.

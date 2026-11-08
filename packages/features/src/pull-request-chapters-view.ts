@@ -45,8 +45,6 @@ export const pullRequestChaptersParamsSchema = EffectSchema.Struct({
   number: EffectSchema.optionalKey(githubPullRequestNumberSchema),
 });
 
-export type PullRequestChaptersParams = typeof pullRequestChaptersParamsSchema.Type;
-
 /** A read of a pull request's chapters, which names the number the tab's own read of it found. */
 export const pullRequestChaptersReadParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,

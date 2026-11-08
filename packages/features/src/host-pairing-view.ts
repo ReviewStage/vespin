@@ -43,9 +43,6 @@ export const HOST_PAIRING_CALL_FAILURE = failureSetOf(HOST_PAIRING_CALLS, {
   as: HOST_PAIRING_RENAMES,
 });
 
-export type HostPairingCallFailure =
-  (typeof HOST_PAIRING_CALL_FAILURE)[keyof typeof HOST_PAIRING_CALL_FAILURE];
-
 /** What a read, an approve, or a deny names: the code as typed or as its link named it. */
 export const hostPairingParamsSchema = hostPairingCodeRequestSchema;
 

@@ -172,8 +172,6 @@ export const DEVICE_KIND = {
   HOST: "host",
 } as const;
 
-export type DeviceKind = (typeof DEVICE_KIND)[keyof typeof DEVICE_KIND];
-
 /**
  * Where a device stands in setting itself up to run agents, as it registers
  * while it is not ready to take one: a device fetching the pinned agent CLIs
@@ -396,8 +394,6 @@ const deviceAgentFileSchema = EffectSchema.Struct({
 export const deviceAgentFilesPayloadSchema = EffectSchema.Struct({
   files: EffectSchema.Array(deviceAgentFileSchema),
 });
-
-export type DeviceAgentFilesPayload = typeof deviceAgentFilesPayloadSchema.Type;
 
 /**
  * A launch's secrets, as the claim of its line hands them over once: the

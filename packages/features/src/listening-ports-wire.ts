@@ -32,12 +32,8 @@ export const portShareRequestSchema = EffectSchema.Struct({
   ),
 });
 
-export type PortShareRequest = typeof portShareRequestSchema.Type;
-
 /** The public link the shared port opens at. */
 export const portShareAnswerSchema = EffectSchema.Struct({ url: EffectSchema.String });
-
-export type PortShareAnswer = typeof portShareAnswerSchema.Type;
 
 /** The port shared now and its public link; none where no port is shared or the sandbox is not running. */
 export const sharedPortAnswerSchema = EffectSchema.Struct({
@@ -45,5 +41,3 @@ export const sharedPortAnswerSchema = EffectSchema.Struct({
     EffectSchema.Struct({ port: EffectSchema.Int, url: EffectSchema.String }),
   ),
 });
-
-export type SharedPortAnswer = typeof sharedPortAnswerSchema.Type;

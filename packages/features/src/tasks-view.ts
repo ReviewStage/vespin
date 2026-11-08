@@ -273,8 +273,6 @@ export const tasksRepositoriesParamsSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.optionalKey(workspaceSchema.fields.id),
 });
 
-export type TasksRepositoriesParams = typeof tasksRepositoriesParamsSchema.Type;
-
 /** Renaming a task, as the window asks it: the task, and the name the service keeps. */
 export const tasksRenameParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
@@ -567,8 +565,6 @@ export const tasksEditParamsSchema = EffectSchema.Struct({
   edit: descriptionEditRequestSchema,
 });
 
-export type TasksEditParams = typeof tasksEditParamsSchema.Type;
-
 /** Why an edit saved nothing: the service did not answer, the task is gone, or the description would be longer than a description may be. */
 const EDIT_FAILURES = [
   TASK_CALL_FAILURE.UNANSWERED,
@@ -632,8 +628,6 @@ export const tasksTreeParamsSchema = EffectSchema.Union([
   EffectSchema.Struct({ planId: EffectSchema.NonEmptyString, ...taskTreeRequestSchema.fields }),
   EffectSchema.Struct({ ...repositoryPlaceFields, ...taskTreeRequestSchema.fields }),
 ]);
-
-export type TasksTreeParams = typeof tasksTreeParamsSchema.Type;
 
 /** The tree's read of a folder, as the window hears it: the folder listed, why it is not, or that the service did not answer. */
 export const tasksTreeAnswerSchema = EffectSchema.Union([
@@ -718,15 +712,11 @@ export type TasksBrowserTabOpenAnswer = typeof tasksBrowserTabOpenAnswerSchema.T
 /** An agent's or a task's Browser tabs, held by a window while its side panel lists them. */
 export const taskBrowserTabsFollowSchema = browserTabsPlaceSchema;
 
-export type TaskBrowserTabsFollow = typeof taskBrowserTabsFollowSchema.Type;
-
 /** A task a link names by its number, as the window asks the host to find it: the link's workspace, by the slug or the id it spells, and the number. */
 export const tasksFindParamsSchema = EffectSchema.Struct({
   workspace: EffectSchema.NonEmptyString,
   number: taskNumberSchema,
 });
-
-export type TasksFindParams = typeof tasksFindParamsSchema.Type;
 
 /** The task a link names by its number, as the window hears it: its id, or that none was found or the service did not answer. */
 export const tasksFindAnswerSchema = EffectSchema.Union([
@@ -734,15 +724,11 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
-export type TasksFindAnswer = typeof tasksFindAnswerSchema.Type;
-
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
   before: EffectSchema.optionalKey(descriptionRevisionSeqSchema),
 });
-
-export type TasksRevisionsParams = typeof tasksRevisionsParamsSchema.Type;
 
 /** The version history's read of a page, as the window hears it: the page as the service answered it, or that it did not answer. */
 export const tasksRevisionsAnswerSchema = EffectSchema.Union([
@@ -757,20 +743,14 @@ export const taskDocumentFollowSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
 });
 
-export type TaskDocumentFollow = typeof taskDocumentFollowSchema.Type;
-
 /** One task's description history, held by a window while its version history stands (`LIVE_READ.HISTORY`), and read again at once on its Try again. */
 export const taskHistoryFollowSchema = EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString });
-
-export type TaskHistoryFollow = typeof taskHistoryFollowSchema.Type;
 
 /** One revision of a description, as the version history names it to read it or to restore it: the task and the revision's number. */
 export const tasksRevisionParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
   seq: descriptionRevisionSeqSchema,
 });
-
-export type TasksRevisionParams = typeof tasksRevisionParamsSchema.Type;
 
 /** The version history's read of one revision, as the window hears it: the revision beside the one before it, or that the service did not answer. */
 export const tasksRevisionAnswerSchema = EffectSchema.Union([
@@ -785,8 +765,6 @@ export const tasksPictureParamsSchema = EffectSchema.Struct({
   planId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
 });
-
-export type TasksPictureParams = typeof tasksPictureParamsSchema.Type;
 
 /**
  * One attachment of a description, as the window hears it: its bytes in base64
@@ -813,8 +791,6 @@ export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
   planId: EffectSchema.NonEmptyString,
   picture: pictureDataUrlSchema,
 });
-
-export type TasksPictureKeepParams = typeof tasksPictureKeepParamsSchema.Type;
 
 /** Why a picture was not kept: the description holds its bound of pictures, or of videos, as the service answers in band, or how its procedure failed: the plan is not the account's to write, or no answer. */
 export const PICTURE_KEEP_FAILURE = {
@@ -858,8 +834,6 @@ export type TasksPageAnswer = typeof tasksPageAnswerSchema.Type;
 /** One plan's pages, or one coding agent's on no task, held by a window while a surface of it draws them. */
 export const taskPagesFollowSchema = pagePlaceSchema;
 
-export type TaskPagesFollow = typeof taskPagesFollowSchema.Type;
-
 /** A page tab's read of one version's source, as the window hears it: its HTML line by line, colored as HTML, or that the service did not answer. */
 export const tasksPageSourceAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ lines: codeLinesSchema }),
@@ -874,8 +848,6 @@ const workspaceCallFailureSchema = EffectSchema.Struct({
 
 /** Making a workspace, as the window asks it: its name, as the service takes it; the account that asks owns it. */
 export const tasksWorkspaceCreateParamsSchema = workspaceCreateRequestSchema;
-
-export type TasksWorkspaceCreateParams = typeof tasksWorkspaceCreateParamsSchema.Type;
 
 /** Renaming a workspace, as the window asks it: the workspace and its new name, as the service takes them. */
 export const tasksWorkspaceRenameParamsSchema = workspaceRenameRequestSchema;
@@ -895,8 +867,6 @@ export type TasksWorkspaceSlugSetParams = typeof tasksWorkspaceSlugSetParamsSche
 /** Setting or removing a workspace's photo, as the window asks it: the workspace and the photo as a `data:` URL, or null, as the service takes them. */
 export const tasksWorkspacePhotoSetParamsSchema = workspacePhotoSetRequestSchema;
 
-export type TasksWorkspacePhotoSetParams = typeof tasksWorkspacePhotoSetParamsSchema.Type;
-
 /** One workspace, as the window names it to read its invitations, to connect or disconnect its GitHub organization, or to hold its own integrations or its Slack channels. */
 export const tasksWorkspaceParamsSchema = workspaceGithubRequestSchema;
 
@@ -915,8 +885,6 @@ export const tasksWorkspaceGitHubConnectAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ url: EffectSchema.String }),
   workspaceCallFailureSchema,
 ]);
-
-export type TasksWorkspaceGitHubConnectAnswer = typeof tasksWorkspaceGitHubConnectAnswerSchema.Type;
 
 /** One of a workspace's Sentry installations disconnected, as the window asks it: the workspace and Sentry's id for the installation. */
 export const tasksWorkspaceSentryDisconnectParamsSchema = workspaceSentryDisconnectRequestSchema;
@@ -973,8 +941,6 @@ export type TasksWorkspaceMemberRoleParams = typeof tasksWorkspaceMemberRolePara
 /** Handing a workspace to one of its admins, as the window asks it: the workspace and the admin's account. */
 export const tasksWorkspaceTransferParamsSchema = workspaceTransferSchema;
 
-export type TasksWorkspaceTransferParams = typeof tasksWorkspaceTransferParamsSchema.Type;
-
 /** A workspace's members, as the window hears them after a read, a removal, a role changed, or a handover: the members as they then stand, or why there are none. */
 export const tasksWorkspaceMembersAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -990,13 +956,8 @@ export type TasksWorkspaceMembersAnswer = typeof tasksWorkspaceMembersAnswerSche
 /** A workspace's people, followed by a window while it draws them. */
 export const workspacePeopleFollowSchema = EffectSchema.Struct({ workspaceId: workspaceIdSchema });
 
-export type WorkspacePeopleFollow = typeof workspacePeopleFollowSchema.Type;
-
 /** A workspace's token repositories, as Settings › Workspace asks for them: the workspace. */
 export const tasksWorkspaceTokenRepositoriesParamsSchema = workspaceLeaveRequestSchema;
-
-export type TasksWorkspaceTokenRepositoriesParams =
-  typeof tasksWorkspaceTokenRepositoriesParamsSchema.Type;
 
 /** A repository added to a workspace on the account's own token, or removed from it, as Settings › Workspace asks it. */
 export const tasksWorkspaceTokenRepositorySetParamsSchema = workspaceTokenRepositoryRequestSchema;
@@ -1016,28 +977,20 @@ export type TasksWorkspaceTokenRepositoriesAnswer =
 /** Leaving a workspace, as the window asks it: the workspace. */
 export const tasksWorkspaceLeaveParamsSchema = workspaceLeaveRequestSchema;
 
-export type TasksWorkspaceLeaveParams = typeof tasksWorkspaceLeaveParamsSchema.Type;
-
 /** A leave, as the window hears it: left, the view's list then without it, or why not. */
 export const tasksWorkspaceLeaveAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ left: EffectSchema.Literal(true) }),
   workspaceCallFailureSchema,
 ]);
 
-export type TasksWorkspaceLeaveAnswer = typeof tasksWorkspaceLeaveAnswerSchema.Type;
-
 /** An invitation, as the window asks for it: the workspace, the address, and the role. */
 export const tasksWorkspaceInviteParamsSchema = workspaceInviteRequestSchema;
-
-export type TasksWorkspaceInviteParams = typeof tasksWorkspaceInviteParamsSchema.Type;
 
 /** An invitation made, as the window hears it: the invitation with its accept link, or why none was. */
 export const tasksWorkspaceInvitationAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ invitation: workspaceInvitationSchema }),
   workspaceCallFailureSchema,
 ]);
-
-export type TasksWorkspaceInvitationAnswer = typeof tasksWorkspaceInvitationAnswerSchema.Type;
 
 /** A pending invitation canceled, as the window asks it: the workspace and the invitation. */
 export const tasksWorkspaceInvitationCancelParamsSchema = workspaceInvitationCancelSchema;
@@ -1070,8 +1023,6 @@ export const tasksGitHubDisconnectAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ connection: githubConnectionSchema }),
   answerView(githubContract.disconnect).members[1],
 ]);
-
-export type TasksGitHubDisconnectAnswer = typeof tasksGitHubDisconnectAnswerSchema.Type;
 
 /** Why a call about a description's comments answered nothing to draw: no answer, or the plan is not the account's to read or write. */
 export const DESCRIPTION_COMMENT_CALL_FAILURE = failureSetOf(descriptionCommentsContract);
