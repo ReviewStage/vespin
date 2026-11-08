@@ -126,7 +126,7 @@ import { TOAST_HOLD, useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
-import { ForwardChip, useAutoForward } from "./agent-forward.js";
+import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
   AGENT_PART,
   type AgentPart,
@@ -3276,7 +3276,7 @@ function AgentTabBody({
     known: control.pullRequests.get(agent.id),
   });
   const moveToCloud = useMoveToCloud(agent, control);
-  useAutoForward(agent, shown);
+  useForwardToast(agent);
   // Note that the log never waits on the pull request's dock over the box, because its read asks GitHub and would hold every tab's first draw for a second or more.
   // Note that nothing counts as landed before the first page.
   const surroundsLanded = messages.length > 0;

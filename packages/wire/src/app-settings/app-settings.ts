@@ -25,6 +25,7 @@ export const APP_SETTING_ID = {
   OPEN_AT_LOGIN: "open_at_login",
   AGENT_NOTIFICATIONS: "agent_notifications",
   MAC_COMMANDS: "mac_commands",
+  /** Offered by no build: Forward cloud agents' ports automatically, removed since ports are forwarded only from the agent's plug. */
   FORWARD_PORTS: "forward_ports",
   /** Offered by no build: Run agents on this Mac, removed since Runs on chooses where each agent runs. */
   LOCAL_AGENTS: "local_agents",
