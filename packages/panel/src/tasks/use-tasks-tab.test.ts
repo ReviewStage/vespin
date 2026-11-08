@@ -3824,6 +3824,34 @@ test("a task pressed on the Board leaves the Board for its task's own place", as
   assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
 });
 
+test.each<[string, (control: TasksControl) => void, string]>([
+  ["the Board", FROM_BOARD, "/personal/tasks"],
+  [
+    "a person's page",
+    (control) => control.onOpenPerson("user-ada", "Ada"),
+    "/personal/person/user-ada",
+  ],
+])(
+  "a task pressed on %s that the host refuses to open stands that page again",
+  async (_page, away, at) => {
+    const tab = mount(
+      {
+        shown: true,
+        history: true,
+        tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+      },
+      { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false) },
+    );
+    await settle();
+    act(() => away(tab.control()));
+    await settle();
+    act(() => tab.control().onSelect(BILLING.id));
+    await settle();
+
+    assert.equal(tab.at(), at);
+  },
+);
+
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();
   const asks: (() => void)[] = [];

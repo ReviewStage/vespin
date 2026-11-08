@@ -1369,6 +1369,10 @@ export function useTasksTab(input: {
   const backs = useNarrowBacks(narrowRoom);
   const routedBoard = useBoardRoute();
   const routedPerson = usePersonRoute();
+  // The Board's and a person's page's doors as the window was last drawn, which a refusal landing later stands them by,
+  // since a door read at the press thinks its page still stands and moves nothing.
+  const pagesNow = useRef({ board: routedBoard, person: routedPerson });
+  pagesNow.current = { board: routedBoard, person: routedPerson };
   const routedAutomations = useAutomationsRoute({ narrow: narrowRoom });
   // The routed places a door into a place of the window's state leaves, the Inbox, an agent's page, and a workspace not there, which stand in the task's place.
   const overPlan =
@@ -1397,10 +1401,10 @@ export function useTasksTab(input: {
     const unmoved = input.linkReads();
     return () => navigations.current === mine && unmoved();
   };
-  // What stood where a door was pressed, a workspace not there, an agent's page, the Inbox, and, where `history` says, a
-  // version history, each by where its address stood, which a refusal of the move stands again where the developer went
-  // nowhere since the press, the press's own move, `moved`, aside; the place a refusal leaves standing otherwise is the
-  // binding's (`places/place-binding.ts`).
+  // What stood where a door was pressed, a workspace not there, an agent's page, the Inbox, the Board, a person's page,
+  // and, where `history` says, a version history, each by where its address stood, which a refusal of the move stands
+  // again where the developer went nowhere since the press, the press's own move, `moved`, aside; the place a refusal
+  // leaves standing otherwise is the binding's (`places/place-binding.ts`).
   const pressedOverNow = useRef<(history: boolean, moved: boolean) => () => void>(
     () => () => undefined,
   );
@@ -1419,6 +1423,15 @@ export function useTasksTab(input: {
             at: { workspace: inboxView.standingIn, narrowed: inboxView.narrowed },
             chosen: inboxView.chosen,
           };
+    const boardBefore = routedBoard.standingIn;
+    const personBefore =
+      routedPerson.userId === undefined || routedPerson.workspace === undefined
+        ? undefined
+        : {
+            userId: routedPerson.userId,
+            name: routedPerson.name,
+            workspace: routedPerson.workspace,
+          };
     const historyBefore =
       !history || historyRoute.workspace === undefined || historyRoute.task === undefined
         ? undefined
@@ -1432,6 +1445,11 @@ export function useTasksTab(input: {
       if (inboxBefore !== undefined) {
         if (inboxBefore.chosen === undefined) inboxRoute.onOpen(inboxBefore.at);
         else inboxRoute.onChoose(inboxBefore.chosen, inboxBefore.at);
+      }
+      if (boardBefore !== undefined) pagesNow.current.board.onOpen(boardBefore);
+      if (personBefore !== undefined) {
+        const { userId, name, workspace } = personBefore;
+        pagesNow.current.person.onOpen(userId, name, workspace);
       }
       if (historyBefore !== undefined) {
         historyRoute.onOpen(historyBefore.workspace, historyBefore.task, historyBefore.spot);
@@ -2236,6 +2254,9 @@ export function useTasksTab(input: {
   // The task whose own place stood as the window was last drawn, which a press reads as where it was pressed.
   const routedTask = useRef({ taskId: taskRouted, opens: opensTaskPlace });
   routedTask.current = { taskId: taskRouted, opens: opensTaskPlace };
+  // Whether the move of the door landing now (`arriveAt`) moved the window, which its open reads as the press's own move,
+  // since a door `over` a place beside the task's place moves the window though that place opens no task's place.
+  const arrivedMove = useRef<boolean | undefined>(undefined);
   // Opening a task, or leaving one, is going to its own place, whatever stood there giving way, as only one place stands
   // at a time (`places/routed-places.ts`), unless the door `stays`, as a version history opening over its task.
   // Note that `onOpened` runs only once the task opened, because a task that
@@ -2247,8 +2268,9 @@ export function useTasksTab(input: {
       // the doors that open it, which a refusal never brings back, as its task is what opens.
       const moved =
         !stays &&
-        routedTask.current.opens &&
-        (fixture === undefined ? taskId : openTaskId) !== routedTask.current.taskId;
+        (arrivedMove.current ??
+          (routedTask.current.opens &&
+            (fixture === undefined ? taskId : openTaskId) !== routedTask.current.taskId));
       const standBack = pressedOverNow.current(false, moved);
       // Note that the task is asked for before the window moves, so its arrival finds it asked for already.
       const takeBack = fixture === undefined ? ask(taskId) : NO_TAKE_BACK;
@@ -3028,10 +3050,22 @@ export function useTasksTab(input: {
   };
   // A door to `taskId` goes to its own place first, `over` a place standing beside it too, and does the rest of what it
   // does once it lands there, so a move held at a page's leave ask and kept changes nothing (`places/place-leave.ts`).
-  const arriveAt = (taskId: string, door: () => void, over = false) =>
-    placeLeave.arrive(() => {
-      standTaskPlace(taskId, over);
-    }, door);
+  const arriveAt = (taskId: string, door: () => void, over = false) => {
+    let moved = false;
+    placeLeave.arrive(
+      () => {
+        moved = standTaskPlace(taskId, over);
+      },
+      () => {
+        arrivedMove.current = moved;
+        try {
+          door();
+        } finally {
+          arrivedMove.current = undefined;
+        }
+      },
+    );
+  };
   // What the window does once the move of the link opening now lands, beside what the link's door does (`app.tsx`), taken
   // by the first move the link makes, which a read the link waits on makes later, once it lands.
   const linkLanded = useRef<(() => void) | undefined>(undefined);
