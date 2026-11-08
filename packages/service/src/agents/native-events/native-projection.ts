@@ -485,10 +485,13 @@ class Fold {
 
   /**
    * The turn a launch's end settles: the one under way, or, where the launch
-   * failed before its first, one opened for it, the turn its line queued
-   * where one stands, so why it failed is kept, and whether it was opened for
-   * the end. None for any other end that finds no turn, nor for a warm
-   * launch's, whose turn already ended at its IDLE.
+   * failed before its first, the turn its line queued, opened for the end so
+   * why it failed is kept, and whether it was opened for the end. None for
+   * any other end that finds no turn, nor for a warm launch's, whose turn
+   * already ended at its IDLE. Note that a launch that fails with no turn
+   * under way and none queued, as a warm runner a newer launch cut off does,
+   * fails no turn but is said in the log, since no message of the developer's
+   * waited on it.
    */
   #endedTurn(
     moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>,
@@ -496,6 +499,10 @@ class Fold {
     const held = this.state.turn;
     if (held !== undefined) return { turn: held, openedForEnd: false };
     if (moment.launchFailed !== true || this.state.warm === true) return undefined;
+    if (this.#context.queuedTurnId === undefined) {
+      this.#context.report(`A launch with no turn under way ended: ${moment.detail ?? "failed"}`);
+      return undefined;
+    }
     return { turn: this.turn(), openedForEnd: true };
   }
 
