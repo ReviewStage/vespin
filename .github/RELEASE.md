@@ -145,6 +145,58 @@ request that moves `HOST_RELEASE` to the new version and its digests, which the 
 prints and the `.sha256` files carry. Until it merges, the install script keeps installing the
 previous release.
 
+## iOS releases
+
+The iOS app (`apps/mobile`) reaches testers through TestFlight, by the **Release iOS**
+workflow (`.github/workflows/release-ios.yml`) on a `macos-26` runner with Xcode 27.1. It
+runs on an `ios-vX.Y.Z` tag, whose version must match `version` in
+`apps/mobile/app.config.ts`, and on a manual dispatch. Both upload: TestFlight is itself
+the rehearsal, since a build reaches no tester until it is added to a group.
+
+The run generates the native project with `expo prebuild`, archives it with automatic
+signing through an App Store Connect API key of its own, and exports
+it with `xcodebuild -exportArchive` and `apps/mobile/release/ExportOptions.plist`, whose
+destination is upload. Its build number is `<run number>.<run attempt>`, so a re-run
+uploads a build App Store Connect has not seen. The build carries
+`aps-environment: production`.
+
+It needs an App Store Connect API key apart from the Mac release's, whose role is
+**App Manager** with access to cloud-managed distribution certificates (or **Admin**),
+because automatic signing creates the distribution certificate and profile on the first
+run; the Developer role the Mac's notarization key holds cannot upload. Create it under
+**Users and Access → Integrations**, download its `.p8` at once, and set it as three
+secrets, beside the repository **variable** `APPLE_TEAM_ID`, the paid team's
+ten-character ID from the Apple Developer account's Membership details:
+
+| Name | Kind | Purpose |
+| --- | --- | --- |
+| `APP_STORE_CONNECT_KEY_P8_BASE64` | Secret | Base64-encoded `.p8` private key of the iOS key |
+| `APP_STORE_CONNECT_KEY_ID` | Secret | Its key ID |
+| `APP_STORE_CONNECT_ISSUER_ID` | Secret | Its issuer ID |
+| `APPLE_TEAM_ID` | Variable | The team the app is signed for |
+
+As on the Mac, a tag push without them skips the upload job cleanly, and a dispatch fails
+at the secret check naming the one that is missing. From macOS:
+
+```sh
+base64 -i AuthKey_KEYID.p8 | gh secret set APP_STORE_CONNECT_KEY_P8_BASE64
+printf '%s' 'KEYID' | gh secret set APP_STORE_CONNECT_KEY_ID
+printf '%s' 'issuer-uuid' | gh secret set APP_STORE_CONNECT_ISSUER_ID
+gh variable set APPLE_TEAM_ID --body 'TEAMID'
+```
+
+To cut a build, bump `version` in `apps/mobile/app.config.ts` through a merged PR, then
+tag the merged commit:
+
+```sh
+git fetch origin main
+git tag ios-v0.1.0 origin/main
+git push origin ios-v0.1.0
+```
+
+The build appears in App Store Connect under TestFlight once Apple finishes processing it,
+usually within half an hour, and goes to testers from there.
+
 ## GitHub Actions secrets
 
 All eight are configured. This section is for rotating them or standing the workflow up
