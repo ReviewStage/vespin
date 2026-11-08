@@ -53,3 +53,12 @@ artifacts/
 !.claude/rules/
 !.claude/settings.json
 !.claude/skills/
+
+# The iOS app's native project, which Expo generates from apps/mobile/app.config.ts
+# on every build, its Metro state, and Xcode's own per-user and build state.
+apps/mobile/ios/
+apps/mobile/android/
+.expo/
+expo-env.d.ts
+xcuserdata/
+DerivedData/

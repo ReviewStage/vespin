@@ -36,6 +36,13 @@
       "dependsOn": ["^transit"],
       "outputs": []
     },
+    // The iOS app bundled with Metro (`apps/mobile`), which is what catches a
+    // module Hermes cannot resolve; like typecheck, it runs again whenever the
+    // app or a package it imports changes.
+    "export:ios": {
+      "dependsOn": ["^transit"],
+      "outputs": []
+    },
     // One workspace's tests. The check that walks every /api/ client in the
     // repository runs in scripts/repository-checks.sh, outside the cache, so
     // no workspace's tests read beyond their own graph. CI cuts the largest

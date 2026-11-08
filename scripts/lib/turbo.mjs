@@ -13,8 +13,12 @@ const PLATFORM = `${process.platform}-${process.arch}-node${process.versions.nod
  */
 export const ROOT_TASKS = ["lint", "discarded-effect"];
 
-/** The checks that run once per workspace. */
-export const WORKSPACE_TASKS = ["typecheck"];
+/**
+ * The checks that run once per workspace, in every workspace that declares
+ * the script: the typecheck everywhere, and the iOS app's Metro bundle
+ * (`apps/mobile`'s `export:ios`), a portable check that needs no Xcode.
+ */
+export const WORKSPACE_TASKS = ["typecheck", "export:ios"];
 
 /**
  * The tests, one task per workspace holding a `vitest.config.ts`. CI cuts the

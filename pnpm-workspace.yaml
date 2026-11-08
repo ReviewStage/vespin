@@ -50,6 +50,15 @@ catalog:
 catalogs:
   web:
     typescript: 6.0.3
+  # The mobile app's React. React Native 0.88 is compiled against React 19.3
+  # and declares `react: ^19.3.0` as its peer, while the web and desktop apps
+  # stand on the default catalog's 19.2.8 with the panel and `@repo/ui`. The
+  # two trees never meet in one bundle: Metro bundles the app's own React, and
+  # nothing of `@repo/panel` or `@repo/ui` is drawn in it. Move the default
+  # catalog to 19.3 and delete this one once the web and desktop apps take it.
+  mobile:
+    react: 19.3.0
+    "@types/react": 19.3.0
 
 # Every dependency here builds nothing this repository needs: esbuild runs from
 # its platform package, @sentry/cli is only reached with an auth token no check

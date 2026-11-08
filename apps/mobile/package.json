@@ -1,0 +1,34 @@
+{
+  "name": "@repo/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vespin's iOS app: an Expo shell over the shared client host, drawn SwiftUI-first through @expo/ui",
+  "main": "expo-router/entry",
+  "scripts": {
+    "export:ios": "EXPO_NO_TELEMETRY=1 expo export --platform ios --output-dir dist",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild --platform ios",
+    "start": "expo start",
+    "test:vitest": "vitest run",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@expo/ui": "58.0.27",
+    "@repo/features": "workspace:*",
+    "effect": "catalog:",
+    "expo": "58.0.23",
+    "expo-constants": "58.0.15",
+    "expo-linking": "58.0.16",
+    "expo-router": "58.0.30",
+    "expo-symbols": "58.0.4",
+    "react": "catalog:mobile",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "5.11.1",
+    "react-native-screens": "4.30.1"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:mobile",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

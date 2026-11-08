@@ -32,6 +32,11 @@
       "entry": ["src/main.ts", "scripts/*.ts"],
       "project": ["src/**", "scripts/**"]
     },
+    "apps/mobile": {
+      "entry": ["src/app/**/*.tsx", "app.config.ts", "metro.config.js"],
+      "project": ["src/**", "scripts/**"],
+      "ignoreDependencies": ["effect"]
+    },
     "apps/catalog": {
       "project": ["src/**"],
       "ignoreDependencies": ["playwright"]

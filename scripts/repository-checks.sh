@@ -164,10 +164,13 @@ pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/api-callers.ts
 # — a door is spelled `import "…"` with no names, and an extensionless one fails
 # exactly the same way. An import `?raw` is a file's text, which the function's
 # bundle inlines (`apps/web/server/function-bundles.ts`), so no loader ever
-# reads its specifier.
+# reads its specifier. The iOS app's sources are held to the same spelling,
+# since its Metro (`apps/mobile/metro.config.js`) reads a `.js` specifier as
+# the `.ts` beside it the way the packages are written.
 extensionless_imports=$(grep -rEn '(from|import) "\.\.?/[^"]*"' \
     "$APP_REPO_ROOT"/packages/*/src \
-    "$APP_REPO_ROOT"/apps/web/server |
+    "$APP_REPO_ROOT"/apps/web/server \
+    "$APP_REPO_ROOT"/apps/mobile/src |
     grep -vE '\.(js|css)"|\?raw"' || true)
 if [[ -n "$extensionless_imports" ]]; then
     printf 'error: relative imports in packages/ and the web function sources must end in .js (Node ESM cannot load them compiled otherwise):\n%s\n' \

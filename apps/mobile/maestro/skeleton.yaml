@@ -1,0 +1,22 @@
+# skeleton.yaml -- every tab and the signed-out placeholder, each shot once.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Inbox"
+- takeScreenshot: inbox
+- tapOn: "Tasks"
+- assertVisible: "Tasks"
+- takeScreenshot: tasks
+- tapOn: "Search"
+- assertVisible: "Find a task, a thread, or an agent."
+- takeScreenshot: search
+- tapOn: "New task"
+- assertVisible: "Describe the task, and an agent starts on it."
+- takeScreenshot: new-task
+- openLink: vespin://signed-out
+- assertVisible: "Sign in"
+- takeScreenshot: signed-out
