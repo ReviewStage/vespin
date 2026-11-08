@@ -148,7 +148,7 @@ test("a related task's row is led by its owner's relation and ends with its open
   assert.deepEqual(opened, ["t-42"]);
 });
 
-test("a related task's row says it is blocked beside its name and how many of its sub-tasks are finished, even in a list too narrow for its key", () => {
+test("a related task's row leads its trailing run with its stop sign and says how many of its sub-tasks are finished, even in a narrow pane", () => {
   const blocked: TaskSummary = { ...TASK, blocked: true };
   const child = (id: string, status: NonNullable<TaskSummary["status"]>): TaskSummary => ({
     ...TASK,
@@ -156,7 +156,7 @@ test("a related task's row says it is blocked beside its name and how many of it
     status,
     parentTaskId: TASK.id,
   });
-  // Note that the list is measured as a plan's narrow pane stands it, which folds the key away.
+  // Note that the list is measured as a plan's narrow pane stands it, which folds the columns that fold away.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
     new DOMRect(0, 0, 360, 400),
   );
@@ -187,10 +187,9 @@ test("a related task's row says it is blocked beside its name and how many of it
   const row = container.querySelector<HTMLElement>("[data-task-id='t-42']");
   assert.ok(row, "the task's row stands");
   assert.ok(
-    row.querySelector("[data-cell='name'] .blocked-mark"),
-    "the stop sign stands beside the name",
+    row.querySelector("[data-cell='trail'] > .ui-task-row-flag > .blocked-mark"),
+    "the stop sign leads the trailing run",
   );
-  assert.equal(row.querySelector("[data-cell='key']"), null, "the key folds away");
   assert.match(row.querySelector("[data-cell='subTasks']")?.textContent ?? "", /^1\/2/u);
 });
 

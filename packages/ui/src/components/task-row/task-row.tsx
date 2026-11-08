@@ -33,24 +33,31 @@ import {
 } from "../virtual-rows/virtual-rows.js";
 
 /**
- * task-row.tsx -- a task as one line of columns: how it stands to the list's task, its priority, key, and status before its name, what the list draws of it after, and an end of its owner's, each cell in its own column so the columns line up down every row, and its ⋯ coming in over the row's end.
+ * task-row.tsx -- a task as one line, the same on every list: how it stands to the list's task, its priority, key, and status before its name, each in its own column, then one trailing run of what it has packed against its time, its owner's end last, and its ⋯ coming in over the time.
  *
  * A row is one line of a grid its list stands, a subgrid of the list's
- * columns, as Linear's list stands its rows, so each cell lines up down the
- * list whatever any one row holds. Which cells a row draws is its list's
- * (`cells`), the same for every row of it, and what stands in each is the
- * row's owner's (`content`): the chips that change a task where it stands,
- * its key, its assignee's face, its pull requests. The Tasks page's List
- * stands every row of the page in one grid whose columns its display
+ * columns, as Linear's list stands its rows, so the cells before the name
+ * and the name itself line up down the list. Which cells a row draws is its
+ * list's (`cells`), the same for every row of it, and what stands in each
+ * is the row's owner's (`content`): the chips that change a task where it
+ * stands, its key, its assignee's face, its pull requests. Every cell after
+ * the name but the time and the owner's end stands in one trailing run, in
+ * one order on every list: its flag (`flag`), the repository, what waits on
+ * the reader, the sub-tasks' count, the pull requests, how its agents
+ * stand, its creator, and its assignee's face. The run is one column,
+ * packed against the time, and a cell a task leaves empty takes no room in
+ * it, so a list never keeps a band at its end for what a few rows hold:
+ * the face and the time stand at the row's end on every row, and the
+ * marks before them go only as far in as each row needs. The Tasks page's
+ * List stands every row of the page in one grid whose columns its display
  * chooses and folds by width; a list of a task's related tasks stands its
- * own (`TaskRows`), its columns fixed to the few it draws, each row led by
- * how its task stands to the list's (`RELATION`), so it reads as a
- * sentence: Blocked by, its key, its status, its name.
+ * own (`TaskRows`), its status and the run alone, each row led by how its
+ * task stands to the list's (`RELATION`), so it reads as a sentence:
+ * Blocked by, its status, its name.
  *
  * The row's press reaches every edge of it (`CardPress`), opening the task,
  * its name on one line in the label's weight, what the eye reads in the
- * cells said after the name to a reader (`said`), and a mark that stands
- * beside the name (`beside`). The cells that hold a control stand over the
+ * cells said after the name to a reader (`said`). The cells that hold a control stand over the
  * press, and the rest let the pointer through to it, a related task's kind
  * leading the row among the first; a cell of its owner's, the pull requests
  * and the end, lifts only the links and buttons in it, so a press anywhere
@@ -61,11 +68,11 @@ import {
  * (`useRowMenu`). The ⋯ keeps no column, so a list's last column ends at
  * the row's end inset: it comes in over the row's end while the row is in
  * hand, holds the keyboard, or has its menu open, nothing in the row moving,
- * as the sidebar's and the inbox's rows do: over the last cell, which gives
- * way under it, where that cell only says something (the time on the Tasks
- * page), and in a narrow column the list keeps for it where the last cell
- * holds a control (an assignee's chip) or the name is the last cell, so
- * neither is ever covered; on a screen with no hover it stands there at
+ * as the sidebar's and the inbox's rows do: over the time, which gives
+ * way under it, or over the run where the list draws no time and its run
+ * only says something, and in a narrow column the list keeps for it where
+ * the run ends on a control (an assignee's chip), the owner's end is last,
+ * or the name is, so none is ever covered; on a screen with no hover it stands there at
  * rest, the cells after the name stepping aside for it where it would stand
  * over the last (`task-row.css`). A row may leave its ⋯ out (`more`), as a
  * phone's mail list draws none on its rows, and offer its menu by the long
@@ -99,21 +106,21 @@ import {
  * holding its owner's blocks (`TaskRowSkeleton`).
  */
 
-/** The cells a task's row draws, each in a column of its own, in the order a row draws them. */
+/** The cells a task's row draws, in the order a row draws them: those before the name, then those after it in the order its trailing run packs them. */
 export const TASK_ROW_CELL = {
   /** How the row's task stands to the task the list is about, leading the row so it reads as a sentence: Blocked by …. */
   RELATION: "relation",
   PRIORITY: TASK_PROPERTY.PRIORITY,
   KEY: TASK_PROPERTY.KEY,
   STATUS: TASK_PROPERTY.STATUS,
-  WAITING: TASK_PROPERTY.WAITING,
   REPOSITORY: TASK_PROPERTY.REPOSITORY,
-  ASSIGNEE: TASK_PROPERTY.ASSIGNEE,
-  CREATOR: TASK_PROPERTY.CREATOR,
-  AGENTS: TASK_PROPERTY.AGENTS,
-  PULL_REQUESTS: "pullRequests",
+  WAITING: TASK_PROPERTY.WAITING,
   /** How many of the task's sub-tasks are finished, of all of them ("1/3"). */
   SUB_TASKS: LIST_COLUMN.SUB_TASKS,
+  PULL_REQUESTS: "pullRequests",
+  AGENTS: TASK_PROPERTY.AGENTS,
+  CREATOR: TASK_PROPERTY.CREATOR,
+  ASSIGNEE: TASK_PROPERTY.ASSIGNEE,
   UPDATED: TASK_PROPERTY.UPDATED,
   /** What the row's owner stands at its end, before its ⋯: a dock's × that takes the row away, say. */
   END: "end",
@@ -137,10 +144,10 @@ export const TASK_ROW_EDGES = {
 
 export type TaskRowEdges = (typeof TASK_ROW_EDGES)[keyof typeof TASK_ROW_EDGES];
 
-/** Every cell, in the order a row draws them and its list stands their columns. */
+/** Every cell, in the order a row draws them. */
 const TASK_ROW_CELL_ORDER: readonly TaskRowCell[] = Object.values(TASK_ROW_CELL);
 
-/** The cells drawn before a row's name; the rest stand after it. */
+/** The cells drawn before a row's name, each in a column of its own. */
 const LEADING: readonly TaskRowCell[] = [
   TASK_ROW_CELL.RELATION,
   TASK_ROW_CELL.PRIORITY,
@@ -148,120 +155,85 @@ const LEADING: readonly TaskRowCell[] = [
   TASK_ROW_CELL.STATUS,
 ];
 
-/**
- * The cells after the name that only say something, holding no control, so
- * the ⋯ may come in over one standing last: every cell but the assignee's
- * chip, the creator's face, the pull requests' chips, and the owner's end.
- */
-const QUIET_AFTER: readonly TaskRowCell[] = [
-  TASK_ROW_CELL.WAITING,
+/** The cells after the name packed into its trailing run, one column for them all; the time and the owner's end keep a column each after it. */
+const TRAILING: readonly TaskRowCell[] = [
   TASK_ROW_CELL.REPOSITORY,
-  TASK_ROW_CELL.AGENTS,
+  TASK_ROW_CELL.WAITING,
   TASK_ROW_CELL.SUB_TASKS,
-  TASK_ROW_CELL.UPDATED,
+  TASK_ROW_CELL.PULL_REQUESTS,
+  TASK_ROW_CELL.AGENTS,
+  TASK_ROW_CELL.CREATOR,
+  TASK_ROW_CELL.ASSIGNEE,
 ];
+
+/**
+ * The trailing cells that only say something, holding no control, so the ⋯
+ * may come in over the run where it stands last and holds only these:
+ * every cell but the assignee's chip, the creator's face, and the pull
+ * requests' chips.
+ */
+const QUIET_TRAILING: readonly TaskRowCell[] = [
+  TASK_ROW_CELL.REPOSITORY,
+  TASK_ROW_CELL.WAITING,
+  TASK_ROW_CELL.SUB_TASKS,
+  TASK_ROW_CELL.AGENTS,
+];
+
+/** The trailing run's column, which stands where a row draws any cell after its name but its owner's end. */
+const TRAIL = "trail" as const;
+
+/** A column after the name: the trailing run, the time, or the owner's end. */
+type AfterColumn = typeof TRAIL | typeof TASK_ROW_CELL.UPDATED | typeof TASK_ROW_CELL.END;
 
 /** The ⋯'s own column, where the list keeps one: a compact button's width. */
 const MORE_COLUMN = "var(--ui-space-24)";
 
-/** The cells a related task's row draws, in its own list: how it stands to the list's task, its chips, its key, its assignee, its pull requests, and how many of its sub-tasks are finished. */
+/** The cells a related task's row draws, in its own list: how it stands to the list's task, its status, and the trailing run every list ends in, its time last. */
 export const RELATED_TASK_CELLS: readonly TaskRowCell[] = [
   TASK_ROW_CELL.RELATION,
-  TASK_ROW_CELL.PRIORITY,
-  TASK_ROW_CELL.KEY,
   TASK_ROW_CELL.STATUS,
-  TASK_ROW_CELL.ASSIGNEE,
-  TASK_ROW_CELL.PULL_REQUESTS,
   TASK_ROW_CELL.SUB_TASKS,
+  TASK_ROW_CELL.PULL_REQUESTS,
+  TASK_ROW_CELL.AGENTS,
+  TASK_ROW_CELL.ASSIGNEE,
+  TASK_ROW_CELL.UPDATED,
 ];
 
-/** How wide each column stands, by the cell it holds: its content's own, the repository's held to a short name's. */
-const COLUMN_WIDTH = {
-  [TASK_ROW_CELL.RELATION]: "auto",
-  [TASK_ROW_CELL.PRIORITY]: "auto",
-  [TASK_ROW_CELL.KEY]: "auto",
-  [TASK_ROW_CELL.STATUS]: "auto",
-  [TASK_ROW_CELL.WAITING]: "auto",
-  [TASK_ROW_CELL.REPOSITORY]: "fit-content(22ch)",
-  [TASK_ROW_CELL.ASSIGNEE]: "auto",
-  [TASK_ROW_CELL.CREATOR]: "auto",
-  [TASK_ROW_CELL.AGENTS]: "auto",
-  [TASK_ROW_CELL.PULL_REQUESTS]: "auto",
-  [TASK_ROW_CELL.SUB_TASKS]: "auto",
-  [TASK_ROW_CELL.UPDATED]: "auto",
-  [TASK_ROW_CELL.END]: "auto",
-} as const satisfies Record<TaskRowCell, string>;
-
-/** A row's cell: a line in the caption's type, in its column, letting the pointer through to the row's press. */
+/** A row's cell: a line in the caption's type, letting the pointer through to the row's press. */
 const CELL =
   "ui-task-row-cell flex items-center gap-item-gap text-caption text-muted-foreground tabular-nums whitespace-nowrap";
 
 /**
- * How narrow a cell may stand: as narrow as its column, but the one the ⋯
- * comes in over, which is at least the ⋯'s width, so its column is too, and
- * the ⋯ never reaches past it onto a control in the cell before where every
- * row leaves the last one empty.
+ * How narrow a column's cell may stand: as narrow as its column, but the
+ * one the ⋯ comes in over, which is at least the ⋯'s width, so its column
+ * is too, and the ⋯ never reaches past it onto a control in the cell before.
  */
 const CELL_LEAST = { REST: "min-w-0", UNDER_MORE: "min-w-ui-24" } as const;
 
-/**
- * The room past its words a cell's own marks take, in characters of the
- * cell's type, where its row is placed out of its list's grid
- * (`taskRowFit`): a count's ring and its badge's sides, the waiting mark,
- * and the repository's picture; the characters the time the row was
- * updated says at most ("11mo ago"); and the characters a maker's name is
- * cut short at before its face in the creator's cell, as the Tasks page
- * cuts it (`--spacing-tasks-list-maker`).
- */
-const FIT_CHARS = {
-  MAKER: 16,
-  SUB_TASKS_MARKS: 5,
-  WAITING_MARKS: 3,
-  REPOSITORY_MARKS: 4,
-  UPDATED: 8,
-} as const;
-
-/** The repository's column's widest, in characters, as `COLUMN_WIDTH` holds it. */
-const REPOSITORY_MOST_CHARS = 22;
+/** The characters the time the row was updated says at most ("11mo ago"). */
+const UPDATED_CHARS = 8;
 
 /** A relation's pill past its words: its compact pill's sides, its kind's mark and its chevron, each with the gap beside it (`Chip`), and a character's room more, since the words are set in the chip's own weight; none on a list whose rows say no relation. */
 const RELATION_CHIP_MARKS =
   "min(var(--ui-task-row-relation-chars, 0), 1) * (2 * var(--ui-space-8) + 2 * (var(--ui-space-12) + var(--ui-space-4)) + 1ch)";
 
-/** A pull request's chip past its number: its compact pill's sides and its edge, its mark, and the gap between them (`Chip`), and a character's room more, since the number is set in the chip's own weight. */
-const PULL_REQUEST_CHIP_MARKS =
-  "(2 * var(--ui-space-8) + var(--ui-space-12) + var(--ui-space-4) + 1ch)";
-
 /**
- * How wide each cell whose words differ from row to row stands at least,
+ * How wide each column whose cell differs from row to row stands at least,
  * where its row is placed out of its list's grid, read from what the list
  * sets on its element (`taskRowFit`): the key in its own monospaced type,
- * so a character of it is one `ch`, a cell of words by its characters, the
- * pull requests by their chips, the agents' mark by its seat, which
- * stands empty on a task with none, and the creator's by its widest maker
- * and face. A cell not named here draws the same marks on every row.
+ * so a character of it is one `ch`, the relation by its pill, and the time
+ * by the most it says. The trailing run needs none: it stands against the
+ * time on every row, however wide it is.
  */
 const CELL_FIT: Partial<Record<TaskRowCell, CSSProperties>> = {
   [TASK_ROW_CELL.KEY]: {
     fontFamily: "var(--ui-font-mono)",
     minWidth: "calc(var(--ui-task-row-key-chars, 0) * 1ch)",
   },
-  [TASK_ROW_CELL.PULL_REQUESTS]: {
-    minWidth: `calc(var(--ui-task-row-pull-requests, 0) * (${PULL_REQUEST_CHIP_MARKS} + var(--ui-task-row-pull-request-chars, 0) * 1ch) + max(0, var(--ui-task-row-pull-requests, 0) - 1) * var(--ui-item-gap))`,
-  },
   [TASK_ROW_CELL.RELATION]: {
     minWidth: `calc(var(--ui-task-row-relation-chars, 0) * 1ch + ${RELATION_CHIP_MARKS})`,
   },
-  [TASK_ROW_CELL.SUB_TASKS]: { minWidth: "calc(var(--ui-task-row-sub-task-chars, 0) * 1ch)" },
-  [TASK_ROW_CELL.WAITING]: { minWidth: "calc(var(--ui-task-row-waiting-chars, 0) * 1ch)" },
-  [TASK_ROW_CELL.REPOSITORY]: { minWidth: "calc(var(--ui-task-row-repository-chars, 0) * 1ch)" },
-  [TASK_ROW_CELL.AGENTS]: { minWidth: "var(--ui-space-16)" },
-  [TASK_ROW_CELL.UPDATED]: { minWidth: `${FIT_CHARS.UPDATED}ch` },
-  // Note that a maker's name is read per task where the row draws, never by its list, so the creator's cell keeps the room of a name cut short and its face, the face at its end, so faces line up whether a row names a maker or not.
-  [TASK_ROW_CELL.CREATOR]: {
-    minWidth: `calc(${FIT_CHARS.MAKER}ch + var(--ui-item-gap) + var(--ui-space-20))`,
-    justifyContent: "flex-end",
-  },
+  [TASK_ROW_CELL.UPDATED]: { minWidth: `${UPDATED_CHARS}ch` },
 };
 
 /** A cell over the row's press where it holds anything, and the press's own where it stands empty. */
@@ -277,30 +249,50 @@ const OVER_ITS_CONTROLS =
   "pointer-events-none relative z-1 [&_a]:pointer-events-auto [&_button]:pointer-events-auto";
 
 /**
- * Each cell's place in a row's reading order, the relation, priority, key,
- * and status before the name and the rest after it, and whether it stands
- * over the row's press: the chips take their own presses, and a cell left
- * empty, a nested row's relation among them, leaves the press its own. The time ends on its last letter, so times of
- * any length line up at their ends down the column.
+ * Whether each cell stands over the row's press: the chips take their own
+ * presses, and a cell left empty, a nested row's relation among them,
+ * leaves the press its own.
  */
-const CELL_PLACE = {
-  [TASK_ROW_CELL.RELATION]: `${OVER_WHERE_FILLED} order-0`,
-  [TASK_ROW_CELL.PRIORITY]: "pointer-events-auto relative z-1 order-1",
-  [TASK_ROW_CELL.KEY]: "pointer-events-none order-2",
-  [TASK_ROW_CELL.STATUS]: "pointer-events-auto relative z-1 order-3",
-  [TASK_ROW_CELL.WAITING]: "pointer-events-none order-5",
-  [TASK_ROW_CELL.REPOSITORY]: "pointer-events-none order-6",
-  [TASK_ROW_CELL.ASSIGNEE]: `${OVER_WHERE_FILLED} order-7`,
-  [TASK_ROW_CELL.CREATOR]: "pointer-events-none order-8",
-  [TASK_ROW_CELL.AGENTS]: "pointer-events-none order-9",
-  [TASK_ROW_CELL.PULL_REQUESTS]: `${OVER_ITS_CONTROLS} order-10`,
-  [TASK_ROW_CELL.SUB_TASKS]: "pointer-events-none order-11",
-  [TASK_ROW_CELL.UPDATED]: "pointer-events-none order-12 justify-end",
-  [TASK_ROW_CELL.END]: `${OVER_ITS_CONTROLS} order-13`,
+const CELL_PRESS = {
+  [TASK_ROW_CELL.RELATION]: OVER_WHERE_FILLED,
+  [TASK_ROW_CELL.PRIORITY]: "pointer-events-auto relative z-1",
+  [TASK_ROW_CELL.KEY]: "pointer-events-none",
+  [TASK_ROW_CELL.STATUS]: "pointer-events-auto relative z-1",
+  [TASK_ROW_CELL.REPOSITORY]: "pointer-events-none",
+  [TASK_ROW_CELL.WAITING]: "pointer-events-none",
+  [TASK_ROW_CELL.SUB_TASKS]: "pointer-events-none",
+  [TASK_ROW_CELL.PULL_REQUESTS]: OVER_ITS_CONTROLS,
+  [TASK_ROW_CELL.AGENTS]: "pointer-events-none",
+  [TASK_ROW_CELL.CREATOR]: "pointer-events-none",
+  [TASK_ROW_CELL.ASSIGNEE]: OVER_WHERE_FILLED,
+  [TASK_ROW_CELL.UPDATED]: "pointer-events-none",
+  [TASK_ROW_CELL.END]: OVER_ITS_CONTROLS,
 } as const satisfies Record<TaskRowCell, string>;
+
+/**
+ * Each column's place in a row's reading order, the leading cells before
+ * the name and the trailing run, the time, and the end after it. The run
+ * and the time end on their last mark, so whatever a row's run holds, it
+ * stands against the time, and times of any length line up at their ends.
+ */
+const COLUMN_ORDER = {
+  [TASK_ROW_CELL.RELATION]: "order-0",
+  [TASK_ROW_CELL.PRIORITY]: "order-1",
+  [TASK_ROW_CELL.KEY]: "order-2",
+  [TASK_ROW_CELL.STATUS]: "order-3",
+  [TRAIL]: "order-5 justify-end",
+  [TASK_ROW_CELL.UPDATED]: "order-6 justify-end",
+  [TASK_ROW_CELL.END]: "order-7",
+} as const;
 
 /** A cell after the name, which steps aside while the ⋯ stands at rest over the last on a screen with no hover (`task-row.css`). */
 const AFTER = "ui-task-row-after";
+
+/** One cell of the trailing run, the gap before it taken only where it holds something. */
+const TRAIL_PART = "ui-task-row-part flex min-w-0 items-center gap-item-gap empty:hidden";
+
+/** The widest a repository's name stands in the run, cut short past it. */
+const REPOSITORY_MOST: CSSProperties = { maxWidth: "22ch" };
 
 /** The ⋯'s place: out of the row's columns, at its end inset, over its press while it shows (`task-row.css`). */
 const MORE = "ui-task-row-more z-1 flex items-center";
@@ -358,8 +350,8 @@ const PRESS = "ui-task-row-press flex min-w-0 items-center";
 /** The name's weight: the label's, or the heavier one while its list counts it unread. */
 const NAME_WEIGHT = { REST: "font-ui-medium", UNREAD: "font-emphasis" } as const;
 
-/** A mark beside the name, a gap from its last letter. */
-const BESIDE = "ui-task-row-beside ms-icon-gap inline-flex flex-none items-center";
+/** A row's flag, leading its trailing run. */
+const FLAG = "ui-task-row-flag inline-flex flex-none items-center empty:hidden";
 
 /** What did not land, in the name's cell. */
 const NOTE = "ui-task-row-note text-caption text-danger";
@@ -383,57 +375,130 @@ function inOrder(cells: readonly TaskRowCell[]): readonly TaskRowCell[] {
   return TASK_ROW_CELL_ORDER.filter((cell) => cells.includes(cell));
 }
 
-/** The cell the ⋯ comes in over: the last drawn, where it stands after the name and only says something; none where the list keeps the ⋯ a column. */
-function cellUnderMore(cells: readonly TaskRowCell[]): TaskRowCell | undefined {
-  const last = inOrder(cells).at(-1);
-  return last !== undefined && QUIET_AFTER.includes(last) ? last : undefined;
+/** The columns after the name a list of `cells` stands: the trailing run where it draws any cell after the name but its end, then the time and the end where it draws them. */
+function afterColumns(cells: readonly TaskRowCell[]): readonly AfterColumn[] {
+  const drawn = inOrder(cells);
+  const trails = drawn.some((cell) => !LEADING.includes(cell) && cell !== TASK_ROW_CELL.END);
+  const columns: AfterColumn[] = trails ? [TRAIL] : [];
+  if (drawn.includes(TASK_ROW_CELL.UPDATED)) columns.push(TASK_ROW_CELL.UPDATED);
+  if (drawn.includes(TASK_ROW_CELL.END)) columns.push(TASK_ROW_CELL.END);
+  return columns;
 }
 
-/** A cell of a row, in its column, holding what its owner stands there; empty where it holds nothing. */
+/**
+ * The column the ⋯ comes in over: the last, where it is the time, or the
+ * trailing run holding only cells that say something; none, where the
+ * list keeps the ⋯ a column of its own.
+ */
+function columnUnderMore(cells: readonly TaskRowCell[]): AfterColumn | undefined {
+  const last = afterColumns(cells).at(-1);
+  if (last === TASK_ROW_CELL.UPDATED) return last;
+  const quiet = cells
+    .filter((cell) => TRAILING.includes(cell))
+    .every((cell) => QUIET_TRAILING.includes(cell));
+  return last === TRAIL && quiet ? last : undefined;
+}
+
+/** A column's cell, holding what its owner stands there; empty where it holds nothing. */
 function RowCell({
-  cell,
+  column,
+  press,
   underMore,
   placed,
   children,
 }: {
-  cell: TaskRowCell;
-  underMore: TaskRowCell | undefined;
+  column: TaskRowCell | typeof TRAIL;
+  /** Whether it stands over the row's press (`CELL_PRESS`). */
+  press: string;
+  underMore: AfterColumn | undefined;
   /** Whether its row is placed out of its list's grid, where the cell stands as wide as the list says its column does (`taskRowFit`). */
   placed: boolean;
   children: ReactNode;
 }): React.JSX.Element {
-  const after = LEADING.includes(cell) ? "" : ` ${AFTER}`;
+  const leading = column !== TRAIL && LEADING.includes(column);
+  const fit = placed && column !== TRAIL ? CELL_FIT[column] : undefined;
   return (
     <span
-      style={placed ? CELL_FIT[cell] : undefined}
-      className={`${CELL} ${cell === underMore ? CELL_LEAST.UNDER_MORE : CELL_LEAST.REST} ${CELL_PLACE[cell]}${after}`}
-      data-cell={cell}
-      data-under-more={cell === underMore ? "true" : undefined}
+      style={fit}
+      className={`${CELL} ${column === underMore ? CELL_LEAST.UNDER_MORE : CELL_LEAST.REST} ${press} ${COLUMN_ORDER[column as keyof typeof COLUMN_ORDER]}${leading ? "" : ` ${AFTER}`}`}
+      data-cell={column}
+      data-under-more={column === underMore ? "true" : undefined}
     >
       {children}
     </span>
   );
 }
 
-/** A row's cells, in their columns in the list's order, each holding what its owner stands there. */
+/**
+ * A row's cells: each cell before the name in its column; then its trailing
+ * run, its flag first and each cell after it in their order, packed against
+ * the time, a cell holding nothing taking no room; then the time and the
+ * owner's end in a column each.
+ */
 function RowCells({
   cells,
   content,
+  flag,
   underMore,
   placed = false,
 }: {
   cells: readonly TaskRowCell[];
   content: Partial<Record<TaskRowCell, ReactNode>>;
-  underMore: TaskRowCell | undefined;
+  flag?: ReactNode;
+  underMore: AfterColumn | undefined;
   placed?: boolean;
 }): React.JSX.Element {
+  const drawn = inOrder(cells);
   return (
     <>
-      {inOrder(cells).map((cell) => (
-        <RowCell key={cell} cell={cell} underMore={underMore} placed={placed}>
-          {content[cell]}
-        </RowCell>
-      ))}
+      {drawn
+        .filter((cell) => LEADING.includes(cell))
+        .map((cell) => (
+          <RowCell
+            key={cell}
+            column={cell}
+            press={CELL_PRESS[cell]}
+            underMore={underMore}
+            placed={placed}
+          >
+            {content[cell]}
+          </RowCell>
+        ))}
+      {afterColumns(cells).map((column) =>
+        column === TRAIL ? (
+          <RowCell
+            key={column}
+            column={column}
+            press="pointer-events-none"
+            underMore={underMore}
+            placed={placed}
+          >
+            <span className={FLAG}>{flag}</span>
+            {drawn
+              .filter((cell) => TRAILING.includes(cell))
+              .map((cell) => (
+                <span
+                  key={cell}
+                  className={`${TRAIL_PART} ${CELL_PRESS[cell]}`}
+                  style={cell === TASK_ROW_CELL.REPOSITORY ? REPOSITORY_MOST : undefined}
+                  data-cell={cell}
+                >
+                  {content[cell]}
+                </span>
+              ))}
+          </RowCell>
+        ) : (
+          <RowCell
+            key={column}
+            column={column}
+            press={CELL_PRESS[column]}
+            underMore={underMore}
+            placed={placed}
+          >
+            {content[column]}
+          </RowCell>
+        ),
+      )}
     </>
   );
 }
@@ -474,17 +539,11 @@ function NameCell({
   );
 }
 
-/** What a task's row says in the cells whose words differ from row to row, as its list reads them for `taskRowFit`. */
+/** What a task's row says in the columns before its name whose words differ from row to row, as its list reads them for `taskRowFit`. */
 export interface TaskRowWords {
   readonly key?: string | undefined;
   /** Its relation's kind in words, as its pill says it ("Blocked by"). */
   readonly relation?: string | undefined;
-  /** Each open pull request's number as its chip says it ("#42"). */
-  readonly pullRequests?: readonly string[] | undefined;
-  /** Its finished sub-tasks of all of them ("1/3"). */
-  readonly subTasks?: string | undefined;
-  readonly waiting?: string | undefined;
-  readonly repository?: string | undefined;
 }
 
 /** The most characters any of `words` holds; none where none holds any. */
@@ -494,60 +553,38 @@ function mostChars(words: Iterable<string | undefined>): number {
   return most;
 }
 
-/** The characters a cell's column stands, its marks' room after its words, where any row says anything there. */
-function withMarks(chars: number, marks: number): number {
-  return chars === 0 ? 0 : chars + marks;
-}
-
 /**
  * How wide the columns of a list of task rows stand where its rows are
  * placed out of its grid (`VirtualRows`), as custom properties for the
  * element its rows stand in: a row placed so lays the list's columns out
  * on its own, and a column sized by its row's own words would stand at a
- * width of its own on each row, so each cell whose words differ stands as
- * wide as the widest the list's tasks say there (`CELL_FIT`), read from
- * every task it lists rather than from the rows drawn, so the columns
- * line up down the list and stand still as it scrolls.
+ * width of its own on each row, so each column before the name whose words
+ * differ stands as wide as the widest the list's tasks say there
+ * (`CELL_FIT`), read from every task it lists rather than from the rows
+ * drawn, so the names line up down the list and stand still as it scrolls.
  */
 export function taskRowFit(rows: readonly TaskRowWords[]): CSSProperties {
-  const pullRequests = rows.map((row) => row.pullRequests ?? []);
   return cssCustomProperties({
     "--ui-task-row-key-chars": mostChars(rows.map((row) => row.key)),
     "--ui-task-row-relation-chars": mostChars(rows.map((row) => row.relation)),
-    "--ui-task-row-pull-requests": pullRequests.reduce(
-      (most, each) => Math.max(most, each.length),
-      0,
-    ),
-    "--ui-task-row-pull-request-chars": mostChars(pullRequests.flat()),
-    "--ui-task-row-sub-task-chars": withMarks(
-      mostChars(rows.map((row) => row.subTasks)),
-      FIT_CHARS.SUB_TASKS_MARKS,
-    ),
-    "--ui-task-row-waiting-chars": withMarks(
-      mostChars(rows.map((row) => row.waiting)),
-      FIT_CHARS.WAITING_MARKS,
-    ),
-    "--ui-task-row-repository-chars": withMarks(
-      Math.min(mostChars(rows.map((row) => row.repository)), REPOSITORY_MOST_CHARS),
-      FIT_CHARS.REPOSITORY_MARKS,
-    ),
   });
 }
 
 /**
  * The grid's columns for the cells drawn, in the order a row draws them:
- * those before the name, the name, and those after it, then the ⋯'s own
- * where it comes in over no cell (`cellUnderMore`) and its rows draw it
- * (`more`); the cell it comes in over is held to the ⋯'s width at least
+ * one for each cell before the name, the name, the trailing run, the time,
+ * and the owner's end, each as wide as its widest, then the ⋯'s own where
+ * it comes in over no column (`columnUnderMore`) and its rows draw it
+ * (`more`); the column it comes in over is held to the ⋯'s width at least
  * (`CELL_LEAST`). The list standing the rows lays them as its
  * `--tasks-list-columns`.
  */
 export function taskRowColumns(cells: readonly TaskRowCell[], more = true): string {
-  const drawn = inOrder(cells);
-  const width = (cell: TaskRowCell) => COLUMN_WIDTH[cell];
-  const before = drawn.filter((cell) => LEADING.includes(cell)).map(width);
-  const after = drawn.filter((cell) => !LEADING.includes(cell)).map(width);
-  const moreColumn = more && cellUnderMore(cells) === undefined ? [MORE_COLUMN] : [];
+  const before = inOrder(cells)
+    .filter((cell) => LEADING.includes(cell))
+    .map(() => "auto");
+  const after = afterColumns(cells).map(() => "auto");
+  const moreColumn = more && columnUnderMore(cells) === undefined ? [MORE_COLUMN] : [];
   return [...before, "minmax(0, 1fr)", ...after, ...moreColumn].join(" ");
 }
 
@@ -556,7 +593,7 @@ export function TaskRow({
   taskId,
   name,
   said,
-  beside,
+  flag,
   cells,
   content,
   editor,
@@ -582,8 +619,8 @@ export function TaskRow({
   name: string;
   /** What a reader hears after the name that the eye reads in the cells: the key and status, say. */
   said?: ReactNode;
-  /** A mark that stands beside the name, which says in the press what it says to the eye: a blocked task's stop sign. */
-  beside?: ReactNode;
+  /** A mark that leads the row's trailing run, which says in the press what it says to the eye: a blocked task's stop sign. */
+  flag?: ReactNode;
   /** The cells its list draws, the same for every row of it. */
   cells: readonly TaskRowCell[];
   /** What stands in each cell; a cell with none stands empty. */
@@ -609,7 +646,7 @@ export function TaskRow({
   nest?: ListRowNest | undefined;
   /** The rows nested under it, which it folds; none where it holds none. */
   fold?: ListRowFold | undefined;
-  /** Whether it stands settled beside the rows still open, its name in the muted ink: a blocker that is done. */
+  /** Whether it stands settled beside the rows still open, its name in the muted ink: a task done or canceled. */
   settled?: boolean | undefined;
   /** Whether its list counts it unread, its name standing in the heavier weight until it is read. */
   unread?: boolean | undefined;
@@ -637,7 +674,7 @@ export function TaskRow({
   const bare = edges === TASK_ROW_EDGES.BARE;
   const drawsMore = (more && !bare) || editor !== undefined;
   const rowMenu = useRowMenu(menu, { disabled, opener: press, more: drawsMore });
-  const underMore = drawsMore ? cellUnderMore(cells) : undefined;
+  const underMore = drawsMore ? columnUnderMore(cells) : undefined;
   // Note that → and ← are the row's only while they would move its fold, so the list still hears the rest.
   const foldKeys = (event: KeyboardEvent<HTMLElement>) => {
     if (fold === undefined) return;
@@ -664,7 +701,6 @@ export function TaskRow({
         <OneLine words={name}>
           <ReplayMask>{name}</ReplayMask>
         </OneLine>
-        {beside === undefined ? null : <span className={BESIDE}>{beside}</span>}
         {said}
       </span>
     </CardPress>
@@ -725,6 +761,7 @@ export function TaskRow({
       <RowCells
         cells={cells}
         content={content}
+        flag={flag}
         underMore={underMore}
         placed={place !== undefined}
       />

@@ -1009,25 +1009,24 @@ function SidebarTaskCard({
  * (`PlanGlyph`), its status's mark or the document where its service gives
  * it none, whose status the press says after the name, as a List row's does,
  * since the mark is decoration to a screen reader; its name, in the
- * body's weight unless the task is unread, and at the row's end how long ago
- * it was last updated, led by one mark for a repository that belongs to
- * another workspace, an agent at work, or a pull request (`task-card.tsx`),
- * the first named in the row's card; before that a stop
- * sign while a task it waits on is still open (`BlockedMark`), which the press says after
- * the status, before that a pencil while a draft
- * waits in one of its boxes and it is not the plan open, whose boxes show
- * their own words, or the failed mark in its place while a message sent to
- * one of its agents was not delivered (`draft-mark.tsx`), and before that the face of who
- * is on it (`rowFaceOf`, drawn as `AssigneeFaceMark`): its assignee's,
- * where someone other than the reader is assigned, read against the members of the directory around the
- * list, or the dashed unassigned mark where no one is; a task assigned to
- * the reader wears none. Its repository, its owner's picture and its name, muted, where the list hands one (in one run),
+ * body's weight unless the task is unread, and at the row's end its
+ * trailing run in the order every list of tasks draws it (`task-row.tsx`):
+ * a pencil while a draft waits in one of its boxes and it is not the plan
+ * open, whose boxes show their own words, or the failed mark in its place
+ * while a message sent to one of its agents was not delivered
+ * (`draft-mark.tsx`); a stop sign while a task it waits on is still open
+ * (`BlockedMark`), which the press says after the status; how many of its
+ * sub-tasks are finished; one mark for an agent at work, one failed, or a
+ * pull request (`task-card.tsx`); the face of who is on it (`rowFaceOf`,
+ * drawn as `AssigneeFaceMark`): its assignee's, where someone other than
+ * the reader is assigned, read against the members of the directory around
+ * the list, or the dashed unassigned mark where no one is, a task assigned
+ * to the reader wearing none; and how long ago it was last updated. A task
+ * done or canceled stands back (`muted`). Its repository, its owner's picture and its name, muted, where the list hands one (in one run),
  * and no face where its group is its creator's. Its time is the one the
  * list's order chooses. Pin
  * and Mark done stand in place of all of it while the row is hovered or
- * reached from the keyboard. A finished sub-task nested under its parent,
- * which the view shows only when asked, is muted, so the open work stands
- * out among them.
+ * reached from the keyboard.
  * A press opens it, and its actions are one menu opened alike by the row's ⋯,
  * a right-click, a long press, and the menu key (`ListRow`'s `menu`). A
  * finger's row draws neither its ⋯ nor Pin and Mark done, as a phone's
@@ -1175,7 +1174,6 @@ export function SidebarTask({
                     <ReplayMask>{repository}</ReplayMask>
                   </span>
                 )}
-                {worn === undefined ? null : <AssigneeFaceMark face={worn} heard={false} />}
                 {leftMark(sendFailed, drafted)}
                 {task.blocked === true ? <BlockedMark aria-hidden="true" /> : null}
                 {childCount === undefined ? null : (
@@ -1186,13 +1184,14 @@ export function SidebarTask({
                   />
                 )}
                 <TaskRowStatus task={task} />
+                {worn === undefined ? null : <AssigneeFaceMark face={worn} heard={false} />}
                 <Time at={at} now={now} hint={false} />
               </span>
             )
           }
           current={current ? LIST_ROW_CURRENT.PAGE : undefined}
           unread={unread}
-          muted={depth !== undefined && depth > 0 && taskFinished(task)}
+          muted={taskFinished(task)}
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
