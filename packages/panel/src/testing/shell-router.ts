@@ -16,6 +16,7 @@
  * The history is a memory one at `at`.
  */
 
+import { PANEL_PATH } from "@repo/features/link-home";
 import { TASKS_PAGE } from "@repo/ui/tasks-model";
 import { QueryClient } from "@tanstack/react-query";
 import {
@@ -49,10 +50,10 @@ import { testQueryClientNow } from "./copy-feedback.js";
 
 /** Where a shell under test stands: Home, a task's place, Settings's list or a page of it, Admin, the Board, the Automations list, a version history's list, the Inbox, or a person's page. */
 export const SHELL_AT = {
-  PLACES: "/app",
+  PLACES: PANEL_PATH,
   TASK: "/acme/task/1",
   INBOX: "/acme/inbox",
-  SETTINGS: "/app/settings",
+  SETTINGS: `${PANEL_PATH}/settings`,
   ADMIN: "/acme/admin",
   BOARD: "/acme/tasks",
   AUTOMATIONS: "/acme/automations",

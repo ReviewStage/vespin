@@ -30,20 +30,19 @@ import {
   readShownLink,
   type ShownLink,
 } from "@repo/features/link-grammar";
-import { LINK_ORIGIN } from "@repo/features/link-home";
+import { LINK_ORIGIN, PANEL_PATH } from "@repo/features/link-home";
 import type { AppBridge } from "@repo/host/bridge";
 import { savesStep } from "@repo/panel/navigation-history";
 import { opensAtItsRoute } from "@repo/panel/places/link-places";
-import type { RouterHistory } from "@tanstack/react-router";
-import { addressHere, PANEL_PATH } from "./web-address";
+import type { HistoryLocation, RouterHistory } from "@tanstack/react-router";
 
 /** The paths the panel itself is served at, which name no place. */
 const PANEL_PATHS: ReadonlySet<string> = new Set([PANEL_PATH, `${PANEL_PATH}.html`]);
 
-/** The place the tab's address names, read as its link on the home; nothing for the panel's own paths or a path naming no place. */
-function linkHere(): ShownLink | undefined {
-  if (PANEL_PATHS.has(location.pathname.replace(/\/$/u, ""))) return undefined;
-  return readShownLink(`${LINK_ORIGIN}${addressHere()}`);
+/** The place the tab's address `here` names, read as its link on the home; nothing for the panel's own paths or a path naming no place. */
+function linkHere(here: HistoryLocation): ShownLink | undefined {
+  if (PANEL_PATHS.has(here.pathname.replace(/\/$/u, ""))) return undefined;
+  return readShownLink(`${LINK_ORIGIN}${here.href}`);
 }
 
 /** Whether a link is one a link place's route opens, which the tab lands on rather than saying here. */
@@ -51,21 +50,21 @@ function routedHere(link: ShownLink | undefined): link is ReadLink {
   return link !== undefined && "workspace" in link && opensAtItsRoute(link);
 }
 
-/** The address a link is written at now, its path, query, and fragment, as `linkOf` writes it, every value of every other key the tab's own query carries kept after its own, and the tab's fragment where the link writes none. */
-function addressOfLink(link: ReadLink): string {
+/** The address a link is written at now, its path, query, and fragment, as `linkOf` writes it, every value of every other key the tab's own query (`here`'s) carries kept after its own, and the tab's fragment where the link writes none. */
+function addressOfLink(link: ReadLink, here: HistoryLocation): string {
   const url = new URL(linkOf(link.place, link.workspace));
   // Note that the link's own keys are read before any is kept, so a key the tab's query repeats keeps every value.
   const own = new Set(url.searchParams.keys());
-  for (const [key, value] of new URLSearchParams(location.search)) {
+  for (const [key, value] of new URLSearchParams(here.search)) {
     if (!own.has(key)) url.searchParams.append(key, value);
   }
-  const hash = url.hash === "" ? location.hash : url.hash;
+  const hash = url.hash === "" ? here.hash : url.hash;
   return `${url.pathname}${url.search}${hash}`;
 }
 
 /** Moves the tab's entry onto `address` in place, flushed at once, before anything reads it. */
 function standAt(history: RouterHistory, address: string): void {
-  if (address === addressHere()) return;
+  if (address === history.location.href) return;
   history.replace(address, history.location.state);
   // Note that the history writes the address bar on its next tick, so the move is flushed now, before anything reads the address.
   history.flush();
@@ -80,10 +79,10 @@ function standAt(history: RouterHistory, address: string): void {
  * own move along it, never a write.
  */
 export function withLoadLink(bridge: AppBridge, history: RouterHistory): AppBridge {
-  standAt(history, currentTaskPath(addressHere()));
-  const here = savesStep(history.location) ? undefined : linkHere();
+  standAt(history, currentTaskPath(history.location.href));
+  const here = savesStep(history.location) ? undefined : linkHere(history.location);
   // A link place lands on its route at the address its link is written at now, which opens it.
-  if (routedHere(here)) standAt(history, addressOfLink(here));
+  if (routedHere(here)) standAt(history, addressOfLink(here, history.location));
   let loaded = routedHere(here) ? undefined : here;
   return {
     ...bridge,
@@ -91,7 +90,7 @@ export function withLoadLink(bridge: AppBridge, history: RouterHistory): AppBrid
       const stop = bridge.onShowLink(listener);
       const stopLanding = history.subscribe(({ location, action }) => {
         if (action.type === "PUSH" || action.type === "REPLACE" || savesStep(location)) return;
-        const link = linkHere();
+        const link = linkHere(location);
         if (link !== undefined && !routedHere(link)) listener(link);
       });
       const waiting = loaded;

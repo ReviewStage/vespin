@@ -20,12 +20,12 @@
  */
 
 import { LANDING_CLOSE_TAB, LANDING_TONE, type LandingWords } from "@repo/features/landing-outcome";
+import { PANEL_PATH } from "@repo/features/link-home";
 import type { LinkPlatform } from "@repo/features/link-open";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { AuthAction } from "@repo/ui";
 import { Option, Schema } from "effect";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
-import { PANEL_PATH } from "./app/web-address";
 import { browserLinkPlatform } from "./link-platform";
 import { OPEN_APP, openMacApp } from "./open-app";
 

@@ -7,6 +7,7 @@
  * tells its subscribers, as a reader outside the panel would.
  */
 
+import { PANEL_PATH } from "@repo/features/link-home";
 import {
   createMemoryHistory,
   RouterContextProvider,
@@ -33,7 +34,7 @@ export interface TestWindowRouter {
 
 /** The panel's router over `history`, a memory history at `/app` where none is given, its entries followed from the start. */
 export function windowRouter(
-  history: RouterHistory = createMemoryHistory({ initialEntries: ["/app"] }),
+  history: RouterHistory = createMemoryHistory({ initialEntries: [PANEL_PATH] }),
 ): TestWindowRouter {
   // Note that its routes read the test's own client, the one the window draws with, as a root hands its window's.
   const router = createPanelRouter(history, testQueryClientNow());

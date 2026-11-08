@@ -80,6 +80,7 @@ import {
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { highlightSnippet } from "@repo/host/task-code";
 import type { AppPlatform } from "@repo/panel/app-platform";
+import type { RouterHistory } from "@tanstack/react-router";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { version as appVersion } from "../../package.json";
@@ -87,7 +88,6 @@ import { type ConnectTabs, connectTabs, tabBrowser } from "./connect-tab";
 import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-file-system";
 import { type PageLeave, tabLeave } from "./page-leave";
 import { failedChunkAnswer, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
-import { addressHere } from "./web-address";
 import { developmentFixtureProfile } from "./web-fixture";
 import { onTabShownChanged, webNoticeDoors } from "./web-notices";
 import { copyPng, downloadText, openTab, webPlatform } from "./web-platform";
@@ -125,6 +125,8 @@ export interface WebHostOptions {
   readonly fork: (effect: Effect.Effect<void>) => void;
   /** The platform the tab runs on, which is offered the Mac app only where it is a Mac; the browser's own word where none is given. */
   readonly linkPlatform?: LinkPlatform;
+  /** The tab's router history, whose location is the address the tab stands at, as the panel writes one: its path, query, and fragment. */
+  readonly history: RouterHistory;
 }
 
 /** The web host as built, with the operator its launch starts beside it. */
@@ -175,14 +177,14 @@ const report = (message: string): void => {
  * return to it, shown again or focused, on which the session is read again,
  * because another tab may have signed in as someone else.
  */
-function cookieDoor(tab: PageLeave): CookieSessionDoor {
+function cookieDoor(tab: PageLeave, history: RouterHistory): CookieSessionDoor {
   const shown = Stream.filter(
     Stream.fromEventListener(document, "visibilitychange"),
     () => document.visibilityState === "visible",
   );
   const focused = Stream.fromEventListener(window, "focus");
   return {
-    currentAddress: addressHere,
+    currentAddress: () => history.location.href,
     navigate: (url, signingIn) =>
       Effect.sync(() =>
         tab.leave(() => {
@@ -408,6 +410,7 @@ const servedActPort = (
 const composedWeb = (
   fork: WebHostOptions["fork"],
   tab: PageLeave,
+  history: RouterHistory,
   linkPlatform: LinkPlatform | undefined,
   fixture: RunProfile | undefined,
 ) =>
@@ -436,7 +439,7 @@ const composedWeb = (
         services,
       );
       // An address the host opens goes to a connect's waiting tab, or opens as a link.
-      const tabs = connectTabs(tabBrowser(openTab, tab.leave));
+      const tabs = connectTabs(tabBrowser(openTab, tab.leave, history));
       yield* Effect.acquireRelease(Effect.sync(tabs.listen), (stop) => Effect.sync(stop));
       const operator = yield* createOperatorClient({
         report,
@@ -513,7 +516,7 @@ const composedWeb = (
 export function composeWeb(
   options: WebHostOptions,
 ): Layer.Layer<WebHostTag | HostTag, DuplicateGatewayMethod | DuplicateHostAct> {
-  const { httpClient, fork, linkPlatform } = options;
+  const { httpClient, fork, linkPlatform, history } = options;
   // The tab's one way out past the panel's leave guard, which the sign-in, a connect, and the platform share.
   const tab = tabLeave();
   // Read once, so the files and the word of another tab's write are the same storage, in memory where the browser blocks it.
@@ -528,7 +531,7 @@ export function composeWeb(
       localStorageFileSystem(storage),
       Path.layer,
       httpClient,
-      Layer.provide(cookieAccountSourceLayer(cookieDoor(tab)), httpClient),
+      Layer.provide(cookieAccountSourceLayer(cookieDoor(tab, history)), httpClient),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
   const launched = Layer.unwrap(
@@ -556,7 +559,7 @@ export function composeWeb(
     ),
   );
   return Layer.merge(launched, staleBuild).pipe(
-    Layer.provideMerge(composedWeb(fork, tab, linkPlatform, fixture)),
+    Layer.provideMerge(composedWeb(fork, tab, history, linkPlatform, fixture)),
     Layer.provideMerge(assembly),
     Layer.provide(httpClient),
   );

@@ -24,6 +24,7 @@
  */
 
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
+import { PANEL_PATH } from "@repo/features/link-home";
 import {
   SOCIAL_PROVIDER,
   type SocialProvider,
@@ -40,9 +41,6 @@ export const LOCAL_SIGN_IN_PATH = LOGIN_PAGE;
 
 /** Better Auth's authorize endpoint, under the handler's mount, where a resumed authorization goes back to. */
 const AUTHORIZE_PATH = "/api/auth/oauth2/authorize";
-
-/** The web app's address, where a sign-in with no authorization to resume lands. */
-const WEB_APP_PATH = "/app";
 
 /**
  * What the OAuth provider adds to the query it signs for the login page,
@@ -155,7 +153,8 @@ async function signIn(auth: LocalSignInAuth, userId: string, request: Request): 
   return new Response(null, {
     status: STATUS.FOUND,
     headers: {
-      location: resumed === undefined ? WEB_APP_PATH : `${AUTHORIZE_PATH}?${resumed}`,
+      // A sign-in with no authorization to resume lands on the web app.
+      location: resumed === undefined ? PANEL_PATH : `${AUTHORIZE_PATH}?${resumed}`,
       "set-cookie": await sessionCookie(context, session.token),
     },
   });

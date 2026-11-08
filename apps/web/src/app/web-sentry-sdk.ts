@@ -8,7 +8,7 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { readLink } from "@repo/features/link-grammar";
-import { LINK_ORIGIN } from "@repo/features/link-home";
+import { LINK_ORIGIN, PANEL_PATH } from "@repo/features/link-home";
 import { eventNamingAccount, logNamingAccount } from "@repo/features/sentry-account";
 import {
   eventWithoutAccessTokens,
@@ -37,7 +37,6 @@ import {
   withStreamedSpan,
 } from "@sentry/browser";
 import type { QueryClient } from "@tanstack/react-query";
-import { PANEL_PATH } from "./web-address";
 import type { WebSentry, WebSentryBuild } from "./web-sentry";
 
 /** The SDK's client, as `getClient` answers it once `init` stands. */

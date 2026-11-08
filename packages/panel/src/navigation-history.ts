@@ -120,6 +120,7 @@ import {
   taskLinkStep,
   withTaskId,
 } from "@repo/features/link-grammar";
+import { PANEL_PATH } from "@repo/features/link-home";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { type StripTab, tabKey, taggedStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
@@ -376,7 +377,7 @@ function pathOf(address: string): string {
  * The address the window is handed while it stands on no place, at which no
  * step is written: Home's while no workspace is listed (`ROUTED_PLACE.HOME`).
  */
-const NO_LINK_ADDRESS = "/app";
+const NO_LINK_ADDRESS = PANEL_PATH;
 
 /** The address a step is held at: its link's path, with the query and fragment it carries, since a browser holds a same-origin path. */
 function addressOf(link: ReadLink): string {

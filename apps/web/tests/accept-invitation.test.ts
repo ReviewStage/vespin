@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { HOSTED_SERVICE_PATH } from "@repo/features";
+import { PANEL_PATH } from "@repo/features/link-home";
 import {
   INVITATION_OFFER_REFUSAL,
   type InvitationOfferAnswer,
 } from "@repo/features/workspace-invitation-wire";
 import { act } from "react";
 import { afterEach, expect, test, vi } from "vitest";
-import { PANEL_PATH } from "../src/app/web-address";
 
 /**
  * accept-invitation.test.ts -- the invitation page says where an invitation

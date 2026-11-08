@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { PANEL_ASSET_BASE } from "@repo/features/link-home";
 import { PAGE_IN_MAC_APP_PATH } from "@repo/features/page-frame";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -42,7 +43,13 @@ function pageInMacAppAtCleanPath(): Plugin {
 
 export default defineConfig({
   define: WEB_DEPLOYMENT_DEFINES,
-  plugins: [react(), tailwindcss(), ...panelBuild(), siteMarkdown(), pageInMacAppAtCleanPath()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...panelBuild(PANEL_ASSET_BASE),
+    siteMarkdown(),
+    pageInMacAppAtCleanPath(),
+  ],
   build: {
     // Vite's own gzip report is only a cost to every build.
     reportCompressedSize: false,

@@ -4,7 +4,7 @@
  * Every path is the one `linkOf` (`@repo/features/link-grammar`) writes
  * under its workspace, `/<workspace>/task/<id>` and the rest, a pairing's
  * `/connect/<code>`, and the bare `/app`, the address of a place with no
- * link (`navigation-history.ts`'s `NO_LINK_ADDRESS`), so a link written
+ * link (`@repo/features/link-home`'s `PANEL_PATH`), so a link written
  * before the router stood reads the same through it; Settings stands at
  * `/app/settings` too, while the window lists no workspace, and the
  * Automations pages hold the places no link names, their Runs tab, a new
@@ -28,6 +28,7 @@
  * one component (`StatePlace`), as a pairing's link does.
  */
 
+import type { PANEL_PATH } from "@repo/features/link-home";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { ReloadState } from "@repo/ui/error-boundary";
 import type { QueryClient } from "@tanstack/react-query";
@@ -154,7 +155,8 @@ const placesRoute = createRoute({
  */
 const appRoute = createRoute({
   getParentRoute: () => placesRoute,
-  path: "/app",
+  // Note that the path is the literal its route's type is read from, held to the panel's own path, so the two cannot part.
+  path: "/app" satisfies typeof PANEL_PATH,
   component: HomePlace,
 });
 
@@ -534,7 +536,7 @@ const taskVersionSectionRoute = createRoute({
 /** Settings while the window lists no workspace, as the desktop's does with no account. */
 const appSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/app/settings",
+  path: "/app/settings" satisfies `${typeof PANEL_PATH}/settings`,
   pendingComponent: SettingsRouteLoading,
   ...LAZY_ROUTE,
 }).lazy(() =>
