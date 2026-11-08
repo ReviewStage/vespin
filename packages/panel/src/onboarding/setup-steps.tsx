@@ -282,11 +282,6 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title={team === undefined ? "Create a team workspace" : "Your team workspace"}
-        description={
-          team === undefined
-            ? "Your team shares tasks, agents, and the repositories you connect next."
-            : "Change its name or photo, or invite more of your team."
-        }
         foot={
           <AuthStepFoot
             at={at + 1}
