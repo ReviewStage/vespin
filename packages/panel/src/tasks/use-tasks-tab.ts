@@ -1,13 +1,6 @@
-import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
-import type {
-  AgentAttachment,
-  AgentSummary,
-  ListedAgent,
-  TasklessAgent,
-} from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent, TasklessAgent } from "@repo/features/agent-wire";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
-import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItemHome } from "@repo/features/inbox-wire";
 import {
@@ -19,20 +12,14 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-link";
-import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import type { PageLine } from "@repo/features/page-wire";
-import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentMovedAt, agentsOfTask } from "@repo/features/task-agents-model";
 import type {
   CodeRef,
   ListedPullRequest,
   TaskAgentPin,
-  TaskCreateRelation,
-  TaskCreateRelationKind,
   TaskRelationKind,
-  TaskRunsOnRequest,
-  TaskStanding,
   TaskSummary,
 } from "@repo/features/task-wire";
 import {
@@ -43,8 +30,8 @@ import {
 } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxTask, AppStateSnapshot } from "@repo/host/app-state";
-import { APP_SETTING_DEFAULTS, EXPERIMENT, experimentOn } from "@repo/settings";
+import type { AppInboxTask } from "@repo/host/app-state";
+import { EXPERIMENT, experimentOn } from "@repo/settings";
 import type { SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
 import {
@@ -65,7 +52,6 @@ import {
   renamedRegion,
   renamedView,
   sidebarTasks,
-  startFailureNote,
   TASK_MARK,
   TASKS_PAGE,
   type TaskMark,
@@ -85,7 +71,7 @@ import { useRouter } from "@tanstack/react-router";
 import { absurd } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { askAct, sendAct, unreachedAs } from "../act.js";
-import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
+import { actMutation, pressMutation } from "../act-mutations.js";
 import { useAdminRoute } from "../admin/admin-route.js";
 import { adminViewOfLink } from "../admin/routing.js";
 import type { AgentRoute } from "../agent-route.js";
@@ -123,7 +109,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import { appStateQuery, selectAppSettingsView, selectWorkspaces } from "../use-app-state.js";
+import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import { workspaceExperimentChoices } from "../workspace-experiments.js";
 import {
@@ -132,14 +118,7 @@ import {
   useBoardRoute,
   usePersonRoute,
 } from "../workspace-routes.js";
-import {
-  startFailureNote as agentStartFailureNote,
-  agentStillWriting,
-  choiceRequest,
-  localAgentRefusalWords,
-  openingLineOf,
-  type SentLine,
-} from "./agent-model.js";
+import { agentStillWriting } from "./agent-model.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 import {
@@ -154,10 +133,6 @@ import type { SectionReveal } from "./description-body.js";
 import type { RevisionSource } from "./description-history-model.js";
 import { holdsAsk } from "./inbox-model.js";
 import type { MessageReveal } from "./message-links.js";
-import type { NewTaskPress } from "./new-task-composer.js";
-import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
-import type { NewTaskRelation } from "./new-task-relation.js";
-import type { RepositoryChooser } from "./repository-chip.js";
 import {
   stripTabClosesIdle,
   stripTabDrawsAgain,
@@ -178,20 +153,12 @@ import {
 import {
   type RelationMenuAsk,
   type RepositoryMenuAsk,
-  useRepositoriesIn,
   useTaskMenus,
 } from "./task-repository-menus.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture } from "./tasks-fixture-loader.js";
 import type { ThreadReveal } from "./thread-reveal.js";
-import type { ComposerNote } from "./use-agent-composer.js";
-import {
-  type AgentsControl,
-  holdsNothing,
-  type ModelsRead,
-  readAgentById,
-  useAgents,
-} from "./use-agents.js";
+import { type AgentsControl, holdsNothing, readAgentById, useAgents } from "./use-agents.js";
 import {
   type DescriptionHistoryControl,
   type DescriptionHistorySource,
@@ -202,6 +169,7 @@ import { useIdleTabs } from "./use-idle-tabs.js";
 import { useInboxWaitingTasks } from "./use-inbox-slices.js";
 import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
+import { type NewTask, useNewTask } from "./use-new-task.js";
 import { usePinWrites } from "./use-pin-writes.js";
 import {
   DRAWN_KINDS,
@@ -353,137 +321,9 @@ function stepOf(workspace: Pick<Workspace, "id" | "slug">): string {
   return workspace.slug ?? workspace.id;
 }
 
-/**
- * The coding agent New task's Agent mode starts on the task it started:
- * the key its start carries, which the card keeps for a press asking the
- * same again (`new-task-composer.tsx`), its prompt, the files attached,
- * the model picked on its chip, none where the chip was left on the
- * account's default, so the service runs the default it holds at the start,
- * and the MCP servers its + menu switched off, none by default.
- */
-export interface NewTaskAgent {
-  readonly idempotencyKey: string;
-  readonly prompt: string;
-  readonly attachments: readonly AgentAttachment[];
-  readonly choice: ModelChoice | undefined;
-  readonly disabledServers: readonly string[];
-  /** The repositories the agent works in beside the task's, `owner/name`, which the card's repository chip picks after the task's own; none where left out. */
-  readonly alsoRepositories?: readonly string[] | undefined;
-}
-
-/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt, the files where any, the chip's model where one was picked, the servers switched off where any, and the repositories beside the task's where any. */
-function agentRequest(handed: NewTaskAgent) {
-  const also = handed.alsoRepositories ?? [];
-  return {
-    idempotencyKey: handed.idempotencyKey,
-    prompt: handed.prompt,
-    ...(handed.attachments.length === 0 ? undefined : { attachments: handed.attachments }),
-    ...(handed.choice === undefined ? undefined : choiceRequest(handed.choice)),
-    ...(handed.disabledServers.length === 0
-      ? undefined
-      : { disabledServers: handed.disabledServers }),
-    ...(also.length === 0
-      ? undefined
-      : { alsoRepositories: also.map((repository) => ({ repository })) }),
-  };
-}
-
-/** Where a group's quick add puts the task it adds: the group's status, priority, or assignee, or its repository. */
-export interface QuickAddInto {
-  readonly standing?: TaskStanding;
-  readonly repository?: string;
-}
-
-/** What a quick add asks of where its task stands: a status, a priority, or an assignee, as given; no one assigned is where a task starts, so it is asked nothing. */
-function startingStanding(standing: TaskStanding | undefined) {
-  if (standing === undefined) return undefined;
-  const { assigneeId, ...rest } = standing;
-  return assigneeId === undefined || assigneeId === null ? rest : { ...rest, assigneeId };
-}
-
-/** What the press that opened New task chose: a repository (a repository group's +), the card's purpose (the Automations page's Create with an agent), the relation it starts its task in (a relation's New task, or New sub-task), or the card a start refused after it closed opens again on. */
-export interface NewTaskPreset {
-  readonly repository?: string;
-  /** The relation the card starts its task in, from the new task's side; none for a task related to none. */
-  readonly relation?: NewTaskRelation;
-  /** What the card starts; a task's agent where none is named. */
-  readonly purpose?: NewTaskPurpose;
-  /** The card as it pressed Start, and why the start was refused, where the card is opened again on a refusal. */
-  readonly refused?: NewTaskRefusal;
-}
-
-/** The card as it pressed Start, and why the start was refused, which the card opens again on. */
-export interface NewTaskRefusal {
-  readonly card: NewTaskCardKept;
-  readonly note: Failure;
-}
-
-/** A start pressed on Home's own composer and refused, which that composer opens again on: each refusal a new opening, so the composer draws it afresh. */
-export interface HomeRefusal {
-  readonly opening: number;
-  readonly refused: NewTaskRefusal;
-}
-
-/**
- * What New task's card held as it pressed Start, which it hands its start
- * so a card opened again on a refusal starts where it was left: the
- * repository, the model picked on its chip, none where it was left on the
- * account's default, and the press it made, whose key a Retry asking the
- * same carries again.
- */
-interface NewTaskCardKept {
-  /** What the card started, which it opens again for; a task's agent where none is named. */
-  readonly purpose?: NewTaskPurpose;
-  /** The relations the card started its task in, which it opens again on. */
-  readonly relations: readonly NewTaskRelation[];
-  readonly repository: string | null;
-  readonly choice: ModelChoice | undefined;
-  readonly press: NewTaskPress;
-  /** The words as the box held them, which the card opens again on. */
-  readonly words: string;
-}
-
-/**
- * New task's agent start under way: the line its agent opens on, and the
- * model it was started with, which the page draws while it waits. It names
- * no task, since the task stands Untitled until its agent names it.
- */
-export interface StartingTask {
-  readonly line: SentLine;
-  /** The model the card's chip picked; none where the start takes the default. */
-  readonly choice: ModelChoice | undefined;
-}
-
-/**
- * What a start comes from beyond its name, repository, and workspace: where
- * its agent runs, and the agent New task's composer starts on its words in
- * the task's own start (`handed`).
- */
-export interface NewTaskStart {
-  /**
-   * Where the card's Runs on chose: the cloud, or one of the member's
-   * devices. A task holds no place, so it is where the handed agent runs,
-   * and, with none handed, the member's last pick.
-   */
-  readonly runsOn?: TaskRunsOnRequest;
-  /** The device Runs on chose, which a refusal names; none for the cloud. */
-  readonly device?: MacOffer;
-  /** The relations the start makes its task in, from the new task's side, written with it in one transaction; none for a task related to none. */
-  readonly relations?: readonly TaskCreateRelation[];
-  readonly handed?: NewTaskAgent;
-  /** What the card held as it pressed Start, which it opens again on where an agent's start is refused after the card closed. */
-  readonly card?: NewTaskCardKept;
-}
-
 /** Everything the Tasks tab draws and presses, handed to the panel body whole. */
 export interface TasksControl {
   page: TasksPage;
-  /**
-   * New task's agent start under way, which the window draws on a task's
-   * page in its shape until the start answers (`StartingAgentTab`); none
-   * otherwise, or once the developer went to another task or page meanwhile.
-   */
-  starting: StartingTask | undefined;
   /** Whether the tab is on screen: the panel open, on this tab. */
   shown: boolean;
   /** Whether an account is signed in to plan with, or a fixture's tasks stand in for one. */
@@ -666,67 +506,8 @@ export interface TasksControl {
   /** The same move, as a question asking it first holds its own mutation over it. */
   moveTask: TaskMoveMutation;
   onRetryList: () => void;
-  /** Opens the New task dialog over whatever stands open, which it leaves standing; on Home, hands Home's own composer the caret instead (`newTask.homeAsks`). */
-  onNewTask: () => void;
-  /** New task with a repository already chosen in the dialog: what a repository group's + asks. */
-  onNewTaskIn: (repository: string) => void;
-  /** New task related to the task given as `kind`, read from the new task's side, in that task's workspace: what the add menu's New task, and the task's menu and ⌘K's New sub-task, ask. */
-  onNewRelatedTask: (taskId: string, kind: TaskCreateRelationKind) => void;
-  /**
-   * Adds a task named `name` to a Tasks page group with no agent, in the
-   * listed workspace, and opens nothing: what a group's quick add asks.
-   * Answers why it was not added, or nothing once the list carries it.
-   */
-  onQuickAdd: (name: string, into: QuickAddInto) => Promise<Failure | undefined>;
-  /** New task's card for the agent that makes an automation: what the Automations page's Create with an agent asks. */
-  onNewAutomationAgent: () => void;
-  /** The New task dialog: whether it stands, what its press chose, and the two presses it makes. */
-  newTask: {
-    open: boolean;
-    /** What the press that opened the dialog chose: a repository, where it chose one. */
-    preset: NewTaskPreset | undefined;
-    /** How many times New task was pressed on Home, whose composer takes the caret at each press rather than a dialog opening over it. */
-    homeAsks: number;
-    /** A start pressed on Home's own composer and refused while Home stood, which that composer opens again on rather than a dialog over it; none once the developer went elsewhere. */
-    homeRefused: HomeRefusal | undefined;
-    /** The workspaces a task may start in, the account's every one. */
-    workspaces: readonly Workspace[];
-    /** The workspace the dialog starts the task in until another is chosen: the one listed; none before the workspaces are read. */
-    workspaceId: string | undefined;
-    /** The repository chip's list for a workspace, as the dialog chooses which the task starts in. */
-    repositoriesIn: (workspaceId: string | undefined) => RepositoryChooser;
-    /**
-     * Starts the task on the repository given, or none, in the workspace
-     * given, with an empty description and no call,
-     * which closes the dialog and opens the task; with an agent handed over it opens the
-     * task on a draft agent's tab holding the agent's prompt, files, and
-     * model, which starts the agent at once; answers why the task did not
-     * start, with the press that mends it where there is one, or nothing
-     * once it has.
-     */
-    start: (
-      name: string,
-      repository: string | null,
-      workspaceId: string | undefined,
-      from?: NewTaskStart,
-    ) => Promise<Failure | undefined>;
-    /** The models the composer's chip offers, as last read; nothing before the first read lands. */
-    models: readonly CatalogModel[] | undefined;
-    /** The member's devices Runs on offers, as the same read last listed them: none listed where it offered none, and nothing before a read lands. */
-    devices: readonly MacOffer[] | undefined;
-    /** Whether the last read of the models did not land. */
-    modelsFailed: boolean;
-    /** Where the newest read of the models stands, at the generation it took, so the card can wait on a read made since it opened. */
-    modelsRead: ModelsRead;
-    /** Asks the host for the models again, as the card opening and the chip's Retry ask. */
-    readModels: () => void;
-    /** Puts the dialog away with nothing started. */
-    onClose: () => void;
-    /** The tasks the window lists, archived ones among them, which name the agents an `@` in the composer offers and New task's Task relation offers its workspace's of. */
-    tasks: readonly TaskSummary[];
-    /** Opens a task or a section a mention in the composer names, as the window's own opener does. */
-    onShowMention: (mention: DescriptionMention) => void;
-  };
+  /** New task: the presses that open it, its dialog, Home's own composer's asks, and a start under way (`use-new-task.ts`). */
+  newTask: NewTask;
   /** Leaves the open task for Home (`desktop-home.tsx`); a call on it stands, as opening another task leaves one. */
   onLeaveTask: () => void;
   /** Goes to Home from wherever the tab stands, which lets go of the open task as it arrives. */
@@ -866,19 +647,6 @@ const NO_TASK_AGENT_PINS: readonly TaskAgentPin[] = [];
 /** What the toast says once Copy description has put the description on the clipboard. */
 const TASK_COPIED_NOTE = "Description copied";
 
-/** Whether a task New task starts opens, as Settings › Profile › Tasks says; until the first document arrives it does. */
-const selectOpensNewTask = (state: AppStateSnapshot): boolean =>
-  selectAppSettingsView(state)?.openNewTask ?? APP_SETTING_DEFAULTS.openNewTask;
-
-/** What the toast says once New task started a task it did not open. */
-const TASK_STARTED_NOTE = "Task started";
-
-/** What it says instead where the task started but its agent was refused. */
-const TASK_STARTED_AGENT_REFUSED_NOTE = "Task started, but its agent did not";
-
-/** That toast's action, which opens the task. */
-const OPEN_STARTED_TASK = "Open";
-
 /** What the toast says once a task is deleted. */
 
 /** What the toast says when the service did not move a task, which stays where it was. */
@@ -1009,31 +777,11 @@ export function useTasksTab(input: {
   const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
   const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
   const { mutateAsync: sendRestore } = useMutation(actMutation(ACT_KIND.TASKS_RESTORE));
-  // Note that a task started with its agent is traced as a send; one started with none is not.
-  const { mutateAsync: sendTaskStart } = useMutation(
-    sendMutation(ACT_KIND.TASKS_START, (start) =>
-      start.agent === undefined ? undefined : SENTRY_SEND_SPAN.TASK_START,
-    ),
-  );
   // Note that which agent is shown is told, quiet whatever comes back, since no person pressed for it.
   const { mutate: tellShown } = useMutation(actMutation(ACT_KIND.AGENTS_SHOWN));
   const { mutate: refreshTasks } = useMutation(pressMutation(ACT_KIND.TASKS_REFRESH));
   const copyWithToast = useCopyToast();
   const toast = useToast();
-  // The New task dialog's ask, standing while the dialog does: the preset it was opened with, if any.
-  const [newTaskAsk, setNewTaskAsk] = useState<
-    { readonly preset: TasksControl["newTask"]["preset"] } | undefined
-  >(undefined);
-  // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
-  const [homeNewTasks, setHomeNewTasks] = useState(0);
-  // A start pressed on Home's own composer and refused while Home stood, with the arrivals counted as it was refused, past which it gives way.
-  const [homeRefused, setHomeRefused] = useState<
-    (HomeRefusal & { readonly arrivals: number }) | undefined
-  >(undefined);
-  // New task's agent start under way: what its page draws, and the arrivals counted once the window stood where it was pressed into.
-  const [startingTask, setStartingTask] = useState<
-    (StartingTask & { readonly arrivals: number }) | undefined
-  >(undefined);
   const [chosen, setChosen] = useState<PinChoice | undefined>(undefined);
   /** The save whose revision a version history opened from a section's "Edited by" seeks, on its task, until it is found, given up on, or the history is left. */
   const [historySeek, setHistorySeek] = useState<HistorySeek | undefined>(undefined);
@@ -2119,8 +1867,6 @@ export function useTasksTab(input: {
   // tab is shown.
   const unreadTabs: readonly StripTab[] = input.unseenAgents.map((agent) => agentTab(agent));
 
-  const repositoriesIn = useRepositoriesIn();
-
   // A fixture's tasks move nowhere, as they are read from nowhere. Note that
   // the workspace moves with the task, because the sidebar lists one
   // workspace's tasks and the open task must not drop out of it, but only
@@ -2199,9 +1945,6 @@ export function useTasksTab(input: {
     onRestored: (undo) => sayRestored(toast, undo),
   });
 
-  const opensNewTask =
-    useQuery({ ...appStateQuery, select: selectOpensNewTask }).data ??
-    APP_SETTING_DEFAULTS.openNewTask;
   // A task opened from a list or a started task's toast, its pin no longer chosen.
   const openUnpinned = (taskId: string) => {
     setChosen((held) => (held !== undefined && pinOnTask(held.pin, taskId) ? undefined : held));
@@ -2283,258 +2026,36 @@ export function useTasksTab(input: {
     sidePanel.onSetOpen(false);
     mainTabs.onShow(taskId, MAIN_TAB.OVERVIEW);
   };
-  // A started task becomes the host's open one, which turns the page to it,
-  // so the dialog closes and the Inbox or a version history standing behind
-  // it gives way. It starts in the chosen workspace; with none listed the
-  // service starts it in the account's first one. A name left blank is not
-  // sent, and the plan stands as Untitled. A start opens no call, and
-  // names no planning, so the task opens on its empty description. New task starts the task
-  // and its agent in that one start, under the key its card holds
-  // (`agentRequest`), and opens the task on the agent's tab, or on a draft
-  // holding the words with why where the agent was refused (`openAgent`).
-  // An agent's start answered after the developer opened another task, or
-  // left the task, opens nothing (the host's `TASKS_START`), so the window
-  // stays where they went, and the agent's tab is the one the task opens on
-  // when they come to it.
-  // Note that a start whose task was refused, or never answered, is never
-  // sent again by itself, because the service keeps no key for a task, so a
-  // second start could make a second task; the card says why with Retry.
-  // With Settings' Open a task once it starts off, the start is a quiet one:
-  // the window stays on the page it was on, the agent's tab is made ready
-  // for when the task opens, and a toast says the task started with Open.
-  const startTask = (
-    name: string,
-    repository: string | null,
-    workspaceId: string | undefined,
-    from: NewTaskStart = {},
-  ): Promise<Failure | undefined> => {
-    // An agent's start opens on its task's page at once, its words drawn as
-    // the agent's first line, rather than holding the card until the
-    // service answers; a refusal opens the card again where it was left.
-    const { handed, card } = from;
-    const stays = !opensNewTask;
-    // Note that the agent's first line is stamped at the press, which its line after the answer keeps.
-    const sentAt = Date.now();
-    const line =
-      handed === undefined || stays
-        ? undefined
-        : openingLineOf({
-            key: handed.idempotencyKey,
-            prompt: handed.prompt,
-            attachments: handed.attachments,
-            sentAt,
-          });
-    // Note that a start's page is let go only while it is still this start's, because another start may have replaced it.
-    const letGoOfPage = () => setStartingTask((now) => (now?.line === line ? undefined : now));
-    // Staying, an agent's start puts the card away at once and opens nothing; an opening one stands the task bound's own
-    // place, or Home, where its page draws, in place of whatever stood in it, as a step the task it starts takes in place,
-    // so Back from that task returns to where New task was pressed.
-    // Note that what stood at the press is where its address stood, which a refusal opens again.
-    let standBack = pressedOverNow.current(true, false);
-    if (handed !== undefined && stays) setNewTaskAsk(undefined);
-    else if (line !== undefined) {
-      const moved = standTask.current(boundFor);
-      if (moved) input.startStands();
-      standBack = pressedOverNow.current(true, moved);
-      setStartingTask({ line, choice: handed?.choice, arrivals: arrivals() + (moved ? 1 : 0) });
-      setNewTaskAsk(undefined);
-    }
-    // Note that the host opens a start's task at once, so a bare one pressed on Home's own
-    // composer, whose page the task's took the place of, says its refusal in a toast, as no
-    // card stands to say it.
-    const saidInToast = handed === undefined && !stays && newTaskAsk === undefined;
-    // Note that only Home's own route draws its composer, once no task is bound there, so a press
-    // with no dialog standing over Home was the composer's own.
-    const homeNowAt = () => homeNow.current.home.open && homeNow.current.boundFor === undefined;
-    const pressedOnHome = newTaskAsk === undefined && homeNowAt();
-    // Note that a refusal keeps what refused it, so the box that shows it reports that in its place.
-    const refusedWith = (note: ComposerNote): ComposerNote => {
-      if (saidInToast) {
-        toast({
-          words: note.text,
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.TASK_START, cause: note.cause },
-        });
-      }
-      if (handed !== undefined) {
-        letGoOfPage();
-        // Note that what stood before the press comes back only where the developer went nowhere since.
-        standBack();
-        // A start pressed on Home's own composer opens it again where Home still stands, rather than a
-        // second composer in a dialog over it holding the same words; elsewhere the dialog says it.
-        if (card !== undefined && pressedOnHome && homeNowAt()) {
-          setHomeRefused((was) => ({
-            opening: (was?.opening ?? 0) + 1,
-            refused: { card, note },
-            arrivals: arrivals(),
-          }));
-        } else {
-          setNewTaskAsk({
-            preset:
-              card === undefined
-                ? undefined
-                : {
-                    ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
-                    refused: { card, note },
-                  },
-          });
-        }
-      }
-      return note;
-    };
-    return sendTaskStart({
-      ...(name.length === 0 ? undefined : { name }),
-      ...(repository === null ? undefined : { repository }),
-      ...(workspaceId === undefined ? undefined : { workspaceId }),
-      ...(from.runsOn === undefined || from.handed !== undefined
-        ? undefined
-        : { runsOn: from.runsOn }),
-      ...(from.relations === undefined || from.relations.length === 0
-        ? undefined
-        : { relations: from.relations }),
-      planning: false,
-      ...(from.handed === undefined
-        ? undefined
-        : {
-            agent: {
-              ...agentRequest(from.handed),
-              ...(from.runsOn === undefined ? undefined : { runsOn: from.runsOn }),
-            },
-          }),
-      ...(stays ? { quiet: true } : undefined),
-    }).then(
-      (answer) => {
-        if ("failure" in answer) {
-          return refusedWith({
-            reason: FAILURE_REASON.OTHER,
-            text:
-              answer.failure === TASK_CALL_FAILURE.LOCAL_AGENT_REFUSED
-                ? localAgentRefusalWords(answer.localAgentRefusal, from.device)
-                : startFailureNote(answer.failure),
-            cause: answer,
-          });
-        }
-        // Note that an agent's start put the card and whatever stood away as it was pressed, so
-        // what stands now is the developer's since, a New task opened again among it, and stays.
-        if (stays) {
-          if (handed === undefined) setNewTaskAsk(undefined);
-          else openAgent(answer.planId, handed, answer.agentStart, from.device, sentAt);
-          const { agentStart } = answer;
-          sayStarted(
-            answer.planId,
-            handed === undefined || (agentStart !== undefined && !("failure" in agentStart)),
-          );
-          return undefined;
-        }
-        if (handed === undefined) {
-          setNewTaskAsk(undefined);
-          setStartingTask(undefined);
-          standTask.current(homeNow.current.boundFor);
-          return undefined;
-        }
-        letGoOfPage();
-        openAgent(answer.planId, handed, answer.agentStart, from.device, sentAt);
-        return undefined;
+  // New task's flow, handed where the window stands and the moves a start makes there, each read as it stands at the call.
+  const newTask = useNewTask({
+    shown,
+    workspaceId: listedWorkspace?.id,
+    tasks: sidebar,
+    // The open document stands for its task where the list read did not land, as its menu reads it.
+    taskOf: (taskId) =>
+      tasks.tasks.find((each) => each.id === taskId) ??
+      (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId
+        ? region.task
+        : undefined),
+    place: {
+      atHome: () => homeNow.current.home.open && homeNow.current.boundFor === undefined,
+      arrivals,
+      keepPressedOver: (moved) => pressedOverNow.current(true, moved),
+      standStartPage: () => {
+        const moved = standTask.current(homeNow.current.boundFor);
+        if (moved) input.startStands();
+        return moved;
       },
-      (refused: Error) =>
-        refusedWith({ reason: FAILURE_REASON.OTHER, text: refused.message, cause: refused }),
-    );
-  };
-
-  // A task started without opening says so in a toast whose Open opens it
-  // as an opening start would, on the agent's tab where its agent started,
-  // or on the draft saying why where it did not, which the toast says too,
-  // so a narrow room does not lay the plan over it as a list's press does.
-  // Note that Open goes to the task first, which asks while a page stands
-  // unsaved work, as the sidebar's press does, and reads the opener of the
-  // render it is pressed in.
-  const selectNow = useRef((taskId: string) => arriveAt(taskId, () => openUnpinned(taskId)));
-  selectNow.current = (taskId) => arriveAt(taskId, () => openUnpinned(taskId));
-  const sayStarted = (planId: string, agentRan: boolean) =>
-    toast({
-      replayUnmasked: true,
-      words: agentRan ? TASK_STARTED_NOTE : TASK_STARTED_AGENT_REFUSED_NOTE,
-      tone: agentRan ? STATUS_TONE.COMPLETE : STATUS_TONE.ATTENTION,
-      action: {
-        label: OPEN_STARTED_TASK,
-        replayUnmasked: true,
-        onPress: () => selectNow.current(planId),
+      standBound: () => {
+        standTask.current(homeNow.current.boundFor);
       },
-    });
-
-  // A task started with an agent opens on the agent's tab, as a landed
-  // Start opens it; one whose agent was refused opens on a draft holding
-  // the words, the files, the model, and the servers under the start's key, with why
-  // under its box, whose Retry is the agent's own Start on the task. Either
-  // opens on the agent's tab, the task's Overview beside it, so the side
-  // panel stands as it stood on every other task.
-  // Note that an answer naming neither is read as one the service never gave.
-  const openAgent = (
-    planId: string,
-    handed: NewTaskAgent,
-    started: AgentAgentAnswer | undefined,
-    device: MacOffer | undefined,
-    sentAt: number,
-  ) => {
-    if (started !== undefined && !("failure" in started)) {
-      agents.onTaskStarted(planId, started.agent, {
-        key: handed.idempotencyKey,
-        prompt: handed.prompt,
-        attachments: handed.attachments,
-        sentAt,
-      });
-      mainTabs.onShow(planId, agentTab(started.agent.id));
-      return;
-    }
-    // Note that the refusal keeps the answer that said it, so the draft's tab reports the service's word for it.
-    const answer = started ?? { failure: AGENT_CALL_FAILURE.UNANSWERED };
-    const refused = { ...agentStartFailureNote(answer, planId, device), cause: answer };
-    const { idempotencyKey: id, ...words } = handed;
-    agents.onHandDraft(planId, { id, ...words, refused });
-    mainTabs.onShow(planId, draftTab(id));
-  };
-
-  // Note that New task's start is a steady door, so the dialog handed it holds while nothing it draws moves.
-  const steadyStartTask = useSteadyDoor(startTask);
-
-  // A group's quick add starts a task with no agent and no call, quietly, so
-  // the window stays on the Tasks page and the task lands in its group.
-  const quickAdd: TasksControl["onQuickAdd"] = (name, into) =>
-    sendTaskStart({
-      name,
-      ...(into.repository === undefined ? undefined : { repository: into.repository }),
-      ...(listedWorkspace === undefined ? undefined : { workspaceId: listedWorkspace.id }),
-      ...startingStanding(into.standing),
-      planning: false,
-      quiet: true,
-    }).then(
-      (answer): Failure | undefined =>
-        "failure" in answer
-          ? { reason: FAILURE_REASON.OTHER, text: startFailureNote(answer.failure) }
-          : undefined,
-      (refused: Error): Failure => ({ reason: FAILURE_REASON.OTHER, text: refused.message }),
-    );
-
-  // New task opens the dialog over whatever stands, an open task and its
-  // call included, which stay until a task is started. Note that a press
-  // while the dialog stands, as the menu bar's still can, leaves it as it is,
-  // because a fresh ask would keep the card's draft under another preset.
-  const newTaskWith = (preset: TasksControl["newTask"]["preset"]) =>
-    setNewTaskAsk((standing) => standing ?? { preset });
-  // Home opens on New task's composer, so a plain New task there takes its
-  // caret rather than drawing the same card again in a dialog over it. Note
-  // that the tab need not be shown, because every New task press brings it
-  // forward first.
-  const newTask = () => {
-    // Note that only Home's own route draws its composer (`ROUTED_PLACE.HOME`), once no task is bound there.
-    const atHome = input.homeView.open && boundFor === undefined;
-    if (atHome && signedIn && newTaskAsk === undefined) setHomeNewTasks((n) => n + 1);
-    else newTaskWith(undefined);
-  };
-  // The dialog is the Tasks tab's, so Settings taking the window puts it
-  // away rather than leaving it to stand again on the way back.
-  if (!shown && newTaskAsk !== undefined) setNewTaskAsk(undefined);
+      // Note that Open goes to the task first, which asks while a page stands unsaved work, as the sidebar's press does.
+      openStarted: (taskId) => arriveAt(taskId, () => openUnpinned(taskId)),
+      showMention: (mention) => arriveOnMention(mention),
+    },
+    agents,
+    showTab: mainTabs.onShow,
+  });
 
   // A description's version history opens over the task, so another task opens first.
   // Note that a task's versions are its description's, so while Descriptions is off whatever would open them, a link to a version among them, opens the task's Overview.
@@ -3553,19 +3074,8 @@ export function useTasksTab(input: {
   };
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
-  // Note that the start's page gives way for good to any place the developer went since, by any door, while it is out;
-  // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
-  const starting =
-    startingTask !== undefined && arrivals() <= startingTask.arrivals ? startingTask : undefined;
-  // Note that Home's refused start gives way the same, so Home opened again later opens on its draft alone.
-  const homeRefusedNow =
-    homeRefused !== undefined && arrivals() <= homeRefused.arrivals
-      ? { opening: homeRefused.opening, refused: homeRefused.refused }
-      : undefined;
-
   return useSteadyDoors({
     page,
-    starting,
     shown,
     signedIn,
     // Note that a fixture's invented tasks are nobody's, but those of a profile that signs in its own reader.
@@ -3748,38 +3258,7 @@ export function useTasksTab(input: {
     onMoveTask: moveTask,
     moveTask: moveTaskOptions,
     onRetryList: () => refreshTasks(),
-    onNewTask: newTask,
-    onNewTaskIn: (repository) => newTaskWith({ repository }),
-    onNewRelatedTask: (taskId, kind) => {
-      // The open document stands for its task where the list read did not land, as its menu reads it.
-      const task =
-        tasks.tasks.find((each) => each.id === taskId) ??
-        (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId
-          ? region.task
-          : undefined);
-      if (task === undefined) return;
-      newTaskWith({ relation: { kind, task } });
-    },
-    onQuickAdd: quickAdd,
-    onNewAutomationAgent: () => newTaskWith({ purpose: NEW_TASK_PURPOSE.AUTOMATION }),
-    newTask: {
-      open: newTaskAsk !== undefined,
-      preset: newTaskAsk?.preset,
-      homeAsks: homeNewTasks,
-      homeRefused: homeRefusedNow,
-      workspaces: viewed.workspaces,
-      workspaceId: listedWorkspace?.id,
-      repositoriesIn,
-      start: steadyStartTask,
-      models: agents.models,
-      devices: agents.macs,
-      modelsFailed: agents.modelsFailed,
-      modelsRead: agents.modelsRead,
-      readModels: agents.readModels,
-      onClose: () => setNewTaskAsk(undefined),
-      tasks: sidebar,
-      onShowMention: arriveOnMention,
-    },
+    newTask,
     // Leaving the task is going Home, whose arrival lets go of the task (`places/place-binding.ts`).
     onLeaveTask: () => leaveTask(),
     onGoHome: goHome,

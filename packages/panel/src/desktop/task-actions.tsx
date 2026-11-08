@@ -112,6 +112,7 @@ import {
   useAssigneeRows,
 } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import type { NewTask } from "../tasks/use-new-task.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import { useReadMark, useReadMarks } from "../tasks/use-task-looks.js";
@@ -233,11 +234,12 @@ export interface TaskRowTab
     | "me"
     | "workspaces"
     | "drawnTasks"
-    | "onNewRelatedTask"
     | "onChangeRepository"
     | "onMoveTask"
     | "moveTask"
   > {
+  /** New task related to a task, as the add menu's New task asks (`NewTask`'s `onOpenRelated`). */
+  readonly onNewRelatedTask: NewTask["onOpenRelated"];
   /** The tab's tasks as they stand when read. */
   readonly tasksNow: () => readonly TaskSummary[];
   /** Copies the open description, as Copy description does. */
@@ -256,7 +258,7 @@ export function taskRowTab(
     me: tasks.me,
     workspaces: tasks.workspaces,
     drawnTasks: tasks.drawnTasks,
-    onNewRelatedTask: tasks.onNewRelatedTask,
+    onNewRelatedTask: tasks.newTask.onOpenRelated,
     onChangeRepository: tasks.onChangeRepository,
     onMoveTask: tasks.onMoveTask,
     moveTask: tasks.moveTask,

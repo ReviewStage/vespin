@@ -2,7 +2,8 @@ import type { TaskStanding } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/ui";
 import { TASKS_GROUP, type TasksGroupHead } from "@repo/ui/tasks-page-model";
-import type { QuickAddInto, TasksControl } from "../tasks/use-tasks-tab.js";
+import type { QuickAddInto } from "../tasks/use-new-task.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
  * new-task-button.tsx -- New task as a glyph: the title bar's while the sidebar is folded, opening New task's dialog; and a group's +: a sidebar repository's, opening it on the repository, and a Tasks page group's, adding a task in the group in place (`quick-add.tsx`).
@@ -35,7 +36,7 @@ export function NewTaskButton({ tasks }: { tasks: TasksControl }): React.JSX.Ele
         icon={<ComposeIcon />}
         label="New task"
         disabled={!tasks.signedIn}
-        onClick={tasks.onNewTask}
+        onClick={tasks.newTask.onOpen}
       />
     </Tooltip>
   );

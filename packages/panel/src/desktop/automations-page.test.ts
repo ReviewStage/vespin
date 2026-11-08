@@ -73,7 +73,7 @@ import { pixelsOf, wayBackGap } from "../testing/laid-length.js";
 import { playMotions } from "../testing/pane-motion.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { newTaskControl, tasksControl } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { appStateIn } from "../use-app-state.js";
@@ -848,7 +848,12 @@ test("the list's title is its bar's heading, and Create with an agent and New au
 
 test("with no workspace chosen the bar's two acts stay reachable by keyboard, press nothing, and say why on hover", async () => {
   const agentOpens: number[] = [];
-  mount(tasksControl({ workspace: undefined, onNewAutomationAgent: () => agentOpens.push(1) }));
+  mount(
+    tasksControl({
+      workspace: undefined,
+      newTask: newTaskControl({ onOpenForAutomation: () => agentOpens.push(1) }),
+    }),
+  );
   await settle();
 
   for (const name of ["Create with an agent", "New automation"]) {

@@ -201,7 +201,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   phoneStart?: React.ReactNode;
 }): React.JSX.Element {
   // New task is the way on from an Inbox with nothing in it, wherever an account can start one.
-  const newTask = tasks.signedIn ? tasks.onNewTask : undefined;
+  const newTask = tasks.signedIn ? tasks.newTask.onOpen : undefined;
   const automations = useAutomationsDoor(tasks);
   const inbox = useInboxDoor(tasks);
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.

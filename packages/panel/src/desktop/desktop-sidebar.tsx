@@ -1901,7 +1901,7 @@ function SidebarColumn({
   // are asked once, because a page holding unsaved work holds one question (`places/place-leave.ts`'s `arrive`).
   const newTaskOver = (door: () => void) =>
     onTasks ? door() : tasks.placeLeave.arrive(() => onTabChange(PANEL_TAB.TASKS), door);
-  const newTask = () => newTaskOver(() => tasks.onNewTask());
+  const newTask = () => newTaskOver(() => tasks.newTask.onOpen());
   const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
   const openInbox = () => inbox.open();
@@ -1912,7 +1912,7 @@ function SidebarColumn({
   // Home is the place of no task bound, standing on its own route. New task's
   // composer is on it, so its row draws no Draft pencil for the words shown there.
   const atHome = onTasks && tasks.atHome;
-  const newTaskIn = (repository: string) => newTaskOver(() => tasks.onNewTaskIn(repository));
+  const newTaskIn = (repository: string) => newTaskOver(() => tasks.newTask.onOpenIn(repository));
   const folds = useFoldedGroups(sidebar.staged);
   const taskView = useTaskListView(tasks.workspace?.id, sidebar.staged);
   // The Tasks head's own menu, on a right-click and a long press, drawn only once it offers more than the buttons beside it.

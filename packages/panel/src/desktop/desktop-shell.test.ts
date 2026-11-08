@@ -52,7 +52,7 @@ import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
-import { handInbox, tasksControl } from "../testing/tasks-control.js";
+import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -201,8 +201,12 @@ function mount(
       page: TASKS_PAGE.HOME,
       // Home stands where the router stands it, on no place over it, as the window's root reads it.
       atHome: home,
-      onNewTask: () => setAsked(true),
-      newTask: { ...control.newTask, open: asked, onClose: () => setAsked(false) },
+      newTask: {
+        ...control.newTask,
+        onOpen: () => setAsked(true),
+        open: asked,
+        onClose: () => setAsked(false),
+      },
       ...overrides,
     });
     return createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch));
@@ -927,7 +931,7 @@ test("on a phone the Tasks page stands over a bar of the window's places, its ow
     at: SHELL_AT.BOARD,
     workspaces: [ACME],
     workspace: ACME,
-    onNewTask: () => asked.push("new task"),
+    newTask: newTaskControl({ onOpen: () => asked.push("new task") }),
   });
   assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
   assert.equal(barItem(page, "Tasks").getAttribute("aria-current"), "page");

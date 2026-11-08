@@ -35,6 +35,7 @@ import {
   MODELS_READ,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
+import type { NewTask } from "../tasks/use-new-task.js";
 import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
 import {
   type TasksControl,
@@ -456,6 +457,34 @@ export const NO_ARRIVALS = (): number => 0;
 /** A link read that always stands, for a tab drawn with no router, whose window never moves. */
 export const UNMOVED_LINK_READS = (): (() => boolean) => () => true;
 
+/** New task as the Tasks tab hands it, its dialog put away and every press ignored, but where `overrides` say otherwise. */
+export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
+  return {
+    starting: undefined,
+    onOpen: ignore,
+    onOpenIn: ignore,
+    onOpenRelated: ignore,
+    onOpenForAutomation: ignore,
+    open: false,
+    preset: undefined,
+    homeAsks: 0,
+    homeRefused: undefined,
+    workspaces: [],
+    workspaceId: undefined,
+    repositoriesIn: () => NO_REPOSITORIES,
+    start: () => Promise.resolve(undefined),
+    models: undefined,
+    devices: undefined,
+    modelsFailed: false,
+    modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
+    readModels: ignore,
+    onClose: ignore,
+    tasks: [],
+    onShowMention: ignore,
+    ...overrides,
+  };
+}
+
 /**
  * A signed-in Tasks tab on screen on Home with no tasks, every
  * press ignored, bound for whichever task it is given as open.
@@ -465,7 +494,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     overrides.onMoveTask ?? (() => Promise.resolve(false));
   return {
     page: TASKS_PAGE.HOME,
-    starting: undefined,
     shown: true,
     signedIn: true,
     me: undefined,
@@ -611,29 +639,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     relationMenu: undefined,
     onAddRelation: ignore,
     onRetryList: ignore,
-    onNewTask: ignore,
-    onNewTaskIn: ignore,
-    onNewRelatedTask: ignore,
-    onQuickAdd: () => Promise.resolve(undefined),
-    onNewAutomationAgent: ignore,
-    newTask: {
-      open: false,
-      preset: undefined,
-      homeAsks: 0,
-      homeRefused: undefined,
-      workspaces: [],
-      workspaceId: undefined,
-      repositoriesIn: () => NO_REPOSITORIES,
-      start: () => Promise.resolve(undefined),
-      models: undefined,
-      devices: undefined,
-      modelsFailed: false,
-      modelsRead: { state: MODELS_READ.UNREAD, generation: 0 },
-      readModels: ignore,
-      onClose: ignore,
-      tasks: [],
-      onShowMention: ignore,
-    },
+    newTask: newTaskControl(),
     onLeaveTask: ignore,
     onGoHome: ignore,
     onLeaveRouted: ignore,

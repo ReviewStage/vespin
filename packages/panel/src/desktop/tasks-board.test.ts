@@ -531,13 +531,14 @@ test("with a draft standing over its column's cards, the card dragged onto anoth
 });
 
 test("a column's + opens a draft there whose chips change it, and Return adds it with no agent and opens the next draft", async () => {
-  const added: [string, unknown][] = [];
-  const board = await mountBoard(TASKS, SHELL_ROOM.WIDE, DEFAULT_BOARD_DISPLAY, {
-    onQuickAdd: (name, into) => {
-      added.push([name, into]);
-      return Promise.resolve(undefined);
+  const added: unknown[] = [];
+  fakeActPort({
+    [ACT_KIND.TASKS_START]: (start) => {
+      added.push(start);
+      return Promise.resolve({ planId: "t-50" });
     },
   });
+  const board = await mountBoard();
   const draft = () => board.querySelector<HTMLInputElement>("[data-quick-add] input");
   act(() =>
     board.querySelector<HTMLButtonElement>('button[aria-label="New task in Backlog"]')?.click(),
@@ -554,10 +555,14 @@ test("a column's + opens a draft there whose chips change it, and Return adds it
   await act(async () => undefined);
 
   assert.deepEqual(added, [
-    [
-      "Export invoices as CSV",
-      { standing: { status: TASK_STATUS.BACKLOG, priority: TASK_PRIORITY.HIGH } },
-    ],
+    {
+      name: "Export invoices as CSV",
+      workspaceId: ACME.id,
+      status: TASK_STATUS.BACKLOG,
+      priority: TASK_PRIORITY.HIGH,
+      planning: false,
+      quiet: true,
+    },
   ]);
   assert.equal(draft()?.value, "", "the next draft stands, empty");
 });

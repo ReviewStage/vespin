@@ -1048,7 +1048,7 @@ export function TasksBoard({
         <EmptyState
           icon={<SquareKanbanIcon />}
           replayUnmasked
-          action={newTaskAction(tasks.signedIn ? tasks.onNewTask : undefined)}
+          action={newTaskAction(tasks.signedIn ? tasks.newTask.onOpen : undefined)}
         >
           {noneYetWords(TERM.TASK)}
         </EmptyState>

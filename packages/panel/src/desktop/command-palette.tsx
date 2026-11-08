@@ -1575,7 +1575,7 @@ function taskCommandRows(
       : []),
     {
       item: PANEL_COMMAND.NEW_CHILD_TASK,
-      run: () => tasks.onNewRelatedTask(task.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF),
+      run: () => tasks.newTask.onOpenRelated(task.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF),
     },
     // Add task relation opens the head's add menu on its first kind, whose pinned Relation row switches it.
     {
