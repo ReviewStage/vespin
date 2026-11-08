@@ -7,7 +7,7 @@ import {
   type TaskListView,
 } from "@repo/ui/task-list-model";
 import { createStore, useSelector } from "@tanstack/react-store";
-import { Schema, SchemaTransformation } from "effect";
+import { Schema } from "effect";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**
@@ -20,34 +20,12 @@ import { keptKey, useKept } from "../use-kept.js";
  * repository, the reader's own tasks. A fixture run draws that view and
  * keeps nothing, so its frames never wear a developer's choices.
  *
- * Note that Assigned to is kept under `assignee`, which no earlier build
- * wrote, and Me where it is absent, so every reader opens on their own
- * tasks once, whatever an earlier build kept under `assignedTo`, and a
- * later choice of Anyone is kept as one. An earlier build's order, creator,
- * and statuses read as nothing, and its grouping by person as by
- * repository.
+ * Note that Assigned to is kept as Me where it is absent, so every reader
+ * opens on their own tasks, and a later choice of Anyone is kept as one.
  */
 
-/** The groupings by person an earlier build kept, which read as by repository. */
-const EARLIER_GROUPING = {
-  ASSIGNEE: "assignee",
-  CREATOR: "creator",
-} as const;
-
-/** A kept grouping, an earlier build's by person read as by repository. */
-const storedGrouping = Schema.Literals([
-  ...Object.values(TASK_GROUPING),
-  ...Object.values(EARLIER_GROUPING),
-]).pipe(
-  Schema.decodeTo(
-    Schema.Literals(Object.values(TASK_GROUPING)),
-    SchemaTransformation.transform({
-      decode: (kept): TaskGrouping =>
-        kept === TASK_GROUPING.NONE ? TASK_GROUPING.NONE : TASK_GROUPING.REPOSITORY,
-      encode: (grouping) => grouping,
-    }),
-  ),
-);
+/** A kept grouping. */
+const storedGrouping = Schema.Literals(Object.values(TASK_GROUPING));
 
 /** A kept Assigned to. */
 const storedAssignedTo = Schema.Union([

@@ -1074,18 +1074,13 @@ test("a row draws its assignee and not its creator at first, and a List display 
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
-  for (const kept of [
-    { properties: BEFORE_ASSIGNEE, offered: BEFORE_ASSIGNEE },
-    { properties: BEFORE_ASSIGNEE },
-  ]) {
-    window.localStorage.setItem("app.tasksListDisplay", JSON.stringify(kept));
-    const page = await mountPage();
-    assert.ok(cells(page).includes("assignee"), "the assignee is drawn without turning it on");
-    assert.ok(cells(page).includes("creator"), "the creator stays on, as kept");
-    act(() => {
-      for (const root of roots.splice(0)) root.unmount();
-    });
-  }
+  window.localStorage.setItem(
+    "app.tasksListDisplay",
+    JSON.stringify({ properties: BEFORE_ASSIGNEE, offered: BEFORE_ASSIGNEE }),
+  );
+  const page = await mountPage();
+  assert.ok(cells(page).includes("assignee"), "the assignee is drawn without turning it on");
+  assert.ok(cells(page).includes("creator"), "the creator stays on, as kept");
 });
 
 test("a row's Assignee chip sends the member picked, and No assignee assigns it to no one, opening no task", async () => {
@@ -1158,19 +1153,6 @@ test("on a phone grouped by assignee, a row keeps its Assignee chip, which moves
   choose("No assignee");
 
   assert.deepEqual(sent, [["t-39", { assigneeId: null }]]);
-});
-
-test("a Board display kept before its cards offered Agents and Needs you draws them, the rest as kept", async () => {
-  window.localStorage.setItem("app.tasksPageView", JSON.stringify("board"));
-  window.localStorage.setItem(
-    "app.tasksBoardDisplay",
-    JSON.stringify({ properties: ["priority", "status"] }),
-  );
-  const page = await mountPage();
-  const card = page.querySelector<HTMLElement>('li[data-task-id="t-44"]');
-
-  assert.match(card?.textContent ?? "", /2 need you/, "the card says what waits on the reader");
-  assert.equal(card?.querySelector("[data-task-key]"), null, "the key stays off, as kept");
 });
 
 /** The section writes sent, each as its kind, its task, and its section. */

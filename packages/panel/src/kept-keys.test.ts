@@ -169,11 +169,8 @@ test("a sidebar never folded opens", () => {
   expect(draw(() => useSidebarCollapse(false, false)).now().collapsed).toBe(false);
 });
 
-test("a task list view an earlier build kept opens on the reader's own tasks, a grouping by person read as by repository, and Anyone chosen is kept", () => {
-  keep(
-    "app.sidebarTaskViews",
-    '{"w1":{"grouping":"creator","order":"created","createdBy":"u1","assignedTo":"u2"},"w2":{"grouping":"none","order":"updated"}}',
-  );
+test("a task list view kept with no Assigned to opens on the reader's own tasks, and Anyone chosen is kept", () => {
+  keep("app.sidebarTaskViews", '{"w1":{"grouping":"repository"},"w2":{"grouping":"none"}}');
   const list = draw(() => ({
     w1: useTaskListView("w1", false),
     w2: useTaskListView("w2", false),

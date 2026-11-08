@@ -12,14 +12,13 @@ import {
   clearedField,
   DEFAULT_BOARD_DISPLAY,
   DEFAULT_LIST_DISPLAY,
-  EARLIER_BOARD_PROPERTIES,
-  EARLIER_LIST_PROPERTIES,
   keptTasksDisplay,
   LIST_COLUMN,
   listPropertiesFitting,
   NO_TASKS_FILTER,
   TASK_MAKER,
   TASK_PROPERTY,
+  TASK_PROPERTY_ORDER,
   TASKS_FILTER_FIELD,
   TASKS_GROUP,
   TASKS_GROUPING,
@@ -457,49 +456,19 @@ test("the older count leaves out the tasks the filter does, and a Board column h
   expect([done?.tasks, done?.older]).toEqual([[], 1]);
 });
 
-test("a display kept before the completed window reads its Done and Canceled switches as the past week or none, and one kept since reads as kept", () => {
-  expect(
-    keptTasksDisplay({ done: true, canceled: false }, DEFAULT_LIST_DISPLAY, EARLIER_LIST_PROPERTIES)
-      .completed,
-  ).toBe(COMPLETED_WINDOW.PAST_WEEK);
-  expect(
-    keptTasksDisplay({ done: false, canceled: true }, DEFAULT_LIST_DISPLAY, EARLIER_LIST_PROPERTIES)
-      .completed,
-  ).toBe(COMPLETED_WINDOW.PAST_WEEK);
+test("a display kept reads over the view's own for whatever it holds, and as the view's own where it holds nothing", () => {
+  const offered = TASK_PROPERTY_ORDER;
+  expect(keptTasksDisplay({ offered }, DEFAULT_LIST_DISPLAY)).toEqual(DEFAULT_LIST_DISPLAY);
   expect(
     keptTasksDisplay(
-      { done: false, canceled: false },
+      { grouping: TASKS_GROUPING.PRIORITY, completed: COMPLETED_WINDOW.ALL, offered },
       DEFAULT_BOARD_DISPLAY,
-      EARLIER_BOARD_PROPERTIES,
-    ),
-  ).toEqual({
-    ...DEFAULT_BOARD_DISPLAY,
-    completed: COMPLETED_WINDOW.NONE,
-  });
-  expect(
-    keptTasksDisplay(
-      { grouping: TASKS_GROUPING.PRIORITY, done: true },
-      DEFAULT_BOARD_DISPLAY,
-      EARLIER_BOARD_PROPERTIES,
     ),
   ).toEqual({
     ...DEFAULT_BOARD_DISPLAY,
     grouping: TASKS_GROUPING.PRIORITY,
-    completed: COMPLETED_WINDOW.PAST_WEEK,
+    completed: COMPLETED_WINDOW.ALL,
   });
-  expect(keptTasksDisplay({}, DEFAULT_LIST_DISPLAY, EARLIER_LIST_PROPERTIES)).toEqual(
-    DEFAULT_LIST_DISPLAY,
-  );
-  expect(keptTasksDisplay({}, DEFAULT_BOARD_DISPLAY, EARLIER_BOARD_PROPERTIES).completed).toBe(
-    COMPLETED_WINDOW.PAST_WEEK,
-  );
-  expect(
-    keptTasksDisplay(
-      { completed: COMPLETED_WINDOW.ALL, done: false },
-      DEFAULT_LIST_DISPLAY,
-      EARLIER_LIST_PROPERTIES,
-    ).completed,
-  ).toBe(COMPLETED_WINDOW.ALL);
 });
 test("Made by keeps the tasks a person made by hand, those a coding agent made, or those Vespin made on a call, a task from before origins as made by hand", () => {
   const tasks = [
@@ -618,32 +587,16 @@ test("the Board stands a column for each assignee where asked, the reader's firs
 test("a display kept before rows offered the assignee draws it, and keeps its creator as it was kept, on or off", () => {
   const without = (left: readonly TaskProperty[], ...out: TaskProperty[]) =>
     left.filter((property) => !out.includes(property));
-  const listKept = without(EARLIER_LIST_PROPERTIES, TASK_PROPERTY.UPDATED);
-  const boardKept = without(EARLIER_BOARD_PROPERTIES, TASK_PROPERTY.STATUS);
+  const offered = without(TASK_PROPERTY_ORDER, TASK_PROPERTY.ASSIGNEE);
+  const listKept = without(offered, TASK_PROPERTY.UPDATED);
 
-  // A List display kept by a build that said what it offered, and one kept before builds said so.
-  for (const offered of [EARLIER_LIST_PROPERTIES, undefined]) {
-    const kept = keptTasksDisplay(
-      { properties: listKept, ...(offered === undefined ? {} : { offered }) },
-      DEFAULT_LIST_DISPLAY,
-      EARLIER_LIST_PROPERTIES,
-    ).properties;
-    expect(kept).toContain(TASK_PROPERTY.ASSIGNEE);
-    expect(kept).toContain(TASK_PROPERTY.CREATOR);
-    expect(kept).not.toContain(TASK_PROPERTY.UPDATED);
-  }
-  const board = keptTasksDisplay(
-    { properties: boardKept },
-    DEFAULT_BOARD_DISPLAY,
-    EARLIER_BOARD_PROPERTIES,
-  ).properties;
-  expect(board).toContain(TASK_PROPERTY.ASSIGNEE);
-  expect(board).toContain(TASK_PROPERTY.CREATOR);
-  expect(board).not.toContain(TASK_PROPERTY.STATUS);
+  const kept = keptTasksDisplay({ properties: listKept, offered }, DEFAULT_LIST_DISPLAY).properties;
+  expect(kept).toContain(TASK_PROPERTY.ASSIGNEE);
+  expect(kept).toContain(TASK_PROPERTY.CREATOR);
+  expect(kept).not.toContain(TASK_PROPERTY.UPDATED);
   const creatorOff = keptTasksDisplay(
-    { properties: without(listKept, TASK_PROPERTY.CREATOR), offered: EARLIER_LIST_PROPERTIES },
+    { properties: without(listKept, TASK_PROPERTY.CREATOR), offered },
     DEFAULT_LIST_DISPLAY,
-    EARLIER_LIST_PROPERTIES,
   ).properties;
   expect(creatorOff).toContain(TASK_PROPERTY.ASSIGNEE);
   expect(creatorOff).not.toContain(TASK_PROPERTY.CREATOR);
@@ -658,7 +611,6 @@ test("a display kept since rows offered the assignee keeps it off where its read
       offered: DEFAULT_LIST_DISPLAY.properties.concat(TASK_PROPERTY.CREATOR),
     },
     DEFAULT_LIST_DISPLAY,
-    EARLIER_LIST_PROPERTIES,
   ).properties;
 
   expect(offAgain).not.toContain(TASK_PROPERTY.ASSIGNEE);
