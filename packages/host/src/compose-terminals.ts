@@ -407,10 +407,7 @@ function composed(
   const reopening = (connection: Connection) =>
     Effect.gen(function* () {
       yield* opening(connection).pipe(
-        Effect.retry({
-          schedule: RECONNECT_BACKOFF,
-          while: (failure) => failure._tag === "RelayDropped",
-        }),
+        Effect.retry({ schedule: RECONNECT_BACKOFF }),
         Effect.repeat({
           schedule: Schedule.spaced(TERMINAL_RECONNECT.FIRST),
           while: (ending: SocketEnding) => ending === SOCKET_ENDING.DROPPED,
