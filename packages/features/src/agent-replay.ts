@@ -36,6 +36,8 @@
  * stands.
  */
 
+import { Schema } from "effect";
+
 /** The heading a start's note stands under, after the brief and any replay: the developer's, or that of the agent that started it. */
 export const START_NOTE_HEADING = {
   DEVELOPER: "## Note from the developer",
@@ -237,7 +239,7 @@ const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(REPLAY_TOOL_STATE
 const SENDER_KINDS: ReadonlySet<string> = new Set(Object.values(REPLAY_SENDER));
 /** The app's sender as a marker written before it was `app` spells it. */
 const LEGACY_APP_SENDER = "luke";
-const VALUE_FORMS: ReadonlySet<string> = new Set(Object.values(REPLAY_VALUE_FORM));
+const isReplayValueForm = Schema.is(Schema.Literals(Object.values(REPLAY_VALUE_FORM)));
 /** Whose words a summary is, as its marker says: the app's, `luke` before it. */
 const SUMMARY_BY = "app";
 const SUMMARY_OPEN = new RegExp(
@@ -296,8 +298,7 @@ function stepText(step: ReplayStep): string {
 
 /** A value's form read back from its marker; none where it names none it knows. */
 function formOf(value: string | undefined): ReplayValueForm | undefined {
-  // SAFETY: the value was checked against the vocabulary in the same expression.
-  return value !== undefined && VALUE_FORMS.has(value) ? (value as ReplayValueForm) : undefined;
+  return isReplayValueForm(value) ? value : undefined;
 }
 
 /** A tool call's state, input, output, tool, and the forms of its input and output read back from its marker and its words; none where they do not add up. */

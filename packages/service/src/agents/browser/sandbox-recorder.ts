@@ -34,6 +34,7 @@
 
 import { PLAYWRIGHT_PIN } from "@repo/agent-runner/pins";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
+import { Schema } from "effect";
 import { LINK_SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 import { RECORDING_CURSOR_SOURCE, RECORDING_CURSOR_STOP } from "./recording-cursor.js";
 import { SANDBOX_BROWSER } from "./sandbox-browser.js";
@@ -420,7 +421,7 @@ export type RecordingStop =
   | { readonly ok: true; readonly seconds: number; readonly bytes: number }
   | { readonly ok: false; readonly reason: RecordingFailure; readonly bytes?: number };
 
-const FAILURES: ReadonlySet<string> = new Set(Object.values(RECORDING_FAILURE));
+const isRecordingFailure = Schema.is(Schema.Literals(Object.values(RECORDING_FAILURE)));
 
 export function recordingStopOf(run: CommandRun): RecordingStop {
   const failedRun: RecordingStop = { ok: false, reason: RECORDING_FAILURE.ENCODER };
@@ -436,10 +437,7 @@ export function recordingStopOf(run: CommandRun): RecordingStop {
   if (word.ok === true && typeof word.seconds === "number" && typeof word.bytes === "number") {
     return { ok: true, seconds: word.seconds, bytes: word.bytes };
   }
-  const reason =
-    typeof word.reason === "string" && FAILURES.has(word.reason)
-      ? (word.reason as RecordingFailure)
-      : RECORDING_FAILURE.ENCODER;
+  const reason = isRecordingFailure(word.reason) ? word.reason : RECORDING_FAILURE.ENCODER;
   return typeof word.bytes === "number"
     ? { ok: false, reason, bytes: word.bytes }
     : { ok: false, reason };
