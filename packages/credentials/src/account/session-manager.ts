@@ -781,28 +781,47 @@ export class AccountSessionManager {
   }
 
   /**
-   * Whether the account still stands, as the Mac's own tokens find it: its
-   * identity read, and once more after one refresh grant where the access
-   * token is refused. Only the provider's own answer that the account is
-   * gone counts as gone; a refused grant, an outage, or another person
-   * counts as unknown, since a revoked grant answers as a deleted account's
-   * does. A renewal's rotated tokens are kept, as `#renew` keeps them.
+   * Whether the account a deletion was asked for still stands, as the Mac's
+   * own tokens find it, and only while that account is still the one this
+   * Mac holds: a sign-out or a sign-in landing meanwhile makes the answer
+   * unknown, so nothing the caller does on it reaches another account.
    */
   #accountStanding(stored: StoredAccount): Effect.Effect<AccountStanding> {
     return Effect.gen({ self: this }, function* () {
       const generation = this.#generation;
+      const standing = yield* this.#readStanding(stored);
+      return this.#isCurrent(generation) ? standing : ACCOUNT_STANDING.UNKNOWN;
+    });
+  }
+
+  /**
+   * The identity read under the tokens stored now, and once more after a
+   * renewal where the access token is refused. Only the provider's own
+   * answer that the account is gone counts as gone; a refused grant, an
+   * outage, or another person counts as unknown, since a revoked grant
+   * answers as a deleted account's does. Note that the renewal is the one
+   * flight every caller shares (`renewOnce`), which reads the refresh token
+   * it trades from the store itself, because a second grant on one refresh
+   * token is a replay Better Auth answers by revoking every token the Mac
+   * holds.
+   */
+  #readStanding(stored: StoredAccount): Effect.Effect<AccountStanding> {
+    return Effect.gen({ self: this }, function* () {
       const client = this.#options.client;
       const standingOf = (failure: AccountClientFailure) =>
         accountNotFound(failure) ? ACCOUNT_STANDING.GONE : ACCOUNT_STANDING.UNKNOWN;
-      const read = yield* Effect.result(client.userInfo(stored.accessToken, stored.provider));
+      const held = yield* this.#options.store.readAccount();
+      if (held === undefined) return ACCOUNT_STANDING.UNKNOWN;
+      const read = yield* Effect.result(client.userInfo(held.accessToken, held.provider));
       if (Result.isSuccess(read)) return identityStanding(stored, read.success);
       if (!accessTokenNeedsRefresh(read.failure)) return standingOf(read.failure);
-      const renewed = yield* Effect.result(client.refresh(stored.refreshToken));
-      if (Result.isFailure(renewed)) return standingOf(renewed.failure);
-      yield* this.#storeCurrent(generation, { ...stored, ...renewed.success });
-      const again = yield* Effect.result(
-        client.userInfo(renewed.success.accessToken, stored.provider),
-      );
+      yield* this.renewOnce();
+      const renewed = yield* this.#options.store.readAccount();
+      // A renewal that stored nothing new was refused or did not answer, which says nothing of the account.
+      if (renewed === undefined || renewed.accessToken === held.accessToken) {
+        return ACCOUNT_STANDING.UNKNOWN;
+      }
+      const again = yield* Effect.result(client.userInfo(renewed.accessToken, renewed.provider));
       return Result.isSuccess(again)
         ? identityStanding(stored, again.success)
         : standingOf(again.failure);
