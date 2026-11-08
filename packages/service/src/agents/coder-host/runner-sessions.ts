@@ -931,18 +931,11 @@ export const runnerSessions = <
      * stands is left for the next message. A failure here is logged by its
      * kind alone, and the launch's own failure answered all the same.
      */
-    const discardedWhereAgentGone = (
-      agent: Agent,
-      place: { readonly name: MachineName; readonly session: string },
-    ) =>
+    const discardedWhereAgentGone = (agent: Agent, sessionId: string) =>
       Effect.gen(function* () {
         if (Option.isSome(yield* readAgent(userId, agent.id))) return;
-        const found = yield* machine.findPlaces(userId, place.session);
-        yield* Effect.forEach(
-          found.filter((each) => each.name === place.name),
-          (each) => machine.discard(each),
-          { discard: true },
-        );
+        const found = yield* machine.findPlace(userId, sessionId);
+        if (Option.isSome(found)) yield* machine.discard(found.value);
       }).pipe(
         Effect.catch((failure) =>
           Effect.logWarning(`a deleted agent's place was not discarded: ${failureKind(failure)}`),
@@ -998,7 +991,8 @@ export const runnerSessions = <
           );
           // An agent deleted while its launch prepared, its workspace's delete among them, takes no
           // bearer, and the launch is refused rather than start a runner nothing could reach or retire.
-          if (Option.isNone(recordedLaunch)) return yield* new LaunchRefused({ reason: "no agent" });
+          if (Option.isNone(recordedLaunch))
+            return yield* new LaunchRefused({ reason: "no agent" });
           const named = (url: string) =>
             Option.match(recordedLaunch, {
               onNone: () => url,
@@ -1602,9 +1596,7 @@ export const runnerSessions = <
                 ),
               ).pipe(
                 // Note that a launch failing for its agent's delete, prepared or launched, leaves no place behind.
-                Effect.tapError(() =>
-                  discardedWhereAgentGone(agent, { name: opened.name, session: sessionId }),
-                ),
+                Effect.tapError(() => discardedWhereAgentGone(agent, sessionId)),
               ),
             ).pipe(Effect.annotateLogs(runningLogId(opened.place.running))),
         );
@@ -1677,9 +1669,7 @@ export const runnerSessions = <
           ),
         ).pipe(
           // Note that a launch failing for its agent's delete, prepared or launched, leaves no place behind.
-          Effect.tapError(() =>
-            discardedWhereAgentGone(agent, { name: running.name, session: sessionId }),
-          ),
+          Effect.tapError(() => discardedWhereAgentGone(agent, sessionId)),
         );
         return place;
       });

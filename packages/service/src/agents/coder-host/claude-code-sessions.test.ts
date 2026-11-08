@@ -900,7 +900,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           Effect.provide(Layer.merge(services(api), deletedOnceOpened)),
         );
 
-        yield* sessions.open(message(agent, "Fix the invitations."));
+        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the invitations."));
 
         assert.equal(api.sandboxes.length, 1);
         assert.deepEqual(api.commands, []);

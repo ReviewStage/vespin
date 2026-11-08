@@ -301,7 +301,7 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const everyLetGoByStarter = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   agents: readonly Agent[],
-): Effect.fn.Return<void, never, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<void, never, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const sessionsOf = yield* sessionsRouter;
   yield* everySettled(agents, (agent) =>
     letGo(writer, sessionsOf(agent.userId), agent).pipe(
