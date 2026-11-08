@@ -1,11 +1,9 @@
-# skeleton.yaml -- every tab, an ask's choices, and the signed-out placeholder, each shot once in the light theme.
+# skeleton.yaml -- every tab, an ask's choices, and the signed-out placeholder, each shot once.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device.
 appId: dev.vespin.ios
 ---
-# The flows share a simulator, and `skeleton-dark.yaml` may run first.
-- setDarkMode: disabled
 - launchApp:
     clearState: true
 - assertVisible: "Inbox"
