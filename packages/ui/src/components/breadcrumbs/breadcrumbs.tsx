@@ -17,7 +17,8 @@ import {
 import { useDisclosure } from "../../use-disclosure.js";
 import { BUTTON_VARIANT } from "../button/button.js";
 import { FoldingButton, type FoldingButtonHint } from "../folding-button/folding-button.js";
-import { dropBelowStart, Menu, type MenuAction, useMenu, withContextMenu } from "../menu/menu.js";
+import { withContextMenu } from "../menu/context-menu.js";
+import { dropBelowStart, Menu, type MenuAction, useMenu } from "../menu/menu.js";
 import {
   ClippedLine,
   ONE_LINE_ELEMENT,

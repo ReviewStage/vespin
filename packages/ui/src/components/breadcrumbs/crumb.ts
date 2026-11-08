@@ -3,7 +3,7 @@
  */
 
 import type { ReactNode } from "react";
-import type { ContextMenuProps } from "../menu/menu.js";
+import type { ContextMenuProps } from "../menu/context-menu.js";
 import type { OneLineEnd } from "../one-line/clipped-line.js";
 
 /**
