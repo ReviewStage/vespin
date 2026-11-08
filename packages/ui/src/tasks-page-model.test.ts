@@ -327,6 +327,25 @@ test("the List leads with the pins, then each section, one holding no task among
   ]);
 });
 
+test("the List stands a section whose every task the view leaves out only where the display shows empty groups", () => {
+  const sections = (emptyGroups: boolean) =>
+    drawn(
+      tasksListGroups([task("Shipped", { status: TASK_STATUS.DONE })], {
+        filter: NO_TASKS_FILTER,
+        display: { ...DEFAULT_LIST_DISPLAY, emptyGroups },
+        pinned: [],
+        sections: [{ sectionId: "errors", taskIds: ["Shipped"] }],
+        readerId: DEAN,
+        personName: () => "",
+        members: [],
+        now: NOW,
+      }),
+    ).filter(([head]) => head?.[0] === TASKS_GROUP.SECTION);
+
+  expect(sections(false)).toEqual([]);
+  expect(sections(true)).toEqual([[["section", "errors"], []]]);
+});
+
 test("the Board stands a column for every status at first, empty ones too, the settled finished in the past week, and by priority where asked; a grouping it cannot drop into is read as status", () => {
   const tasks = [
     task("Urgent", { status: TASK_STATUS.TODO, priority: TASK_PRIORITY.URGENT }),

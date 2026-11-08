@@ -191,7 +191,6 @@ import {
   NEW_SECTION,
   PINNED_DROP_ZONE,
   rowMember,
-  type ShownSection,
   SidebarSections,
   TASKS_DROP_ZONE,
   useSectionDialogs,
@@ -1296,7 +1295,7 @@ function withTaskLists(
 }
 
 /** A section as it draws `rows` (`homedTaskRows`): the entries of its own rows among them, a child task standing under a parent it holds after them with no entry. */
-function homedSection(drawn: ShownSection, rows: readonly TaskRow[]): ShownSection {
+function homedSection(drawn: DrawnSection, rows: readonly TaskRow[]): DrawnSection {
   const kept = new Set(rows);
   const entries = drawn.entries.filter((_, at) => {
     const row = drawn.rows[at];
@@ -1657,17 +1656,14 @@ function sectionedTasks(
 /**
  * A section as the view leaves it: its tasks to do and in progress, and
  * any with no status, an agent's among them, of those Assigned to holds,
- * each with its entry, in its order; and whether Assigned to leaves any
- * out. Note that a row only the statuses shown leave out counts for
- * nothing, because the section still reads as one to drag tasks into.
+ * each with its entry, in its order.
  */
 function sectionInView(
   drawn: DrawnSection,
   assignedTo: AssignedTo,
   readerId: string | undefined,
-): ShownSection {
-  const people = taskRowsAssignedTo(drawn.rows, assignedTo, readerId);
-  const held = new Set(people);
+): DrawnSection {
+  const held = new Set(taskRowsAssignedTo(drawn.rows, assignedTo, readerId));
   const shown = (row: TaskRow) => held.has(row) && taskRowInStatuses(row, SHOWN_STATUSES);
   const kept = drawn.rows.flatMap((row, at) => {
     const entry = drawn.entries[at];
@@ -1677,7 +1673,6 @@ function sectionInView(
     ...drawn,
     entries: kept.map(({ entry }) => entry),
     rows: kept.map(({ row }) => row),
-    othersHeld: people.length < drawn.rows.length,
   };
 }
 
