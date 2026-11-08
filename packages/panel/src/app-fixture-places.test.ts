@@ -386,8 +386,8 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
     "a pairing's link",
     handLink({ place: { kind: ACCOUNT_PLACE.CONNECT, code: "ABCDEFGH" } }),
     "/personal/settings/hosts",
-    // The code its link hands, which the Hosts page asks over once it stands.
-    /Connect a host/u,
+    // The code its link hands, which the Hosts page's dialog asks over once the pairing it names is read.
+    /ABCD-EFGH/u,
   ],
   [
     "a link to Admin",
@@ -420,7 +420,10 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
       yield* press;
       yield* leaveAsked();
       assert.deepEqual(router.addresses().slice(0, router.at() + 1), [...standing, arrived]);
-      if (shows !== undefined) assert.match(drawn(), shows);
+      // Note that we wait on the ask itself, because the pairing's read lands after hops a busy runner stretches past any fixed count of ticks.
+      if (shows !== undefined) {
+        yield* Effect.promise(() => vi.waitFor(() => assert.match(drawn(), shows)));
+      }
     }),
 );
 
