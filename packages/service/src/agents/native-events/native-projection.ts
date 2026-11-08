@@ -514,7 +514,9 @@ class Fold {
    */
   #ended(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>): void {
     const ended = this.#endedTurn(moment);
-    const { warm: _warm, ...cold } = this.state;
+    // Note that a limit is the launch's, let go at its end whether or not a turn ends with it:
+    // the next launch is refused again or it is not.
+    const { warm: _warm, rateLimit, rateLimitResetsAt: _resets, ...cold } = this.state;
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
     if (ended === undefined) return;
     const turn = this.#closed(ended.turn);
@@ -536,7 +538,7 @@ class Fold {
       turn.compactionFailed,
       turn.refusing,
       turn.failure,
-      this.state.rateLimit,
+      rateLimit,
     ]
       .filter((word) => word !== undefined)
       .join("; ");
@@ -561,14 +563,11 @@ class Fold {
         failure,
         detail,
         // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue.
-        expected: turn.limited === true || this.state.rateLimit !== undefined || refusal,
+        expected: turn.limited === true || rateLimit !== undefined || refusal,
         refused: turn.refused === true,
       });
     }
     this.#setTurn(undefined);
-    // Note that a limit is the launch's: the next launch is refused again or it is not.
-    const { rateLimit: _spent, rateLimitResetsAt: _resets, ...rest } = this.state;
-    this.state = rest;
   }
 
   #usage(usage: RunUsage): void {

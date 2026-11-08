@@ -62,10 +62,10 @@ test("a warm launch that fails after its turn ended at its IDLE fails no turn of
   assert.deepEqual(crashed.writes, []);
 });
 
-test("a warm runner a newer launch cut off with no turn under way or queued fails no turn, and says so", () => {
+test("a warm runner a newer launch cut off with no turn under way or queued fails no turn, says so, and lets its limit go", () => {
   const reports: string[] = [];
   const cutOff = projectMoments(
-    heldProjection(null),
+    { rateLimit: "usage limit reached" },
     [
       {
         kind: NATIVE_MOMENT.ENDED,
@@ -87,6 +87,7 @@ test("a warm runner a newer launch cut off with no turn under way or queued fail
     },
   );
   assert.deepEqual(cutOff.writes, []);
+  assert.deepEqual(cutOff.state, {});
   assert.deepEqual(reports, [
     "A launch with no turn under way ended: failed the service refused the launch's lines: The service answered 401",
   ]);
