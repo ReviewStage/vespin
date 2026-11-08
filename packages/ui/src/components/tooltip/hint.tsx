@@ -116,7 +116,7 @@ import { createPortal } from "react-dom";
 import { useDisclosure } from "../../use-disclosure.js";
 import { useStateWithRef } from "../../use-state-with-ref.js";
 import { makeWait, useWait, type Wait } from "../../wait.js";
-import type { ListRowHint } from "../list-row/list-row.js";
+import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
 import { Shortcut } from "../shortcut/shortcut.js";

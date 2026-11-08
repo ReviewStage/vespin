@@ -89,7 +89,7 @@ import { type TitleSeat, useWrapWhenCut } from "../../use-wrap-when-cut.js";
 import { BREADCRUMBS_VARIANT, Breadcrumbs, type Crumb } from "../breadcrumbs/breadcrumbs.js";
 import { EmptyState, type EmptyStateAction } from "../empty-state/empty-state.js";
 import { FILL_ELEMENT, Fill } from "../layout/layout.js";
-import type { ContextMenuProps } from "../menu/menu.js";
+import type { ContextMenuProps } from "../menu/context-menu.js";
 import { ONE_LINE_ELEMENT, OneLine } from "../one-line/one-line.js";
 import { Tooltip, wholeWordsHint } from "../tooltip/hint.js";
 import {

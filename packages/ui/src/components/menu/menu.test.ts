@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import { holdExits } from "../../testing/held-exits.js";
 import { Tooltip } from "../tooltip/hint.js";
+import { NO_CONTEXT_MENU } from "./context-menu.js";
 import {
   MENU_DETAIL,
   MENU_ITEM_MARK,
@@ -13,7 +14,6 @@ import {
   Menu,
   type MenuEntry,
   MenuItem,
-  NO_CONTEXT_MENU,
   useMenu,
 } from "./menu.js";
 

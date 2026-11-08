@@ -28,13 +28,8 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { ANNOUNCE, announce } from "../announcer/announcer.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
-import {
-  type ContextMenuProps,
-  MENU_ALIGN,
-  MENU_DROP,
-  type MenuPlacement,
-  opensMenu,
-} from "../menu/menu.js";
+import type { ContextMenuProps } from "../menu/context-menu.js";
+import { MENU_ALIGN, MENU_DROP, type MenuPlacement, opensMenu } from "../menu/menu.js";
 import {
   ROVING_ORIENTATION,
   ROVING_STOP,
