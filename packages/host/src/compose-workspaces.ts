@@ -1120,11 +1120,11 @@ function workspaceRowActs(
     // as a leave does, because the task is deleted with it; a refused delete
     // closes nothing. The workspace and its tasks leave the view over the
     // follow, as every other member's window hears it.
-    WORKSPACE_DELETE: ({ workspaceId }) =>
+    WORKSPACE_DELETE: ({ workspaceId, ifAlone }) =>
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const open = dependencies.tasks.openTaskLeaving();
-        const remove = Effect.tap(client.workspaces.delete(workspaceId), (answer) =>
+        const remove = Effect.tap(client.workspaces.delete(workspaceId, ifAlone), (answer) =>
           answer.ok && open.workspaceId === workspaceId ? open.close : Effect.void,
         );
         const deleted = yield* served(remove);
