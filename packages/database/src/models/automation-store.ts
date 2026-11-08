@@ -24,20 +24,7 @@ import {
 } from "@repo/features/automation-wire";
 import type { SentryTriggerEvent, TriggerProvider } from "@repo/features/trigger-catalog";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  gt,
-  gte,
-  inArray,
-  isNull,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -597,30 +584,6 @@ const ScheduledRowSchema = Schema.Struct({
 
 /** One scheduled automation as its schedule is kept for it: its id, its workspace, whether it runs, and what fires it. */
 export type ScheduledAutomation = typeof ScheduledRowSchema.Type;
-
-const findScheduled = SqlSchema.findAll({
-  Request: Schema.Struct({ after: Schema.NullOr(Schema.String), limit: Schema.Int }),
-  Result: ScheduledRowSchema,
-  execute: ({ after, limit }) =>
-    Database.use((db) =>
-      db
-        .select({
-          id: automation.id,
-          organizationId: automation.organizationId,
-          enabled: automation.enabled,
-          trigger: automation.trigger,
-        })
-        .from(automation)
-        .where(
-          and(
-            eq(automation.triggerKind, AUTOMATION_TRIGGER.SCHEDULE),
-            after === null ? undefined : gt(automation.id, after),
-          ),
-        )
-        .orderBy(asc(automation.id))
-        .limit(limit),
-    ),
-});
 
 const StartedAgentSchema = Schema.Struct({
   agentId: Schema.String,
@@ -1238,14 +1201,6 @@ export function advanceAutomationSchedule(
   nextRunAt: Date | null,
 ): TaskStoreEffect<void> {
   return writeNextRun({ id, nextRunAt });
-}
-
-/** The automations a schedule fires, paused ones among them, in id order after `after` (from the first where it is null), at most `limit`, for keeping their schedules. */
-export function scheduledAutomations(
-  after: string | null,
-  limit: number,
-): TaskStoreEffect<readonly ScheduledAutomation[]> {
-  return findScheduled({ after, limit });
 }
 
 /** The agents the automation's runs fired at or after `since` started, and that stand still. */

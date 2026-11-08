@@ -33,7 +33,6 @@ import {
   readAutomation,
   readWebhookAutomation,
   recordAutomationRun,
-  scheduledAutomations,
   settleAutomationRun,
   subjectRunStartedSince,
   updateAutomation,
@@ -313,38 +312,6 @@ it.layer(getTestDB())("the automation store", (it) => {
         );
         assert.equal(yield* deleteAutomation(owner, made.id), false);
         assert.deepEqual(yield* listAutomationRuns(owner, made.id), []);
-      }),
-  );
-
-  it.effect(
-    "the scheduled automations are read from the first page, paused ones among them and no other trigger's, and a page after an id starts past it",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openAccount;
-        const workspaceId = yield* openWorkspace(owner);
-        const scheduled = Option.getOrThrow(yield* createAutomation(owner, nightly(workspaceId)));
-        const paused = Option.getOrThrow(
-          yield* updateAutomation(
-            owner,
-            Option.getOrThrow(yield* createAutomation(owner, nightly(workspaceId))).id,
-            { enabled: false },
-          ),
-        );
-        const hooked = Option.getOrThrow(
-          yield* createAutomation(owner, {
-            ...nightly(workspaceId),
-            trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
-            nextRunAt: null,
-            webhookSecretHash: "cd".repeat(32),
-          }),
-        );
-
-        const read = (yield* scheduledAutomations(null, 1000)).map((row) => row.id);
-        const after = (yield* scheduledAutomations(scheduled.id, 1000)).map((row) => row.id);
-
-        assert.ok(read.includes(scheduled.id) && read.includes(paused.id));
-        assert.ok(!read.includes(hooked.id), "a webhook automation keeps no schedule");
-        assert.ok(!after.includes(scheduled.id), "a page after an id starts past it");
       }),
   );
 

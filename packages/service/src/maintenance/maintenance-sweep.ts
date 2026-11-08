@@ -29,8 +29,6 @@ interface MaintenanceSweeps {
   reconcileAgents: (now: number) => SweepRead<number>;
   /** Publishes again the coding agents' turns still queued for a runner whose message may have been lost, a sweep's worth, answering how many (`coder-host/turn-delivery.ts`). */
   republishTurns: (now: number) => SweepRead<number>;
-  /** Temporary: keeps the schedules of scheduled automations saved before they moved to Vercel Schedules, answering how many (`automation-schedules-backfill.ts`); leaves with it. */
-  keepAutomationSchedules: () => SweepRead<number>;
 }
 
 /**
@@ -59,8 +57,6 @@ interface MaintenanceSweepAnswer {
   turns: Swept<number>;
   /** Coding agents' turns still queued, published again. */
   republished: Swept<number>;
-  /** Temporary: scheduled automations' missing schedules kept. */
-  automationSchedules: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -99,10 +95,6 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     portShares: yield* isolated("sweepPortShares", sweeps.sweepPortShares(now)),
     turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
     republished: yield* isolated("republishTurns", sweeps.republishTurns(now)),
-    automationSchedules: yield* isolated(
-      "keepAutomationSchedules",
-      sweeps.keepAutomationSchedules(),
-    ),
   };
 });
 

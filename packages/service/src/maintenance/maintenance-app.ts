@@ -4,7 +4,6 @@ import { Effect, Layer } from "effect";
 import { HttpClient, HttpRouter } from "effect/http";
 import { reconcileAgents } from "../agents/coder-host/reconcile.js";
 import { republishQueuedTurns } from "../agents/coder-host/turn-delivery.js";
-import { keepMissingSchedules } from "../automations/automation-schedules-backfill.js";
 import { HostedEnvironment } from "../environment.js";
 import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
 import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js";
@@ -43,7 +42,6 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     reconcileAgents: (now) =>
       Effect.provideService(reconcileAgents(now), HttpClient.HttpClient, http),
     republishTurns: republishQueuedTurns,
-    keepAutomationSchedules: keepMissingSchedules,
   });
 });
 
