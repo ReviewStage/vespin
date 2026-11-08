@@ -1,5 +1,5 @@
-import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
 import {
   ArrowLeftIcon,
@@ -28,7 +28,6 @@ import { NAV_CURRENT, NAV_ITEM_VARIANT, NavItem } from "../nav-item/nav-item.js"
 import { SidebarPlaces, SidebarRule } from "../sidebar/sidebar.js";
 import { TEXT_ELEMENT, Text } from "../text/text.js";
 import { TEXT_VARIANT } from "../text/text-role.js";
-import { TextButton } from "../text-button/text-button.js";
 import { Time } from "../time/time.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 import { MINUTE, STORY_NOW, still } from "./landing-story.js";
@@ -212,9 +211,6 @@ export function DesktopSidebar({
             </List>
           </div>
         ))}
-        <p className="ui-landing-hidden-statuses">
-          <TextButton onClick={still}>1 more in Done</TextButton>
-        </p>
       </nav>
       <div className="ui-landing-sidebar-foot">
         <NavItem

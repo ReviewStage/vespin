@@ -122,6 +122,8 @@ async function mount() {
       arrivals: NO_ARRIVALS,
       linkReads: UNMOVED_LINK_READS,
       visitTask: () => false,
+      startStands: () => undefined,
+      leaveStart: () => false,
     });
     return createElement(TasksPage, {
       tasks: { ...control, onSelect: (taskId: string) => opened.push(taskId) },

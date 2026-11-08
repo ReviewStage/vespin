@@ -75,8 +75,9 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
  * The experiments part is the one patch: its keys are merged over what
  * stood, so a Mac that knows fewer experiments never erases another's.
  * `preferences` is the shared part; the link choice, Enter's choice, the
- * commit author, setup finished, the setup place, and when and which sound
- * plays are parts of their own, which a build that predates them never sends.
+ * commit author, setup finished, the setup place, when and which sound plays,
+ * and whether a notification is posted are parts of their own, which a build
+ * that predates them never sends.
  */
 export interface AccountPreferencesWrite {
   preferences?: AccountPreferences;
@@ -87,6 +88,7 @@ export interface AccountPreferencesWrite {
   setupPlace?: string;
   soundWhen?: SoundWhen;
   completionSound?: CompletionSound;
+  turnNotifications?: boolean;
   agent?: ModelChoice;
   chaptersModel?: ChaptersPick;
   experiments?: ExperimentChoices;
@@ -129,6 +131,7 @@ const PREFERENCE_COLUMNS = {
   setupPlace: accountPreference.setupPlace,
   soundWhen: accountPreference.soundWhen,
   completionSound: accountPreference.completionSound,
+  turnNotifications: accountPreference.turnNotifications,
   agentModel: accountPreference.agentModel,
   agentEffort: accountPreference.agentEffort,
   agentContextWindow: accountPreference.agentContextWindow,
@@ -145,6 +148,7 @@ const PreferenceRowSchema = Schema.Struct({
   setupPlace: Schema.NullOr(Schema.String),
   soundWhen: Schema.NullOr(Schema.String),
   completionSound: Schema.NullOr(Schema.String),
+  turnNotifications: Schema.NullOr(Schema.Boolean),
   agentModel: Schema.NullOr(Schema.String),
   agentEffort: Schema.NullOr(Schema.String),
   agentContextWindow: Schema.NullOr(contextWindowSchema),
@@ -171,6 +175,9 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.setupPlace ? { setupPlace: row.setupPlace } : undefined),
         ...(row.soundWhen ? { soundWhen: row.soundWhen } : undefined),
         ...(row.completionSound ? { completionSound: row.completionSound } : undefined),
+        ...(row.turnNotifications === null
+          ? undefined
+          : { turnNotifications: row.turnNotifications }),
       }) ?? {},
     agent: storedAgentChoice(row),
     // Note that a stored model no build lists any more reads as Haiku, as a row never written does.
@@ -284,6 +291,7 @@ const PreferenceWriteSchema = Schema.Struct({
   setupPlace: Schema.optionalKey(Schema.String),
   soundWhen: Schema.optionalKey(Schema.Literals(SOUND_WHEN_LIST)),
   completionSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
+  turnNotifications: Schema.optionalKey(Schema.Boolean),
   agent: Schema.optionalKey(
     Schema.Struct({
       model: Schema.String,
@@ -312,6 +320,9 @@ function writtenColumns(write: PreferenceWrite) {
     ...(write.completionSound === undefined
       ? undefined
       : { completionSound: write.completionSound }),
+    ...(write.turnNotifications === undefined
+      ? undefined
+      : { turnNotifications: write.turnNotifications }),
     ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
     ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
     ...(write.agent === undefined
@@ -379,6 +390,9 @@ export function writeAccountPreferences(
       ...(write.completionSound === undefined
         ? undefined
         : { completionSound: write.completionSound }),
+      ...(write.turnNotifications === undefined
+        ? undefined
+        : { turnNotifications: write.turnNotifications }),
       ...(write.agent === undefined ? undefined : { agent: write.agent }),
       ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
       ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),

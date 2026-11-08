@@ -231,6 +231,8 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       arrivals: NO_ARRIVALS,
       linkReads: UNMOVED_LINK_READS,
       visitTask: () => false,
+      startStands: () => undefined,
+      leaveStart: () => false,
     });
     return createElement(TasksPage, { tasks: control, room: SHELL_ROOM.WIDE, held });
   }

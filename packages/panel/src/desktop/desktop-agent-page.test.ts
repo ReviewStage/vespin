@@ -686,7 +686,7 @@ function PanelPage(): React.JSX.Element {
   });
 }
 
-test("a delegation's row opens its worker in the side panel beside the agent's page, whose + offers no Inbox, its threads opening in the window's Inbox, and none of a task's Description or Comments", async () => {
+test("a delegation's row opens its worker in the side panel beside the agent's page, handing it the keys, whose + offers no Inbox, its threads opening in the window's Inbox, and none of a task's Description or Comments", async () => {
   localStorage.clear();
   installScrollIntoView();
   transcript = {
@@ -720,8 +720,18 @@ test("a delegation's row opens its worker in the side panel beside the agent's p
   assert.ok(row, "the delegation's row opens its worker");
   act(() => row.click());
   await settle();
+  const tabLabels = () =>
+    [...(container.querySelector("aside.side-panel")?.querySelectorAll("[role='tab']") ?? [])].map(
+      (tab) => tab.textContent,
+    );
+  const opened = tabLabels();
+  // The row hands the panel the keys, so ⌘W closes the tab it just opened.
+  act(() => runAppCommand(APP_COMMAND.CLOSE_TAB));
+  await settle();
+  const afterClose = tabLabels();
+  act(() => row.click());
+  await settle();
   const panel = container.querySelector("aside.side-panel");
-  const opened = [...(panel?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent);
   const add = panel?.querySelector<HTMLButtonElement>("button[aria-label='Open a tab']");
   assert.ok(add, "the panel offers its +");
   act(() => add.click());
@@ -731,6 +741,11 @@ test("a delegation's row opens its worker in the side panel beside the agent's p
   assert.ok(
     opened.some((label) => label?.includes("Find the flakiest test.")),
     `the worker's tab stands in the panel: ${opened.join(", ")}`,
+  );
+  assert.equal(
+    afterClose.some((label) => label?.includes("Find the flakiest test.")),
+    false,
+    `⌘W closes the worker's tab: ${afterClose.join(", ")}`,
   );
   assert.deepEqual(
     offered.filter((label) => /^(Description|Comments|Inbox)/u.test(label ?? "")),

@@ -454,6 +454,8 @@ function mount(
       linkReads: useLinkReads(),
       // A link's step is written by the window's history beside the tab, where one stands, else the task's place opens by its own door.
       visitTask: (at, step) => windowHistory?.onVisitTask(at, step) ?? false,
+      startStands: () => windowHistory?.onStartStands(),
+      leaveStart: () => windowHistory?.onLeaveStart() ?? false,
     });
     // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);
@@ -772,6 +774,46 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   assert.equal(home.control().newTask.homeAsks, 1);
 });
 
+test("an agent's start pressed on Home's own composer and refused opens no dialog over Home, handing the composer the card it pressed with and why, which a page opened since lets go", async () => {
+  const tab = mount(
+    { shown: true, tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces } },
+    {
+      [ACT_KIND.TASKS_START]: () =>
+        Promise.resolve({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE }),
+    },
+  );
+  const { idempotencyKey: key, ...agent } = handedStart();
+  const ask = { repository: "acme/api", workspaceId: undefined, relations: [], agent };
+  const card = { relations: [], repository: "acme/api", choice: undefined, words: agent.prompt };
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/api", undefined, {
+      handed: { idempotencyKey: key, ...agent },
+      card: { ...card, press: { key, ask } },
+    });
+  });
+  const refused = tab.control().newTask.homeRefused?.refused;
+  const refusedOnHome = {
+    dialog: tab.control().newTask.open,
+    words: refused?.card.words,
+    repository: refused?.card.repository,
+    says: refused?.note.text.length !== 0,
+  };
+  act(() => inboxDoorNow().open());
+  act(() => tab.control().onGoHome());
+
+  assert.deepEqual(refusedOnHome, {
+    dialog: false,
+    words: "Sweep the tests.",
+    repository: "acme/api",
+    says: true,
+  });
+  assert.equal(
+    tab.control().newTask.homeRefused,
+    undefined,
+    "Home opened again after the Inbox opens on its draft alone",
+  );
+});
+
 /** A start's payload, read back for whether it asked to open nothing. */
 const readQuiet = Schema.decodeUnknownOption(
   Schema.Struct({ quiet: Schema.optionalKey(Schema.Boolean) }),
@@ -912,6 +954,41 @@ test("⇧⌘T opens the tabs closed again, the latest first, each in its strip a
   assert.deepEqual(panel().strip, strip);
   assert.deepEqual(panelOf(tab), { open: true, tab: PULLS });
   assert.equal(tab.control().onReopenClosedTab, undefined);
+});
+
+test("⇧⌘T passes over a closed tab opened again another way since, and opens the one closed before it", async () => {
+  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
+  await settle();
+  const panel = () => tab.control().sidePanel;
+  const column = () => tab.control().mainTabs;
+  const agent = agentTab(AGENT_ID);
+  act(() => panel().onChoose(PULLS));
+  act(() => panel().onClose(PULLS));
+  act(() => column().onClose(agent));
+  // The column's "+" opens the agent's tab again, which leaves the stack alone.
+  act(() => column().onChoose(agent));
+
+  act(() => tab.control().onReopenClosedTab?.());
+  assert.deepEqual(panel().strip, [PULLS], "the tab closed before the agent's opens");
+  assert.deepEqual(column().tab, agent, "and the agent's tab stays as it stands");
+  assert.equal(tab.control().onReopenClosedTab, undefined, "nothing closed is left to open");
+});
+
+test("⇧⌘T asks first while a page stands unsaved work, and reopens once the developer leaves", async () => {
+  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
+  await settle();
+  const panel = () => tab.control().sidePanel;
+  act(() => panel().onChoose(PULLS));
+  act(() => panel().onClose(PULLS));
+  const asked: (() => void)[] = [];
+  act(() => {
+    tab.control().placeLeave.stand((leave) => asked.push(leave));
+  });
+
+  act(() => tab.control().onReopenClosedTab?.());
+  assert.deepEqual(panel().strip, [], "nothing reopens while the ask stands");
+  act(() => asked[0]?.());
+  assert.deepEqual(panel().strip, [PULLS]);
 });
 
 test("a task none of whose tabs was viewed shows its agents' last tab, opens on its agents again across a launch though left on its details, and shows the tab viewed before its last agent's once that closes", async () => {
@@ -2346,20 +2423,24 @@ test("the closed tabs kept are the latest twenty, the oldest let go past them", 
   const tab = mount({ shown: true, tasks: OPEN });
   const panel = () => tab.control().sidePanel;
   act(() => panel().onClose(SIDE_PANEL_TAB.DESCRIPTION));
-  for (let close = 0; close < 20; close += 1) {
-    act(() => panel().onOpenFile(FILE_REF));
-    act(() => panel().onClose(FILE));
+  // Note that each close is of a file of its own, since a tab standing open again is passed over.
+  const files = Array.from({ length: 20 }, (_, at) => ({ ...FILE_REF, path: `src/file-${at}.ts` }));
+  for (const ref of files) {
+    act(() => panel().onOpenFile(ref));
+    act(() => panel().onClose(fileTab(ref.path)));
   }
 
-  let reopened = 0;
+  const reopened: unknown[] = [];
   for (let reopen = tab.control().onReopenClosedTab; reopen !== undefined; ) {
     act(() => reopen?.());
-    assert.deepEqual(panel().tab, FILE);
-    reopened += 1;
+    reopened.push(panel().tab);
     reopen = tab.control().onReopenClosedTab;
   }
-  assert.equal(reopened, 20);
-  assert.deepEqual(panel().strip, [FILE], "the description's tab, closed first, is not kept");
+  assert.deepEqual(
+    reopened,
+    files.toReversed().map((ref) => fileTab(ref.path)),
+    "the latest first, the description's tab, closed first, not kept",
+  );
 });
 
 test("a file's tab opens again on the record it closed with, though another plan opened the same path since", () => {
@@ -3812,6 +3893,43 @@ test("a version's link from the Board, with Descriptions off, stands its task's 
   assert.equal(views?.board, false);
   assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
 });
+
+test("a task pressed on the Board leaves the Board for its task's own place", async () => {
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onSelect(BILLING.id));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
+test.each<[string, (control: TasksControl) => void, string]>([
+  ["the Board", FROM_BOARD, "/personal/tasks"],
+  [
+    "a person's page",
+    (control) => control.onOpenPerson("user-ada", "Ada"),
+    "/personal/person/user-ada",
+  ],
+])(
+  "a task pressed on %s that the host refuses to open stands that page again",
+  async (_page, away, at) => {
+    const tab = mount(
+      {
+        shown: true,
+        history: true,
+        tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+      },
+      { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false) },
+    );
+    await settle();
+    act(() => away(tab.control()));
+    await settle();
+    act(() => tab.control().onSelect(BILLING.id));
+    await settle();
+
+    assert.equal(tab.at(), at);
+  },
+);
 
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();

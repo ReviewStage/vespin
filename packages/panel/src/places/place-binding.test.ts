@@ -8,7 +8,13 @@ import { afterEach, test } from "vitest";
 import { useTaskRoute } from "../task-route.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { windowRouter } from "../testing/window-router.js";
-import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "./place-binding.js";
+import {
+  PLACE_BINDING,
+  type TaskAsking,
+  usePlaceArrivals,
+  usePlaceBinding,
+  useTaskAsk,
+} from "./place-binding.js";
 import { useWindowPlace } from "./routed-places.js";
 import { taskOfAt } from "./task-step.js";
 
@@ -17,7 +23,8 @@ import { taskOfAt } from "./task-step.js";
  * following each other through the place module: the host binding a task
  * leaves Home or another task's place for it, arriving on Home lets go of
  * the task and arriving on a task's place asks for it, neither chases the
- * other, and only the developer's own moves count as arrivals. Synthetic ids.
+ * other, only the developer's own moves count as arrivals, and a task asked
+ * for stands only until the host answers. Synthetic ids.
  */
 
 const TASK_ID = "b2000002-0000-4000-8000-0000000000e2";
@@ -144,4 +151,25 @@ test("the binding's own move to the task the host bound is no arrival, while eac
   window.arrive("/acme/inbox");
   window.arrive(`/acme/task/${TASK_ID}`);
   assert.deepEqual([followed, window.arrivals()], [0, 2]);
+});
+
+test("a task asked for from Home is let go once the host answers, so the host binding none again leaves it unbound", () => {
+  let asking: TaskAsking | undefined;
+  let bind: ((taskId: string | undefined) => void) | undefined;
+  function Probe() {
+    const [open, setOpen] = useState<string | undefined>(undefined);
+    bind = setOpen;
+    asking = useTaskAsk(open);
+    return null;
+  }
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() => root.render(createElement(Probe)));
+  act(() => {
+    asking?.ask(TASK_ID);
+  });
+  act(() => bind?.(TASK_ID));
+  // The host binding none, as a delete of the open task does.
+  act(() => bind?.(undefined));
+  assert.deepEqual([asking?.boundFor, asking?.boundForNow()], [undefined, undefined]);
 });

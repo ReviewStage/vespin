@@ -25,6 +25,12 @@
  *   `title` last as words that are no press, said to be the page the
  *   reader stands on. A place that wears its glyph is the trail's folding
  *   way back, whose words fold away as the bar's acts do.
+ * - A title in words is renamed where it stands (`titleEdit`): while the
+ *   caller says, a field over its words in their place and type, bare, the
+ *   caret and the selection alone marking it, the press's mark kept before
+ *   it and the trail and the menu's box giving way to it; once a key ends
+ *   the edit, the focus goes back to whichever holds the title, the press or
+ *   the menu's box.
  * - `detail` follows the title on its last baseline: quiet words saying
  *   what the page is beside its name, on one line
  *   that gives way, cut short, before the title does.
@@ -82,13 +88,14 @@
  * where every page has them, and says so in the room under it.
  */
 
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { NotFoundIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayMask, ReplayWords } from "../../session-replay-marks.js";
 import { type TitleSeat, useWrapWhenCut } from "../../use-wrap-when-cut.js";
 import { BREADCRUMBS_VARIANT, Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
 import type { Crumb } from "../breadcrumbs/crumb.js";
 import { EmptyState, type EmptyStateAction } from "../empty-state/empty-state.js";
+import { INLINE_EDIT_LOOK, InlineEdit, type InlineEditEnd } from "../inline-edit/inline-edit.js";
 import { FILL_ELEMENT, Fill } from "../layout/layout.js";
 import type { ContextMenuProps } from "../menu/context-menu.js";
 import { ONE_LINE_ELEMENT, OneLine } from "../one-line/one-line.js";
@@ -156,6 +163,19 @@ const TITLE_PRESS_HEADING =
 const TITLE_PRESS =
   "ui-toolbar-title-press inline-flex h-control max-w-full items-center gap-icon-gap rounded-control bg-transparent px-ui-8 hover:bg-muted [&_svg]:size-control-icon";
 
+/**
+ * A title renamed where it stands: the press's box with nothing to press, or
+ * the title's own, its field filling the room left after the mark. Note
+ * that it keeps its presses on the desktop's bar, which would otherwise drag
+ * the window by it (`toolbar.css`).
+ */
+const TITLE_EDIT =
+  "ui-toolbar-title-edit flex min-w-0 items-center [&>.ui-inline-edit]:min-w-0 [&>.ui-inline-edit]:flex-auto";
+const TITLE_EDIT_PRESS = `${TITLE_EDIT} h-control gap-icon-gap px-ui-8 [&_svg]:size-control-icon [&_svg]:flex-none`;
+
+/** What holds the title and takes the focus back from its rename: its press, or the box holding the page's menu. */
+const TITLE_FOCUS = ".ui-toolbar-title-press, .ui-toolbar-title-menu[tabindex]";
+
 /** Where a bar's heading stands its title on one row: the page's own name, its last words. */
 const HEADING_SEAT: TitleSeat = {
   room: ":scope > .ui-toolbar-heading",
@@ -190,6 +210,13 @@ export interface ToolbarTitlePress {
   readonly onPress: () => void;
 }
 
+/** A title in words renamed where it stands: what its field is called, how long a name it takes, and how the edit ended, which the caller stops it at. */
+export interface ToolbarTitleEdit {
+  readonly label: string;
+  readonly maxLength?: number | undefined;
+  readonly onEnd: (end: InlineEditEnd) => void;
+}
+
 /** The page's menu on its title: `useMenu`'s `contextMenu()` and `keyMenu`. */
 export interface ToolbarTitleMenu {
   readonly contextMenu: ContextMenuProps;
@@ -206,6 +233,8 @@ export interface ToolbarProps {
   readonly titlePress?: ToolbarTitlePress | undefined;
   /** The menu a right-click, a long press, or the menu key on the title opens, in place of a ⋯ at the bar's end (`ToolbarTitleMenu`). */
   readonly titleMenu?: ToolbarTitleMenu | undefined;
+  /** While given, the title in words is a field renaming it in place (`ToolbarTitleEdit`), opened over the title. */
+  readonly titleEdit?: ToolbarTitleEdit | undefined;
   /** Whether a title in words is the app's own (Settings, Tasks, Inbox), which a screen recording shows as it reads; one that names a task or a workspace stays masked, as every place of a trail and a picked-up name do. */
   readonly titleReplayUnmasked?: boolean | undefined;
   /** The places above the page, outermost first, which lead its heading as crumbs with the `title` last, or a document's `pickUp` name once it is shown; read only where the title is words or there is a `pickUp`. */
@@ -247,6 +276,7 @@ function ToolbarTitle({
   unmasked,
   press,
   menu,
+  edit,
   barType,
 }: {
   title: ReactNode;
@@ -258,8 +288,34 @@ function ToolbarTitle({
   press?: ToolbarTitlePress | undefined;
   /** The page's menu, which a press holds on its right-click and the menu key (`titleMenu`). */
   menu?: ToolbarTitleMenu | undefined;
+  /** The title's rename in place, while it stands (`titleEdit`). */
+  edit?: ToolbarTitleEdit | undefined;
 }): React.JSX.Element {
   if (typeof title !== "string") return <>{title}</>;
+  if (edit !== undefined) {
+    const field = (
+      <ReplayWords unmasked={unmasked}>
+        <InlineEdit
+          value={title}
+          label={edit.label}
+          maxLength={edit.maxLength}
+          look={INLINE_EDIT_LOOK.FIELD}
+          editing
+          onEnd={edit.onEnd}
+        />
+      </ReplayWords>
+    );
+    return press === undefined ? (
+      <h1 className={`${barType ? BAR_TITLE : TITLE} ${TITLE_EDIT}`}>{field}</h1>
+    ) : (
+      <h1 className={TITLE_PRESS_HEADING}>
+        <span className={TITLE_EDIT_PRESS}>
+          {press.icon}
+          {field}
+        </span>
+      </h1>
+    );
+  }
   if (press !== undefined) {
     return (
       <h1 className={TITLE_PRESS_HEADING}>
@@ -406,6 +462,7 @@ export function Toolbar({
   title,
   titlePress,
   titleMenu,
+  titleEdit,
   titleReplayUnmasked = false,
   trail,
   pickUp,
@@ -424,6 +481,26 @@ export function Toolbar({
   const frame = useRef<HTMLElement>(null);
   const barType = quiet || look === TOOLBAR_LOOK.PHONE;
   const wrapped = useWrapWhenCut(frame, HEADING_SEAT, wrapHeading === true);
+  const heading = useRef<HTMLDivElement>(null);
+  const refocus = useRef(false);
+  // Note that an edit a key ended hands the focus back to what holds the title once it is drawn again, as a tab's rename does, which is kept here because the title is drawn afresh as its menu's box comes back.
+  useLayoutEffect(() => {
+    if (titleEdit !== undefined || !refocus.current) return;
+    refocus.current = false;
+    heading.current?.querySelector<HTMLElement>(TITLE_FOCUS)?.focus();
+  });
+  const edit: ToolbarTitleEdit | undefined =
+    titleEdit === undefined
+      ? undefined
+      : {
+          ...titleEdit,
+          onEnd: (end) => {
+            refocus.current = end.byKey;
+            titleEdit.onEnd(end);
+          },
+        };
+  // Note that a title being renamed stands alone, its trail and its menu giving way to its field.
+  const crumbs = trail !== undefined && trail.length > 0 && titleEdit === undefined;
   return (
     <ToolbarFrame
       frameRef={frame}
@@ -437,16 +514,16 @@ export function Toolbar({
       wrapHeading={wrapHeading}
     >
       {said(lead) ? <div className={LEAD}>{lead}</div> : null}
-      <div className="ui-toolbar-heading">
+      <div ref={heading} className="ui-toolbar-heading">
         <TitleMenu
-          menu={titlePress === undefined ? titleMenu : undefined}
-          crumbs={trail !== undefined && trail.length > 0}
+          menu={titlePress === undefined && titleEdit === undefined ? titleMenu : undefined}
+          crumbs={crumbs}
         >
-          {trail !== undefined && trail.length > 0 && typeof title === "string" && title !== "" ? (
+          {crumbs && typeof title === "string" && title !== "" ? (
             <ReplayMask>
               <ToolbarTrail trail={trail} title={title} />
             </ReplayMask>
-          ) : trail !== undefined && trail.length > 0 && !said(title) && pickUp !== undefined ? (
+          ) : crumbs && !said(title) && pickUp !== undefined ? (
             <ReplayMask>
               <ToolbarTrail trail={trail} title={pickUp.name} shown={pickUp.shown} />
             </ReplayMask>
@@ -456,6 +533,7 @@ export function Toolbar({
               unmasked={titleReplayUnmasked}
               press={titlePress}
               menu={titleMenu}
+              edit={edit}
               barType={barType}
             />
           ) : pickUp !== undefined && pickUp.name !== "" ? (

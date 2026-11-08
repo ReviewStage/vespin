@@ -274,11 +274,13 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [readItems, liveKind, liveId, liveItems],
   );
   // An agent with no plan that a link names, which main does not list as holding items yet, is grouped by its own read, in its own workspace's list alone.
+  // Note that an agent whose plan the list holds is not, though a link names its item by the agent, because the plan's group lists its items already, and an item listed twice is counted and stepped through twice.
   const pageAgent = agents.agents?.[0] ?? agents.archived?.[0];
   const settles =
     chosenAgentId !== undefined &&
     holdsLive &&
     pageAgent !== undefined &&
+    !holdings.some((each) => each.taskId === pageAgent.planId) &&
     !agentsHolding.some((each) => each.agentId === chosenAgentId);
   const { agentRepository, workspaceId: agentWorkspace } = agents;
   const holdingAgents = useMemo(

@@ -1,11 +1,6 @@
 import type { TasklessAgent } from "@repo/features/agent-wire";
 import { agentName } from "@repo/features/model-label";
-import {
-  TASK_STATUS,
-  TASK_STATUS_ORDER,
-  type TaskStatus,
-  type TaskSummary,
-} from "@repo/features/task-wire";
+import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/task-wire";
 
 /**
  * task-list-model.ts -- how the sidebar's task list is grouped and filtered: the view a workspace keeps, the groups it draws, and the time each row shows.
@@ -293,26 +288,6 @@ export function taskRowsInStatuses(
   openParents: ReadonlySet<string>,
 ): readonly TaskRow[] {
   return rows.filter((row) => taskRowInStatuses(row, statuses, openParents));
-}
-
-/** How many of the rows each status the view leaves out holds, in `TASK_STATUS_ORDER`, a status holding none left unsaid. */
-export interface HiddenStatus {
-  readonly status: TaskStatus;
-  readonly count: number;
-}
-
-/** The rows the statuses shown leave out, counted by status, a parent a child task keeps open not among them; none where every row stands. */
-export function hiddenStatuses(
-  rows: readonly TaskRow[],
-  statuses: readonly TaskStatus[],
-  openParents: ReadonlySet<string>,
-): readonly HiddenStatus[] {
-  const hidden = rows.filter((row) => !taskRowInStatuses(row, statuses, openParents));
-  return TASK_STATUS_ORDER.flatMap((status) => {
-    if (statuses.includes(status)) return [];
-    const count = hidden.filter((row) => taskRowStatus(row) === status).length;
-    return count === 0 ? [] : [{ status, count }];
-  });
 }
 
 /** One row as a list nesting child tasks draws it: how deep it stands, and whether the child tasks under it stand open. */

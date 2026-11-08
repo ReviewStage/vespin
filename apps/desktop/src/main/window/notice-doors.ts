@@ -1,15 +1,17 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import type { AgentNoticeDoorsSurface } from "@repo/host/agent-notices";
+import { type AgentNoticeDoorsSurface, NOTICE_KIND } from "@repo/host/agent-notices";
 import { PUSH } from "@repo/host/contract";
 import { NOTIFICATIONS_STATUS, type NotificationsStatus } from "@repo/settings/settings-controls";
 import { app, Notification } from "electron";
 import type { PanelManager } from "./panel-manager";
 
 /**
- * notice-doors.ts -- the doors a notice leaves this process through: Electron's `Notification`, shown once with its click handed back, which only a command waiting on this Mac posts, the Dock's badge, or a chime played in one panel window.
+ * notice-doors.ts -- the doors a notice leaves this process through: Electron's `Notification`, shown once with its click handed back, which a command waiting on this Mac posts, as does an agent's finish or ask where the account turned notifications on, the Dock's badge, or a chime played in one panel window.
  *
  * A system that posts no notifications is left alone rather than asked;
- * the prompt in the window still says a command waits.
+ * the prompt in the window still says a command waits. An agent's finish or
+ * ask is posted silent, since the chime, where the account turned one on,
+ * is its one sound; a command waiting sounds as macOS sounds a notification.
  *
  * Note that each notification is held until macOS is done with it, because
  * the object is all that ties the banner to its click: one the collector
@@ -36,7 +38,8 @@ export function electronNoticeDoors(dependencies: {
   const standing = new Set<Notification>();
   const post: AgentNoticeDoorsSurface["post"] = (notice) => {
     if (!Notification.isSupported()) return;
-    const posted = new Notification({ title: notice.title, body: notice.body });
+    const silent = notice.subject.kind !== NOTICE_KIND.MAC_COMMAND_ASK;
+    const posted = new Notification({ title: notice.title, body: notice.body, silent });
     const release = () => standing.delete(posted);
     standing.add(posted);
     posted.on("click", () => {

@@ -12,6 +12,7 @@ import {
   type ProviderKeyStatus,
   type ProviderKeySummary,
   type ProviderKeysAnswer,
+  pastedKeyFits,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -629,7 +630,8 @@ interface PastedSecret {
  * A pasted secret's save, a Claude token's and an API key's alike: the
  * field stands until one is held, or on Replace with the focus in it; Save
  * sends the paste once, trimmed, and clears it as soon as the service keeps
- * it, and a refusal stands under the field saying why, the paste kept.
+ * it, and a refusal stands under the field saying why, the paste kept. A
+ * paste no key could be is refused as the provider's invalid one, unsent.
  */
 function usePastedSecret({
   held,
@@ -666,6 +668,10 @@ function usePastedSecret({
   const save = (value = pasted) => {
     const key = value.trim();
     if (key === "" || saving) return;
+    if (!pastedKeyFits(key)) {
+      setRejection(refused(PROVIDER_KEY_REJECTION.INVALID));
+      return;
+    }
     setSaving(true);
     setRejection(undefined);
     void sendProviderKeysSave(payload(key))

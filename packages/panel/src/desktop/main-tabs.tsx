@@ -75,6 +75,7 @@ import {
 import { LOOK_STRIP, useStripLooks } from "./switcher-looks.js";
 import { tabCard } from "./tab-card.js";
 import { TabStrip } from "./tab-strip.js";
+import { TASK_MENU_LABEL } from "./task-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
 
 /**
@@ -473,17 +474,14 @@ function MainTabsRow({ children }: { children: React.ReactNode }): React.JSX.Ele
 /** What the task's name in its topbar opens, and the place the details' way back leads to. */
 export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
 
-/** What the task's menu is named, which a right-click on its name opens. */
-const TASK_MENU_LABEL = "Task actions";
-
 /**
  * The task's topbar, across the task's page over its column and its side
  * panel: the task's status mark and name, the two one press, hanging the
  * task's card, that opens the
  * task's details across the page and, pressed again, goes back to the agents
  * (`details`), as a channel's name opens its details, and whose right-click
- * is the task's own menu (`descriptionMenu`), whichever the page shows; then
- * `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
+ * is the task's own menu (`descriptionMenu`), whichever the page shows,
+ * renamed where it stands while `rename` is editing; then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
  * it: every menu there is a right-click. The window's side panel toggle
  * stands at its end (`desktop-shell.tsx`).
  */
@@ -491,6 +489,7 @@ export function TaskTopbar({
   task,
   details,
   descriptionMenu,
+  rename,
   shown,
   actions,
 }: {
@@ -500,6 +499,8 @@ export function TaskTopbar({
   details: { readonly shown: boolean; readonly onToggle: () => void } | undefined;
   /** The task's own menu, which its ⋯ draws. */
   descriptionMenu: DocumentMenu | undefined;
+  /** The task's name renamed in place over the title (`useInlineRename`'s), opened over the name a refusal left standing. */
+  rename?: Pick<InlineRename, "editing" | "asked" | "end"> | undefined;
   /** Whether the task's page is on screen, for the menu not to outlive it. */
   shown: boolean;
   actions?: React.ReactNode;
@@ -509,12 +510,22 @@ export function TaskTopbar({
     task === undefined
       ? undefined
       : tabLook({ kind: TAB_KIND.PLAN, status: task.status, name: task.name });
+  const renaming = task !== undefined && rename?.editing === true;
   return (
     <>
       <Toolbar
         // Note that the status mark stands inside the name's press, as a task's chip wears it, where the name opens the details.
         lead={details === undefined ? look?.icon : undefined}
-        title={task?.name}
+        title={renaming ? (rename.asked ?? task.name) : task?.name}
+        titleEdit={
+          renaming
+            ? {
+                label: "Task name",
+                maxLength: TASK_BOUNDS.MAX_NAME_CHARS,
+                onEnd: (end) => rename.end(end.value),
+              }
+            : undefined
+        }
         titleMenu={
           task === undefined || descriptionMenu === undefined
             ? undefined

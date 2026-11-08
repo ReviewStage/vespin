@@ -19,7 +19,7 @@ import { stepTitle } from "../history-titles.js";
 import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import { SHELL_ROOM } from "../shell-room.js";
-import { useTaskRoute } from "../task-route.js";
+import { type TaskRoute, useTaskRoute } from "../task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { isOverviewTab } from "../tasks/use-main-tabs.js";
@@ -50,6 +50,7 @@ import type { RoutedPlace } from "./routed-places.js";
 import { taskAtOf, taskOfAt } from "./task-step.js";
 import {
   type HistoryBehind,
+  type TaskVisits,
   useHistoryMouseButtons,
   useRoutedStanding,
   useWindowHistory,
@@ -103,7 +104,7 @@ function mount(
     views: RoutedViews,
   ) => StepTitle | undefined,
 ) {
-  let history: (WindowHistory & HistoryBehind) | undefined;
+  let history: (WindowHistory & HistoryBehind & TaskVisits) | undefined;
   let open: TasksControl | undefined;
   let backs: NarrowBacks | undefined;
   let restand: ((tasks: TasksControl) => void) | undefined;
@@ -119,6 +120,7 @@ function mount(
   let wanted = initial;
   // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
   let leaveTo: (to: TasksControl) => void = () => undefined;
+  let taskRoute: TaskRoute | undefined;
   function Probe() {
     const [standing, setTasks] = useState(initial);
     wanted = standing;
@@ -161,15 +163,16 @@ function mount(
       }
     });
     // The task's own place stands where the router does, its task named by its address among those listed, as the Tasks tab reads it.
-    const taskRoute = useTaskRoute();
-    const taskAt = taskRoute.at;
+    const route = useTaskRoute();
+    taskRoute = route;
+    const taskAt = route.at;
     leaveTo = (to) => {
       const at =
         to.boundFor === undefined
           ? undefined
           : taskAtOf(to.boundFor, to.tasks, to.workspaces, to.workspace, undefined);
       if (at === undefined) home.onOpen();
-      else taskRoute.onOpen(at, true);
+      else route.onOpen(at, true, history?.onLeaveStart() ?? false);
     };
     const tasks: TasksControl = {
       ...standing,
@@ -289,6 +292,12 @@ function mount(
       act(() => person?.onOpen(userId, name, workspace)),
     /** Opens an Automations page by the router, as its own doors do. */
     openAutomations: (to?: AutomationsPlace) => act(() => openAutomationsAt(to)),
+    /** Stands the own place of the task `task` under `workspace` for a task New task is starting, as its start's door moves the window there and takes that step as its page's. */
+    standStart: (workspace: string, task: string) =>
+      act(() => {
+        taskRoute?.onOpen({ workspace, task });
+        history?.onStartStands();
+      }),
     /** Opens the version history of the task named `task` under `workspace` by the router, as its doors do. */
     openVersions: (workspace: string, task: string) => act(() => versions?.onOpen(workspace, task)),
     /** Stands the automation's runs alone, or its setup again, as its Runs and its way back do. */
@@ -420,6 +429,18 @@ test("Escape on a task opened from the Inbox returns to the Inbox, as Back does,
   assert.deepEqual(left, [], "the task is not left for the home page");
   assert.equal(window.history().canGoBack, false, "Escape took the one step back");
   assert.equal(window.history().canGoForward, true, "which Forward takes again");
+});
+
+test("a task New task starts over the Inbox takes the step its starting page stood on, the task bound under the Inbox, so Back from it returns to the Inbox", () => {
+  const STARTED = "7e8f9a0b-0000-4000-8000-0000000000d5";
+  const window = mount(listedTab({ activeTaskId: TASK_ID, boundFor: TASK_ID, inboxStands: {} }));
+  window.standStart(ACME.slug, TASK_ID);
+  window.stand(listedTab({ page: TASKS_PAGE.DOCUMENT, activeTaskId: STARTED, boundFor: STARTED }));
+  assert.equal(window.at(), `/acme/task/${STARTED}`);
+
+  act(() => window.history().onBack());
+
+  assert.equal(window.at(), "/acme/inbox");
 });
 
 test("Escape on a task opened from a person's page returns to that page", async () => {
@@ -1117,6 +1138,30 @@ test("a task opened again before its agents are read keeps the column it was las
     ["column:agent-c", "side:shut", "column:agent-a", "side:shut"],
     "home, then C, then A past B",
   );
+});
+
+test("the open task deleted, as the host binds none, goes Home by a move of the router's history, which holds Home's step and passes over the deleted task", () => {
+  const held = windowRouter();
+  const task = listedTask("Auth refactor");
+  const window = mount(listedTab({ tasks: [task] }), held);
+  press();
+  window.stand(
+    listedTab({
+      tasks: [task],
+      page: TASKS_PAGE.DOCUMENT,
+      activeTaskId: TASK_ID,
+      boundFor: TASK_ID,
+    }),
+  );
+  assert.equal(window.history().canGoBack, true, "Home stands behind the task");
+
+  // The host binds none, its list no longer holding the task.
+  window.stand(listedTab({ tasks: [] }));
+
+  assert.equal(window.at(), "/acme", "the window stands on Home");
+  assert.ok(savesStep(held.history.location), "whose entry holds its step");
+  assert.equal(window.history().canGoBack, false, "the deleted task is passed over");
+  assert.equal(window.history().canGoForward, false);
 });
 
 test("a browser's Back onto a step it cannot reach, with none behind it and the step it left unreachable too, takes the window back where it stood, once", () => {

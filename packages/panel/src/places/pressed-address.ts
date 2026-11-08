@@ -122,8 +122,6 @@ export const THING = {
   PAGE: "page",
   /** An agent's Changes, its Pull request tab, as an app link names it. */
   CHANGES: "changes",
-  /** An agent's transcript, at one of its messages where the link names one. */
-  TRANSCRIPT: "transcript",
   /** An agent's Pull request tab on its Conversation, as the pull request's page on GitHub names it. */
   PULL_REQUEST: "pull-request",
   /** One review thread of an agent's pull request, in its Pull request tab, on the view the link names. */
@@ -150,12 +148,6 @@ export type Thing =
       readonly place?: PagePlace;
     }
   | { readonly kind: typeof THING.CHANGES; readonly agentId: string }
-  | {
-      readonly kind: typeof THING.TRANSCRIPT;
-      readonly agentId: string;
-      /** The message brought into view; none for the transcript as it stands. */
-      readonly messageId?: string;
-    }
   | {
       readonly kind: typeof THING.PULL_REQUEST;
       readonly agentId: string;

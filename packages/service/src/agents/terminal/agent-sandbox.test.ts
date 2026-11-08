@@ -39,7 +39,6 @@ const SESSION = "wrun_fixture";
 /** The agents' image as a deploy names it, the fixture's. */
 const FIXTURE_IMAGE = {
   reference: Effect.succeed("agent-image:fixture"),
-  base: Effect.succeed("agent-image-base:fixture"),
   runner: Effect.succeed([]),
 };
 const SANDBOX = agentSandboxName(SESSION);

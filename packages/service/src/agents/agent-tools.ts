@@ -135,7 +135,7 @@ import {
 import { agentFailureOf, agentStatusOf, startedBlank } from "./coder-host/status.js";
 import { stoppedAgent, standingsOf as turnStandingsOf } from "./coder-host/stop.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
-import { deploymentSandboxStops } from "./session-sandboxes.js";
+import { deploymentSandboxDeletes } from "./session-sandboxes.js";
 import type { AgentSessions } from "./sessions/agent-sessions.js";
 import {
   assigneeIdOf,
@@ -2552,7 +2552,8 @@ export function runUpdateTask(
       if (Result.isFailure(changed)) return agentToolRejected(changed.failure);
       const { updated, task, parentChanged, blocksChanged } = changed.success;
       // The agents its Done archived are let go of once it commits, and a finish counted, as the app's change does.
-      if (updated !== undefined) yield* taskChangeSettled(deploymentSandboxStops, userId, updated);
+      if (updated !== undefined)
+        yield* taskChangeSettled(deploymentSandboxDeletes, userId, updated);
       return yield* taskUpdateAnswer(userId, task, {
         already: stands && !parentChanged && !blocksChanged,
         section: placing?.success.section,
@@ -2734,7 +2735,7 @@ export function runUpdateAgent(
       if (archived !== undefined) {
         const archive = yield* Effect.result(
           archivedAgent(
-            deploymentSandboxStops,
+            deploymentSandboxDeletes,
             call.writer,
             userId,
             agent,

@@ -34,10 +34,12 @@ import { ShadcnInput } from "../../shadcn/input.js";
  */
 
 /**
- * How the field is drawn: on a field's own ground inside a hairline, as a
- * list's row renames; in a settings input's box, as a settings row's label
- * renames; or bare in the type around it, where what it stands in is a well,
- * as a tab's is, and the caret alone marks the field.
+ * How the field is drawn: bare in the words' own type across the line they
+ * stood on, as a list's row renames, the caret and the selection alone
+ * marking it, so the name being typed stands where it is drawn; in a
+ * settings input's box, as a settings row's label renames; or bare in the
+ * type around it at its own width, where what it stands in is a well, as a
+ * tab's is.
  */
 export const INLINE_EDIT_LOOK = {
   FIELD: "field",
@@ -48,23 +50,19 @@ export const INLINE_EDIT_LOOK = {
 export type InlineEditLook = (typeof INLINE_EDIT_LOOK)[keyof typeof INLINE_EDIT_LOOK];
 
 /**
- * The field's looks, each keyed on its `data-look`. As a field, on the
- * ground inside the selected hairline in the body's size; as an input, a
+ * The field's looks, each keyed on its `data-look`. As a field, bare in the
+ * type around it, as wide as the line it stands on; as an input, a
  * settings input's box a label's line and 3px to spare each side tall, in
  * the label's own type, overhanging the label by those 3px and by its own
  * inset and edge at the start, so its words stand where the label's stood
  * and the row keeps its height; in a well, bare in the type around it, wearing
  * no ring, as no field does. How wide a field or a well
- * stands is its container's to say. Note that the field look's line and
- * weight are `revert-layer`, which hands them back to the engine's own for an
- * input (no `base` layer rule, `@repo/panel`'s base.css included, sets an
- * input's), because the input's `text-body` and `font-text` would set them
- * where the hand-written rule never did. A group head's editor
+ * stands is its container's to say. A group head's editor
  * (`GroupHeaderEditor`) draws its field in the well look too.
  */
 export const INLINE_EDIT_FIELD =
   "ui-inline-edit pointer-coarse:data-[look]:text-touch " +
-  "data-[look=field]:inline-block data-[look=field]:h-auto data-[look=field]:w-auto data-[look=field]:rounded-inline-edit data-[look=field]:border-0 data-[look=field]:bg-ground data-[look=field]:focus:bg-ground data-[look=field]:px-ui-4 data-[look=field]:py-px data-[look=field]:shadow-selected-edge data-[look=field]:text-body-size data-[look=field]:[font-family:inherit] data-[look=field]:[font-weight:revert-layer] data-[look=field]:[line-height:revert-layer] " +
+  "data-[look=field]:block data-[look=field]:h-auto data-[look=field]:w-full data-[look=field]:rounded-none data-[look=field]:border-0 data-[look=field]:bg-transparent data-[look=field]:focus:bg-transparent data-[look=field]:p-0 data-[look=field]:text-inherit data-[look=field]:outline-none data-[look=field]:[font:inherit] " +
   "data-[look=input]:-my-inline-edit-lift data-[look=input]:ms-inline-edit-reach data-[look=input]:h-ui-24 data-[look=input]:border-border data-[look=input]:px-ui-8 data-[look=input]:tracking-normal data-[look=input]:[font:inherit] " +
   "data-[look=well]:inline-block data-[look=well]:h-auto data-[look=well]:w-auto data-[look=well]:rounded-none data-[look=well]:border-0 data-[look=well]:bg-transparent data-[look=well]:focus:bg-transparent data-[look=well]:p-0 data-[look=well]:text-inherit data-[look=well]:outline-none data-[look=well]:[font:inherit]";
 

@@ -86,6 +86,64 @@ test("a workspace reached through the App draws the App's card checked, its done
   });
 });
 
+test("a paste too short to be a token says GitHub's invalid words on the token's card until it is edited, and is sent nowhere", async () => {
+  holdRepositoryLists(handHostReads({}).deliverRepositoryLists, () => ({
+    repositories: {
+      installed: false,
+      repositories: [],
+      installationUrl: "https://github.com/apps/luke/installations/new",
+    },
+  }));
+  holdGitHubToken(() => ({ rows: { token: null } }));
+  const saved: unknown[] = [];
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.GITHUB_TOKEN_SAVE]: (payload) => {
+      saved.push(payload);
+      return Promise.resolve({ token: null });
+    },
+  });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(GitHubSetup, { workspaceId: WORKSPACE, onReached: () => undefined }),
+      ),
+    ),
+  );
+  await settle();
+  const radio =
+    [...container.querySelectorAll<HTMLElement>('[role="radio"]')].find((one) =>
+      one.textContent?.includes("Personal access token"),
+    ) ?? assert.fail("the step offers the token");
+  act(() => radio.click());
+  await settle();
+  const field =
+    [...container.querySelectorAll("label")].find((each) => each.textContent === "Classic token")
+      ?.control ?? assert.fail("no token field");
+  const type = (value: string) =>
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  type("ghp_bad");
+  act(() =>
+    (
+      [...container.querySelectorAll("button")].find((each) => each.textContent === "Save") ??
+      assert.fail("no Save")
+    ).click(),
+  );
+  await settle();
+
+  assert.match(container.textContent ?? "", /GitHub rejected this token\./u);
+  assert.deepEqual(saved, []);
+
+  type("ghp_bad2");
+  assert.doesNotMatch(container.textContent ?? "", /GitHub rejected/u, "an edit clears the words");
+});
+
 /** A repository as the workspace's listing answers it, reached through `access`. */
 function reached(fullName: string, updatedAt: number, access: GitHubAccess): GitHubRepository {
   const [owner = "", name = ""] = fullName.split("/");

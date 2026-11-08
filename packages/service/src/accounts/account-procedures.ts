@@ -279,7 +279,8 @@ export function accountProcedures(seams: AccountProcedureSeams) {
      * agent's box while it works, `commitAuthor`, who authors an agent's
      * commits, `setupFinished`, whether the account
      * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
-     * `completionSound`, when and which sound plays as an agent finishes, `agent`, a choice the catalog
+     * `completionSound`, when and which sound plays as an agent finishes,
+     * `turnNotifications`, whether a notification is posted then, `agent`, a choice the catalog
      * accepts, moved only to a model the account pays for, `chaptersModel`, one of the chapters' fixed set, and `experiments`, each experiment's on or off merged over
      * what stood — and answers the snapshot as it then stands. A body
      * carrying none of them asks for nothing and is refused.
@@ -296,6 +297,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         body.setupPlace === undefined &&
         body.soundWhen === undefined &&
         body.completionSound === undefined &&
+        body.turnNotifications === undefined &&
         body.agent === undefined &&
         body.chaptersModel === undefined &&
         body.experiments === undefined
@@ -345,6 +347,16 @@ export function accountProcedures(seams: AccountProcedureSeams) {
           return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
         }
         write.completionSound = completionSound;
+      }
+      if (body.turnNotifications !== undefined) {
+        const turnNotifications = ownPreferenceFromWire(
+          "turnNotifications",
+          body.turnNotifications,
+        );
+        if (turnNotifications === undefined) {
+          return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+        }
+        write.turnNotifications = turnNotifications;
       }
       if (body.agent !== undefined) {
         write.agent = yield* acceptedAgentChoice(seams, context.userId, body.agent);

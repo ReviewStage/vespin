@@ -618,6 +618,14 @@ test("a Claude setup-token is saved by its kind, refused with why, and disconnec
   await vi.waitFor(() => assert.equal(rowButton(page, "Claude").textContent, "Connect"));
 });
 
+test("a paste too short to be a setup-token says it isn't one, and is sent nowhere", async () => {
+  const page = await mount();
+  const dialog = await open(page, "Claude");
+  await paste(labeled(row(dialog, "Claude plan"), "Paste the token it prints"), "not-a-real-token");
+  assert.match(dialog.textContent ?? "", /That isn't a Claude setup-token\./u);
+  assert.equal(sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_SAVE).length, 0);
+});
+
 test("a harness's dialog opens on the first field it draws, the setup-token's, else the API key's", async () => {
   const page = await mount();
   const claude = await open(page, "Claude");

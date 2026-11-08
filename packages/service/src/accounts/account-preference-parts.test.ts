@@ -47,7 +47,7 @@ import { accountProcedures } from "./account-procedures.js";
  * shared part a build that predates it writes back whole, and refused where
  * it names no choice. The chapters model: Haiku until the account chooses,
  * written on its own and read back, and refused where it names no model the
- * set offers. When and which sound plays as an agent finishes: none until
+ * set offers. When and which sound plays as an agent finishes, and whether a notification is posted: none until
  * the account chooses, each written on its own and read back, and refused
  * where it names no choice. The agent default: GPT-6.1 Sol at high effort for an account
  * only an OpenAI key pays for until it stores one, an Effort kept on a model
@@ -259,20 +259,24 @@ it.layer(getTestDB())("the preferences snapshot's link part", (it) => {
   );
 });
 
-it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
+it.layer(getTestDB())("the preferences snapshot's sound and notification parts", (it) => {
   it.effect("are absent until the account chooses, and a choice written is the one read back", () =>
     Effect.gen(function* () {
       const { owner, other, ask } = yield* openAccounts;
       assert.equal(partOf(yield* ask(request(owner)), "soundWhen"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "completionSound"), undefined);
+      assert.equal(partOf(yield* ask(request(owner)), "turnNotifications"), undefined);
 
       yield* ask(request(owner, { soundWhen: SOUND_WHEN.BACKGROUND }));
-      const chosen = yield* ask(request(owner, { completionSound: COMPLETION_SOUND.QUACK }));
+      yield* ask(request(owner, { completionSound: COMPLETION_SOUND.QUACK }));
+      const chosen = yield* ask(request(owner, { turnNotifications: true }));
       assert.equal(partOf(chosen, "soundWhen"), SOUND_WHEN.BACKGROUND);
       assert.equal(partOf(chosen, "completionSound"), COMPLETION_SOUND.QUACK);
+      assert.equal(partOf(chosen, "turnNotifications"), true);
       assert.equal(partOf(chosen, "updatedAt"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "soundWhen"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "completionSound"), undefined);
+      assert.equal(partOf(yield* ask(request(other)), "turnNotifications"), undefined);
     }),
   );
 
@@ -280,9 +284,17 @@ it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
     Effect.gen(function* () {
       const { owner, ask } = yield* openAccounts;
       yield* ask(
-        request(owner, { soundWhen: SOUND_WHEN.ALWAYS, completionSound: COMPLETION_SOUND.BELL }),
+        request(owner, {
+          soundWhen: SOUND_WHEN.ALWAYS,
+          completionSound: COMPLETION_SOUND.BELL,
+          turnNotifications: true,
+        }),
       );
-      for (const refused of [{ soundWhen: "sometimes" }, { completionSound: "kazoo" }]) {
+      for (const refused of [
+        { soundWhen: "sometimes" },
+        { completionSound: "kazoo" },
+        { turnNotifications: "yes" },
+      ]) {
         assert.deepEqual(yield* ask(request(owner, refused)), {
           status: HOSTED_HTTP_STATUS.BAD_REQUEST,
           body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
@@ -291,6 +303,7 @@ it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
       const kept = yield* ask(request(owner));
       assert.equal(partOf(kept, "soundWhen"), SOUND_WHEN.ALWAYS);
       assert.equal(partOf(kept, "completionSound"), COMPLETION_SOUND.BELL);
+      assert.equal(partOf(kept, "turnNotifications"), true);
     }),
   );
 });

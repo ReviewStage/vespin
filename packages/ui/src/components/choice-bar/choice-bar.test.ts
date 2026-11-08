@@ -27,7 +27,9 @@ import {
  * app's `data-` attributes reach the bar; and a bar folding together folds
  * every option once their names no longer fit, and unfolds once they would,
  * and folds as a name grows past its width with nothing resized, each
- * folded option then naming itself in its hint; a row cut short of its
+ * folded option then naming itself in its hint; a bar folding the chosen
+ * one last keeps its name while the others' fold, and folds it too only
+ * once even that does not fit; a row cut short of its
  * options brings the chosen one into view; and an option that says more
  * hangs the app's hint saying it.
  */
@@ -341,7 +343,7 @@ test("a bar folding together folds every option once their names no longer fit i
     },
   );
   const folded = () =>
-    document.querySelector('[data-fold="together"]')?.getAttribute("data-folded") === "true";
+    document.querySelector('[data-fold="together"]')?.getAttribute("data-folded") === "all";
   const optionWidth = () => glyph + (folded() ? 0 : NAME);
   const optionsOf = (element: HTMLElement) => [
     ...(element.parentElement?.querySelectorAll(".ui-choice-bar-option") ?? []),
@@ -465,7 +467,7 @@ test("a bar folding together folds once a name grows past its width, though noth
   const GLYPH = 20;
   const ROOM = 300;
   const folded = () =>
-    document.querySelector('[data-fold="together"]')?.getAttribute("data-folded") === "true";
+    document.querySelector('[data-fold="together"]')?.getAttribute("data-folded") === "all";
   const nameOf = (element: Element) =>
     element.querySelector(".ui-choice-bar-label")?.textContent ?? "";
   const widthOf = (element: Element) => GLYPH + (folded() ? 0 : 10 * nameOf(element).length);
@@ -542,6 +544,105 @@ test("a bar folding together folds once a name grows past its width, though noth
     );
     assert.equal(hintOf("Files"), "2 of 5 viewed", "an option that says more says it");
   } finally {
+    vi.restoreAllMocks();
+  }
+});
+
+test("a bar folding the chosen one last keeps its name while the others fold to their glyphs, and folds it too only once even that does not fit", () => {
+  // Note that jsdom lays nothing out, so each option is as wide as its glyph and, while drawn, its name at 10px a letter, the bar's width and when it resizes the test's.
+  const GLYPH = 20;
+  let room = 300;
+  const observers: (() => void)[] = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(private readonly heard: () => void) {
+        observers.push(() => this.heard());
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const step = () =>
+    document.querySelector('[data-fold="chosen-last"]')?.getAttribute("data-folded") ?? "none";
+  const nameOf = (element: Element) =>
+    element.querySelector(".ui-choice-bar-label")?.textContent ?? "";
+  const named = (element: Element) =>
+    step() === "none" || (step() === "others" && element.getAttribute("aria-checked") === "true");
+  const widthOf = (element: Element) => GLYPH + (named(element) ? 10 * nameOf(element).length : 0);
+  const optionsOf = (element: HTMLElement) => [
+    ...(element.parentElement?.querySelectorAll(".ui-choice-bar-option") ?? []),
+  ];
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => room);
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return widthOf(this);
+  });
+  vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    const options = optionsOf(this);
+    return options.slice(0, options.indexOf(this)).reduce((left, each) => left + widthOf(each), 0);
+  });
+  vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.classList.contains("ui-choice-bar-label")
+      ? 10 * (this.textContent?.length ?? 0)
+      : room;
+  });
+  function Hint({
+    label,
+    children,
+  }: {
+    label: string | undefined;
+    children: ReactElement<{
+      "aria-describedby"?: string | undefined;
+      "data-hint"?: string | undefined;
+    }>;
+  }) {
+    return cloneElement(children, { "data-hint": label });
+  }
+  const resize = (width: number) => {
+    room = width;
+    act(() => {
+      for (const heard of observers) heard();
+    });
+  };
+  const page = render(
+    createElement(ChoiceBar<View>, {
+      label: "Pull request",
+      items: [
+        { value: VIEW.CONVERSATION, label: "Conversation", icon: "C" },
+        { value: VIEW.CHECKS, label: "Checks", icon: "K" },
+        { value: VIEW.FILES, label: "Files", icon: "F" },
+      ],
+      value: VIEW.CONVERSATION,
+      onChange: () => undefined,
+      look: CHOICE_BAR_LOOK.FILL,
+      fold: CHOICE_BAR_FOLD.CHOSEN_LAST,
+      hint: Hint,
+    }),
+  );
+  const hintOf = (name: string) =>
+    options(page)
+      .find((each) => nameOf(each) === name)
+      ?.getAttribute("data-hint") ?? undefined;
+  try {
+    assert.equal(step(), "none", "names that fit stand");
+    // Every name takes 290px; the chosen one's alone beside the others' glyphs, 180px.
+    resize(200);
+    assert.equal(step(), "others", "names that no longer fit fold, the chosen one's kept");
+    assert.equal(hintOf("Conversation"), undefined, "the chosen option is named in words");
+    assert.equal(hintOf("Checks"), "Checks", "a folded option names itself");
+    resize(100);
+    assert.equal(step(), "all", "short even of the chosen name's room, it folds too");
+    assert.equal(hintOf("Conversation"), "Conversation");
+    resize(200);
+    assert.equal(step(), "others", "given its room back, the chosen option is named again");
+  } finally {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   }
 });

@@ -7,56 +7,64 @@ import { Effect } from "effect";
 import { SessionSandboxes, sessionSandboxesLayer } from "./session-sandboxes.js";
 
 /**
- * A session's sandboxes stopped through `Sandbox`: the sandboxes carrying
- * the session's tag are listed, the one up has its run stopped, one already
- * stopped is left, and a stop the sandbox refused fails as it answered.
+ * A session's sandboxes deleted through `Sandbox` as an archive deletes
+ * them: every sandbox carrying the session's tag goes, with the drive it
+ * owns where it owns one, one from before drives as well, and a delete the
+ * sandbox refused fails as it answered.
  */
 
 const SESSION = "wrun_fixture";
 
-/** The session's sandboxes as the memory has them, a call refused where the test names one. */
+/** The session's sandboxes as the memory has them, one up on a drive of its own forked from a base and one stopped with none, a call refused where the test names one. */
 function standing(refused?: (typeof SANDBOX_CALL)[keyof typeof SANDBOX_CALL]) {
   const sandbox = memorySandbox({
     fail: (call) => (call === refused ? new SandboxUnavailable({ call }) : undefined),
   });
-  const up = sandbox.stand({
-    name: "agent-sandbox-up",
-    tags: { sessionId: SESSION },
-  });
-  const down = sandbox.stand({
-    name: "agent-sandbox-down",
-    tags: { sessionId: SESSION },
-    status: SANDBOX_STATUS.STOPPED,
-  });
+  sandbox.state.drives.set("base", { name: "base", forkedFrom: undefined });
   const run = <A, E>(call: (sandboxes: SessionSandboxes["Service"]) => Effect.Effect<A, E>) =>
     Effect.flatMap(SessionSandboxes, call).pipe(
       Effect.provide(sessionSandboxesLayer),
       Effect.provide(sandbox.layer),
       Effect.provide(getTestDB()),
     );
-  return { sandbox, up, down, run };
+  return Effect.gen(function* () {
+    yield* sandbox.service.create({
+      name: "agent-sandbox-drive",
+      from: { image: "agent-image" },
+      drive: { fork: { base: "base" }, at: "/workspace" },
+      tags: { sessionId: SESSION },
+      env: {},
+    });
+    sandbox.stand({
+      name: "agent-sandbox-before-drives",
+      tags: { sessionId: SESSION },
+      status: SANDBOX_STATUS.STOPPED,
+    });
+    return { sandbox, run };
+  });
 }
 
 it.effect(
-  "the session's sandbox that is up has its run stopped, and one already stopped is left",
+  "every sandbox of the session is deleted with the drive it owns, and the base drive is left",
   () =>
     Effect.gen(function* () {
-      const { sandbox, up, run } = standing();
+      const { sandbox, run } = yield* standing();
 
-      const stopped = yield* run((sandboxes) => sandboxes.stopFor(SESSION));
+      const deleted = yield* run((sandboxes) => sandboxes.deleteFor(SESSION));
 
-      assert.equal(stopped, 1);
-      assert.deepEqual(sandbox.state.stopped, [{ name: up.name, running: up.running }]);
+      assert.equal(deleted, 2);
+      assert.equal(sandbox.state.sandboxes.size, 0);
+      assert.deepEqual([...sandbox.state.drives.keys()], ["base"]);
     }),
 );
 
-it.effect("a stop the sandbox refused fails as it answered", () =>
+it.effect("a delete the sandbox refused fails as it answered", () =>
   Effect.gen(function* () {
-    const { run } = standing(SANDBOX_CALL.STOP);
+    const { run } = yield* standing(SANDBOX_CALL.DELETE);
 
-    const failure = yield* run((sandboxes) => sandboxes.stopFor(SESSION)).pipe(Effect.flip);
+    const failure = yield* run((sandboxes) => sandboxes.deleteFor(SESSION)).pipe(Effect.flip);
 
     assert.ok(failure instanceof SandboxUnavailable);
-    assert.equal(failure.call, SANDBOX_CALL.STOP);
+    assert.equal(failure.call, SANDBOX_CALL.DELETE);
   }),
 );

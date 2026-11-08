@@ -4,7 +4,11 @@ import {
   type GitHubAccess,
   type GitHubRepository,
 } from "@repo/features/github-repositories-wire";
-import { GITHUB_TOKEN_CREATE_URL } from "@repo/features/github-token-wire";
+import {
+  GITHUB_TOKEN_CREATE_URL,
+  GITHUB_TOKEN_REJECTION,
+  pastedTokenFits,
+} from "@repo/features/github-token-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ALIGN,
@@ -149,12 +153,24 @@ function TokenRoute({ workspaceId }: { workspaceId: string }): React.JSX.Element
   const [pasted, setPasted] = useState("");
   const saved = saveToken.data;
   const saving = saveToken.isPending;
+  // Note that a paste no token could be is refused as GitHub's invalid one, unsent.
+  const [unfit, setUnfit] = useState(false);
   const failed = saveToken.isError || (saved !== undefined && "failure" in saved);
-  const rejection = saved === undefined || "failure" in saved ? undefined : saved.rejected;
+  const rejection = unfit
+    ? GITHUB_TOKEN_REJECTION.INVALID
+    : saved === undefined || "failure" in saved
+      ? undefined
+      : saved.rejected;
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const save = () => {
     const typed = pasted.trim();
     if (typed === "" || saving) return;
+    const fits = pastedTokenFits(typed);
+    setUnfit(!fits);
+    if (!fits) {
+      saveToken.reset();
+      return;
+    }
     saveToken.mutate(
       { token: typed },
       {
@@ -199,7 +215,10 @@ function TokenRoute({ workspaceId }: { workspaceId: string }): React.JSX.Element
           label="Classic token"
           placeholder="ghp_…"
           value={pasted}
-          onChange={setPasted}
+          onChange={(value) => {
+            setPasted(value);
+            setUnfit(false);
+          }}
           onEnter={save}
         />
         {rejection !== undefined ? (

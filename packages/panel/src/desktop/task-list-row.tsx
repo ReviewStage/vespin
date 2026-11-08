@@ -52,12 +52,7 @@ import { TASK_RENAME_SHAPE } from "../tasks/use-tasks-tab.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
-import {
-  type OpenedTask,
-  TASK_MENU_SURFACE,
-  type TaskRowTab,
-  useTaskMenuItems,
-} from "./task-actions.js";
+import { type OpenedTask, type TaskRowTab, useTaskMenuItems } from "./task-actions.js";
 import { TaskRowStatus } from "./task-card.js";
 import { AssigneeChip, PriorityChip, StatusChip, statusOf, taskSubject } from "./task-row-parts.js";
 import { type ChosenTasks, chosenRowMenu } from "./tasks-selection.js";
@@ -214,7 +209,6 @@ export function TaskListRow({
     rename: rename.begin,
     drawn: true,
     unread: unread ?? marked,
-    surface: TASK_MENU_SURFACE.ROW,
     chips: {
       status: drawn(TASK_ROW_CELL.STATUS),
       priority: drawn(TASK_ROW_CELL.PRIORITY),

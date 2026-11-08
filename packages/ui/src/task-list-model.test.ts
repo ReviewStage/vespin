@@ -13,7 +13,6 @@ import {
   childTaskCounts,
   createdByOnly,
   drawnTaskRows,
-  hiddenStatuses,
   openParentIds,
   type RepositoryGroup,
   repositoryGroups,
@@ -190,7 +189,7 @@ function standing(
   };
 }
 
-test("the list leaves the backlog and the settled out, counting them by status, and keeps a row with no status to leave out by", () => {
+test("the list leaves the backlog and the settled out, and keeps a row with no status to leave out by", () => {
   const rows = [
     standing("Filed", TASK_STATUS.BACKLOG, TASK_PRIORITY.NONE, 1),
     standing("Under way", TASK_STATUS.IN_PROGRESS, TASK_PRIORITY.HIGH, 2),
@@ -202,10 +201,6 @@ test("the list leaves the backlog and the settled out, counting them by status, 
   expect(taskRowsInStatuses(rows, SHOWN_STATUSES, new Set()).map(taskRowName)).toEqual([
     "Under way",
     "Older service",
-  ]);
-  expect(hiddenStatuses(rows, SHOWN_STATUSES, new Set())).toEqual([
-    { status: TASK_STATUS.BACKLOG, count: 2 },
-    { status: TASK_STATUS.DONE, count: 1 },
   ]);
 });
 
@@ -338,7 +333,7 @@ test("a parent counts its direct child tasks that are done or canceled, of all i
   expect(counts.has("shipped")).toBe(false);
 });
 
-test("a parent stays in the list, uncounted as hidden, while the view shows any child task under it, at any depth, whatever its own status", () => {
+test("a parent stays in the list while the view shows any child task under it, at any depth, whatever its own status", () => {
   const withStatus = (name: string, parent: string | undefined, status: TaskStatus) => ({
     ...childTask(name, 1, parent),
     status,
@@ -357,9 +352,5 @@ test("a parent stays in the list, uncounted as hidden, while the view shows any 
     "shipped parent",
     "shipped child",
     "waiting grandchild",
-  ]);
-  expect(hiddenStatuses(rows, SHOWN_STATUSES, open)).toEqual([
-    { status: TASK_STATUS.BACKLOG, count: 1 },
-    { status: TASK_STATUS.CANCELED, count: 1 },
   ]);
 });

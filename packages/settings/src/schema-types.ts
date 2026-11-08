@@ -71,7 +71,7 @@ export const SETTING_SECTION = {
   COMPOSER: "composer",
   /** Who authors an agent's commits, a group of its own on Account, under the message box. */
   COMMITS: "commits",
-  /** Whether and which sound plays as an agent finishes, a group of its own on Account, under Commits. */
+  /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Account, under Commits. */
   SOUNDS: "sounds",
 } as const;
 

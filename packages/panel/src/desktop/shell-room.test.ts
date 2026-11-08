@@ -233,7 +233,7 @@ function openDrawer(): void {
 /** The side panel's toggle at the window's top right, by whatever it is called now. */
 function panelToggle(page: HTMLElement): HTMLButtonElement {
   const button = page.querySelector<HTMLButtonElement>(
-    '.title-bar-controls[data-edge="end"] button',
+    '.title-bar-controls[data-edge="end"] button[aria-expanded]',
   );
   assert.ok(button, "the panel's toggle stands");
   return button;
@@ -246,7 +246,8 @@ function panelOf(page: HTMLElement) {
   return {
     fullScreen: aside.getAttribute("data-full-screen") === "true",
     resizable: aside.querySelector('[aria-label="Resize panel"]') !== null,
-    fullScreenButton: [...aside.querySelectorAll("button")].some((button) =>
+    // Note that a task's panel draws its button beside the window's toggle rather than in itself.
+    fullScreenButton: [...page.querySelectorAll("button")].some((button) =>
       ["Expand panel", "Exit full screen"].includes(button.getAttribute("aria-label") ?? ""),
     ),
   };

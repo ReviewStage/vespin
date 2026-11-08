@@ -151,6 +151,7 @@ import {
   TAB_KIND,
   tabLook,
 } from "../tasks/tab-look.js";
+import { COLUMN, type Column, type ColumnKeys } from "../tasks/tab-press.js";
 import {
   type FixedSidePanelTab,
   PULL_REQUEST_VIEW,
@@ -440,14 +441,6 @@ export function offeredPanelKinds(holder: SidePanelHolder): readonly FixedSidePa
   return HOLDER_KINDS[holder];
 }
 
-/** Which of a page's two columns holds the window's focus, which ⌘T, ⌘W, and ⌘F answer to: its own, or the side panel beside it. */
-export const COLUMN = {
-  MAIN: "main",
-  SIDE: "side",
-} as const;
-
-type Column = (typeof COLUMN)[keyof typeof COLUMN];
-
 /** The column holding the keys, the door its page's area is handed through, and the door a press that hands the keys over goes through. */
 export interface ColumnFocus {
   readonly onArea: (area: HTMLDivElement | null) => void;
@@ -457,13 +450,24 @@ export interface ColumnFocus {
 
 /**
  * The column of a page with a side panel that holds the keys: the one the
- * pointer or the focus last went into, and the door a press that hands the
- * keys over goes through. Note that it is heard on the page's area, handed
- * through `onArea`, as it bubbles, because the columns are no controls of
- * their own to hear it.
+ * pointer or the focus last went into, or the one a door that opened a tab
+ * asked for since (`keys`, `tab-press.ts`), and the door a press that hands
+ * the keys over goes through. Note that it is heard on the page's area,
+ * handed through `onArea`, as it bubbles, because the columns are no
+ * controls of their own to hear it; and that an ask is taken, and let go
+ * (`onTaken`), by the page standing as it is drawn, a page drawn by the door
+ * that asked among them, so it never waits for a page kept out of sight.
  */
-export function useColumnFocus(): ColumnFocus {
+export function useColumnFocus(
+  keys: ColumnKeys | undefined,
+  onTaken: (ask: number) => void,
+): ColumnFocus {
   const [focus, setFocus] = useState<Column>(COLUMN.MAIN);
+  useLayoutEffect(() => {
+    if (keys === undefined) return;
+    setFocus(keys.column);
+    onTaken(keys.ask);
+  }, [keys, onTaken]);
   const [area, onArea] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     if (area === null) return;
@@ -1685,6 +1689,15 @@ export function usePanelToggleRoom(): (room: HTMLElement | null) => void {
 }
 
 /**
+ * The box just before the side panel's toggle, which a task's panel draws
+ * its full-screen button in (`PanelFrame`'s `besideToggle`); none where no
+ * toggle is drawn.
+ */
+const fullScreenRoomStore = createStore<HTMLElement | null>(null);
+
+const setFullScreenRoom = (room: HTMLElement | null) => fullScreenRoomStore.setState(() => room);
+
+/**
  * The "+" menu hung from the side panel's toggle, where the toggle or ⌘T
  * asked for it with nothing to show, since the panel never stands with
  * nothing in it: a pick opens the panel on what it names, and the menu
@@ -2268,7 +2281,9 @@ function TabContent({
  * panel covers everything else. It stands on every task's page, so it
  * is also what offers the panel's shortcut. ⌘T is the task's page's, which hands it to the column
  * holding the window's focus (desktop-tasks.tsx). While the task is not
- * drawn there is no panel to show, so it is disabled and offers none.
+ * drawn there is no panel to show, so it is disabled and offers none. On a
+ * task's page it stands at the end of the agents' tabs' row instead, with the
+ * panel's full-screen button just before it (desktop.css).
  */
 export function SidePanelToggle({
   panel,
@@ -2283,15 +2298,18 @@ export function SidePanelToggle({
   const offer = (run: () => void) => (disabled ? undefined : run);
   useAppCommand(APP_COMMAND.TOGGLE_SIDE_PANEL, offer(panel.onToggle));
   return (
-    <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDE_PANEL}>
-      <IconButton
-        icon={closes ? <CloseIcon /> : <SidePanelIcon />}
-        label={label}
-        aria-expanded={panel.open || panel.toggleAsked}
-        disabled={disabled}
-        onClick={panel.onToggle}
-      />
-    </Tooltip>
+    <>
+      <div ref={setFullScreenRoom} className="contents" />
+      <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDE_PANEL}>
+        <IconButton
+          icon={closes ? <CloseIcon /> : <SidePanelIcon />}
+          label={label}
+          aria-expanded={panel.open || panel.toggleAsked}
+          disabled={disabled}
+          onClick={panel.onToggle}
+        />
+      </Tooltip>
+    </>
   );
 }
 
@@ -2843,6 +2861,7 @@ export function SidePanel({
       onLeft={onLeft}
       edge={edge}
       label="Panel"
+      besideToggle={holder === SIDE_PANEL_HOLDER.TASK}
       banner={banner}
       switched={switched}
       onLeavingHere={carryToAgent}
@@ -3012,7 +3031,7 @@ export function SidePanelSkeleton({
   panel: SidePanelControl;
 }): React.JSX.Element {
   return (
-    <PanelFrame {...drawing} panel={panel} label="Panel" tabs={null}>
+    <PanelFrame {...drawing} panel={panel} label="Panel" besideToggle tabs={null}>
       {null}
     </PanelFrame>
   );
@@ -3105,8 +3124,9 @@ function PanelPhoneHead({
  * The frame every side panel stands in, the task's, an agent's page's, and
  * the Inbox's: the panel's pane at the window's
  * right, its width the window's, over its top row of `tabs`, the chosen
- * tab's `actions`, and its full-screen button, with what it shows under the
- * row and its resize edge at its left. Full screen, it covers what it stood
+ * tab's `actions`, and its full-screen button, or none there where the button
+ * stands beside the panel's toggle instead (`besideToggle`), with what it
+ * shows under the row and its resize edge at its left. Full screen, it covers what it stood
  * beside rather than taking its place, and an empty room holds the panel's
  * own width beside it, so what is beneath keeps its layout and is there to
  * be uncovered as the panel goes back. Where the room holds it only full
@@ -3119,6 +3139,7 @@ function PanelFrame({
   onLeft,
   edge,
   label,
+  besideToggle = false,
   tabs,
   banner,
   switched = false,
@@ -3129,6 +3150,8 @@ function PanelFrame({
   panel: Pick<SidePanelControl, "width" | "fullScreen" | "fullScreenOnly" | "onToggleFullScreen">;
   /** What the pane is called to a reader. */
   label: string;
+  /** Whether the full-screen button stands just before the panel's toggle, where one is drawn, rather than at the row's end: a task's page's, whose agents' tabs' row holds both. */
+  besideToggle?: boolean;
   /** The row's tabs, which take what the row leaves beside the full-screen button. */
   tabs: React.ReactNode;
   /** Drawn under the row while the panel fills the window and covers what draws it otherwise. */
@@ -3143,10 +3166,19 @@ function PanelFrame({
 }): React.JSX.Element {
   const aside = useRef<HTMLElement>(null);
   const room = useRef<HTMLDivElement>(null);
+  const toggleRoom = useSelector(fullScreenRoomStore);
+  const beside = besideToggle ? toggleRoom : null;
   useLayoutEffect(() => {
     if (leaving === PANEL_LEAVING.NONE || aside.current === null) return;
     return playExit(aside.current, room.current, leaving, onLeft);
   }, [leaving, onLeft]);
+  const fullScreenToggle = panel.fullScreenOnly ? null : (
+    <FullScreenToggle
+      fullScreen={panel.fullScreen}
+      leaving={leaving !== PANEL_LEAVING.NONE}
+      onToggle={panel.onToggleFullScreen}
+    />
+  );
   return (
     <>
       {/* Shut, it gives the document its room back at once, to glide into. A
@@ -3173,13 +3205,7 @@ function PanelFrame({
             document order, so the controls follow it. */}
         <div className="side-panel-bar">
           {tabs}
-          {panel.fullScreenOnly ? null : (
-            <FullScreenToggle
-              fullScreen={panel.fullScreen}
-              leaving={leaving !== PANEL_LEAVING.NONE}
-              onToggle={panel.onToggleFullScreen}
-            />
-          )}
+          {beside === null ? fullScreenToggle : null}
         </div>
         {head}
         {panel.fullScreen ? banner : null}
@@ -3192,6 +3218,8 @@ function PanelFrame({
             edge's top from it. Full screen has no edge to drag. */}
         {panel.fullScreen ? null : <ResizeEdge edge={edge} />}
       </aside>
+      {/* Beside the toggle it stands still with it, a title-bar control, while the panel slides beneath. */}
+      {beside === null || fullScreenToggle === null ? null : createPortal(fullScreenToggle, beside)}
     </>
   );
 }

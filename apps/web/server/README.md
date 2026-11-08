@@ -174,9 +174,8 @@ fewer than `MAX_VIDEOS_PER_DESCRIPTION` videos, answering `{ id }`
 or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/plans/<id>/attachments/<picture>`
 serves the bytes under their sniffed type, `nosniff` and `private, no-store`,
 to a member alone, anyone else reading `not-found`. The description's text names a
-picture by its address (`@repo/features/description-attachment-link`), which
-`saveDescriptionText` reads to stamp the picture `saved_at`, and the scheduled sweep
-deletes, a day on, a picture no save stamped.
+picture by its address (`@repo/features/description-attachment-link`); a picture
+stays until its task is deleted, whether or not a save named it.
 
 An agent's conversation keeps the member who started it as its
 `user_id`, the address its messages, turns, and asks are written under, and

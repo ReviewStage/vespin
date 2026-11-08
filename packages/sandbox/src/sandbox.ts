@@ -1,5 +1,5 @@
 /**
- * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a snapshot built in a sandbox of its own, a sandbox deleted only while it is the one read, and one resumed until it runs.
+ * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a base drive filled in a sandbox of its own, a sandbox deleted only while it is the one read, and one resumed until it runs.
  *
  * A sandbox is persistent and named: it runs, stops with its disk kept as a
  * snapshot, and resumes from it, each time in a run of its own. A call on
@@ -15,6 +15,11 @@
  * (`touch`, `touchSandbox`) about every `SANDBOX_TOUCH_EVERY`, which no
  * caller times any other way. A stopped sandbox keeps its disk as a
  * snapshot, so an idle one bills nothing but that.
+ *
+ * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
+ * or a drive of its own forked from one. Every drive call is the package's,
+ * made as a sandbox opens or is deleted, so a drive is never a caller's to
+ * forget: a sandbox's delete deletes the drive it owns in the same call.
  */
 
 import { Context, Duration, Effect, Option, Schedule, type Scope } from "effect";
@@ -55,9 +60,10 @@ export interface SandboxService {
   /** The named sandbox, resumed from its snapshot first where it was stopped. */
   readonly resume: (name: string) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
-   * Opens a persistent sandbox from the image or snapshot named, on the open
-   * internet; answers it with the run it is up in. A name another sandbox
-   * holds is refused (`SandboxNameTaken`), which is what makes a name a lock.
+   * Opens a persistent sandbox from the image or snapshot named, with the
+   * drive it asks for, on the open internet; answers it with the run it is
+   * up in. A name another sandbox holds is refused (`SandboxNameTaken`),
+   * which is what makes a name a lock.
    */
   readonly create: (ask: SandboxCreate) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
@@ -73,7 +79,13 @@ export interface SandboxService {
     ask: SandboxGetOrCreate,
     onCreate?: (created: OpenedSandbox) => Promise<void>,
   ) => Effect.Effect<OpenedSandbox, SandboxError>;
-  /** Deletes the named sandbox with the snapshots no other sandbox uses; one already gone counts as deleted. */
+  /**
+   * Deletes the named sandbox with the snapshots no other sandbox uses and
+   * the drive it owns, where it forked one, stopping its run first where the
+   * drive is still mounted in it; one already gone counts as deleted. A
+   * drive left by a delete that failed is deleted by the next delete of the
+   * name, whether the sandbox still stands or not.
+   */
   readonly delete: (name: string) => Effect.Effect<void, SandboxError>;
   /** Stops the target's run, keeping its disk as a snapshot for a resume; one already gone counts as stopped. */
   readonly stop: (target: SandboxTarget) => Effect.Effect<void, SandboxError>;
@@ -84,13 +96,12 @@ export interface SandboxService {
   ) => Effect.Effect<void, SandboxError>;
   /**
    * Serves exactly the ports given on public routes, closing every other,
-   * and replaces the named sandbox's tags whole, without resuming it;
-   * answers the routes it serves after.
+   * without resuming the named sandbox or changing its tags; answers the
+   * routes it serves after.
    */
   readonly updatePorts: (
     name: string,
     ports: readonly number[],
-    tags: Readonly<Record<string, string>>,
   ) => Effect.Effect<readonly SandboxRoute[], SandboxError>;
   /** Runs a command on the target and waits for its end. */
   readonly run: (target: SandboxTarget, ask: CommandAsk) => Effect.Effect<CommandRun, SandboxError>;
@@ -217,26 +228,36 @@ export const touchSandbox = (name: string): Effect.Effect<void, never, Sandbox> 
     Effect.catch((failure) => Effect.logWarning(`a sandbox was not touched: ${failure.message}`)),
   );
 
-/** What a snapshot is built as: the sandbox's name, the image it starts from, its size, and how long the snapshot lasts after its last use. */
-export interface SnapshotBuild {
+/**
+ * What a base drive is filled as: the fill's sandbox's name, which is its
+ * lock, the drive's name and where it is mounted, the image the sandbox
+ * opens from, and its size.
+ */
+export interface DriveFill {
   readonly name: string;
+  readonly drive: string;
+  readonly at: string;
   readonly image: string;
   readonly vcpus?: number;
-  readonly lapse: Duration.Duration;
 }
 
 /**
- * A snapshot built in a sandbox of its own: created from the image under the
- * name, the caller's steps run in it, touched every `SANDBOX_TOUCH_EVERY`
- * while they run, and snapshotted, which stops it; the snapshot's id, or none
- * where another build holds the name, which this one leaves be. The sandbox
- * stays stopped holding the snapshot, which is where a reader finds it, since
- * deleting it deletes the snapshot with it. A build that failed deletes its
- * sandbox, where it is still this build's; one whose caller went stops
- * touching it, so it stops `SANDBOX_IDLE` later.
+ * A base drive filled in a sandbox of its own: created from the image under
+ * the name with the drive mounted to be filled (made empty where none
+ * stands), the caller's steps run in it, touched every `SANDBOX_TOUCH_EVERY`
+ * while they run, and then stopped and deleted, which leaves the drive, as
+ * Vercel's own example fills one; whether it filled, false where another
+ * fill holds the name, which this one leaves be. Note that the sandbox is
+ * stopped before its delete, because the stop lets go of the drive at once,
+ * where a delete of a running sandbox answers before it does, and a fork
+ * read past a fill must find the drive whole. A fill whose steps failed
+ * stops its sandbox and leaves it standing, so a reader of the name finds
+ * the drive unfinished, whatever the steps left on it, until a later fill
+ * replaces it; one whose caller went stops touching it, so it stops
+ * `SANDBOX_IDLE` later and reads the same.
  */
-export const buildSnapshot = <E, R>(
-  ask: SnapshotBuild,
+export const filledDrive = <E, R>(
+  ask: DriveFill,
   steps: (running: SandboxRunning) => Effect.Effect<void, E, R>,
 ) =>
   Effect.gen(function* () {
@@ -245,31 +266,32 @@ export const buildSnapshot = <E, R>(
       .create({
         name: ask.name,
         from: { image: ask.image },
+        drive: { fill: ask.drive, at: ask.at },
         tags: {},
         ...(ask.vcpus === undefined ? undefined : { vcpus: ask.vcpus }),
-        snapshotLapse: ask.lapse,
         env: {},
       })
       .pipe(
         Effect.map(Option.some),
         Effect.catchTag("SandboxNameTaken", () => Effect.succeed(Option.none<OpenedSandbox>())),
       );
-    if (Option.isNone(created)) return Option.none<string>();
+    if (Option.isNone(created)) return false;
     const running = { name: ask.name, running: created.value.running };
-    return yield* Effect.gen(function* () {
+    yield* Effect.gen(function* () {
       yield* touchSandbox(ask.name).pipe(
         Effect.delay(SANDBOX_TOUCH_EVERY),
         Effect.forever,
         Effect.forkScoped,
       );
       yield* steps(running);
-      return Option.some(yield* sandbox.snapshot(running, ask.lapse));
     }).pipe(
       Effect.scoped,
-      // Only this build's own sandbox goes, so a build that failed after another replaced it leaves that one be.
-      Effect.tapError(() => Effect.ignore(deletedIfStill(created.value))),
+      Effect.tapError(() => Effect.ignore(sandbox.stop(running))),
     );
-  }).pipe(Effect.withSpan("web/buildSnapshot"));
+    yield* sandbox.stop(running);
+    yield* sandbox.delete(ask.name);
+    return true;
+  }).pipe(Effect.withSpan("web/fillDrive"));
 
 /**
  * The named sandbox resumed and waited on until it runs: the run it is up

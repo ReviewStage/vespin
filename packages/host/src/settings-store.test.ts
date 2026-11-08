@@ -190,8 +190,6 @@ const SAMPLE_VALUE = {
   preferBuiltInMicrophone: false,
   // Ask is the default, so Never is the choice that has to survive a reopen.
   macCommands: MAC_COMMAND_MODE.NEVER,
-  // On is the default, so Off is the choice that has to survive a reopen.
-  forwardPorts: false,
   // Steer is the default, so Queue is the choice that has to survive a reopen.
   agentEnter: AGENT_ENTER.QUEUE,
   // You with our bot as co-author is the default, so the bot alone is the choice that has to survive a reopen.
@@ -204,6 +202,8 @@ const SAMPLE_VALUE = {
   soundWhen: SOUND_WHEN.BACKGROUND,
   // The chime is the default, so another sound is the choice that has to survive a reopen.
   completionSound: COMPLETION_SOUND.QUACK,
+  // Off is the default, so a notification turned on is the choice that has to survive a reopen.
+  turnNotifications: true,
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,

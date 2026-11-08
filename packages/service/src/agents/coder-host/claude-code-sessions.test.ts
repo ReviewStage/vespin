@@ -116,6 +116,7 @@ import {
   type SentToGitHub,
 } from "../../testing/github-app-fake.js";
 import {
+  type FakeSandbox,
   launchBearer,
   launchLines,
   runnerSandboxApi,
@@ -123,7 +124,7 @@ import {
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
 import { AGENT_TAG, agentSandboxName, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
-import { BASE_SNAPSHOT } from "../base-snapshot.js";
+import { BASE_DRIVE } from "../base-drive.js";
 import { claimedDeviceAgentLine } from "../device-agent.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { type SandboxRunner, sandboxMachineLayer } from "../machine/sandbox-machine.js";
@@ -229,7 +230,6 @@ function readyingScript(api: ReturnType<typeof runnerSandboxApi>): string {
 /** The agents' image as a deploy names it, the fixture's. */
 const FIXTURE_IMAGE = Layer.succeed(AgentImage, {
   reference: Effect.succeed(IMAGE),
-  base: Effect.succeed(IMAGE),
   runner: Effect.succeed(RUNNER_FILES),
 });
 
@@ -697,9 +697,17 @@ const isRefresh = (run: { readonly env: Readonly<Record<string, string>> }) =>
 const isInstall = (run: { readonly args: readonly string[] }) =>
   run.args.some((arg) => arg.includes("pnpm install"));
 
-/** The base snapshot's sandbox standing, where one does. */
-const baseSandbox = (api: ReturnType<typeof runnerSandboxApi>) =>
-  api.sandboxes.find((each) => !each.deleted && each.name.startsWith(BASE_SNAPSHOT.NAME_PREFIX));
+/** Every sandbox a base drive's fill created, deleted or not. */
+const baseFills = (api: ReturnType<typeof runnerSandboxApi>) =>
+  api.sandboxes.filter((each) => each.name.startsWith(BASE_DRIVE.NAME_PREFIX));
+
+/** The base drive standing, where one does. */
+const baseDrive = (api: ReturnType<typeof runnerSandboxApi>) =>
+  api.drives.find((each) => !each.deleted && each.name.startsWith(BASE_DRIVE.NAME_PREFIX));
+
+/** The drive a sandbox mounts at the workspace, and the drive it was forked from, where it was. */
+const mountedDrive = (api: ReturnType<typeof runnerSandboxApi>, sandbox: FakeSandbox | undefined) =>
+  api.mountedAt(sandbox, BASE_DRIVE.MOUNT);
 
 /** Whether a run in the sandbox made the agent's user, as `@vercel/sandbox` makes one. */
 const isUserMade = (run: { readonly args: readonly string[] }) =>
@@ -3435,7 +3443,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessions,
           yield* writtenLine(agent, "Fix the relay."),
         ).pipe(Effect.provide(kept.layer));
-        // The launch, then the base snapshot's fill, whose clone is refused too.
+        // The launch, then the base drive's fill, whose clone is refused too.
         yield* kept.run;
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal((yield* newestTurn(agent)).status, TURN_STATUS.FAILED);
@@ -3467,7 +3475,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start on a repository with no base snapshot clones it whole from the image, then fills the base snapshot past the answer apart from the launch",
+    "a Start on a repository with no base drive clones it whole from the image alone, then fills the base drive past the answer apart from the launch",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3480,25 +3488,29 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           yield* writtenLine(agent, "Fix the relay."),
         ).pipe(Effect.provide(kept.layer));
         const launched = api.commands.length;
-        const filledWithLaunch = baseSandbox(api);
+        const filledWithLaunch = baseDrive(api);
         yield* kept.run;
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(launched, 1);
         assert.equal(filledWithLaunch, undefined);
         const own = sandboxOfAgent(api, agent);
-        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.deepEqual(
+          [own?.image, own?.sourceSnapshotId, mountedDrive(api, own)],
+          [IMAGE, undefined, undefined],
+        );
         assert.ok(api.runs.some((run) => run.session === own?.currentSessionId && isClone(run)));
-        const base = baseSandbox(api);
-        assert.deepEqual([base?.status, base?.currentSnapshotId], ["stopped", api.snapshots[0]]);
-        // The base snapshot holds no credential: the token stood at its firewall for the clone alone.
+        // The fill mounted the base drive, and its sandbox is gone once it filled it.
+        const [fill] = baseFills(api);
+        assert.deepEqual([mountedDrive(api, fill), fill?.deleted], [baseDrive(api), true]);
+        // The base drive holds no credential: the token stood at its firewall for the clone alone.
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
       }),
   );
 
   it.effect(
-    "the next agent on the repository is created from the base snapshot, makes its user, fetches only its branch, installs nothing, clones nothing, and launches with its write token standing",
+    "the next agent on the repository boots from the image on its own fork of the base drive, makes its user, fetches only its branch, installs nothing, clones nothing, and launches with its write token standing",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3519,7 +3531,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const own = sandboxOfAgent(api, next);
-        assert.equal(own?.sourceSnapshotId, baseSandbox(api)?.currentSnapshotId);
+        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, baseDrive(api)?.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 0);
         assert.equal(ownRuns.filter(isUserMade).length, 1);
@@ -3534,7 +3547,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         assert.equal(ownRuns.filter(isInstall).length, 0);
         assert.equal(api.commands.length, 2);
-        assert.equal(api.snapshots.length, 1, "the base was not filled again");
+        assert.equal(baseFills(api).length, 1, "the base was not filled again");
         const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
         const ownPolicies = api.policies.filter((each) => each.session === own?.currentSessionId);
         assert.ok(JSON.stringify(ownPolicies.at(-1)?.policy).includes(writeHeader));
@@ -3542,7 +3555,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent whose fast-forward from the base snapshot moved a lockfile has the base filled again past the answer",
+    "a message after a drive agent's stopped sandbox's snapshot expired mounts the drive its first open forked in the fresh sandbox from the image",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3554,7 +3567,48 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         yield* kept.run;
         yield* kept.run;
-        const [first] = api.snapshots;
+        const next = yield* anotherAgent(userId, agent);
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(next, "Fix it again."),
+        ).pipe(Effect.provide(kept.layer));
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const expired = sandboxOfAgent(api, next);
+        const drive = mountedDrive(api, expired);
+        assert.ok(expired !== undefined && drive !== undefined);
+        yield* runnerTook(next.id);
+        yield* runnerEnded({
+          target: { userId, conversationId: next.conversationId },
+          sessionId: opened.sessionId,
+          sequence: 0,
+        }).pipe(Effect.provide(api.layer));
+        api.idleStop();
+        expired.snapshotExpired = true;
+
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, next, "Now the emails.");
+
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const fresh = sandboxOfAgent(api, next);
+        assert.ok(fresh !== undefined && fresh !== expired);
+        assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [IMAGE, undefined]);
+        assert.equal(mountedDrive(api, fresh), drive);
+      }),
+  );
+
+  it.effect(
+    "an agent whose fast-forward from the base drive moved a lockfile has the base filled again past the answer",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const kept = keptAfterResponse();
+        yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
+          Effect.provide(kept.layer),
+        );
+        yield* kept.run;
+        yield* kept.run;
+        const base = baseDrive(api);
         api.hooks.runExit = (args) =>
           args.some((arg) => arg.includes("git diff --quiet")) ? 1 : 0;
         const next = yield* anotherAgent(userId, agent);
@@ -3565,14 +3619,14 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* kept.run;
         yield* kept.run;
 
-        assert.equal(sandboxOfAgent(api, next)?.sourceSnapshotId, first);
-        assert.equal(api.snapshots.length, 2);
-        assert.equal(baseSandbox(api)?.currentSnapshotId, api.snapshots[1]);
+        assert.equal(mountedDrive(api, sandboxOfAgent(api, next))?.forkedFrom, base?.name);
+        assert.equal(baseFills(api).length, 2);
+        assert.equal(baseDrive(api), base, "the refill mounted the drive standing");
       }),
   );
 
   it.effect(
-    "an agent whose base snapshot lapsed is created from the image and clones, and the base is filled again past the answer",
+    "an agent whose base drive is gone is created from the image alone and clones, and the base is filled again past the answer",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3584,7 +3638,9 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
         yield* kept.run;
         yield* kept.run;
-        api.goneSnapshots.add(api.snapshots[0] ?? "");
+        const gone = baseDrive(api);
+        assert.ok(gone !== undefined);
+        gone.deleted = true;
         const next = yield* anotherAgent(userId, agent);
 
         const opened = yield* deliveredOpen(
@@ -3595,9 +3651,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const own = sandboxOfAgent(api, next);
-        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.deepEqual([own?.image, mountedDrive(api, own)], [IMAGE, undefined]);
         assert.ok(api.runs.some((run) => run.session === own?.currentSessionId && isClone(run)));
-        assert.equal(baseSandbox(api)?.currentSnapshotId, api.snapshots[1]);
+        assert.equal(baseFills(api).length, 2);
+        assert.ok(baseDrive(api) !== undefined);
       }),
   );
 
@@ -3643,6 +3700,70 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           ],
           [0, 0, 0, 0],
         );
+      }),
+  );
+
+  /** An agent continued from one that runs on a fork of the base drive, its sandbox stopped on a snapshot, the snapshot gone where `gone` says. */
+  const continuedFromDrive = (gone: boolean) =>
+    Effect.gen(function* () {
+      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+      const api = runnerSandboxApi();
+      const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+      const kept = keptAfterResponse();
+      yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay.")).pipe(
+        Effect.provide(kept.layer),
+      );
+      yield* kept.run;
+      const onDrive = yield* anotherAgent(userId, agent);
+      yield* deliveredOpen(sessions, yield* writtenLine(onDrive, "Fix it again.")).pipe(
+        Effect.provide(kept.layer),
+      );
+      const source = sandboxOfAgent(api, onDrive);
+      assert.ok(source !== undefined);
+      source.status = "stopped";
+      source.currentSnapshotId = "snap_source";
+      if (gone) api.goneSnapshots.add("snap_source");
+      const continued = yield* anotherAgent(userId, onDrive, undefined, {
+        agentId: onDrive.id,
+        steps: 0,
+        totalSteps: 0,
+        sandbox: source.name,
+      });
+      const opened = yield* deliveredOpen(sessions, yield* writtenLine(continued, "Go on.")).pipe(
+        Effect.provide(kept.layer),
+      );
+      assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+      return { api, source, own: sandboxOfAgent(api, continued) };
+    });
+
+  it.effect(
+    "an agent continued from one on a drive is created from its source's snapshot with a fork of the source's drive, and clones, fetches, and installs nothing",
+    () =>
+      Effect.gen(function* () {
+        const { api, source, own } = yield* continuedFromDrive(false);
+
+        assert.equal(own?.sourceSnapshotId, "snap_source");
+        assert.equal(mountedDrive(api, own)?.forkedFrom, mountedDrive(api, source)?.name);
+        const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
+        assert.deepEqual(
+          [
+            ownRuns.filter(isClone).length,
+            ownRuns.filter(isRefresh).length,
+            ownRuns.filter(isInstall).length,
+          ],
+          [0, 0, 0],
+        );
+      }),
+  );
+
+  it.effect(
+    "an agent continued from one on a drive whose snapshot is gone forks the base drive, leaving none of the source's drive it forked first",
+    () =>
+      Effect.gen(function* () {
+        const { api, own } = yield* continuedFromDrive(true);
+
+        assert.equal(own?.sourceSnapshotId, undefined);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, baseDrive(api)?.name);
       }),
   );
 
@@ -3717,7 +3838,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent started on another branch is created from the image and clones its branch, passing the base snapshot by",
+    "an agent started on another branch is created from the image and clones its branch, passing the base drive by",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3741,8 +3862,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const clone = api.runs.find((run) => run.session === own?.currentSessionId && isClone(run));
         assert.equal(clone?.env[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.BRANCH], "relay-fix");
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(own?.sourceSnapshotId, undefined);
-        assert.equal(api.snapshots.length, 1);
+        assert.deepEqual([own?.sourceSnapshotId, mountedDrive(api, own)], [undefined, undefined]);
+        assert.equal(baseFills(api).length, 1);
       }),
   );
 

@@ -25,6 +25,7 @@ export const APP_SETTING_ID = {
   OPEN_AT_LOGIN: "open_at_login",
   AGENT_NOTIFICATIONS: "agent_notifications",
   MAC_COMMANDS: "mac_commands",
+  /** Offered by no build: Forward cloud agents' ports automatically, removed since ports are forwarded only from the agent's plug. */
   FORWARD_PORTS: "forward_ports",
   /** Offered by no build: Run agents on this Mac, removed since Runs on chooses where each agent runs. */
   LOCAL_AGENTS: "local_agents",
@@ -58,6 +59,7 @@ export const APP_SETTING_ID = {
   SETUP_PLACE: "setup_place",
   SOUND_WHEN: "sound_when",
   COMPLETION_SOUND: "completion_sound",
+  TURN_NOTIFICATIONS: "turn_notifications",
 } as const;
 
 export type AppSettingId = (typeof APP_SETTING_ID)[keyof typeof APP_SETTING_ID];

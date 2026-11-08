@@ -35,9 +35,11 @@ export interface TaskRoute {
    * Opens a task's own place at `at`, a visit after the step standing; with
    * `takesStepless`, in the place of an entry holding no step the window
    * saved, as a launch's entry is, which the window's history takes in place
-   * of a step of its own (`places/window-history.ts`'s visit).
+   * of a step of its own (`places/window-history.ts`'s visit); with `inPlace`,
+   * in the place of the step standing whatever it holds, as a task a start
+   * lands on takes its page's (`TaskVisits.onLeaveStart`).
    */
-  readonly onOpen: (at: TaskAt, takesStepless?: boolean) => void;
+  readonly onOpen: (at: TaskAt, takesStepless?: boolean, inPlace?: boolean) => void;
 }
 
 /** Where a task's own place stands by the params its address's routes read. */
@@ -66,12 +68,12 @@ export function useTaskRoute(): TaskRoute {
   const savedNow = () => savedTaskOf(router.history.location);
   const workspaceNow = () =>
     placeParamsOf(router.matchRoutes(router.history.location.pathname)).workspace;
-  const onOpen = (to: TaskAt, takesStepless = false) => {
+  const onOpen = (to: TaskAt, takesStepless = false, inPlace = false) => {
     // Note that the router writes its entry at once, which the history takes the task's step in the place of (`places/window-history.ts`).
     void router.navigate({
       to: "/$workspace/task/$taskId",
       params: { workspace: to.workspace, taskId: to.task },
-      replace: takesStepless && !savesStep(router.history.location),
+      replace: inPlace || (takesStepless && !savesStep(router.history.location)),
     });
   };
   return { at, saved, atNow, savedNow, workspaceNow, onOpen };

@@ -952,13 +952,14 @@ test("a sidebar row's Task relation asks for the relation beside the menu, then 
   assert.deepEqual(asked.opened, [], "relating from a row opens no task");
 });
 
-/** What the plan's chips stand for, which the Plan tab's menu leaves out and a row's keeps. */
-const CHIP_ITEMS = ["Status", "Priority", "Assignee"];
-
-test("the Plan tab's ⋯ prints the chords that act on the open task, leaves Status, Priority, and Assignee to the plan's chips, which a row keeps, and keeps Change repository, Choose a repository on a task with none, which a row leaves to it; another task's row prints only U, S, and P, which act on the focused row", () => {
+test("the open task's topbar and its sidebar row offer the one menu, Status, Priority, Assignee, Version history, and Change repository among it, Choose a repository on a task with none, the topbar's printing the chords that act on the open task; another task's row prints only U, S, and P, which act on the focused row", () => {
   const { tasks, asked } = openTab({ [TASK.id]: "acme/app", [OTHER.id]: "acme/app" });
+  const standing: TasksControl = {
+    ...tasks,
+    tasks: tasks.tasks.map((each) => ({ ...each, ...STANDING })),
+  };
 
-  openTaskMenu(mountDescriptionTab(tasks));
+  openTaskMenu(mountDescriptionTab(standing));
   assert.deepEqual(itemChords(), [
     ["Copy description", "⌥⌘C"],
     ["Version history", "⌥⇧⌘H"],
@@ -966,13 +967,13 @@ test("the Plan tab's ⋯ prints the chords that act on the open task, leaves Sta
     ["Pin", "P"],
     ["Permanently delete", "⌘⌫"],
   ]);
-  const offered = menuItems().map(itemLabel);
-  assert.deepEqual(
-    CHIP_ITEMS.filter((item) => offered.includes(item)),
-    [],
-    "the plan's chips stand for these",
-  );
-  assert.ok(offered.includes("Change repository"), "the plan's repository is words, not a chip");
+  const topbar = menuItems().map(itemLabel);
+  for (const item of ["Status", "Priority", "Assignee", "Change repository"]) {
+    assert.ok(topbar.includes(item), `the topbar's menu offers ${item}`);
+  }
+  unmountAll();
+  rightClick(mountSidebarTask(standing, standing.tasks[0] as TaskSummary, asked, true), 40, 60);
+  assert.deepEqual(menuItems().map(itemLabel), topbar, "the open task's row offers the same menu");
 
   unmountAll();
   openTaskMenu(mountDescriptionTab(openTab().tasks));
@@ -982,14 +983,11 @@ test("the Plan tab's ⋯ prints the chords that act on the open task, leaves Sta
   );
 
   unmountAll();
-  const other: TaskSummary = { ...OTHER, ...STANDING };
-  rightClick(mountSidebarTask(tasksControl({ tasks: [other] }), other, asked), 40, 60);
+  rightClick(mountSidebarTask(standing, standing.tasks[1] as TaskSummary, asked), 40, 60);
   const row = menuItems().map(itemLabel);
-  assert.deepEqual(
-    [...CHIP_ITEMS, "Choose a repository", "Version history"].filter((item) => row.includes(item)),
-    CHIP_ITEMS,
-    "a sidebar row draws no chips, so its menu keeps them, and leaves the repository and the versions to the open task's menu",
-  );
+  for (const item of ["Version history", "Change repository"]) {
+    assert.ok(row.includes(item), `another task's row offers ${item}`);
+  }
   assert.deepEqual(
     itemChords(),
     [

@@ -316,6 +316,16 @@ test("a row listed again before its exit has played stands again, and comes back
   ]);
 });
 
+test("a key listed twice is drawn once, so no row is left behind as the list changes after it", () => {
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const show = draw([["A", "B"]]);
+  show([["A", "A", "B"]]);
+
+  show([["N", "A", "B"]]);
+
+  expect(drawn()).toEqual([["N", "A", "B"]]);
+});
+
 test("a row moved into another list glides across from where it stood rather than leaving one and arriving in the other", () => {
   const show = draw([["A", "B"], ["C"]]);
 

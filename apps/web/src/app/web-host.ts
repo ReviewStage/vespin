@@ -16,7 +16,8 @@
  * contact mail, feedback, and an agent's Terminal tab) are the tab's, and
  * every other platform kind is refused in its own words, so the table stays
  * total. What waits is counted on the tab's badge (`web-notices.ts`), and the
- * tab posts no notification. The composition is a
+ * tab posts a notification of news only where the account turned them on and
+ * the browser allows it. The composition is a
  * `Layer`, built by the tab's one runtime edge (`web-root.tsx`), whose close
  * is the host's drain; `fork` is that runtime's, handed in so no count runs
  * anywhere else.
@@ -80,6 +81,7 @@ import {
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { highlightSnippet } from "@repo/host/task-code";
 import type { AppPlatform } from "@repo/panel/app-platform";
+import type { NotificationsStatus } from "@repo/settings/settings-controls";
 import type { RouterHistory } from "@tanstack/react-router";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -89,7 +91,12 @@ import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-f
 import { type PageLeave, tabLeave } from "./page-leave";
 import { failedChunkAnswer, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
 import { developmentFixtureProfile } from "./web-fixture";
-import { onTabShownChanged, webNoticeDoors } from "./web-notices";
+import {
+  askTabNotifications,
+  onTabShownChanged,
+  tabNotificationsStatus,
+  webNoticeDoors,
+} from "./web-notices";
 import { copyPng, downloadText, openTab, webPlatform } from "./web-platform";
 import { openTerminalSocketFromPage } from "./web-terminal-socket";
 
@@ -459,11 +466,41 @@ const composedWeb = (
       yield* linkSessionReload({ state, reload: () => location.reload() });
 
       const doors = yield* noticeDoors;
+      // Whether the browser lets the tab post notifications, which Settings says under the switch:
+      // read as the tab opens and each time it is shown again, since the developer may change it
+      // in the browser's own settings meanwhile, and as an ask is answered.
+      const sayNotifications = (status: NotificationsStatus) => {
+        if (state.snapshot().notifications.status !== status) {
+          state.update({ notifications: { status } });
+        }
+      };
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          onTabShownChanged((shown) => {
+            if (shown) sayNotifications(tabNotificationsStatus());
+          }),
+        ),
+        (stop) => Effect.sync(stop),
+      );
+      // Note that an ask the browser fails is said as where it stands then, since that is all it tells.
+      const askForNotifications = () => {
+        void askTabNotifications().then(sayNotifications, () =>
+          sayNotifications(tabNotificationsStatus()),
+        );
+      };
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
-        // No command runs in a tab, so no ask is ever announced here.
-        presenter: { openMacCommandAsk: () => window.focus() },
+        // No command runs in a tab, so no ask is ever announced here. A notification of news opens
+        // its place as a link handed the tab does, under the workspace the tab stands in; the bridge
+        // it is said through is made below, before any notification can be clicked.
+        presenter: {
+          openMacCommandAsk: () => window.focus(),
+          openPlace: (place) => {
+            window.focus();
+            made.events.onShowLink({ workspace: "", place });
+          },
+        },
         onPanelFocusChanged: onTabShownChanged,
         report,
       }).pipe(Effect.provideService(AgentNoticeDoors, doors));
@@ -496,6 +533,7 @@ const composedWeb = (
             recordSurfaceEvent: count,
             unsavedWork: tab.unsavedWork,
             unsavedDescriptionWords: tab.unsavedDescriptionWords,
+            askForNotifications,
           },
           linkPlatform,
         ),

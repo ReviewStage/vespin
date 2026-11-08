@@ -7,10 +7,12 @@ import {
   ErrorState,
   FILL_FLOW,
   Fill,
-  OneLine,
   PaneBar,
   Shortcut,
   TEXT_BUTTON_TONE,
+  TEXT_ELEMENT,
+  TEXT_VARIANT,
+  Text,
   TextButton,
 } from "@repo/ui";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
@@ -102,20 +104,27 @@ function StateBar({
   useAnnounceShown(ANNOUNCE.POLITE, bar.late && !revealed ? "" : bar.words);
   return (
     <div
-      className="terminal-bar flex min-h-7 flex-none flex-wrap items-center gap-x-control-gap gap-y-list-gap whitespace-nowrap border-b border-border bg-muted py-tight-gap pr-list-inset pl-ui-16 font-mono text-caption text-muted-foreground"
+      className="terminal-bar flex min-h-7 flex-none flex-wrap items-center gap-x-control-gap gap-y-list-gap border-b border-border bg-muted py-tight-gap pr-list-inset pl-ui-16 font-mono text-caption text-muted-foreground"
       data-late={String(bar.late)}
       onAnimationEnd={() => setRevealed(true)}
     >
       {/* Note that the glyph and the words are one item, so a bar too narrow for its action puts the action on a line of its own rather than the glyph apart from its words. */}
-      <span className="flex min-w-0 flex-initial items-center gap-control-gap">
+      {/* Note that the words wrap rather than hold to one line, because they say what to do and a cut line loses that first; the glyph keeps to their first line's baseline. */}
+      <span className="flex min-w-0 flex-initial items-baseline gap-control-gap">
         {bar.busy ? (
           <span className="flex-none tracking-busy text-muted-foreground" aria-hidden="true">
             ⋯
           </span>
         ) : null}
-        <OneLine className="terminal-bar-words">{bar.words}</OneLine>
+        <Text
+          as={TEXT_ELEMENT.SPAN}
+          variant={TEXT_VARIANT.INHERIT}
+          className="terminal-bar-words min-w-0"
+        >
+          {bar.words}
+        </Text>
       </span>
-      <span className="terminal-bar-end ml-auto inline-flex items-center gap-control-gap">
+      <span className="terminal-bar-end ml-auto inline-flex items-center gap-control-gap whitespace-nowrap">
         {action === undefined ? null : (
           <TextButton tone={TEXT_BUTTON_TONE.ACCENT} onClick={() => onAction(action.kind)}>
             {action.label}

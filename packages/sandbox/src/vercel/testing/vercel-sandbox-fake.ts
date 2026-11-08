@@ -232,6 +232,105 @@ export function snapshotOf(snapshot: {
   };
 }
 
+/** A drive as a lookup, a create, a fork, or a delete answers it, with the fields `@vercel/sandbox` checks. */
+export function driveAnswered(drive: {
+  readonly id: string;
+  readonly name: string;
+  readonly parentDriveId?: string;
+}) {
+  return {
+    drive: {
+      id: drive.id,
+      ...(drive.parentDriveId === undefined ? undefined : { parentDriveId: drive.parentDriveId }),
+      name: drive.name,
+      projectId: PROJECT,
+      region: SESSION_SIZE.REGION,
+      maxSizeBytes: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  };
+}
+
+/** A drive as a fake keeps it: its name, the drive it was forked from where it was, and whether it was deleted. */
+export interface FakeDrive {
+  readonly id: string;
+  readonly name: string;
+  readonly forkedFrom?: string;
+  deleted: boolean;
+}
+
+/** A create's mounts as `@vercel/sandbox` sends them: each path's drive and mode. */
+type FakeMounts = Readonly<Record<string, { readonly drive: string; readonly mode: string }>>;
+
+/**
+ * The drives a fake of Vercel keeps, as Vercel answers a call on one: a
+ * get-or-create makes one where none stands, a fork copies one standing, a
+ * delete is refused while a running sandbox mounts it (`attached`, the
+ * fake's own reading), and a create mounts only drives that stand. Each of a
+ * create's mounts is kept as the create sent it, opaque to the suite, which
+ * reads it back by the path it was mounted at (`mountedAt`).
+ */
+export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => boolean) {
+  const drives: FakeDrive[] = [];
+  let next = 0;
+  const named = (name: string) => drives.find((each) => !each.deleted && each.name === name);
+  const mountsOf = (mounts: unknown): FakeMounts => (mounts ?? {}) as FakeMounts;
+  return {
+    drives,
+    /** What a create's body mounts, kept as it was sent. */
+    mountsSent: (created: { readonly mounts?: unknown }): unknown => created.mounts,
+    /** Whether every drive a create's mounts name stands. */
+    mountable: (mounts: unknown) =>
+      Object.values(mountsOf(mounts)).every((mount) => named(mount.drive) !== undefined),
+    /** The drive standing that a create's mounts put at the path, where one does. */
+    mountedAt: (mounts: unknown, at: string) => {
+      const name = mountsOf(mounts)[at]?.drive;
+      return name === undefined ? undefined : named(name);
+    },
+    /** Vercel's answer to a call on a drive, or nothing where the call is on none. */
+    answer: async (
+      path: string,
+      method: string,
+      body: () => Promise<{ readonly name?: string }>,
+    ): Promise<Response | undefined> => {
+      const call = /^\/api\/v2\/sandboxes\/drives\/([^/]+)(\/fork)?$/u.exec(path);
+      if (call === null) return undefined;
+      const name = decodeURIComponent(call[1] ?? "");
+      const standing = named(name);
+      if (method === "POST" && call[2] === undefined) {
+        next += 1;
+        const made = standing ?? { id: `drv_${next}`, name, deleted: false };
+        if (standing === undefined) drives.push(made);
+        return Response.json(driveAnswered(made));
+      }
+      if (standing === undefined) {
+        return Response.json({ error: { code: "not_found" } }, { status: 404 });
+      }
+      if (method === "POST") {
+        next += 1;
+        const forked: FakeDrive = {
+          id: `drv_${next}`,
+          name: (await body()).name ?? "",
+          forkedFrom: name,
+          deleted: false,
+        };
+        drives.push(forked);
+        return Response.json(driveAnswered({ ...forked, parentDriveId: standing.id }));
+      }
+      if (method === "DELETE") {
+        const mountsIt = (mounts: unknown) =>
+          Object.values(mountsOf(mounts)).some((mount) => mount.drive === name);
+        if (attached(mountsIt)) {
+          return Response.json({ error: { code: "drive_attached" } }, { status: 409 });
+        }
+        standing.deleted = true;
+      }
+      return Response.json(driveAnswered(standing));
+    },
+  };
+}
+
 /** A fake's responder as `fetch`. */
 type Responder = (url: string, init: RequestInit) => Response | Promise<Response>;
 

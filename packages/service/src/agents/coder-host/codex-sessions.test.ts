@@ -191,7 +191,6 @@ function services(
     Layer.succeed(HostedEnvironment, NO_KEYS),
     Layer.succeed(AgentImage, {
       reference: Effect.succeed(IMAGE),
-      base: Effect.succeed(IMAGE),
       runner: Effect.succeed([]),
     }),
   );
