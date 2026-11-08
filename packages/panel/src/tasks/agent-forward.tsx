@@ -16,7 +16,7 @@ import {
 } from "@repo/ui";
 import { CopyIcon, GlobeIcon, LinkIcon, PlugIcon, UnlinkIcon } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pressAct } from "../act.js";
 import { appPlatform } from "../app-platform.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
@@ -167,14 +167,15 @@ function sharedItems(
 
 /**
  * One row of the chip's menu per port, its actions in a submenu beside it:
- * Open, and Share while no port is, or, for the shared port, its link,
- * Copy link, and Stop sharing; a busy port that is not shared is a dimmed
- * row, and the line saying none listens yet stands where none does.
+ * Open, and Share where `share` is offered, or, for the shared port, its
+ * link, Copy link, and Stop sharing; a busy port that is not shared is a
+ * dimmed row, and the line saying none listens yet stands where none does.
  */
 function portRows(
   agentId: string,
   answer: PortForwardingAnswer,
   copy: (words: string, label: string) => void,
+  share: ((port: number) => void) | undefined,
 ): MenuEntry[] {
   const { shared } = answer;
   const rows = answer.ports.map(({ port, localPort, state }): MenuEntry => {
@@ -209,15 +210,14 @@ function portRows(
       items:
         shared !== undefined && isShared
           ? [...open, ...sharedItems(agentId, shared.url, copy)]
-          : shared !== undefined
-            ? // Note that one port is shared at a time, so another offers Share only once the shared one stops, rather than moving the live link.
-              open
+          : share === undefined
+            ? open
             : [
                 ...open,
                 {
                   label: WORDS.SHARE,
                   icon: <LinkIcon aria-hidden="true" />,
-                  onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
+                  onSelect: () => share(port),
                 },
               ],
     };
@@ -246,6 +246,7 @@ export function ForwardChip({
   const { offered, answer } = useForwarding(agent);
   const menu = useMenu(true);
   const copy = useCopyToast();
+  const [sharing, setSharing] = useState(false);
   if (!offered) return null;
   const first = reached(answer)[0];
   const words = !answer.on
@@ -253,6 +254,16 @@ export function ForwardChip({
     : first === undefined
       ? WORDS.FORWARDING
       : `${WORDS.FORWARDING_TO} ${localAddress(first)}`;
+  // Note that one port is shared at a time, so no port offers Share while one is or while a share is on its way, rather than moving the live link; the host sets `shared` before the act settles.
+  const share =
+    answer.shared !== undefined || sharing
+      ? undefined
+      : (port: number) => {
+          setSharing(true);
+          void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId: agent.id, port }).then(() =>
+            setSharing(false),
+          );
+        };
   const groups: MenuEntry[][] = [
     [
       {
@@ -264,7 +275,7 @@ export function ForwardChip({
         onSelect: () => setForwarding(agent.id, !answer.on),
       },
     ],
-    ...(answer.on ? [portRows(agent.id, answer, copy)] : []),
+    ...(answer.on ? [portRows(agent.id, answer, copy, share)] : []),
   ];
   const chip = (
     <Chip
