@@ -376,12 +376,11 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           record.tags = { ...tags };
         }),
       ),
-    updatePorts: (name, ports, tags) =>
+    updatePorts: (name, ports) =>
       scripted(
         SANDBOX_CALL.PORTS,
         name,
         Effect.map(reached(SANDBOX_CALL.PORTS, name), (record) => {
-          record.tags = { ...tags };
           record.routes = ports.map((port) => ({ port, url: `https://${name}-${port}.memory` }));
           return record.routes;
         }),

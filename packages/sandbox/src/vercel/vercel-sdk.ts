@@ -785,11 +785,11 @@ function vercelSandbox(
           await sandbox.update({ tags: { ...tags } }, { signal });
         }),
       ),
-    updatePorts: (name, ports, tags) =>
+    updatePorts: (name, ports) =>
       said(
         asked(SANDBOX_CALL.PORTS, async (signal, under) => {
           const sandbox = await SdkSandbox.get({ ...under, name, resume: false, signal });
-          await sandbox.update({ ports: [...ports], tags: { ...tags } }, { signal });
+          await sandbox.update({ ports: [...ports] }, { signal });
           return routesOf(sandbox);
         }),
       ),

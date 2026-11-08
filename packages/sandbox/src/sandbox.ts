@@ -84,13 +84,12 @@ export interface SandboxService {
   ) => Effect.Effect<void, SandboxError>;
   /**
    * Serves exactly the ports given on public routes, closing every other,
-   * and replaces the named sandbox's tags whole, without resuming it;
-   * answers the routes it serves after.
+   * without resuming the named sandbox or changing its tags; answers the
+   * routes it serves after.
    */
   readonly updatePorts: (
     name: string,
     ports: readonly number[],
-    tags: Readonly<Record<string, string>>,
   ) => Effect.Effect<readonly SandboxRoute[], SandboxError>;
   /** Runs a command on the target and waits for its end. */
   readonly run: (target: SandboxTarget, ask: CommandAsk) => Effect.Effect<CommandRun, SandboxError>;

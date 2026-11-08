@@ -5,13 +5,9 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net, { type AddressInfo } from "node:net";
 import { join } from "node:path";
-import { it as effectIt } from "@effect/vitest";
-import { memorySandbox } from "@repo/sandbox/testing";
 import { temporaryDirectory } from "@repo/wire/testing";
-import { Effect } from "effect";
 import { it } from "vitest";
-import { AGENT_TAG, SESSION_TAG } from "../agent-sandbox-open.js";
-import { PORT_SHARE, PORT_SHARE_HELPER_SOURCE, sharePort } from "./port-share.js";
+import { PORT_SHARE_HELPER_SOURCE } from "./port-share.js";
 
 /**
  * The share helper the agent's sandbox runs, as its own Node process in
@@ -65,31 +61,3 @@ it("a request through the helper reaches the app as localhost and is written as 
     app.close();
   }
 });
-
-effectIt.effect(
-  "sharing a sandbox carrying leftover tags writes only the session, the agent, and the share's mark",
-  () =>
-    Effect.gen(function* () {
-      const memory = memorySandbox();
-      const standing = memory.stand({
-        name: "sandbox",
-        tags: {
-          [AGENT_TAG]: "agent",
-          [SESSION_TAG]: "session",
-          agentRunnerCommand: "command",
-          agentRunnerLaunch: "launch",
-          agentRunnerSession: "runner",
-        },
-      });
-      const sandbox = { name: standing.name, tags: standing.tags };
-      const running = { name: standing.name, running: standing.running };
-
-      yield* sharePort(memory.service, sandbox, running, 3000);
-
-      assert.deepEqual(standing.tags, {
-        [AGENT_TAG]: "agent",
-        [SESSION_TAG]: "session",
-        [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON,
-      });
-    }),
-);
