@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { INTEGRATION_ROW_STATUS } from "../integration-vocabulary.js";
 import { agentTable } from "../schemas/agent.js";
 import { member, user } from "../schemas/auth.js";
@@ -58,12 +59,6 @@ import type { TaskStoreEffect } from "./task-store.js";
  * waits for before it confirms the write.
  */
 
-/** The id of the transaction a write committed in, read in its own `RETURNING`. */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
-/** What a write that answers its transaction returns. */
-const TxidSchema = Schema.Struct({ txid: Schema.String });
-
 /** The transaction the first row a write returned committed in; none where it wrote none. */
 function txidOf(rows: readonly { readonly txid: string }[]): Option.Option<string> {
   return Option.map(Option.fromNullishOr(rows[0]), (row) => row.txid);
@@ -107,7 +102,7 @@ const findNotifications = SqlSchema.findOneOption({
 
 const upsertNotifications = SqlSchema.findOne({
   Request: Schema.Struct({ userId: Schema.String, on: Schema.Boolean }),
-  Result: Schema.Struct({ txid: Schema.String }),
+  Result: TxidRowSchema,
   execute: ({ userId, on }) =>
     Database.use((db) =>
       db
@@ -117,7 +112,7 @@ const upsertNotifications = SqlSchema.findOne({
           target: accountPreference.userId,
           set: { slackNotifications: on },
         })
-        .returning({ txid: sql<string>`pg_current_xact_id()::text` }),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -145,7 +140,7 @@ const upsertInstallation = SqlSchema.findOne({
     userId: Schema.String,
     now: Schema.Date,
   }),
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: (row) =>
     Database.use((db) =>
       db
@@ -166,7 +161,7 @@ const upsertInstallation = SqlSchema.findOne({
             updatedAt: sql`excluded.updated_at`,
           },
         })
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -184,13 +179,13 @@ const findInstallation = SqlSchema.findOneOption({
 
 const deleteInstallation = SqlSchema.findAll({
   Request: Schema.String,
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: (organizationId) =>
     Database.use((db) =>
       db
         .delete(slackInstallation)
         .where(eq(slackInstallation.organizationId, organizationId))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -529,14 +524,14 @@ const updateDefaultRepository = SqlSchema.findAll({
     repository: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ organizationId, repository, now }) =>
     Database.use((db) =>
       db
         .update(slackInstallation)
         .set({ defaultRepository: repository, updatedAt: now })
         .where(eq(slackInstallation.organizationId, organizationId))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -571,7 +566,7 @@ const upsertChannelRepository = SqlSchema.findAll({
     repository: Schema.String,
     now: Schema.Date,
   }),
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: (row) =>
     Database.use((db) =>
       db
@@ -589,13 +584,13 @@ const upsertChannelRepository = SqlSchema.findAll({
             updatedAt: sql`excluded.updated_at`,
           },
         })
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
 const deleteChannelRepository = SqlSchema.findAll({
   Request: Schema.Struct({ organizationId: Schema.String, channelId: Schema.String }),
-  Result: TxidSchema,
+  Result: TxidRowSchema,
   execute: ({ organizationId, channelId }) =>
     Database.use((db) =>
       db
@@ -606,7 +601,7 @@ const deleteChannelRepository = SqlSchema.findAll({
             eq(slackChannelRepository.channelId, channelId),
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 

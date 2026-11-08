@@ -56,6 +56,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Exit, Option, Schema, SchemaTransformation } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import {
   agentDelegationTable,
   agentTable,
@@ -765,22 +766,11 @@ const insertAgentConversation = SqlSchema.findOne({
     ),
 });
 
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * task list waits for that transaction to arrive before it confirms the
- * write.
- */
-const TXID = sql<string>`pg_current_xact_id()::text`;
-
 /** An agent's row as a write returned it, with the transaction it committed in. */
 const CommittedAgentRowSchema = Schema.Struct({
   ...AgentRowSchema.fields,
   txid: Schema.String,
 });
-
-/** The transaction a pin's write committed in; none where the pin stood as asked already. */
-const TxidRowSchema = Schema.Struct({ txid: Schema.String });
 
 /**
  * The task's pilot standing unarchived, any but the one named, by the task's
@@ -871,7 +861,7 @@ const insertAgent = SqlSchema.findOne({
           idempotencyKey: write.idempotencyKey,
           createdAt: write.now,
         })
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -911,7 +901,7 @@ const updateAgentChoiceRow = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ model, effort, contextWindow })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -928,7 +918,7 @@ const updateAgentServersRow = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ disabledServers })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1102,7 +1092,7 @@ const updateAgentTitle = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ title })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -1209,7 +1199,7 @@ const updateAgentArchived = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ archivedAt, archivedBy })
         .where(reachableAgent(userId, agentId))
-        .returning({ ...AGENT_COLUMNS, txid: TXID }),
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -2230,7 +2220,7 @@ const insertAgentPin = SqlSchema.findOneOption({
         .insert(agentPin)
         .values({ userId, agentId: agentId, pinnedAt: now })
         .onConflictDoNothing()
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2252,7 +2242,7 @@ const placeAgentPin = SqlSchema.findOneOption({
           target: [agentPin.userId, agentPin.agentId],
           set: { position },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2265,7 +2255,7 @@ const deleteAgentPin = SqlSchema.findOneOption({
       db
         .delete(agentPin)
         .where(and(eq(agentPin.userId, userId), eq(agentPin.agentId, agentId)))
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2282,7 +2272,7 @@ const markAgentRead = SqlSchema.findOneOption({
           target: [agentRead.userId, agentRead.agentId],
           set: { readThrough: now, markedUnread: false },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2299,7 +2289,7 @@ const markAgentSeen = SqlSchema.findOneOption({
           target: [agentRead.userId, agentRead.agentId],
           set: { readThrough: now },
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2317,7 +2307,7 @@ const markAgentUnread = SqlSchema.findOneOption({
           set: { markedUnread: true },
           setWhere: sql`not ${agentRead.markedUnread}`,
         })
-        .returning({ txid: TXID }),
+        .returning({ txid: CURRENT_TXID }),
     ),
 });
 
@@ -2382,7 +2372,7 @@ const deleteAgentRow = SqlSchema.findAll({
       db
         .delete(agentTable)
         .where(reachableAgent(userId, agentId))
-        .returning({ conversationId: agentTable.conversationId, txid: TXID }),
+        .returning({ conversationId: agentTable.conversationId, txid: CURRENT_TXID }),
     ),
 });
 

@@ -9,6 +9,7 @@ import {
   readConcurrency,
   type StoreFailure,
 } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { task } from "../schemas/task.js";
 import { taskBlock } from "../schemas/task-block.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
@@ -56,15 +57,6 @@ export class TaskBlockAcrossWorkspaces extends Data.TaggedError("TaskBlockAcross
 
 /** The blocked task already blocks the blocker, itself or through others, so the block would close a cycle; nothing was written. */
 export class TaskBlockCycle extends Data.TaggedError("TaskBlockCycle") {}
-
-/**
- * The id of the transaction a write committed in, read in the write's own
- * `RETURNING`, as Neon's mutations guide says, so a client following the
- * task waits for that transaction to arrive before it confirms the write.
- */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
-const TxidRowSchema = Schema.Struct({ txid: Schema.String });
 
 /** The statuses a blocker no longer holds work up in: its work is finished, or it was cut. */
 const SETTLED = [TASK_STATUS.DONE, TASK_STATUS.CANCELED];
@@ -156,7 +148,7 @@ const insertBlock = SqlSchema.findOneOption({
         .insert(taskBlock)
         .values({ blockerTaskId, blockedTaskId, createdAt: now })
         .onConflictDoNothing()
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -196,7 +188,7 @@ const deleteBlock = SqlSchema.findOneOption({
             eq(taskBlock.blockedTaskId, blockedTaskId),
           ),
         )
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 
