@@ -105,12 +105,15 @@ const SESSION_STOPPED = { STATUS: 410, CODE: "sandbox_stopped" } as const;
 /**
  * Vercel's answer for a resume or a create whose snapshot is gone: expired
  * past the expiration it was kept for, or deleted, its body naming
- * `snapshot_not_found`, as the SDK's own check reads it. Note that Vercel
+ * `snapshot_not_found`, as the SDK's own check reads it, or a code of no
+ * such meaning with words that name the snapshot, as Vercel has also
+ * answered (`bad_request: Snapshot expired or deleted.`). Note that Vercel
  * answers 410 for a call to a stopped sandbox too (`SESSION_STOPPED`), which
  * a resume mends, and that a body that could not be read names no code, so
- * only a 410 that names this code says the snapshot is gone.
+ * only a 410 that names this code, or names the snapshot in its words, says
+ * the snapshot is gone.
  */
-const SNAPSHOT_GONE = { STATUS: 410, CODE: "snapshot_not_found" } as const;
+const SNAPSHOT_GONE = { STATUS: 410, CODE: "snapshot_not_found", WORDS: /\bsnapshot\b/iu } as const;
 
 /**
  * Vercel's answer for a call to a session that is stopping, or being
@@ -235,6 +238,7 @@ class Refused extends Data.TaggedError("Refused")<{
   readonly status?: number;
   readonly code?: string;
   readonly detail?: string;
+  readonly snapshotGone?: true;
 }> {}
 
 /** What a refusal's line says: Vercel's status where it answered one, and its words or the cause's. */
@@ -253,9 +257,7 @@ function neutralOf(refusal: Refused): SandboxError {
   if (status === NAME_TAKEN_STATUS && code !== DRIVE_CODE.ATTACHED) {
     return new SandboxNameTaken({ call });
   }
-  if (status === SNAPSHOT_GONE.STATUS && code === SNAPSHOT_GONE.CODE) {
-    return new SnapshotGone({ call });
-  }
+  if (refusal.snapshotGone === true) return new SnapshotGone({ call });
   if (status === SESSION_ENDING.STATUS && code !== undefined && SESSION_ENDING.CODES.has(code)) {
     return new SandboxEnding({ call });
   }
@@ -408,6 +410,26 @@ function errorCode(text: string): string | undefined {
   return code !== undefined && ERROR_CODE.test(code) ? code : undefined;
 }
 
+/** Whether an answer says the snapshot a resume or a create opens from is gone (`SNAPSHOT_GONE`). */
+function snapshotGoneAnswer(answered: { readonly status: number; readonly text: string }): boolean {
+  if (answered.status !== SNAPSHOT_GONE.STATUS) return false;
+  const read = readErrorAnswer(unparsedWire(valueFromJsonText(answered.text)));
+  if (Result.isFailure(read)) return false;
+  const { code, message } = read.success.error;
+  if (code === SNAPSHOT_GONE.CODE) return true;
+  return (
+    code !== SESSION_STOPPED.CODE && message !== undefined && SNAPSHOT_GONE.WORDS.test(message)
+  );
+}
+
+/** Whether the SDK's failure is Vercel's answer that the snapshot it opens from is gone. */
+function snapshotGoneFailure(failure: unknown): boolean {
+  return (
+    failure instanceof APIError &&
+    snapshotGoneAnswer({ status: failure.response.status, text: failure.text ?? "" })
+  );
+}
+
 function succeeded(status: number): boolean {
   return status >= OK_STATUS.FIRST && status <= OK_STATUS.LAST;
 }
@@ -425,6 +447,7 @@ function refused(
     status: answered.status,
     ...(code === undefined ? undefined : { code }),
     ...(detail === undefined ? undefined : { detail }),
+    ...(snapshotGoneAnswer(answered) ? { snapshotGone: true } : undefined),
   });
 }
 
@@ -609,11 +632,23 @@ async function openedWithDrive(
 /** Whether a resume's failure says no sandbox stands to resume: none under the name, or one whose snapshot is gone, which a create replaces. */
 function noneToResume(failure: unknown): boolean {
   if (!(failure instanceof APIError)) return false;
-  const { status } = failure.response;
-  return (
-    status === NOT_FOUND_STATUS ||
-    (status === SNAPSHOT_GONE.STATUS && errorCode(failure.text ?? "") === SNAPSHOT_GONE.CODE)
+  return failure.response.status === NOT_FOUND_STATUS || snapshotGoneFailure(failure);
+}
+
+/**
+ * Whether a sandbox stood under the name to be deleted, as one whose
+ * snapshot is gone is, so a create may take its name: what the SDK's own
+ * `getOrCreate` does only for the one code it reads (`SNAPSHOT_GONE`). Note
+ * that the sandbox's own drive is left standing, for the create to mount
+ * again.
+ */
+async function clearedStale(name: string, under: Under, signal: AbortSignal): Promise<boolean> {
+  const stale = await SdkSandbox.get({ ...under, name, resume: false, signal }).catch(
+    absentIfNotFound,
   );
+  if (stale === undefined) return false;
+  await stale.delete({ signal }).catch(absentIfNotFound);
+  return true;
 }
 
 /**
@@ -892,13 +927,20 @@ function vercelSandbox(
                 if (ask.user !== undefined) await madeUser(created, ask.user, signal);
                 await onCreate?.(openedOf(created));
               };
-              try {
-                const opened = await SdkSandbox.getOrCreate({
+              const gotOrCreated = () =>
+                SdkSandbox.getOrCreate({
                   ...under,
                   ...createParams(ask, mounted),
                   resume: true,
                   signal,
                   onCreate: setUp,
+                });
+              try {
+                const opened = await gotOrCreated().catch(async (failure: unknown) => {
+                  // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
+                  if (!snapshotGoneFailure(failure)) throw failure;
+                  if (!(await clearedStale(ask.name, under, signal))) throw failure;
+                  return await gotOrCreated();
                 });
                 stands();
                 return await idleTimed(opened, signal);

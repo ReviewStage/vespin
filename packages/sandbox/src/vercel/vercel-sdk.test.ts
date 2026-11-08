@@ -24,6 +24,8 @@ const NAME = "luke-native-fixture";
 const REFUSAL = { code: "bad_request", message: "Invalid request: the fixture's refusal" } as const;
 const SECRET_ENV = "fixture-secret-env-value";
 const CREATED_AT = Date.UTC(2026, 10, 5);
+/** Vercel's answer for a snapshot past its expiration, as it answered on Nov 8, 2026, naming no code of its own. */
+const SNAPSHOT_EXPIRED = { code: "bad_request", message: "Snapshot expired or deleted." } as const;
 
 /** A sandbox as Vercel's list names it, up in the session it runs. */
 const RUNNING_SANDBOX = {
@@ -217,7 +219,7 @@ it.effect("a sandbox Vercel no longer holds is none", () =>
 );
 
 it.effect(
-  "a create Vercel refused for its snapshot gone reads as gone, and the same status for a stopped sandbox or with no code does not",
+  "a create Vercel refused for its snapshot gone reads as gone, by its code or by its words, and the same status for a stopped sandbox or with no code does not",
   () =>
     Effect.gen(function* () {
       let error: object = { code: "snapshot_not_found", message: "the snapshot is gone" };
@@ -225,12 +227,15 @@ it.effect(
       const refusal = () => Effect.flip(api.create(CREATE_ASK));
 
       const lost = yield* refusal();
+      error = SNAPSHOT_EXPIRED;
+      const expired = yield* refusal();
       error = { code: "sandbox_stopped", message: "the sandbox is stopped" };
       const stopped = yield* refusal();
       error = { message: "gone" };
       const unnamed = yield* refusal();
 
       assert.equal(lost._tag, "SnapshotGone");
+      assert.equal(expired._tag, "SnapshotGone");
       assert.equal(stopped._tag, "SandboxUnavailable");
       assert.equal(unnamed._tag, "SandboxUnavailable");
     }),
@@ -238,6 +243,34 @@ it.effect(
 
 /** A stopped sandbox as Vercel's list names it. */
 const STOPPED_SANDBOX = { ...RUNNING_SANDBOX, status: "stopped" } as const;
+
+it.effect(
+  "a get-or-create whose standing sandbox lost its snapshot deletes it and hands a fresh one under its name to onCreate",
+  () =>
+    Effect.gen(function* () {
+      let deleted = false;
+      const api = yield* apiOver((url, init) => {
+        if (init.method === "DELETE") {
+          deleted = true;
+          return Response.json(sandboxDeleted(STOPPED_SANDBOX));
+        }
+        if (init.method === "POST") return Response.json(sandboxFound(RUNNING_SANDBOX));
+        if (deleted) return refusedWith(404)();
+        return new URL(url).searchParams.get("resume") === "true"
+          ? Response.json({ error: SNAPSHOT_EXPIRED }, { status: 410 })
+          : Response.json(sandboxFound(STOPPED_SANDBOX));
+      });
+      const setUp: string[] = [];
+
+      const opened = yield* api.getOrCreate(CREATE_ASK, async (created) => {
+        setUp.push(created.running);
+      });
+
+      assert.equal(deleted, true);
+      assert.equal(opened.running, SESSION);
+      assert.deepEqual(setUp, [SESSION]);
+    }),
+);
 
 /** Vercel's answer to a lookup and to a delete, as `@vercel/sandbox` reads them. */
 const sandboxAnswer = (method: string) =>
