@@ -11,7 +11,11 @@ import {
   descriptionAgentEditSchema,
 } from "@repo/features/description-notes";
 import { DEVICE_KIND } from "@repo/features/device-agent-wire";
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import {
+  GITHUB_ACCESS,
+  type GitHubAccess,
+  sameRepository,
+} from "@repo/features/github-repositories-wire";
 import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { agentName } from "@repo/features/model-label";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
@@ -1072,12 +1076,6 @@ const hasChildren = SqlSchema.findOneOption({
       db.select({ id: task.id }).from(task).where(eq(task.parentTaskId, taskId)).limit(1),
     ),
 });
-
-/** Whether two repositories are one: GitHub's names match whatever their case, and none matches none. */
-function sameRepository(one: string | null, other: string | null): boolean {
-  if (one === null || other === null) return one === other;
-  return one.toLowerCase() === other.toLowerCase();
-}
 
 /**
  * Refuses a change that names another repository for a task in a tree: one

@@ -46,7 +46,11 @@ import {
   type TaskParentUnreached,
   type TaskStartCommitted,
 } from "@repo/database/models/task-store";
-import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import {
+  GITHUB_ACCESS,
+  type GitHubAccess,
+  sameRepository,
+} from "@repo/features/github-repositories-wire";
 import {
   TASK_CREATE_RELATION_KIND,
   type TaskBlockRelation,
@@ -92,12 +96,6 @@ export type TaskCreateRelationAsked =
       readonly repository: string | null;
     }
   | { readonly kind: TaskBlockRelation; readonly taskId: string };
-
-/** Whether a repository a start names is the other task's: GitHub's names match whatever their case, and none matches none. */
-function sameRepository(asked: string | null, held: string | null): boolean {
-  if (asked === null || held === null) return asked === held;
-  return asked.toLowerCase() === held.toLowerCase();
-}
 
 /** The block a kind names between the new task and the other, where the kind is a block's side. */
 function blockPairOf(taskId: string, otherId: string, kind: TaskBlockRelation): TaskBlockPair {
