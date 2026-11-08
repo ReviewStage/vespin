@@ -202,10 +202,10 @@ import { useModifierHeld } from "./use-modifier-held.js";
 /** What the box's note says while the editor bundle could not be loaded. */
 const EDITOR_LOAD_FAILED = "The message box could not be loaded.";
 
-/** What the box says it takes: the first message of an empty conversation, then a follow up. */
+/** What the box says it takes: the first message of an empty conversation, then a follow-up. */
 export const PLACEHOLDER = {
   FIRST: "Ask to make changes",
-  FOLLOW_UP: "Send a follow up",
+  FOLLOW_UP: "Send a follow-up",
 } as const;
 
 /** What a box other than an agent's own asks for, calls its field, and calls its round button, and the chord its button's hint names. */

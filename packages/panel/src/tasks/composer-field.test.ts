@@ -78,7 +78,7 @@ test("a box drawn before the editor bundle lands is inert with its placeholder, 
   assert.equal(container.querySelector(".composer-editor"), null);
   assert.equal(
     container.querySelector(".agent-composer-placeholder")?.textContent,
-    "Send a follow up",
+    "Send a follow-up",
   );
   assert.equal(
     container.querySelector<HTMLButtonElement>('button[aria-label="Dictate"]')?.disabled,

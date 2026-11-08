@@ -712,7 +712,7 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
       ) : null}
       <div className="ui-landing-composer">
         <ComposerFrame>
-          <ComposerField label="Follow up" placeholder="Send a follow up" />
+          <ComposerField label="Follow-up" placeholder="Send a follow-up" />
           <ComposerFoot
             send={{ label: "Send", empty: true }}
             stop={{ label: "Stop", onStop: still }}
