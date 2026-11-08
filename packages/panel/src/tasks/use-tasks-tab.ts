@@ -3074,6 +3074,12 @@ export function useTasksTab(input: {
       }
     };
   };
+  // A link's move to the own place of `taskId`, from whatever stands. Note that one the window holds no address for yet,
+  // from a place beside the task's place, moves nowhere and leaves that place standing once the task opens under it, so
+  // its Leave leaves no page and the page's ask stands on (`places/place-leave.ts`'s `stays`).
+  const standLinkedTask = (taskId: string) => {
+    if (!standTaskPlace(taskId, true) && !opensTaskPlace) placeLeave.stays();
+  };
   // A move as `placeLeave.arrive` makes it, which lands what the link opening now does as well.
   const linkArrive = (move: (free: boolean) => void, landed: () => void) => {
     const also = takeLinkLanded();
@@ -3359,8 +3365,13 @@ export function useTasksTab(input: {
       readonly workspace?: string;
     },
   ) => {
+    // Note that with Descriptions off its task's own place stands first, out from whatever stands, and opens on its
+    // Overview once it lands, as a task's link does.
     if (!descriptionsOnFor(taskId, opening.workspace)) {
-      showOverview({ kind: LINK_PLACE.TASK, planId: taskId });
+      linkArrive(
+        () => standLinkedTask(taskId),
+        () => showOverview({ kind: LINK_PLACE.TASK, planId: taskId }),
+      );
       return;
     }
     const address = versionHistoryAddressOf(
@@ -3857,8 +3868,8 @@ export function useTasksTab(input: {
   const linkOnTask = (step: LinkStep, open: () => void) =>
     linkArrive(
       (free) => {
-        if (free) linkingTo(step, () => standTaskPlace(step.taskId, true));
-        else standTaskPlace(step.taskId, true);
+        if (free) linkingTo(step, () => standLinkedTask(step.taskId));
+        else standLinkedTask(step.taskId);
       },
       () => linkingTo(step, open),
     );
@@ -3949,7 +3960,7 @@ export function useTasksTab(input: {
         if (place.kind !== LINK_PLACE.TASK) return;
         const taskId = place.planId;
         linkArrive(
-          () => standTaskPlace(taskId, true),
+          () => standLinkedTask(taskId),
           () => showMention({ kind: MENTION_KIND.TASK, taskId }),
         );
         return;

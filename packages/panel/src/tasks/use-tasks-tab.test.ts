@@ -3813,6 +3813,45 @@ test.each(LINK_DOORS)(
   async (_door, href) => askedOver((control) => control.onOpenLink(linkAt(href)), FROM_BOARD),
 );
 
+test("a link to a task number the service finds none for, over an automation holding unsaved work, keeps the page's ask once Leave leaves it standing", async () => {
+  const tab = mount(
+    {
+      shown: true,
+      history: true,
+      tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+    },
+    {
+      [ACT_KIND.TASKS_FIND]: () => Promise.resolve({ failure: TASK_CALL_FAILURE.UNANSWERED }),
+      [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false),
+    },
+  );
+  await settle();
+  act(() => automationsDoor?.open(EDIT));
+  await settle();
+  const asks: (() => void)[] = [];
+  act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
+  act(() => tab.control().onOpenLink(linkAt(`${LINK_ORIGIN}/personal/task/99`)));
+  await settle();
+  act(() => asks[0]?.());
+  await settle();
+  const stays = views?.automations !== undefined;
+  act(() => boardDoor?.open());
+  await settle();
+
+  assert.equal(stays, true, "the automation still stands, its work unsaved");
+  assert.equal(asks.length, 2, "leaving it later still asks");
+});
+
+test("a version's link from the Board, with Descriptions off, stands its task's own place on its Overview", async () => {
+  handState(experimentsOn());
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onOpenLink(linkAt(`${ON_BILLING}/version/1`)));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();
   const asks: (() => void)[] = [];
