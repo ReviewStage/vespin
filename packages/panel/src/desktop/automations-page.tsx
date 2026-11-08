@@ -85,6 +85,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { rowMenu } from "./action-menu.js";
+import { openRunAgent } from "./automation-agent-run.js";
 import {
   AutomationEditor,
   AutomationPageSkeleton,
@@ -812,7 +813,7 @@ function RunsPage({
             shown={shown}
             mine={mine}
             now={now}
-            onOpenAgent={(agentId) => tasks.agentView.onOpen(agentId)}
+            onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
             onOpenAutomation={(automationId) =>
               door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId })
             }
@@ -1060,7 +1061,7 @@ function AutomationsPages({
       repositories={tasks.newTask.repositoriesIn(workspace?.id)}
       writes={automations}
       onBack={back}
-      onOpenAgent={(agentId) => tasks.agentView.onOpen(agentId)}
+      onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
       linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
       placeLeave={tasks.placeLeave}
       room={room}

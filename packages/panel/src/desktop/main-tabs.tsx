@@ -20,6 +20,7 @@ import {
   TOOLBAR_INSET,
   TOOLBAR_LOOK,
   Toolbar,
+  type ToolbarPlace,
   Tooltip,
   useMenu,
 } from "@repo/ui";
@@ -481,7 +482,9 @@ export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
  * task's details across the page and, pressed again, goes back to the agents
  * (`details`), as a channel's name opens its details, and whose right-click
  * is the task's own menu (`descriptionMenu`), whichever the page shows,
- * renamed where it stands while `rename` is editing; then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
+ * renamed where it stands while `rename` is editing, and led on a run's task
+ * by the path to the automation whose run made it (`trail`), as the run's
+ * agent's own page leads with it; then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
  * it: every menu there is a right-click. The window's side panel toggle
  * stands at its end (`desktop-shell.tsx`).
  */
@@ -491,8 +494,11 @@ export function TaskTopbar({
   descriptionMenu,
   rename,
   shown,
+  trail,
   actions,
 }: {
+  /** The places above the task, a run's task's alone: Automations and the automation whose run made it (`automation-agent-run.tsx`). */
+  trail?: readonly ToolbarPlace[] | undefined;
   /** The task as the list names it now, its name and status first there. */
   task: Pick<TaskSummary, "id" | "name" | "status"> | undefined;
   /** Whether the task's details stand in the column, and the press that opens or leaves them. */
@@ -526,6 +532,7 @@ export function TaskTopbar({
               }
             : undefined
         }
+        trail={trail}
         titleMenu={
           task === undefined || descriptionMenu === undefined
             ? undefined

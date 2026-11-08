@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_BOUNDS, type AgentSummary, type TasklessAgent } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  type AgentSummary,
+  type ListedAgent,
+  type TasklessAgent,
+} from "@repo/features/agent-wire";
 import {
   AUTOMATION_CALL_FAILURE,
   AUTOMATION_FOLLOW,
@@ -235,6 +240,10 @@ let runHeld = false;
 let runRefusal: (typeof AUTOMATION_CALL_FAILURE)[keyof typeof AUTOMATION_CALL_FAILURE] | undefined;
 /** Every agent whose page a run opened. */
 let agentsOpened: string[] = [];
+/** Every agent a run opened on its task, as its task and itself. */
+let agentsShown: string[] = [];
+/** Every agent the task list carries, on a task or with none; none while it is not followed. */
+let liveAgents: ListedAgent[] | undefined;
 /** Whether the account's default model reads, or answers that it could not. */
 let defaultRefused = false;
 /** How many times the model catalog was asked again. */
@@ -351,6 +360,8 @@ beforeEach(() => {
   runHeld = false;
   runRefusal = undefined;
   agentsOpened = [];
+  agentsShown = [];
+  liveAgents = undefined;
   defaultRefused = false;
   catalogReads = 0;
   catalogRefused = false;
@@ -982,6 +993,8 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
           arriveAt(`/${WORKSPACE.slug}/agent/${agentId}`, () => agentsOpened.push(agentId)),
         onClose: () => undefined,
       },
+      liveAgents,
+      onShowAgent: (taskId: string, agentId: string) => agentsShown.push(`${taskId} ${agentId}`),
       workspace: listed,
       workspaces: [PERSONAL, WORKSPACE],
     });
@@ -2525,6 +2538,28 @@ function glyphs(rows: readonly Element[]): string[] {
     return named?.slice("lucide-".length) ?? "none";
   });
 }
+
+test("a run whose agent works on a task opens the agent on its task, its tab chosen, not its own page", async () => {
+  const taskId = "0f6a2c4e-8b1d-4f3a-9c5e-7d2b4a6c8e10";
+  liveAgents = [{ ...CI_DIGEST, planId: taskId, workspaceId: WORKSPACE.id, repository: null }];
+  runs = [
+    {
+      id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+      firing: { kind: AUTOMATION_TRIGGER.SCHEDULE, dueAt: 3 },
+      status: AUTOMATION_RUN_STATUS.STARTED,
+      reason: null,
+      agent: { id: CI_DIGEST.id, title: "Fix the flaky test", status: "completed" },
+      firedAt: 3,
+      settledAt: 3,
+    },
+  ];
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+
+  act(() => runRows(page)[0]?.querySelector("button")?.click());
+  assert.deepEqual(agentsShown, [`${taskId} ${CI_DIGEST.id}`]);
+  assert.deepEqual(agentsOpened, []);
+});
 
 test("an automation's runs stand on its page's right, newest first, a run that started an agent opening it", async () => {
   runs = [

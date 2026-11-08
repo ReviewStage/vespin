@@ -186,6 +186,35 @@ test("a trail leads the heading with each place above the page, the page's own n
   assert.deepEqual(pressed, ["Workspace", "Automations"]);
 });
 
+test("a title that opens what it names ends its trail as that press, the page's heading", () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe(): void {}
+      disconnect(): void {}
+    },
+  );
+  const presses: string[] = [];
+  const banner = bar({
+    title: "Daily standup · Nov 8, 7:30",
+    titlePress: { open: false, label: "Task details", onPress: () => presses.push("details") },
+    trail: [{ label: "Automations", icon: createElement("svg"), onPress: () => undefined }],
+  });
+  const crumbs = [
+    ...(banner.querySelector("nav") ?? assert.fail("no trail")).querySelectorAll("li"),
+  ];
+
+  assert.deepEqual(
+    crumbs.map((crumb) => crumb.textContent),
+    ["Automations", "Daily standup · Nov 8, 7:30"],
+  );
+  const press =
+    crumbs.at(-1)?.querySelector<HTMLButtonElement>("h1 button") ?? assert.fail("no press");
+  assert.equal(press.getAttribute("aria-expanded"), "false");
+  act(() => press.click());
+  assert.deepEqual(presses, ["details"]);
+});
+
 test("a place not found keeps its bar, its way back pressable, above the words saying so", () => {
   let backed = false;
   const region = draw(

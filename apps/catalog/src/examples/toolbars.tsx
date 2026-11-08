@@ -11,14 +11,15 @@ import {
   TOOLBAR_LOOK,
   Toolbar,
 } from "@repo/ui";
+import { ClockIcon, GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../examples";
 import { CatalogSection } from "../section";
 
 /**
  * toolbars.tsx -- a workspace's bar with its title and actions; one whose
- * title opens what it names, filled while that stands, and renamed where it
- * stands; one led by a
+ * title opens what it names, filled while that stands, alone and ending a
+ * trail, and renamed where it stands; one led by a
  * way back, a tag after its title; one led by a control at the column's own
  * edge; a narrow bar, whose title fades where cut rather than wrapping; a
  * bar told to fold, its controls' glyphs alone; a tab strip's bar in a narrow
@@ -37,13 +38,21 @@ function NewAutomation(): React.JSX.Element {
   );
 }
 
-/** A task's bar whose name opens its details, open while pressed. */
-function TitlePressBar(): React.JSX.Element {
+/** A task's bar whose name opens its details, open while pressed, led by its trail where one is given. */
+function TitlePressBar({ trailed = false }: { trailed?: boolean }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   return (
     <Toolbar
-      title="Teammate invitations"
+      title={trailed ? "Daily standup · Nov 8, 7:30" : "Teammate invitations"}
       titlePress={{ open, label: "Task details", onPress: () => setOpen((was) => !was) }}
+      trail={
+        trailed
+          ? [
+              { label: "Automations", icon: <GLYPH.AUTOMATION />, onPress: stay },
+              { label: "Daily standup", icon: <ClockIcon />, onPress: stay },
+            ]
+          : undefined
+      }
     />
   );
 }
@@ -80,6 +89,12 @@ function Toolbars(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="toolbar-title-press" title="A title that opens what it names">
         <TitlePressBar />
+      </CatalogSection>
+      <CatalogSection
+        id="toolbar-trail-title-press"
+        title="A title that opens what it names, ending its trail"
+      >
+        <TitlePressBar trailed />
       </CatalogSection>
       <CatalogSection id="toolbar-title-edit" title="A title renamed where it stands">
         <RenamedTitleBar />

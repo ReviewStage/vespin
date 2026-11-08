@@ -104,6 +104,14 @@ import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { ArchivedAgents } from "./agent-archive.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
+import {
+  AutomationRunSteps,
+  AutomationRunStrip,
+  automationTrail,
+  openRunAgent,
+  runAgentOf,
+  useAutomationRunPlace,
+} from "./automation-agent-run.js";
 import { DesktopHome } from "./desktop-home.js";
 import {
   AgentPane,
@@ -560,6 +568,9 @@ function DescriptionDocument({
             commit: lines.commit,
           },
     );
+  // The agent a run of an automation started, on a run's task alone, whose path leads the task's bar and whose automation's runs its arrows step through (`automation-agent-run.tsx`).
+  const runAgent = runAgentOf([...(agents.agents ?? []), ...(agents.archived ?? [])]);
+  const runPlace = useAutomationRunPlace(runAgent);
   const { tab } = mainTabs;
   const home =
     opened === undefined
@@ -1326,6 +1337,11 @@ function DescriptionDocument({
                   <div className={phone ? "task-topbar" : "task-topbar contents"} hidden={phone}>
                     <TaskTopbar
                       task={listed}
+                      trail={
+                        runAgent === undefined
+                          ? undefined
+                          : automationTrail(runAgent, task.workspaceId, onOpenAutomations)
+                      }
                       // A phone's head offers the task's menu and its details itself (`TaskHead`).
                       details={
                         phone ? undefined : { shown: overviewShown, onToggle: toggleDetails }
@@ -1346,6 +1362,12 @@ function DescriptionDocument({
                               {RENAME_FAILED_NOTE}
                             </FailureNote>
                           ) : null}
+                          {runPlace === undefined ? null : (
+                            <AutomationRunSteps
+                              place={runPlace}
+                              onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
+                            />
+                          )}
                           <CopyChord copy={tasks.copy} workspaceId={task.workspaceId} />
                           {terminalDoors.terminals ? (
                             <TerminalCommands
@@ -1412,6 +1434,10 @@ function DescriptionDocument({
                         {/* The plan's banner is the whole plan's, so it stands over every
             tab of the column, and over the panel's while that fills the window. */}
                         {sidePanel.fullScreen ? null : stranded.banner}
+                        {/* A run's task says what fired the run over every tab of the column too, as its agent's own page does under its bar. */}
+                        {runPlace === undefined || runAgent === undefined ? null : (
+                          <AutomationRunStrip place={runPlace} status={runAgent.status} />
+                        )}
                         <TaskBody>
                           <FindScope
                             className="desktop-task-column"

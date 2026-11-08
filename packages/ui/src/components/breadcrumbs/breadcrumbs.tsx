@@ -53,6 +53,10 @@ import { useCrumbFold } from "./crumb-fold.js";
  * all; and a toolbar's heading, a way back then the page's name in the
  * bar title type.
  *
+ * A path may end on what its caller draws in a last crumb's place (`end`),
+ * behind its chevron: a toolbar's heading ends on the page's own name as a
+ * press that opens what it names, which no crumb's look draws.
+ *
  * A path gives way on a narrow bar first by folding: one that does not
  * fit whole folds the crumbs at its start into one "…" (`crumb-fold.ts`),
  * the last always standing, before any crumb is cut; only once nothing is
@@ -335,12 +339,15 @@ function CrumbItem({
 export function Breadcrumbs({
   label,
   crumbs,
+  end,
   variant = BREADCRUMBS_VARIANT.CAPTION,
   hint = Tooltip,
 }: {
   /** The landmark's name ("Path"). */
   label: string;
   crumbs: readonly Crumb[];
+  /** What the path ends on, drawn by the caller in a last crumb's place behind its chevron: the page's own name as a press (a toolbar's heading); none where the crumbs end it. */
+  end?: ReactNode;
   variant?: BreadcrumbsVariant;
   /** The hint raising a crumb's `hint` or hanging its `card`, and a folded way back's words: the window's tooltip, unless the caller hangs one of its own. */
   hint?: BreadcrumbHint | undefined;
@@ -395,6 +402,15 @@ export function Breadcrumbs({
             hint={hint}
           />
         ))}
+        {end === undefined ? null : (
+          <BreadcrumbItem className={LOOK[variant].wordsItem} data-words="true">
+            {shown.length === 0 ? null : (
+              <Chevron at={SHOWN_WIDTHS[BREADCRUMB_SHOWN.ALWAYS]} variant={variant} />
+            )}
+            {/* Note that the end is the page the reader stands on, so it takes the text ink, as a current crumb's words do, rather than the path's muted one its chevron keeps. */}
+            <span className="flex min-w-0 text-foreground">{end}</span>
+          </BreadcrumbItem>
+        )}
       </BreadcrumbList>
       {menu.drawn === undefined ? null : (
         <Menu

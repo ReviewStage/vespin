@@ -24,7 +24,9 @@
  *   crumbs (`Breadcrumbs`), each a press back to its place, the page's
  *   `title` last as words that are no press, said to be the page the
  *   reader stands on. A place that wears its glyph is the trail's folding
- *   way back, whose words fold away as the bar's acts do.
+ *   way back, whose words fold away as the bar's acts do. A title that
+ *   opens what it names (`titlePress`) ends the trail as that press, its
+ *   mark, card, and menu its own, as it stands where there is no trail.
  * - A title in words is renamed where it stands (`titleEdit`): while the
  *   caller says, a field over its words in their place and type, bare, the
  *   caret and the selection alone marking it, the press's mark kept before
@@ -227,7 +229,7 @@ export interface ToolbarProps {
   readonly lead?: ReactNode;
   /** The page's name, drawn as its heading on one line; a node that is more than words stands as given. */
   readonly title?: ReactNode;
-  /** Whether the title in words opens what it names (`ToolbarTitlePress`); read only where the title is words and there is no `trail`. */
+  /** Whether the title in words opens what it names (`ToolbarTitlePress`), ending the `trail` where there is one; read only where the title is words. */
   readonly titlePress?: ToolbarTitlePress | undefined;
   /** The menu a right-click, a long press, or the menu key on the title opens, in place of a ⋯ at the bar's end (`ToolbarTitleMenu`). */
   readonly titleMenu?: ToolbarTitleMenu | undefined;
@@ -403,18 +405,23 @@ function ToolbarTrail({
   trail,
   title,
   shown,
+  end,
 }: {
   trail: readonly ToolbarPlace[];
   title: string;
   shown?: boolean | undefined;
+  /** The page's name drawn as a press that opens what it names, ending the trail in place of the words. */
+  end?: ReactNode;
 }): React.JSX.Element {
   // Note that a name not yet read leaves the places alone, so the way back stands while it loads.
-  const own: Crumb[] = title === "" ? [] : [{ label: title, current: true, shown }];
+  const own: Crumb[] =
+    title === "" || end !== undefined ? [] : [{ label: title, current: true, shown }];
   return (
     <Breadcrumbs
       label={TRAIL_LABEL}
       variant={BREADCRUMBS_VARIANT.TITLE}
       crumbs={[...trail.map(placeCrumb), ...own]}
+      end={end}
     />
   );
 }
@@ -497,7 +504,21 @@ export function Toolbar({
         >
           {crumbs && typeof title === "string" && title !== "" ? (
             <ReplayMask>
-              <ToolbarTrail trail={trail} title={title} />
+              <ToolbarTrail
+                trail={trail}
+                title={title}
+                end={
+                  titlePress === undefined ? undefined : (
+                    <ToolbarTitle
+                      title={title}
+                      unmasked={titleReplayUnmasked}
+                      press={titlePress}
+                      menu={titleMenu}
+                      barType={barType}
+                    />
+                  )
+                }
+              />
             </ReplayMask>
           ) : crumbs && !said(title) && pickUp !== undefined ? (
             <ReplayMask>

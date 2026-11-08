@@ -291,6 +291,52 @@ test("a task with no agent tab draws a new agent's draft", () => {
   assert.ok(page.querySelector(".desktop-agent .agent-composer"), "the draft's composer is drawn");
 });
 
+test("a run's task leads its bar with the path to the automation whose run made it, the task's name last", () => {
+  // jsdom lacks the ResizeObserver a trail's folding place measures its fold by.
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe(): void {}
+      disconnect(): void {}
+    },
+  );
+  const agent: AgentSummary = {
+    id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
+    planId: TASK.id,
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    title: "Draft standup entry",
+    createdAt: 3,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+    automationId: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
+    automationName: "Daily standup",
+  };
+  const page = document.createElement("div");
+  page.innerHTML = markupOf(
+    windowRouter().provide(
+      withQueryClient(
+        createElement(DesktopTasks, {
+          looks: NO_LOOKS,
+          tasks: tasksControl({
+            page: TASKS_PAGE.DOCUMENT,
+            activeTaskId: TASK.id,
+            region: { kind: DOCUMENT_REGION.READY, task: TASK },
+            agents: agentsControl({ agents: [agent], agentIds: [agent.id] }),
+          }),
+        }),
+      ),
+    ),
+  );
+  vi.unstubAllGlobals();
+
+  const path = page.querySelector(".task-topbar nav[aria-label='Path']") ?? assert.fail("no trail");
+  assert.deepEqual(
+    [...path.querySelectorAll("li")].map((crumb) => crumb.textContent),
+    ["Automations", "Daily standup", TASK.name],
+  );
+});
+
 test("a wide task's details with no agent offer New agent at their head, which opens a draft as the way back to the agents does", async () => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});

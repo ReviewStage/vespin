@@ -31,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import { automationsQuery } from "../live-reads.js";
 import type { AutomationsDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 
 /**
@@ -108,6 +109,31 @@ export function automationTrail(
       onPress: () => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     },
   ];
+}
+
+/**
+ * Opens the agent of an automation's run where it works: on its task, its
+ * tab chosen, as any agent on a task opens, so the run's other agents stand
+ * beside it as tabs; on its own page where it has no task, or where the
+ * window does not list it.
+ */
+export function openRunAgent(
+  tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,
+  agentId: string,
+): void {
+  const planId = tasks.liveAgents?.find((each) => each.id === agentId)?.planId ?? null;
+  if (planId === null) tasks.agentView.onOpen(agentId);
+  else tasks.onShowAgent(planId, agentId);
+}
+
+/** The agent an automation's run started on its task: the first started of the task's agents a run names, archived ones among them; none on a task no run made. */
+export function runAgentOf(agents: readonly AgentSummary[]): AgentSummary | undefined {
+  return agents
+    .filter((agent) => automationRun(agent)?.name !== undefined)
+    .reduce<AgentSummary | undefined>(
+      (first, agent) => (first === undefined || agent.createdAt < first.createdAt ? agent : first),
+      undefined,
+    );
 }
 
 /** Where the page's agent's run stands among its automation's runs, followed live; none for an agent no automation started, or while its run is not read. */

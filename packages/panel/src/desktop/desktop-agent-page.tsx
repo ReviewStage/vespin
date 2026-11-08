@@ -100,6 +100,7 @@ import {
   AutomationRunSteps,
   AutomationRunStrip,
   automationTrail,
+  openRunAgent,
   useAutomationRunPlace,
 } from "./automation-agent-run.js";
 import { AgentPane } from "./main-tabs.js";
@@ -810,7 +811,7 @@ function DesktopAgentPage({
         trail={automationTrail(agent, workspaceId, onOpenAutomations) ?? slackTrail(agent)}
         steps={
           runPlace === undefined ? null : (
-            <AutomationRunSteps place={runPlace} onOpenAgent={tasks.agentView.onOpen} />
+            <AutomationRunSteps place={runPlace} onOpenAgent={(id) => openRunAgent(tasks, id)} />
           )
         }
       />
