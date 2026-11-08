@@ -15,7 +15,8 @@ import { CatalogSection } from "../section";
  * rest with the way in taken last filled and wearing its pill, and pending,
  * the pressed one named for its wait while the other stands back. A press
  * begins the wait and a second press of the waited one is refused, so the
- * example is pressed through as a sign-in is. Setup's GitHub step names
+ * example is pressed through as a sign-in is; the gate's waited one offers
+ * Cancel at its trailing edge, which takes the wait back. Setup's GitHub step names
  * its own act, "Install on GitHub", in place of "Continue with GitHub".
  */
 
@@ -55,6 +56,11 @@ function Choices({
             busy={pending === provider}
             busyLabel={PENDING_LABEL[size](name)}
             disabled={pending !== undefined && pending !== provider}
+            cancel={
+              size === PROVIDER_BUTTON_SIZE.GATE
+                ? { label: "Cancel", onPress: () => setPending(undefined) }
+                : undefined
+            }
             onPress={() => setPending(provider)}
           />
         ))}
