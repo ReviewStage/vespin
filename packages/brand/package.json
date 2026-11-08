@@ -6,6 +6,7 @@
   "description": "The brand: the design sources, the generators, and the generated art, motion tokens, and geometry",
   "exports": {
     ".": "./src/index.js",
+    "./palette": "./src/generated/brand-palette.ts",
     "./assets-directory": "./scripts/assets-directory.mjs",
     "./dmg-window": "./scripts/dmg-window.mjs"
   },

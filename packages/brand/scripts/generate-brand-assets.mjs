@@ -229,6 +229,53 @@ const ICON_GRID = { canvas: 1024, tile: 824, radius: 185.4 };
   }
 }
 
+// iOS app icon, an Icon Composer bundle (`Vespin.icon`) that iOS 26 and later
+// draw in Liquid Glass: light, dark, clear, and tinted from the one layer. The
+// bundle holds the mark alone, white and full canvas, on the grid's 1024
+// units with the disc at ICON_MARK of them; the tile is the bundle's fill,
+// which the system rounds itself, so no corner is drawn here. Each mode's
+// tile and ink are TILES', and the clear and tinted looks are the system's
+// own from the layer's shape.
+const IOS_ICON = { canvas: 1024, name: "ios/Vespin.icon" };
+const iosColor = (hex) => {
+  const [r, g, b] = [1, 3, 5].map(
+    (i) => Math.round((Number.parseInt(hex.slice(i, i + 2), 16) / 255) * 1e4) / 1e4,
+  );
+  return `srgb:${r},${g},${b},1`;
+};
+{
+  const disc = IOS_ICON.canvas * ICON_MARK;
+  const at = (IOS_ICON.canvas - disc) / 2;
+  emit(
+    `${IOS_ICON.name}/Assets/mark.svg`,
+    `${svgOpen(IOS_ICON.canvas, IOS_ICON.canvas)}${markAt(at, at, disc, "#ffffff")}</svg>`,
+    `${PRODUCT_NAME} mark`,
+  );
+  const solid = (hex) => ({ solid: iosColor(hex) });
+  const icon = {
+    fill: solid(TILES.light.tile),
+    "fill-specializations": [{ appearance: "dark", value: solid(TILES.dark.tile) }],
+    groups: [
+      {
+        layers: [
+          {
+            "image-name": "mark.svg",
+            name: "mark",
+            glass: true,
+            fill: solid(TILES.light.ink),
+            "fill-specializations": [{ appearance: "dark", value: solid(TILES.dark.ink) }],
+          },
+        ],
+        shadow: { kind: "neutral", opacity: 0.5 },
+        translucency: { enabled: true, value: 0.5 },
+      },
+    ],
+    "supported-platforms": { squares: "shared" },
+  };
+  put(join(OUT, IOS_ICON.name, "icon.json"), `${JSON.stringify(icon, null, 2)}\n`);
+  written.push(`${IOS_ICON.name}/icon.json`);
+}
+
 // Web app icon: the dark mode's tile, full bleed, for the platform to round
 // or mask itself, the disc spanning ICON_MARK of it. The site's
 // apple-touch-icon and its manifest's icons, as is and maskable, are cut from
