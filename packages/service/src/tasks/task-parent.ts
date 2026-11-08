@@ -10,13 +10,17 @@
  * is unreached too. A child works in its parent's repository, and a create
  * that names another repository is refused rather than overruled, so nothing is made somewhere
  * its maker did not ask; the refusals are the store's own, which a parent
- * set after creation (`setTaskParent`) answers too. It also hands back the parent's assignee, which a
- * create that names none gives its child, or none where that member has left
- * the workspace. Nesting has no bound.
+ * set after creation (`setTaskParent`) answers too. It also hands back the
+ * assignee a create that names none gives its child: the parent's assignee
+ * where the maker is that assignee, or where every child the parent already
+ * has is theirs too, and otherwise no one, as it is none where that member
+ * has left the workspace.
+ * Nesting has no bound.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
+  readChildAssignees,
   readTaskHeader,
   TaskParentRepositoryDiffers,
   TaskParentUnreached,
@@ -30,9 +34,30 @@ import { Effect, Option } from "effect";
 export interface TaskParent {
   readonly id: string;
   readonly repository: string | null;
-  /** The parent's assignee while still a member of the workspace; null for none. */
+  /** The assignee a child that names none takes from its parent; null for none. */
   readonly assigneeId: string | null;
 }
+
+/**
+ * The assignee a child of `parentTaskId` made by `userId` takes when it names
+ * none: the parent's, where the maker holds the parent or every child already
+ * under it is the parent assignee's, and otherwise no one, so a child added to
+ * a parent whose work is spread across members is not handed to whoever
+ * holds the parent.
+ */
+const inheritedAssignee = Effect.fnUntraced(function* (
+  userId: string,
+  workspaceId: string,
+  parentTaskId: string,
+  assigneeId: string | null,
+): Effect.fn.Return<string | null, TaskStoreFailure, DatabaseServices> {
+  if (assigneeId === null) return null;
+  const held =
+    assigneeId === userId ||
+    (yield* readChildAssignees(parentTaskId)).every((each) => each === assigneeId);
+  // Note that a member who has left is dropped rather than refused, since the store would refuse the child for them.
+  return held && (yield* isWorkspaceMember(assigneeId, workspaceId)) ? assigneeId : null;
+});
 
 /**
  * The parent a child is made under in `workspaceId`, as `userId` reaches it,
@@ -57,9 +82,14 @@ export const taskParentOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (repositoryAsked !== undefined && !sameRepository(repositoryAsked, repository)) {
     return yield* new TaskParentRepositoryDiffers({ repository });
   }
-  // Note that a member who has left is dropped rather than refused, since the store would refuse the child for them.
-  const { assigneeId } = header.value;
-  const assignable =
-    assigneeId !== null && (yield* isWorkspaceMember(assigneeId, workspaceId)) ? assigneeId : null;
-  return { id: parentTaskId, repository, assigneeId: assignable };
+  return {
+    id: parentTaskId,
+    repository,
+    assigneeId: yield* inheritedAssignee(
+      userId,
+      workspaceId,
+      parentTaskId,
+      header.value.assigneeId,
+    ),
+  };
 });

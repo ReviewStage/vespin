@@ -307,8 +307,9 @@ export interface TaskCreated extends TaskStartCommitted {
  * Makes the task `userId` asked for, the make every door shares, each door
  * holding who may ask for what first. A child, by `parentTaskId` or a
  * sub-task relation, takes its parent's repository and, where it names no
- * assignee, its parent's (`taskParentOf`); a parent of others takes theirs
- * (`relationsAsked`); a repository is reached as the workspace reaches it.
+ * assignee, its parent's on the terms `taskParentOf` sets; a parent of others
+ * takes theirs (`relationsAsked`); a repository is reached as the workspace
+ * reaches it.
  * The task, its description's first revision, and every relation are one write
  * (`createTaskRelated`). A make under an id that made its task answers it,
  * unmade, and counts none.

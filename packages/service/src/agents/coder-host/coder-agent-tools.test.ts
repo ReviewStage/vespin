@@ -4092,7 +4092,7 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
     filed.assignee,
   );
 
-  // A child made with no assignee named takes its parent's; a null names no one.
+  // A child made with no assignee named takes its parent's while its siblings share it, or the caller holds the parent; a null names no one.
   const childAssignee = async (input: { assignee?: null; parentTaskId?: string }, key: string) => {
     const child = taskOf(
       await call(AGENT_TOOL.CREATE_TASK, { name: key, parentTaskId: filed.id, ...input }, key),
@@ -4103,6 +4103,13 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   };
   assert.equal(await childAssignee({}, "child-inherits"), teammates.userId);
   assert.equal(await childAssignee({ assignee: null }, "child-unassigned"), undefined);
+  assert.equal(await childAssignee({}, "child-mixed"), undefined);
+  await call(
+    AGENT_TOOL.UPDATE_TASK,
+    { taskId: filed.id, assignee: personLink(caller.userId) },
+    "call-take",
+  );
+  assert.equal(await childAssignee({}, "child-held"), caller.userId);
 
   const cleared = await call(
     AGENT_TOOL.UPDATE_TASK,

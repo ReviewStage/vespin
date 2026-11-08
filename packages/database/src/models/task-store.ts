@@ -1053,6 +1053,19 @@ const hasChildren = SqlSchema.findOneOption({
     ),
 });
 
+/** The members this task's children are assigned to, each once, null among them where a child is assigned to no one. */
+const findChildAssignees = SqlSchema.findAll({
+  Request: Schema.Struct({ taskId: Schema.String }),
+  Result: Schema.Struct({ assigneeId: Schema.NullOr(Schema.String) }),
+  execute: ({ taskId }) =>
+    Database.use((db) =>
+      db
+        .selectDistinct({ assigneeId: task.assigneeId })
+        .from(task)
+        .where(eq(task.parentTaskId, taskId)),
+    ),
+});
+
 /**
  * Refuses a change that names another repository for a task in a tree: one
  * with a parent, or with children, works in its tree's repository, so only
@@ -1535,6 +1548,11 @@ export function readTaskHeaders(
         ]),
       ),
   );
+}
+
+/** The members a task's children are assigned to, each once, null among them for a child assigned to no one; empty for a task with none. */
+export function readChildAssignees(taskId: string): TaskStoreEffect<readonly (string | null)[]> {
+  return Effect.map(findChildAssignees({ taskId }), (rows) => rows.map((row) => row.assigneeId));
 }
 
 /**
