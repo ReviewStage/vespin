@@ -714,6 +714,50 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
+    "an agent that opened a pull request before its newest names the older one while it stands open and its newest merged, as the plan's row does, live as held",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const { queued: _, ...published } = PUBLISHED;
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        const read = { at: 0, branch: "agent/first", pushed: true };
+        yield* recordAgentPublished(
+          owner,
+          agent.id,
+          { ...published, number: 41, url: "https://github.com/acme/relay/pull/41" },
+          read,
+        );
+        yield* recordAgentPublished(
+          owner,
+          agent.id,
+          {
+            ...published,
+            number: 42,
+            url: "https://github.com/acme/relay/pull/42",
+            state: PULL_REQUEST_STATE.MERGED,
+          },
+          { ...read, branch: "agent/second" },
+        );
+
+        const rows = yield* liveRowsOf(owner);
+        const every = taskPullRequestsOfLiveRows(rows).find((each) => each.taskId === plan.id);
+        assert.deepEqual(
+          every?.pullRequests.map((each) => [each.number, each.state]),
+          [
+            [41, PULL_REQUEST_STATE.OPEN],
+            [42, PULL_REQUEST_STATE.MERGED],
+          ],
+        );
+        assert.deepEqual(
+          agentPullRequestsOfLiveRows(rows).map((each) => each.pullRequest.number),
+          [41],
+        );
+        assert.deepEqual(yield* liveListOf(owner, NOW), yield* heldListOf(owner, NOW));
+      }),
+  );
+
+  it.effect(
     "a task's pilot says it is one, as the held read reads it, while a coder does not",
     () =>
       Effect.gen(function* () {

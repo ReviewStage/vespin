@@ -1175,6 +1175,35 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
   );
 
   it.effect(
+    "waits on a pull request an agent opened before its newest, the newest merged, until the older merged too",
+    () =>
+      Effect.gen(function* () {
+        const { dean, taskId, workspace } = yield* openSharedTask;
+        const agent = yield* openTaskAgent(dean, workspace, taskId);
+        const older = {
+          ...pullRequestIn(PULL_REQUEST_STATE.OPEN),
+          number: 41,
+          url: "https://github.com/acme/api/pull/41",
+        };
+        yield* recordAgentPublished(dean, agent, older, {
+          at: 0,
+          branch: "agent/first",
+          pushed: true,
+        });
+        const second = { at: 1, branch: "agent/second", pushed: true };
+        yield* recordAgentPublished(dean, agent, pullRequestIn(PULL_REQUEST_STATE.MERGED), second);
+        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
+
+        // The older one read again as merged beside the newest: the work is finished.
+        const merged = { ...older, state: PULL_REQUEST_STATE.MERGED };
+        yield* recordAgentPublished(dean, agent, pullRequestIn(PULL_REQUEST_STATE.MERGED), second, [
+          merged,
+        ]);
+        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), true);
+      }),
+  );
+
+  it.effect(
     "leaves a settled task, and one of a workspace the account is not in, as they stand",
     () =>
       Effect.gen(function* () {

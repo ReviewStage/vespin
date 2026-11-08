@@ -73,9 +73,27 @@ it.layer(getTestDB())("the repositories an agent works in", (it) => {
       ]);
 
       assert.deepEqual(yield* readAgentRepositories(userId, agentId), [
-        { repository: "acme/api", baseBranch: "release", headBranch: null, pullRequest: null },
-        { repository: "acme/web", baseBranch: null, headBranch: null, pullRequest: null },
-        { repository: "acme/docs", baseBranch: "next", headBranch: null, pullRequest: null },
+        {
+          repository: "acme/api",
+          baseBranch: "release",
+          headBranch: null,
+          pullRequest: null,
+          earlierPullRequests: [],
+        },
+        {
+          repository: "acme/web",
+          baseBranch: null,
+          headBranch: null,
+          pullRequest: null,
+          earlierPullRequests: [],
+        },
+        {
+          repository: "acme/docs",
+          baseBranch: "next",
+          headBranch: null,
+          pullRequest: null,
+          earlierPullRequests: [],
+        },
       ]);
     }),
   );
@@ -88,7 +106,13 @@ it.layer(getTestDB())("the repositories an agent works in", (it) => {
       const inNone = yield* startedIn(userId, workspace, null);
 
       assert.deepEqual(yield* readAgentRepositories(userId, inOne), [
-        { repository: "acme/api", baseBranch: "release", headBranch: null, pullRequest: null },
+        {
+          repository: "acme/api",
+          baseBranch: "release",
+          headBranch: null,
+          pullRequest: null,
+          earlierPullRequests: [],
+        },
       ]);
       assert.deepEqual(yield* readAgentRepositories(userId, inNone), []);
       assert.deepEqual([...(yield* extraRows(inOne)), ...(yield* extraRows(inNone))], []);
@@ -154,9 +178,27 @@ it.layer(getTestDB())("the repositories an agent works in", (it) => {
           Result.fail(APPEND_REFUSAL.UNREACHED),
         ]);
         assert.deepEqual(yield* readAgentRepositories(owner, agentId), [
-          { repository: "acme/api", baseBranch: "release", headBranch: null, pullRequest: null },
-          { repository: "acme/web", baseBranch: null, headBranch: null, pullRequest: null },
-          { repository: "acme/docs", baseBranch: "next", headBranch: null, pullRequest: null },
+          {
+            repository: "acme/api",
+            baseBranch: "release",
+            headBranch: null,
+            pullRequest: null,
+            earlierPullRequests: [],
+          },
+          {
+            repository: "acme/web",
+            baseBranch: null,
+            headBranch: null,
+            pullRequest: null,
+            earlierPullRequests: [],
+          },
+          {
+            repository: "acme/docs",
+            baseBranch: "next",
+            headBranch: null,
+            pullRequest: null,
+            earlierPullRequests: [],
+          },
         ]);
         assert.equal((yield* readAgentRepositories(owner, full)).length, 10);
       }),

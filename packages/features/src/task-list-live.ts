@@ -5,6 +5,7 @@ import {
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentArchivedBy,
+  type AgentPullRequest,
   type AgentStatus,
   type AgentSummary,
   type AgentTurn,
@@ -35,7 +36,7 @@ import { LIVE_USER_QUERY } from "./live-wire.js";
 import { readMarkOf } from "./read-mark.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
-import { standingFailures } from "./task-agents-model.js";
+import { agentMarkedPullRequest, standingFailures } from "./task-agents-model.js";
 import {
   DESCRIPTION_ACTOR,
   type ListedPullRequest,
@@ -160,6 +161,12 @@ const agentLiveRowSchema = EffectSchema.Struct({
   archiverName: EffectSchema.NullOr(EffectSchema.String),
   disabledServers: EffectSchema.NullOr(EffectSchema.Array(EffectSchema.String)),
   published: EffectSchema.NullOr(agentPullRequestSchema),
+  /** The pull requests the agent opened before `published`, newest left first; null before a second opened, and absent from a statement before they were carried. */
+  earlierPublished: EffectSchema.optionalKey(
+    EffectSchema.NullOr(
+      EffectSchema.Array(EffectSchema.Struct({ pullRequest: agentPullRequestSchema })),
+    ),
+  ),
   /** The agent this one continues or forks, as its summary's `from` says it. */
   startedFrom: EffectSchema.NullOr(agentSummarySchema.fields.from.schema),
   /** What outside the app the agent was started from, as its summary's `source` says it; absent from a statement before it was carried. */
@@ -314,6 +321,22 @@ function newestStarted(a: AgentLiveRow, b: AgentLiveRow): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/** The pull requests the agent's row keeps it opened before its newest, newest left first. */
+function earlierOfRow(row: AgentLiveRow): readonly AgentPullRequest[] {
+  return (row.earlierPublished ?? []).map((each) => each.pullRequest);
+}
+
+/** Every pull request the agent's row keeps, its newest first, then those it opened before. */
+function pullRequestsOfRow(row: AgentLiveRow): readonly AgentPullRequest[] {
+  const earlier = earlierOfRow(row);
+  return row.published === null ? earlier : [row.published, ...earlier];
+}
+
+/** The one pull request the agent's row names (`agentMarkedPullRequest`); null where it opened none. */
+function markedOfRow(row: AgentLiveRow): AgentPullRequest | null {
+  return agentMarkedPullRequest(row.published, earlierOfRow(row)) ?? null;
+}
+
 /**
  * Every pull request a plan's agents opened, the archived agents' left out,
  * each once by its page: those still open first, the newest agent's first
@@ -322,21 +345,22 @@ function newestStarted(a: AgentLiveRow, b: AgentLiveRow): number {
 function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly TaskPullRequestLine[] {
   const pullRequests = new Map<string, TaskPullRequestLine>();
   for (const row of rows.filter((each) => each.archivedAt === null).toSorted(newestStarted)) {
-    const { published } = row;
-    if (published === null || pullRequests.has(published.url)) continue;
-    const { number, title, state, checks, additions, deletions, url } = published;
-    pullRequests.set(url, {
-      number,
-      title,
-      state,
-      checks,
-      additions,
-      deletions,
-      url,
-      agentId: row.id,
-      ...(published.queued === true ? { queued: true } : undefined),
-      ...pullRequestAuthorOf(published),
-    });
+    for (const published of pullRequestsOfRow(row)) {
+      if (pullRequests.has(published.url)) continue;
+      const { number, title, state, checks, additions, deletions, url } = published;
+      pullRequests.set(url, {
+        number,
+        title,
+        state,
+        checks,
+        additions,
+        deletions,
+        url,
+        agentId: row.id,
+        ...(published.queued === true ? { queued: true } : undefined),
+        ...pullRequestAuthorOf(published),
+      });
+    }
   }
   return [...pullRequests.values()].toSorted(
     (a, b) => PULL_REQUEST_RANK[a.state] - PULL_REQUEST_RANK[b.state],
@@ -551,7 +575,7 @@ function tasklessAgentOf(
       ? undefined
       : { pinPosition: row.pinPosition }),
     ...readMarkOf(row),
-    ...pullRequestOf(row.published),
+    ...pullRequestOf(markedOfRow(row)),
   };
 }
 
@@ -611,11 +635,10 @@ function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   return pinPosition === null ? at : { ...at, pinPosition };
 }
 
-/** The pull request an agent's row keeps, as the service last read it on GitHub; none where it opened none. */
+/** The pull request an agent's row names of those it keeps (`agentMarkedPullRequest`), as the service last read it on GitHub; none where it opened none. */
 function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
-  return row.published === null
-    ? undefined
-    : { agentId: row.id, taskId: row.planId, pullRequest: row.published };
+  const marked = markedOfRow(row);
+  return marked === null ? undefined : { agentId: row.id, taskId: row.planId, pullRequest: marked };
 }
 
 /** Whether two lists hold the very same objects in one order. */

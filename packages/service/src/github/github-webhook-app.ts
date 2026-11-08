@@ -4,7 +4,10 @@ import {
   GITHUB_INSTALLATION_STATUS,
   type GitHubInstallationStatus,
 } from "@repo/database/github-installation-vocabulary";
-import { listAgentsOnBranches } from "@repo/database/models/agent-store";
+import {
+  listAgentsOnBranches,
+  listAgentsOnEarlierBranches,
+} from "@repo/database/models/agent-store";
 import {
   noteGitHubRepository,
   type RepositorySighting,
@@ -54,7 +57,8 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * its event, its action, the repository's id and full name, and the branches it
  * names are read, and none of them is logged: the branch finds the
  * agents whose rows stand on it, of whichever account, by their own
- * repository or one they work in beside it, and what each
+ * repository or one they work in beside it, and those that opened a pull
+ * request from it before their newest, and what each
  * published is read again from GitHub on its owner's own token, exactly as
  * the agent's tab reads it (`packages/service/src/agents/coder-host/published.ts`), which writes
  * it on the agent's row for the task list. A delivery is therefore
@@ -350,7 +354,7 @@ function revokedAuthorization(payload: UnparsedWireValue): number | undefined {
   return read.success.sender.id;
 }
 
-/** What the agents on the target's branches published, read again on each owner's token; answers how many reads landed. */
+/** What the agents on the target's branches published, and those that opened a pull request from one before their newest, read again on each owner's token, each once; answers how many reads landed. */
 const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgain")(function* (
   target: DeliveryTarget,
 ): Effect.fn.Return<
@@ -358,8 +362,15 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
   HostedRefusal,
   DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
-  const agents = yield* hostedStoreOrUnavailable(
-    listAgentsOnBranches(target.repository, target.branches, MAXIMUM_AGENTS_PER_DELIVERY),
+  const [onBranches, onEarlier] = yield* hostedStoreOrUnavailable(
+    Effect.all([
+      listAgentsOnBranches(target.repository, target.branches, MAXIMUM_AGENTS_PER_DELIVERY),
+      listAgentsOnEarlierBranches(target.repository, target.branches, MAXIMUM_AGENTS_PER_DELIVERY),
+    ]),
+  );
+  // Note that one read of an agent reads every pull request of it, so an agent found twice is read once.
+  const agents = [...onBranches, ...onEarlier].filter(
+    ({ agent }, at, all) => all.findIndex((each) => each.agent.id === agent.id) === at,
   );
   const landed = yield* Effect.forEach(
     agents,

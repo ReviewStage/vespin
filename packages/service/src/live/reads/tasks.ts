@@ -59,7 +59,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * reader's own pin and read mark and the owner's name, and the agents with their newest
  * turn, the pilot that started each where one did, when the newest line
  * of the developer's awaiting its turn was written and whether that turn's session ended, when the newest turn to end
- * ended, what each last published, the harness its conversation runs on, the
+ * ended, what each last published and every pull request it opened before, the harness its conversation runs on, the
  * Mac a local one runs on, and the names of the members each names. A third, the issues
  * the plans linked, answers no rows now that a plan links none, and stands
  * because a released desktop follows it. Every column stands
@@ -202,6 +202,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         archiverName: outerJoined(archiver.name),
         disabledServers: agentTable.disabledServers,
         published: agentTable.published,
+        earlierPublished: agentTable.earlierPublished,
         startedFrom: agentTable.startedFrom,
         source: agentTable.source,
         runtime: conversations.runtime,

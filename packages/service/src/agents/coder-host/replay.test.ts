@@ -84,8 +84,20 @@ const startFrom = (total: number, extras: StartFrom["told"]["extras"] = []): Sta
 it("a source in other repositories beside its own is told to have left its unpushed work there behind, with the branch it pushed in one", () => {
   const preamble = replayOf(
     startFrom(1, [
-      { repository: "acme/web", baseBranch: null, headBranch: "agent/invite", pullRequest: null },
-      { repository: "acme/docs", baseBranch: "next", headBranch: null, pullRequest: null },
+      {
+        repository: "acme/web",
+        baseBranch: null,
+        headBranch: "agent/invite",
+        pullRequest: null,
+        earlierPullRequests: [],
+      },
+      {
+        repository: "acme/docs",
+        baseBranch: "next",
+        headBranch: null,
+        pullRequest: null,
+        earlierPullRequests: [],
+      },
     ]),
     [],
     undefined,
@@ -99,7 +111,13 @@ it("a source in other repositories beside its own is told to have left its unpus
 
 it("a source handed in its stopped sandbox's snapshot is told to stand in the new agent's own checkout, its other repositories with it, and a fork to move off its branch before committing", () => {
   const from = startFrom(1, [
-    { repository: "acme/web", baseBranch: null, headBranch: "agent/invite", pullRequest: null },
+    {
+      repository: "acme/web",
+      baseBranch: null,
+      headBranch: "agent/invite",
+      pullRequest: null,
+      earlierPullRequests: [],
+    },
   ]);
   const onSnapshot = (inPullRequest: boolean) =>
     replayOf(

@@ -57,9 +57,9 @@ const PULL_REQUEST_ORDER = [
 ] as const;
 
 /** The pull request a task's status names: the first of the earliest state in `PULL_REQUEST_ORDER`. */
-function markedPullRequest(
-  pullRequests: readonly TaskPullRequestLine[],
-): TaskPullRequestLine | undefined {
+function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state">>(
+  pullRequests: readonly PullRequest[],
+): PullRequest | undefined {
   for (const states of PULL_REQUEST_ORDER) {
     const found = pullRequests.find((each) => states.has(each.state));
     if (found !== undefined) return found;
@@ -130,6 +130,20 @@ export function pullRequestsOfTask(
   taskId: string,
 ): readonly TaskPullRequestLine[] {
   return listed?.find((each) => each.taskId === taskId)?.pullRequests ?? [];
+}
+
+/**
+ * The one pull request an agent's own row names of every one it opened: its
+ * newest, `published`, unless one it opened before (`earlier`) stands earlier
+ * in `PULL_REQUEST_ORDER`, as its task's status picks among its agents', so
+ * an agent whose newest merged while an older one waits names the one that
+ * waits, as its task does; none where it opened none.
+ */
+export function agentMarkedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state">>(
+  published: PullRequest | null | undefined,
+  earlier: readonly PullRequest[],
+): PullRequest | undefined {
+  return markedPullRequest(published == null ? earlier : [published, ...earlier]);
 }
 
 /** The one status a task's row wears for what its agents are doing and what they published, its pull requests every one it opened (`pullRequestsOfTask`). */

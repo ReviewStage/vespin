@@ -67,6 +67,13 @@ import { task } from "./task.js";
  * `published_read` is when that read was (`StoredPublishedRead`), which lets
  * a tab's read answer from the row rather than GitHub; null before one, for
  * a write that names none, and once a change to the pull request lets it go.
+ * `earlier_published` is every pull request the agent opened in its own
+ * repository before the one `published` keeps, newest left first
+ * (`StoredEarlierPullRequest`): a read that finds another pull request than
+ * the row kept moves the kept one here rather than dropping it, and each
+ * read again of the agent reads the open and draft ones here again, so the
+ * task's finish (`task-store.ts`'s `finishTaskWork`) and its pull requests'
+ * chip wait on every one of them; null before an agent opened a second.
  * `archived_at` is when the developer put the agent away, which leaves it
  * out of every list but the one that asks for archived agents, and null
  * while it stands; its conversation and pull request are kept either way.
@@ -231,6 +238,17 @@ export interface StoredPullRequest extends AgentPullRequest {
 }
 
 /**
+ * A pull request an agent opened before the one it keeps now
+ * (`earlier_published`): the branch it was opened from as the read that
+ * kept it stood on, null where that read is unknown, and the pull request as
+ * GitHub last answered, in the shape `published` keeps it.
+ */
+export interface StoredEarlierPullRequest {
+  readonly branch: string | null;
+  readonly pullRequest: StoredPullRequest;
+}
+
+/**
  * The read of GitHub that wrote an agent's `published`: when it was, in
  * epoch millis, the branch the row stood on as it read, and whether GitHub
  * held that branch, a pull request from it or the branch pushed alone. What
@@ -305,6 +323,8 @@ export const agentTable = pgTable(
     published: jsonb("published").$type<StoredPullRequest>(),
     /** When the read that wrote `published` was, and of which branch; null before one, and once a change lets it go. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
+    /** The pull requests the agent opened before the one `published` keeps, newest left first; null before a second opened. */
+    earlierPublished: jsonb("earlier_published").$type<readonly StoredEarlierPullRequest[]>(),
     /** When the developer archived the agent; null while it is not. */
     archivedAt: timestamptz("archived_at"),
     /** Who archived the agent, and why; null while it is not, and for an archive no one was recorded for. */
@@ -387,6 +407,11 @@ export const agentTable = pgTable(
     index("agent_on_branch")
       .on(sql`lower(${table.repository})`, table.branch)
       .where(sql`${table.branch} is not null`),
+    // The same deliveries find an agent on the branch of a pull request it opened before its
+    // newest (`listAgentsOnBranches`), by containment in the list it keeps them in.
+    index("agent_on_earlier_branch")
+      .using("gin", sql`${table.earlierPublished} jsonb_path_ops`)
+      .where(sql`${table.earlierPublished} is not null`),
   ],
 );
 

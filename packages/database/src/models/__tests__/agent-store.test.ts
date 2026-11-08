@@ -65,6 +65,7 @@ import {
   lineSendersOf,
   listAgentLines,
   listAgentsOnBranches,
+  listAgentsOnEarlierBranches,
   listAgentsOnPullRequest,
   listPublishedAgents,
   listPublishedAgentsById,
@@ -1387,6 +1388,31 @@ it.layer(getTestDB())("the coding-agent store's agents on a branch", (it) => {
           numbered.map(({ agent, on }) => [agent.id, on.extra]),
           [[beside.agentId, true]],
         );
+
+        // A newer pull request from another branch leaves the older one's branch finding the agent among those it opened before.
+        assert.deepEqual(yield* listAgentsOnEarlierBranches("acme/api", ["agent/invite"], 10), []);
+        yield* recordAgentRepositoryPublished(
+          dean,
+          beside.agentId,
+          "acme/api",
+          {
+            number: 13,
+            title: "Invite emails",
+            url: "https://github.com/acme/api/pull/13",
+            state: PULL_REQUEST_STATE.OPEN,
+            checks: CHECK_SUMMARY.PASSING,
+            additions: 1,
+            deletions: 0,
+            changedFiles: 1,
+          },
+          { at: 1, branch: "agent/emails", pushed: true },
+        );
+        const earlier = yield* listAgentsOnEarlierBranches("Acme/API", ["agent/invite"], 10);
+        assert.deepEqual(
+          earlier.map(({ agent, on }) => [agent.id, on.extra]),
+          [[beside.agentId, true]],
+        );
+        assert.deepEqual(yield* listAgentsOnEarlierBranches("acme/api", ["agent/emails"], 10), []);
       }),
   );
 });

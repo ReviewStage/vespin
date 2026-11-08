@@ -22,7 +22,7 @@ import {
   pullRequestAuthorOf,
   type TasklessAgent,
 } from "@repo/features/agent-wire";
-import { standingFailures } from "@repo/features/task-agents-model";
+import { agentMarkedPullRequest, standingFailures } from "@repo/features/task-agents-model";
 import {
   type HeldTaskSummary,
   RELEASED_CLIENT_TASK_LINES,
@@ -67,6 +67,7 @@ interface ReadAgent {
   readonly activityAt: number;
   readonly archived: boolean;
   readonly published: PublishedAgentLine["published"];
+  readonly earlier: PublishedAgentLine["earlier"];
 }
 
 /** One agent as its row names it, its status read at `now`: since its run began while it works, since its newest turn ended once it has; its starter named by `names`, and left unnamed once their account is gone. */
@@ -101,6 +102,7 @@ function agentLine(
     activityAt: agentActivityAt(lastSettledAt, agent),
     archived: agent.archivedAt !== null,
     published: held.published,
+    earlier: held.earlier,
   };
 }
 
@@ -117,7 +119,8 @@ const PULL_REQUEST_RANK = {
  * newest started first within each; the pull requests each named once by
  * their page, since two agents on one branch share theirs and a task whose
  * repository changed may hold two of one number, those still open first, then
- * merged, then closed, newest agent's first within each, so the few a released
+ * merged, then closed, newest agent's first within each and an agent's newest
+ * before those it opened earlier, so the few a released
  * client's row names always hold the one its mark is drawn for; and the
  * latest settled activity of every agent, named or not and archived or not,
  * which the plan's last update is read beside; and how many agents failed
@@ -134,21 +137,23 @@ function summaryOf(read: readonly ReadAgent[]): NonNullable<HeldTaskSummary["age
   const working = newest.filter((agent) => WORKING_STATUSES.has(agent.line.status));
   const resting = newest.filter((agent) => !WORKING_STATUSES.has(agent.line.status));
   const pullRequests = new Map<string, TaskPullRequestLine>();
-  for (const { published, line } of newest) {
-    if (published === null || pullRequests.has(published.url)) continue;
-    const { number, title, state, checks, additions, deletions, url } = published;
-    pullRequests.set(url, {
-      number,
-      title,
-      state,
-      checks,
-      additions,
-      deletions,
-      url,
-      agentId: line.id,
-      ...(published.queued === true ? { queued: true } : undefined),
-      ...pullRequestAuthorOf(published),
-    });
+  for (const { published, earlier, line } of newest) {
+    for (const each of published === null ? earlier : [published, ...earlier]) {
+      if (pullRequests.has(each.url)) continue;
+      const { number, title, state, checks, additions, deletions, url } = each;
+      pullRequests.set(url, {
+        number,
+        title,
+        state,
+        checks,
+        additions,
+        deletions,
+        url,
+        agentId: line.id,
+        ...(each.queued === true ? { queued: true } : undefined),
+        ...pullRequestAuthorOf(each),
+      });
+    }
   }
   return {
     total: agents.length,
@@ -239,12 +244,17 @@ export function listTasklessAgents(
 ): AgentStoreEffect<readonly TasklessAgent[]> {
   return Effect.gen(function* () {
     const agents = yield* listTasklessAgentRows(userId, options);
-    // What each published, as a task's row carries its agents' pull requests.
+    // What each published, the one its row names of every one it opened (`agentMarkedPullRequest`), as a task's row picks among its agents'.
     const held = yield* listPublishedAgentsById(
       userId,
       agents.map((agent) => agent.id),
     );
-    const published = new Map(held.map(({ agent, published }) => [agent.id, published]));
+    const marked = new Map(
+      held.map(({ agent, published, earlier }) => [
+        agent.id,
+        agentMarkedPullRequest(published, earlier),
+      ]),
+    );
     const conversationIds = agents.map((agent) => agent.conversationId);
     // The agents were read through their workspaces' gate, and each conversation is its starter's.
     const turns = yield* latestTurnsOfReached(conversationIds);
@@ -286,7 +296,7 @@ export function listTasklessAgents(
         ...(agent.pinPosition === null ? undefined : { pinPosition: agent.pinPosition }),
         readThrough: agent.readThrough.getTime(),
         markedUnread: agent.markedUnread,
-        ...pullRequestOf(published.get(agent.id)),
+        ...pullRequestOf(marked.get(agent.id)),
       };
     });
   });

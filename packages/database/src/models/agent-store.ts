@@ -63,6 +63,7 @@ import {
   type StoredAgentStep,
   type StoredArchive,
   type StoredAutomationOrigin,
+  type StoredEarlierPullRequest,
   type StoredPublishedRead,
   type StoredPullRequest,
   type StoredStartedFrom,
@@ -1104,14 +1105,15 @@ const updateAgentTitle = SqlSchema.findOneOption({
  * after the caller read it is left standing.
  */
 /**
- * An agent with no pull request open or in draft, as GitHub last answered:
- * what an archive the developer did not ask for waits on, since an archived
- * agent is woken by no review, comment, or check on its pull request.
+ * An agent with no pull request open or in draft, as GitHub last answered,
+ * its newest nor any it opened before: what an archive the developer did not
+ * ask for waits on, since an archived agent is woken by no review, comment,
+ * or check on its pull request.
  */
-export const noOpenPullRequest: SQL = notInArray(
+export const noOpenPullRequest: SQL = sql`${notInArray(
   sql`coalesce(${agentTable.published}->>'state', '')`,
   [PULL_REQUEST_STATE.OPEN, PULL_REQUEST_STATE.DRAFT],
-);
+)} and not coalesce(jsonb_path_exists(${agentTable.earlierPublished}, '$[*] ? (@.pullRequest.state == $open || @.pullRequest.state == $draft)', jsonb_build_object('open', ${PULL_REQUEST_STATE.OPEN}::text, 'draft', ${PULL_REQUEST_STATE.DRAFT}::text)), false)`;
 
 /**
  * An agent holding no inbox item open: what an archive the developer did not
@@ -1854,18 +1856,38 @@ export const PublishedReadColumnSchema = Schema.Struct({
   pushed: Schema.Boolean,
 });
 
+/** The `earlier_published` column (`StoredEarlierPullRequest`), null before a second pull request opened. */
+export const EarlierPublishedColumnSchema = Schema.NullOr(
+  Schema.Array(
+    Schema.Struct({ branch: Schema.NullOr(Schema.String), pullRequest: PublishedColumnSchema }),
+  ),
+);
+
+/** The `earlier_published` column as a list reads it: the pull request of each, as the wire carries it. */
+const EarlierPullRequestsSchema = Schema.NullOr(
+  Schema.Array(Schema.Struct({ pullRequest: agentPullRequestSchema })),
+);
+
+/** What a row keeps of GitHub's answers, as a write of a new one reads it under the row's lock. */
+export const KeptPublishedRowSchema = Schema.Struct({
+  published: Schema.NullOr(PublishedColumnSchema),
+  publishedRead: Schema.NullOr(PublishedReadColumnSchema),
+  earlierPublished: EarlierPublishedColumnSchema,
+});
+
 const updateAgentPublished = SqlSchema.void({
   Request: Schema.Struct({
     userId: Schema.String,
     agentId: Schema.String,
     published: Schema.NullOr(PublishedColumnSchema),
     publishedRead: Schema.NullOr(PublishedReadColumnSchema),
+    earlierPublished: EarlierPublishedColumnSchema,
   }),
-  execute: ({ userId, agentId, published, publishedRead }) =>
+  execute: ({ userId, agentId, published, publishedRead, earlierPublished }) =>
     Database.use((db) =>
       db
         .update(agentTable)
-        .set({ published, publishedRead })
+        .set({ published, publishedRead, earlierPublished })
         .where(reachableAgent(userId, agentId)),
     ),
 });
@@ -1880,14 +1902,15 @@ const updateAgentPublishedReadForgotten = SqlSchema.void({
 
 const findAgentPublished = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({
-    published: Schema.NullOr(PublishedColumnSchema),
-    publishedRead: Schema.NullOr(PublishedReadColumnSchema),
-  }),
+  Result: KeptPublishedRowSchema,
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
-        .select({ published: agentTable.published, publishedRead: agentTable.publishedRead })
+        .select({
+          published: agentTable.published,
+          publishedRead: agentTable.publishedRead,
+          earlierPublished: agentTable.earlierPublished,
+        })
         .from(agentTable)
         .where(reachableAgent(userId, agentId))
         .limit(1),
@@ -1897,11 +1920,15 @@ const findAgentPublished = SqlSchema.findOneOption({
 /** The pull request the agent's row keeps, under the row's lock, as a write of a new one reads it. */
 const lockAgentPublished = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({ published: Schema.NullOr(PublishedColumnSchema) }),
+  Result: KeptPublishedRowSchema,
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
-        .select({ published: agentTable.published })
+        .select({
+          published: agentTable.published,
+          publishedRead: agentTable.publishedRead,
+          earlierPublished: agentTable.earlierPublished,
+        })
         .from(agentTable)
         .where(reachableAgent(userId, agentId))
         .limit(1)
@@ -1918,11 +1945,16 @@ const findAgentsOfTasks = SqlSchema.findAll({
   Result: Schema.Struct({
     ...AgentLineRowSchema.fields,
     published: Schema.NullOr(agentPullRequestSchema),
+    earlier: EarlierPullRequestsSchema,
   }),
   execute: ({ userId, taskIds, includeArchived }) =>
     Database.use((db) =>
       db
-        .select({ ...AGENT_LINE_COLUMNS, published: agentTable.published })
+        .select({
+          ...AGENT_LINE_COLUMNS,
+          published: agentTable.published,
+          earlier: agentTable.earlierPublished,
+        })
         .from(agentTable)
         .innerJoin(task, eq(task.id, agentTable.taskId))
         .where(
@@ -1936,9 +1968,14 @@ const findAgentsOfTasks = SqlSchema.findAll({
     ),
 });
 
+/** That a column of earlier pull requests (`earlier_published`) keeps one GitHub reported merged. */
+function earlierMerged(column: SQLWrapper): SQL {
+  return sql`coalesce(jsonb_path_exists(${column}, '$[*].pullRequest.mergedAt'), false)`;
+}
+
 /**
  * One agent of the task, archived or not, whose pull request GitHub reported
- * merged, where the account reaches the task. Note that every agent of the
+ * merged, its newest or one it opened before, where the account reaches the task. Note that every agent of the
  * task counts, one on a teammate's token the account does not see among
  * them, because the answer is one bit about the task and names no agent,
  * and the migration that settled the archived tasks counted them all.
@@ -1958,6 +1995,8 @@ const findMergedAgentOfTask = SqlSchema.findOneOption({
             taskReachableBy(userId),
             or(
               isNotNull(sql`${agentTable.published} ->> 'mergedAt'`),
+              // Note that a pull request the agent opened before its newest counts as its newest does.
+              earlierMerged(agentTable.earlierPublished),
               // Note that a pull request in a repository the agent works in beside its own counts as its own does.
               exists(
                 queryBuilder
@@ -1966,7 +2005,10 @@ const findMergedAgentOfTask = SqlSchema.findOneOption({
                   .where(
                     and(
                       eq(agentRepository.agentId, agentTable.id),
-                      isNotNull(sql`${agentRepository.published} ->> 'mergedAt'`),
+                      or(
+                        isNotNull(sql`${agentRepository.published} ->> 'mergedAt'`),
+                        earlierMerged(agentRepository.earlierPublished),
+                      ),
                     ),
                   ),
               ),
@@ -1982,11 +2024,16 @@ const findPublishedAgentsById = SqlSchema.findAll({
   Result: Schema.Struct({
     ...AgentRowSchema.fields,
     published: Schema.NullOr(agentPullRequestSchema),
+    earlier: EarlierPullRequestsSchema,
   }),
   execute: ({ userId, agentIds }) =>
     Database.use((db) =>
       db
-        .select({ ...AGENT_COLUMNS, published: agentTable.published })
+        .select({
+          ...AGENT_COLUMNS,
+          published: agentTable.published,
+          earlier: agentTable.earlierPublished,
+        })
         .from(agentTable)
         .where(and(inArray(agentTable.id, [...agentIds]), agentVisibleTo(userId)))
         .orderBy(asc(agentTable.createdAt), asc(agentTable.id)),
@@ -2112,6 +2159,62 @@ const findAgentsOnExtraBranches = SqlSchema.findAll({
           and(
             namesDeliveredRepository(agentRepository.repository, repository),
             inArray(agentRepository.headBranch, [...branches]),
+          ),
+        )
+        .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
+        .limit(limit),
+    ),
+});
+
+/** That a column of earlier pull requests (`earlier_published`) holds one from any of the branches named, as its containment index serves it. */
+function onEarlierBranch(column: SQLWrapper, branches: readonly string[]): SQL | undefined {
+  return or(...branches.map((branch) => sql`${column} @> ${JSON.stringify([{ branch }])}::jsonb`));
+}
+
+/** The agents of a delivery's repository that opened a pull request from one of its branches before their newest, as `findAgentsOnBranches` finds them by their newest. */
+const findAgentsOnEarlierBranches = SqlSchema.findAll({
+  Request: OnBranchesSchema,
+  Result: AgentOnRepositoryRowSchema,
+  execute: ({ repository, branches, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          ...AGENT_COLUMNS,
+          userId: agentTable.userId,
+          onRepository: sql<string>`${agentTable.repository}`,
+          onBranch: agentTable.branch,
+        })
+        .from(agentTable)
+        .where(
+          and(
+            namesDeliveredRepository(agentTable.repository, repository),
+            onEarlierBranch(agentTable.earlierPublished, branches),
+          ),
+        )
+        .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
+        .limit(limit),
+    ),
+});
+
+/** The agents whose extra repository a delivery names opened a pull request from one of its branches before their newest there. */
+const findAgentsOnExtraEarlierBranches = SqlSchema.findAll({
+  Request: OnBranchesSchema,
+  Result: AgentOnRepositoryRowSchema,
+  execute: ({ repository, branches, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          ...AGENT_COLUMNS,
+          userId: agentTable.userId,
+          onRepository: agentRepository.repository,
+          onBranch: agentRepository.headBranch,
+        })
+        .from(agentRepository)
+        .innerJoin(agentTable, eq(agentTable.id, agentRepository.agentId))
+        .where(
+          and(
+            namesDeliveredRepository(agentRepository.repository, repository),
+            onEarlierBranch(agentRepository.earlierPublished, branches),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2720,16 +2823,25 @@ export function taskNamesOf(
   );
 }
 
-/** One agent, and the pull request from its branch as GitHub last answered; null before a read found one. */
+/** One agent, and the pull request from its branch as GitHub last answered, null before a read found one, with those it opened before it, newest left first. */
 export interface PublishedAgent {
   readonly agent: Agent;
   readonly published: AgentPullRequest | null;
+  readonly earlier: readonly AgentPullRequest[];
 }
 
-/** One agent's line, and the pull request from its branch as GitHub last answered; null before a read found one. */
+/** One agent's line, and the pull request from its branch as GitHub last answered, null before a read found one, with those it opened before it, newest left first. */
 export interface PublishedAgentLine {
   readonly agent: AgentLine;
   readonly published: AgentPullRequest | null;
+  readonly earlier: readonly AgentPullRequest[];
+}
+
+/** An agent's earlier pull requests as a row reads them: the pull request of each, none for a row with none. */
+function earlierOf(
+  earlier: readonly { readonly pullRequest: AgentPullRequest }[] | null,
+): readonly AgentPullRequest[] {
+  return (earlier ?? []).map((each) => each.pullRequest);
 }
 
 /** Every agent standing on the plans named, by any member, each as its line reads with what it published, in the order they were started, an archived one left out unless `includeArchived` asks for it; a plan of a workspace the account is not in names none. */
@@ -2741,7 +2853,11 @@ export function listPublishedAgents(
   if (taskIds.length === 0) return Effect.succeed([]);
   const includeArchived = options.includeArchived === true;
   return Effect.map(findAgentsOfTasks({ userId, taskIds, includeArchived }), (rows) =>
-    rows.map(({ published, ...agent }) => ({ agent, published })),
+    rows.map(({ published, earlier, ...agent }) => ({
+      agent,
+      published,
+      earlier: earlierOf(earlier),
+    })),
   );
 }
 
@@ -2752,7 +2868,11 @@ export function listPublishedAgentsById(
 ): AgentStoreEffect<readonly PublishedAgent[]> {
   if (agentIds.length === 0) return Effect.succeed([]);
   return Effect.map(findPublishedAgentsById({ userId, agentIds }), (rows) =>
-    rows.map(({ published, ...agent }) => ({ agent, published })),
+    rows.map(({ published, earlier, ...agent }) => ({
+      agent,
+      published,
+      earlier: earlierOf(earlier),
+    })),
   );
 }
 
@@ -2803,27 +2923,86 @@ export function newlyMerged(
   return kept?.number !== published.number || kept.state !== PULL_REQUEST_STATE.MERGED;
 }
 
+/** What a row kept of GitHub's answers before a write: its pull request, the read that kept it, and those it opened before it. */
+export interface KeptPublishedRow {
+  readonly published: StoredPullRequest | null;
+  readonly publishedRead: StoredPublishedRead | null;
+  readonly earlierPublished: readonly StoredEarlierPullRequest[] | null;
+}
+
+/** What a write of a read of GitHub leaves on a row: its earlier pull requests, and how many merges it is the first to keep. */
+export interface PublishedWrite {
+  readonly earlierPublished: readonly StoredEarlierPullRequest[] | null;
+  readonly firstMerged: number;
+}
+
+/**
+ * What a read of GitHub leaves of a row's earlier pull requests, and how
+ * many merges the write is the first to keep: each earlier one read again
+ * (`reread`) as it stands now, one no longer among them left out; the one
+ * the row kept moved to the front where the read found another, since the
+ * agent opened a newer one and the older still counts; and the one the read
+ * found taken out where it stood among them, the row back on its branch.
+ * Note that a read that found none leaves the kept one dropped rather than
+ * moved, as it always did, since no newer pull request stands in its place.
+ */
+export function publishedWrite(
+  kept: KeptPublishedRow,
+  published: StoredPullRequest | null,
+  reread: readonly StoredPullRequest[],
+): PublishedWrite {
+  const before = kept.earlierPublished ?? [];
+  let firstMerged = newlyMerged(kept.published, published) ? 1 : 0;
+  const refreshed = before.map((earlier) => {
+    const again = reread.find((each) => each.number === earlier.pullRequest.number);
+    if (again === undefined) return earlier;
+    if (newlyMerged(earlier.pullRequest, again)) firstMerged += 1;
+    return { ...earlier, pullRequest: again };
+  });
+  const left =
+    kept.published !== null && published !== null && kept.published.number !== published.number
+      ? [{ branch: kept.publishedRead?.branch ?? null, pullRequest: kept.published }]
+      : [];
+  const current = published?.number;
+  const earlier = [...left, ...refreshed].filter(
+    (each, at, all) =>
+      each.pullRequest.number !== current &&
+      all.findIndex((other) => other.pullRequest.number === each.pullRequest.number) === at,
+  );
+  return { earlierPublished: earlier.length === 0 ? null : earlier, firstMerged };
+}
+
 /**
  * The pull request from the agent's branch as GitHub just answered, or null
- * where it answered none, with the read that found it where one is named;
- * nothing written for an agent of a workspace the account is not in.
- * Answers whether this write is the one that first kept it merged: the row
- * is locked as it is read, so of two reads that find the same merge at once
- * (the webhook's and the sweep's) only the first to write says so.
+ * where it answered none, with the read that found it where one is named,
+ * and the earlier pull requests the agent opened as GitHub just answered
+ * them again (`publishedWrite`); nothing written for an agent of a
+ * workspace the account is not in. Answers how many merges this write is
+ * the first to keep: the row is locked as it is read, so of two reads that
+ * find the same merge at once (the webhook's and the sweep's) only the first
+ * to write counts it.
  */
 export function recordAgentPublished(
   userId: string,
   agentId: string,
   published: StoredPullRequest | null,
   read?: StoredPublishedRead,
-): AgentStoreEffect<boolean> {
+  reread: readonly StoredPullRequest[] = [],
+): AgentStoreEffect<number> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const kept = yield* lockAgentPublished({ userId, agentId });
-        if (Option.isNone(kept)) return false;
-        yield* updateAgentPublished({ userId, agentId, published, publishedRead: read ?? null });
-        return newlyMerged(kept.value.published, published);
+        if (Option.isNone(kept)) return 0;
+        const { earlierPublished, firstMerged } = publishedWrite(kept.value, published, reread);
+        yield* updateAgentPublished({
+          userId,
+          agentId,
+          published,
+          publishedRead: read ?? null,
+          earlierPublished,
+        });
+        return firstMerged;
       }),
     ),
   );
@@ -2849,6 +3028,16 @@ export function readAgentPublished(
 ): AgentStoreEffect<StoredPullRequest | null> {
   return Effect.map(findAgentPublished({ userId, agentId }), (row) =>
     Option.isSome(row) ? row.value.published : null,
+  );
+}
+
+/** The pull requests the agent opened in its own repository before the one its row keeps, newest left first; none before a second opened, and for an agent the account does not reach. */
+export function readAgentEarlierPublished(
+  userId: string,
+  agentId: string,
+): AgentStoreEffect<readonly StoredEarlierPullRequest[]> {
+  return Effect.map(findAgentPublished({ userId, agentId }), (row) =>
+    Option.isSome(row) ? (row.value.earlierPublished ?? []) : [],
   );
 }
 
@@ -2933,6 +3122,28 @@ export function listAgentsOnBranches(
   const request = { repository, branches, limit };
   return Effect.map(
     Effect.all([findAgentsOnBranches(request), findAgentsOnExtraBranches(request)]),
+    ([own, extra]) => ownedNewestFirst(own, extra, limit),
+  );
+}
+
+/**
+ * The agents of any account that opened a pull request from one of the
+ * repository's branches named before the newest they keep, in their own
+ * repository or an extra one, matched as `listAgentsOnBranches` matches,
+ * newest started first and at most `limit` of them; none for no branch.
+ * What a delivery about a branch reads again beside the agents on it, so a
+ * pull request an agent left behind is still read as it merges or closes.
+ * Like that read, it names no account.
+ */
+export function listAgentsOnEarlierBranches(
+  repository: string,
+  branches: readonly string[],
+  limit: number,
+): AgentStoreEffect<readonly OwnedAgent[]> {
+  if (branches.length === 0) return Effect.succeed([]);
+  const request = { repository, branches, limit };
+  return Effect.map(
+    Effect.all([findAgentsOnEarlierBranches(request), findAgentsOnExtraEarlierBranches(request)]),
     ([own, extra]) => ownedNewestFirst(own, extra, limit),
   );
 }

@@ -1,6 +1,11 @@
 import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
-import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "./agent.js";
+import {
+  agentTable,
+  type StoredEarlierPullRequest,
+  type StoredPublishedRead,
+  type StoredPullRequest,
+} from "./agent.js";
 
 /**
  * agent-repository.ts -- a repository an agent works in beside its primary one, which its own row keeps.
@@ -18,7 +23,10 @@ import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "./
  * until one opens. `published` and `published_read` are that pull request
  * as GitHub last answered and when, in the shapes the agent row keeps its
  * own in (`StoredPullRequest`, `StoredPublishedRead`), null before a read
- * found one. Each row leaves with its agent.
+ * found one. `earlier_published` is the pull requests the agent opened in
+ * that repository before the one `published` keeps, as the agent row keeps
+ * its own (`StoredEarlierPullRequest`), null before a second opened. Each
+ * row leaves with its agent.
  */
 export const agentRepository = pgTable(
   "agent_repository",
@@ -38,6 +46,8 @@ export const agentRepository = pgTable(
     published: jsonb("published").$type<StoredPullRequest>(),
     /** When the read that wrote `published` was, and of which branch; null before one. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
+    /** The pull requests opened in the repository before the one `published` keeps, newest left first; null before a second opened. */
+    earlierPublished: jsonb("earlier_published").$type<readonly StoredEarlierPullRequest[]>(),
   },
   (table) => [
     primaryKey({ columns: [table.agentId, table.position] }),
@@ -49,5 +59,8 @@ export const agentRepository = pgTable(
       sql`lower(${table.repository})`,
       sql`((${table.published}->>'number')::int)`,
     ),
+    index("agent_repository_on_earlier_branch")
+      .using("gin", sql`${table.earlierPublished} jsonb_path_ops`)
+      .where(sql`${table.earlierPublished} is not null`),
   ],
 );

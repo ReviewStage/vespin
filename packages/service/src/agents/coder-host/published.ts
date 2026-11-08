@@ -9,12 +9,13 @@ import {
   hasRepository,
   type KeptPublished,
   readAgent,
+  readAgentEarlierPublished,
   readAgentKeptPublished,
   readAgentPublished,
   recordAgentPublished,
   type WithRepository,
 } from "@repo/database/models/agent-store";
-import type { StoredPullRequest } from "@repo/database/schemas/agent";
+import type { StoredEarlierPullRequest, StoredPullRequest } from "@repo/database/schemas/agent";
 import {
   type AgentPullRequest,
   type AgentPullRequestAnswer,
@@ -97,6 +98,16 @@ import { CODER } from "./bounds.js";
  * would be; what a read answers stays the agent's own pull request, which
  * the Changes tab and the sidebar show. A read of an extra that fails is
  * logged and fails nothing else.
+ *
+ * An agent may open more than one pull request in a repository, each from
+ * a branch of its own, and its row keeps the newest; those it opened before
+ * stand on the row beside it (`earlier_published`), moved there by the
+ * write that found the newer one. Each read of the agent reads those still
+ * open or a draft again, by their numbers, and writes them with the newest,
+ * a merge first seen among them counted and its task asked to settle as the
+ * newest's would be, so the task waits on every pull request the agent
+ * opened, not its newest alone. A read of them that fails is logged and
+ * leaves them as they stood.
  */
 
 /** The installation of the task's workspace no longer reaches the agent's repository, so nothing of it is read. */
@@ -259,11 +270,66 @@ const publishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
     : nothing(agent);
 });
 
+/** A pull request the agent opened before its newest, read again: as its row keeps it, and how it ended where the read is the first to find it so. */
+interface EarlierRead {
+  readonly stored: StoredPullRequest;
+  readonly ended: PullRequestEnd | undefined;
+}
+
+/** Whether a pull request still waits on review or on being marked ready, which is all an earlier one is read again for. */
+function stillOpen({ pullRequest }: StoredEarlierPullRequest): boolean {
+  return (
+    pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT
+  );
+}
+
+/**
+ * The pull requests the agent opened in one of its repositories before its
+ * newest, those still open or a draft, as GitHub holds them now, read by
+ * their numbers on a token for that repository; one GitHub no longer holds
+ * is left as the row keeps it. A read that fails is logged by its kind and
+ * reads none, since the newest is still read and answered.
+ */
+const earlierOnGitHub = (
+  userId: string,
+  agent: WithRepository<Agent>,
+  repository: string,
+  earlier: readonly StoredEarlierPullRequest[],
+): Effect.Effect<readonly EarlierRead[], never, PublishedServices> =>
+  Effect.gen(function* () {
+    const open = earlier.filter(stillOpen);
+    if (open.length === 0) return [];
+    const { token } = yield* agentPullRequestReach(userId, agent, repository);
+    const read = yield* Effect.forEach(
+      open,
+      ({ pullRequest: kept }) =>
+        Effect.gen(function* () {
+          const found = yield* pullRequestByNumber(token, repository, kept.number);
+          if (Option.isNone(found)) return [];
+          const { stored, ended } = yield* withChecks(token, repository, found.value, kept);
+          return stored === null ? [] : [{ stored, ended }];
+        }),
+      // Note that an agent opens few pull requests, so they are read together.
+      { concurrency: "unbounded" },
+    );
+    return read.flat();
+  }).pipe(Effect.catch(earlierUnread));
+
+/** A read of the pull requests an agent opened before its newest that failed, logged by its kind alone. */
+function earlierUnread(failure: unknown): Effect.Effect<readonly EarlierRead[]> {
+  return Effect.as(
+    Effect.logWarning(
+      `an agent's earlier pull requests could not be read again: ${failureKind(failure)}`,
+    ),
+    [],
+  );
+}
+
 /**
  * What the agent published as GitHub holds it now, written on its row as
- * read. The routes read it through the cache below; an agent tool's read
- * of one agent (`agents/agent-tools.ts`) reads it afresh, once per
- * ask.
+ * read, with the pull requests it opened before it read again beside it.
+ * The routes read it through the cache below; an agent tool's read of one
+ * agent (`agents/agent-tools.ts`) reads it afresh, once per ask.
  */
 export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(function* (
   userId: string,
@@ -271,33 +337,46 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
 ): Effect.fn.Return<AgentPullRequestAnswer, PublishedReadFailure, PublishedServices> {
   yield* extrasPublished(userId, agent);
   const { answer, stored, ended } = yield* publishedOnGitHub(userId, agent);
+  const earlier = hasRepository(agent)
+    ? yield* earlierOnGitHub(
+        userId,
+        agent,
+        agent.repository,
+        yield* readAgentEarlierPublished(userId, agent.id),
+      )
+    : [];
   const at = yield* Clock.currentTimeMillis;
   const read = { at, branch: agent.branch, pushed: answer.branch !== null };
-  const firstMerged = yield* recordAgentPublished(userId, agent.id, stored, read);
-  yield* afterRecorded(userId, agent, firstMerged, ended);
+  const reread = earlier.map((each) => each.stored);
+  const firstMerged = yield* recordAgentPublished(userId, agent.id, stored, read, reread);
+  yield* afterRecorded(userId, agent, firstMerged, [ended, ...earlier.map((each) => each.ended)]);
   return answer;
 });
 
-/** What a pull request's write leaves to do: a merge counted by the one write that first kept it, the task asked to settle where the read first saw it merged, and the agent's automation run asked to archive where the read first saw it merged or closed. */
+/** What a write of pull requests leaves to do: each merge counted by the one write that first kept it, the task asked to settle where the read first saw one merged, and the agent's automation run asked to archive where the read first saw one merged or closed. */
 const afterRecorded = (
   userId: string,
   agent: Agent,
-  firstMerged: boolean,
-  ended: PullRequestEnd | undefined,
+  firstMerged: number,
+  ended: readonly (PullRequestEnd | undefined)[],
 ) =>
   Effect.gen(function* () {
     // Counted once per pull request, by the one write that first kept it merged, under the agent's starter.
-    if (firstMerged)
-      yield* recordServerEvent(
-        SERVER_EVENT.PULL_REQUEST_MERGE,
-        { userId: agent.userId, workspaceId: agent.organizationId },
-        {},
-      );
+    yield* Effect.forEach(
+      Array.from({ length: firstMerged }),
+      () =>
+        recordServerEvent(
+          SERVER_EVENT.PULL_REQUEST_MERGE,
+          { userId: agent.userId, workspaceId: agent.organizationId },
+          {},
+        ),
+      { discard: true },
+    );
     // A merge first seen may have finished the task's work; the task is asked once the row says merged.
-    const merged = ended === PULL_REQUEST_STATE.MERGED;
+    const merged = ended.includes(PULL_REQUEST_STATE.MERGED);
     if (merged && agent.taskId !== null) yield* settleTaskIfFinished(userId, agent.taskId);
     // Note that a pull request ending wakes no agent, so no settle of its turn would archive its run.
-    if (ended !== undefined && agent.automationRunId !== null)
+    if (ended.some((each) => each !== undefined) && agent.automationRunId !== null)
       yield* reconsiderRunArchive(agent.id);
   });
 
@@ -327,8 +406,9 @@ const extraPublishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * Each pull request the agent opened in a repository it works in beside its
  * own (`readAgentRepositories`), read again from GitHub and written on that
- * repository's row as the agent's own is on its row, a merge first seen
- * counted and its task asked to settle; nothing for an agent in one
+ * repository's row as the agent's own is on its row, with those opened
+ * there before it still open read again, a merge first seen counted and its
+ * task asked to settle; nothing for an agent in one
  * repository, nor for an extra that opened none. Each read that fails is
  * logged by its kind and leaves its row as it stood, since the agent's own
  * pull request is still read and answered.
@@ -347,6 +427,12 @@ const extrasPublished = (userId: string, agent: Agent) =>
             ...extra,
             headBranch,
           });
+          const earlier = yield* earlierOnGitHub(
+            userId,
+            agent,
+            extra.repository,
+            extra.earlierPullRequests,
+          );
           const at = yield* Clock.currentTimeMillis;
           const read = { at, branch: headBranch, pushed: answer.branch !== null };
           const firstMerged = yield* recordAgentRepositoryPublished(
@@ -355,8 +441,12 @@ const extrasPublished = (userId: string, agent: Agent) =>
             extra.repository,
             stored,
             read,
+            earlier.map((each) => each.stored),
           );
-          yield* afterRecorded(userId, agent, firstMerged, ended);
+          yield* afterRecorded(userId, agent, firstMerged, [
+            ended,
+            ...earlier.map((each) => each.ended),
+          ]);
         }).pipe(Effect.catch(extraUnread));
       },
       // Note that an agent's extras are bounded at its Start, so they are read together.

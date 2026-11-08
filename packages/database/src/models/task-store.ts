@@ -49,6 +49,7 @@ import {
   ne,
   notInArray,
   type SQL,
+  type SQLWrapper,
   sql,
 } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
@@ -2185,41 +2186,51 @@ const OPEN_PULL_REQUEST_STATES: readonly string[] = [
   PULL_REQUEST_STATE.DRAFT,
 ];
 
+/** The states of the pull requests a column of earlier ones (`earlier_published`) keeps, one line each. */
+function earlierStates(column: SQLWrapper) {
+  return sql<string>`jsonb_path_query(${column}, '$[*].pullRequest.state') #>> '{}'`.as("state");
+}
+
 /**
  * Where the pull requests of the task's standing agents stand, as their rows
  * keep them: each agent's own, then each one in a repository it works in
- * beside its own (`agent_repository`); a repository whose row keeps none has
- * no line here, so an agent in one repository reads as it always did.
+ * beside its own (`agent_repository`), then every one each of them opened
+ * before the newest it keeps (`earlier_published`), so a pull request an
+ * agent left behind for a newer one still holds the task; a repository whose
+ * row keeps none has no line here, so an agent in one repository reads as
+ * it always did.
  */
 const findStandingPullRequestStates = SqlSchema.findAll({
   Request: Schema.Struct({ taskId: Schema.String }),
   Result: Schema.Struct({ state: Schema.String }),
   execute: ({ taskId }) =>
-    Database.use((db) =>
-      db
+    Database.use((db) => {
+      const standing = and(eq(agentTable.taskId, taskId), isNull(agentTable.archivedAt));
+      return db
         .select({ state: sql<string>`${agentTable.published} ->> 'state'`.as("state") })
         .from(agentTable)
-        .where(
-          and(
-            eq(agentTable.taskId, taskId),
-            isNull(agentTable.archivedAt),
-            isNotNull(agentTable.published),
-          ),
-        )
+        .where(and(standing, isNotNull(agentTable.published)))
         .unionAll(
           db
             .select({ state: sql<string>`${agentRepository.published} ->> 'state'`.as("state") })
             .from(agentRepository)
             .innerJoin(agentTable, eq(agentTable.id, agentRepository.agentId))
-            .where(
-              and(
-                eq(agentTable.taskId, taskId),
-                isNull(agentTable.archivedAt),
-                isNotNull(agentRepository.published),
-              ),
-            ),
-        ),
-    ),
+            .where(and(standing, isNotNull(agentRepository.published))),
+        )
+        .unionAll(
+          db
+            .select({ state: earlierStates(agentTable.earlierPublished) })
+            .from(agentTable)
+            .where(and(standing, isNotNull(agentTable.earlierPublished))),
+        )
+        .unionAll(
+          db
+            .select({ state: earlierStates(agentRepository.earlierPublished) })
+            .from(agentRepository)
+            .innerJoin(agentTable, eq(agentTable.id, agentRepository.agentId))
+            .where(and(standing, isNotNull(agentRepository.earlierPublished))),
+        );
+    }),
 });
 
 /**

@@ -25,13 +25,20 @@ import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
-import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "../schemas/agent.js";
+import {
+  agentTable,
+  type StoredEarlierPullRequest,
+  type StoredPublishedRead,
+  type StoredPullRequest,
+} from "../schemas/agent.js";
 import { agentRepository } from "../schemas/agent-repository.js";
 import {
   type AgentStoreEffect,
-  newlyMerged,
+  EarlierPublishedColumnSchema,
+  KeptPublishedRowSchema,
   PublishedColumnSchema,
   PublishedReadColumnSchema,
+  publishedWrite,
 } from "./agent-store.js";
 import { agentReachableBy } from "./workspace-store.js";
 
@@ -44,6 +51,8 @@ export interface AgentRepositoryEntry {
   readonly headBranch: string | null;
   /** None before a read found one. */
   readonly pullRequest: StoredPullRequest | null;
+  /** The pull requests opened in it before that one, newest left first; none before a second opened. */
+  readonly earlierPullRequests: readonly StoredEarlierPullRequest[];
 }
 
 const AgentRepositoryRowSchema = Schema.Struct({
@@ -51,11 +60,13 @@ const AgentRepositoryRowSchema = Schema.Struct({
   baseBranch: Schema.NullOr(Schema.String),
   headBranch: Schema.NullOr(Schema.String),
   pullRequest: Schema.NullOr(PublishedColumnSchema),
+  earlierPullRequests: EarlierPublishedColumnSchema,
   extraPosition: Schema.NullOr(Schema.Number),
   extraRepository: Schema.NullOr(Schema.String),
   extraBaseBranch: Schema.NullOr(Schema.String),
   extraHeadBranch: Schema.NullOr(Schema.String),
   extraPullRequest: Schema.NullOr(PublishedColumnSchema),
+  extraEarlierPullRequests: EarlierPublishedColumnSchema,
 });
 
 /** The agent's row with each of its extras beside it, in their order: one row with no extra where it has none. */
@@ -70,11 +81,13 @@ const findAgentRepositories = SqlSchema.findAll({
           baseBranch: agentTable.startBranch,
           headBranch: agentTable.branch,
           pullRequest: agentTable.published,
+          earlierPullRequests: agentTable.earlierPublished,
           extraPosition: agentRepository.position,
           extraRepository: agentRepository.repository,
           extraBaseBranch: agentRepository.baseBranch,
           extraHeadBranch: agentRepository.headBranch,
           extraPullRequest: agentRepository.published,
+          extraEarlierPullRequests: agentRepository.earlierPublished,
         })
         .from(agentTable)
         .leftJoin(agentRepository, eq(agentRepository.agentId, agentTable.id))
@@ -101,6 +114,7 @@ export function readAgentRepositories(
       baseBranch: first.baseBranch,
       headBranch: first.headBranch,
       pullRequest: first.pullRequest,
+      earlierPullRequests: first.earlierPullRequests ?? [],
     };
     const extras = rows.flatMap((row): AgentRepositoryEntry[] =>
       row.extraRepository === null
@@ -111,6 +125,7 @@ export function readAgentRepositories(
               baseBranch: row.extraBaseBranch,
               headBranch: row.extraHeadBranch,
               pullRequest: row.extraPullRequest,
+              earlierPullRequests: row.extraEarlierPullRequests ?? [],
             },
           ],
     );
@@ -152,11 +167,15 @@ const updateExtraHead = SqlSchema.void({
 
 const lockExtraPublished = SqlSchema.findOneOption({
   Request: ExtraKeySchema,
-  Result: Schema.Struct({ published: Schema.NullOr(PublishedColumnSchema) }),
+  Result: KeptPublishedRowSchema,
   execute: ({ userId, agentId, repository }) =>
     Database.use((db) =>
       db
-        .select({ published: agentRepository.published })
+        .select({
+          published: agentRepository.published,
+          publishedRead: agentRepository.publishedRead,
+          earlierPublished: agentRepository.earlierPublished,
+        })
         .from(agentRepository)
         .where(extraOf(userId, agentId, repository))
         .limit(1)
@@ -169,12 +188,13 @@ const updateExtraPublished = SqlSchema.void({
     ...ExtraKeySchema.fields,
     published: Schema.NullOr(PublishedColumnSchema),
     publishedRead: Schema.NullOr(PublishedReadColumnSchema),
+    earlierPublished: EarlierPublishedColumnSchema,
   }),
-  execute: ({ userId, agentId, repository, published, publishedRead }) =>
+  execute: ({ userId, agentId, repository, published, publishedRead, earlierPublished }) =>
     Database.use((db) =>
       db
         .update(agentRepository)
-        .set({ published, publishedRead })
+        .set({ published, publishedRead, earlierPublished })
         .where(extraOf(userId, agentId, repository)),
     ),
 });
@@ -192,11 +212,12 @@ export function recordAgentRepositoryHead(
 /**
  * The pull request from the head branch of a repository the agent works in
  * beside its own, as GitHub just answered, or null where it answered none,
- * with the read that found it, written on that repository's row as
+ * with the read that found it and the earlier pull requests opened there as
+ * GitHub just answered them again, written on that repository's row as
  * `recordAgentPublished` writes the agent's own; nothing written for a
  * repository it does not work in, or an agent the account does not reach.
- * Answers whether this write is the one that first kept it merged, the row
- * locked as it is read.
+ * Answers how many merges this write is the first to keep, the row locked
+ * as it is read.
  */
 export function recordAgentRepositoryPublished(
   userId: string,
@@ -204,15 +225,17 @@ export function recordAgentRepositoryPublished(
   repository: string,
   published: StoredPullRequest | null,
   read: StoredPublishedRead,
-): AgentStoreEffect<boolean> {
+  reread: readonly StoredPullRequest[] = [],
+): AgentStoreEffect<number> {
   const key = { userId, agentId, repository };
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const kept = yield* lockExtraPublished(key);
-        if (Option.isNone(kept)) return false;
-        yield* updateExtraPublished({ ...key, published, publishedRead: read });
-        return newlyMerged(kept.value.published, published);
+        if (Option.isNone(kept)) return 0;
+        const { earlierPublished, firstMerged } = publishedWrite(kept.value, published, reread);
+        yield* updateExtraPublished({ ...key, published, publishedRead: read, earlierPublished });
+        return firstMerged;
       }),
     ),
   );
