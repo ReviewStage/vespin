@@ -15,10 +15,10 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
-  Badge,
   BUTTON_VARIANT,
   Button,
   type ButtonVariant,
+  ChipName,
   CONFIRM_LOSS,
   ConfirmDialog,
   type DialogQuestion,
@@ -26,6 +26,7 @@ import {
   SpinnerRing,
   SplitButton,
   STATUS_TONE,
+  StaticChip,
   type StatusTone,
   Tooltip,
   useConfirmDialog,
@@ -294,14 +295,20 @@ function chipOf(
   }
 }
 
-/** The chip: its glyph and word in its tone, GitHub's sentence in its hint and for a reader. */
+/**
+ * The chip: its glyph in its tone and its word, GitHub's sentence in its hint
+ * and for a reader. Note that it is a static chip at the control's size, with
+ * no edge, so it stands level with the presses beside it while reading as a
+ * status rather than a press.
+ */
 function MergeChip({ face, sentence }: { face: ChipFace; sentence: string }): React.JSX.Element {
   return (
     <Tooltip label={sentence}>
       <span className="merge-chip inline-flex min-w-0">
-        <Badge tone={face.tone} icon={face.icon} hideWordsUnder={VISUALLY_HIDDEN_UNDER.SNUG}>
-          {face.label}
-        </Badge>
+        <StaticChip tone={face.tone} hideWordsUnder={VISUALLY_HIDDEN_UNDER.SNUG}>
+          {face.icon}
+          <ChipName>{face.label}</ChipName>
+        </StaticChip>
         <VisuallyHidden>{`: ${sentence}`}</VisuallyHidden>
       </span>
     </Tooltip>

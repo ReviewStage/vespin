@@ -18,6 +18,7 @@ import {
   Stack,
   StaticChip,
   StatusGlyph,
+  VISUALLY_HIDDEN_UNDER,
 } from "@repo/ui";
 import { GLYPH, PlugIcon } from "@repo/ui/icons";
 import { useState } from "react";
@@ -28,7 +29,9 @@ import { CatalogSection } from "../section";
  * chips.tsx -- each chip look at rest, with a mark and a chevron, with its
  * menu open, unavailable, and with a long name in a narrow column; a row of
  * filters, one pressed at a time; a row of compact counts, one pressed and
- * one busy; each tone, and each in a compact pill beside a badge of its size; each width; a chip drawn as
+ * one busy; each tone, and each in a compact pill beside a badge of its size; an
+ * outline chip and a toned static chip standing in a row of buttons at their
+ * height; each width; a chip drawn as
  * its mark alone; a name in the code face; a glyph wearing a status dot,
  * sized as a bare one; removable filters, each
  * springing in as one is added and scaling out as its × lifts it, and
@@ -229,6 +232,20 @@ function Chips(): React.JSX.Element {
             </StatusGlyph>
             <ChipName mono>localhost:3000</ChipName>
           </Chip>
+        </Inline>
+      </CatalogSection>
+      <CatalogSection id="chips-outline-row" title="Outline, in a row of buttons">
+        <Inline gap={GAP.CONTROL}>
+          <Chip look={CHIP_LOOK.OUTLINE} tone={STATUS_TONE.COMPLETE} chevron>
+            <GLYPH.PULL_REQUEST />
+            <ChipName>Open</ChipName>
+          </Chip>
+          <Button variant={BUTTON_VARIANT.OUTLINE}>Preview</Button>
+          <StaticChip tone={STATUS_TONE.DANGER} hideWordsUnder={VISUALLY_HIDDEN_UNDER.SNUG}>
+            <GLYPH.FAILED />
+            <ChipName>Conflicts</ChipName>
+          </StaticChip>
+          <Button variant={BUTTON_VARIANT.PRIMARY}>Merge when ready</Button>
         </Inline>
       </CatalogSection>
       <CatalogSection id="chips-static" title="Static: a value fixed where it stands">

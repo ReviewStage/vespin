@@ -1150,9 +1150,13 @@
   /* Note that the pill is drawn ahead of the title it follows in the
      markup, where a screen reader names the title first. */
   order: -1;
-  /* The pill, a badge's height, stands centered in a control's height, the
-     height of the title's first line and of the controls. */
-  margin-block: calc((var(--ui-control-height) - var(--ui-space-20)) / 2);
+}
+
+/* The pill's mark stands at the control's glyph size, as the glyphs of the
+   buttons beside it do, rather than a row's 12px. */
+.pull-request-state .pull-request-mark {
+  width: var(--ui-control-icon);
+  height: var(--ui-control-icon);
 }
 
 .pull-request-title-row > .pull-request-title,

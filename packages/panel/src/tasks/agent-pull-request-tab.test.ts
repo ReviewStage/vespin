@@ -765,7 +765,7 @@ test("the tab draws the pull request as a page: its standing and branches, wheth
   );
   assert.equal(tab.querySelector(".pull-request-title")?.textContent, "Expire invitations #42");
   const merge = mergeControl(tab) ?? assert.fail("an open pull request has a merge control");
-  assert.equal(merge.querySelector(".ui-badge")?.textContent, "Conflicts");
+  assert.equal(merge.querySelector(".merge-chip .ui-chip")?.textContent, "Conflicts");
   assert.equal(
     merge.querySelector(".merge-chip .ui-visually-hidden")?.textContent,
     ": Conflicts with main",
@@ -2838,7 +2838,7 @@ function mergePresses(tab: HTMLElement): HTMLButtonElement[] {
 function mergeShown(tab: HTMLElement) {
   const control = mergeControl(tab);
   if (control === null) return undefined;
-  const badge = control.querySelector(".merge-chip .ui-badge");
+  const badge = control.querySelector(".merge-chip .ui-chip");
   const [press] = mergePresses(tab);
   return {
     chip: badge?.textContent,

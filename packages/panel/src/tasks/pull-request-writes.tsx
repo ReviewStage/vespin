@@ -23,10 +23,8 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
-  Badge,
   BUTTON_SIZE,
   CHIP_LOOK,
-  CHIP_SIZE,
   Chip,
   ChipName,
   CONFIRM_LOSS,
@@ -40,6 +38,7 @@ import {
   InlineEdit,
   type InlineEditEnd,
   STATUS_TONE,
+  StaticChip,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
@@ -425,16 +424,18 @@ const CLOSED_TOAST = {
 } as const;
 
 /**
- * The pill saying where the pull request stands, in its tone; a press
+ * The pill saying where the pull request stands, its mark in its tone; a press
  * opens the changes that may be made from there, and a merged pull request,
- * which no change leaves, is a badge. An open one GitHub holds in its merge
+ * which no change leaves, says so without a press. An open one GitHub holds in its merge
  * queue says so in the pill, as stage-cli's does: Queued and its place, in
  * the attention tone with the merge's mark, its menu offering Close alone,
  * which asks first, since reopening does not queue it again; any other Close
  * acts at once and a toast offers Reopen.
- * Note that the pill is a compact one, which `@repo/ui` draws in a badge's
- * box, so every state stands at the one size the app's status badges do,
- * the one with a menu adding its chevron.
+ * Note that the pill is an outline chip at the control's size, so it reads
+ * as one of the controls beside it in the title's row (Preview, the merge
+ * press), its tone said by the mark alone; a merged one is a static chip of
+ * that height, with no edge, as a status beside them is, so no state
+ * changes the row's height or baseline.
  */
 export function PullRequestStateMenu({
   pullRequest,
@@ -491,9 +492,10 @@ export function PullRequestStateMenu({
   );
   if (actions.length === 0) {
     return (
-      <Badge tone={tone} icon={mark}>
-        {words}
-      </Badge>
+      <StaticChip tone={tone}>
+        {mark}
+        <ChipName>{words}</ChipName>
+      </StaticChip>
     );
   }
   // Note that a Close that may leave the queue asks first, and every other change acts at once, a Close offering Reopen in a toast since it can be taken back.
@@ -533,8 +535,7 @@ export function PullRequestStateMenu({
   return (
     <>
       <Chip
-        look={CHIP_LOOK.PILL}
-        size={CHIP_SIZE.COMPACT}
+        look={CHIP_LOOK.OUTLINE}
         tone={tone}
         chevron
         aria-label={label}

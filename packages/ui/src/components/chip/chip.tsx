@@ -6,6 +6,7 @@ import type { StatusTone } from "../../status-tone.js";
 import { motionKey as motionKeyAttribute } from "../list-motion/list-motion.js";
 import { TEXT_ELEMENT, TEXT_FONT, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
+import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js";
 
 /**
  * chip.tsx -- the one chip: a button naming a value or a thing, drawn in the look of the place it stands.
@@ -27,6 +28,12 @@ import { Tooltip } from "../tooltip/hint.js";
  *   a pull request's reactions), is a capsule on the chip's face until it
  *   stands pressed (`aria-pressed`), when it is drawn in the ink, as the
  *   Ink button is; its caller holds which one is pressed.
+ * - an outline, a chip standing in a row of outlined buttons (a pull
+ *   request's state beside its Preview and merge presses), is drawn as
+ *   they are: their hairline and corner, no face of its own, lighting
+ *   under the pointer and while its menu is open as they do, its words
+ *   centered as theirs are. A tone keeps that face, said by its glyph
+ *   alone, so it reads as one of the row's controls.
  *
  * Beside its look a chip may say where a thing stands in the state palette
  * (`tone`), in its leading glyph's color, or a dot of it before its words
@@ -84,6 +91,7 @@ export const CHIP_LOOK = {
   PILL: "pill",
   FIELD: "field",
   FILTER: "filter",
+  OUTLINE: "outline",
 } as const;
 
 export type ChipLook = (typeof CHIP_LOOK)[keyof typeof CHIP_LOOK];
@@ -211,6 +219,8 @@ const LOOK_FACE = {
     "border-chip-edge bg-chip text-foreground hover:not-disabled:not-aria-disabled:bg-chip-hover aria-expanded:bg-chip-hover",
   [CHIP_LOOK.FILTER]:
     "border-chip-edge bg-chip text-muted-foreground hover:not-disabled:not-aria-disabled:not-aria-pressed:bg-chip-hover hover:not-disabled:not-aria-disabled:not-aria-pressed:text-foreground aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-ink-foreground",
+  [CHIP_LOOK.OUTLINE]:
+    "border-border-strong bg-transparent text-foreground hover:not-disabled:not-aria-disabled:bg-fill-selected aria-expanded:bg-fill-selected active:not-disabled:not-aria-disabled:bg-fill-pressed",
 } as const satisfies Record<ChipLook, string>;
 
 /** A removable filter's face: chosen, inside the strong hairline, lighting under the pointer as any filter does. */
@@ -236,6 +246,7 @@ const LOOK_CORNER = {
   [CHIP_LOOK.FIELD]: "rounded-control",
   [CHIP_LOOK.PILL]: "rounded-full",
   [CHIP_LOOK.FILTER]: "rounded-full",
+  [CHIP_LOOK.OUTLINE]: "rounded-control",
 } as const satisfies Record<ChipLook, string>;
 
 /** A look's side room inside its box. */
@@ -244,6 +255,7 @@ const LOOK_INSET = {
   [CHIP_LOOK.FIELD]: "ps-control-inset pe-chip-inset",
   [CHIP_LOOK.PILL]: "ps-chip-inset pe-chip-inset-wide",
   [CHIP_LOOK.FILTER]: "px-chip-inset-wide",
+  [CHIP_LOOK.OUTLINE]: "ps-control-inset pe-chip-inset",
 } as const satisfies Record<ChipLook, string>;
 
 /** A removable chip's side room: its look's start, and its × near the end. */
@@ -252,6 +264,7 @@ const REMOVABLE_INSET = {
   [CHIP_LOOK.FIELD]: "ps-chip-inset-wide pe-chip-tight",
   [CHIP_LOOK.PILL]: "ps-chip-inset pe-chip-tight",
   [CHIP_LOOK.FILTER]: "ps-chip-inset-wide pe-chip-tight",
+  [CHIP_LOOK.OUTLINE]: "ps-chip-inset-wide pe-chip-tight",
 } as const satisfies Record<ChipLook, string>;
 
 /** Each width a place shares; a chip at its words' own may still shrink to nothing. */
@@ -275,13 +288,15 @@ function chipClasses(
   const compact = size === CHIP_SIZE.COMPACT;
   const toned = tone !== undefined;
   const filterish = look === CHIP_LOOK.FILTER;
-  const face = toned
-    ? [
-        TONED_FACE,
-        removable && !filterish ? TONED_OPEN : TONED_HOVER,
-        look === CHIP_LOOK.TOOLBAR || look === CHIP_LOOK.FIELD ? TONED_PRESS : "",
-      ]
-    : [removable && filterish ? REMOVABLE_FILTER_FACE : LOOK_FACE[look]];
+  // Note that an outline keeps its own face under a tone, because its glyph alone says the tone, as the buttons beside it carry none.
+  const face =
+    toned && look !== CHIP_LOOK.OUTLINE
+      ? [
+          TONED_FACE,
+          removable && !filterish ? TONED_OPEN : TONED_HOVER,
+          look === CHIP_LOOK.TOOLBAR || look === CHIP_LOOK.FIELD ? TONED_PRESS : "",
+        ]
+      : [removable && filterish ? REMOVABLE_FILTER_FACE : LOOK_FACE[look]];
   // Note that the side room is the last of look, removal, mark alone, and compact to name it, as each narrows the one before.
   const inset = compact
     ? look === CHIP_LOOK.PILL
@@ -459,9 +474,11 @@ export function Chip(props: ChipProps): React.JSX.Element {
 /** The looks a static chip comes in: a toolbar chip's, or a pill's, as a removable pill stands beside it. */
 type StaticChipLook = typeof CHIP_LOOK.TOOLBAR | typeof CHIP_LOOK.PILL;
 
-/** A static chip's own options: its look, the toolbar's where none is named, its tone, its size, and whether it draws its mark alone. */
+/** A static chip's own options: its look, the toolbar's where none is named, its tone, its size, and whether it draws its mark alone, always or in a narrow room. */
 type StaticChipProps = Pick<ChipFace, "tone" | "iconOnly" | "size"> & {
   look?: StaticChipLook | undefined;
+  /** Give its words up, to a reader alone, once the room around it (a `ui-room` container) is narrower than this step, as a `Badge`'s do; its mark still drawn. */
+  hideWordsUnder?: VisuallyHiddenUnder | undefined;
   children: ReactNode;
 } & Omit<ComponentPropsWithRef<"span">, "style" | "className" | "children">;
 
@@ -482,13 +499,18 @@ const STATIC_FACE = {
  * compact, for a thing named that can no longer be lifted, as an address
  * already invited stands among the removable pills of those still to invite. Its hint (`Tooltip`) opens on a rest,
  * or under a finger on a tap, since it is no control of its own. Its mark
- * alone stands centered in a square, as a toolbar chip's does.
+ * alone stands centered in a square, as a toolbar chip's does. A toolbar
+ * chip at the control's size, toned, is a status standing in a row of
+ * controls at their height, as a pull request's merge state stands beside
+ * its merge press; in a narrow room it may give its words up to a reader
+ * (`hideWordsUnder`), its mark saying the state in their place.
  */
 export function StaticChip({
   look = CHIP_LOOK.TOOLBAR,
   tone,
   size = CHIP_SIZE.CONTROL,
   iconOnly = false,
+  hideWordsUnder,
   children,
   ...span
 }: StaticChipProps): React.JSX.Element {
@@ -509,6 +531,7 @@ export function StaticChip({
       {...span}
       className={`${STATIC_BOX} ${STATIC_FACE[look]} ${box} ${room}`}
       {...faceAttributes({ look, tone, size, iconOnly })}
+      data-words-under={hideWordsUnder}
     >
       <span className={faceClasses({ look, size, iconOnly }, false)}>{children}</span>
     </span>
@@ -528,9 +551,9 @@ type ChipNameProps = {
     }
 );
 
-/** A chip's words, and, drawn as its mark alone, read and drawn nowhere; a field's lead and fill it. */
+/** A chip's words, and, drawn as its mark alone, always or under its room's step, read and drawn nowhere; a field's lead and fill it. */
 const NAME =
-  "ui-chip-name group-data-[look=field]/chip:flex-1 group-data-[look=field]/chip:text-left group-data-[icon-only=true]/chip:absolute group-data-[icon-only=true]/chip:-m-px group-data-[icon-only=true]/chip:size-px group-data-[icon-only=true]/chip:[clip-path:inset(50%)]";
+  "ui-chip-name group-data-[look=field]/chip:flex-1 group-data-[look=field]/chip:text-left group-data-[icon-only=true]/chip:absolute group-data-[icon-only=true]/chip:-m-px group-data-[icon-only=true]/chip:size-px group-data-[icon-only=true]/chip:[clip-path:inset(50%)] @max-[520px]/ui-room:group-data-[words-under=snug]/chip:sr-only @max-[440px]/ui-room:group-data-[words-under=tight]/chip:sr-only";
 
 /** A name cut in its middle: the start, which gives way first, ending in an ellipsis where it is cut short. */
 function ChipNameStart({ children }: { children: string }): React.JSX.Element {
