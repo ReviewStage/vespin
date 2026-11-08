@@ -12,6 +12,7 @@ import { createAgent, recordAgentRunnerToken } from "../agent-store.js";
 import {
   readNativeProjection,
   readNativeSequence,
+  seedNativeProjection,
   withNativeProjection,
 } from "../native-projection-store.js";
 
@@ -174,5 +175,29 @@ it.layer(getTestDB())("the native projection's place", (it) => {
       assert.equal(Option.isNone(strangers), true);
       assert.equal(Option.getOrThrow(untouched).sequence, null);
     }),
+  );
+  it.effect(
+    "a Start's seed starts a projection none saved, never overwrites one saved, and is never written to another account's",
+    () =>
+      Effect.gen(function* () {
+        const fresh = yield* openConversation;
+        const running = yield* openConversation;
+        yield* withNativeProjection(running, running.digest, () =>
+          Effect.succeed({ result: undefined, saved: { sequence: 4, projection: { turn: "t1" } } }),
+        );
+        const stranger = yield* openConversation;
+
+        yield* seedNativeProjection(fresh, { seeded: true });
+        yield* seedNativeProjection(running, { seeded: true });
+        yield* seedNativeProjection(
+          { userId: stranger.userId, conversationId: fresh.conversationId },
+          { stranger: true },
+        );
+
+        const seeded = Option.getOrThrow(yield* readBack(fresh));
+        const kept = Option.getOrThrow(yield* readBack(running));
+        assert.deepEqual([seeded.projection, seeded.sequence], [{ seeded: true }, null]);
+        assert.deepEqual([kept.projection, kept.sequence], [{ turn: "t1" }, 4]);
+      }),
   );
 });

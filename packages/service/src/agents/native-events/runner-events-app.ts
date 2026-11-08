@@ -204,8 +204,19 @@ const PLAN_ROW: Partial<
   },
 };
 
-/** The catalog a batch reads its models' ids back through where the catalog could not be read. */
+/** The catalog a batch reads its models' ids back through where it holds no result to price, or the catalog could not be read. */
 const NO_MODELS: readonly OfferedModel[] = [];
+
+/** The message type a Claude Code result carries, the one a harness reports its totals by model in. */
+const RESULT_TYPE = "result";
+
+/** Whether the batch's unapplied events hold a result, whose totals by model are priced through the catalog. */
+function holdsResult(batch: RunnerEventBatch, after: number | null): boolean {
+  return unapplied(batch, after).some(
+    ({ message }) =>
+      Predicate.isObject(message) && "type" in message && message.type === RESULT_TYPE,
+  );
+}
 
 /**
  * The catalog id a provider's own model id stands for, for an agent on the
@@ -803,12 +814,18 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
   const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-  // Note that a catalog it cannot read leaves only the agent's own model read back, so a report of any other is kept unpriced rather than refused.
-  const offered = yield* (yield* ModelCatalog).read.pipe(
-    Effect.catch(() =>
-      Effect.as(Effect.logWarning("runner-events: the model catalog could not be read"), NO_MODELS),
-    ),
-  );
+  // Note that only a batch holding a result reads the catalog, so a heartbeat or a step never waits on it; and
+  // a catalog it cannot read leaves only the agent's own model read back, so a report of any other is kept unpriced.
+  const offered = holdsResult(batch.value, null)
+    ? yield* (yield* ModelCatalog).read.pipe(
+        Effect.catch(() =>
+          Effect.as(
+            Effect.logWarning("runner-events: the model catalog could not be read"),
+            NO_MODELS,
+          ),
+        ),
+      )
+    : NO_MODELS;
   const applying: Applying = {
     target,
     agentId: agent.value.id,

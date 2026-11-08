@@ -212,6 +212,13 @@ const ModelUsageSchema = Schema.Struct({
   cacheCreationInputTokens: Schema.Number,
 });
 
+/**
+ * A result's totals by model, read apart from the result, so totals spelled
+ * in a way this does not read cost the turn its totals and nothing else: its
+ * failure and its main loop's usage are still read.
+ */
+const readModelUsage = Schema.decodeUnknownOption(Schema.Record(Schema.String, ModelUsageSchema));
+
 const ResultSchema = Schema.Struct({
   subtype: Schema.String,
   session_id: Schema.optionalKey(Schema.String),
@@ -220,7 +227,7 @@ const ResultSchema = Schema.Struct({
   api_error_status: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   result: Schema.optionalKey(Schema.String),
   usage: Schema.optionalKey(MessageUsageSchema),
-  modelUsage: Schema.optionalKey(Schema.Record(Schema.String, ModelUsageSchema)),
+  modelUsage: Schema.optionalKey(Schema.Unknown),
 });
 
 const readResult = Schema.decodeUnknownOption(ResultSchema);
@@ -557,7 +564,11 @@ function runUsageOf(
  * the totals are cumulative, so the projection meters what they grew by.
  */
 function costMoments(result: typeof ResultSchema.Type, held: NativeHeld): readonly NativeMoment[] {
-  const { usage, modelUsage } = result;
+  const { usage } = result;
+  const modelUsage =
+    result.modelUsage === undefined
+      ? undefined
+      : Option.getOrUndefined(readModelUsage(result.modelUsage));
   const modelTurn =
     usage === undefined
       ? undefined
