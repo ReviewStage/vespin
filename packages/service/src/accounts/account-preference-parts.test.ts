@@ -297,7 +297,7 @@ it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
 
 it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
   it.effect(
-    "keeps the account's answers with their words beside Other, no other account's, and refuses an answer no set offers",
+    "keeps the account's answers with their words beside Other, no other account's, and refuses an answer no set offers or words beside no Other",
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts;
@@ -308,13 +308,16 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
         );
         assert.equal(partOf(yield* ask(request(other)), "onboardingSurvey"), undefined);
 
-        assert.deepEqual(
-          yield* ask(request(owner, { onboardingSurvey: '{"referral":"a billboard"}' })),
-          {
+        // Note that words beside no Other are refused as an answer no set offers is.
+        for (const refused of [
+          '{"referral":"a billboard"}',
+          '{"role":"founder","roleOther":"CEO"}',
+        ]) {
+          assert.deepEqual(yield* ask(request(owner, { onboardingSurvey: refused })), {
             status: HOSTED_HTTP_STATUS.BAD_REQUEST,
             body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
-          },
-        );
+          });
+        }
         assert.equal(partOf(yield* ask(request(owner)), "onboardingSurvey"), answers);
       }),
   );

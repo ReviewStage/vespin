@@ -34,7 +34,12 @@ function answeredOf<Value extends string>(values: Record<string, Value>) {
 
 const otherWords = Schema.String.check(Schema.isMaxLength(SURVEY_OTHER_MAX_CHARS));
 
-/** What the account answered; a question left has no answer, and Other may carry words. */
+/** Whether words stand only beside the Other they belong to; an Other may stand without them. */
+function wordsBesideOther(answer: string | undefined, words: string | undefined): boolean {
+  return words === undefined || answer === PRODUCT_SURVEY_ANSWER.OTHER;
+}
+
+/** What the account answered; a question left has no answer, and an Other may carry words. */
 const onboardingSurveySchema = Schema.Struct({
   referral: Schema.optionalKey(answeredOf(PRODUCT_REFERRAL_SOURCE)),
   referralOther: Schema.optionalKey(otherWords),
@@ -42,7 +47,14 @@ const onboardingSurveySchema = Schema.Struct({
   roleOther: Schema.optionalKey(otherWords),
   intent: Schema.optionalKey(answeredOf(PRODUCT_SIGNUP_INTENT)),
   intentOther: Schema.optionalKey(otherWords),
-});
+}).check(
+  Schema.makeFilter(
+    (survey) =>
+      wordsBesideOther(survey.referral, survey.referralOther) &&
+      wordsBesideOther(survey.role, survey.roleOther) &&
+      wordsBesideOther(survey.intent, survey.intentOther),
+  ),
+);
 
 export type OnboardingSurvey = typeof onboardingSurveySchema.Type;
 

@@ -9,7 +9,7 @@ import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { fakeActPort } from "../testing/app-bridge.js";
+import { fakeActPort, refusedOnPort } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
@@ -106,14 +106,18 @@ test("Just me after a team's workspace was made lists the account's own workspac
   assert.deepEqual(chosen, [OWN.id]);
 });
 
-test("the survey keeps its answers on the account and counts them once, Other's words kept and never counted", async () => {
+test("the survey keeps its answers on the account, again after a refusal, and counts them once, Other's words kept and never counted", async () => {
   // Setup stands at the survey, for the account alone, as the account keeps it.
   const place = JSON.stringify({ audience: "me", at: 1 });
   writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
   const kept: unknown[] = [];
   fakeActPort({
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: ({ field, value }) => {
-      if (field === "onboardingSurvey") kept.push(JSON.parse(String(value)));
+      if (field === "onboardingSurvey") {
+        kept.push(JSON.parse(String(value)));
+        // The account refuses the first keep, as a write lost to an outage is.
+        if (kept.length === 1) return Promise.reject(refusedOnPort("Not saved."));
+      }
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
@@ -143,13 +147,18 @@ test("the survey keeps its answers on the account and counts them once, Other's 
   typeInto(container.querySelector<HTMLInputElement>('input[aria-label$="Other"]'), "  A meetup ");
   act(() => buttonStarting(container, "Founder or CTO").click());
   // Note that the account's place comes back from no write here, so Continue leaves setup at the survey to be pressed again.
+  const answers = { referral: "other", referralOther: "A meetup", role: "founder" };
   act(() => buttonStarting(container, "Continue").click());
+  // Note that the write reaches the act port a tick after the press, and its refusal a tick after that, as a mutation's do.
+  await vi.waitFor(() => assert.deepEqual(kept, [answers]));
+  await act(() => Promise.resolve());
   act(() => buttonStarting(container, "Continue").click());
+  await vi.waitFor(() => assert.deepEqual(kept, [answers, answers]));
+  await act(() => Promise.resolve());
+  act(() => buttonStarting(container, "Continue").click());
+  await act(() => Promise.resolve());
 
-  // Note that the write reaches the act port a tick after the press, as a mutation's does.
-  await vi.waitFor(() =>
-    assert.deepEqual(kept, [{ referral: "other", referralOther: "A meetup", role: "founder" }]),
-  );
+  assert.deepEqual(kept, [answers, answers], "answers kept are not kept again");
   assert.deepEqual(counted, [
     {
       name: PRODUCT_SURFACE_EVENT.ONBOARDING_SURVEY,

@@ -41,7 +41,10 @@ import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
  * usage data. The words beside an Other are kept on the account alone: the
  * count says only `other`, since a counted value is one of a fixed set. A
  * walk back and forth keeps and counts the answers again only where they
- * changed.
+ * changed, and a keep the account refused is tried again on the next
+ * Continue without counting the same answers twice. Note that, as setup's
+ * other writes, nothing waits on the keep or says it failed: setup goes on
+ * either way.
  */
 
 /* Each question's answers, as the account keeps them. */
@@ -83,7 +86,7 @@ export interface Survey {
   /** Whether any question is answered, which turns the step's Skip into Continue. */
   readonly answered: boolean;
   readonly answer: (change: OnboardingSurvey) => void;
-  /** Keeps the answers on the account and counts them, unless they are the ones last kept. */
+  /** Keeps the answers on the account unless they stand there, and counts them unless they were counted. */
   readonly keep: () => void;
 }
 
@@ -166,19 +169,32 @@ export function useSurvey(): Survey {
     useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.onboardingSurvey,
   );
   const [draft, setDraft] = useState<OnboardingSurvey>();
-  const last = useRef<OnboardingSurvey | undefined>(undefined);
+  const saving = useRef<OnboardingSurvey | undefined>(undefined);
+  const counted = useRef<OnboardingSurvey | undefined>(undefined);
   // Note that the account's answers stand until a pick here, so setup on another machine opens on them.
   const answers = draft ?? stored ?? {};
   const answered =
     answers.referral !== undefined || answers.role !== undefined || answers.intent !== undefined;
   const keep = () => {
     const keeping = kept(answers);
-    if (!answered || sameAnswers(last.current ?? stored, keeping)) return;
-    last.current = keeping;
-    updateSetting({
-      field: APP_SETTING_SCHEMA.onboardingSurvey.field,
-      value: onboardingSurveyStored(keeping),
-    });
+    if (!answered) return;
+    if (!sameAnswers(saving.current ?? stored, keeping)) {
+      saving.current = keeping;
+      updateSetting(
+        {
+          field: APP_SETTING_SCHEMA.onboardingSurvey.field,
+          value: onboardingSurveyStored(keeping),
+        },
+        {
+          // A keep refused leaves the answers to be kept again on the next Continue.
+          onError: () => {
+            if (saving.current === keeping) saving.current = undefined;
+          },
+        },
+      );
+    }
+    if (sameAnswers(counted.current ?? stored, keeping)) return;
+    counted.current = keeping;
     appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.ONBOARDING_SURVEY, {
       referral_source: keeping.referral ?? PRODUCT_REFERRAL_SOURCE.SKIPPED,
       role: keeping.role ?? PRODUCT_ROLE.SKIPPED,
