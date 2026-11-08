@@ -111,16 +111,6 @@ export function UnarchiveIcon(): React.JSX.Element {
   );
 }
 
-/** An arrow turning back on itself: returns a setting to its default. */
-export function ResetIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M2.5 5.1v5.2h5.2" />
-      <path d="M4.6 14.6a7.8 7.8 0 1 0 1.9-8.1L2.5 10.3" />
-    </Glyph>
-  );
-}
-
 /** Stands down without choosing: the cancel a control becomes mid-action. */
 export function CloseIcon(): React.JSX.Element {
   return (
@@ -196,17 +186,6 @@ export function ArrowDownIcon(): React.JSX.Element {
     <Glyph className="icon-button-glyph">
       <path d="M12 5v14" />
       <path d="m5.4 12.4 6.6 6.6 6.6-6.6" />
-    </Glyph>
-  );
-}
-
-/** Sound leaving the machine: everything about how the app is heard. */
-export function SpeakerIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <path d="M4 9.4h2.9L11.6 5v14L6.9 14.6H4Z" />
-      <path d="M14.8 9.3a4.1 4.1 0 0 1 0 5.4" />
-      <path d="M17.6 6.9a7.6 7.6 0 0 1 0 10.2" />
     </Glyph>
   );
 }
@@ -313,18 +292,6 @@ export function MicrophoneIcon(): React.JSX.Element {
       <rect x="9.2" y="2.6" width="5.6" height="10.6" rx="2.8" />
       <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0" />
       <path d="M12 17.8V21" />
-    </Glyph>
-  );
-}
-
-/** The microphone struck through, on a call that is muted. */
-export function MicrophoneOffIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <rect x="9.2" y="2.6" width="5.6" height="10.6" rx="2.8" />
-      <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0" />
-      <path d="M12 17.8V21" />
-      <path d="M4 3.4 20 19.4" />
     </Glyph>
   );
 }
