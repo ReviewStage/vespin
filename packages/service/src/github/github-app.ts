@@ -131,7 +131,7 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { type GitHubRepository, text } from "../core.js";
-import { HostedEnvironment } from "../environment.js";
+import { HostedEnvironment, present } from "../environment.js";
 import type { StoreFailure } from "../http/store-failure.js";
 import {
   installationsOfWorkspace,
@@ -2268,11 +2268,6 @@ function githubAppService(
     };
     return service;
   });
-}
-
-/** A value under the same rule as `HostedEnvironment`'s: trimmed, and a blank one is absent. */
-function present(value: Option.Option<string>): string | undefined {
-  return text(Option.getOrUndefined(value));
 }
 
 function presentRedacted(value: Option.Option<Redacted.Redacted>): Redacted.Redacted | undefined {
