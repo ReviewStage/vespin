@@ -161,7 +161,9 @@ import {
   writeAgentCredential,
 } from "../coder-host/checkout.js";
 import { NATIVE_SKILLS_PATH } from "../coder-host/native-skills.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
+  GROUP_WRITES,
   REPOSITORY_REFUSAL,
   type RepositoryFirewall,
   type RepositorySandbox,
@@ -194,6 +196,7 @@ import {
   type RunnerHandle,
   type RunnerMark,
   type RunnerRecord,
+  type SandboxSetup,
 } from "./agent-machine.js";
 
 /**
@@ -327,6 +330,31 @@ function readyScript(extraCheckouts: readonly string[]): string {
   ].join("\n");
 }
 
+/** Where a created sandbox's setup writes the workspace's cloud setup scripts, as its default user, for the setup run to read. */
+const SETUP_FILE = {
+  INSTALL: "/tmp/vespin-setup/install.sh",
+  REPOSITORY: "/tmp/vespin-setup/setup.sh",
+} as const;
+
+/**
+ * The workspace's cloud setup scripts run in a sandbox just created, after
+ * its checkout, by bash as its default user, as Conductor runs its setup
+ * script once a workspace is created and checked out: the install script as
+ * root from the workspace folder, then, where it succeeded, the repository's
+ * setup script from the checkout, its writes the group's as the clone's are
+ * (`GROUP_WRITES`), each failing on its first failed command. What they print,
+ * and how they exited, goes to `SETUP_LOG`, which every user reads.
+ */
+const SETUP_RUN_SCRIPT = [
+  GROUP_WRITES,
+  `: > ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
+  "status=0",
+  `if [ -f ${SETUP_FILE.INSTALL} ]; then echo "--- install script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; (cd ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE} && sudo -n bash -e -o pipefail ${SETUP_FILE.INSTALL}) >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; fi`,
+  `if [ "$status" -eq 0 ] && [ -f ${SETUP_FILE.REPOSITORY} ]; then echo "--- setup script" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}; bash -e -o pipefail ${SETUP_FILE.REPOSITORY} >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG} 2>&1 || status=$?; fi`,
+  `echo "--- exit $status" >> ${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}`,
+  'exit "$status"',
+].join("\n");
+
 /** Why the sandbox could not be readied for the agent's runner. */
 const NOT_READIED = "the sandbox could not be readied for the agent's runner";
 
@@ -407,6 +435,8 @@ interface AgentCheckoutReads {
   readonly read: AgentRepositoryRead;
   readonly extras: readonly AgentExtraRead[];
   readonly credential: Effect.Effect<RepositoryCredential, CheckoutRefused>;
+  /** The workspace's cloud setup scripts as the launch reads them beside the open, which the sandbox runs after its checkout. */
+  readonly setup: Effect.Effect<SandboxSetup | undefined>;
 }
 
 /** The run a place stands for as its firewall names it, with the account whose agent it is. */
@@ -846,6 +876,48 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     });
 
   /**
+   * The workspace's cloud setup scripts run in the sandbox just created
+   * (`SETUP_RUN_SCRIPT`), each written to its file first so no script is
+   * spliced into shell text, the setup script with the workspace's variables;
+   * nothing where none is saved. A setup that failed, or could not run, is
+   * logged and leaves the launch to go on, since the agent reads its log and
+   * says what failed.
+   */
+  const setUp = (
+    sandbox: RepositorySandbox,
+    opened: SandboxRunning,
+    setup: SandboxSetup | undefined,
+  ) =>
+    Effect.gen(function* () {
+      if (setup === undefined) return;
+      const encoder = new TextEncoder();
+      const files = [
+        { path: SETUP_FILE.INSTALL, script: setup.install },
+        { path: SETUP_FILE.REPOSITORY, script: setup.repository },
+      ].flatMap(({ path, script }) =>
+        script === undefined ? [] : [{ path, contents: encoder.encode(script), mode: 0o644 }],
+      );
+      yield* api.writeFiles(opened, files);
+      const ran = yield* runInSandbox(
+        sandbox,
+        {
+          command: SETUP_RUN_SCRIPT,
+          workingDirectory: CODER.CHECKOUT_PATH,
+          env: setup.environment,
+        },
+        REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+      );
+      if (ran.exitCode !== 0) {
+        yield* Effect.logWarning(`A sandbox's cloud setup exited ${ran.exitCode}`);
+      }
+    }).pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(`A sandbox's cloud setup did not run: ${failure._tag}`),
+      ),
+      Effect.withSpan("web/sandboxSetup"),
+    );
+
+  /**
    * A sandbox `getOrCreate` created set up for a launch, in its `onCreate`
    * beside the `agent` user it makes (`../agent-sandbox-open.ts`): the
    * agent's repository checked out as it was created (`checkedOutAs`), on
@@ -871,9 +943,13 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const github = yield* checkout.credential;
       const sandbox = checkoutOver(context, opened, userId, { github }, github.fullName);
       yield* writeAgentCredential(sandbox, github);
-      return yield* Effect.tap(checkedOutAs(checkout.agent, sandbox, checkout.read, from), () =>
-        cloneAgentExtras(sandbox, checkout.extras),
+      const refill = yield* Effect.tap(
+        checkedOutAs(checkout.agent, sandbox, checkout.read, from),
+        () => cloneAgentExtras(sandbox, checkout.extras),
       );
+      // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
+      if (from !== CREATED_FROM.SOURCE) yield* setUp(sandbox, opened, yield* checkout.setup);
+      return refill;
     });
 
   /**
@@ -1010,6 +1086,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     agent: Agent,
     sessionId: string,
     credential: Effect.Effect<RepositoryCredential, CheckoutRefused>,
+    setup: Effect.Effect<SandboxSetup | undefined>,
   ) =>
     Effect.gen(function* () {
       const [image, read, extras, source] = yield* Effect.all(
@@ -1023,7 +1100,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       );
       const checkout =
         hasRepository(agent) && read !== undefined
-          ? { agent, read, extras, credential }
+          ? { agent, read, extras, credential, setup }
           : undefined;
       const base =
         checkout === undefined
@@ -1156,7 +1233,13 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         );
         const [{ name, running, created, from }, [plan, beside]] = yield* Effect.all(
           [
-            openedCheckout(ask.target, ask.agent, ask.session, credential),
+            openedCheckout(
+              ask.target,
+              ask.agent,
+              ask.session,
+              credential,
+              ask.setup ?? Effect.succeed(undefined),
+            ),
             Effect.all([read, ask.beside], { concurrency: "unbounded" }),
           ],
           { concurrency: "unbounded" },

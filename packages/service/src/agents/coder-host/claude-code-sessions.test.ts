@@ -38,7 +38,11 @@ import { readNativeRewind, rewindConversation } from "@repo/database/models/conv
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { installSkill } from "@repo/database/models/installed-skill-store";
-import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
+import {
+  parseKeyRing,
+  sealProviderKey,
+  sealWorkspaceVariable,
+} from "@repo/database/models/provider-key-seal";
 import {
   removeProviderKey,
   saveProviderKey,
@@ -48,7 +52,12 @@ import {
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
+import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import {
+  setInstallScript,
+  setRepositorySetup,
+} from "@repo/database/models/workspace-sandbox-script-store";
 import { storeWriter } from "@repo/database/models/writer";
 import type { StoredStartedFrom } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -3513,6 +3522,56 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // The base drive holds no credential: the token stood at its firewall for the clone alone.
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
+      }),
+  );
+
+  it.effect(
+    "a repository agent's new sandbox runs its workspace's cloud setup after its checkout, the scripts written to files and the setup script given the workspace's variables, and none of the runner's credentials",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { agent, sessions } = yield* repositoryAgent(api, ownInstallation());
+        const ring = parseKeyRing(Redacted.make(RING));
+        assert.ok(Result.isSuccess(ring));
+        const workspace = agent.organizationId;
+        yield* setInstallScript(workspace, "apt-get install -y redis-tools", new Date(0));
+        yield* setRepositorySetup(workspace, RELAY_FULL_NAME, "pnpm install", new Date(0));
+        yield* setWorkspaceVariable(
+          workspace,
+          "DATABASE_URL",
+          sealWorkspaceVariable(
+            ring.success,
+            { organizationId: workspace, name: "DATABASE_URL" },
+            Redacted.make("postgres://fixture"),
+          ),
+          new Date(0),
+        );
+
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Fix the relay."));
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const own = sandboxOfAgent(api, agent);
+        const uploaded = new Map(api.uploads.flatMap((upload) => [...upload]));
+        assert.equal(
+          uploaded.get("/tmp/vespin-setup/install.sh"),
+          "apt-get install -y redis-tools",
+        );
+        assert.equal(uploaded.get("/tmp/vespin-setup/setup.sh"), "pnpm install");
+        const runs = api.runs.filter((run) => run.session === own?.currentSessionId);
+        const clone = runs.findIndex(isClone);
+        const setup = runs.findIndex((run) =>
+          run.args.join(" ").includes(REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG),
+        );
+        assert.ok(clone !== -1 && setup > clone);
+        assert.equal(runs[setup]?.env.DATABASE_URL, "postgres://fixture");
+        // The runner's own credentials stay in the runner's environment alone.
+        const runner = api.commands.find((each) => each.user === "agent");
+        assert.ok(runner !== undefined);
+        for (const secret of [runner.env[RUNNER_ENV.CLAUDE_TOKEN], runner.env[RUNNER_ENV.BEARER]]) {
+          assert.ok(secret !== undefined);
+          assert.equal(JSON.stringify(runs[setup]?.env).includes(secret), false);
+        }
       }),
   );
 

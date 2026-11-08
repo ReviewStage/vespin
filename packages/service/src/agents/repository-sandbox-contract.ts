@@ -22,6 +22,8 @@ export const REPOSITORY_SANDBOX_CONTRACT = {
     WORKSPACE: "/workspace",
     CHECKOUT: "/workspace/repository",
     CHECKOUT_RECORD: `${SANDBOX_STATE_FOLDER}/repository`,
+    /** What the workspace's cloud setup scripts printed as the sandbox was created, and how they exited. */
+    SETUP_LOG: "/tmp/vespin-setup.log",
   },
   VARIABLE: {
     /** The repository the call is about, `owner/name`, read by the probe and the checkout. */

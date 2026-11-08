@@ -158,6 +158,10 @@ import {
 } from "@repo/database/models/runner-line-store";
 import { turnAwaitedByLine } from "@repo/database/models/turn-state";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
+import {
+  readInstallScript,
+  readRepositorySetup,
+} from "@repo/database/models/workspace-sandbox-script-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
@@ -212,6 +216,7 @@ import {
   type RunnerCredential,
   type RunnerHandle,
   type RunnerMark,
+  type SandboxSetup,
 } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
@@ -646,6 +651,39 @@ function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) {
     if (ring === undefined || Result.isFailure(ring)) return {};
     return yield* openWorkspaceEnvironment(ring.success, agent.organizationId);
   });
+}
+
+/**
+ * The agent's workspace's cloud setup scripts for a sandbox its launch
+ * creates on a cloud machine, with the workspace's variables the setup
+ * script runs with: its install script, and its repository's setup script,
+ * each where one is saved; none on a Mac, where neither is saved, or where
+ * they could not be read, which leaves the sandbox set up as before.
+ */
+function sandboxSetupOf(agent: Agent, machine: AgentMachineKind) {
+  return Effect.gen(function* () {
+    if (machine !== AGENT_MACHINE.VERCEL || agent.repository === null) return undefined;
+    const [install, repository] = yield* Effect.all(
+      [
+        readInstallScript(agent.organizationId),
+        readRepositorySetup(agent.organizationId, agent.repository),
+      ],
+      { concurrency: "unbounded" },
+    );
+    if (Option.isNone(install) && Option.isNone(repository)) return undefined;
+    return {
+      install: Option.getOrUndefined(Option.map(install, (row) => row.script)),
+      repository: Option.getOrUndefined(Option.map(repository, (row) => row.script)),
+      environment: yield* workspaceEnvironmentOf(agent, machine),
+    } satisfies SandboxSetup;
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`A workspace's cloud setup was not read: ${failure._tag}`),
+        undefined,
+      ),
+    ),
+  );
 }
 
 /** How a message reached its runner, as the handoff counts it. */
@@ -1488,12 +1526,14 @@ export const runnerSessions = <
         const target: ConversationTarget = { userId, conversationId: agent.conversationId };
         // Note that the place opens on the machine the agent's row names, as `open` is routed.
         const kind = agent.machine ?? AGENT_MACHINE.VERCEL;
+        const services = yield* Effect.context<DatabaseServices | HostedEnvironment>();
         yield* machine.open(
           {
             session: sessionId,
             target,
             agent,
             harness: harness.name,
+            setup: Effect.provideContext(sandboxSetupOf(agent, kind), services),
             beside: Effect.all(
               [
                 Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
