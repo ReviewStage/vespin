@@ -72,6 +72,7 @@ import {
 } from "../use-app-state.js";
 import {
   ARCHIVE_NOT_READY,
+  agentStillWriting,
   archiveWords,
   choiceRequest,
   continueFailureNote,
@@ -84,6 +85,7 @@ import {
   START_FAILED_AWAY,
   START_NEEDS_TASK,
   STOP_FAILED,
+  STOP_NOTHING_YET,
   startFailureNote,
 } from "./agent-model.js";
 import {
@@ -1400,18 +1402,28 @@ export function useAgents(input: {
     return undefined;
   };
 
-  // A refused Stop leaves the button as it was, so it says so in a toast.
+  // A refused Stop, or one that found nothing to stop yet, leaves the button as it was, so it says so in a toast.
   const onStop = async (agentId: string): Promise<boolean> => {
     const answer = await sendStop({ agentId }).catch(agentUnreached);
-    const took = !("failure" in answer);
-    if (!took) {
+    if ("failure" in answer) {
       failed(STOP_FAILED, {
         surface: FAILURE_SURFACE.AGENT_STOP,
         cause: answer,
         about: { agentId },
       });
+      return false;
     }
-    return took;
+    // An agent still at work once its Stop answered is one the Stop found nothing to stop in yet.
+    if (agentStillWriting(answer.agent.status)) {
+      toast({
+        replayUnmasked: true,
+        words: STOP_NOTHING_YET,
+        tone: STATUS_TONE.ATTENTION,
+        hold: TOAST_HOLD.FAILED,
+      });
+      return false;
+    }
+    return true;
   };
 
   // A refused Try again leaves the end line offering it, so it says so in a toast.

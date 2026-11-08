@@ -53,7 +53,7 @@ import { instancePublishedCache } from "../agents/coder-host/published.js";
 import type { SummaryModelOf } from "../agents/coder-host/replay-summary.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { messagesProcedures } from "../agents/messages-procedures.js";
-import { type SandboxStopReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
+import { type SandboxDeleteReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import {
   type AgentSessions,
   SESSION_CANCEL_OUTCOME,
@@ -417,7 +417,7 @@ export const standing = (
   github: FakeGitHub,
   agentSessions: ReturnType<typeof fakeAgentSessions>,
   summaryModel: SummaryModelOf = () => Effect.succeed(undefined),
-  sessionSandboxes: SandboxStopReach["sessionSandboxes"] = sessionSandboxesLayer,
+  sessionSandboxes: SandboxDeleteReach["sessionSandboxes"] = sessionSandboxesLayer,
   titleModel: InboxTitleModelOf = () => Effect.succeed(undefined),
   afterResponse: Layer.Layer<AfterResponse> | Layer.Layer<never> = Layer.empty,
 ) =>
@@ -668,7 +668,7 @@ export const openTask = (
     /** The model a replay's summary is written on; none unless a test names one. */
     readonly summaryModel?: SummaryModelOf;
     /** The sandboxes an archive stops; Vercel's own, which a test with no token in its environment finds unavailable, unless a test scripts them. */
-    readonly sessionSandboxes?: SandboxStopReach["sessionSandboxes"];
+    readonly sessionSandboxes?: SandboxDeleteReach["sessionSandboxes"];
     /** The model an untitled inbox thread's title is generated on; none unless a test names one. */
     readonly titleModel?: InboxTitleModelOf;
     /** Where a request's after-response work goes; run inline, before the answer is read, unless a test keeps it (`keptAfterResponse`). */
@@ -997,7 +997,7 @@ export function openedParts(agentSessions: ReturnType<typeof fakeAgentSessions>)
 export const messagedAgent = (
   agentSessions: ReturnType<typeof fakeAgentSessions>,
   turn: { readonly running: boolean } | undefined,
-  sessionSandboxes?: SandboxStopReach["sessionSandboxes"],
+  sessionSandboxes?: SandboxDeleteReach["sessionSandboxes"],
   afterResponse?: Layer.Layer<AfterResponse>,
 ) =>
   Effect.flatMap(

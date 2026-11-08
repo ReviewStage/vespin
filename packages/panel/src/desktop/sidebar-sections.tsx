@@ -50,13 +50,7 @@ import {
 } from "@repo/ui";
 import { FolderPlusIcon, MailOpenIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  type DrawnTaskRow,
-  type HiddenStatus,
-  TASK_ROW,
-  type TaskRow,
-  taskRowKey,
-} from "@repo/ui/task-list-model";
+import { type DrawnTaskRow, TASK_ROW, type TaskRow, taskRowKey } from "@repo/ui/task-list-model";
 import {
   memberSection,
   placeAllWrites,
@@ -83,7 +77,7 @@ import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-mo
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
 import { foldedCount, SIDEBAR_SECTION_SLOT, sidebarFold, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
-import { HiddenStatusesLine, NONE_MATCH } from "./sidebar-task-view.js";
+import { NONE_MATCH } from "./sidebar-task-view.js";
 import { useFormDialog } from "./use-form-dialog.js";
 import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
 
@@ -561,10 +555,8 @@ export interface DrawnSection {
   readonly rows: readonly TaskRow[];
 }
 
-/** A section as the view draws it: the rows it leaves standing, and what it leaves out of the rest. */
+/** A section as the view draws it: the rows it leaves standing, and whether Assigned to leaves any out. */
 export interface ShownSection extends DrawnSection {
-  /** Its rows of the people Assigned to holds that the statuses shown leave out, counted by status, which the section says itself rather than the list's foot. */
-  readonly hidden: readonly HiddenStatus[];
   /** Whether it holds rows Assigned to leaves out, so that it holds nothing in view is no call to drag tasks in. */
   readonly othersHeld: boolean;
 }
@@ -602,8 +594,6 @@ interface SectionContext {
   readonly onDropRow: (row: TaskRow, zone: string, at: number) => void;
   /** Hears a row lifted into a drag and that drag ended, while which an empty Pinned stands to take it. */
   readonly onCarried: (carried: boolean) => void;
-  /** Opens the Tasks page, where the tasks a section's view leaves out are browsed. */
-  readonly onOpenBoard: () => void;
 }
 
 /** What a section's actions on all its tasks run through beyond the section's writes: each asks or reaches past the sections. */
@@ -733,21 +723,12 @@ function SectionRows({
 }
 
 /**
- * What a section draws under its rows, or in their place while the view
- * leaves none standing: how many more its statuses hidden hold, which opens
- * the Tasks page as the list's foot does; else, holding none, that Assigned
- * to leaves out what it holds, or a word that tasks are dragged in.
+ * What a section draws in place of its rows while the view leaves none
+ * standing: that Assigned to leaves out what it holds, or a word that tasks
+ * are dragged in; nothing while it draws rows.
  */
-function SectionFoot({
-  drawn,
-  onOpenBoard,
-}: {
-  drawn: ShownSection;
-  onOpenBoard: () => void;
-}): React.JSX.Element | null {
-  if (drawn.rows.length > 0 || drawn.hidden.length > 0) {
-    return <HiddenStatusesLine hidden={drawn.hidden} onOpen={onOpenBoard} />;
-  }
+function SectionFoot({ drawn }: { drawn: ShownSection }): React.JSX.Element | null {
+  if (drawn.rows.length > 0) return null;
   return (
     <div className={SIDEBAR_SECTION_SLOT}>
       <NoteLine look={NOTE_LINE_LOOK.INSET}>
@@ -817,9 +798,9 @@ function SidebarSection({
         glyph={glyph}
         label={<ReplayMask>{section.title}</ReplayMask>}
         fold={sidebarFold(folded, () => context.onToggle(section.id))}
-        // Note that a section the view leaves nothing standing in, though it holds rows, counts none, because a 0 would call it empty.
+        // Note that a section Assigned to leaves nothing standing in, though it holds rows, counts none, because a 0 would call it empty.
         count={
-          drawn.rows.length === 0 && (drawn.hidden.length > 0 || drawn.othersHeld)
+          drawn.rows.length === 0 && drawn.othersHeld
             ? undefined
             : foldedCount(folded, drawn.rows.length, TASK_NOUN)
         }
@@ -842,7 +823,7 @@ function SidebarSection({
         {drawn.rows.length === 0 ? null : (
           <SectionRows drawn={drawn} context={context} rows={drawn.rows} folded={false} />
         )}
-        <SectionFoot drawn={drawn} onOpenBoard={context.onOpenBoard} />
+        <SectionFoot drawn={drawn} />
       </GroupHeader>
       {menu.drawn === undefined ? null : (
         <ActionMenu

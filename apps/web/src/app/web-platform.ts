@@ -154,7 +154,10 @@ export function browserCommandKey(browser: SystemNaming = navigator): CommandKey
  * admin plugin (`auth-client.ts`).
  */
 export function webPlatform(
-  shell: Pick<AppPlatform, "recordSurfaceEvent" | "unsavedWork" | "unsavedDescriptionWords">,
+  shell: Pick<
+    AppPlatform,
+    "recordSurfaceEvent" | "unsavedWork" | "unsavedDescriptionWords" | "askForNotifications"
+  >,
   linkPlatform: LinkPlatform = browserLinkPlatform(),
   commandKey: CommandKey = browserCommandKey(),
 ): AppPlatform {
@@ -182,5 +185,7 @@ export function webPlatform(
   if (shell.unsavedWork !== undefined) platform.unsavedWork = shell.unsavedWork;
   if (shell.unsavedDescriptionWords !== undefined)
     platform.unsavedDescriptionWords = shell.unsavedDescriptionWords;
+  if (shell.askForNotifications !== undefined)
+    platform.askForNotifications = shell.askForNotifications;
   return platform;
 }

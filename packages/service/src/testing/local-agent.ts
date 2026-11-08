@@ -100,7 +100,6 @@ const LOCAL_AGENT_SERVICES = Layer.mergeAll(
   NO_GITHUB,
   Layer.succeed(AgentImage, {
     reference: Effect.die(new Error("a Mac opens no image")),
-    base: Effect.die(new Error("a Mac opens no image")),
     runner: Effect.die(new Error("a Mac opens no image")),
   }),
 );

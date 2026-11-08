@@ -2,9 +2,9 @@
  * vocabulary.ts -- what a caller of a sandbox speaks in, whichever provider runs it: a sandbox's statuses, the calls made and the failures they answer, and the shapes of a sandbox, its run, its commands, its files, and its network policy.
  *
  * Nothing here names who asks or who answers: a sandbox is named, tagged,
- * and opened from the image or snapshot its caller hands, what a name or a
- * tag means is the caller's, and how a provider spells any of it is its
- * adapter's (`vercel/`).
+ * and opened from the image or snapshot its caller hands, with the drive it
+ * asks for, what a name or a tag means is the caller's, and how a provider
+ * spells any of it is its adapter's (`vercel/`).
  */
 
 import { Data, type Redacted } from "effect";
@@ -257,6 +257,28 @@ export type DetachedCommandAsk = CommandAsk &
 /** What a sandbox is opened from: an image in the project's registry, or a snapshot. */
 export type SandboxSource = { readonly image: string } | { readonly snapshotId: string };
 
+/** What a sandbox's own drive is forked from: a base drive, by its name, or the drive another sandbox owns, by that sandbox's name. */
+export type DriveOrigin = { readonly base: string } | { readonly ownedBy: string };
+
+/**
+ * A drive a sandbox opens with, mounted writable at the absolute path
+ * `at`, its files kept apart from the sandbox's own disk and its snapshots:
+ * a base drive, by its name, made empty where none stands, mounted to be
+ * filled (`fill`), which one sandbox fills at a time and many fork; or a
+ * drive of the sandbox's own forked from a base drive or from another
+ * sandbox's own (`fork`), copying its files as they stand; or the drive an
+ * earlier create under the sandbox's name forked (`own`), mounted again as it
+ * stands, as after its kept snapshot lapsed, and none where it forked none.
+ * A sandbox owns the drive it forked, which its delete deletes with it, so
+ * neither goes without the other; it never owns a base drive, which no
+ * sandbox's delete touches. A fork whose origin is missing, or was never
+ * filled, answers as gone (`SandboxGone`).
+ */
+export type SandboxDrive =
+  | { readonly fill: string; readonly at: string }
+  | { readonly fork: DriveOrigin; readonly at: string }
+  | { readonly own: true; readonly at: string };
+
 /**
  * A user made in a sandbox, in the group of the sandbox's default user, who
  * writes what a file write writes, the checkout among it, so the two share
@@ -270,14 +292,16 @@ export interface SandboxUser {
 
 /**
  * A sandbox opened from an image or a snapshot: its name, what it is opened
- * from, its tags, how large a run is, how long its kept snapshot lasts after
- * its last use, and its variables. Each run lasts `SANDBOX_IDLE` past its
- * last touch, which no caller chooses. It keeps its newest snapshot alone,
- * which is all a resume reads.
+ * from, the drive it opens with where it asks one, its tags, how large a run
+ * is, how long its kept snapshot lasts after its last use, and its
+ * variables. Each run lasts `SANDBOX_IDLE` past its last touch, which no
+ * caller chooses. It keeps its newest snapshot alone, which is all a resume
+ * reads; a drive it opened with is mounted again at every resume.
  */
 export interface SandboxCreate {
   readonly name: string;
   readonly from: SandboxSource;
+  readonly drive?: SandboxDrive;
   readonly tags: Readonly<Record<string, string>>;
   /** How many vCPUs it runs on; where unsaid, the provider's default. */
   readonly vcpus?: number;

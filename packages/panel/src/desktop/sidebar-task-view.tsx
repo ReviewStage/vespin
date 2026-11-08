@@ -7,24 +7,17 @@ import {
   GroupAction,
   IconButton,
   MENU_ITEM_MARK,
-  TextButton,
   Tooltip,
   useMenu,
 } from "@repo/ui";
 import { ACTOR_KIND, type Actor, actorName, creatorActor, memberActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  ASSIGNED_TO,
-  type AssignedTo,
-  type HiddenStatus,
-  TASK_GROUPING,
-} from "@repo/ui/task-list-model";
+import { ASSIGNED_TO, type AssignedTo, TASK_GROUPING } from "@repo/ui/task-list-model";
 import { FolderGitIcon, SlidersHorizontalIcon } from "lucide-react";
 import { useAppCommand } from "../app-commands.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { memberReadNote, PEOPLE_FILTER, peopleFilterActions } from "../member-rows.js";
-import { TASK_STATUS_WORDS } from "../tasks/task-standing.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { actionSearchPanel } from "./action-search-menu.js";
 import type { TaskListViewControl } from "./task-list-view.js";
@@ -215,29 +208,6 @@ export function tasksHeadWords(
 
 /** What the list says where its filters leave nothing, as the Tasks page says it; a section says it where they leave none of its rows. */
 export const NONE_MATCH = "No tasks match this view.";
-
-/** What the hidden tasks' line says: how many, and in which statuses, as `4 more in Backlog, Done`. */
-function hiddenStatusesLine(hidden: readonly HiddenStatus[]): string {
-  const count = hidden.reduce((sum, each) => sum + each.count, 0);
-  return `${count} more in ${hidden.map((each) => TASK_STATUS_WORDS[each.status]).join(", ")}`;
-}
-
-/** The quiet line at the list's foot saying what the list leaves out, which opens the Tasks page; nothing where it leaves nothing out. */
-export function HiddenStatusesLine({
-  hidden,
-  onOpen,
-}: {
-  hidden: readonly HiddenStatus[];
-  /** Opens the Tasks page, where every status's tasks are browsed. */
-  onOpen: () => void;
-}): React.JSX.Element | null {
-  if (hidden.length === 0) return null;
-  return (
-    <p className="sidebar-hidden-statuses mx-row-inset my-tight-gap text-caption text-muted-foreground">
-      <TextButton onClick={onOpen}>{hiddenStatusesLine(hidden)}</TextButton>
-    </p>
-  );
-}
 
 /** Each choice's command offered only where taking it changes the view; nothing where `offered` is false. */
 function offer(offered: boolean, changes: boolean, run: () => void): (() => void) | undefined {

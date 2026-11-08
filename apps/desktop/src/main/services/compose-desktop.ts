@@ -10,6 +10,7 @@ import {
   type OperatorClient,
   publishAppStateChanges,
 } from "@repo/host/client";
+import { PUSH } from "@repo/host/contract";
 import {
   ALL_CLIENT_CAPABILITIES,
   type DuplicateGatewayMethod,
@@ -306,7 +307,9 @@ export function composeDesktop(
           again: () => config.quit(),
         }),
       );
-      // A command ask's notification clicked brings the window forward, where its prompt stands.
+      // A command ask's notification clicked brings the window forward, where its prompt stands; a
+      // notification of news, on the place it names, which opens as an app link's place does, under
+      // the workspace the window stands in.
       const noticeDoors = electronNoticeDoors({
         onAnswered: (status) => {
           if (state.snapshot().notifications.status !== status) {
@@ -319,7 +322,13 @@ export function composeDesktop(
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
-        presenter: { openMacCommandAsk: () => windows.panels.focusExpanded() },
+        presenter: {
+          openMacCommandAsk: () => windows.panels.focusExpanded(),
+          openPlace: (place) => {
+            windows.panels.focusExpanded();
+            windows.panels.broadcast(PUSH.SHOW_LINK, { workspace: "", place });
+          },
+        },
         onPanelFocusChanged: windows.onPanelFocusChanged,
         report: config.report,
       }).pipe(Effect.provideService(AgentNoticeDoors, noticeDoors));

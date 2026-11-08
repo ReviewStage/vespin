@@ -4,7 +4,6 @@ import {
   type AgentMachineKind,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { descriptionAttachmentIdsIn } from "@repo/features/description-attachment-link";
 import type { DescriptionSectionWriter } from "@repo/features/description-document";
 import {
   type DescriptionAgentEdit,
@@ -75,7 +74,6 @@ import { taskSectionEntry } from "../schemas/task-section.js";
 import { agentAutomationNameSql } from "./agent-name.js";
 import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
-import { stampSavedAttachments } from "./description-attachments.js";
 import { readLastEdit, readSectionWriters } from "./description-revisions.js";
 import { type Device, devicesNamed } from "./device-store.js";
 import {
@@ -1563,8 +1561,7 @@ export interface DescriptionTextSaveExtras {
 
 /**
  * Replaces the text of a task that is one document, with the agents' journal
- * where it is handed, stamps the description's pictures the text names as saved, and answers
- * the task as saved, or nothing where the account reaches no such task; nothing
+ * where it is handed, and answers the task as saved, or nothing where the account reaches no such task; nothing
  * is ever created here.
  */
 export function saveDescriptionText(
@@ -1576,9 +1573,6 @@ export function saveDescriptionText(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const row = yield* replaceText({ userId, taskId, text, ...extras, now });
-    // The pictures the text names are stamped saved, so a rollback to a release that still purges unsaved ones spares them.
-    if (Option.isSome(row))
-      yield* stampSavedAttachments(taskId, descriptionAttachmentIdsIn(text, taskId));
     return yield* Effect.transposeOption(Option.map(row, (saved) => taskOf(userId, saved)));
   });
 }

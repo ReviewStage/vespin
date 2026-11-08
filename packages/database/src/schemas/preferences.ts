@@ -68,6 +68,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   completionSound: text("completion_sound").$type<CompletionSound>(),
   /**
+   * Whether the OS posts a notification as an agent the account started
+   * finishes or asks, while the window is behind; null until the account
+   * chooses, which reads as off. A part of the snapshot of its own, as the
+   * link choice is.
+   */
+  turnNotifications: boolean("turn_notifications"),
+  /**
    * What the account answered in setup's survey, as its JSON
    * (`@repo/settings`'s `OnboardingSurvey`: how it heard of us, its role,
    * what it hopes we help with, and its words beside any Other); null until

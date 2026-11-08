@@ -21,7 +21,8 @@ export interface MicrophoneControl {
 /**
  * What macOS last answered a notification of the app's: nothing yet, showed it,
  * or refused it, which is the only word Electron gives of whether
- * notifications are on for the app.
+ * notifications are on for the app; in a browser, whether it lets the site
+ * post them: not yet asked, allowed, or blocked.
  */
 export const NOTIFICATIONS_STATUS = {
   UNKNOWN: "unknown",
@@ -32,9 +33,11 @@ export const NOTIFICATIONS_STATUS = {
 export type NotificationsStatus = (typeof NOTIFICATIONS_STATUS)[keyof typeof NOTIFICATIONS_STATUS];
 
 /**
- * Whether macOS shows the app's notifications, which the one notification the app
- * posts, a command waiting on this Mac, reaches the developer through, and
- * the one place that grant can be changed.
+ * Whether the system shows the app's notifications, which a command waiting
+ * on this Mac, and an agent's finish or ask where the account turned
+ * notifications on, reach the developer through, and the one place that
+ * grant can be changed. In a browser, the status is the browser's leave,
+ * which no page can open the place of.
  */
 export interface NotificationsControl {
   status: NotificationsStatus;

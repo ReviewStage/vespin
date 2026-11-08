@@ -17,7 +17,8 @@ import { CatalogSection } from "../section";
 
 /**
  * toolbars.tsx -- a workspace's bar with its title and actions; one whose
- * title opens what it names, filled while that stands; one led by a
+ * title opens what it names, filled while that stands, and renamed where it
+ * stands; one led by a
  * way back, a tag after its title; one led by a control at the column's own
  * edge; a narrow bar, whose title fades where cut rather than wrapping; a
  * bar told to fold, its controls' glyphs alone; a tab strip's bar in a narrow
@@ -47,6 +48,30 @@ function TitlePressBar(): React.JSX.Element {
   );
 }
 
+/** A task's bar whose name is renamed where it stands, its field opened over the name until Return or Escape. */
+function RenamedTitleBar(): React.JSX.Element {
+  const [name, setName] = useState("Teammate invitations");
+  const [editing, setEditing] = useState(true);
+  return (
+    <Toolbar
+      title={name}
+      titlePress={{ open: false, label: "Task details", onPress: () => setEditing(true) }}
+      titleEdit={
+        editing
+          ? {
+              label: "Task name",
+              maxLength: 120,
+              onEnd: ({ value }) => {
+                setEditing(false);
+                if (value !== undefined) setName(value);
+              },
+            }
+          : undefined
+      }
+    />
+  );
+}
+
 function Toolbars(): React.JSX.Element {
   return (
     <>
@@ -55,6 +80,9 @@ function Toolbars(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="toolbar-title-press" title="A title that opens what it names">
         <TitlePressBar />
+      </CatalogSection>
+      <CatalogSection id="toolbar-title-edit" title="A title renamed where it stands">
+        <RenamedTitleBar />
       </CatalogSection>
       <CatalogSection id="toolbar-lead" title="Led by a way back, a tag after the title">
         <Toolbar

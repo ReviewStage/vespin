@@ -168,10 +168,13 @@ it.each<[string, string, InboxItemHere, Route]>([
   ],
   ["an Inbox item: its task's plan, the window's", `${APP}/plan/${TASK}`, ITEM, NOTHING],
   [
-    "an Inbox item: an agent of its task, its transcript beside it",
+    "an Inbox item: an agent of its task, archived or not, to the task on its tab, never beside it",
     `${APP}/plan/${TASK}/agent/${AGENT}`,
     ITEM,
-    beside({ kind: THING.TRANSCRIPT, agentId: AGENT }),
+    go({
+      workspace: "acme",
+      place: { kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT },
+    }),
   ],
   [
     "an Inbox item: an agent under another task, the window's",
@@ -181,30 +184,15 @@ it.each<[string, string, InboxItemHere, Route]>([
   ],
   ["an Inbox item: an agent not of its task, the window's", `${APP}/agent/${OTHER}`, ITEM, NOTHING],
   [
-    "an Inbox item: an archived agent of its task, to the task on its tab",
-    `${APP}/plan/${TASK}/agent/${AGENT}`,
-    { ...ITEM, ...ARCHIVED },
-    go({
-      workspace: "acme",
-      place: { kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT },
-    }),
-  ],
-  [
     "an Inbox item: an archived agent's Changes, beside it",
     `${APP}/agent/${AGENT}/changes`,
     { ...ITEM, ...ARCHIVED },
     beside({ kind: THING.CHANGES, agentId: AGENT }),
   ],
   [
-    "an Inbox item: a message of an agent of its task, its transcript beside it at the message",
+    "an Inbox item: a message of an agent of its task, the window's, which opens the agent's tab at it",
     `${APP}/agent/${AGENT}/message/${MESSAGE}`,
     ITEM,
-    beside({ kind: THING.TRANSCRIPT, agentId: AGENT, messageId: MESSAGE }),
-  ],
-  [
-    "an Inbox item: a message of an archived agent of its task, the window's",
-    `${APP}/plan/${TASK}/agent/${AGENT}/message/${MESSAGE}`,
-    { ...ITEM, ...ARCHIVED },
     NOTHING,
   ],
   [

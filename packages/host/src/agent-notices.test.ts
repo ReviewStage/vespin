@@ -25,6 +25,7 @@ const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const MODEL = "anthropic/claude-opus-5.5";
 const TURN_ID = "3f1c2b7a-9d4e-4a6b-8c1d-2e5f6a7b8c9d";
 const ACCOUNT = "dean@example.com";
+const TASK_NAME = "Fix invitations";
 const OTHER_ACCOUNT = "sam@example.com";
 
 function agent(status: AgentStatus, patch: Partial<AgentSummary> = {}): AgentSummary {
@@ -60,6 +61,8 @@ function fixture() {
   const chimes: CompletionSound[] = [];
   /** When the account plays a sound, which no sound unless a test turns one on. */
   let soundWhen: SoundWhen = SOUND_WHEN.OFF;
+  /** Whether the account posts notifications, which none unless a test turns them on. */
+  let notifying = false;
   /** Whether the badge door throws, as a platform that refuses one may. */
   let refusingBadges = false;
   const doors = Layer.succeed(AgentNoticeDoors, {
@@ -123,6 +126,9 @@ function fixture() {
         failedRuns.push(next.failedRuns);
       },
       sound: () => ({ when: soundWhen, sound: COMPLETION_SOUND.MARIMBA }),
+      notify: () => notifying,
+      taskName: (taskId) => (taskId === TASK_ID ? TASK_NAME : undefined),
+      open: () => undefined,
       report: () => undefined,
     });
   }).pipe(Effect.provide(doors));
@@ -133,6 +139,10 @@ function fixture() {
     /** When the account plays a sound, as its preference says now. */
     playSound: (when: SoundWhen) => {
       soundWhen = when;
+    },
+    /** Whether the account posts notifications, as its preference says now. */
+    showNotifications: (on: boolean) => {
+      notifying = on;
     },
     unseen,
     focus: (focused: boolean) => {
@@ -1048,5 +1058,67 @@ it.effect("ends inside one burst chime once, and an end after it chimes again", 
     end("a1b2c3d4-0000-4000-8000-000000000014");
 
     assert.deepEqual([burst, f.chimes.length], [1, 2]);
+  }),
+);
+
+it.effect(
+  "a turn of the account's own agent ending in the background posts a notification naming the agent, once the burst closes",
+  () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const notices = yield* f.notices;
+      f.showNotifications(true);
+      f.focus(false);
+
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { title: "Ship the chime" })]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.FAILED, { title: "Ship the chime" })]);
+      yield* TestClock.adjust(Duration.seconds(2));
+
+      assert.deepEqual(
+        f.posted.map(({ title, body }) => ({ title, body })),
+        [{ title: "Ship the chime", body: "Your agent failed." }],
+      );
+    }),
+);
+
+it.effect.each([
+  { what: "notifications off", on: false, focused: false },
+  { what: "the window focused", on: true, focused: true },
+])("an end under $what posts nothing", ({ on, focused }) =>
+  Effect.gen(function* () {
+    const f = fixture();
+    const notices = yield* f.notices;
+    f.showNotifications(on);
+    f.focus(focused);
+
+    notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING)]);
+    notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED)]);
+    yield* TestClock.adjust(Duration.seconds(2));
+
+    assert.deepEqual(f.posted, []);
+  }),
+);
+
+it.effect("ends inside one burst post one notification counting them", () =>
+  Effect.gen(function* () {
+    const f = fixture();
+    const notices = yield* f.notices;
+    f.showNotifications(true);
+    f.focus(false);
+    for (const id of [
+      "a1b2c3d4-0000-4000-8000-000000000021",
+      "a1b2c3d4-0000-4000-8000-000000000022",
+      "a1b2c3d4-0000-4000-8000-000000000023",
+    ]) {
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { id })]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED, { id })]);
+      yield* TestClock.adjust(Duration.millis(400));
+    }
+    yield* TestClock.adjust(Duration.seconds(2));
+
+    assert.deepEqual(
+      f.posted.map(({ title }) => title),
+      ["3 agents finished"],
+    );
   }),
 );

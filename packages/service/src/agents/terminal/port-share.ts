@@ -1,5 +1,5 @@
 /**
- * port-share.ts -- one port of an agent's running sandbox shared by a public link: the helper that serves it, the public route opened to the helper, and the tag that marks the sandbox shared.
+ * port-share.ts -- one port of an agent's running sandbox shared by a public link: the helper that serves it, the public route opened to the helper, and the row that keeps the share.
  *
  * A sandbox serves a port on a public route, which anyone holding its
  * address may open. Only the helper's own fixed port is ever routed: the
@@ -15,11 +15,17 @@
  * which the sweep reads to close a link no one has visited lately
  * (`maintenance/port-share-sweep.ts`); starting the helper counts as one.
  *
- * The share is marked on the sandbox by a tag, which the sweep lists by.
- * Closing it closes the route, drops the tag, and removes the folder, which
- * the helper notices and leaves. Nothing here reads a byte the link carries.
+ * The share is kept in the store by the agent's session
+ * (`@repo/database/models/sandbox-port-shares`), which the sweep lists, and
+ * never on the sandbox, whose tags are left as they stand. Closing it closes
+ * the route, removes the folder, which the helper notices and leaves, and
+ * forgets the row. A row the store could not write or forget fails the call
+ * as the sandbox unavailable, so a caller retries it as any other. Nothing
+ * here reads a byte the link carries.
  */
 
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { forgetPortShare, recordPortShare } from "@repo/database/models/sandbox-port-shares";
 import {
   type CommandAsk,
   type ListedSandbox,
@@ -29,8 +35,7 @@ import {
   type SandboxService,
   SandboxUnavailable,
 } from "@repo/sandbox";
-import { Duration, Effect } from "effect";
-import { AGENT_TAG, agentTag, SESSION_TAG } from "../agent-sandbox-open.js";
+import { DateTime, Duration, Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
@@ -39,9 +44,6 @@ export const PORT_SHARE = {
   HELPER_PORT: 48_211,
   /** How long a link stays open past its last visit. */
   IDLE: Duration.minutes(10),
-  /** The tag a shared sandbox carries, and its one value. */
-  TAG: "portShare",
-  TAG_ON: "on",
   /** The folder the port shared and the last visit are written in. */
   FOLDER: `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}/share`,
 } as const;
@@ -111,22 +113,14 @@ function readShare(): CommandAsk {
   };
 }
 
-/**
- * The sandbox's tags as a share writes them whole: its session, its agent
- * (read under either of the agent tag's names, written under the current
- * one), and the share's mark where shared. Note that every other tag is
- * dropped, because the provider refuses a sandbox more than five, and a sandbox
- * from before the runner's state moved to our store still carries three
- * leftovers that would push the mark past it.
- */
-function tagsOf(sandbox: ListedSandbox, shared: boolean): Record<string, string> {
-  const session = sandbox.tags?.[SESSION_TAG];
-  const agent = agentTag(sandbox.tags);
-  return {
-    ...(session === undefined ? {} : { [SESSION_TAG]: session }),
-    ...(agent === undefined ? {} : { [AGENT_TAG]: agent }),
-    ...(shared ? { [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON } : {}),
-  };
+/** A store failure keeping the share's row, as the sandbox unavailable, in words naming no value. */
+function kept<A>(
+  effect: Effect.Effect<A, StoreFailure, DatabaseServices>,
+): Effect.Effect<A, SandboxError, DatabaseServices> {
+  return Effect.mapError(
+    effect,
+    () => new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "the share's row" }),
+  );
 }
 
 /** The share as the folder holds it: the port shared and its last visit; none where it holds no port. */
@@ -142,20 +136,24 @@ export function readSharedPort(
   });
 }
 
-/** Shares the port from the running sandbox, replacing any shared before, answering its public link. */
+/**
+ * Shares the port from the session's running sandbox, replacing any shared
+ * before, answering its public link. Note that the row is kept before the
+ * helper starts, because a share the sweep cannot list stays open for as
+ * long as its sandbox, while a row whose share never opened is only closed
+ * again by the sweep.
+ */
 export function sharePort(
   api: SandboxService,
+  sessionId: string,
   sandbox: ListedSandbox,
   running: SandboxRunning,
   port: number,
-): Effect.Effect<string, SandboxError> {
+): Effect.Effect<string, SandboxError, DatabaseServices> {
   return Effect.gen(function* () {
+    yield* kept(recordPortShare(sessionId, port, yield* DateTime.nowAsDate));
     yield* api.start(running, { ...startHelper(port), env: {}, sudo: false });
-    const routes = yield* api.updatePorts(
-      sandbox.name,
-      [PORT_SHARE.HELPER_PORT],
-      tagsOf(sandbox, true),
-    );
+    const routes = yield* api.updatePorts(sandbox.name, [PORT_SHARE.HELPER_PORT]);
     const route = routes.find((each) => each.port === PORT_SHARE.HELPER_PORT);
     if (route === undefined) {
       return yield* new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "no route" });
@@ -164,16 +162,18 @@ export function sharePort(
   });
 }
 
-/** Closes the sandbox's share: no public route, no mark, and, while it runs, the helper gone with its folder. */
+/** Closes the session's share: no public route, and, while the sandbox runs, the helper gone with its folder, then its row forgotten. */
 export function unsharePort(
   api: SandboxService,
+  sessionId: string,
   sandbox: ListedSandbox,
   running: SandboxRunning | undefined,
-): Effect.Effect<void, SandboxError> {
+): Effect.Effect<void, SandboxError, DatabaseServices> {
   return Effect.gen(function* () {
-    yield* api.updatePorts(sandbox.name, [], tagsOf(sandbox, false));
+    yield* api.updatePorts(sandbox.name, []);
     if (running !== undefined)
       yield* api.run(running, { command: "rm", args: ["-rf", PORT_SHARE.FOLDER] });
+    yield* kept(forgetPortShare(sessionId));
   });
 }
 

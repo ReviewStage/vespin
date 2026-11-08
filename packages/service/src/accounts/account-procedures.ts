@@ -289,6 +289,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
      * commits, `setupFinished`, whether the account
      * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
      * `completionSound`, when and which sound plays as an agent finishes,
+     * `turnNotifications`, whether a notification is posted then, `agent`, a choice the catalog
      * `onboardingSurvey`, what it answered in setup's survey, `agent`, a choice the catalog
      * accepts, moved only to a model the account pays for, `chaptersModel`, one of the chapters' fixed set, and `experiments`, each experiment's on or off merged over
      * what stood — and answers the snapshot as it then stands. A body
@@ -306,6 +307,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         body.setupPlace === undefined &&
         body.soundWhen === undefined &&
         body.completionSound === undefined &&
+        body.turnNotifications === undefined &&
         body.onboardingSurvey === undefined &&
         body.agent === undefined &&
         body.chaptersModel === undefined &&
@@ -356,6 +358,16 @@ export function accountProcedures(seams: AccountProcedureSeams) {
           return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
         }
         write.completionSound = completionSound;
+      }
+      if (body.turnNotifications !== undefined) {
+        const turnNotifications = ownPreferenceFromWire(
+          "turnNotifications",
+          body.turnNotifications,
+        );
+        if (turnNotifications === undefined) {
+          return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+        }
+        write.turnNotifications = turnNotifications;
       }
       if (body.onboardingSurvey !== undefined) {
         const onboardingSurvey = ownPreferenceFromWire("onboardingSurvey", body.onboardingSurvey);

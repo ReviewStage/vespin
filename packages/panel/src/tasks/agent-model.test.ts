@@ -43,6 +43,7 @@ import {
   noteWhileOffline,
   offeredModels,
   offersContinue,
+  offersStop,
   openingLineOf,
   pilotTarget,
   placedMessages,
@@ -532,6 +533,15 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
   );
   assert.equal(workingLineWords("working", waiting), "Working…");
   assert.equal(workingLineWords("waiting"), "Waiting for the runner…");
+});
+
+test("Stop is offered while an agent may still write, a stalled one starting or awaiting its turn included, and not once it has ended", () => {
+  // A line awaiting a turn that never opens reads running with nothing yet to cancel, which a Stop settles where its runner went quiet.
+  const awaitingItsTurn = { status: AGENT_STATUS.RUNNING, stoppable: false } as const;
+  assert.equal(offersStop(awaitingItsTurn), true);
+  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), true);
+  assert.equal(offersStop({ status: AGENT_STATUS.COMPLETED }), false);
+  assert.equal(offersStop({ status: AGENT_STATUS.CANCELED }), false);
 });
 
 test("the working line counts from the press of the line that opened the turn, through the turn and a line steering it", () => {

@@ -776,6 +776,23 @@ test("an item a link names is not found though another task's read failed, and i
   );
 });
 
+test("a link naming a task's item by its agent lists the item once, under its task", async () => {
+  // Note that the agent's own read holds its task's items, as the service reads an agent's items whatever task it works on.
+  world.agentInboxes = new Map([[AGENT.id, [THRESHOLD, RETRY]]]);
+  const { page } = mount();
+  await settle();
+  const rows = listed(page);
+  act(() => world.chooseFromOutside({ agentId: AGENT.id, itemId: THRESHOLD.id, opened: true }));
+  await settle();
+
+  assert.deepEqual(
+    listed(page).map((row) => row.replace("▸ ", "")),
+    rows,
+  );
+  layOut(page, 600);
+  assert.equal(pagerOf(page), "3 of 3", "each item stepped through once");
+});
+
 test("an item a link names under an agent that is not there, deleted or another's, is not found once its page's read says so, and no other item is chosen", async () => {
   const { page } = mount();
   await settle();

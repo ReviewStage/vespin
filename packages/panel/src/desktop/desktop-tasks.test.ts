@@ -997,7 +997,7 @@ test("a page of the task's Overview opens in the side panel beside the agents, a
     },
     sidePanel: {
       ...DOCUMENT_PANEL,
-      onChoose: (opened) => chosen.push(opened),
+      onOpen: (opened) => chosen.push(opened),
       onClose: () => closed.push("panel"),
     },
     pages: [{ id: "page-1", title: "Invite funnel", version: 1, at: 1 }],

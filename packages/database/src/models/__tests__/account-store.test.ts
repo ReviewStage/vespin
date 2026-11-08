@@ -150,6 +150,7 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
         yield* writeAccountPreferences(userId, { setupPlace: SETUP_PLACE });
         yield* writeAccountPreferences(userId, { soundWhen: SOUND_WHEN.BACKGROUND });
         yield* writeAccountPreferences(userId, { completionSound: COMPLETION_SOUND.QUACK });
+        yield* writeAccountPreferences(userId, { turnNotifications: true });
         yield* writeAccountPreferences(userId, { onboardingSurvey: ONBOARDING_SURVEY });
 
         yield* writeAccountPreferences(userId, { preferences: {} });
@@ -162,6 +163,7 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
           setupPlace: SETUP_PLACE,
           soundWhen: SOUND_WHEN.BACKGROUND,
           completionSound: COMPLETION_SOUND.QUACK,
+          turnNotifications: true,
           onboardingSurvey: ONBOARDING_SURVEY,
         });
         assert.deepEqual(

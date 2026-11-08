@@ -19,8 +19,9 @@
  * The ports a server listens on are read the same way, from the kernel's
  * socket tables in the running session (`listening-ports.ts`), and never
  * from a sandbox that is not running. One of them may be shared by a public
- * link (`port-share.ts`), only from a running sandbox; closing the share
- * closes its route whatever the sandbox stands.
+ * link (`port-share.ts`), only from a running sandbox, and kept in the store
+ * the sweep lists; closing the share closes its route whatever the sandbox
+ * stands.
  *
  * The GitHub credential the firewall carries for the agent is set here in
  * the shape its own session and a copy of its work set it
@@ -228,12 +229,16 @@ function agentSandboxOver(
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return undefined;
-        return yield* sharePort(api, sandbox, running, port);
+        return yield* Effect.provideContext(
+          sharePort(api, sessionId, sandbox, running, port),
+          context,
+        );
       }),
     unshare: (sessionId) =>
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
-        if (sandbox !== undefined) yield* unsharePort(api, sandbox, running);
+        if (sandbox !== undefined)
+          yield* Effect.provideContext(unsharePort(api, sessionId, sandbox, running), context);
       }),
     shared: (sessionId) =>
       Effect.gen(function* () {

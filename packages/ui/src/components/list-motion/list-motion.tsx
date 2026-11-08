@@ -228,15 +228,24 @@ function animates(element: Element): boolean {
 /**
  * The entries to draw once `listed` replaces what was drawn: every entry
  * listed, in its order, and every entry drawn that is no longer listed
- * still drawn, leaving, after the entry that stood before it.
+ * still drawn, leaving, after the entry that stood before it. Note that a
+ * key listed twice is drawn once, where it is first listed, because two
+ * rows under one key leave React a row it never takes down, drawn on over
+ * the rows as they stood when it was lost.
  */
 function drawnAfter<T>(
   drawn: readonly Drawn<T>[],
   listed: readonly T[],
   keyOf: (value: T) => string,
 ): Drawn<T>[] {
-  const next: Drawn<T>[] = listed.map((value) => ({ key: keyOf(value), value, leaving: false }));
-  const keys = new Set(next.map((entry) => entry.key));
+  const next: Drawn<T>[] = [];
+  const keys = new Set<string>();
+  for (const value of listed) {
+    const key = keyOf(value);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    next.push({ key, value, leaving: false });
+  }
   let before: string | undefined;
   for (const entry of drawn) {
     if (!keys.has(entry.key)) {

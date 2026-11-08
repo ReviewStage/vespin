@@ -735,13 +735,6 @@
     margin-top: 8px;
   }
 
-  .ui-landing-hidden-statuses {
-    margin: var(--ui-tight-gap) var(--ui-row-inset);
-    color: var(--ui-color-text-muted);
-    font-size: var(--ui-type-caption-size);
-    line-height: var(--ui-type-caption-leading);
-  }
-
   .ui-landing-sidebar-foot {
     display: flex;
     align-items: center;

@@ -361,9 +361,6 @@ const NAME_WEIGHT = { REST: "font-ui-medium", UNREAD: "font-emphasis" } as const
 /** A mark beside the name, a gap from its last letter. */
 const BESIDE = "ui-task-row-beside ms-icon-gap inline-flex flex-none items-center";
 
-/** Where a row's name gives way to its field while it is renamed. */
-const EDITOR = "ui-task-row-press flex min-w-0 items-center font-ui-regular";
-
 /** What did not land, in the name's cell. */
 const NOTE = "ui-task-row-note text-caption text-danger";
 
@@ -675,7 +672,10 @@ export function TaskRow({
   const named = (
     <>
       {editor !== undefined ? (
-        <span className={EDITOR}>{editor}</span>
+        // Note that the field stands where the name stood, in its weight, so the name being typed reads as it will be drawn.
+        <span className={`${PRESS} ${unread ? NAME_WEIGHT.UNREAD : NAME_WEIGHT.REST}`}>
+          {editor}
+        </span>
       ) : hint === undefined ? (
         pressed
       ) : (

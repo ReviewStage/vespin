@@ -454,6 +454,8 @@ function mount(
       linkReads: useLinkReads(),
       // A link's step is written by the window's history beside the tab, where one stands, else the task's place opens by its own door.
       visitTask: (at, step) => windowHistory?.onVisitTask(at, step) ?? false,
+      startStands: () => windowHistory?.onStartStands(),
+      leaveStart: () => windowHistory?.onLeaveStart() ?? false,
     });
     // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);
@@ -3812,6 +3814,43 @@ test("a version's link from the Board, with Descriptions off, stands its task's 
   assert.equal(views?.board, false);
   assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
 });
+
+test("a task pressed on the Board leaves the Board for its task's own place", async () => {
+  const tab = await onInbox(FROM_BOARD);
+  act(() => tab.control().onSelect(BILLING.id));
+  await settle();
+
+  assert.equal(views?.board, false);
+  assert.equal(tab.at(), `/personal/task/${BILLING.id}`);
+});
+
+test.each<[string, (control: TasksControl) => void, string]>([
+  ["the Board", FROM_BOARD, "/personal/tasks"],
+  [
+    "a person's page",
+    (control) => control.onOpenPerson("user-ada", "Ada"),
+    "/personal/person/user-ada",
+  ],
+])(
+  "a task pressed on %s that the host refuses to open stands that page again",
+  async (_page, away, at) => {
+    const tab = mount(
+      {
+        shown: true,
+        history: true,
+        tasks: { ...TWO_WORKSPACES, tasks: [row("notes", 4), BILLING], activeTaskId: "notes" },
+      },
+      { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false) },
+    );
+    await settle();
+    act(() => away(tab.control()));
+    await settle();
+    act(() => tab.control().onSelect(BILLING.id));
+    await settle();
+
+    assert.equal(tab.at(), at);
+  },
+);
 
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
   const tab = await onInbox();

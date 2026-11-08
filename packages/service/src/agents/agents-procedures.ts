@@ -128,14 +128,14 @@ import {
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
-import type { SandboxStopReach } from "./session-sandboxes.js";
+import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
 import { runOnMacStanding } from "./workspace-tools.js";
 
-export interface AgentsProcedureSeams extends PublishedReach, SandboxStopReach {
+export interface AgentsProcedureSeams extends PublishedReach, SandboxDeleteReach {
   resolveUserId: UserIdResolver;
   /** The agent's sandbox as the shells reach it: Vercel's in production, a script's in a test. */
   readonly sandbox: Layer.Layer<

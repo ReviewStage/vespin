@@ -2,8 +2,9 @@
  * memory-sandbox.ts -- `Sandbox` kept in memory, for a suite to provide on its tag: the second implementation of the package's interface, its state open to the suite's assertions, and the hooks a suite answers its commands and its failures through.
  *
  * It keeps what a provider would: sandboxes by name, each up in a run of its
- * own or stopped holding a snapshot, the commands each run started, the
- * files written, the policies set, and the snapshots taken. A call fenced to
+ * own or stopped holding a snapshot, the drives they opened with, the
+ * commands each run started, the files written, the policies set, and the
+ * snapshots taken. A call fenced to
  * a run the sandbox is no longer up in answers as gone, as the interface
  * says; nothing resumes but `resume` and `getOrCreate`. A suite scripts what
  * a command answers (`hooks.run`, `hooks.start`) and which call fails
@@ -25,6 +26,7 @@ import {
   SANDBOX_STATUS,
   type SandboxCall,
   type SandboxCreate,
+  type SandboxDrive,
   type SandboxError,
   type SandboxFile,
   SandboxGone,
@@ -47,11 +49,19 @@ export interface MemorySandboxRecord {
   snapshotId: string | undefined;
   readonly createdAt: number;
   readonly from: SandboxSource;
+  /** The drive it opened with and where it is mounted: a base drive it fills, or its own. */
+  readonly drive: { readonly name: string; readonly at: string } | undefined;
   readonly vcpus: number | undefined;
   readonly env: Readonly<Record<string, string>>;
   readonly user: SandboxUser | undefined;
   expiresAt: number | undefined;
   routes: readonly SandboxRoute[];
+}
+
+/** A drive as the memory keeps it: its name, and the drive it was forked from, where it was forked. */
+export interface MemoryDrive {
+  readonly name: string;
+  readonly forkedFrom: string | undefined;
 }
 
 /** A command a run started or ran, as the memory keeps it. */
@@ -103,6 +113,10 @@ export interface MemorySandboxState {
     readonly policy: NetworkPolicy;
   }[];
   readonly snapshots: MemorySnapshot[];
+  /** Every drive standing, by name: a suite puts a base drive here to find it standing. */
+  readonly drives: Map<string, MemoryDrive>;
+  /** Every drive deleted, by name, in order. */
+  readonly deletedDrives: string[];
   /** The snapshots gone, which a resume or a create from one answers as gone. */
   readonly goneSnapshots: Set<string>;
   /** Every run a stop ended, in order. */
@@ -139,6 +153,11 @@ function counter(prefix: string): () => string {
   };
 }
 
+/** What a sandbox's own drive is named in memory: after the sandbox, as a provider names it. */
+function ownDriveName(sandboxName: string): string {
+  return `${sandboxName}-drive`;
+}
+
 /** The record as a lookup names it. */
 function listedOf(record: MemorySandboxRecord): OpenedSandbox {
   return {
@@ -163,6 +182,8 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     files: [],
     policies: [],
     snapshots: [],
+    drives: new Map(),
+    deletedDrives: [],
     goneSnapshots: new Set(),
     stopped: [],
     deleted: [],
@@ -206,11 +227,31 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         : Effect.fail(new SandboxGone({ call })),
     );
 
+  /** The drive a create opens with: a base drive made where none stands, or the sandbox's own, mounted again where it stands, else forked from an origin that must, or none where the ask forks none. */
+  const driveFor = (name: string, asked: SandboxDrive) =>
+    Effect.suspend(() => {
+      if ("fill" in asked) {
+        if (!state.drives.has(asked.fill)) {
+          state.drives.set(asked.fill, { name: asked.fill, forkedFrom: undefined });
+        }
+        return Effect.succeed({ name: asked.fill, at: asked.at });
+      }
+      const own = ownDriveName(name);
+      if (state.drives.has(own)) return Effect.succeed({ name: own, at: asked.at });
+      if ("own" in asked) return Effect.succeed(undefined);
+      const origin = "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy);
+      if (!state.drives.has(origin))
+        return Effect.fail(new SandboxGone({ call: SANDBOX_CALL.CREATE }));
+      state.drives.set(own, { name: own, forkedFrom: origin });
+      return Effect.succeed({ name: own, at: asked.at });
+    });
+
   const opened = (ask: SandboxCreate & { readonly user?: SandboxUser }) =>
     Effect.gen(function* () {
       if ("snapshotId" in ask.from && state.goneSnapshots.has(ask.from.snapshotId)) {
         return yield* new SnapshotGone({ call: SANDBOX_CALL.CREATE });
       }
+      const drive = ask.drive === undefined ? undefined : yield* driveFor(ask.name, ask.drive);
       const record: MemorySandboxRecord = {
         name: ask.name,
         status: SANDBOX_STATUS.RUNNING,
@@ -219,6 +260,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         snapshotId: undefined,
         createdAt: yield* Clock.currentTimeMillis,
         from: ask.from,
+        drive,
         vcpus: ask.vcpus,
         env: { ...ask.env },
         user: ask.user,
@@ -353,6 +395,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.sync(() => {
           if (state.sandboxes.delete(name)) state.deleted.push(name);
+          if (state.drives.delete(ownDriveName(name))) state.deletedDrives.push(ownDriveName(name));
         }),
       ),
     stop: (target) =>
@@ -376,12 +419,11 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           record.tags = { ...tags };
         }),
       ),
-    updatePorts: (name, ports, tags) =>
+    updatePorts: (name, ports) =>
       scripted(
         SANDBOX_CALL.PORTS,
         name,
         Effect.map(reached(SANDBOX_CALL.PORTS, name), (record) => {
-          record.tags = { ...tags };
           record.routes = ports.map((port) => ({ port, url: `https://${name}-${port}.memory` }));
           return record.routes;
         }),
@@ -526,6 +568,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         snapshotId: undefined,
         createdAt: 0,
         from: { image: "memory-image" },
+        drive: undefined,
         vcpus: undefined,
         env: {},
         user: undefined,

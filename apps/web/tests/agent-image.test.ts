@@ -1,14 +1,10 @@
 /**
- * agent-image.test.ts -- what the build ships beside a function that opens a sandbox: the runner's unit whole, and the digest a base snapshot is keyed on, which stands through a change to the unit alone and moves with one to the Dockerfile.
+ * agent-image.test.ts -- what the build ships beside a function that opens a sandbox: the runner's unit whole, under an image reference that moves with it.
  */
 
 import assert from "node:assert/strict";
 import { RUNNER_UNIT } from "@repo/agent-runner/pins";
-import {
-  AGENT_IMAGE_BASE_FILE,
-  AGENT_IMAGE_FILE,
-  AGENT_RUNNER_FOLDER,
-} from "@repo/service/agents/coder-host/agent-image";
+import { AGENT_IMAGE_FILE, AGENT_RUNNER_FOLDER } from "@repo/service/agents/coder-host/agent-image";
 import { test } from "vitest";
 import { shippedBesideFunctions } from "../scripts/agent-image";
 
@@ -35,14 +31,11 @@ function shipped(dockerfile: string, unit: Readonly<Record<string, string>>) {
   );
 }
 
-test("a change to any file of the runner's unit ships the unit whole and moves the image but not the base's digest, and a Dockerfile's change moves both", () => {
+test("a change to any file of the runner's unit ships the unit whole and moves the image", () => {
   const before = shipped("FROM node:24", UNIT);
   const unitMoved = shipped("FROM node:24", { ...UNIT, [RUNNER_UNIT.PROFILER]: "profiler two" });
-  const dockerfileMoved = shipped("FROM node:26", UNIT);
 
   assert.notEqual(unitMoved.get(AGENT_IMAGE_FILE), before.get(AGENT_IMAGE_FILE));
-  assert.equal(unitMoved.get(AGENT_IMAGE_BASE_FILE), before.get(AGENT_IMAGE_BASE_FILE));
   assert.equal(unitMoved.get(inFolder(RUNNER_UNIT.BUNDLE)), "// runner one");
   assert.equal(unitMoved.get(inFolder(RUNNER_UNIT.PROFILER)), "profiler two");
-  assert.notEqual(dockerfileMoved.get(AGENT_IMAGE_BASE_FILE), before.get(AGENT_IMAGE_BASE_FILE));
 });

@@ -767,12 +767,7 @@ const BY_STATUS = [
   standing("s-5", "Retry webhooks", TASK_STATUS.DONE, 50),
 ];
 
-/** The quiet line under the list saying what it leaves out, if it stands. */
-function hiddenLine(sidebar: HTMLElement): HTMLButtonElement | null {
-  return sidebar.querySelector<HTMLButtonElement>(".sidebar-hidden-statuses button");
-}
-
-test("the list holds the tasks to do and in progress, each led by its status's mark, and a quiet line says how many it leaves out and in which statuses", () => {
+test("the list holds the tasks to do and in progress, each led by its status's mark", () => {
   const sidebar = mountSidebar(ACME, BY_STATUS);
 
   assert.deepEqual(
@@ -783,14 +778,6 @@ test("the list holds the tasks to do and in progress, each led by its status's m
     ...sidebar.querySelectorAll(`${TASK_LIST} .ui-list-row-leading .ui-task-status-mark`),
   ].map((mark) => mark.getAttribute("data-status"));
   assert.deepEqual(marks, [TASK_STATUS.IN_PROGRESS, TASK_STATUS.TODO]);
-  assert.equal(hiddenLine(sidebar)?.textContent, "3 more in Backlog, Done");
-});
-
-test("the hidden tasks' line opens the Tasks page", () => {
-  const line = hiddenLine(mountSidebar(ACME, BY_STATUS));
-  assert.ok(line, "the hidden tasks' line stands");
-  act(() => line.click());
-  assert.equal(sidebarRouter.history.location.pathname, `/${ACME.id}/tasks`);
 });
 
 test("a task from a service before statuses stands among them", () => {

@@ -3,6 +3,7 @@
  */
 
 import type { ReactNode } from "react";
+import type { ContextMenuProps } from "../menu/context-menu.js";
 import type { OneLineEnd } from "../one-line/clipped-line.js";
 
 /**
@@ -30,6 +31,12 @@ export const BREADCRUMB_POPUP = {
 } as const;
 
 export type BreadcrumbPopup = (typeof BREADCRUMB_POPUP)[keyof typeof BREADCRUMB_POPUP];
+
+/** The menu a crumb holds on a right-click, a long press, and the menu key, as `useMenu` hands out its doors. */
+export interface CrumbMenu {
+  readonly contextMenu: ContextMenuProps;
+  readonly keyMenu: (event: React.KeyboardEvent<HTMLElement>) => void;
+}
 
 /** What every crumb holds: its words, its press, and the widths it is drawn at. */
 interface CrumbBase {
@@ -66,6 +73,10 @@ interface PathCrumb extends CrumbBase {
   readonly kept?: boolean | undefined;
   /** Whether it keeps its size in a narrow bar, so the crumbs after it are cut short first; it gives way with the rest where none is said. */
   readonly fixed?: boolean | undefined;
+  /** The menu of what it names, which a right-click, a long press, or the menu key on its press opens; read only where it presses. */
+  readonly menu?: CrumbMenu | undefined;
+  /** The field it stands as while its name is edited, in its press's place. */
+  readonly editing?: ReactNode;
 }
 
 /**
@@ -87,6 +98,8 @@ interface WayBackCrumb extends CrumbBase {
   readonly end?: undefined;
   readonly kept?: undefined;
   readonly fixed?: undefined;
+  readonly menu?: undefined;
+  readonly editing?: undefined;
 }
 
 /** One crumb of a path. */

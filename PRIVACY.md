@@ -50,11 +50,16 @@ as written, not end-to-end encrypted, and our operators can read them.
 
 Through your workspace's GitHub App installation, we access repository
 contents, pull requests, code diffs, review comments, checks, and issues for
-repositories where the App is installed. Each agent works on a checkout of the
-repository in its own Vercel Sandbox. We generally do not keep copies of
-repository content apart from what lands in an agent's transcript, except a
-pull request's number, title, state, and checks, and any chapters you
-generate for it.
+repositories where the App is installed. A cloud agent works on a checkout of
+the repository in its own Vercel Sandbox: on a drive of its own where it was
+forked from its repository's default-branch drive or from the drive of the agent
+it was continued from, and in the sandbox otherwise; an agent on your own
+machine keeps its work there. A workspace
+repository's default branch may be kept on a drive cloud agents start from.
+Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
+Apart from them, we generally do not keep copies of repository content beyond
+what lands in an agent's transcript, except a pull request's number, title,
+state, and checks, and any chapters you generate for it.
 
 ### Credentials you save
 
@@ -163,6 +168,19 @@ sends Sentry nothing.
 If you send feedback, we receive your words, any screenshots you attach, and,
 unless you untick it, your name and email.
 
+### Notifications
+
+If you turn on Show a notification in Settings › Account › Sounds, the Mac
+app, or the web app where your browser allows it, asks your system to show a
+notification while Vespin is in the background when an agent you started
+finishes, or when an Inbox item asks you something, including one on a task
+assigned to you whose agent someone else started. **The notification shows the
+agent's or the task's name, and the title of the question asked**, and your
+system (macOS's Notification Center, or your browser and the system it runs
+on) shows it and may keep it in its notification history under its own
+settings, outside Vespin. Showing one sends nothing to us or anyone else. It is off until you
+turn it on. The notification that a command waits on your Mac, which the Mac
+app shows whatever this setting, names no command.
 ### Setup questions
 
 If you answer the optional questions in setup (how you heard about Vespin,
@@ -254,7 +272,10 @@ data with:
 
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
-Vercel Sandboxes and in snapshots kept for up to thirty days after last use.
+Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
+checkout on a drive of its own, and a copy of each workspace repository's
+default branch, with its dependencies installed, on a drive its agents start
+from.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -270,14 +291,21 @@ affected users and relevant authorities as required by applicable law.
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Their sandboxes and those sandboxes' snapshots expire and are
-removed seven days after they were last used. When you delete your account:
+agent deletes its transcript at once. Deleting or archiving an agent asks
+Vercel to delete its sandbox and the drive holding its checkout; where that
+fails or does not finish in time, the delete or archive goes ahead anyway, and
+the drive may remain. A sandbox's snapshots otherwise expire and are removed
+seven days after they were last used. A repository's default-branch drive is
+kept for the workspace's agents until we remove it, and a repository snapshot
+made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, and integration records) is deleted at once.
-- **Your tasks, descriptions, transcripts, and inbox items** are deleted at once, and
-  your agents' sandboxes and their snapshots expire and are removed seven days
-  after they were last used.
+- **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
+  and we ask Vercel to delete your agents' sandboxes and the drives holding
+  their checkouts; where that fails or does not finish in time, your account is
+  deleted anyway and a drive may remain. Their snapshots otherwise expire and
+  are removed seven days after they were last used.
 - **Workspaces you own**, and the memories, comments, and description text you left in
   them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it

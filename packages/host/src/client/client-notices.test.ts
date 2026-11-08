@@ -67,6 +67,7 @@ function linked(
         openMacCommandAsk: () => {
           forward += 1;
         },
+        openPlace: () => undefined,
       },
       onPanelFocusChanged: (listener) => {
         focus = listener;

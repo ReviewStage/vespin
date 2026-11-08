@@ -86,7 +86,6 @@ import {
   childTaskCounts,
   type DrawnTaskRow,
   drawnTaskRows,
-  hiddenStatuses,
   homedTaskRows,
   NO_REPOSITORY,
   openParentIds,
@@ -200,7 +199,6 @@ import {
   useSectionEdits,
 } from "./sidebar-sections.js";
 import {
-  HiddenStatusesLine,
   NONE_MATCH,
   TaskViewOptions,
   tasksHeadWords,
@@ -1661,9 +1659,9 @@ function sectionedTasks(
  * A section as the view leaves it: its tasks to do and in progress, any
  * with no status, an agent's among them, and any parent a child task keeps
  * open, of those Assigned to holds, each with its entry, in its order; and
- * the rest of those it holds counted by status, so the section says what it
- * holds where the view hides it. Note that a row Assigned to leaves out is
- * counted in no status, because Show all, not the Tasks page, brings it back.
+ * whether Assigned to leaves any out. Note that a row only the statuses
+ * shown leave out counts for nothing, because the section still reads as
+ * one to drag tasks into.
  */
 function sectionInView(
   drawn: DrawnSection,
@@ -1683,7 +1681,6 @@ function sectionInView(
     ...drawn,
     entries: kept.map(({ entry }) => entry),
     rows: kept.map(({ row }) => row),
-    hidden: hiddenStatuses(people, SHOWN_STATUSES, openParents),
     othersHeld: people.length < drawn.rows.length,
   };
 }
@@ -2125,8 +2122,7 @@ function SidebarColumn({
     unpinnedAgents.length === 0;
   const unpinned = [...unpinnedTasks.map(taskRow), ...unpinnedAgents.map(agentRow)];
   const rows = taskRowsAssignedTo(unpinned, assignedTo, tasks.me);
-  // The list holds the tasks to do and in progress, and says how many more the Tasks page holds; a section says its own (`sectionInView`).
-  const hidden = hiddenStatuses(rows, SHOWN_STATUSES, openParents);
+  // The list holds the tasks to do and in progress; the Tasks page holds the rest.
   const statusRows = taskRowsInStatuses(rows, SHOWN_STATUSES, openParents);
   const orderView: TaskOrderView = {
     workspaceId: tasks.workspace?.id,
@@ -2417,7 +2413,6 @@ function SidebarColumn({
                         },
                         onDropRow: dropRow,
                         runs: runsPlace,
-                        onOpenBoard: chosen(openBoard),
                         onCarried: setCarrying,
                       }}
                     />
@@ -2503,7 +2498,6 @@ function SidebarColumn({
                         onNewTaskIn={chosen(newTaskIn)}
                         context={context}
                       />
-                      <HiddenStatusesLine hidden={hidden} onOpen={chosen(openBoard)} />
                     </nav>
                   </div>
                 </SelectionRegion>
