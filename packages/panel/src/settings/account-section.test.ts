@@ -3,12 +3,14 @@
 import assert from "node:assert/strict";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL, ACT_KIND } from "@repo/host/acts";
 import { accountActor } from "@repo/ui/actor-model";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, test } from "vitest";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
+import { fakeActPort, refusedOnPort } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { ToastHost } from "../toast.js";
 import { AccountSection } from "./account-section.js";
@@ -160,6 +162,7 @@ test("Delete account names the workspaces the account owns and is the only membe
             workspaceOf("Ada", WORKSPACE_ROLE.OWNER, 1),
             workspaceOf("Acme", WORKSPACE_ROLE.MEMBER, 3),
           ],
+          workspacesRead: true,
           onSignOut: () => Promise.resolve(),
         }),
       ),
@@ -171,5 +174,74 @@ test("Delete account names the workspaces the account owns and is the only membe
   const asked = document.body.textContent ?? "";
   assert.match(asked, /Also deleted, with everything in them: Ada\./u);
   assert.doesNotMatch(asked, /Acme/u);
+  act(() => root.unmount());
+});
+
+test("while the workspaces are unread or their read failed, Delete account says the ones the account alone belongs to go with it", async () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(AccountSection, {
+          account: ADA,
+          workspaces: [workspaceOf("Ada", WORKSPACE_ROLE.OWNER, 1)],
+          workspacesRead: true,
+          listFailed: true,
+          onSignOut: () => Promise.resolve(),
+        }),
+      ),
+    ),
+  );
+
+  await act(async () => deleteButton(container).click());
+
+  const asked = document.body.textContent ?? "";
+  assert.match(asked, /Workspaces you own and are the only member of are also deleted/u);
+  act(() => root.unmount());
+});
+
+/** The standing question's gate typed with `words`, as a reader typing the account's address does. */
+function typeGate(words: string): void {
+  const field =
+    document.querySelector<HTMLInputElement>('[role="alertdialog"] input') ??
+    assert.fail("no gate");
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, words);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+test.each([
+  {
+    refusal: ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL,
+    says: /Sign out and back in, then delete it again\./u,
+  },
+  { refusal: "Could not delete that account on this system.", says: /Try again\./u },
+])("a delete refused with $refusal says what gets past it", async ({ refusal, says }) => {
+  fakeActPort({ [ACT_KIND.ACCOUNT_DELETE]: () => Promise.reject(refusedOnPort(refusal)) });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(AccountSection, {
+          account: ADA,
+          onSignOut: () => Promise.resolve(),
+        }),
+      ),
+    ),
+  );
+  await act(async () => deleteButton(container).click());
+  typeGate(ADA.email);
+
+  const dialog =
+    document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("no question");
+  await act(async () => deleteButton(dialog).click());
+
+  const said = dialog.textContent ?? "";
+  assert.match(said, says);
   act(() => root.unmount());
 });

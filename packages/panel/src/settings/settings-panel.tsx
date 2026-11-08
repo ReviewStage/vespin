@@ -101,6 +101,9 @@ export function SettingsPanel({
             <AccountSection
               account={account}
               workspaces={workspace?.workspaces}
+              // Note that the workspaces are read once some are listed, as every account holds its own.
+              workspacesRead={(workspace?.workspaces.length ?? 0) > 0}
+              listFailed={workspace?.listFailed ?? false}
               onSignOut={onSignOut}
             />
             {panelView ? <LinksSection view={panelView} writes={writes} /> : null}
