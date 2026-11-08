@@ -2454,9 +2454,10 @@ export function DescriptionCommentLayer({
     // Note that in the editor a press places the caret, so marked words there open no thread.
     if (editor === undefined) element.addEventListener("click", pressed);
     document.addEventListener("selectionchange", selected);
-    // Note that hiding the tab the description stands in changes no selection, so its `hidden` attribute is watched for itself.
+    // Note that hiding the tab the description stands in changes no selection and moves no pointer, so its `hidden` attribute is watched for itself.
     // Note that the tab shown again offers the words still selected there, though only a selection, not a caret, is read again, since a caret read opens and closes threads.
     const hiding = new MutationObserver(() => {
+      if (element.closest("[hidden]") !== null) setOnBlocks(false);
       if (element.closest("[hidden]") !== null || window.getSelection()?.isCollapsed === false) {
         selected();
       }
@@ -2482,7 +2483,7 @@ export function DescriptionCommentLayer({
   // While the pointer is on a block, the same command comments on it as its button does, giving way to words selected, the bubble's or the editor's toolbar's.
   useAppCommand(
     APP_COMMAND.COMMENT_ON_SELECTION,
-    onBlocks ? hovered?.start : undefined,
+    descriptionShown && onBlocks ? hovered?.start : undefined,
     YIELDS_TO_SELECTION,
   );
 

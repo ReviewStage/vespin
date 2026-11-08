@@ -1588,7 +1588,7 @@ test("⇧⌘M with no words selected starts a thread on the block under the poin
   );
 });
 
-test("words selected in a description whose tab is then hidden take the bubble and ⇧⌘M with them, and bring them back as it is shown again", async () => {
+test("words selected, and the block under the pointer, in a description whose tab is then hidden take the bubble and ⇧⌘M with them, and bring them back as it is shown again", async () => {
   const keys = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(keys);
   act(() => keys.render(withQueryClient(createElement(Keymap))));
@@ -1616,6 +1616,8 @@ test("words selected in a description whose tab is then hidden take the bubble a
     answerMouse();
   }
   assert.ok(container.querySelector(".comment-bubble"), "the bubble stands by the selection");
+  // Note that the pointer rests on the words' block as the tab hides, as a key switching tabs leaves it.
+  act(() => text.parentElement?.dispatchEvent(new Event("pointerover", { bubbles: true })));
 
   await act(async () => {
     container.hidden = true;
