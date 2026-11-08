@@ -52,7 +52,7 @@ function memberNamed(
  * argument, the port's member, or a local it is kept in, it reads.
  */
 function answersRead(node: ESTree.MemberExpression): boolean {
-  const parent = (node as { parent?: ESTree.Node }).parent;
+  const parent = node.parent;
   if (parent?.type === "Property") return parent.computed && parent.key === node;
   return (
     parent?.type === "BinaryExpression" && (parent.operator === "===" || parent.operator === "!==")

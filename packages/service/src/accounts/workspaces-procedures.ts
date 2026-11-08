@@ -54,7 +54,7 @@
  * unauthenticated and an oversized body as too large whatever it carries.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import type { MemberSeams, WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import { setWorkspaceSlug } from "@repo/database/models/workspace-slug-store";
@@ -88,7 +88,6 @@ import {
   type SessionUserIdResolver,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted, sessionMiddleware } from "../orpc/base.js";
 import { answeredWorkspace, managedWorkspace, pluginCallOrRefused } from "./workspace-access.js";
 import { listFormerMembers, listMembers, memberIdOf } from "./workspace-members.js";

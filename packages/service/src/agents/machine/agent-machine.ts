@@ -166,7 +166,7 @@ export interface FoundPlace {
  * anew in place of one whose disk was lost (`created`), which holds nothing
  * the place kept on its disk, the harness's own session among it.
  */
-export interface ResumedPlace {
+interface ResumedPlace {
   readonly place: MachinePlace;
   readonly created: boolean;
 }

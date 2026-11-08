@@ -1,3 +1,4 @@
+import type { StoreFailure } from "@repo/database/core/query";
 import type {
   ExtraRepositoryRefusal,
   LocalAgentRefusal,
@@ -12,7 +13,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { type UnparsedWireValue, unparsedWire, wireUuidSchema } from "../core.js";
 import { ANY_METHOD, ANY_PATH } from "../route.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "./http.js";
-import { logStoreFailure, type StoreFailure } from "./store-failure.js";
+import { logStoreFailure } from "./store-failure.js";
 
 /**
  * The hosted response vocabulary as an `HttpRouter` answers it, with the same

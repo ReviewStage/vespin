@@ -2484,7 +2484,7 @@ const retiredHolding = (machine: MachineLifecycle, retiring: WarmRunner) =>
  * record, cleared here, would send the next message to a second runner beside
  * it; its next turn's end retires it. Answers whether the line was written.
  */
-export const retireWarmRunner = Effect.fn("web/retireWarmRunner")(function* (retiring: WarmRunner) {
+const retireWarmRunner = Effect.fn("web/retireWarmRunner")(function* (retiring: WarmRunner) {
   const machine = yield* deploymentLifecycle;
   return yield* holdingRunner(retiring.agentId, retiredHolding(machine, retiring));
 });

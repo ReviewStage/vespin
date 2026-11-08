@@ -22,7 +22,7 @@
  * falls back to anyone's token, and an automation acts as no member.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   readAgent,
@@ -37,7 +37,6 @@ import {
   hostedStoreOrUnavailable,
   repositoryNotReachable,
 } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import { GitHubApp, type ReachedRepository } from "./github-app.js";
 import { memberWorkspaceOnOwner } from "./github-installations.js";
 import { githubReachOrRefusal, logWorkspaceReadFailure } from "./github-refusal.js";

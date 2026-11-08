@@ -17,7 +17,7 @@
  * `PLAN_AGENT_WRITER_POLICY` admits (`admitsPlanWriter`).
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Agent, readAgentRouting, readVisibleAgent } from "@repo/database/models/agent-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
@@ -33,7 +33,6 @@ import {
   type UserIdResolver,
   uuidOf,
 } from "../http/http-effect.js";
-import type { StoreFailure } from "../http/store-failure.js";
 
 /** What resolves a request's bearer to the account it answers for. */
 export interface AccountResolving {

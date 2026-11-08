@@ -67,7 +67,7 @@ export const RECORDING_START_OUTPUT = { STARTED: "started", RUNNING: "running" }
  * The recorder asks it of a page from its first frame, and again after each
  * navigation, every tenth of a second until it says yes.
  */
-export const RECORDING_PAINTED_SOURCE =
+const RECORDING_PAINTED_SOURCE =
   'performance.getEntriesByName("first-contentful-paint").length > 0';
 
 /**
