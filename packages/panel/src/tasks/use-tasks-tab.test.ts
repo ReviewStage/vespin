@@ -57,7 +57,7 @@ import {
   STRIP_TAB_KIND,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, SETTLED_STATUS, TASKS_PAGE } from "@repo/ui/tasks-model";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
@@ -65,7 +65,6 @@ import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
-import { KEPT, type Kept } from "../act.js";
 import { useAdminView } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
@@ -686,40 +685,6 @@ const PLATFORM = {
   role: WORKSPACE_ROLE.OWNER,
   github: null,
 };
-
-test("a member assigned from a chip goes to main with the name the reader knows them by, and a refusal answers so", async () => {
-  const tab = mount(
-    { shown: true, tasks: listRead([listed()]) },
-    { [ACT_KIND.TASKS_SET_STANDING]: () => Promise.resolve(false) },
-  );
-  let kept: Promise<Kept> = Promise.resolve(KEPT);
-
-  await act(async () => {
-    kept = tab
-      .control()
-      .onSetTaskStanding(
-        TASK.id,
-        { priority: TASK_PRIORITY.URGENT, assigneeId: "user-charles" },
-        "Charles",
-      );
-  });
-
-  assert.deepEqual(
-    tab.payloads.filter((each) => each.kind === ACT_KIND.TASKS_SET_STANDING),
-    [
-      {
-        kind: ACT_KIND.TASKS_SET_STANDING,
-        payload: {
-          taskId: TASK.id,
-          priority: TASK_PRIORITY.URGENT,
-          assigneeId: "user-charles",
-          assigneeName: "Charles",
-        },
-      },
-    ],
-  );
-  assert.equal((await kept).kept, false);
-});
 
 test("New plan opens its dialog over the open plan, which stays open; a second press leaves it as it stands, only a plan that starts closes it, and leaving the tab puts it away", async () => {
   const answers = [
@@ -4561,39 +4526,6 @@ test("a task opened is timed from the press to its document drawn ready, and one
       },
     ],
   );
-});
-
-/** A status write's payload, read back as the act's own schema admits it. */
-const readStanding = Schema.decodeUnknownOption(
-  Schema.Struct({ taskId: Schema.String, status: Schema.optionalKey(Schema.String) }),
-);
-
-test("Mark done's Undo leaves a status chosen since alone, though that choice is still unanswered", async () => {
-  const view: TasksView = {
-    ...IDLE_TASKS_VIEW,
-    listStatus: TASKS_READ.READY,
-    workspaces: [PERSONAL],
-    tasks: [{ ...row("notes", 4), status: TASK_STATUS.TODO }],
-  };
-  let answered = 0;
-  const tab = mount({ tasks: view }, {
-    // The Mark done is kept, and the status chosen after it waits on the service.
-    [ACT_KIND.TASKS_SET_STANDING]: () => {
-      answered += 1;
-      return answered === 1 ? Promise.resolve(true) : new Promise(() => undefined);
-    },
-  } as Parameters<typeof mount>[1]);
-
-  act(() => tab.control().onSettleTasks(["notes"], SETTLED_STATUS.DONE));
-  await settle();
-  void tab.control().onSetTaskStanding("notes", { status: TASK_STATUS.IN_PROGRESS });
-  act(() => _undoButton().click());
-  await settle();
-
-  const written = tab.payloads
-    .filter(({ kind }) => kind === ACT_KIND.TASKS_SET_STANDING)
-    .map(({ payload }) => Option.getOrUndefined(readStanding(payload))?.status);
-  assert.deepEqual(written, [TASK_STATUS.DONE, TASK_STATUS.IN_PROGRESS]);
 });
 
 /**

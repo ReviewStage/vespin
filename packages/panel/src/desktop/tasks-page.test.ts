@@ -26,7 +26,6 @@ import { type PinMove, TASK_MARK, type TaskMark } from "@repo/ui/tasks-model";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { askKept } from "../act.js";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
@@ -102,6 +101,9 @@ let sections: TaskSections = NO_TASK_SECTIONS;
 /** Whether the service keeps the changes of where a task stands sent. */
 let keeps = true;
 
+/** How the service answers a change of where a task stands: as `keeps` says, unless a case holds it. */
+let standingAnswer: () => Promise<boolean> = () => Promise.resolve(keeps);
+
 /** Each pin given a place the page sent, in order. */
 let moved: PinMove[] = [];
 
@@ -116,13 +118,19 @@ beforeEach(() => {
   written = [];
   sections = NO_TASK_SECTIONS;
   keeps = true;
+  standingAnswer = () => Promise.resolve(keeps);
   moved = [];
   drawsWrites = false;
   window.localStorage.clear();
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
-  // A pin and a section write leave on the act port, as the window sends them.
+  // A pin, a section write, and a change of standing leave on the act port, as the window sends them.
   fakeActPort({
+    // Note that the name the reader knows a member by goes with them, which the page's own tests leave aside.
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, assigneeName: _named, ...standing }) => {
+      sent.push([taskId, standing]);
+      return standingAnswer();
+    },
     [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
       if (position === undefined) marked.push([taskId, pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN]);
       else moved.push({ agent: false, id: taskId, position });
@@ -254,10 +262,6 @@ async function mountPage(
       me: DEAN,
       listRead: true,
       onSelect: (taskId) => opened.push(taskId),
-      onSetTaskStanding: (taskId, standing) => {
-        sent.push([taskId, standing]);
-        return askKept(Promise.resolve(keeps));
-      },
       ...overrides,
     });
     root.render(
@@ -724,10 +728,12 @@ test("a row's Priority chip sends the priority picked, and its Status chip the s
   act(() => rowChip(page, "ACME-36", "Status").click());
   choose("In progress");
 
-  assert.deepEqual(sent, [
-    ["t-39", { priority: TASK_PRIORITY.URGENT }],
-    ["t-36", { status: TASK_STATUS.IN_PROGRESS }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-39", { priority: TASK_PRIORITY.URGENT }],
+      ["t-36", { status: TASK_STATUS.IN_PROGRESS }],
+    ]),
+  );
   assert.deepEqual(opened, [], "a pick opens no task");
 });
 
@@ -1020,7 +1026,7 @@ test("a Todo row dragged onto In progress's group is sent in progress, opening n
 
   dragRow(page, "ACME-39", "In progress");
 
-  assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]));
   assert.deepEqual(marked, []);
   assert.deepEqual(opened, [], "a drag opens no task");
 });
@@ -1038,7 +1044,7 @@ test("a row dragged out of Pinned onto Todo is unpinned and sent todo, and one d
     ["t-44", TASK_MARK.UNPIN],
     ["t-36", TASK_MARK.PIN],
   ]);
-  assert.deepEqual(sent, [["t-44", { status: TASK_STATUS.TODO }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-44", { status: TASK_STATUS.TODO }]]));
 });
 
 test("a row dragged into a section is kept there, and one dragged out of its section onto a status leaves it", async () => {
@@ -1066,7 +1072,7 @@ test("a row dragged into a section is kept there, and one dragged out of its sec
     ),
     [[["place", "t-40", LAUNCH]], [["place", "t-42", null]]],
   );
-  assert.deepEqual(sent, [["t-42", { status: TASK_STATUS.BACKLOG }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-42", { status: TASK_STATUS.BACKLOG }]]));
 });
 
 /** A task of `TASKS` assigned to Dean, the reader. */
@@ -1125,10 +1131,12 @@ test("a row's Assignee chip sends the member picked, and No assignee assigns it 
   act(() => rowChip(page, "ACME-39", "Assignee").click());
   choose("No assignee");
 
-  assert.deepEqual(sent, [
-    ["t-40", { assigneeId: DEAN }],
-    ["t-39", { assigneeId: null }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-40", { assigneeId: DEAN }],
+      ["t-39", { assigneeId: null }],
+    ]),
+  );
   assert.deepEqual(opened, [], "a pick opens no task");
 });
 
@@ -1154,10 +1162,12 @@ test("grouped by assignee, the reader's group leads and No assignee's ends, a ro
   dragRow(page, "ACME-40", "You");
   dragRow(page, "ACME-39", "No assignee");
 
-  assert.deepEqual(sent, [
-    ["t-40", { assigneeId: DEAN }],
-    ["t-39", { assigneeId: null }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-40", { assigneeId: DEAN }],
+      ["t-39", { assigneeId: null }],
+    ]),
+  );
 });
 
 test("on a phone grouped by assignee, a row keeps its Assignee chip, which moves it without a drag", async () => {
@@ -1177,7 +1187,7 @@ test("on a phone grouped by assignee, a row keeps its Assignee chip, which moves
   act(() => (chip ?? assert.fail("the row keeps its Assignee chip")).click());
   choose("No assignee");
 
-  assert.deepEqual(sent, [["t-39", { assigneeId: null }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-39", { assigneeId: null }]]));
 });
 
 /** The section writes sent, each as its kind, its task, and its section. */
@@ -1201,12 +1211,8 @@ test("a row dragged out of its section or Pinned onto a status the service refus
   // Note that the sections are drawn as written, as main draws a write at once, and the service refuses only once they are, so the refusal finds the row where the drop left it.
   drawsWrites = true;
   const refusals: (() => void)[] = [];
-  const page = await mountPage(TASKS, SHELL_ROOM.WIDE, {
-    onSetTaskStanding: (taskId, standing) => {
-      sent.push([taskId, standing]);
-      return askKept(new Promise((resolve) => refusals.push(() => resolve(false))));
-    },
-  });
+  standingAnswer = () => new Promise((resolve) => refusals.push(() => resolve(false)));
+  const page = await mountPage(TASKS, SHELL_ROOM.WIDE);
   layRowsOut(page);
 
   dragRow(page, "ACME-42", "Backlog");
@@ -1217,10 +1223,12 @@ test("a row dragged out of its section or Pinned onto a status the service refus
     for (const refuse of refusals) refuse();
   });
 
-  assert.deepEqual(sent, [
-    ["t-42", { status: TASK_STATUS.BACKLOG }],
-    ["t-44", { status: TASK_STATUS.BACKLOG }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-42", { status: TASK_STATUS.BACKLOG }],
+      ["t-44", { status: TASK_STATUS.BACKLOG }],
+    ]),
+  );
   assert.deepEqual(
     writesSent(),
     [[["place", "t-42", null]], [["place", "t-42", LAUNCH]]],

@@ -22,7 +22,7 @@ import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-li
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import type { PageLine } from "@repo/features/page-wire";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
-import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentMovedAt, agentsOfTask } from "@repo/features/task-agents-model";
 import type {
   CodeRef,
@@ -33,7 +33,6 @@ import type {
   TaskRelationKind,
   TaskRunsOnRequest,
   TaskStanding,
-  TaskStatus,
   TaskSummary,
 } from "@repo/features/task-wire";
 import {
@@ -65,10 +64,6 @@ import {
   documentRegion,
   renamedRegion,
   renamedView,
-  type StatusChange,
-  settleChanges,
-  settledNote,
-  settleFailedNote,
   sidebarTasks,
   startFailureNote,
   TASK_MARK,
@@ -89,7 +84,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { absurd } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { askAct, askKept, firstRefusal, type Kept, notKept, sendAct, unreachedAs } from "../act.js";
+import { askAct, sendAct, unreachedAs } from "../act.js";
 import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
 import { useAdminRoute } from "../admin/admin-route.js";
 import { adminViewOfLink } from "../admin/routing.js";
@@ -127,8 +122,7 @@ import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-s
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
-import { pressRows, ROW_WRITE } from "../undo-stack.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspaces } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import { workspaceExperimentChoices } from "../workspace-experiments.js";
@@ -187,7 +181,6 @@ import {
   useRepositoriesIn,
   useTaskMenus,
 } from "./task-repository-menus.js";
-import { useTaskRowDoors } from "./task-row-doors.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture } from "./tasks-fixture-loader.js";
 import type { ThreadReveal } from "./thread-reveal.js";
@@ -659,12 +652,6 @@ export interface TasksControl {
   relationMenu: RelationMenuAsk | undefined;
   /** Opens a task's add menu on a kind (`task-relation-menu.tsx`), opening the task first where it is not the open one. */
   onAddRelation: (taskId: string, kind: TaskRelationKind) => void;
-  /** Sets where a task stands, how much it matters, or who it is assigned to, drawn at once by the assignee's name where the caller knows it; answers whether the service kept it, with what refused it where it did not. */
-  onSetTaskStanding: (
-    taskId: string,
-    standing: TaskStanding,
-    assigneeName?: string,
-  ) => Promise<Kept>;
   /**
    * Moves a task to another of the account's workspaces, whose GitHub
    * reaches its repository, and lists that workspace so the task stays in
@@ -760,14 +747,6 @@ export interface TasksControl {
    * any of it is saved, or none, which draws its saved name again.
    */
   onDraftName: (taskId: string, name: string | undefined) => void;
-  /**
-   * Sets one task or several at a status, as Mark done, Cancel task, a
-   * group's Mark tasks done, and the Tasks page's selection ask: each drawn
-   * there at once, and one toast for them all once the service answered,
-   * naming how many it refused, whose Undo puts back the status each stood
-   * at. A task already there is left as it stands.
-   */
-  onSettleTasks: (taskIds: readonly string[], status: TaskStatus) => void;
   /** Every agent the list followed live carries, on a plan or with none, the archived ones among them, each with its own workspace and repository; none while it is not. */
   liveAgents: readonly ListedAgent[] | undefined;
   /** The pull request of every agent the list followed live carries that opened one, as its row keeps it; none while it is not. */
@@ -919,24 +898,6 @@ export function taskMoveMutation(run: (asked: TaskMoveAsk) => Promise<boolean>) 
 
 /** A task's move, as a place asking it holds it. */
 type TaskMoveMutation = ReturnType<typeof taskMoveMutation>;
-
-/** What ⌘Z's toast calls a change of a task's priority it takes back or puts back. */
-const PRIORITY_CHANGED_NOTE = "Priority changed";
-
-/** What ⌘Z's toast calls a change of who a task is assigned to, by whether it names anyone. */
-const ASSIGNEE_CHANGED_NOTES = {
-  ASSIGNED: "Task assigned",
-  UNASSIGNED: "Task unassigned",
-} as const;
-
-/** What ⌘Z's toast calls a change of where one task stands, by what it changed. */
-function standingNote(standing: TaskStanding): string {
-  if (standing.status !== undefined) return settledNote(standing.status, 1, 0);
-  if (standing.assigneeId === undefined) return PRIORITY_CHANGED_NOTE;
-  return standing.assigneeId === null
-    ? ASSIGNEE_CHANGED_NOTES.UNASSIGNED
-    : ASSIGNEE_CHANGED_NOTES.ASSIGNED;
-}
 
 /** What the toast says when opening a task listed the workspace it is in. */
 function switchedNote(workspace: string): string {
@@ -2136,8 +2097,6 @@ export function useTasksTab(input: {
   const drawnTasks = useRef(tasks);
   drawnTasks.current = tasks;
   const drawnNow = useCallback(() => drawnTasks.current, []);
-  const standingDoors = useTaskRowDoors(ROW_WRITE.TASK_STANDING.kind, drawnNow);
-  const sendStandingRow = standingDoors.send;
 
   // The open task as it stands when a move is answered, which may be
   // another than the one open when it was pressed.
@@ -2148,74 +2107,6 @@ export function useTasksTab(input: {
   markTaskNow.current = usePinWrites(drawnNow).onMarkTask;
 
   const { taskAgentPins = NO_TASK_AGENT_PINS } = tasks;
-
-  // The tasks as the list holds them, or the open document where the list does not hold one yet.
-  const standingTasksOf = (taskIds: readonly string[]) => {
-    const held = region.kind === DOCUMENT_REGION.READY ? region.task : undefined;
-    return taskIds.flatMap((taskId): readonly Pick<TaskSummary, "id" | "status">[] => {
-      const task = tasks.tasks.find((each) => each.id === taskId);
-      if (task !== undefined) return [task];
-      return held?.id === taskId ? [held] : [];
-    });
-  };
-  // A change of where a task stands, its status, priority, or assignee, is
-  // sent, which main draws at once and puts back where the service refused
-  // it. Answers whether the service kept it, with what refused it where it did not.
-  const sendStanding = (
-    taskId: string,
-    standing: TaskStanding,
-    assigneeName?: string,
-  ): Promise<Kept> => {
-    // Note that the name the reader knows a member by goes with them, so main draws them by it until the list carries them.
-    const named = standing.assigneeId && assigneeName !== undefined ? { assigneeName } : undefined;
-    return askKept(sendStandingRow({ taskId, ...standing, ...named }));
-  };
-  // Each status change is sent as one standing. Answers which tasks the
-  // service kept, how many it refused, and what refused the first of them.
-  const sendStatuses = (changes: readonly StatusChange[]) => {
-    const answers = changes.map(({ taskId, status }) => sendStanding(taskId, { status }));
-    return Promise.all(answers).then((changed) => {
-      const landed = changes
-        .filter((_, index) => changed[index]?.kept === true)
-        .map(({ taskId }) => taskId);
-      return { landed, refused: changes.length - landed.length, cause: firstRefusal(changed) };
-    });
-  };
-
-  // Tasks set at a status by one press answer with one toast rather than
-  // one each, and are one entry for ⌘Z, whose Undo the toast runs: it puts
-  // back the status of every task the service kept that still stands where
-  // the press left it (`undo-stack.ts`). The open task stays open, since a
-  // task done or canceled is still read and worked on.
-  const settleTasks = (taskIds: readonly string[], status: TaskStatus) => {
-    if (fixture !== undefined) return;
-    const asked = settleChanges(standingTasksOf(taskIds), status);
-    if (asked.length === 0) return;
-    const pressed = pressRows(
-      ROW_WRITE.TASK_STANDING,
-      standingDoors,
-      asked.map((change) => ({ id: change.taskId, after: { status: change.status } })),
-    );
-    sendStatuses(asked).then(({ landed, refused, cause }) => {
-      if (landed.length === 0) {
-        toast({
-          replayUnmasked: true,
-          words: settleFailedNote(status, refused),
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.TASK_SETTLE, cause },
-        });
-        return;
-      }
-      const words = settledNote(status, landed.length, refused);
-      const undo = pressed.keep(words, (taskId) => landed.includes(taskId));
-      toast(
-        undo === undefined
-          ? { replayUnmasked: true, words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE }
-          : { ...undoToast(words, undo), replayUnmasked: true },
-      );
-    });
-  };
 
   // Copy formats the document drawn now and hands it to main's clipboard;
   // it asks the model nothing and reads no flag.
@@ -2229,30 +2120,6 @@ export function useTasksTab(input: {
   const unreadTabs: readonly StripTab[] = input.unseenAgents.map((agent) => agentTab(agent));
 
   const repositoriesIn = useRepositoriesIn();
-
-  // A fixture's tasks are read from nowhere, so nothing keeps where they
-  // stand. A change the service kept is ⌘Z's to take back.
-  const setTaskStanding = (
-    taskId: string,
-    standing: TaskStanding,
-    assigneeName?: string,
-  ): Promise<Kept> => {
-    if (fixture !== undefined) return Promise.resolve(notKept(FAILURE_CONDITION.NOT_KEPT));
-    const { assigneeId, ...rest } = standing;
-    const assignee =
-      assigneeId === undefined
-        ? undefined
-        : {
-            assignee: assigneeId === null ? null : { userId: assigneeId, name: assigneeName ?? "" },
-          };
-    const pressed = pressRows(ROW_WRITE.TASK_STANDING, standingDoors, [
-      { id: taskId, after: { ...rest, ...assignee } },
-    ]);
-    return sendStanding(taskId, standing, assigneeName).then((kept) => {
-      if (kept.kept) pressed.keep(standingNote(standing));
-      return kept;
-    });
-  };
 
   // A fixture's tasks move nowhere, as they are read from nowhere. Note that
   // the workspace moves with the task, because the sidebar lists one
@@ -3878,7 +3745,6 @@ export function useTasksTab(input: {
     chosenPin: chosenPinOf(chosen, boundFor, agentView?.agentId),
     onReopenClosedTab: reopenable.length === 0 ? undefined : reopenClosedTab,
     ...menus,
-    onSetTaskStanding: setTaskStanding,
     onMoveTask: moveTask,
     moveTask: moveTaskOptions,
     onRetryList: () => refreshTasks(),
@@ -3928,7 +3794,6 @@ export function useTasksTab(input: {
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     drawnTasks: drawnNow,
     onDraftName: draftName,
-    onSettleTasks: settleTasks,
     liveAgents,
     listedPullRequests: tasks.agentPullRequests,
     back: escapeTask,

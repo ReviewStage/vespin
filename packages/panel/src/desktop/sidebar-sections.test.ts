@@ -595,11 +595,18 @@ test("a section holding no task offers only Rename, Add icon where it wears none
 });
 
 test("⌘-clicking a section's task and one under Tasks chooses both, opening neither, and a right-click on either offers Status for both, which S on the focused one opens", async () => {
-  const settled: [string[], string][] = [];
+  const settled: [string, string | undefined][] = [];
   const opened: string[] = [];
   const sidebar = await mountSidebar([], SECTIONS, {
     onResume: (taskId) => opened.push(taskId),
-    onSettleTasks: (taskIds, status) => settled.push([[...taskIds], status]),
+  });
+  // Each task's status leaves on the act port, which the service keeps.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, status }) => {
+      settled.push([taskId, status]);
+      return Promise.resolve(true);
+    },
   });
   const rowOf = (name: string) =>
     [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
@@ -631,7 +638,10 @@ test("⌘-clicking a section's task and one under Tasks chooses both, opening ne
   assert.equal(document.querySelector(".ui-menu-heading")?.textContent, "2 tasks");
   assert.ok(document.querySelector('[role="menu"][aria-label="Status"]'), "S opens Status");
   await act(async () => item("Done").click());
-  assert.deepEqual(settled, [[[INVITES.id, RETRIES.id], TASK_STATUS.DONE]]);
+  assert.deepEqual(settled, [
+    [INVITES.id, TASK_STATUS.DONE],
+    [RETRIES.id, TASK_STATUS.DONE],
+  ]);
 });
 
 test("a plain click on any row, with tasks chosen and no bar to let them go, opens it and chooses none", async () => {

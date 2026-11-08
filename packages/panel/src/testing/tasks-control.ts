@@ -21,7 +21,6 @@ import type {
 } from "@repo/host/app-state";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
-import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
@@ -611,7 +610,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onChangeRepository: ignore,
     relationMenu: undefined,
     onAddRelation: ignore,
-    onSetTaskStanding: () => Promise.resolve(KEPT),
     onRetryList: ignore,
     onNewTask: ignore,
     onNewTaskIn: ignore,
@@ -642,7 +640,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onUnbindTask: ignore,
     drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: overrides.tasks ?? [] }),
     onDraftName: ignore,
-    onSettleTasks: ignore,
     liveAgents: [],
     listedPullRequests: undefined,
     back: () => false,
