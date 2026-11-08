@@ -610,16 +610,19 @@ it.layer(SUITE)("the runner events route", (it) => {
           },
         };
         const replaced = yield* post(agent.bearer, [cutOff], 1);
+        // The launch now recorded is admitted under the same bearer, its heartbeat taken.
+        const current = yield* post(agent.bearer, [], 2);
         yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
         const retired = yield* post(agent.bearer, events);
         const { rows, turns: written } = yield* transcriptOf(agent.target.conversationId);
 
         assert.deepEqual(
-          [wrong.status, none.status, replaced.status, retired.status],
+          [wrong.status, none.status, replaced.status, current.status, retired.status],
           [
             HOSTED_HTTP_STATUS.UNAUTHORIZED,
             HOSTED_HTTP_STATUS.UNAUTHORIZED,
             HOSTED_HTTP_STATUS.UNAUTHORIZED,
+            HOSTED_HTTP_STATUS.OK,
             HOSTED_HTTP_STATUS.UNAUTHORIZED,
           ],
         );
