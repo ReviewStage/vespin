@@ -30,7 +30,7 @@ import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handMembers } from "../testing/app-state.js";
+import { handMembers, writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -812,7 +812,7 @@ test("a section made while the board is drawn is offered under Move to on a card
     entries: [],
     agentEntries: [],
   };
-  redrawBoard(DEFAULT_BOARD_DISPLAY, { taskSections: launch });
+  act(() => writeListedTasks({ taskSections: launch }));
 
   act(() => {
     cardOf(board, "t-40").dispatchEvent(

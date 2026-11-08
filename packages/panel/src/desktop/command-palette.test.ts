@@ -35,7 +35,7 @@ import { SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views"
 import { APP_COMMAND, type AppCommand } from "@repo/settings/shortcuts";
 import { experimentsOn, settingsView } from "@repo/settings/testing";
 import { agentTab, changesTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASK_MARK, TASKS_PAGE } from "@repo/ui/tasks-model";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
@@ -73,7 +73,7 @@ import {
   withExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
-import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { withQueryClient, writeAppState, writeHandedAppState } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
@@ -2412,8 +2412,18 @@ test("⌘K's Tasks lists the agents with no task among the tasks by their last a
   assert.deepEqual(opened, ["a-1", "a-2"]);
 });
 
-test("on a one-off agent's page, ⌘K offers Pin agent, or Unpin agent once it is pinned, and nothing for an archived agent", () => {
+test("on a one-off agent's page, ⌘K offers Pin agent, or Unpin agent once it is pinned, and nothing for an archived agent", async () => {
   const asked: string[] = [];
+  // An agent's pin leaves on the act port, as the window sends it.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.AGENTS_PIN]: ({ agentId, pinned }) => {
+      asked.push(`${agentId}:${String(pinned)}`);
+      return Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
+    },
+  });
+  // Note that a pin is asked under the account it was pressed under, so the document stands before the first press.
+  await writeHandedAppState();
   const agent = {
     id: "agent-9",
     planId: null,
@@ -2438,7 +2448,6 @@ test("on a one-off agent's page, ⌘K offers Pin agent, or Unpin agent once it i
       tasksControl({
         agentView: { agentId: agent.id, onOpen: () => undefined, onClose: () => undefined },
         listedAgents: { standing, archived },
-        onPinAgent: (agentId, pinned) => asked.push(`${agentId}:${String(pinned)}`),
       }),
     );
     type("pin");
@@ -2450,7 +2459,7 @@ test("on a one-off agent's page, ⌘K offers Pin agent, or Unpin agent once it i
   assert.deepEqual(pinRows([{ ...agent, pinnedAt: 3 }]), ["Unpin agent"]);
   press("Unpin agent");
   assert.deepEqual(pinRows([]), []);
-  assert.deepEqual(asked, ["agent-9:true", "agent-9:false"]);
+  await vi.waitFor(() => assert.deepEqual(asked, ["agent-9:true", "agent-9:false"]));
 });
 
 test("on a one-off agent's page, ⌘K marks the agent unread, and offers no mark while no agent's page stands", async () => {
@@ -2498,17 +2507,17 @@ test("on a one-off agent's page, ⌘K marks the agent unread, and offers no mark
   await vi.waitFor(() => assert.deepEqual(marks, [`unread:${agent.id}`]));
 });
 
+/** Draws the task on screen pinned or not, as main draws a pin it was asked; `PinnableTask` sets it as it stands. */
+let drawPin: (pinned: boolean) => void = () => undefined;
+
 /** The task on screen, listed in the sidebar beside the palette, its pin landing where the row menu's would. */
 function PinnableTask(): React.JSX.Element {
   const [listed, setListed] = useState<Task>(DOCUMENT_TASK);
+  drawPin = (pinned) => setListed(pinned ? { ...DOCUMENT_TASK, pinnedAt: 5 } : DOCUMENT_TASK);
   const tasks = tasksControl({
     tasks: [listed],
     region: { kind: DOCUMENT_REGION.READY, task: listed },
     activeTaskId: listed.id,
-    onMarkTask: (taskId, mark) => {
-      assert.equal(taskId, listed.id);
-      setListed(mark === TASK_MARK.PIN ? { ...DOCUMENT_TASK, pinnedAt: 5 } : DOCUMENT_TASK);
-    },
   });
   return createElement(
     Fragment,
@@ -2550,7 +2559,16 @@ function pinRows(): string[] {
   return rows().filter((row) => /^(Pin|Unpin) task$/u.test(row));
 }
 
-test("with a task open, ⌘K offers Pin task, which pins it under Pinned and turns to Unpin task", () => {
+test("with a task open, ⌘K offers Pin task, which pins it under Pinned and turns to Unpin task", async () => {
+  // A pin leaves on the act port, and main draws it.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_PIN]: ({ taskId, pinned }) => {
+      assert.equal(taskId, DOCUMENT_TASK.id);
+      drawPin(pinned);
+      return Promise.resolve(true);
+    },
+  });
   // The sidebar asks whether motion is reduced, which jsdom cannot answer.
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -2570,9 +2588,11 @@ test("with a task open, ⌘K offers Pin task, which pins it under Pinned and tur
 
   assert.deepEqual(pinRows(), ["Pin task"]);
   press("Pin task");
+  await act(async () => undefined);
   assert.deepEqual(pinnedNames(), [DOCUMENT_TASK.name]);
   assert.deepEqual(pinRows(), ["Unpin task"]);
   press("Unpin task");
+  await act(async () => undefined);
   assert.deepEqual(pinnedNames(), []);
   assert.deepEqual(pinRows(), ["Pin task"]);
 });

@@ -132,6 +132,7 @@ import {
   TASK_PRIORITY_WORDS,
   TASK_STATUS_WORDS,
 } from "../tasks/task-standing.js";
+import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -379,6 +380,9 @@ function groupKey(head: TasksGroupHead): string {
   }
 }
 
+/** The tab as the List reads it, the pins and sections beside it (`use-pin-writes.ts`). */
+type ListTasks = TasksControl & Pins;
+
 /** What the page stands: its read, or none of the workspace's tasks. */
 function listState(tasks: TasksControl, empty: boolean): CollectionState {
   if (tasks.listFailed && empty) return COLLECTION_STATE.ERROR;
@@ -387,7 +391,7 @@ function listState(tasks: TasksControl, empty: boolean): CollectionState {
 }
 
 /** The account's sections in the listed workspace, each with its tasks' ids in its own order; none while it keeps no sections. */
-function listSections(tasks: TasksControl): readonly TasksSection[] {
+function listSections(tasks: ListTasks): readonly TasksSection[] {
   const workspaceId = tasks.workspace?.id;
   if (workspaceId === undefined) return [];
   return workspaceSections(tasks.taskSections, workspaceId).map((section) => ({
@@ -416,7 +420,7 @@ interface GroupPeople {
 /** What heads a group: its glyph and its name. */
 function groupHead(
   head: TasksGroupHead,
-  tasks: TasksControl,
+  tasks: ListTasks,
   /** Every repository a group or a row stands for, which a repository's name tells its own apart from. */
   repositories: readonly { readonly repository: string | null }[],
   people: GroupPeople,
@@ -497,14 +501,14 @@ function pinMoves(positions: ReadonlyMap<TaskSummary, string>) {
 }
 
 /** The write that takes a task out of the section it is kept in; none where it is in none. */
-function leaveSection(tasks: TasksControl, taskId: string): TaskSectionWrite[] {
+function leaveSection(tasks: ListTasks, taskId: string): TaskSectionWrite[] {
   return sectionEntries(tasks.taskSections).has(taskId)
     ? [{ kind: TASK_SECTION_WRITE.PLACE, taskId, sectionId: null }]
     : [];
 }
 
 /** A section's entries for the tasks its group draws, in its own order; its agents, which the List draws not, left out. */
-function drawnEntries(tasks: TasksControl, group: TasksGroup, sectionId: string) {
+function drawnEntries(tasks: ListTasks, group: TasksGroup, sectionId: string) {
   const drawn = new Set(group.tasks.map((task) => task.id));
   return sectionOrder(tasks.taskSections, sectionId).flatMap((entry) =>
     !isAgentEntry(entry) && drawn.has(entry.taskId) ? [entry] : [],
@@ -527,8 +531,8 @@ interface ListDrops {
  * section, as the tab reads when the refusal comes (`latest`).
  */
 function listDrops(
-  tasks: TasksControl,
-  latest: () => TasksControl,
+  tasks: ListTasks,
+  latest: () => ListTasks,
   groups: readonly TasksGroup[],
   setStanding: (task: TaskSummary, standing: TaskStanding, onRefused?: () => void) => void,
 ): ListDrops {
@@ -957,6 +961,9 @@ export function TasksList({
   room: ShellRoom;
   frame: TasksViewFrame;
 }): React.JSX.Element {
+  // The tab with the pins and sections beside it, which the List's groups and drops read; its rows read the tab alone.
+  const pins = usePins(tasks.drawnTasks);
+  const listTasks: ListTasks = { ...tasks, ...pins };
   useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
   const { filter, display } = frame;
   const directory = useMemberDirectory();
@@ -1005,7 +1012,7 @@ export function TasksList({
         filter,
         display,
         pinned,
-        sections: listSections(tasks),
+        sections: listSections(listTasks),
         readerId: tasks.me,
         personName:
           display.grouping === TASKS_GROUPING.ASSIGNEE ? people.assigneeName : people.creatorName,
@@ -1060,9 +1067,9 @@ export function TasksList({
     [fit, properties, more],
   );
   // The tab as it stands, which an Undo pressed or a refusal answered renders after its act reads.
-  const latest = useRef(tasks);
-  latest.current = tasks;
-  const drops = listDrops(tasks, () => latest.current, groups, setStanding);
+  const latest = useRef(listTasks);
+  latest.current = listTasks;
+  const drops = listDrops(listTasks, () => latest.current, groups, setStanding);
   const list = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
   // Every open group's tasks, in the order drawn down the page, those its run leaves undrawn among them; a folded group's are not drawn.
@@ -1172,7 +1179,7 @@ export function TasksList({
               key={display.grouping}
               groups={groups}
               group={(group) => {
-                const named = groupHead(group.head, tasks, repositories, people);
+                const named = groupHead(group.head, listTasks, repositories, people);
                 return (
                   <TasksListGroup
                     key={groupKey(group.head)}

@@ -69,6 +69,7 @@ import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "reac
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
+import { useSectionWrites, useTaskSections } from "../tasks/use-pin-writes.js";
 import { useReadMarks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
@@ -103,7 +104,7 @@ import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
  * or onto Pinned, which pins it there and takes it out of every section too
  * (`use-row-drag.ts`'s drop zones); a section is dragged among the others
  * by its header. Every change is drawn at once and kept on the account
- * (`TasksControl.onWriteSections`). Deleting a section deletes no task and
+ * (`use-pin-writes.ts`'s `useSectionWrites`). Deleting a section deletes no task and
  * asks nothing: it happens at once, and its toast's Undo makes the section
  * again under its id, with its title and icon, where it stood, holding the
  * rows it held that no other section has taken since.
@@ -161,6 +162,10 @@ export interface SectionDialogs {
     movedTo: string | null,
     writes: readonly TaskSectionWrite[],
   ) => void;
+  /** The sections the account made, as the window lists them (`use-pin-writes.ts`). */
+  sections: TaskSections;
+  /** Writes a drag's or a menu's changes to the sections, in order, asking nothing and offering no Undo. */
+  write: (writes: readonly TaskSectionWrite[]) => void;
   dialog: React.JSX.Element;
 }
 
@@ -344,16 +349,18 @@ const SECTION_UNDO = {
  * pressed (`latest`), since it lands renders after the act.
  */
 export function useSectionDialogs(
-  tasks: Pick<TasksControl, "signedIn" | "taskSections" | "onWriteSections">,
+  tasks: Pick<TasksControl, "signedIn">,
   surfaceOpen: boolean,
 ): SectionDialogs {
+  const taskSections = useTaskSections();
+  const onWriteSections = useSectionWrites();
   const [ask, setAsk] = useState<SectionAsk | undefined>(undefined);
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState<TaskSectionIcon | undefined>(undefined);
   const [picking, setPicking] = useState(false);
   const field = useRef<HTMLInputElement | null>(null);
-  const latest = useRef(tasks);
-  latest.current = tasks;
+  const latest = useRef({ taskSections, onWriteSections });
+  latest.current = { taskSections, onWriteSections };
   // Note that a section's write is drawn at once and its refusal said by
   // `onWriteSections` itself, so the door answers kept as it sends.
   const doors: RowDoors<TaskSections, typeof ACT_KIND.TASKS_WRITE_SECTION> = {
@@ -369,7 +376,7 @@ export function useSectionDialogs(
       if (trimmed === "" || ask === undefined) {
         return Promise.resolve({ status: ACTION_RESULT_STATUS.REJECTED, reason: TITLE_ASKED });
       }
-      tasks.onWriteSections(answerWrites(ask, trimmed, icon));
+      onWriteSections(answerWrites(ask, trimmed, icon));
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
     },
   });
@@ -466,6 +473,8 @@ export function useSectionDialogs(
     move: (members, movedTo, writes) => {
       void pressWrite(SECTION_UNDO.MOVE, doors, { members, movedTo, writes });
     },
+    sections: taskSections,
+    write: onWriteSections,
     dialog,
   };
 }
@@ -591,14 +600,13 @@ export function newSectionAction(onSelect: () => void): MenuAction {
  * would, and the toast it answers with offers Undo.
  */
 export function moveToSectionEntry(
-  tasks: Pick<TasksControl, "taskSections">,
   member: SectionMember,
   workspaceId: string,
-  dialogs: Pick<SectionDialogs, "askNew" | "move">,
+  dialogs: Pick<SectionDialogs, "askNew" | "move" | "sections">,
   /** The task's name, which New section's card names; none for an agent, which it names as one agent. */
   name?: string | undefined,
 ): MenuEntry {
-  const state = tasks.taskSections;
+  const state = dialogs.sections;
   const standing = memberSection(state, member);
   const put = (sectionId: string) =>
     placeWrites(sectionOrder(state, sectionId), member, sectionId, 0, Date.now());
@@ -757,7 +765,7 @@ function SectionRows({
   // Note that a move lands the row's entry beside its sibling's, which alone orders the two as they are drawn.
   const besideSibling = (from: number, beside: number | undefined) => {
     if (beside === undefined) return;
-    context.tasks.onWriteSections(placeWritesWithin(drawn, storedAt(from), storedAt(beside)));
+    context.dialogs.write(placeWritesWithin(drawn, storedAt(from), storedAt(beside)));
   };
   const move = folded
     ? undefined
@@ -862,7 +870,7 @@ function SidebarSection({
     // Note that a name left blank keeps the one it had, as a rename never leaves a section nameless.
     const title = end.value === "" ? section.title : end.value;
     if (title === section.title && sameIcon(icon, section.icon)) return;
-    tasks.onWriteSections([
+    context.dialogs.write([
       { kind: TASK_SECTION_WRITE.EDIT, id: section.id, title, icon: icon ?? null },
     ]);
   };
@@ -950,13 +958,13 @@ export function SidebarSections({
 }): React.JSX.Element | null {
   const order = sections.map((drawn) => drawn.section);
   const move = (from: number, to: number) =>
-    context.tasks.onWriteSections(sectionMoveWrites(order, from, to));
+    context.dialogs.write(sectionMoveWrites(order, from, to));
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
   // Note that a section on its way out, deleted or moved away, is drawn on where it stood until its exit has played.
   const shown = useLeaving(sections, sectionKeyOf);
   const listedAt = new Map(sections.map((drawn, at) => [sectionKeyOf(drawn), at]));
-  const { tasks, edits } = context;
+  const { edits } = context;
   const creating =
     edits.inPlace?.kind === TASK_SECTION_WRITE.CREATE && edits.inPlace.workspaceId === workspaceId
       ? edits.inPlace
@@ -971,7 +979,7 @@ export function SidebarSections({
     }
     const made = createWrite(creating.workspaceId, end.value, icon);
     edits.end(end.byKey ? made.id : undefined);
-    tasks.onWriteSections([made]);
+    context.dialogs.write([made]);
   };
   return (
     <nav className="sidebar-group" aria-label="Sections">

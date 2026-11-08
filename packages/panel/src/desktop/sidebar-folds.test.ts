@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
+import { writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import {
@@ -157,10 +158,10 @@ test("a folded repository leaves the task that is open standing, and unfolds to 
 
 test("a repository's header folds on its name, says its pin, counts its plans folded, keeps its + outside the fold, and opens its menu on a right-click", () => {
   const asked: string[] = [];
+  writeListedTasks({ repositoryPins: [{ repository: "acme/relay", pinnedAt: 1 }] });
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [task("p-1", "Invite expiry", "acme/relay"), task("p-2", "Retry audit", "acme/relay")],
-      pinnedRepositories: ["acme/relay"],
       onNewTaskIn: (repository) => asked.push(repository),
     }),
   );

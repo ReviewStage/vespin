@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_STATUS, type TasklessAgent } from "@repo/features/agent-wire";
 import {
   TASK_SECTION_ICON_COLOR,
@@ -23,7 +24,7 @@ import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
-import { handState } from "../testing/app-state.js";
+import { handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { playListMotions } from "../testing/pane-motion.js";
@@ -58,6 +59,31 @@ const LAUNCH = "0a1b2c3d-0000-4000-8000-000000000001";
 const RECENT_ICONS = "app.recentSectionIcons";
 
 const roots: Root[] = [];
+
+/**
+ * Hears each pin and section write on the act port, as the window sends
+ * them: a section write's writes, a task's pin as its mark, and a pin given
+ * a place as its move, each landing.
+ */
+function hearWrites(asked: Partial<Asked>): void {
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
+      asked.writes?.push(...writes);
+      return Promise.resolve(true);
+    },
+    [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
+      if (position === undefined)
+        asked.marks?.push([taskId, pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN]);
+      else asked.moves?.push({ agent: false, id: taskId, position });
+      return Promise.resolve(true);
+    },
+    [ACT_KIND.AGENTS_PIN]: ({ agentId, position }) => {
+      if (position !== undefined) asked.moves?.push({ agent: true, id: agentId, position });
+      return Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
+    },
+  });
+}
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -196,12 +222,12 @@ function sidebarOver(
   writes: TaskSectionWrite[],
   rest: Partial<TasksControl> = {},
 ) {
+  writeListedTasks({ taskSections: sections });
+  hearWrites({ writes });
   const tasks = tasksControl({
     tasks: [INVITES, RETRIES],
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    taskSections: sections,
-    onWriteSections: (asked) => writes.push(...asked),
     ...rest,
   });
   return drawnSidebar(sidebarProps(tasks));
@@ -326,7 +352,7 @@ test("the column's task rows, a section's and Tasks', are one Tab stop that ↓ 
     });
 
   assert.equal(stops().length, 1, "Tab lands on the column's rows once");
-  act(() => row("Invite expiry").focus());
+  await act(async () => row("Invite expiry").focus());
   down();
   assert.equal(document.activeElement, row("Retry audit"), "↓ goes from Launch into Tasks");
   assert.deepEqual(stops(), [row("Retry audit")]);
@@ -346,16 +372,16 @@ test("a section folds on its title, aria-expanded following, counts its tasks fo
   assert.equal(launch().textContent, "🚀Launch");
   assert.deepEqual(namesIn(sidebar, "Sections"), ["Invite expiry"]);
 
-  act(() => launch().click());
+  await act(async () => launch().click());
   assert.equal(launch().getAttribute("aria-expanded"), "false");
   assert.equal(launch().textContent, "🚀Launch1 task");
   assert.deepEqual(namesIn(sidebar, "Sections"), []);
 
   const actions = sidebar.querySelector<HTMLButtonElement>('[aria-label="Launch actions"]');
-  act(() => actions?.click());
+  await act(async () => actions?.click());
   assert.equal(launch().getAttribute("aria-expanded"), "false", "the ⋯ folds nothing");
 
-  act(() => launch().click());
+  await act(async () => launch().click());
   assert.equal(launch().getAttribute("aria-expanded"), "true");
   assert.deepEqual(namesIn(sidebar, "Sections"), ["Invite expiry"]);
 });
@@ -415,11 +441,11 @@ test("a task's Move to puts it on top of the section chosen", async () => {
   );
   assert.ok(row);
 
-  act(() => {
+  await act(async () => {
     row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
   });
-  act(() => item("Move to").click());
-  act(() => item("Launch").click());
+  await act(async () => item("Move to").click());
+  await act(async () => item("Launch").click());
 
   assert.deepEqual(writes, [
     { kind: TASK_SECTION_WRITE.PLACE, taskId: RETRIES.id, sectionId: LAUNCH },
@@ -478,7 +504,7 @@ test("deleting a section removes it at once with no dialog, and Undo brings it b
   const stood = sectionTitles(sidebar);
   openSectionMenu(sidebar, "Launch");
 
-  act(() => item("Delete section").click());
+  await act(async () => item("Delete section").click());
   const deleted = applied(BOTH_IN_LAUNCH, writes.splice(0));
   await draw(deleted);
 
@@ -506,7 +532,7 @@ test("a deleted section slides out where it stood, out of reach, and leaves once
   const { container: sidebar, draw } = await mountSidebarRedrawn(writes, ICONLESS);
   openSectionMenu(sidebar, "Launch");
 
-  act(() => item("Delete section").click());
+  await act(async () => item("Delete section").click());
   await draw(applied(ICONLESS, writes.splice(0)));
 
   const leaving = sidebar.querySelector<HTMLElement>("li[data-leaving]");
@@ -514,7 +540,7 @@ test("a deleted section slides out where it stood, out of reach, and leaves once
   assert.equal(leaving?.hasAttribute("inert"), true, "out of reach while it goes");
   const out = motions.played.find((each) => each.element === leaving);
 
-  act(() => out?.finish());
+  await act(async () => out?.finish());
   assert.equal(sidebar.querySelector("[data-leaving]"), null);
   assert.deepEqual(sectionTitles(sidebar), ["Someday"]);
 });
@@ -526,13 +552,13 @@ test("the last section deleted slides out too, and takes its group with it once 
   const { container: sidebar, draw } = await mountSidebarRedrawn(writes);
   openSectionMenu(sidebar, "Launch");
 
-  act(() => item("Delete section").click());
+  await act(async () => item("Delete section").click());
   await draw(applied(SECTIONS, writes.splice(0)));
 
   const leaving = sidebar.querySelector<HTMLElement>('nav[aria-label="Sections"] li[data-leaving]');
   assert.match(leaving?.textContent ?? "", /Launch/u, "it is drawn on");
 
-  act(() => motions.played.find((each) => each.element === leaving)?.finish());
+  await act(async () => motions.played.find((each) => each.element === leaving)?.finish());
   assert.equal(sidebar.querySelector('nav[aria-label="Sections"]'), null);
 });
 
@@ -541,7 +567,7 @@ test("deleting the last section hands focus to the first, rather than letting it
   const { container: sidebar, draw } = await mountSidebarRedrawn(writes, BOTH_IN_LAUNCH);
   openSectionMenu(sidebar, "Launch");
 
-  act(() => item("Delete section").click());
+  await act(async () => item("Delete section").click());
   await draw(applied(BOTH_IN_LAUNCH, writes.splice(0)));
 
   assert.deepEqual(sectionTitles(sidebar), ["Someday"]);
@@ -591,20 +617,20 @@ test("⌘-clicking a section's task and one under Tasks chooses both, opening ne
 
   openRowMenu(sidebar, RETRIES.name);
   assert.equal(document.querySelector(".ui-menu-heading")?.textContent, "2 tasks");
-  act(() => {
+  await act(async () => {
     document.activeElement?.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
   });
 
-  act(() => rowOf(RETRIES.name).focus());
-  act(() => {
+  await act(async () => rowOf(RETRIES.name).focus());
+  await act(async () => {
     assert.ok(runAppCommand(APP_COMMAND.SET_STATUS), "the focused row answers S");
   });
   await act(async () => undefined);
   assert.equal(document.querySelector(".ui-menu-heading")?.textContent, "2 tasks");
   assert.ok(document.querySelector('[role="menu"][aria-label="Status"]'), "S opens Status");
-  act(() => item("Done").click());
+  await act(async () => item("Done").click());
   assert.deepEqual(settled, [[[INVITES.id, RETRIES.id], TASK_STATUS.DONE]]);
 });
 
@@ -640,7 +666,7 @@ test("a plain click on any row, with tasks chosen and no bar to let them go, ope
     [...sidebar.querySelectorAll<HTMLElement>("button")].find((each) =>
       each.textContent?.trim().startsWith("Home"),
     ) ?? assert.fail("no Home row");
-  act(() => home.click());
+  await act(async () => home.click());
   noneChosen();
 });
 
@@ -658,7 +684,7 @@ test("a section's Mark all as read stands while a task in it is unread, and asks
   });
   openSectionMenu(read, "Launch");
   assert.ok(!menuLabels().includes("Mark all as read"));
-  act(() => {
+  await act(async () => {
     document.activeElement?.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
@@ -672,7 +698,7 @@ test("a section's Mark all as read stands while a task in it is unread, and asks
     ],
   });
   openSectionMenu(sidebar, "Launch");
-  act(() => item("Mark all as read").click());
+  await act(async () => item("Mark all as read").click());
   await settle();
 
   assert.deepEqual(marks, [`read:${INVITES.id}`]);
@@ -724,7 +750,7 @@ test("two sections titled alike are two items in Move to section, on one task's 
   }
   openRowMenu(sidebar, RETRIES.name);
   assert.equal(document.querySelector(".ui-menu-heading")?.textContent, "2 tasks");
-  act(() => item("Move to section").click());
+  await act(async () => item("Move to section").click());
   assert.deepEqual(
     menuLabels().filter((label) => label === "Launch"),
     ["Launch", "Launch"],
@@ -779,7 +805,7 @@ test("Move to section's New section asks in a card that says the task moves into
   const sidebar = await mountSidebar(writes);
 
   openMoveToSection(sidebar, "Retry audit");
-  act(() => item("New section").click());
+  await act(async () => item("New section").click());
   const card = document.querySelector('[role="dialog"]') ?? assert.fail("no card");
   assert.ok(card.textContent?.includes("“Retry audit” moves into it"));
   assert.ok(dialogButton("Add icon"), "the icon well says no icon is chosen");
@@ -797,7 +823,7 @@ test("New section waits on a name, and Enter in it makes the section", async () 
   const sidebar = await mountSidebar(writes);
 
   openMoveToSection(sidebar, "Retry audit");
-  act(() => item("New section").click());
+  await act(async () => item("New section").click());
   assert.equal(dialogButton("Create section").disabled, true, "a blank name is not offered");
   const name = dialogField("Name");
   assert.ok(name.closest('[role="dialog"]'), "a form is a dialog, not an alert");
@@ -814,7 +840,7 @@ test("New section's field is labeled, and Enter on a blank name marks it invalid
   const sidebar = await mountSidebar(writes);
 
   openMoveToSection(sidebar, "Retry audit");
-  act(() => item("New section").click());
+  await act(async () => item("New section").click());
   const name = dialogField("Name");
   assert.equal(name.getAttribute("aria-label"), null, "the visible label names the field");
   assert.notEqual(name.placeholder, "Name", "the placeholder is not the label again");
@@ -890,13 +916,13 @@ test("Remove icon in the picker clears a section's icon", async () => {
   const sidebar = await mountSidebar(writes);
 
   sectionMenuChoose(sidebar, "Launch", "Rename");
-  act(() => dialogButton("Change icon").click());
+  await act(async () => dialogButton("Change icon").click());
   await settleLoaded();
   assert.equal(
     document.querySelector('button[aria-label="rocket"]')?.getAttribute("aria-pressed"),
     "true",
   );
-  act(() => dialogButton("Remove icon").click());
+  await act(async () => dialogButton("Remove icon").click());
   await settleLoaded();
   await press(sectionNameField(), "Enter");
 
@@ -951,14 +977,12 @@ async function mountDraggable(
   asked: Asked,
   rest: Partial<TasksControl> = {},
 ): Promise<HTMLElement> {
+  writeListedTasks({ taskSections: sections });
+  hearWrites(asked);
   const tasks = tasksControl({
     tasks: [...summaries],
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    taskSections: sections,
-    onWriteSections: (writes) => asked.writes.push(...writes),
-    onMarkTask: (taskId, mark) => asked.marks.push([taskId, mark]),
-    onMovePins: (moves) => asked.moves.push(...moves),
     ...rest,
   });
   const container = document.body.appendChild(document.createElement("div"));
@@ -1024,6 +1048,7 @@ test("a task dragged from Tasks into Pinned is pinned below the pin it was let g
   const sidebar = await mountDraggable([PINNED, INVITES, RETRIES], SECTIONS, asked);
 
   drag(sidebar, "Retry audit", ROW_HEIGHT - 4);
+  await settle();
 
   assert.deepEqual(asked.marks, [[RETRIES.id, TASK_MARK.PIN]]);
   assert.deepEqual(
@@ -1039,6 +1064,7 @@ test("a task dragged from a section onto the top of Pinned leaves the section an
   const sidebar = await mountDraggable([PINNED, INVITES, RETRIES], SECTIONS, asked);
 
   drag(sidebar, "Invite expiry", 4);
+  await settle();
 
   assert.deepEqual(asked.marks, [[INVITES.id, TASK_MARK.PIN]]);
   assert.deepEqual(
@@ -1060,6 +1086,7 @@ test("a pinned task dragged onto Tasks is unpinned and leaves the section it was
   const sidebar = await mountDraggable([PINNED, INVITES, RETRIES], kept, asked);
 
   drag(sidebar, "Pin audit", 3 * ROW_HEIGHT - 4);
+  await settle();
 
   assert.deepEqual(asked.marks, [[PINNED.id, TASK_MARK.UNPIN]]);
   assert.deepEqual(asked.writes, [
@@ -1072,6 +1099,7 @@ test("a pinned task dragged into a section is unpinned and lands where it was le
   const sidebar = await mountDraggable([PINNED, INVITES, RETRIES], SECTIONS, asked);
 
   drag(sidebar, "Pin audit", 2 * ROW_HEIGHT - 4);
+  await settle();
 
   assert.deepEqual(asked.marks, [[PINNED.id, TASK_MARK.UNPIN]]);
   const after = asked.writes.reduce(
@@ -1095,6 +1123,7 @@ test("with nothing pinned Pinned stands nowhere, and a row lifted into a drag dr
   assert.equal(zone.textContent, "Pinned", "no count, and no words beyond its name");
 
   letGo(4);
+  await settle();
 
   assert.deepEqual(asked.marks, [[RETRIES.id, TASK_MARK.PIN]]);
 });
@@ -1105,7 +1134,7 @@ test("a drag put back with nothing pinned takes the empty Pinned away again", as
 
   lift(sidebar, "Retry audit", 0);
   assert.ok(pinnedGroup(sidebar), "Pinned stands while a row is carried");
-  act(() => {
+  await act(async () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
   await settle();
@@ -1125,8 +1154,8 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
       tasks: [...summaries],
       workspaces: [WORKSPACE],
       workspace: WORKSPACE,
-      taskSections: SECTIONS,
     });
+    writeListedTasks({ taskSections: SECTIONS });
     act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
     await settle();
   };
@@ -1134,7 +1163,7 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
 
   const fold = pinnedGroup(container)?.querySelector("button[aria-expanded]");
   assert.equal(fold?.getAttribute("aria-expanded"), "true", "it folds");
-  act(() => fold?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await act(async () => fold?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   assert.match(pinnedGroup(container)?.textContent ?? "", /1 pin/u, "folded, it counts its pin");
 
   await draw([task(PINNED.id, PINNED.name), INVITES, RETRIES]);
@@ -1143,7 +1172,7 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
   assert.equal(leaving?.hasAttribute("data-leaving"), true, "it is drawn on while it goes");
   const out = motions.played.find((each) => each.element === leaving);
   assert.equal(out?.keyframes.at(-1)?.opacity, 0, "it fades out");
-  act(() => out?.finish());
+  await act(async () => out?.finish());
   assert.equal(pinnedGroup(container), null);
 });
 
@@ -1158,6 +1187,7 @@ test("a pin dragged below the next one reorders the pins", async () => {
   const sidebar = await mountDraggable([PINNED, second, INVITES, RETRIES], SECTIONS, asked);
 
   drag(sidebar, "Pin audit", 2 * ROW_HEIGHT - 4);
+  await settle();
 
   assert.deepEqual(asked.marks, []);
   assert.deepEqual(
@@ -1176,11 +1206,11 @@ test("a glyph found by searching asks its color over the grid, the text's own na
   await dialogPicker(sidebar);
   typeInto(dialogField("Search icons and emoji"), "telescope");
   await settleLoaded();
-  act(() => dialogButton("Telescope").click());
+  await act(async () => dialogButton("Telescope").click());
   const colors =
     document.querySelector(".section-icon-colors") ?? assert.fail("the glyph's colors are asked");
   assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
-  act(() => dialogButton("Teal").click());
+  await act(async () => dialogButton("Teal").click());
   assert.equal(
     document.querySelector('input[aria-label="Search icons and emoji"]'),
     null,
@@ -1211,9 +1241,9 @@ test("Change icon opens a section's head with its picker open, where the glyph i
   await settleLoaded();
   const telescope = dialogButton("Telescope");
   assert.equal(telescope.getAttribute("aria-pressed"), "true");
-  act(() => telescope.click());
+  await act(async () => telescope.click());
   assert.equal(dialogButton("Teal").getAttribute("aria-pressed"), "true");
-  act(() => dialogButton("Black").click());
+  await act(async () => dialogButton("Black").click());
   await press(sectionNameField(), "Enter");
 
   assert.deepEqual(writes, [
@@ -1230,7 +1260,7 @@ test("a section wearing a glyph no Lucide knows still leaves the grid one tab st
   const sidebar = await mountSidebar([], GLYPHS);
 
   sectionMenuChoose(sidebar, "Lost", "Rename");
-  act(() => dialogButton("Change icon").click());
+  await act(async () => dialogButton("Change icon").click());
   await settleLoaded();
 
   const panel = document.querySelector('[role="tabpanel"]') ?? assert.fail("no picker panel");
@@ -1280,7 +1310,7 @@ test("Icons and Emoji are tabs over the picker's panel, which the tab shown name
     false,
   );
 
-  act(() => tab("Emoji").click());
+  await act(async () => tab("Emoji").click());
   await settleLoaded();
 
   assert.equal(tab("Emoji").getAttribute("aria-selected"), "true");
@@ -1303,8 +1333,8 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   await press(document.activeElement as HTMLElement, "Escape");
   assert.equal(document.querySelector(".section-icon-colors"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
-  act(() => dialogButton("Telescope").click());
-  act(() => (document.activeElement as HTMLButtonElement).click());
+  await act(async () => dialogButton("Telescope").click());
+  await act(async () => (document.activeElement as HTMLButtonElement).click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
 
@@ -1322,7 +1352,7 @@ test("Clear search empties the search, every glyph is offered again, and the car
   typeInto(search, "telescope");
   await settleLoaded();
   assert.equal(document.querySelector('button[aria-label="Folder"]'), null);
-  act(() => dialogButton("Clear search").click());
+  await act(async () => dialogButton("Clear search").click());
 
   assert.equal(search.value, "");
   assert.ok(dialogButton("Folder"));
@@ -1346,8 +1376,8 @@ test("the arrows move the grid's one tab stop with the focus", async () => {
 
   await dialogPicker(sidebar);
   const folder = dialogButton("Folder");
-  act(() => folder.focus());
-  act(() => {
+  await act(async () => folder.focus());
+  await act(async () => {
     folder.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   });
 
@@ -1360,13 +1390,13 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
   const sidebar = await mountSidebar([]);
 
   await dialogPicker(sidebar);
-  act(() => dialogButton("Folder").click());
+  await act(async () => dialogButton("Folder").click());
   const layers = dialogButton("Layers");
-  act(() => layers.focus());
+  await act(async () => layers.focus());
   await press(layers, "ArrowRight");
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Heart");
 
-  act(() => dialogButton("Star").click());
+  await act(async () => dialogButton("Star").click());
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
   assert.equal(document.querySelectorAll(".section-icon-colors").length, 1);
 });
@@ -1376,10 +1406,10 @@ test("a glyph pressed again while its colors stand open closes them, its press t
 
   await dialogPicker(sidebar);
   const folder = dialogButton("Folder");
-  act(() => folder.click());
+  await act(async () => folder.click());
   assert.ok(document.querySelector(".section-icon-colors"), "the colors are asked");
-  act(() => folder.focus());
-  act(() => folder.click());
+  await act(async () => folder.focus());
+  await act(async () => folder.click());
 
   assert.equal(document.querySelector(".section-icon-colors"), null);
 });
@@ -1420,9 +1450,9 @@ test("a glyph this Mac chose last is offered first under Recent in the color it 
   const first = recent.querySelector("button") ?? assert.fail("nothing under Recent");
   assert.equal(first.getAttribute("aria-label"), "Telescope");
   assert.equal(first.querySelector("svg")?.getAttribute("data-icon-color"), "red");
-  act(() => first.click());
+  await act(async () => first.click());
   assert.equal(dialogButton("Red").getAttribute("aria-pressed"), "true");
-  act(() => dialogButton("Teal").click());
+  await act(async () => dialogButton("Teal").click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
 
@@ -1509,7 +1539,7 @@ test("under a finger, a pin held offers Move down, which moves it below the next
 
   assert.ok(menuWords().includes("Move down"), "the menu offers Move down");
   assert.ok(!menuWords().includes("Move up"), "the top pin has no Move up");
-  act(() => item("Move down").click());
+  await act(async () => item("Move down").click());
   assert.deepEqual(
     asked.moves.map((move) => move.id),
     [PINNED.id],
@@ -1520,7 +1550,7 @@ test("under a finger, a pin held offers Move down, which moves it below the next
 test("with a mouse, a pin's menu offers its move too, with its chord", async () => {
   const sidebar = await mountDraggable([PINNED, SECOND_PIN, INVITES], SECTIONS, noneAsked());
 
-  act(() => {
+  await act(async () => {
     rowPress(sidebar, "Pin review").dispatchEvent(
       new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }),
     );
@@ -1543,9 +1573,9 @@ test("under a finger, a section's menu moves it up among the sections", async ()
   const actions = sidebar.querySelector<HTMLButtonElement>(`[aria-label="${last} actions"]`);
   assert.ok(actions);
 
-  act(() => actions.click());
+  await act(async () => actions.click());
   assert.ok(!menuWords().includes("Move down"), "the last section has no Move down");
-  act(() => item("Move up").click());
+  await act(async () => item("Move up").click());
 
   const after = writes.reduce(
     (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
@@ -1576,7 +1606,7 @@ test("under a finger, a task in a section draws no ⋯ and no Pin or Mark done, 
   );
 
   longPress(press);
-  act(() => item("Move down").click());
+  await act(async () => item("Move down").click());
 
   const after = asked.writes.reduce(
     (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
@@ -1585,52 +1615,60 @@ test("under a finger, a task in a section draws no ⋯ and no Pin or Mark done, 
   assert.deepEqual(sectionTaskIds(after, LAUNCH), [second.id, first.id]);
 });
 
-/** The sidebar over two pins that sorts them by each place `onMovePins` hears, as the window's own state does. */
+/** Gives a pin the place the act port heard, as main draws it; `PinsThatMove` sets it as it stands. */
+let placePin: (taskId: string, position: string) => void = () => undefined;
+
+/** The sidebar over two pins that sorts them by each place the act port hears, as the window's own state does. */
 function PinsThatMove(): React.JSX.Element {
   const [pins, setPins] = useState([PINNED, SECOND_PIN]);
+  placePin = (taskId, position) =>
+    setPins((held) =>
+      held.map((pin) => (pin.id === taskId ? { ...pin, pinPosition: position } : pin)),
+    );
   const tasks = tasksControl({
     tasks: pins,
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    onMovePins: (moves) =>
-      setPins((held) =>
-        held.map((pin) => {
-          const place = moves.find((move) => move.id === pin.id)?.position;
-          return place === undefined ? pin : { ...pin, pinPosition: place };
-        }),
-      ),
   });
   return drawnSidebar(sidebarProps(tasks));
 }
 
 test("⇧⌘↓ moves the pin that has the keyboard below the next and leaves it focused, so ⇧⌘↑ can move it back", async () => {
+  // A pin's new place leaves on the act port, and main draws it.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_PIN]: ({ taskId, position }) => {
+      if (position !== undefined) placePin(taskId, position);
+      return Promise.resolve(true);
+    },
+  });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(PinsThatMove))));
+  await act(async () => root.render(withQueryClient(createElement(PinsThatMove))));
   await settle();
   assert.equal(appCommandOffered(APP_COMMAND.MOVE_ROW_DOWN), false, "no row has the keyboard");
 
-  act(() => rowPress(container, "Pin audit").focus());
+  await act(async () => rowPress(container, "Pin audit").focus());
   assert.equal(appCommandOffered(APP_COMMAND.MOVE_ROW_DOWN), true);
-  act(() => {
+  await act(async () => {
     runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
   });
   assert.deepEqual(namesIn(container, "Pinned"), ["Pin review", "Pin audit"]);
   assert.equal(document.activeElement, rowPress(container, "Pin audit"));
 
   // Note that the last row has nowhere further down, so the chord leaves it where it stands.
-  act(() => {
+  await act(async () => {
     runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
   });
   assert.deepEqual(namesIn(container, "Pinned"), ["Pin review", "Pin audit"]);
-  act(() => {
+  await act(async () => {
     runAppCommand(APP_COMMAND.MOVE_ROW_UP);
   });
   assert.deepEqual(namesIn(container, "Pinned"), ["Pin audit", "Pin review"]);
   assert.equal(document.activeElement, rowPress(container, "Pin audit"));
 
-  act(() => (document.activeElement as HTMLElement).blur());
+  await act(async () => (document.activeElement as HTMLElement).blur());
   assert.equal(appCommandOffered(APP_COMMAND.MOVE_ROW_DOWN), false, "the keyboard left the list");
 });
 
@@ -1644,8 +1682,8 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
     );
   const before = workspaceSections(BOTH_IN_LAUNCH, WORKSPACE.id).map((section) => section.title);
 
-  act(() => rowPress(sidebar, "Invite expiry").focus());
-  act(() => {
+  await act(async () => rowPress(sidebar, "Invite expiry").focus());
+  await act(async () => {
     runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
   });
   assert.deepEqual(sectionTaskIds(written(), LAUNCH), [RETRIES.id, INVITES.id]);
@@ -1656,8 +1694,8 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
   );
 
   const fold = sectionHeader(sidebar, "Launch").querySelector<HTMLElement>("button[aria-expanded]");
-  act(() => fold?.focus());
-  act(() => {
+  await act(async () => fold?.focus());
+  await act(async () => {
     runAppCommand(APP_COMMAND.MOVE_ROW_UP);
   });
   assert.deepEqual(
@@ -1726,8 +1764,8 @@ test("an agent's menu offers Move to section beside Pin, before Archive, as the 
     "Move to section",
     "Archive",
   ]);
-  act(() => item("Move to section").click());
-  act(() => item("Launch").click());
+  await act(async () => item("Move to section").click());
+  await act(async () => item("Launch").click());
 
   assert.deepEqual(writes, [
     { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: SWEEP.id, sectionId: LAUNCH },
@@ -1740,7 +1778,7 @@ test("an agent's Move to section checks the section it stands in and offers Remo
 
   openMoveToSection(sidebar, "Sweep flaky tests", "Move to section");
   assert.equal(item("Launch").getAttribute("aria-checked"), "true");
-  act(() => item("Remove from section").click());
+  await act(async () => item("Remove from section").click());
 
   assert.deepEqual(writes, [
     { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: SWEEP.id, sectionId: null },
@@ -1753,6 +1791,7 @@ test("an agent dragged from Tasks into a section lands where it was let go, amon
   const sidebar = await mountDraggable([INVITES, RETRIES], SECTIONS, asked, WITH_SWEEP);
 
   drag(sidebar, "Sweep flaky tests", 2 * ROW_HEIGHT - 4);
+  await settle();
 
   assert.deepEqual(asked.marks, []);
   const after = asked.writes.reduce(
@@ -1774,6 +1813,7 @@ test("an agent dragged from a section onto Tasks leaves every section", async ()
   const sidebar = await mountDraggable([INVITES, RETRIES], SWEEP_IN_LAUNCH, asked, WITH_SWEEP);
 
   drag(sidebar, "Sweep flaky tests", 4 * ROW_HEIGHT - 4);
+  await settle();
 
   assert.deepEqual(asked.writes, [
     { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: SWEEP.id, sectionId: null },

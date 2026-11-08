@@ -22,7 +22,7 @@ import { SHELL_ROOM } from "../shell-room.js";
 import { useTasksTab } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handMembers } from "../testing/app-state.js";
+import { handMembers, writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import {
@@ -231,6 +231,8 @@ async function mountPage(held?: TasksPageHeld): Promise<{
     });
     return createElement(TasksPage, { tasks: control, room: SHELL_ROOM.WIDE, held });
   }
+  // Note that the sections are read off main's document, as the window's surfaces read them (`use-pin-writes.ts`).
+  writeListedTasks({ taskSections: sectionsHolding([]) });
   const page = document.createElement("div");
   document.body.append(page);
   const root = createRoot(page);
@@ -247,7 +249,11 @@ async function mountPage(held?: TasksPageHeld): Promise<{
   await settle();
   return {
     page,
-    hold: (tasks, taskSections) => act(() => restand?.(viewOf(tasks, taskSections))),
+    hold: (tasks, taskSections = sectionsHolding([])) =>
+      act(() => {
+        restand?.(viewOf(tasks, taskSections));
+        writeListedTasks({ taskSections });
+      }),
   };
 }
 

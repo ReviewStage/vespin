@@ -83,6 +83,7 @@ import {
   useOpenPlace,
   useReadLinkOpener,
 } from "../tasks/use-open-link.js";
+import { usePinWrites } from "../tasks/use-pin-writes.js";
 import type { PinHolder, SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
@@ -237,6 +238,7 @@ export function useAgentOwnDoors(
   const listed = listedAgent(tasks, agent);
   const reads = useAgentReadMarks();
   const sectionDialogs = useSectionDialogs(tasks, shown);
+  const pins = usePinWrites(tasks.drawnTasks);
   // Note that the agent on screen is unread only by a mark by hand, as its sidebar row reads it while current.
   const read =
     listed === undefined
@@ -249,11 +251,11 @@ export function useAgentOwnDoors(
   const agentPin = own
     ? {
         pinned: listed.pinnedAt !== undefined,
-        onToggle: () => tasks.onPinAgent(agent.id, listed.pinnedAt === undefined),
+        onToggle: () => pins.onPinAgent(agent.id, listed.pinnedAt === undefined),
       }
     : undefined;
   const section = own
-    ? moveToSectionEntry(tasks, { agent: true, id: agent.id }, listed.workspaceId, sectionDialogs)
+    ? moveToSectionEntry({ agent: true, id: agent.id }, listed.workspaceId, sectionDialogs)
     : undefined;
   return { read, agentPin, section, dialog: sectionDialogs.dialog };
 }

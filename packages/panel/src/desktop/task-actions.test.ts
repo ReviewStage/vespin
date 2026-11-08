@@ -19,7 +19,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { draftTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE, type TaskMark } from "@repo/ui/tasks-model";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -96,8 +96,6 @@ interface Asked {
   deleted: string[];
   /** Each rename asked, as the task and the name it was given. */
   renamed: string[][];
-  /** Each pin or archive asked, as the task and what was asked of it. */
-  marked: [string, TaskMark][];
 }
 
 const roots: Root[] = [];
@@ -124,7 +122,6 @@ function openTab(
     changed: [],
     deleted: [],
     renamed: [],
-    marked: [],
   };
   const onRepository = (task: Task | TaskSummary) => ({
     ...task,
@@ -137,7 +134,6 @@ function openTab(
     activeTaskId: TASK.id,
     region: { kind: DOCUMENT_REGION.READY, task: { ...TASK, ...open } },
     onChangeRepository: (taskId) => asked.changed.push(taskId),
-    onMarkTask: (taskId, mark) => asked.marked.push([taskId, mark]),
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
   });
   // A delete and a rename leave on the act port, as the window sends them.
@@ -868,7 +864,6 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     changed: [],
     deleted: [],
     renamed: [],
-    marked: [],
   };
   const doneButton = (container: HTMLElement) =>
     container.querySelector('button[aria-label="Mark done"]');
@@ -924,7 +919,7 @@ test("a sidebar row's Task relation asks for the relation beside the menu, then 
     onSetTaskParent: (taskId, parentTaskId) => parented.push([taskId, parentTaskId]),
     onSetTaskBlock: (taskId, block) => blocked.push([taskId, block]),
   });
-  const asked: Asked = { opened: [], changed: [], deleted: [], renamed: [], marked: [] };
+  const asked: Asked = { opened: [], changed: [], deleted: [], renamed: [] };
   const row = mountSidebarTask(tasks, OTHER, asked);
   const pick = (words: string) => {
     const found = [

@@ -58,7 +58,6 @@ import type {
 import { NO_HOLDER_INBOXES, UNREAD } from "@repo/host/app-state";
 import { AGENT_INBOX_ACT_KIND, type PortActResult } from "@repo/host/contract";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
-import type { TaskMark } from "@repo/ui/tasks-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useEffect, useMemo, useState } from "react";
@@ -693,8 +692,6 @@ interface Asked {
   readonly previewedAgents: string[];
   /** How many times the window was asked to leave it, through its routed exits (`leavingBy`). */
   closed: number;
-  /** Each task it was asked to mark, by the mark, in order. */
-  readonly marks: [string, TaskMark][];
   /** How many times it was asked for New task. */
   newTasks: number;
 }
@@ -800,7 +797,6 @@ export function mount(
     shownAgents: [],
     previewedAgents: [],
     closed: 0,
-    marks: [],
     newTasks: 0,
   };
   function Page({ sidePanel }: { sidePanel?: SidePanelControl | undefined }) {
@@ -876,7 +872,6 @@ export function mount(
         onTaskAgents: () => undefined,
       },
       onShowTask: (taskId) => asked.shownTasks.push(taskId),
-      onMarkTask: (taskId, mark) => asked.marks.push([taskId, mark]),
       onNewTask: () => {
         asked.newTasks += 1;
       },

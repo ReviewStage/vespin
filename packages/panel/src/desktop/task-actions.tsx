@@ -112,6 +112,7 @@ import {
   useAssigneeRows,
 } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { useReadMark, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -226,10 +227,8 @@ export interface TaskRowTab
     | "signedIn"
     | "me"
     | "workspaces"
-    | "taskSections"
     | "drawnTasks"
     | "onSettleTasks"
-    | "onMarkTask"
     | "onSetTaskStanding"
     | "onSetTaskBlock"
     | "onSetTaskParent"
@@ -238,7 +237,6 @@ export interface TaskRowTab
     | "onChangeRepository"
     | "onMoveTask"
     | "moveTask"
-    | "onWriteSections"
   > {
   /** The tab's tasks as they stand when read. */
   readonly tasksNow: () => readonly TaskSummary[];
@@ -261,10 +259,8 @@ export function taskRowTab(
     signedIn: tasks.signedIn,
     me: tasks.me,
     workspaces: tasks.workspaces,
-    taskSections: tasks.taskSections,
     drawnTasks: tasks.drawnTasks,
     onSettleTasks: tasks.onSettleTasks,
-    onMarkTask: tasks.onMarkTask,
     onSetTaskStanding: tasks.onSetTaskStanding,
     onSetTaskBlock: tasks.onSetTaskBlock,
     onSetTaskParent: tasks.onSetTaskParent,
@@ -273,7 +269,6 @@ export function taskRowTab(
     onChangeRepository: tasks.onChangeRepository,
     onMoveTask: tasks.onMoveTask,
     moveTask: tasks.moveTask,
-    onWriteSections: tasks.onWriteSections,
     tasksNow,
     onCopyDescription: tasks.copy.onPress,
     onOpenHistory: tasks.onOpenHistory,
@@ -340,16 +335,20 @@ interface PlaceMark {
 }
 
 /** Pin, offered as whichever way the task is not yet: the reader's own pin of the task, which the Plan tab's menu offers as the tab's. */
-function pinMark(tasks: Pick<TasksControl, "onMarkTask">, task: TaskSummary): PlaceMark {
-  const marking = (mark: TaskMark) => () => tasks.onMarkTask(task.id, mark);
+function pinMark(pins: Pick<PinWrites, "onMarkTask">, task: TaskSummary): PlaceMark {
+  const marking = (mark: TaskMark) => () => pins.onMarkTask(task.id, mark);
   return task.pinnedAt === undefined
     ? { key: TASK_MARK.PIN, item: PANEL_COMMAND.PIN_TASK, onSelect: marking(TASK_MARK.PIN) }
     : { key: TASK_MARK.UNPIN, item: PANEL_COMMAND.UNPIN_TASK, onSelect: marking(TASK_MARK.UNPIN) };
 }
 
 /** Pin, offered as whichever way the task is not yet, and Mark done, offered on a task not yet done. */
-function placeMarks(tasks: TasksControl, task: TaskSummary): PlaceMark[] {
-  const pin = pinMark(tasks, task);
+function placeMarks(
+  tasks: TasksControl,
+  pins: Pick<PinWrites, "onMarkTask">,
+  task: TaskSummary,
+): PlaceMark[] {
+  const pin = pinMark(pins, task);
   const done: PlaceMark = {
     key: SETTLED_STATUS.DONE,
     item: PANEL_COMMAND.MARK_TASK_DONE,
@@ -360,12 +359,12 @@ function placeMarks(tasks: TasksControl, task: TaskSummary): PlaceMark[] {
 
 /** Pin or Unpin as the menu's item, keyed where `keyed`; nothing for a task neither the list nor the document holds. */
 function pinAction(
-  tasks: Pick<TasksControl, "onMarkTask">,
+  pins: Pick<PinWrites, "onMarkTask">,
   task: TaskSummary | undefined,
   keyed: boolean,
 ): MenuAction[] {
   if (task === undefined) return [];
-  const { item, onSelect } = pinMark(tasks, task);
+  const { item, onSelect } = pinMark(pins, task);
   return [commandAction(item, onSelect, keyed)];
 }
 
@@ -466,7 +465,8 @@ function SidebarTaskMarks({
   current: boolean;
   disabled: boolean;
 }): React.JSX.Element {
-  const marks = placeMarks(tasks, task).map(
+  const pins = usePinWrites(tasks.drawnTasks);
+  const marks = placeMarks(tasks, pins, task).map(
     ({ key, item, onSelect }): RowMark => ({
       key,
       label: commandWords(item, COMMAND_PLACE.MENU),
@@ -614,6 +614,8 @@ function taskActionGroups(
     rowKeys: boolean;
     /** Move to section, where the account keeps sections and the task may stand in one. */
     section: MenuEntry | undefined;
+    /** The task's pin, which Pin and Unpin ask. */
+    pins: Pick<PinWrites, "onMarkTask">;
     /** Status, Priority, and Assignee as a row's submenus, where the task has them; none for a task from a service before statuses. */
     standing: readonly MenuSubmenu[];
     /** The id Task relation's search stands under while its panel is drawn. */
@@ -669,7 +671,7 @@ function taskActionGroups(
     [rename, ...versions, ...read],
     [...doors.standing],
     [...relate, ...unparent],
-    [...pinAction(tasks, task, lettered), ...move],
+    [...pinAction(doors.pins, task, lettered), ...move],
     [repository],
     [remove],
   ];
@@ -834,9 +836,10 @@ export function useTaskMenuItems(
   const sections = useSectionDialogs(tasks, tasks.shown && doors.drawn);
   const section =
     task !== undefined
-      ? moveToSectionEntry(tasks, { agent: false, id: task.id }, task.workspaceId, sections, name)
+      ? moveToSectionEntry({ agent: false, id: task.id }, task.workspaceId, sections, name)
       : undefined;
   const setStanding = useStandingDoor(tasks);
+  const pins = usePinWrites(tasks.drawnTasks);
   const relationId = useId();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
@@ -854,6 +857,7 @@ export function useTaskMenuItems(
         chord,
         rowKeys: doors.rowKeys === true,
         section,
+        pins,
         standing,
         relationId,
         opened,
@@ -1065,6 +1069,7 @@ export function SidebarTask({
   onOpen: () => void;
 }): React.JSX.Element {
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const pins = usePinWrites(tasks.drawnTasks);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const actions = useTaskMenuItems(taskRowTab(tasks), task.id, task.name, {
@@ -1097,7 +1102,7 @@ export function SidebarTask({
   useFocusedRowKeys(
     item,
     () => reads.mark(task, !unread),
-    () => tasks.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN),
+    () => pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN),
     statusDrawn ? () => setStatusAsks((asks) => asks + 1) : undefined,
   );
   const card = useMemo(

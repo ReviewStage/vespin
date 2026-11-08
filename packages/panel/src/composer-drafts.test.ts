@@ -47,7 +47,7 @@ import { NO_LOOKS } from "./tasks/use-task-looks.js";
 import type { TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
-import { handHostReads, handInboxItems } from "./testing/app-state.js";
+import { handHostReads, handInboxItems, writeListedTasks } from "./testing/app-state.js";
 import {
   composerEditor,
   editorBundleLanded,
@@ -739,12 +739,14 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
     at: 5,
     model: open.agent.model,
   };
+  writeListedTasks({
+    taskAgentPins: pinned ? [{ agentId: open.agent.id, taskId: open.plan.id, pinnedAt: 5 }] : [],
+  });
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [INVITES.plan, BILLING.plan],
     activeTaskId: open.plan.id,
     chosenPin: pinned ? pin : undefined,
-    taskAgentPins: pinned ? [{ agentId: open.agent.id, taskId: open.plan.id, pinnedAt: 5 }] : [],
     liveAgents: [listedAgent(open.agent)],
     mainTabs: {
       ...tasksControl().mainTabs,

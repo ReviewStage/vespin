@@ -28,11 +28,9 @@ import {
   type FailureSurface,
 } from "@repo/features/shown-failure";
 import { agentMovedAt, agentsOfTask } from "@repo/features/task-agents-model";
-import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
 import {
   type CodeRef,
   type ListedPullRequest,
-  type RepositoryPin,
   TASK_BLOCK_CHANGE,
   TASK_BLOCK_RELATION,
   type TaskAgentPin,
@@ -78,16 +76,10 @@ import {
   sameTab,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/ui/task-sections-model";
 import {
-  AGENT_PIN_FAILED_NOTES,
   DOCUMENT_REGION,
   type DocumentRegion,
   documentRegion,
-  MARK_FAILED_NOTES,
-  PIN_MOVE_FAILED_NOTE,
-  type PinMove,
-  REPOSITORY_PIN_FAILED_NOTES,
   recentRepositories,
   renamedRegion,
   renamedView,
@@ -121,7 +113,6 @@ import {
   askAct,
   askKept,
   firstRefusal,
-  KEPT,
   type Kept,
   notKept,
   sendAct,
@@ -250,6 +241,7 @@ import { useIdleTabs } from "./use-idle-tabs.js";
 import { useInboxWaitingTasks } from "./use-inbox-slices.js";
 import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
+import { usePinWrites } from "./use-pin-writes.js";
 import {
   DRAWN_KINDS,
   type SidebarPin,
@@ -817,11 +809,6 @@ export interface TasksControl {
    */
   onDraftName: (taskId: string, name: string | undefined) => void;
   /**
-   * Pins or unpins a task, drawn at once and put back with a note if the
-   * service refuses.
-   */
-  onMarkTask: (taskId: string, mark: TaskMark) => void;
-  /**
    * Sets one task or several at a status, as Mark done, Cancel task, a
    * group's Mark tasks done, and the Tasks page's selection ask: each drawn
    * there at once, and one toast for them all once the service answered,
@@ -829,38 +816,10 @@ export interface TasksControl {
    * at. A task already there is left as it stands.
    */
   onSettleTasks: (taskIds: readonly string[], status: TaskStatus) => void;
-  /** The repositories the account pinned in the sidebar, newest pinned first, whose groups stand above the rest. */
-  pinnedRepositories: readonly string[];
-  /** Pins a repository in the sidebar or unpins it, on the account: drawn at once, and put back with a toast if the service refuses. */
-  onPinRepository: (repository: string, pinned: boolean) => void;
-  /** Pins an agent, on a plan or with none, in the sidebar or unpins it, for the account alone: drawn at once, and put back with a toast if the service refuses. */
-  onPinAgent: (agentId: string, pinned: boolean) => void;
-  /** The account's pins of agents on a plan, the archived ones left out, which the sidebar's Pinned section draws beside the pinned plans; none while the list is not followed live. */
-  taskAgentPins: readonly TaskAgentPin[];
   /** Every agent the list followed live carries, on a plan or with none, the archived ones among them, each with its own workspace and repository; none while it is not. */
   liveAgents: readonly ListedAgent[] | undefined;
   /** The pull request of every agent the list followed live carries that opened one, as its row keeps it; none while it is not. */
   listedPullRequests: readonly ListedPullRequest[] | undefined;
-  /**
-   * Gives the pins a drag in the sidebar's Pinned section moved their new
-   * places, on the account: a plan's and an agent's, drawn
-   * there at once, and put back with a toast if the service refuses, along
-   * with what `putBack` undoes. A tab pinned to the sidebar keeps its place
-   * on this Mac instead (`sidePanel`), which the drop's `putBack` restores.
-   */
-  onMovePins: (moves: readonly PinMove[], putBack?: () => void) => void;
-  /**
-   * The sections the account made in its sidebars and the tasks it keeps
-   * in them, every workspace's, as main draws them, the writes still out
-   * among them.
-   */
-  taskSections: TaskSections;
-  /**
-   * Writes a drag's or a menu's changes to the sections, in order, on the
-   * account: drawn by main at once, and put back with a toast if the
-   * service refuses one.
-   */
-  onWriteSections: (writes: readonly TaskSectionWrite[]) => void;
   /**
    * Steps back one layer, the window's Escape, answering whether there was one
    * to step back from: a side panel filling the window back beside the
@@ -949,9 +908,6 @@ const NO_TAKE_BACK = (): void => undefined;
  */
 const NOTHING = (): void => undefined;
 
-/** No repository pinned, as before main's view carries the sidebar. */
-const NO_REPOSITORY_PINS: readonly RepositoryPin[] = [];
-
 /** No task a write asked here stands over, as main's view says where it names none. */
 const NO_PENDING_TASKS: readonly string[] = [];
 
@@ -972,17 +928,6 @@ const NO_TASKLESS_AGENTS: readonly TasklessAgent[] = [];
 
 /** A task's act that never answered, settled as unanswered with the error beneath. */
 const taskUnreached = unreachedAs(TASK_CALL_FAILURE.UNANSWERED);
-
-/** How an agent's pin asked of the service landed, where it was not refused: written, or never asked, the account having changed while it waited its turn. */
-const AGENT_PIN_ASKED = {
-  CHANGED: "changed",
-  UNASKED: "unasked",
-} as const;
-
-/** How an agent's pin landed: as above, or refused, with the answer or error that refused it. */
-type AgentPinAsked =
-  | (typeof AGENT_PIN_ASKED)[keyof typeof AGENT_PIN_ASKED]
-  | { readonly refused: unknown };
 
 /** No pin of an agent on a plan, the same array every render. */
 const NO_TASK_AGENT_PINS: readonly TaskAgentPin[] = [];
@@ -1042,18 +987,6 @@ export function taskMoveMutation(run: (asked: TaskMoveAsk) => Promise<boolean>) 
 
 /** A task's move, as a place asking it holds it. */
 type TaskMoveMutation = ReturnType<typeof taskMoveMutation>;
-
-/** What ⌘Z's toast calls a task's pin it takes back or puts back, by what was asked. */
-const TASK_MARKED_NOTES = {
-  [TASK_MARK.PIN]: "Task pinned",
-  [TASK_MARK.UNPIN]: "Task unpinned",
-} as const satisfies Record<TaskMark, string>;
-
-/** What ⌘Z's toast calls an agent's pin it takes back or puts back, by whether it was a pin or an unpin. */
-const AGENT_PINNED_NOTES = {
-  PIN: "Agent pinned",
-  UNPIN: "Agent unpinned",
-} as const;
 
 /** What ⌘Z's toast calls a change of a task's priority it takes back or puts back. */
 const PRIORITY_CHANGED_NOTE = "Priority changed";
@@ -1295,10 +1228,6 @@ export function useTasksTab(input: {
   const queryClient = useQueryClient();
   const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
   const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
-  const { mutateAsync: sendRepositoryPin } = useMutation(
-    actMutation(ACT_KIND.TASKS_PIN_REPOSITORY),
-  );
-  const { mutateAsync: sendSections } = useMutation(actMutation(ACT_KIND.TASKS_WRITE_SECTION));
   const { mutateAsync: sendTaskRepository } = useMutation(
     actMutation(ACT_KIND.TASKS_SET_REPOSITORY),
   );
@@ -1477,9 +1406,7 @@ export function useTasksTab(input: {
   }, []);
   // Note that every list step below is memoized on what it reads, because
   // this runs on every render of the window and each step walks every task
-  // of every workspace. A repository's pin and a change to the sections are
-  // drawn by main the moment they are asked, so the view already carries them.
-  const taskSections = viewed.taskSections ?? NO_TASK_SECTIONS;
+  // of every workspace.
   // A tab closed names a task of the account it was closed under, so a sign-out lets them go.
   useEffect(() => {
     if (!accountSignedIn) setClosedTabs(NO_CLOSED_TABS);
@@ -2398,13 +2325,9 @@ export function useTasksTab(input: {
   const drawnTasks = useRef(tasks);
   drawnTasks.current = tasks;
   const drawnNow = useCallback(() => drawnTasks.current, []);
-  const taskPinDoors = useTaskRowDoors(ROW_WRITE.TASK_PIN.kind, drawnNow);
-  const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind, drawnNow);
   const standingDoors = useTaskRowDoors(ROW_WRITE.TASK_STANDING.kind, drawnNow);
   const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK, drawnNow);
   const parentDoors = useTaskRowDoors(ACT_KIND.TASKS_SET_PARENT, drawnNow);
-  const sendTaskPin = taskPinDoors.send;
-  const sendAgentPin = agentPinDoors.send;
   const sendStandingRow = standingDoors.send;
 
   // The open task as it stands when a move is answered, which may be
@@ -2412,175 +2335,10 @@ export function useTasksTab(input: {
   const openNow = useRef(openTaskId);
   openNow.current = openTaskId;
 
-  // A fixture's tasks are marked nowhere, as they are read from nowhere.
-  // Main draws a pin at once and puts it back where the service refused it;
-  // a pin says nothing once it lands, since the row it moves is in sight,
-  // and a refusal says so in a toast, since the menu that asked has closed;
-  // one kept is ⌘Z's to take back. It answers whether the service kept the
-  // mark, which the pin migration above waits on.
-  const markTask = (taskId: string, mark: TaskMark): Promise<boolean> => {
-    if (fixture !== undefined) return Promise.resolve(false);
-    const pinned = mark === TASK_MARK.PIN;
-    const pressed = pressRows(ROW_WRITE.TASK_PIN, taskPinDoors, [
-      { id: taskId, after: { pinned, position: null } },
-    ]);
-    return askKept(sendTaskPin({ taskId, pinned })).then((changed) => {
-      if (changed.kept) {
-        pressed.keep(TASK_MARKED_NOTES[mark]);
-        return true;
-      }
-      toast({
-        replayUnmasked: true,
-        words: MARK_FAILED_NOTES[mark],
-        tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
-        failure: { surface: FAILURE_SURFACE.TASK_MARK, cause: changed.cause, about: { taskId } },
-      });
-      return false;
-    });
-  };
-  markTaskNow.current = markTask;
-  // A fixture's repositories are pinned nowhere, as its tasks are marked
-  // nowhere. Main draws a pin at once and puts the group back where the
-  // service refused it (`@repo/host`'s `sidebar-collections.ts`); a pin says
-  // nothing once it lands, since the group it moves is in sight, and a
-  // refusal says so in a toast, since the menu that asked has closed.
-  const pinRepository = (repository: string, pinned: boolean) => {
-    if (fixture !== undefined) return;
-    askKept(sendRepositoryPin({ repository, pinned })).then((changed) => {
-      if (changed.kept) return;
-      toast({
-        replayUnmasked: true,
-        words: pinned ? REPOSITORY_PIN_FAILED_NOTES.PIN : REPOSITORY_PIN_FAILED_NOTES.UNPIN,
-        tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
-        failure: { surface: FAILURE_SURFACE.REPOSITORY_PIN, cause: changed.cause },
-      });
-    });
-  };
-
-  // Each agent's pins in flight, the newest last, which the next waits on,
-  // each answering how it landed, or nothing where it was never asked.
-  const agentPinFlights = useRef(new Map<string, Promise<unknown>>());
-  // The account signed in now, which a pin waiting its turn must still be pressed under.
-  const accountNow = useRef(input.account);
-  accountNow.current = input.account;
-  // A fixture's agents are pinned nowhere, as its plans are marked nowhere.
-  // Main draws a pin at once and puts the row back where the service refused
-  // it; a pin says nothing once it lands, since the row it moves is in sight,
-  // and a refusal says so in a toast, since the menu that asked has closed.
-  // Note that one agent's pins are asked one after another, because each
-  // writes as it lands, so a Pin and an Unpin pressed together landing out
-  // of order would leave standing the one not pressed last. One still
-  // waiting when the account changes is never asked, since a pin is its
-  // presser's own and would land on whoever signed in since.
-  const askAgentPin = (
-    agentId: string,
-    pinned: boolean,
-    position?: string,
-  ): Promise<AgentPinAsked> => {
-    const flights = agentPinFlights.current;
-    const pressedBy = input.account;
-    const placed = position === undefined ? {} : { position };
-    const asked = (flights.get(agentId) ?? Promise.resolve()).then(
-      (): Promise<AgentPinAsked> | AgentPinAsked =>
-        accountNow.current === pressedBy
-          ? sendAgentPin({ agentId, pinned, ...placed }).then(
-              (answer) => ("agent" in answer ? AGENT_PIN_ASKED.CHANGED : { refused: answer }),
-              (error: unknown) => ({ refused: error }),
-            )
-          : AGENT_PIN_ASKED.UNASKED,
-    );
-    flights.set(agentId, asked);
-    asked.then(() => {
-      if (flights.get(agentId) === asked) flights.delete(agentId);
-    });
-    return asked;
-  };
-  const pinAgent = (agentId: string, pinned: boolean) => {
-    if (fixture !== undefined) return;
-    const pressed = pressRows(ROW_WRITE.AGENT_PIN, agentPinDoors, [
-      { id: agentId, after: { pinned, position: null } },
-    ]);
-    askAgentPin(agentId, pinned).then((asked) => {
-      if (asked === AGENT_PIN_ASKED.CHANGED) {
-        pressed.keep(pinned ? AGENT_PINNED_NOTES.PIN : AGENT_PINNED_NOTES.UNPIN);
-        return;
-      }
-      if (asked === AGENT_PIN_ASKED.UNASKED) return;
-      toast({
-        replayUnmasked: true,
-        words: pinned ? AGENT_PIN_FAILED_NOTES.PIN : AGENT_PIN_FAILED_NOTES.UNPIN,
-        tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
-        failure: { surface: FAILURE_SURFACE.AGENT_PIN, cause: asked.refused, about: { agentId } },
-      });
-    });
-  };
+  // A task's pin the pin migration above asks (`use-pin-writes.ts`).
+  markTaskNow.current = usePinWrites(drawnNow).onMarkTask;
 
   const { taskAgentPins = NO_TASK_AGENT_PINS } = tasks;
-
-  // A fixture's pins are moved nowhere, as they are pinned nowhere. Each pin
-  // a drop gave a place is asked of the service, which main draws at once: a
-  // plan's through the host, which asks one change at a time, and an agent's
-  // after that agent's pins already in flight, as a pin waits, and never
-  // under an account signed in since. A refusal is put back by main, and
-  // whatever else the drop placed on this Mac alone by `putBack`, and says
-  // so once for the drop, since the pointer that asked has let go.
-  const movePins = (moves: readonly PinMove[], putBack?: () => void) => {
-    if (fixture !== undefined || moves.length === 0) return;
-    const pressedBy = input.account;
-    const asked = moves.map(({ agent, id, position }) => {
-      const flights = agentPinFlights.current;
-      const flight: Promise<Kept | undefined> = agent
-        ? (flights.get(id) ?? Promise.resolve(true)).then(() =>
-            accountNow.current === pressedBy
-              ? sendAgentPin({ agentId: id, pinned: true, position }).then(
-                  (answer) => ("agent" in answer ? KEPT : notKept(answer)),
-                  notKept,
-                )
-              : undefined,
-          )
-        : askKept(sendTaskPin({ taskId: id, pinned: true, position }));
-      if (agent) flights.set(id, flight);
-      return flight.then((changed) => {
-        if (agent && flights.get(id) === flight) flights.delete(id);
-        return changed;
-      });
-    });
-    Promise.all(asked).then((answers) => {
-      const asked = answers.filter((answer) => answer !== undefined);
-      if (asked.every((answer) => answer.kept)) return;
-      putBack?.();
-      toast({
-        replayUnmasked: true,
-        words: PIN_MOVE_FAILED_NOTE,
-        tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
-        failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstRefusal(asked) },
-      });
-    });
-  };
-
-  // A drag's or a menu's changes to the sections go to main as one ask,
-  // which draws them at once and writes them in order after every ask
-  // before them, putting them back where the service refused one
-  // (`@repo/host`'s `sidebar-collections.ts`). A fixture's sections are
-  // changed nowhere, as its repositories are pinned nowhere.
-  const writeSections = (writes: readonly TaskSectionWrite[]) => {
-    const [first, ...rest] = writes;
-    if (first === undefined || fixture !== undefined) return;
-    askKept(sendSections({ writes: [first, ...rest] })).then((changed) => {
-      if (changed.kept) return;
-      toast({
-        replayUnmasked: true,
-        words: SECTION_WRITE_FAILED_NOTE,
-        tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
-        failure: { surface: FAILURE_SURFACE.SECTION_WRITE, cause: changed.cause },
-      });
-    });
-  };
 
   // The tasks as the list holds them, or the open document where the list does not hold one yet.
   const standingTasksOf = (taskIds: readonly string[]) => {
@@ -4501,17 +4259,9 @@ export function useTasksTab(input: {
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     drawnTasks: drawnNow,
     onDraftName: draftName,
-    onMarkTask: (taskId, mark) => markTask(taskId, mark),
     onSettleTasks: settleTasks,
-    pinnedRepositories: (viewed.repositoryPins ?? NO_REPOSITORY_PINS).map((pin) => pin.repository),
-    onPinRepository: pinRepository,
-    taskSections,
-    onWriteSections: writeSections,
-    onPinAgent: pinAgent,
-    taskAgentPins,
     liveAgents,
     listedPullRequests: tasks.agentPullRequests,
-    onMovePins: movePins,
     back: escapeTask,
     placeLeave,
   });

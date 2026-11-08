@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   AGENT_STATUS,
   CHECK_SUMMARY,
@@ -75,7 +76,13 @@ beforeEach(() => {
     }),
   });
   fakeAppBridge({});
-  fakeActPort({});
+  // An agent's pin leaves on the act port, as the window sends it.
+  fakeActPort({
+    [ACT_KIND.AGENTS_PIN]: ({ agentId, pinned }) => {
+      pinsAsked.push(`${agentId}:${String(pinned)}`);
+      return Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
+    },
+  });
   handMembers(() => ({ rows: { members: MEMBERS } }));
 });
 
@@ -209,7 +216,6 @@ function mountSidebar(
       onOpen: (agentId) => openedAgents.push(agentId),
       onClose: () => undefined,
     },
-    onPinAgent: (agentId, pinned) => pinsAsked.push(`${agentId}:${String(pinned)}`),
   });
   act(() =>
     root.render(

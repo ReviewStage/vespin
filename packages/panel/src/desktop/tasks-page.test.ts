@@ -31,7 +31,13 @@ import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handHostReads, handMembers, handState, stateWith } from "../testing/app-state.js";
+import {
+  handHostReads,
+  handMembers,
+  handState,
+  stateWith,
+  writeListedTasks,
+} from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
@@ -96,6 +102,12 @@ let sections: TaskSections = NO_TASK_SECTIONS;
 /** Whether the service keeps the changes of where a task stands sent. */
 let keeps = true;
 
+/** Each pin given a place the page sent, in order. */
+let moved: PinMove[] = [];
+
+/** Whether main draws the section writes sent, as the tab draws a write at once. */
+let drawsWrites = false;
+
 beforeEach(() => {
   opened = [];
   closed = 0;
@@ -104,10 +116,27 @@ beforeEach(() => {
   written = [];
   sections = NO_TASK_SECTIONS;
   keeps = true;
+  moved = [];
+  drawsWrites = false;
   window.localStorage.clear();
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
-  fakeActPort({});
+  // A pin and a section write leave on the act port, as the window sends them.
+  fakeActPort({
+    [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
+      if (position === undefined) marked.push([taskId, pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN]);
+      else moved.push({ agent: false, id: taskId, position });
+      return Promise.resolve(true);
+    },
+    [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
+      written.push(writes);
+      if (drawsWrites) {
+        sections = writes.reduce((held, write) => applySectionWrite(held, write, 2), sections);
+        writeListedTasks({ taskSections: sections });
+      }
+      return Promise.resolve(true);
+    },
+  });
   // Main's read of the account's inbox holds what waits on Acme's tasks.
   handInbox({ waiting: WAITING, tasks: HOLDINGS });
   handMembers(() => ({ rows: { members: MEMBERS } }));
@@ -217,20 +246,18 @@ async function mountPage(
   // The window's router, whose routed exits the page's close leaves by, as the window's history does.
   const { provide } = windowRouter();
   const draw = (workspace: Workspace) => {
+    writeListedTasks({ taskSections: sections });
     const control = tasksControl({
       tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
       workspace,
       workspaces: [ACME, BETA],
       me: DEAN,
       listRead: true,
-      taskSections: sections,
       onSelect: (taskId) => opened.push(taskId),
       onSetTaskStanding: (taskId, standing) => {
         sent.push([taskId, standing]);
         return askKept(Promise.resolve(keeps));
       },
-      onMarkTask: (taskId, mark) => marked.push([taskId, mark]),
-      onWriteSections: (writes) => written.push(writes),
       ...overrides,
     });
     root.render(
@@ -1171,12 +1198,13 @@ test("a row dragged out of its section or Pinned onto a status the service refus
     entries: [{ taskId: "t-42", sectionId: LAUNCH, addedAt: 1 }],
     agentEntries: [],
   };
-  keeps = false;
-  // Note that the sections are drawn as written, as the tab draws a write at once, so the refusal finds the row where the drop left it.
+  // Note that the sections are drawn as written, as main draws a write at once, and the service refuses only once they are, so the refusal finds the row where the drop left it.
+  drawsWrites = true;
+  const refusals: (() => void)[] = [];
   const page = await mountPage(TASKS, SHELL_ROOM.WIDE, {
-    onWriteSections: (writes) => {
-      written.push(writes);
-      sections = writes.reduce((held, write) => applySectionWrite(held, write, 2), sections);
+    onSetTaskStanding: (taskId, standing) => {
+      sent.push([taskId, standing]);
+      return askKept(new Promise((resolve) => refusals.push(() => resolve(false))));
     },
   });
   layRowsOut(page);
@@ -1185,6 +1213,9 @@ test("a row dragged out of its section or Pinned onto a status the service refus
   dragRow(page, "ACME-44", "Backlog");
   listWorkspace(ACME);
   await act(async () => undefined);
+  await act(async () => {
+    for (const refuse of refusals) refuse();
+  });
 
   assert.deepEqual(sent, [
     ["t-42", { status: TASK_STATUS.BACKLOG }],
@@ -1209,10 +1240,7 @@ test("a row dragged out of its section or Pinned onto a status the service refus
 /** The pins' order, by number, once the task numbered `key` among `pinned` is dragged out of Pinned, refused, and pinned again later than any, as the service would stand them. */
 async function pinsAfterRefusedDrop(pinned: readonly TaskSummary[], key: number) {
   keeps = false;
-  const moved: PinMove[] = [];
-  const page = await mountPage(pinned, SHELL_ROOM.WIDE, {
-    onMovePins: (moves) => moved.push(...moves),
-  });
+  const page = await mountPage(pinned);
   layRowsOut(page);
   const before = groups(page)[0];
 
@@ -1268,6 +1296,7 @@ test("a section holding no task stands in the List, empty, and a row dragged int
   assert.match(page.textContent ?? "", /Drag tasks here/);
 
   dragRow(page, "ACME-40", "Later");
+  await act(async () => undefined);
 
   assert.deepEqual(writesSent(), [[["place", "t-40", LATER]]]);
 });

@@ -19,7 +19,6 @@ import type {
   AppInboxWaitingItem,
   AppTranscript,
 } from "@repo/host/app-state";
-import { NO_TASK_SECTIONS } from "@repo/ui/task-sections-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { KEPT } from "../act.js";
@@ -650,17 +649,9 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onUnbindTask: ignore,
     drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: overrides.tasks ?? [] }),
     onDraftName: ignore,
-    onMarkTask: ignore,
     onSettleTasks: ignore,
-    pinnedRepositories: [],
-    onPinRepository: ignore,
-    taskSections: NO_TASK_SECTIONS,
-    onWriteSections: ignore,
-    onPinAgent: ignore,
-    taskAgentPins: [],
     liveAgents: [],
     listedPullRequests: undefined,
-    onMovePins: ignore,
     back: () => false,
     placeLeave: NO_LEAVE_ASK,
     ...overrides,

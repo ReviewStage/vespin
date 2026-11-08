@@ -94,6 +94,7 @@ import type { AppSettingsView } from "@repo/settings/wire";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import type { ReactElement, ReactNode } from "react";
 import type { IntegrationServer } from "../live-reads.js";
+import { appStateQuery } from "../use-app-state.js";
 import {
   fakeActPort,
   fakeActPortCalls,
@@ -102,7 +103,12 @@ import {
   heldUntilClosed,
   quietHold,
 } from "./app-bridge.js";
-import { holdAppStateForFile, withQueryClient, writeAppState } from "./copy-feedback.js";
+import {
+  holdAppStateForFile,
+  testQueryClientNow,
+  withQueryClient,
+  writeAppState,
+} from "./copy-feedback.js";
 
 /** What the desktop offers: every capability there is. */
 export const DESKTOP_CAPABILITIES: readonly HostCapability[] = Object.values(HOST_CAPABILITY);
@@ -285,6 +291,32 @@ export function stateWith(
   patch: Partial<AppStateSnapshot>,
 ): AppStateSnapshot {
   return inCaseWorkspaces({ ...idleDocument(experiments), ...patch }, experiments, patch);
+}
+
+/**
+ * Patches the task list of main's document, as the window's bridge hands it
+ * and as the test's Query client holds it, or an idle one: the sidebar's
+ * pins and sections, which a surface reads off the list
+ * (`use-pin-writes.ts`), standing in the first frame.
+ */
+export function writeListedTasks(listed: Partial<TasksView>): void {
+  const patched = (snapshot: AppStateSnapshot): AppStateSnapshot => ({
+    ...snapshot,
+    tasks: { ...snapshot.tasks, ...listed },
+  });
+  const calls = fakeAppBridgeCalls();
+  const handed = calls.requestAppState;
+  fakeAppBridge({
+    ...calls,
+    requestAppState: () =>
+      (handed === undefined ? Promise.resolve(stateWith({}, {})) : handed()).then(patched),
+  });
+  writeAppState(
+    patched(
+      testQueryClientNow().getQueryData<AppStateSnapshot>(appStateQuery.queryKey) ??
+        stateWith({}, {}),
+    ),
+  );
 }
 
 /** Main's document for the account signed in as given, no experiment on. */

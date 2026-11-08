@@ -147,6 +147,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
 import { useFailedRuns, useInboxTaskless, useListedInbox } from "../tasks/use-inbox-slices.js";
+import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import {
   type AgentPin,
   isAgentPin,
@@ -385,9 +386,12 @@ function HistoryButton({
   );
 }
 
+/** The tab as the sidebar reads it, the pins and sections beside it (`use-pin-writes.ts`). */
+type SidebarTasks = TasksControl & Pins;
+
 /** What every row of the tasks is drawn with, whichever section it stands in. */
 interface RowContext {
-  readonly tasks: TasksControl;
+  readonly tasks: SidebarTasks;
   /** Whether a task is the one open, which a fold still leaves standing. */
   readonly current: (taskId: string) => boolean;
   /** Whether a row is the one the sidebar marks: the pin the open task was opened from, else the open task's own row. */
@@ -543,7 +547,7 @@ function TaskRows({
 }
 
 /** Pin or Unpin for an agent's row, the account's own; none for an archived agent, which the sidebar draws among the archived whether or not it is pinned, as a plan's. */
-function pinOf(tasks: TasksControl, agent: TasklessAgent): ((pinned: boolean) => void) | undefined {
+function pinOf(tasks: SidebarTasks, agent: TasklessAgent): ((pinned: boolean) => void) | undefined {
   return agent.archivedAt === undefined
     ? (pinned) => tasks.onPinAgent(agent.id, pinned)
     : undefined;
@@ -623,7 +627,7 @@ function pinnedRows(
   pinned: readonly TaskSummary[],
   agents: readonly TasklessAgent[],
   standing: readonly TasklessAgent[],
-  tasks: TasksControl,
+  tasks: SidebarTasks,
 ): PinnedRow[] {
   const taskRows = pinned.map(
     (task): PinnedRow => ({
@@ -670,7 +674,7 @@ function pinnedRows(
  * new order at once. A drop the service refuses any of puts the tabs'
  * places back too, so the section is left in no order of its own making.
  */
-function placePins(positions: ReadonlyMap<PinnedRow, string>, tasks: TasksControl): void {
+function placePins(positions: ReadonlyMap<PinnedRow, string>, tasks: SidebarTasks): void {
   const tabs = new Map<number, string>();
   const before = new Map<number, string | undefined>();
   const moves = [...positions].flatMap(([row, position]) => {
@@ -692,7 +696,7 @@ function movePinned(
   rows: readonly PinnedRow[],
   from: number,
   to: number,
-  tasks: TasksControl,
+  tasks: SidebarTasks,
 ): void {
   placePins(pinPositionsForMove(rows, from, to, placeOf), tasks);
 }
@@ -703,7 +707,7 @@ function movePinned(
  * where they need one, wherever it lands, on top included
  * (`pinPositionsForInsert`).
  */
-function pinAt(rows: readonly PinnedRow[], row: TaskRow, at: number, tasks: TasksControl): void {
+function pinAt(rows: readonly PinnedRow[], row: TaskRow, at: number, tasks: SidebarTasks): void {
   const place: PinPlace = { at: Date.now() };
   const moving: PinnedRow =
     row.kind === TASK_ROW.AGENT
@@ -715,7 +719,7 @@ function pinAt(rows: readonly PinnedRow[], row: TaskRow, at: number, tasks: Task
 }
 
 /** Takes a row out of Pinned: a plan's or an agent's pin on the account, a tab's on this Mac. */
-function unpin(row: PinnedRow, tasks: TasksControl): void {
+function unpin(row: PinnedRow, tasks: SidebarTasks): void {
   const local = localPinOf(row);
   if (local !== undefined) {
     tasks.sidePanel.onUnpin(local, local.tab);
@@ -727,7 +731,7 @@ function unpin(row: PinnedRow, tasks: TasksControl): void {
 }
 
 /** The write that takes a task or an agent out of the section it is kept in, a pinned one's included; none where it is in none. */
-function leaveSection(tasks: TasksControl, member: SectionMember): TaskSectionWrite[] {
+function leaveSection(tasks: SidebarTasks, member: SectionMember): TaskSectionWrite[] {
   return memberSection(tasks.taskSections, member) === undefined ? [] : unplaceAllWrites([member]);
 }
 
@@ -1087,7 +1091,7 @@ function PinnedSection({
  * pin, since they always stand last, and no page to open, so they offer no
  * menu.
  */
-function repositoryActionGroups(group: RepositoryGroup, tasks: TasksControl): MenuEntry[][] {
+function repositoryActionGroups(group: RepositoryGroup, tasks: SidebarTasks): MenuEntry[][] {
   const { repository } = group;
   if (repository === null) return [];
   const pin: MenuAction = tasks.pinnedRepositories.includes(repository)
@@ -1236,7 +1240,7 @@ type TaskSections =
 function taskSections(
   rows: readonly TaskRow[],
   grouping: TaskSections["grouping"],
-  tasks: TasksControl,
+  tasks: SidebarTasks,
 ): TaskSections {
   if (grouping === TASK_GROUPING.NONE) {
     return { grouping, rows: orderTaskRows(rows) };
@@ -1628,7 +1632,7 @@ interface SectionedTasks {
  * no sections here.
  */
 function sectionedTasks(
-  tasks: TasksControl,
+  tasks: SidebarTasks,
   workspaceId: string | undefined,
   free: readonly TaskSummary[],
   freeAgents: readonly TasklessAgent[],
@@ -1792,7 +1796,7 @@ function useFirstUsableSpan(tasks: TasksControl): void {
 function SidebarColumn({
   sidebar,
   history,
-  tasks,
+  tasks: control,
   tab,
   onTabChange,
   account,
@@ -1801,6 +1805,7 @@ function SidebarColumn({
   onPressWithin,
   room = SHELL_ROOM.WIDE,
 }: DesktopSidebarProps): React.JSX.Element {
+  const tasks: SidebarTasks = { ...control, ...usePins(control.drawnTasks) };
   const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
@@ -2054,12 +2059,7 @@ function SidebarColumn({
     // Note that an archived agent stands in no section, so it is offered none until it is brought back, as an archived task.
     sectionEntry: (agent) =>
       agent.archivedAt === undefined
-        ? moveToSectionEntry(
-            tasks,
-            { agent: true, id: agent.id },
-            agent.workspaceId,
-            sectionDialogs,
-          )
+        ? moveToSectionEntry({ agent: true, id: agent.id }, agent.workspaceId, sectionDialogs)
         : undefined,
     childCount: (taskId) => childCounts.get(taskId),
     opened: folds.taskOpened,

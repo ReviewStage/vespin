@@ -1665,7 +1665,6 @@ test("the page's ⋯ offers what a task's agent's tab ⋯ does, in the one order
 });
 
 test("a taskless agent the sidebar lists gains its row's own items on its page's ⋯: Mark as unread beside Rename, then Pin and Move to section, and Pin pins it", async () => {
-  const pins: { agentId: string; pinned: boolean }[] = [];
   const row = {
     ...PAGE,
     automationName: "Flaky sweep",
@@ -1674,9 +1673,6 @@ test("a taskless agent the sidebar lists gains its row's own items on its page's
   const page = mount(
     tasksControl({
       listedAgents: { standing: [row], archived: [] },
-      onPinAgent: (agentId, pinned) => {
-        pins.push({ agentId, pinned });
-      },
     }),
   );
   await settle();
@@ -1684,7 +1680,11 @@ test("a taskless agent the sidebar lists gains its row's own items on its page's
     [...document.querySelectorAll('[role="menuitem"]')].map((each) => each.textContent);
   const pin = pageMenuItem(page, "PinP");
   act(() => pin.click());
-  assert.deepEqual(pins, [{ agentId: AGENT_ID, pinned: true }]);
+  await settle();
+  assert.deepEqual(
+    told.filter((asked) => asked.kind === ACT_KIND.AGENTS_PIN).map((asked) => asked.payload),
+    [{ agentId: AGENT_ID, pinned: true }],
+  );
 
   assert.deepEqual(offered(), [], "the menu closed on the pin");
   openPageMenu(page);

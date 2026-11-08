@@ -1,4 +1,5 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { TaskSections } from "@repo/features/task-section-wire";
 import { countWords, IRREVERSIBLE_WORDS, TERM } from "@repo/features/words";
 import {
   CONFIRM_LOSS,
@@ -69,12 +70,11 @@ const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
  * left as it stands.
  */
 function moveToSection(
-  tasks: TasksControl,
+  before: TaskSections,
   taskIds: readonly string[],
   sectionId: string | null,
   move: SectionDialogs["move"],
 ): void {
-  const before = tasks.taskSections;
   const entries = sectionEntries(before);
   const moving = taskIds.filter((taskId) => (entries.get(taskId)?.sectionId ?? null) !== sectionId);
   const members = moving.map((id) => ({ agent: false, id }));
@@ -108,9 +108,11 @@ export interface ChosenTasks {
  */
 function selectionActs(
   tasks: TasksControl,
-  latest: () => TasksControl,
+  latest: () => TaskSections,
   taskIds: readonly string[],
   doors: {
+    /** The sections the account made, as the window lists them now. */
+    sections: TaskSections;
     onActed: () => void;
     askNew: SectionDialogs["askNew"];
     move: SectionDialogs["move"];
@@ -125,13 +127,11 @@ function selectionActs(
   const chosen = tasks.tasks.filter((task) => taskIds.includes(task.id));
   const status = statusSubmenu(tasks, taskIds, sharedStatus(chosen), onActed);
   const workspaceId = tasks.workspace?.id;
-  const sections =
-    workspaceId === undefined ? [] : workspaceSections(tasks.taskSections, workspaceId);
+  const sections = workspaceId === undefined ? [] : workspaceSections(doors.sections, workspaceId);
   const move = (sectionId: string | null) =>
-    acted(() => moveToSection(tasks, taskIds, sectionId, doors.move));
+    acted(() => moveToSection(doors.sections, taskIds, sectionId, doors.move));
   const members = taskIds.map((id) => ({ agent: false, id }));
-  const put = (sectionId: string) =>
-    placeAllWrites(latest().taskSections, members, sectionId, Date.now());
+  const put = (sectionId: string) => placeAllWrites(latest(), members, sectionId, Date.now());
   const sectionMenu = (workspace: string) => [
     [
       ...sections.map((section) => ({
@@ -218,9 +218,10 @@ export function useTasksSelection(
   drawn: ReadonlySet<string>,
   held?: ChosenTasksStore,
 ): TasksSelection {
-  // The tab as it stands, which an Undo pressed or a refusal answered renders after its act reads.
-  const latest = useRef(tasks);
-  latest.current = tasks;
+  // The sections as they stand, which New section's answer reads renders after its act.
+  const sections = useSectionDialogs(tasks, tasks.shown);
+  const latest = useRef(sections.sections);
+  latest.current = sections.sections;
   const regionId = useId();
   const own = useCreateStore<ReadonlySet<string>>(new Set<string>());
   const store = held ?? own;
@@ -235,7 +236,6 @@ export function useTasksSelection(
     if (stale) store.setState((was) => new Set([...was].filter((id) => drawn.has(id))));
   });
   const onClear = () => setChosen(new Set());
-  const sections = useSectionDialogs(tasks, tasks.shown);
   // The tasks Permanently delete was asked of, held as it asks, so a selection changed meanwhile deletes none it never named.
   const [doomed, setDoomed] = useState<readonly string[]>([]);
   // Note that a refusal said once the tab went away is said in a toast, since the question went with it.
@@ -270,6 +270,7 @@ export function useTasksSelection(
     confirmFailure(FAILURE_SURFACE.TASK_DELETE),
   );
   const acts = selectionActs(tasks, () => latest.current, [...selected], {
+    sections: sections.sections,
     onActed: onClear,
     askNew: sections.askNew,
     move: sections.move,

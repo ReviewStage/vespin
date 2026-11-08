@@ -21,7 +21,6 @@ import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
-import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
   TASK_CREATE_RELATION_KIND,
@@ -661,9 +660,6 @@ const TWO_WORKSPACES: TasksView = {
 const readWorkspaceNamed = Schema.decodeUnknownOption(
   Schema.Struct({ workspaceId: Schema.optionalKey(Schema.String) }),
 );
-
-/** A pin's payload, read back as the act's own schema admits it. */
-const readPin = Schema.decodeUnknownOption(Schema.Struct({ pinned: Schema.Boolean }));
 
 /** The workspace each act of `kind` the tab asked named, none where it named none. */
 function namedIn(
@@ -2548,7 +2544,7 @@ test("a render that hands the same plans keeps the lists the tab hands out, and 
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
   const lists = () => {
     const control = tab.control();
-    return [control.tasks, control.listed.tasks, control.taskSections, control.newTask.tasks];
+    return [control.tasks, control.listed.tasks, control.newTask.tasks];
   };
   const before = lists();
 
@@ -3971,101 +3967,6 @@ test("Home from an open plan leaves it, and from Home only puts the page in its 
   assert.equal(inboxNow().open, false);
   assert.equal(home.control().page, TASKS_PAGE.HOME);
   assert.deepEqual(home.told.slice(toldBefore), [], "the host is asked nothing");
-});
-
-test("one agent's pins are asked one after another, so the service hears an Unpin pressed before a Pin landed after it", async () => {
-  const answers: ((answer: PortActResult<typeof ACT_KIND.AGENTS_PIN>) => void)[] = [];
-  const tab = mount(
-    { shown: true, tasks: OPEN },
-    {
-      [ACT_KIND.AGENTS_PIN]: () =>
-        new Promise((resolve) => {
-          answers.push(resolve);
-        }),
-    },
-  );
-  /** Each pin the tab asked of main, in order, as `pinned`. */
-  const asked = () =>
-    tab.payloads
-      .filter((each) => each.kind === ACT_KIND.AGENTS_PIN)
-      .map((each) => Option.getOrUndefined(readPin(each.payload))?.pinned);
-
-  await act(async () => {
-    tab.control().onPinAgent("agent-1", true);
-    tab.control().onPinAgent("agent-1", false);
-  });
-  const first = asked();
-  // The first is answered as refused, which is no matter to the order the second is asked in.
-  await act(async () => answers[0]?.({ failure: AGENT_CALL_FAILURE.NOT_FOUND }));
-
-  assert.deepEqual(first, [true]);
-  assert.deepEqual(asked(), [true, false]);
-});
-
-test("an agent's pin still waiting its turn when the account changes is never asked, so it lands on no one else's pins", async () => {
-  const answers: ((answer: PortActResult<typeof ACT_KIND.AGENTS_PIN>) => void)[] = [];
-  const tab = mount(
-    { shown: true, tasks: OPEN },
-    {
-      [ACT_KIND.AGENTS_PIN]: () =>
-        new Promise((resolve) => {
-          answers.push(resolve);
-        }),
-    },
-  );
-  await act(async () => {
-    tab.control().onPinAgent("agent-1", true);
-    tab.control().onPinAgent("agent-1", false);
-  });
-
-  tab.stand({ signedIn: false });
-  tab.stand({ signedIn: true, account: "teammate@example.com" });
-  await act(async () => answers[0]?.({ failure: AGENT_CALL_FAILURE.NOT_FOUND }));
-
-  assert.equal(tab.payloads.filter((each) => each.kind === ACT_KIND.AGENTS_PIN).length, 1);
-});
-
-test("a pin dragged to a new place the service refuses puts back what the drop placed on this Mac, with a toast", async () => {
-  const pinned = { ...listed(), pinnedAt: 5 };
-  const tab = mount(
-    { shown: true, tasks: listRead([pinned]) },
-    { [ACT_KIND.TASKS_PIN]: () => Promise.resolve(false) },
-  );
-
-  let putBack = 0;
-  await act(async () =>
-    tab.control().onMovePins([{ agent: false, id: TASK.id, position: "a1" }], () => {
-      putBack += 1;
-    }),
-  );
-
-  assert.equal(putBack, 1);
-  assert.equal(newestToastSays(), "The pin could not be moved. Try again.");
-});
-
-test("a drag's changes to the sections go to main as one ask, and a refused one says so in a toast", async () => {
-  const tab = mount(
-    { shown: true, tasks: OPEN },
-    { [ACT_KIND.TASKS_WRITE_SECTION]: () => Promise.resolve(false) },
-  );
-  const make = (id: string, title: string) => ({
-    kind: TASK_SECTION_WRITE.CREATE,
-    id,
-    workspaceId: "workspace-1",
-    title,
-  });
-  const writes = [
-    make("0a1b2c3d-0000-4000-8000-000000000001", "Launch"),
-    make("0a1b2c3d-0000-4000-8000-000000000002", "Later"),
-  ];
-
-  await act(async () => tab.control().onWriteSections(writes));
-
-  assert.deepEqual(
-    tab.payloads.filter((each) => each.kind === ACT_KIND.TASKS_WRITE_SECTION),
-    [{ kind: ACT_KIND.TASKS_WRITE_SECTION, payload: { writes } }],
-  );
-  assert.equal(newestToastSays(), "Your sections could not be changed. Try again.");
 });
 
 /** A pin's payload, read back as the act's own schema admits it. */

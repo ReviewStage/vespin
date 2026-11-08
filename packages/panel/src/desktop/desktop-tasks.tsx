@@ -96,6 +96,7 @@ import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
+import { usePins } from "../tasks/use-pin-writes.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
@@ -440,6 +441,7 @@ function DescriptionDocument({
   away: TaskHeadBack;
 }): React.JSX.Element {
   const { region } = tasks;
+  const pins = usePins(tasks.drawnTasks);
   const account = useWindowAccount();
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
@@ -1418,8 +1420,8 @@ function DescriptionDocument({
                             views={views}
                             pins={{
                               pinned: (agentId) =>
-                                tasks.taskAgentPins.some((pin) => pin.agentId === agentId),
-                              onPin: tasks.onPinAgent,
+                                pins.taskAgentPins.some((pin) => pin.agentId === agentId),
+                              onPin: pins.onPinAgent,
                             }}
                             keys={!phone && tasks.shown && !sideFocused}
                             shown={tasks.shown}

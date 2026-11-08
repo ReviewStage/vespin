@@ -210,6 +210,7 @@ import { type AgentsControl, type HeldPeople, readAgentById } from "../tasks/use
 import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
+import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
@@ -1490,6 +1491,7 @@ function agentReadMarkRows(
  */
 function taskPinRows(
   tasks: TasksControl,
+  pins: Pick<PinWrites, "onMarkTask">,
   reads: ReadMarks,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
@@ -1505,7 +1507,7 @@ function taskPinRows(
       label,
       command: item.command,
       terms: [label],
-      onChoose: () => choose(() => tasks.onMarkTask(task.id, mark)),
+      onChoose: () => choose(() => pins.onMarkTask(task.id, mark)),
     },
   ];
 }
@@ -1518,6 +1520,7 @@ function taskPinRows(
  */
 function agentPinRows(
   tasks: TasksControl,
+  pins: Pick<PinWrites, "onPinAgent">,
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
   const { agentId } = tasks.agentView;
@@ -1532,7 +1535,7 @@ function agentPinRows(
       label,
       command: item.command,
       terms: [label],
-      onChoose: () => choose(() => tasks.onPinAgent(agent.id, !pinned)),
+      onChoose: () => choose(() => pins.onPinAgent(agent.id, !pinned)),
     },
   ];
 }
@@ -1607,6 +1610,7 @@ function taskCommandRows(
  */
 function useOpenThingKeys(
   tasks: TasksControl,
+  pins: Pick<PinWrites, "onMarkTask" | "onPinAgent">,
   inboxStanding: InboxStanding,
   reads: ReadMarks,
   agentReads: AgentReadMarks,
@@ -1627,9 +1631,9 @@ function useOpenThingKeys(
   const togglePin =
     task !== undefined
       ? () =>
-          tasks.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN)
+          pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN)
       : standing !== undefined
-        ? () => tasks.onPinAgent(standing.id, standing.pinnedAt === undefined)
+        ? () => pins.onPinAgent(standing.id, standing.pinnedAt === undefined)
         : undefined;
   useAppCommand(APP_COMMAND.TOGGLE_READ, toggleRead);
   useAppCommand(APP_COMMAND.PIN, togglePin);
@@ -2185,7 +2189,8 @@ export function CommandPalette({
   );
   const renameOffer = useTaskRenameOffer();
   const agentReads = useAgentReadMarks();
-  useOpenThingKeys(tasks, inboxStanding, reads, agentReads);
+  const pins = usePinWrites(tasks.drawnTasks);
+  useOpenThingKeys(tasks, pins, inboxStanding, reads, agentReads);
   // The open agent's Archive, asked of `OpenAgentArchive` by the agent it was chosen for.
   const openAgent = openAgentOf(tasks);
   const [archiveAsks, setArchiveAsks] = useState<{ agentId: string; asked: number }>(
@@ -2312,8 +2317,8 @@ export function CommandPalette({
         ...actionRows(openThingCommands(inboxStanding), runCommand, experiments),
         ...readMarkRows(tasks, reads, choose),
         ...agentReadMarkRows(tasks, agentReads, choose),
-        ...taskPinRows(tasks, reads, choose),
-        ...agentPinRows(tasks, choose),
+        ...taskPinRows(tasks, pins, reads, choose),
+        ...agentPinRows(tasks, pins, choose),
         ...taskCommandRows(tasks, reads, renameOffer, choose, historyOffered),
         ...agentArchiveRows(openAgent, askArchive, choose),
         ...panelTabRows(tasks, inboxStanding, onTasks),
