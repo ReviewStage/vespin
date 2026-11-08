@@ -77,9 +77,9 @@ const server = net.createServer((client) => {
   app.pipe(client);
   client.on("error", () => app.destroy());
   app.on("error", () => client.destroy());
-  // Note that a side closing ends the other rather than destroying it, so the bytes still queued for it are written first.
-  client.on("close", () => app.end());
-  app.on("close", () => client.end());
+  client.on("close", () => app.destroy());
+  // Note that the visitor's side closes only once the bytes still queued for it are written, or it stops reading for 10s.
+  app.on("close", () => { client.destroySoon(); client.setTimeout(10000, () => client.destroy()); });
 });
 visited();
 server.on("error", () => process.exit(0));
