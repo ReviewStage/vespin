@@ -46,6 +46,7 @@ import {
   Schedule,
   Schema,
   type Scope,
+  Semaphore,
   Stream,
 } from "effect";
 import { Base64 } from "effect/encoding";
@@ -363,6 +364,8 @@ export function composeMirrors(
     const path = yield* Path.Path;
     const fibers = yield* FiberMap.make<string>();
     const mirrors = new Map<string, Mirror>();
+    // Note that starts run one at a time, because a start yields between finding no mirror and keeping its own, and an ensure and the task list may start one agent at once.
+    const starting = yield* Semaphore.make(1);
     const socketOrigin = webSocketOrigin(kernel.hostedServiceBaseUrl);
 
     const folderOf = (agentId: string) => path.join(platform.folder, agentId);
@@ -670,31 +673,33 @@ export function composeMirrors(
 
     /** The mirror kept for an agent, its tunnel's fiber started where none runs; made at once where its worktree already stands, whether or not the sandbox runs. */
     const started = (agentId: string) =>
-      Effect.gen(function* () {
-        const standing = mirrors.get(agentId);
-        if (standing !== undefined) return standing;
-        const mirror: Mirror = {
-          made: yield* Deferred.make<string, MirrorGone>(),
-          prefetched: yield* Deferred.make<boolean>(),
-          startedAt: yield* Clock.currentTimeMillis,
-          attempts: 0,
-          stands: yield* worktreeStands(agentId),
-          heard: false,
-          prefetching: false,
-          making: false,
-          failed: undefined,
-          counted: undefined,
-        };
-        mirrors.set(agentId, mirror);
-        if (mirror.stands) yield* Deferred.succeed(mirror.made, worktreeOf(agentId));
-        else yield* told;
-        const keeping = kept(agentId, mirror);
-        // Note that only the mirror's own fibers run on the platform's tracer, so the host's other spans stay where they were.
-        const traced =
-          platform.tracer === undefined ? keeping : Effect.withTracer(keeping, platform.tracer);
-        yield* FiberMap.run(fibers, agentId, Effect.provideContext(traced, context));
-        return mirror;
-      });
+      starting.withPermit(
+        Effect.gen(function* () {
+          const standing = mirrors.get(agentId);
+          if (standing !== undefined) return standing;
+          const mirror: Mirror = {
+            made: yield* Deferred.make<string, MirrorGone>(),
+            prefetched: yield* Deferred.make<boolean>(),
+            startedAt: yield* Clock.currentTimeMillis,
+            attempts: 0,
+            stands: yield* worktreeStands(agentId),
+            heard: false,
+            prefetching: false,
+            making: false,
+            failed: undefined,
+            counted: undefined,
+          };
+          mirrors.set(agentId, mirror);
+          if (mirror.stands) yield* Deferred.succeed(mirror.made, worktreeOf(agentId));
+          else yield* told;
+          const keeping = kept(agentId, mirror);
+          // Note that only the mirror's own fibers run on the platform's tracer, so the host's other spans stay where they were.
+          const traced =
+            platform.tracer === undefined ? keeping : Effect.withTracer(keeping, platform.tracer);
+          yield* FiberMap.run(fibers, agentId, Effect.provideContext(traced, context));
+          return mirror;
+        }),
+      );
 
     /** Every mirror whose agent the task list shows archived, taken away. */
     const archivedRemoved = Effect.suspend(() =>
