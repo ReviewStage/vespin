@@ -736,26 +736,32 @@ const openingLine = (
     );
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const written = yield* Effect.result(
-      hostedStoreOrUnavailable(
-        writer.writeAwaitingLine(
-          { userId: agent.userId, conversationId: agent.conversationId },
-          {
-            text,
-            clientKey,
-            attachments: files,
-            mentioned,
-            ...opened,
-          },
-          dispatch,
-        ),
+      writer.writeAwaitingLine(
+        { userId: agent.userId, conversationId: agent.conversationId },
+        {
+          text,
+          clientKey,
+          attachments: files,
+          mentioned,
+          ...opened,
+        },
+        dispatch,
       ),
     );
     const answer = yield* Ref.get(answered);
-    if (answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED) return answer;
-    // A line refused, or one the store failed around, is no line the runner could name back.
-    if (Result.isFailure(written) || Result.isFailure(written.success)) {
+    if (Result.isFailure(written)) {
+      if (answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED) {
+        yield* Effect.logError(
+          `a Start's open took its line, but the store failed to record its answer, so its queued turn waits on the sweep's republish: ${failureKind(written.failure)}`,
+        ).pipe(Effect.annotateLogs({ ...agentLogIds(agent), outcome: answer.outcome }));
+        return answer;
+      }
+      // A line the store failed around is no line the runner could name back.
+      yield* logStoreFailure(written.failure);
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
+    // A line refused is no line the runner could name back.
+    if (Result.isFailure(written.success)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     return answer;
   });
 
