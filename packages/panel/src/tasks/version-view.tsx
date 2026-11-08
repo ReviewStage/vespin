@@ -6,13 +6,13 @@ import {
   Button,
   ErrorState,
   Fill,
-  ONE_LINE_ELEMENT,
-  ONE_LINE_END,
-  OneLine,
   SKELETON_SHAPE,
   Skeleton,
   SkeletonRegion,
   STATUS_TONE,
+  TEXT_ELEMENT,
+  TEXT_VARIANT,
+  Text,
   Toolbar,
   Tooltip,
 } from "@repo/ui";
@@ -357,10 +357,16 @@ function VersionPageFrame({
   children: React.ReactNode;
 }): React.JSX.Element {
   // Note that only a phone leads the bar with a way back, the version standing there alone.
+  // The version's moment is the bar's title, so it takes a bar title's type, as every other bar's name does.
   const titled = (
-    <OneLine as={ONE_LINE_ELEMENT.H1} end={ONE_LINE_END.ELLIPSIS} className="ui-toolbar-title">
+    <Text
+      as={TEXT_ELEMENT.H1}
+      variant={TEXT_VARIANT.TOOLBAR_TITLE}
+      truncate
+      className="ui-toolbar-title"
+    >
       {title}
-    </OneLine>
+    </Text>
   );
   return (
     <>

@@ -549,8 +549,14 @@ body,
    buttons at either end (`main-tabs.tsx`'s `TaskTopbar`), and its column's
    tabs and its side panel's on one row under it, on the frame: each starts
    and ends on one line with its sheet's edge below it, however the sidebar
-   stands and whether or not the panel is open. */
-:where(:root):not([data-ui-room="narrow"]) .desktop-shell > .desktop-main .desktop-task-main {
+   stands and whether or not the panel is open. Note that the agents' row
+   stands beside the column rather than in it, across the page, so it is
+   named here too, or it would start at the column's inset and end clear of
+   the panel's toggle, which stands over the topbar and not over it. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  :is(.desktop-task-main, .desktop-task > .task-tabs) {
   --ui-toolbar-start-at: 0px;
   --ui-toolbar-end-at: 0px;
 }
@@ -614,11 +620,13 @@ body,
 /* So the side panel's toggle and its full-screen button stand on one row, a
    task's page stands them at the end of the agents' tabs' row rather than
    the title bar's: its tabs stand flush under the topbar, which is two
-   title-bar middles tall. Where the task's details stand in that row's
-   place, the toggle keeps to the title bar. */
+   title-bar middles tall. They rest on the frame as the tabs beside them do,
+   with no ground of their own, the panel open or not. Where the task's
+   details stand in that row's place, the toggle keeps to the title bar. */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell:has(> .desktop-main .desktop-task > .task-tabs)
   > .title-bar-controls[data-edge="end"] {
+  --title-bar-ground: transparent;
   top: calc(2 * var(--title-bar-middle));
 }
 
@@ -1461,8 +1469,12 @@ body,
 
 /* The panel's top row, level with the plan's toolbar and, like it, the
    window's drag handle wherever no control stands. It runs to the window's
-   right edge, so its full-screen button stops short of the toggle there. */
+   right edge, so its full-screen button stops short of the toggle there.
+   Its buttons light in its tabs' soft wash, as a tab strip's bar's do
+   (`toolbar.css`). */
 .side-panel-bar {
+  --ui-button-hover-fill: var(--ui-color-fill-hover);
+
   display: flex;
   flex: 0 0 auto;
   align-items: center;

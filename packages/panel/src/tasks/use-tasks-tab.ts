@@ -462,7 +462,19 @@ export interface NewTaskPreset {
   /** What the card starts; a task's agent where none is named. */
   readonly purpose?: NewTaskPurpose;
   /** The card as it pressed Start, and why the start was refused, where the card is opened again on a refusal. */
-  readonly refused?: { readonly card: NewTaskCardKept; readonly note: Failure };
+  readonly refused?: NewTaskRefusal;
+}
+
+/** The card as it pressed Start, and why the start was refused, which the card opens again on. */
+export interface NewTaskRefusal {
+  readonly card: NewTaskCardKept;
+  readonly note: Failure;
+}
+
+/** A start pressed on Home's own composer and refused, which that composer opens again on: each refusal a new opening, so the composer draws it afresh. */
+export interface HomeRefusal {
+  readonly opening: number;
+  readonly refused: NewTaskRefusal;
 }
 
 /**
@@ -790,6 +802,8 @@ export interface TasksControl {
     preset: NewTaskPreset | undefined;
     /** How many times New task was pressed on Home, whose composer takes the caret at each press rather than a dialog opening over it. */
     homeAsks: number;
+    /** A start pressed on Home's own composer and refused while Home stood, which that composer opens again on rather than a dialog over it; none once the developer went elsewhere. */
+    homeRefused: HomeRefusal | undefined;
     /** The workspaces a task may start in, the account's every one. */
     workspaces: readonly Workspace[];
     /** The workspace the dialog starts the task in until another is chosen: the one listed; none before the workspaces are read. */
@@ -1366,6 +1380,10 @@ export function useTasksTab(input: {
   >(undefined);
   // How many times New task was pressed while Home stood, whose own composer takes the caret on each.
   const [homeNewTasks, setHomeNewTasks] = useState(0);
+  // A start pressed on Home's own composer and refused while Home stood, with the arrivals counted as it was refused, past which it gives way.
+  const [homeRefused, setHomeRefused] = useState<
+    (HomeRefusal & { readonly arrivals: number }) | undefined
+  >(undefined);
   // New task's agent start under way: what its page draws, and the arrivals counted once the window stood where it was pressed into.
   const [startingTask, setStartingTask] = useState<
     (StartingTask & { readonly arrivals: number }) | undefined
@@ -3199,6 +3217,10 @@ export function useTasksTab(input: {
     // composer, whose page the task's took the place of, says its refusal in a toast, as no
     // card stands to say it.
     const saidInToast = handed === undefined && !stays && newTaskAsk === undefined;
+    // Note that only Home's own route draws its composer, once no task is bound there, so a press
+    // with no dialog standing over Home was the composer's own.
+    const homeNowAt = () => homeNow.current.home.open && homeNow.current.boundFor === undefined;
+    const pressedOnHome = newTaskAsk === undefined && homeNowAt();
     // Note that a refusal keeps what refused it, so the box that shows it reports that in its place.
     const refusedWith = (note: ComposerNote): ComposerNote => {
       if (saidInToast) {
@@ -3213,15 +3235,25 @@ export function useTasksTab(input: {
         letGoOfPage();
         // Note that what stood before the press comes back only where the developer went nowhere since.
         standBack();
-        setNewTaskAsk({
-          preset:
-            card === undefined
-              ? undefined
-              : {
-                  ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
-                  refused: { card, note },
-                },
-        });
+        // A start pressed on Home's own composer opens it again where Home still stands, rather than a
+        // second composer in a dialog over it holding the same words; elsewhere the dialog says it.
+        if (card !== undefined && pressedOnHome && homeNowAt()) {
+          setHomeRefused((was) => ({
+            opening: (was?.opening ?? 0) + 1,
+            refused: { card, note },
+            arrivals: arrivals(),
+          }));
+        } else {
+          setNewTaskAsk({
+            preset:
+              card === undefined
+                ? undefined
+                : {
+                    ...(card.purpose === undefined ? undefined : { purpose: card.purpose }),
+                    refused: { card, note },
+                  },
+          });
+        }
       }
       return note;
     };
@@ -4175,13 +4207,24 @@ export function useTasksTab(input: {
   // and a subagent's or a page's on the strip's own
   // terms. Note that what the task has not read yet counts as drawn, as the
   // strips stand a tab until the read says otherwise.
+  // A tab opened again another way since, from the "+", a link, a resume, or a
+  // wake, stands already, so it is passed over too, since opening it would only
+  // move it. The side panel's strip is the task's only while nothing stands in
+  // the task's place.
   // A fixed kind of the side panel draws on every task or on none, so whether it draws again is
   // known before its task opens: the retired Inbox and Comments draw on none.
   const drawsOnAnyTask = (closed: ClosedTab): boolean =>
     closed.strip !== CLOSED_TAB_STRIP.SIDE_PANEL ||
     typeof closed.tab !== "string" ||
     DRAWN_KINDS.some((kind) => kind === closed.tab);
+  const standsOpen = (closed: ClosedTab): boolean =>
+    closed.strip === CLOSED_TAB_STRIP.COLUMN
+      ? mainTabs.tabs.some((each) => sameTab(each, closed.tab))
+      : inboxView === undefined &&
+        pageAgents === undefined &&
+        sidePanel.strip.some((each) => sameTab(each, closed.tab));
   const drawsAgain = (closed: ClosedTab): boolean =>
+    !standsOpen(closed) &&
     stripTabDrawsAgain(closed.tab, {
       openAgents: mainTabs.openAgents,
       taskAgents: agents.heldIds,
@@ -4273,12 +4316,18 @@ export function useTasksTab(input: {
   // Note that a press while one waits on its task takes the next tab only
   // where it is that same task's, because asking for another task would let
   // the waiting one go; it waits its turn on the stack instead.
-  const reopenClosedTab = () => {
+  const nextReopened = () => {
     const waiting = latestReopenFor();
     const open = waiting.length === 0 ? tasks.activeTaskId : undefined;
     const stack = withUndrawnPassed(latestClosedTabs(), open, drawsAgain, drawsOnAnyTask);
     const closed = stack.at(-1);
     if (closed === undefined || (waiting.length > 0 && waiting[0]?.task !== closed.task)) return;
+    return { waiting, stack, closed };
+  };
+  const takeClosedTab = () => {
+    const next = nextReopened();
+    if (next === undefined) return;
+    const { waiting, stack, closed } = next;
     setClosedTabs(stack.slice(0, -1));
     if (waiting.length === 0 && closed.task === tasks.activeTaskId) {
       reopenHere(closed);
@@ -4286,6 +4335,11 @@ export function useTasksTab(input: {
     }
     if (waiting.length === 0) select(closed.task);
     setReopenFor([...waiting, closed]);
+  };
+  // Note that the move to the tab's task's place comes first, so a page's leave ask kept takes nothing off the stack.
+  const reopenClosedTab = () => {
+    const task = nextReopened()?.closed.task;
+    if (task !== undefined) arriveAt(task, takeClosedTab);
   };
   // A reopen is the task's it was asked on, so a select refused, or another
   // task asked for since, puts the tabs waiting on it back, as they stood.
@@ -4376,6 +4430,11 @@ export function useTasksTab(input: {
   // the start's own move there, counted once the window is drawn there, and the host's binding of its task are no such place.
   const starting =
     startingTask !== undefined && arrivals() <= startingTask.arrivals ? startingTask : undefined;
+  // Note that Home's refused start gives way the same, so Home opened again later opens on its draft alone.
+  const homeRefusedNow =
+    homeRefused !== undefined && arrivals() <= homeRefused.arrivals
+      ? { opening: homeRefused.opening, refused: homeRefused.refused }
+      : undefined;
 
   return useSteadyDoors({
     page,
@@ -4529,7 +4588,7 @@ export function useTasksTab(input: {
         backs.list(ROUTED_PLACE.AUTOMATIONS, routedAutomations.setupAddress, setup);
       }
     },
-    onShowFile: showFile,
+    onShowFile: (taskId, ref, commit) => arriveAt(taskId, () => showFile(taskId, ref, commit)),
     // A version's Open lands where its writer wrote it: an agent's tab.
     onShowSource: (taskId, source) => arriveAt(taskId, () => showSource(taskId, source)),
     // A task named by an Inbox item or a call's row opens on its agents.
@@ -4631,6 +4690,7 @@ export function useTasksTab(input: {
       open: newTaskAsk !== undefined,
       preset: newTaskAsk?.preset,
       homeAsks: homeNewTasks,
+      homeRefused: homeRefusedNow,
       workspaces: viewed.workspaces,
       workspaceId: listedWorkspace?.id,
       repositoriesIn,

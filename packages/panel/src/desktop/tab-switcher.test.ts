@@ -786,11 +786,12 @@ function listedAgent(status: TasklessAgent["status"]): TasklessAgent {
   };
 }
 
-/** The switcher's cards, held over the agent's page and then the Inbox, so the agent is the stop behind. */
-async function agentCardAfter(status: TasklessAgent["status"]): Promise<HTMLElement | undefined> {
+/** The switcher's cards, held over the agent's page and then the Inbox, so the agent is the stop behind; listed with no task where nothing else lists it. */
+async function agentCardAfter(
+  agent: Pick<AgentSummary, "id" | "title">,
+  listed: Partial<TasksControl> = { listedAgents: { standing: [], archived: [] } },
+): Promise<HTMLElement | undefined> {
   handCapabilities(DESKTOP_CAPABILITIES);
-  const agent = listedAgent(status);
-  const listed = { listedAgents: { standing: [agent], archived: [] } };
   const base = tasksControl();
   const window = await mounted();
   await window.draw({
@@ -805,13 +806,35 @@ async function agentCardAfter(status: TasklessAgent["status"]): Promise<HTMLElem
   return cards().find((card) => card.textContent?.includes(agent.title ?? ""));
 }
 
+/** The switcher's card of an agent with no task, listed as the sidebar lists it. */
+function tasklessCardAfter(status: TasklessAgent["status"]): Promise<HTMLElement | undefined> {
+  const agent = listedAgent(status);
+  return agentCardAfter(agent, { listedAgents: { standing: [agent], archived: [] } });
+}
+
 test("an agent's stop whose turn failed says so at its end, as its row and its tab do", async () => {
-  const card = await agentCardAfter(AGENT_STATUS.FAILED);
+  const card = await tasklessCardAfter(AGENT_STATUS.FAILED);
   assert.ok(card?.querySelector(".failed-mark"));
 });
 
 test("an agent's stop that finished says nothing at its end", async () => {
-  const card = await agentCardAfter(AGENT_STATUS.COMPLETED);
+  const card = await tasklessCardAfter(AGENT_STATUS.COMPLETED);
   assert.ok(card);
   assert.equal(card.querySelector(".failed-mark"), null);
+});
+
+test("an automation's agent on its run's task is named by its title and its automation, not as a bare agent", async () => {
+  const { workspaceId, repository, ...summary } = listedAgent(AGENT_STATUS.COMPLETED);
+  const agent: AgentSummary = {
+    ...summary,
+    planId: TASK,
+    title: "Draft standup entry",
+    automationId: "automation-standup",
+    automationName: "Daily standup",
+  };
+  const card = await agentCardAfter(agent, {
+    liveAgents: [{ ...agent, workspaceId, repository }],
+  });
+  // The card is found by the agent's title, so a bare "Agent" finds none.
+  assert.match(card?.textContent ?? "", /Daily standup/);
 });

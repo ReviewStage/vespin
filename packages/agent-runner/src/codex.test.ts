@@ -405,6 +405,7 @@ it.effect(
         'mcp_servers.linear.bearer_token_env_var="APP_RUNNER_TOKEN"',
         'mcp_servers.linear.default_tools_approval_mode="approve"',
         "mcp_servers.linear.startup_timeout_sec=20.0",
+        'mcp_servers.linear.startup_readiness="catalog"',
         "mcp_servers.linear.tool_timeout_sec=600.0",
         'approval_policy="never"',
         'sandbox_mode="danger-full-access"',

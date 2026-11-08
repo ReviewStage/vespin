@@ -480,6 +480,21 @@ test.each<[string, string, PagesHere, OpenedBeside]>([
   assert.deepEqual(openedOnPage(href, here), expected);
 });
 
+test("a task's page: a related task's pull request, as its row presses it, the window's, in that task's agent's tab", () => {
+  const opened: (readonly [string, number | undefined])[] = [];
+  const page = openPullRequestsHere(
+    { ...TASK_PAGE, taskId: OTHER, pullRequests: new Map(), agentIds: [OTHER] },
+    (agentId, number) => opened.push([agentId, number]),
+    () => undefined,
+  );
+  const { places } = press(URL, (row) => createElement(OpenAddressesHere, { value: page }, row));
+
+  assert.deepEqual(
+    { places, opened },
+    { places: [{ kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT }], opened: [] },
+  );
+});
+
 test.each<[string, string, boolean, Route]>([
   [
     "the window: an app link, to its place",

@@ -946,7 +946,6 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
 
         const reach = yield* ask(app.repositoryReach(workspace, "Octo-Member/Side", member));
         const write = yield* ask(app.repositoryWriteToken(workspace, "octo-member/side", member));
-        const ci = yield* ask(app.repositoryCiReadable(workspace, "octo-member/side", member));
         const fork = yield* ask(app.repositoryReach(workspace, "octo-member/fork", member));
         const hidden = yield* ask(app.repositoryReach(workspace, "octo-member/hidden", member));
         const automation = yield* ask(
@@ -972,7 +971,6 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
             githubUserId: GITHUB_FIXTURE_MEMBER.ID,
           },
         );
-        assert.equal(ci, true);
         assert.equal(reason(fork), REPOSITORY_UNREACHED.TOKEN_CANNOT_PUSH);
         assert.equal(reason(hidden), REPOSITORY_UNREACHED.TOKEN_NO_ACCESS);
         assert.equal(reason(automation), REPOSITORY_UNREACHED.NOT_CONNECTED);

@@ -43,7 +43,6 @@ function agentHanded(handed: Pick<Agent, "descriptionSnapshot" | "prompt">): Age
 }
 
 const CONTEXT = {
-  ciReadable: false,
   authorship: undefined,
   workspace: "acme",
   standing: standingFor("acme/relay"),

@@ -69,7 +69,6 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
       const words = coderInstructions(
         REPOSITORY,
         brief,
-        true,
         onTask ? TASK_ADDRESS : null,
         standingFor(REPOSITORY),
       );
@@ -119,7 +118,6 @@ test("a coding agent is shown to name an MCP server as a mention Vespin draws as
     const words = coderInstructions(
       REPOSITORY,
       AGENT_BRIEF.PROMPT,
-      true,
       onTask ? TASK_ADDRESS : null,
       standingFor(REPOSITORY),
     );
@@ -141,7 +139,6 @@ test("a coding agent is shown a day, a time, and a range, each a date Vespin dra
   const words = coderInstructions(
     REPOSITORY,
     AGENT_BRIEF.DESCRIPTION,
-    true,
     TASK_ADDRESS,
     standingFor(REPOSITORY),
   );

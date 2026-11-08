@@ -169,6 +169,23 @@
     justify-content: flex-end;
   }
 
+  /* A bar's labeled quiet button (a way back, a crumb's, an act with
+     words) stands its glyph a tab's start in (`--ui-tab-start`), as the
+     task's name press does, so every glyph that leads words in a bar
+     starts the same way in from its pill's edge, the button's hairline
+     edge counted. Note that it is a rule of the components layer, so a
+     folded button's square, a utility, still centers its glyph. */
+  .ui-toolbar .ui-folding-button > .ui-button[data-variant="quiet"] {
+    padding-left: calc(var(--ui-space-8) - 1px);
+  }
+
+  /* A tab strip's bar lights its buttons (the strip's "+", its Retry, and
+     the bar's acts) in the tab's own soft wash under the pointer, so the
+     row reads as one strip rather than tabs beside darker buttons. */
+  .ui-toolbar[data-look="tabs"] {
+    --ui-button-hover-fill: var(--ui-color-fill-hover);
+  }
+
   /* A tab strip's bar leads with its strip, which a narrow room has no room
      for beside the window's buttons and the actions, so the strip takes a row
      of its own under them, as a phone's browser stands its tabs under its

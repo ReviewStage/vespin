@@ -53,11 +53,13 @@ export function ofRepository(named: string, repository: string | null | undefine
 /**
  * A pull request pressed on a surface: one an agent it holds opened, however
  * its page is spelled, a page under it among them, opens in that agent's
- * Pull request tab, and any other of its repository, such as one an agent
- * opened before moving to another branch, in its first agent's by its
- * number; one of another repository is the window's. An Inbox item, a task's
- * page and an agent's answer it alike, an archived agent's pull request,
- * merged or not, opening its tab too.
+ * Pull request tab; one a listed agent elsewhere opened, a related task's
+ * row's chip among them, is the window's, which opens it in that agent's;
+ * and any other of its repository, such as one an agent opened before
+ * moving to another branch, in its first agent's by its number; one of
+ * another repository is the window's. An Inbox item, a task's page and an
+ * agent's answer it alike, an archived agent's pull request, merged or not,
+ * opening its tab too.
  */
 export function pullRequestBeside(
   address: Extract<Address, { readonly kind: typeof ADDRESS.PULL_REQUEST }>,
@@ -72,6 +74,7 @@ export function pullRequestBeside(
     (each) => repositoryPullRequestOf(each.url, here.repository) === address.number,
   );
   if (owner !== undefined) return beside({ kind: THING.PULL_REQUEST, agentId: owner.agentId });
+  if (address.listed !== undefined) return NOTHING;
   const first = here.agentIds?.[0];
   return first === undefined
     ? NOTHING

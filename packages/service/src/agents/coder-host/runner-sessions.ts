@@ -174,7 +174,18 @@ import {
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
-import { Clock, Context, Duration, Effect, Exit, Option, Redacted, Result, Schedule } from "effect";
+import {
+  Clock,
+  Context,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Option,
+  Redacted,
+  Result,
+  Schedule,
+} from "effect";
 import { SqlError } from "effect/sql/SqlError";
 import { HostedEnvironment } from "../../environment.js";
 import {
@@ -876,25 +887,156 @@ export const runnerSessions = <
       );
 
     /**
-     * One launch of the runner in the running place: its swaps kept at the
-     * place's firewall where its machine holds them there (`runnerBearer`,
-     * `HarnessLaunch`'s `credentials`), ahead of every write that composes the
-     * place's policy; then a fresh bearer recorded, numbering the launch,
-     * ahead of its config, whose URLs name that number (`launchUrl`); the
-     * launch's record written, the caller's own steps (`alongside`) run,
-     * and the place's whole policy written, the repository's credential
-     * minted afresh beside the swaps, all at once beside the machine's own,
-     * since none waits on another and the runner waits on them all; then the runner
-     * started, recorded by the machine before it reads anything, and its
-     * config line and first message handed to it as its first lines. On a
-     * machine whose runner reads its lines (`MachineLayout`'s `linesRead`),
-     * the config names the read and is its only line, the first message is
-     * queued for the launch, and the launch is handed beside it every message
-     * an earlier launch never took; such a launch may have no first message
-     * of its own, as one a turn's delivery launches (`deliverTurn`). A runner
-     * started but never configured is ended, its record cleared and its
-     * first message withdrawn, so the next message relaunches whole rather
-     * than writing to a runner that waits for its config.
+     * What one launch of the runner reads and records with no place, run
+     * beside the place's opening or resume rather than after it, since none
+     * of it waits on the place: the credentials its machine delivers
+     * (`HarnessLaunch`'s `credentials`, `runnerBearer`), a fresh bearer
+     * recorded, numbering the launch, ahead of its config, whose URLs name
+     * that number (`launchUrl`); its first message's words; the
+     * repository's credential minted afresh where the machine keeps swaps
+     * at its firewall; the workspace's variables; and the fingerprint its
+     * record keeps. The session it resumes (`from`) is read as the launch
+     * decides it, so a resume waits on whether its place was made anew only
+     * where that decides the session (`resumedSessionWhen`).
+     */
+    const prepared = <FE, FR>(
+      agent: Agent,
+      sessionId: string,
+      kind: AgentMachineKind,
+      layout: MachineLayout,
+      first: RunnerMessage | undefined,
+      credential: HarnessLaunch,
+      from: Effect.Effect<ResumedSession, FE, FR>,
+      /** The first message as the Start composed and queued it before it answered, which the launch takes over rather than composes again, its words marked handed once the runner has it. */
+      queuedFirst?: OpenedLine,
+    ) =>
+      Effect.gen(function* () {
+        const bearer = randomBytes(BEARER_BYTES).toString("base64url");
+        const delivered = machine.deliverCredentials(agent, [
+          ...(credential.credentials ?? []),
+          runnerBearer(bearer, serviceHost),
+        ]);
+        const target: ConversationTarget = { userId, conversationId: agent.conversationId };
+        const made = Effect.gen(function* () {
+          // The bearer is recorded first, as a launch numbered past every one before it, so the
+          // URLs its runner posts to name that number: a bearer alone does not tell launches apart.
+          const [[firstSequence, recordedLaunch], resumed] = yield* Effect.all(
+            [
+              Effect.all(
+                [
+                  options.nextSequence(agent.conversationId),
+                  recordAgentRunnerLaunch(userId, agent.id, runnerTokenDigest(bearer)),
+                ],
+                { concurrency: "unbounded" },
+              ),
+              from,
+            ],
+            { concurrency: "unbounded" },
+          );
+          const named = (url: string) =>
+            Option.match(recordedLaunch, {
+              onNone: () => url,
+              onSome: (number) => launchUrl(url, number),
+            });
+          // A rewind's cut is handed to the launch that resumes the harness's session, and let go
+          // once the runner has it; a fresh session never heard the line it names.
+          const read = Effect.gen(function* () {
+            const rewind = Option.getOrUndefined(
+              yield* readNativeRewind({ userId, conversationId: agent.conversationId }),
+            );
+            const rewindBefore = resumed.resume === undefined ? undefined : rewind;
+            const config = yield* harness
+              .config(agent, layout, resumed.resume, firstSequence, rewindBefore)
+              .pipe(Effect.withSpan("web/runnerConfig"));
+            // Note that a runner stays warm past the agent's turn: a Mac's for its window
+            // (`CODER.RUNNER_WARM`), ending itself once it passes, and a sandbox's until its sandbox stops.
+            const warmForMs =
+              kind === AGENT_MACHINE.DEVICE
+                ? Duration.toMillis(Duration.sum(CODER.RUNNER_WARM, CODER.RUNNER_WARM_SLACK))
+                : undefined;
+            return {
+              config: {
+                ...config,
+                eventsUrl: named(config.eventsUrl),
+                ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
+                ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
+                ...(layout.transcriptsKept
+                  ? { transcriptsUrl: named(options.transcriptsUrl) }
+                  : undefined),
+                ...(resumed.fork === true ? { fork: true } : undefined),
+                warm: true,
+                ...(warmForMs === undefined ? undefined : { warmForMs }),
+              },
+              rewind,
+            };
+          });
+          // The turn's words ahead of the first message, on what the harness's session has handed;
+          // a session not resumed is fresh, and its history holds none of it, but for the agent's
+          // steps replayed where it lets go of one. A first message the Start or the send already
+          // composed and queued is taken over as it stands, its words handed once.
+          const opened =
+            first === undefined
+              ? Effect.succeed(undefined)
+              : queuedFirst !== undefined
+                ? Effect.succeed(queuedFirst)
+                : openedLine(
+                    agent,
+                    sessionId,
+                    first,
+                    resumed.resume === undefined,
+                    resumed.replay === true,
+                  );
+          const [config, opening] = yield* Effect.all([read, opened], {
+            concurrency: "unbounded",
+          });
+          return { firstSequence, ...config, opening };
+        });
+        const [launch, sources, environment, extraCheckouts, integrations] = yield* Effect.all(
+          [
+            made,
+            // The launch's swaps stand before the runner starts, so its first request carries the
+            // real value, the repository's credential minted afresh beside them.
+            delivered.swaps.size === 0
+              ? Effect.succeed(undefined)
+              : agentFirewallSources(target, agent),
+            workspaceEnvironmentOf(agent, kind),
+            extraCheckoutsOf(agent),
+            options.integrations(agent),
+          ],
+          { concurrency: "unbounded" },
+        );
+        return {
+          ...launch,
+          delivered,
+          sources,
+          // Note that the workspace's variables go first, so ours win a name they share.
+          env: { ...environment, ...credential.env, ...delivered.env },
+          extraCheckouts,
+          fingerprint: launchFingerprint(credential, delivered, integrations),
+        };
+      }).pipe(Effect.withSpan("web/runnerLaunchPrepared"));
+
+    /** What a launch prepared with no place (`prepared`), which it takes up once its place runs. */
+    type PreparedLaunch = Effect.Success<ReturnType<typeof prepared>>;
+
+    /**
+     * One launch of the runner in the running place, on what it prepared
+     * beside the place (`prepared`): its swaps kept at the place's firewall
+     * where its machine holds them there, ahead of every write that composes
+     * the place's policy; then the launch's record written, the caller's own
+     * steps (`alongside`) run, and the place's whole policy written, all at
+     * once beside the machine's own, since none waits on another and the
+     * runner waits on them all; then the runner started, recorded by the
+     * machine before it reads anything, and its config line and first
+     * message handed to it as its first lines. On a machine whose runner
+     * reads its lines (`MachineLayout`'s `linesRead`), the config names the
+     * read and is its only line, the first message is queued for the launch,
+     * and the launch is handed beside it every message an earlier launch
+     * never took; such a launch may have no first message of its own, as one
+     * a turn's delivery launches (`deliverTurn`). A runner started but never
+     * configured is ended, its record cleared and its first message
+     * withdrawn, so the next message relaunches whole rather than writing to
+     * a runner that waits for its config.
      */
     const launch = <AE, AR>(
       agent: Agent,
@@ -905,13 +1047,10 @@ export const runnerSessions = <
       },
       layout: MachineLayout,
       first: RunnerMessage | undefined,
-      from: ResumedSession,
-      credential: HarnessLaunch,
+      made: PreparedLaunch,
       alongside: Effect.Effect<void, AE, AR>,
       /** How the message reached the place, as the launch's span names it; none where its machine names none. */
       path: LaunchPath | undefined,
-      /** The first message as the Start composed and queued it before it answered, which the launch takes over rather than composes again, its words marked handed once the runner has it. */
-      queuedFirst?: OpenedLine,
     ) =>
       Effect.gen(function* () {
         // The launch's trace, read here on its span, for a runner in the cloud's sandbox to trace
@@ -924,13 +1063,8 @@ export const runnerSessions = <
           traced === undefined
             ? undefined
             : { ...traced, ...(path === undefined ? undefined : { path }) };
-        const bearer = randomBytes(BEARER_BYTES).toString("base64url");
-        const delivered = machine.deliverCredentials(agent, [
-          ...(credential.credentials ?? []),
-          runnerBearer(bearer, serviceHost),
-        ]);
         // The swaps its machine keeps for what it delivered; none on a machine with no firewall of ours.
-        const { swaps } = delivered;
+        const { swaps } = made.delivered;
         // Kept before any write of this launch's, so the checkout's finish and the launch's own each send them.
         if (swaps.size > 0) {
           yield* machine.firewall.keepLaunch(place.running, agent.userId, {
@@ -938,7 +1072,6 @@ export const runnerSessions = <
             swaps,
           });
         }
-        const target: ConversationTarget = { userId, conversationId: agent.conversationId };
         const recorded = {
           machine: place.running.machine,
           session: place.running.session,
@@ -953,139 +1086,53 @@ export const runnerSessions = <
           });
         const ready = Effect.all(
           [
-            Effect.gen(function* () {
-              // The bearer is recorded first, as a launch numbered past every one before it, so the
-              // URLs its runner posts to name that number: a bearer alone does not tell launches apart.
-              const [firstSequence, recordedLaunch] = yield* Effect.all(
-                [
-                  options.nextSequence(agent.conversationId),
-                  recordAgentRunnerLaunch(userId, agent.id, runnerTokenDigest(bearer)),
-                ],
-                { concurrency: "unbounded" },
-              );
-              const named = (url: string) =>
-                Option.match(recordedLaunch, {
-                  onNone: () => url,
-                  onSome: (number) => launchUrl(url, number),
-                });
-              // A rewind's cut is handed to the launch that resumes the harness's session, and let go
-              // once the runner has it; a fresh session never heard the line it names.
-              const read = Effect.gen(function* () {
-                const rewind = Option.getOrUndefined(
-                  yield* readNativeRewind({ userId, conversationId: agent.conversationId }),
-                );
-                const rewindBefore = from.resume === undefined ? undefined : rewind;
-                const config = yield* harness
-                  .config(agent, layout, from.resume, firstSequence, rewindBefore)
-                  .pipe(Effect.withSpan("web/runnerConfig"));
-                // Note that a runner stays warm past the agent's turn: a Mac's for its window
-                // (`CODER.RUNNER_WARM`), ending itself once it passes, and a sandbox's until its sandbox stops.
-                const warmForMs =
-                  place.running.machine === AGENT_MACHINE.DEVICE
-                    ? Duration.toMillis(Duration.sum(CODER.RUNNER_WARM, CODER.RUNNER_WARM_SLACK))
-                    : undefined;
-                return {
-                  config: {
-                    ...config,
-                    eventsUrl: named(config.eventsUrl),
-                    ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
-                    ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
-                    ...(layout.transcriptsKept
-                      ? { transcriptsUrl: named(options.transcriptsUrl) }
-                      : undefined),
-                    ...(from.fork === true ? { fork: true } : undefined),
-                    warm: true,
-                    ...(warmForMs === undefined ? undefined : { warmForMs }),
-                    ...(trace === undefined ? undefined : { trace }),
-                  },
-                  rewind,
-                };
-              });
-              // The turn's words ahead of the first message, on what the harness's session has handed;
-              // a session not resumed is fresh, and its history holds none of it, but for the agent's
-              // steps replayed where it lets go of one. A first message the Start or the send already
-              // composed and queued is taken over as it stands, its words handed once.
-              const opened =
-                first === undefined
-                  ? Effect.succeed(undefined)
-                  : queuedFirst !== undefined
-                    ? Effect.succeed(queuedFirst)
-                    : openedLine(
-                        agent,
-                        place.session,
-                        first,
-                        from.resume === undefined,
-                        from.replay === true,
-                      );
-              // The launch's record is written before its command starts, so an END the launch it
-              // replaces posts late is told apart from this one's and stops nothing.
-              const [, made, opening] = yield* Effect.all(
-                [launching(firstSequence), read, opened],
-                { concurrency: "unbounded" },
-              );
-              return { firstSequence, ...made, opening };
-            }),
+            // The launch's record is written before its command starts, so an END the launch it
+            // replaces posts late is told apart from this one's and stops nothing.
+            launching(made.firstSequence),
             // The files the lines it is handed name go before its runner reads them: its first
             // message's, and those of the messages waiting for a launch, which their lines carry.
             first === undefined ? Effect.void : filesWritten(place.running, first),
             layout.linesRead ? waitingFilesWritten(agent, place.running) : Effect.void,
             // An earlier launch's lines go but its untaken messages in the window, which this launch is handed.
             layout.linesRead ? clearRunnerLines(userId, agent.id) : Effect.void,
-            // The launch's swaps stand before the runner starts, so its first request carries the
-            // real value: the machine starts the runner once every step here is done. Note that a
-            // post refused for want of its bearer is refused for good.
-            swaps.size === 0
+            // The machine starts the runner once every step here is done. Note that a post refused
+            // for want of its bearer is refused for good.
+            made.sources === undefined
               ? Effect.void
-              : Effect.flatMap(agentFirewallSources(target, agent), (sources) =>
-                  machine.firewall.write(place.running, agent.userId, sources),
-                ),
+              : machine.firewall.write(place.running, agent.userId, made.sources),
             alongside,
           ],
-          { concurrency: "unbounded" },
-        ).pipe(
-          Effect.map(([made]) => made),
-          Effect.withSpan("web/runnerLaunchReady"),
-        );
-        const {
-          handle,
-          ready: { firstSequence, rewind, opening },
-        } = yield* machine.launchRunner(place.running, {
-          // Note that the workspace's variables go first, so ours win a name they share.
-          env: {
-            ...(yield* workspaceEnvironmentOf(agent, place.running.machine)),
-            ...credential.env,
-            ...delivered.env,
-          },
+          { concurrency: "unbounded", discard: true },
+        ).pipe(Effect.withSpan("web/runnerLaunchReady"));
+        const { handle } = yield* machine.launchRunner(place.running, {
+          env: made.env,
           userId,
           agentId: agent.id,
-          extraCheckouts: yield* extraCheckoutsOf(agent),
+          extraCheckouts: made.extraCheckouts,
           name: place.name,
           ready,
-          firstLines: (made) =>
+          firstLines: () =>
             Effect.gen(function* () {
               const mark: RunnerMark = {
                 firstSequence: made.firstSequence,
-                fingerprint: launchFingerprint(
-                  credential,
-                  delivered,
-                  yield* options.integrations(agent),
-                ),
+                fingerprint: made.fingerprint,
                 ...(layout.linesRead ? { linesRead: true } : undefined),
               };
+              const config = { ...made.config, ...(trace === undefined ? undefined : { trace }) };
               const opened = made.opening === undefined ? [] : [made.opening.line];
               if (layout.linesRead) {
                 yield* queued(agent, made.firstSequence, opened, {
                   files: first?.files ?? [],
                   handed: made.opening?.handed ?? Option.none(),
                 });
-                return { lines: line(made.config), mark };
+                return { lines: line(config), mark };
               }
               // Note that a runner fed on its stdin is never launched without a message, which a launch that hands on waiting lines is only for one that reads them.
               if (opened.length === 0) return yield* new LaunchRefused({ reason: "no message" });
-              return { lines: [made.config, ...opened].map(line).join(""), mark };
+              return { lines: [config, ...opened].map(line).join(""), mark };
             }),
           // Note that its first message goes with it, since the send that queued it answers failed.
-          abandon: (made) =>
+          abandon: () =>
             Effect.andThen(
               layout.linesRead && first !== undefined
                 ? withdrawRunnerLine(userId, agent.id, first.line.uuid)
@@ -1095,11 +1142,11 @@ export const runnerSessions = <
         });
         // The runner was handed the first message, so what its words handed is kept for the next.
         // A runner fed on its stdin has its first message as it starts; one that reads its lines hands it on its ACCEPTED.
-        if (opening !== undefined && !layout.linesRead) yield* opening.taken;
-        if (rewind !== undefined) {
-          yield* clearNativeRewindHanded(agent.conversationId, rewind).pipe(
+        if (made.opening !== undefined && !layout.linesRead) yield* made.opening.taken;
+        if (made.rewind !== undefined) {
+          yield* clearNativeRewindHanded(agent.conversationId, made.rewind).pipe(
             Effect.tapError(() =>
-              Effect.ignore(Effect.andThen(machine.kill(handle), launching(firstSequence))),
+              Effect.ignore(Effect.andThen(machine.kill(handle), launching(made.firstSequence))),
             ),
           );
         }
@@ -1371,8 +1418,15 @@ export const runnerSessions = <
      * anew (`created`), whose disk is gone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
      * Start copied a transcript the store holds from its first entry.
+     * Whether the place was made anew is read only where it decides the
+     * session, so a launch prepared beside its place's resume waits on that
+     * resume only there.
      */
-    const resumedSessionOf = (agent: Agent, layout: MachineLayout, created: boolean) =>
+    const resumedSessionWhen = <CE, CR>(
+      agent: Agent,
+      layout: MachineLayout,
+      created: Effect.Effect<boolean, CE, CR>,
+    ) =>
       Effect.gen(function* () {
         const routing = yield* readAgentRouting(userId, agent.id);
         const own = Option.getOrUndefined(
@@ -1382,14 +1436,18 @@ export const runnerSessions = <
         if (own !== undefined) {
           const resumes = layout.transcriptsKept
             ? yield* holdsSession(userId, conversationId, own)
-            : !created;
+            : !(yield* created);
           return (resumes ? { resume: own } : { replay: true }) satisfies ResumedSession;
         }
         const source = agent.startedFrom?.session;
-        if (!created || !layout.transcriptsKept || source === undefined) return {};
+        if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
         const held = yield* holdsSession(userId, conversationId, source);
         return (held ? { resume: source, fork: true } : {}) satisfies ResumedSession;
       });
+
+    /** The session a launch resumes in a place known made anew or not (`resumedSessionWhen`). */
+    const resumedSessionOf = (agent: Agent, layout: MachineLayout, created: boolean) =>
+      resumedSessionWhen(agent, layout, Effect.succeed(created));
 
     /**
      * A new place opened under the session given on the agent's machine, the
@@ -1397,11 +1455,13 @@ export const runnerSessions = <
      * (`finishCheckoutWith`, the machine's `finishCheckout`): the
      * write token at the firewall and the commit identity, since the
      * harness's own shell has no hook for a first write; and the runner
-     * launched on the first line. The member's installed skills are read
-     * beside the opening, and the finish and the skills' upload run beside
-     * the launch's own uploads. A place whose launch failed is left standing
-     * for the session's next message. `sandboxOpened` runs once the place
-     * stands, before the launch.
+     * launched on the first line. The member's installed skills are read,
+     * and the launch prepared (`prepared`), beside the opening, and the
+     * finish and the skills' upload run beside the launch's own uploads. A
+     * preparation that failed is kept as it ended and fails the launch only
+     * once the place stands, so it never cuts the opening short. A place
+     * whose launch failed is left standing for the session's next message.
+     * `sandboxOpened` runs once the place stands, before the launch.
      */
     const openedPlace = (
       agent: Agent,
@@ -1416,86 +1476,124 @@ export const runnerSessions = <
     ) =>
       Effect.gen(function* () {
         const target: ConversationTarget = { userId, conversationId: agent.conversationId };
-        const from = yield* resumedSessionOf(agent, layout, true);
+        // Note that the place opens on the machine the agent's row names, as `open` is routed.
+        const kind = agent.machine ?? AGENT_MACHINE.VERCEL;
         yield* machine.open(
           {
             session: sessionId,
             target,
             agent,
             harness: harness.name,
-            beside: Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
-              nativeSkillFiles(skills, layout.skillsUpload),
+            beside: Effect.all(
+              [
+                Effect.map(nativeSkills(target, agent, harness.skillRoots), (skills) =>
+                  nativeSkillFiles(skills, layout.skillsUpload),
+                ),
+                Effect.exit(
+                  prepared(
+                    agent,
+                    sessionId,
+                    kind,
+                    layout,
+                    first,
+                    credential,
+                    resumedSessionOf(agent, layout, true),
+                    queuedFirst,
+                  ),
+                ),
+              ],
+              { concurrency: "unbounded" },
             ),
           },
-          (opened, skills) =>
+          (opened, [skills, made]) =>
             Effect.andThen(
               Effect.andThen(
                 Effect.logInfo(`A ${harness.name} launch opened its sandbox`),
                 sandboxOpened,
               ),
-              launch(
-                agent,
-                { name: opened.name, running: opened.place, session: sessionId },
-                layout,
-                first,
-                from,
-                credential,
-                Effect.all([opened.finishCheckout, writeInstalledSkills(opened.place, skills)], {
-                  concurrency: "unbounded",
-                  discard: true,
-                }),
-                path ?? opened.path,
-                queuedFirst,
+              Effect.flatMap(made, (ready) =>
+                launch(
+                  agent,
+                  { name: opened.name, running: opened.place, session: sessionId },
+                  layout,
+                  first,
+                  ready,
+                  Effect.all([opened.finishCheckout, writeInstalledSkills(opened.place, skills)], {
+                    concurrency: "unbounded",
+                    discard: true,
+                  }),
+                  path ?? opened.path,
+                ),
               ),
             ).pipe(Effect.annotateLogs(runningLogId(opened.place.running))),
         );
       });
 
     /**
-     * The runner launched again in the running place given, its credential set
-     * afresh by the launch and the harness's session resumed where it may be
-     * (`resumedSessionOf`); with no message of its own where it only hands on
-     * the lines an earlier launch never took. In a place made anew in place
-     * of one whose disk was lost (`created`), the member's installed skills
-     * went with that disk, so they are uploaded again, as a new place's are.
+     * The runner launched again in the place the caller's step runs
+     * (`placed`): a running one as it stands, or one resumed, on the machine
+     * named; its credential set afresh by the launch and the harness's
+     * session resumed where it may be (`resumedSessionWhen`); with no message
+     * of its own where it only hands on the lines an earlier launch never
+     * took. The launch is prepared (`prepared`) beside that step, and a
+     * preparation that failed fails the launch once the place runs, as an
+     * open's does. In a place made anew in place of one whose disk was lost
+     * (`created`), the member's installed skills went with that disk, so
+     * they are uploaded again, as a new place's are. Answers the place.
      */
-    const relaunched = (
+    const relaunched = <PE, PR>(
       agent: Agent,
       sessionId: string,
-      running: MachinePlace,
+      placed: Effect.Effect<{ readonly place: MachinePlace; readonly created: boolean }, PE, PR>,
+      kind: AgentMachineKind,
+      wasUp: boolean,
       layout: MachineLayout,
       sent: RunnerMessage | undefined,
-      path: LaunchPath,
-      created = false,
       queuedFirst?: OpenedLine,
     ) =>
       Effect.gen(function* () {
         const target = { userId, conversationId: agent.conversationId };
-        // Note that a repository added beside the agent's own while its place stood is cloned here, which its launch then shares,
-        // as is the agent's own where the place holds no checkout of it, as a launch whose checkout failed leaves it.
-        const [, from, credential] = yield* Effect.all(
+        const created = yield* Deferred.make<boolean>();
+        const [place, made] = yield* Effect.all(
           [
-            machine.checkOutMissing(running, target, agent, false),
-            resumedSessionOf(agent, layout, created),
-            harness.launch(agent, layout),
+            placed.pipe(
+              Effect.tap((place) => Deferred.succeed(created, place.created)),
+              // Note that a repository added beside the agent's own while its place stood is cloned here, which its launch then shares,
+              // as is the agent's own where the place holds no checkout of it, as a launch whose checkout failed leaves it.
+              Effect.tap((place) => machine.checkOutMissing(place.place, target, agent, false)),
+            ),
+            Effect.exit(
+              Effect.flatMap(harness.launch(agent, layout), (credential) =>
+                prepared(
+                  agent,
+                  sessionId,
+                  kind,
+                  layout,
+                  sent,
+                  credential,
+                  resumedSessionWhen(agent, layout, Deferred.await(created)),
+                  queuedFirst,
+                ),
+              ),
+            ),
           ],
           { concurrency: "unbounded" },
         );
+        const running = place.place;
         yield* launch(
           agent,
           { name: running.name, running, session: sessionId },
           layout,
           sent,
-          from,
-          credential,
-          created
+          yield* made,
+          place.created
             ? Effect.flatMap(nativeSkills(target, agent, harness.skillRoots), (skills) =>
                 writeInstalledSkills(running, nativeSkillFiles(skills, layout.skillsUpload)),
               )
             : Effect.void,
-          path,
-          queuedFirst,
+          resumedPath(place.created, wasUp),
         );
+        return place;
       });
 
     /**
@@ -1651,11 +1749,11 @@ export const runnerSessions = <
             yield* relaunched(
               agent,
               sessionId,
-              runnerPlace,
+              Effect.succeed({ place: runnerPlace, created: false }),
+              runnerPlace.machine,
+              true,
               layout,
               sent,
-              LAUNCH_PATH.RELAUNCHED,
-              false,
               restartLine,
             );
             yield* handed(SERVER_HANDOFF_PATH.RELAUNCHED);
@@ -1732,15 +1830,14 @@ export const runnerSessions = <
         // A runner fed on its stdin, as a Mac's is, is launched again here, its launch a line its
         // machine takes up (`device-machine.ts`), whose place is never lost the way a sandbox's is.
         const wasUp = standing.running !== undefined;
-        const place = yield* machine.resume(standing, agent);
         yield* relaunched(
           agent,
           sessionId,
-          place.place,
+          machine.resume(standing, agent),
+          standing.machine,
+          wasUp,
           layout,
           sent,
-          resumedPath(place.created, wasUp),
-          place.created,
           restartLine,
         );
         yield* handed(wasUp ? SERVER_HANDOFF_PATH.RELAUNCHED : SERVER_HANDOFF_PATH.RESUMED);
@@ -1918,19 +2015,15 @@ export const runnerSessions = <
         const layout = yield* machine.layout(agent);
         if (!layout.linesRead) return undefined;
         const wasUp = found.value.running !== undefined;
-        const resumed = yield* Effect.gen(function* () {
-          const place = yield* machine.resume(found.value, agent);
-          yield* relaunched(
-            agent,
-            sessionId,
-            place.place,
-            layout,
-            undefined,
-            resumedPath(place.created, wasUp),
-            place.created,
-          );
-          return place;
-        }).pipe(Effect.retry(RESUME_WHILE_ENDING));
+        const resumed = yield* relaunched(
+          agent,
+          sessionId,
+          machine.resume(found.value, agent),
+          found.value.machine,
+          wasUp,
+          layout,
+          undefined,
+        ).pipe(Effect.retry(RESUME_WHILE_ENDING));
         if (resumed.created) return SERVER_HANDOFF_PATH.FRESH;
         return wasUp ? SERVER_HANDOFF_PATH.RELAUNCHED : SERVER_HANDOFF_PATH.RESUMED;
       });

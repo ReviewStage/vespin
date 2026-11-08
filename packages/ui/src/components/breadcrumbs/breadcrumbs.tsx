@@ -51,7 +51,7 @@ import { useCrumbFold } from "./crumb-fold.js";
  * Two looks: a bar's path in the caption type, every crumb a quiet pill
  * that narrows by its share, fading out at its end, the current one last of
  * all; and a toolbar's heading, a way back then the page's name in the
- * dialog heading type.
+ * bar title type.
  *
  * A path gives way on a narrow bar first by folding: one that does not
  * fit whole folds the crumbs at its start into one "…" (`crumb-fold.ts`),
@@ -72,7 +72,7 @@ import { useCrumbFold } from "./crumb-fold.js";
 export const BREADCRUMBS_VARIANT = {
   /** A bar's path in the caption type, every crumb a quiet pill. */
   CAPTION: "caption",
-  /** A toolbar's heading: the way back, then the page's name in the dialog heading type. */
+  /** A toolbar's heading: the way back, then the page's name in the bar title type. */
   TITLE: "title",
 } as const;
 
@@ -123,7 +123,7 @@ const LOOK = {
     item: "flex-none gap-breadcrumb-gap",
     wordsItem: "min-w-0 flex-initial gap-breadcrumb-gap",
     separator: "flex-none items-center [&>svg]:size-breadcrumb-title-chevron",
-    words: "text-dialog font-dialog",
+    words: "text-toolbar-title font-toolbar-title",
   },
 } as const;
 

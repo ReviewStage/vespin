@@ -67,8 +67,9 @@ import { numberedTaskIdNow } from "./use-link-standing.js";
  * jumps to, is asked of it the same way (`useOpenPlace`,
  * `OpenAddressesHere`); a task, or an agent with no task, opens a pull
  * request one of its agents opened in that agent's Pull request tab, and any
- * other pull request of its repository in a Pull request tab by its number,
- * rather than on GitHub (`openPullRequestsHere`). Past the place, the window opens
+ * other pull request of its repository no listed task's agent opened in a
+ * Pull request tab by its number, rather than on GitHub
+ * (`openPullRequestsHere`). Past the place, the window opens
  * a pull request any listed task's agent opened in that agent's Pull request
  * tab, on its task (`ListedPullRequests`), wherever it is pressed:
  * a thread, a version, a task's card, or another task. Inside a pull
@@ -341,6 +342,17 @@ export function throughWindow(
   return go(placeAddress(changes, router).routed?.link ?? changes);
 }
 
+/**
+ * The address with the listed agent that opened the pull request it names,
+ * however its page is spelled, among the tasks and the agents on no task the
+ * window lists, so a place asked of it first leaves another task's to the
+ * window; any other address, or none listed, as it is.
+ */
+function withListedAgent(address: Address, listed: Listed | undefined): Address {
+  if (address.kind !== ADDRESS.PULL_REQUEST || listed === undefined) return address;
+  return { ...address, listed: listedPullRequestOf(address.href, listed.tasks, listed.agents) };
+}
+
 /** Opens an address where the place it is pressed on opens it, else where the window does (`throughWindow`): a place in the app there, a listed task's or a listed agent's on no task's pull request in its Pull request tab, anything else in the browser. */
 function openAddress(
   address: Address,
@@ -352,8 +364,9 @@ function openAddress(
   },
 ): void {
   const { openPlace, openHere, listed, router } = doors;
-  if (openHere?.(address) === true) return;
-  const routed = throughWindow(address, openPlace !== undefined, listed?.(), router);
+  const listing = listed?.();
+  if (openHere?.(withListedAgent(address, listing)) === true) return;
+  const routed = throughWindow(address, openPlace !== undefined, listing, router);
   if (routed.kind === ROUTE.GO) {
     openPlace?.(routed.link);
   } else if (routed.kind !== ROUTE.EXTERNAL) {

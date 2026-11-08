@@ -171,6 +171,8 @@ const REFRESH_SCRIPT = [
  */
 export interface RepositoryFirewall {
   readonly write: (sources: FirewallSources) => Effect.Effect<void, SandboxError>;
+  /** The repository, as GitHub spells it, whose credential stands at the firewall already and stays past the run, so a run of git's on it writes nothing of its own (`underCloneCredential`); none where every run writes its own. */
+  readonly carries?: string;
 }
 
 /** One command run in the sandbox: its line, and where and with what environment it runs. */
@@ -260,7 +262,10 @@ export function runInSandbox(
  * without it as the run ends, however it ended, an interrupted run's as it
  * is interrupted, so no later command runs under it, while what else stands
  * at the firewall stays. A write that failed refuses the checkout, because
- * the policy would otherwise carry the read token on past the run.
+ * the policy would otherwise carry the read token on past the run. Where
+ * the firewall carries a credential for the repository already
+ * (`RepositoryFirewall`'s `carries`), as an agent's sandbox does from its
+ * first write, the run goes through that one and nothing is written.
  */
 const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential")(function* (
   sandbox: RepositorySandbox,
@@ -279,14 +284,18 @@ const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential
       orElse: () => new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.CHECKOUT_FAILED }),
     }),
   );
+  const carried = firewall.carries?.toLowerCase() === fullName.toLowerCase();
   const withdrawn = firewall.write({}).pipe(Effect.mapError(refused));
-  const ended = yield* firewall.write({ clone: { fullName, token, access } }).pipe(
-    Effect.mapError(refused),
-    Effect.andThen(timed),
-    Effect.onInterrupt(() => Effect.ignore(withdrawn)),
-    Effect.exit,
-  );
-  yield* withdrawn;
+  const ended = yield* (
+    carried
+      ? timed
+      : firewall.write({ clone: { fullName, token, access } }).pipe(
+          Effect.mapError(refused),
+          Effect.andThen(timed),
+          Effect.onInterrupt(() => Effect.ignore(withdrawn)),
+        )
+  ).pipe(Effect.exit);
+  if (!carried) yield* withdrawn;
   const ran = yield* ended;
   if (ran.exitCode !== 0) return yield* gitRefusal(ran);
 });

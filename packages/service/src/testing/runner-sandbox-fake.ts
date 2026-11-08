@@ -204,6 +204,8 @@ export function runnerSandboxApi() {
     readonly session: string;
     readonly args: readonly string[];
     readonly env: Readonly<Record<string, string>>;
+    /** How many network policies the API had taken as it ran, as a command's `policiesBefore`. */
+    readonly policiesBefore: number;
   }[] = [];
   /**
    * How many reads of a command, and how many network policy updates, the
@@ -463,7 +465,12 @@ export function runnerSandboxApi() {
       const asked = await body();
       if (asked.wait === true) {
         await hooks.onRun?.(asked.env ?? {}, asked.command, asked.args);
-        runs.push({ session: sessionId, args: asked.args, env: asked.env ?? {} });
+        runs.push({
+          session: sessionId,
+          args: asked.args,
+          env: asked.env ?? {},
+          policiesBefore: policies.length,
+        });
         const exitCode = hooks.runExit?.(asked.args) ?? 0;
         const stdout =
           asked.args[1] === DEFAULT_USER_READ ? `${DEFAULT_USER}\n${DEFAULT_USER}\n` : "";

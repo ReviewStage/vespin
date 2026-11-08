@@ -7,10 +7,11 @@
  * showed. A reopen takes the latest and opens it through the strip's own
  * open, so it stands where it stood showing what it showed, and the one
  * closed before it is next. A tab its strip would not draw again on the
- * open task, its agent archived or its page gone since, is passed over for
- * the one before it, so every press opens a tab; every other opens as its
- * strip opens any such tab, a file gone since on the file tab's own word
- * for it. The list is a moment's, kept nowhere, and held to a bound.
+ * open task, its agent archived or its page gone since, or that stands open
+ * again, opened another way since, is passed over for the one before it, so
+ * every press opens a tab; every other opens as its strip opens any such
+ * tab, a file gone since on the file tab's own word for it. The list is a
+ * moment's, kept nowhere, and held to a bound.
  */
 
 import type { MainTab } from "./use-main-tabs.js";

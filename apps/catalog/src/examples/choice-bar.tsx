@@ -5,7 +5,9 @@
  * or names alone; a value set by a radio group; a clearable one with none
  * chosen; an option and a whole bar that cannot be chosen; a row too
  * narrow for its options, which names every option while none is chosen;
- * and one folding every option together, each named in its hint.
+ * one folding every option together, each named in its hint; and one
+ * folding the chosen option last, which keeps its name while the others
+ * fold to their glyphs.
  */
 
 import {
@@ -318,6 +320,17 @@ function ChoiceBarExample(): React.JSX.Element {
             start={VIEW.CONVERSATION}
             look={CHOICE_BAR_LOOK.FILL}
             fold={CHOICE_BAR_FOLD.TOGETHER}
+          />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="choice-bar-chosen-last" title="Fill, folding the chosen option last">
+        <div className="catalog-narrow">
+          <HeldTabs
+            label="Pull request"
+            items={VIEWS}
+            start={VIEW.CONVERSATION}
+            look={CHOICE_BAR_LOOK.FILL}
+            fold={CHOICE_BAR_FOLD.CHOSEN_LAST}
           />
         </div>
       </CatalogSection>

@@ -1,4 +1,4 @@
-import { Schema as EffectSchema } from "effect";
+import { Schema as EffectSchema, Option } from "effect";
 import { PRODUCT_NAME } from "./product-name.js";
 import { countedNumber } from "./service-wire.js";
 
@@ -92,3 +92,15 @@ export const githubTokenSaveRequestSchema = EffectSchema.Struct({
     EffectSchema.isPattern(/^\S+$/u),
   ),
 });
+
+const readPastedToken = EffectSchema.decodeUnknownOption(githubTokenSaveRequestSchema.fields.token);
+
+/**
+ * Whether a paste could be a token at all, by the bounds a save's request is
+ * decoded by. Note that a form asks this before it sends, because a paste
+ * outside them is refused as the act's input, which reads as a save the
+ * service never answered rather than as no token.
+ */
+export function pastedTokenFits(pasted: string): boolean {
+  return Option.isSome(readPastedToken(pasted));
+}
