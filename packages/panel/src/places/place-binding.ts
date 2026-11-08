@@ -33,7 +33,7 @@
  */
 
 import { useRouter } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RoutedPlace } from "./routed-places.js";
 
 /**
@@ -243,8 +243,12 @@ export function useTaskAsk(open: string | undefined): TaskAsking {
   const latest = useRef<TaskAsk | undefined>(undefined);
   // Note that the host's next move answers the ask, so it is let go there, because an ask kept would stand again where
   // the host binds back the task it was asked over, as a delete of a task opened from Home binds none again.
+  // The ask as it was last made is let go as the move commits, before any door reads it, so a draw React throws away
+  // lets go of nothing.
   if (asked !== undefined && asked.over !== open) setAsked(undefined);
-  if (latest.current !== undefined && latest.current.over !== open) latest.current = undefined;
+  useLayoutEffect(() => {
+    if (latest.current !== undefined && latest.current.over !== open) latest.current = undefined;
+  }, [open]);
   const boundFor = asked !== undefined && asked.over === open ? asked.taskId : open;
   const openNow = useRef(open);
   openNow.current = open;
