@@ -4,9 +4,9 @@ import { app } from "electron";
 
 interface NativeHelperProcess {
   stdin?: {
-    write?(chunk: string): void;
-    end?(): void;
-    on?(event: "error", listener: () => void): void;
+    write(chunk: string): void;
+    end(): void;
+    on(event: "error", listener: () => void): void;
   };
   stdout?: {
     setEncoding(encoding: string): void;
@@ -14,7 +14,7 @@ interface NativeHelperProcess {
   };
   on(event: "error" | "exit", listener: () => void): void;
   removeAllListeners(): void;
-  kill?(): void;
+  kill(): void;
 }
 
 interface NativeHelperOptions {
@@ -70,7 +70,7 @@ export class NativeHelper {
       this.#child = child;
       child.stdout?.setEncoding("utf8");
       child.stdout?.on("data", (chunk) => this.#read(chunk));
-      child.stdin?.on?.("error", () => this.#finish());
+      child.stdin?.on("error", () => this.#finish());
       child.on("error", () => this.#finish());
       child.on("exit", () => this.#finish());
       return true;
@@ -83,8 +83,8 @@ export class NativeHelper {
   writeLine(line: string): boolean {
     if (!this.#child || this.#ended) return false;
     try {
-      this.#child.stdin?.write?.(`${line}\n`);
-      return this.#child.stdin?.write !== undefined;
+      this.#child.stdin?.write(`${line}\n`);
+      return this.#child.stdin !== undefined;
     } catch {
       this.#finish();
       return false;
@@ -95,7 +95,7 @@ export class NativeHelper {
   endInput(): void {
     const child = this.#detach();
     try {
-      child?.stdin?.end?.();
+      child?.stdin?.end();
     } catch {
       // A closed pipe has already received the only signal owed here.
     }
@@ -103,7 +103,7 @@ export class NativeHelper {
 
   /** Stops the process without waiting for its exit. */
   stop(): void {
-    this.#detach()?.kill?.();
+    this.#detach()?.kill();
   }
 
   #spawn(): NativeHelperProcess | undefined {
