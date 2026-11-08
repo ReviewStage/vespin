@@ -83,6 +83,7 @@
     "./agents/session-sandboxes": "./src/agents/session-sandboxes.js",
     "./agents/terminal/agent-sandbox": "./src/agents/terminal/agent-sandbox.js",
     "./agents/terminal/tmux": "./src/agents/terminal/tmux.js",
+    "./auth/apple-app-site-association": "./src/auth/apple-app-site-association.js",
     "./auth/auth": "./src/auth/auth.js",
     "./auth/auth-app": "./src/auth/auth-app.js",
     "./auth/auth-database": "./src/auth/auth-database.js",

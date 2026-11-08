@@ -8,8 +8,9 @@
  * it without resolving the service.
  */
 
-/** Each first-party client's OAuth `client_id`: the Mac's, and the command-line tool's. */
+/** Each first-party client's OAuth `client_id`: the Mac's, the command-line tool's, and the iPhone's. */
 export const FIRST_PARTY_OAUTH_CLIENT_ID = {
   DESKTOP: "desktop",
   CLI: "vespin-cli",
+  IOS: "ios",
 } as const;

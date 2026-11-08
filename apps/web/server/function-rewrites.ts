@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { POSTHOG_PROXY } from "@repo/features/posthog-proxy";
 import { SENTRY_TUNNEL } from "@repo/features/sentry-tunnel";
+import { APPLE_APP_SITE_ASSOCIATION } from "@repo/service/auth/apple-app-site-association";
 import { AUTH_SERVER_METADATA_PATHS } from "@repo/service/auth/auth-app";
 import { MEMBER_MCP_METADATA_PATHS, MEMBER_MCP_METADATA_ROUTE } from "@repo/service/member-mcp/app";
 import { isRecord, unparsedWire, type WireBoundaryInput } from "@repo/wire";
@@ -123,7 +124,10 @@ const API_ROUTE_PREFIX = "/api/";
  * the authorization server's own metadata (RFC 8414), which the same client
  * reads at the well-known name ahead of the issuer's path, carried to the
  * auth catch-all as the issuer-path form its handler answers (`query`, as
- * the segment rewrites carry a path). Vercel runs these rules before it looks
+ * the segment rewrites carry a path); and the home host's Apple App Site
+ * Association, which Apple reads at its well-known path alone, as JSON and
+ * under no redirect, to let the iPhone app catch its sign-in's universal
+ * link. Vercel runs these rules before it looks
  * at the built site's files, and the build writes no file at such a path
  * besides.
  */
@@ -151,6 +155,10 @@ const PUBLIC_REWRITES: readonly PublicRewrite[] = [
     route: AUTH_ROUTE,
     query: `${DISPATCH_QUERY.PATH}=${carried.slice(API_ROUTE_PREFIX.length)}`,
   })),
+  {
+    path: APPLE_APP_SITE_ASSOCIATION.PATH,
+    route: APPLE_APP_SITE_ASSOCIATION.ROUTE.slice(API_ROUTE_PREFIX.length),
+  },
 ];
 
 /**

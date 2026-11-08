@@ -39,7 +39,7 @@ import {
   SESSION_COOKIE_CACHE,
   workspaceDeletion,
 } from "./auth-policy.js";
-import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT } from "./oauth-clients.js";
+import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "./oauth-clients.js";
 import { supportAccess } from "./support-access.js";
 
 const deployment = authDeployment(process.env);
@@ -121,7 +121,11 @@ export const auth = betterAuth({
       // the member MCP server's scopes alone (`oauthClientRegistration`).
       ...oauthClientRegistration(),
       clientPrivileges: denyOAuthClientPrivileges,
-      cachedTrustedClients: new Set([DESKTOP_OAUTH_CLIENT.id, CLI_OAUTH_CLIENT.id]),
+      cachedTrustedClients: new Set([
+        DESKTOP_OAUTH_CLIENT.id,
+        CLI_OAUTH_CLIENT.id,
+        IOS_OAUTH_CLIENT.id,
+      ]),
       accessTokenExpiresIn: 60 * 60,
       scopes: [...OAUTH_PROVIDER_SCOPES],
       // The member MCP server is the one resource (RFC 8707) the provider

@@ -6,6 +6,7 @@ import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { POSTHOG_PROXY } from "@repo/features/posthog-proxy";
 import { RESERVED_WORKSPACE_SLUGS } from "@repo/features/workspace-wire";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import { APPLE_APP_SITE_ASSOCIATION } from "@repo/service/auth/apple-app-site-association";
 import { PAGE_LINK_ROUTE } from "@repo/service/pages/page-links";
 import { test } from "vitest";
 import { functionPublicPath, webFunctions } from "../server/function-layout";
@@ -395,6 +396,17 @@ test("each standalone page is served at its clean path and at its .html file's a
     assert.ok("file" in alias && (alias.file ?? file) === file && alias.forced === undefined, page);
     assert.deepEqual([...clean.named], [...alias.named], page);
   }
+});
+
+test("Apple's association file is answered by its route at its exact well-known path, under no redirect and no page's headers", () => {
+  const served = servedBy(APPLE_APP_SITE_ASSOCIATION.PATH);
+  assert.ok("file" in served && served.file !== undefined && served.forced === undefined);
+  const landed = new URL(served.file, `https://${APP_HOST}`);
+  assert.equal(
+    landed.searchParams.get("route"),
+    APPLE_APP_SITE_ASSOCIATION.ROUTE.slice("/api/".length),
+  );
+  assert.deepEqual([...served.named.keys()], []);
 });
 
 /** A link's token as the routing sees it: its claims and its signature, base64url, joined by a dot. */

@@ -9,6 +9,7 @@ import { authDeployment, authSecrets } from "@repo/service/auth/auth-deployment"
 import {
   CLI_OAUTH_CLIENT,
   DESKTOP_OAUTH_CLIENT,
+  IOS_OAUTH_CLIENT,
   type OAuthClient,
   oauthClientRecord,
 } from "@repo/service/auth/oauth-clients";
@@ -129,7 +130,7 @@ export function dropUnreadableJwks(
   });
 }
 
-/** What every deployment build seeds: the desktop and command-line clients, the member MCP server's resource at this deployment's address, and then a key set this deployment can sign with. */
+/** What every deployment build seeds: the desktop, command-line, and iPhone clients, the member MCP server's resource at this deployment's address, and then a key set this deployment can sign with. */
 function seedDeployment(
   variables: Record<string, string | undefined>,
 ): Effect.Effect<void, QueryError, DatabaseServices> {
@@ -140,6 +141,7 @@ function seedDeployment(
     [
       seedOAuthClient(DESKTOP_OAUTH_CLIENT),
       seedOAuthClient(CLI_OAUTH_CLIENT),
+      seedOAuthClient(IOS_OAUTH_CLIENT),
       seedOAuthResource(authDeployment(variables).baseURL),
       sessionSecret === undefined ? Effect.void : dropUnreadableJwks(sessionSecret),
     ],

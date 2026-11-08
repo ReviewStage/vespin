@@ -1,3 +1,4 @@
+import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 
@@ -39,6 +40,25 @@ export const CLI_OAUTH_CLIENT = {
   name: `${PRODUCT_NAME} CLI`,
   scopes: ["openid", "profile", "email", "offline_access"],
   redirectUris: ["http://127.0.0.1/callback"],
+  tokenEndpointAuthMethod: "none",
+  grantTypes: ["authorization_code", "refresh_token"],
+  responseTypes: ["code"],
+  type: "native",
+} as const satisfies OAuthClient;
+
+/**
+ * The iPhone, signed in as the Mac is, under the same scopes, so its token
+ * resolves through userinfo at the account routes. Its one redirect is a
+ * universal link on the home host (`@repo/features/ios-sign-in-wire`), which
+ * the provider matches exactly: the loopback the Mac and the command line
+ * return to is no return address of the phone's, and no other host or path
+ * is either.
+ */
+export const IOS_OAUTH_CLIENT = {
+  id: FIRST_PARTY_OAUTH_CLIENT_ID.IOS,
+  name: `${PRODUCT_NAME} for iPhone`,
+  scopes: ["openid", "profile", "email", "offline_access"],
+  redirectUris: [IOS_OAUTH_CALLBACK_URL],
   tokenEndpointAuthMethod: "none",
   grantTypes: ["authorization_code", "refresh_token"],
   responseTypes: ["code"],
