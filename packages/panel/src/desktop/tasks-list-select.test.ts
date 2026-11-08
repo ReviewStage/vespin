@@ -213,8 +213,6 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       account: "dean@acme.dev",
       shown: true,
       unseenAgents: [],
-      inboxWaiting: [],
-      inboxTasks: [],
       onOpenIntegrations: () => undefined,
       onOpenApiKeys: () => undefined,
       onOpenSettings: () => undefined,

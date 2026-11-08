@@ -66,7 +66,6 @@ import {
   DESKTOP_CAPABILITIES,
   handCapabilities,
   handHostReads,
-  handInboxItems,
   handMembers,
   handState,
   holdAutomations,
@@ -2921,9 +2920,14 @@ test("⌘K's \"This task\" offers the task's Inbox while an item waits on it and
       },
     ],
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
-    inbox: [{ taskId: DOCUMENT_TASK.id, items: [waiting("first"), waiting("second")] }],
   });
   await paletteUnderState(tasks);
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), {
+    inbox: {
+      ...stateWith({}, {}).inbox,
+      waiting: [{ taskId: DOCUMENT_TASK.id, items: [waiting("first"), waiting("second")] }],
+    },
+  });
   chooseFilter("This task");
   const listed = `Inbox · ${DOCUMENT_TASK.name}`;
   assert.ok(rows().includes(listed), "a waiting item holds the Inbox");
@@ -3067,13 +3071,13 @@ function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
 
 /** The palette over a window whose listed workspace's task holds the items the account's feed holds as `inbox` says, main's word of it last changed at `changed`; how the feed moves, and where the window stands, which an Inbox item it opens takes it. */
 function paletteOverInbox(inbox: FedInbox, changed = 9_000) {
-  const deliver = handInboxItems(fedOf(inbox));
-  const tasks = tasksControl({
-    tasks: [ROTATION],
-    workspace: ROTATION_HOME,
-    inboxTasks: [{ taskId: ROTATION.id, items: 2, updatedAt: changed }],
-  });
-  writeExperiments({});
+  const held = {
+    ...stateWith({}, {}).inbox,
+    tasks: [{ taskId: ROTATION.id, items: 2, updatedAt: changed }],
+  };
+  const { deliverItems: deliver } = handHostReads({ items: fedOf(inbox), inbox: held });
+  const tasks = tasksControl({ tasks: [ROTATION], workspace: ROTATION_HOME });
+  writeExperiments({}, { inbox: held });
   openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
   const window = windows.at(-1);
   assert.ok(window, "the palette stands under a window's router");

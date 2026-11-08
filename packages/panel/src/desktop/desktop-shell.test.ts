@@ -52,7 +52,7 @@ import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { handInbox, tasksControl } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -467,9 +467,8 @@ test("with the sidebar folded, New task stands beside its toggle over Home and t
 });
 
 test("with the sidebar folded away, its toggle tells a reader how many wait on them in the Inbox, and says nothing of it while the sidebar is shown", () => {
-  const waiting: Partial<TasksControl> = {
-    tasks: [DOCUMENT_TASK],
-    inbox: [
+  handInbox({
+    waiting: [
       {
         taskId: DOCUMENT_TASK.id,
         items: ["Retry?", "Alert at 80%?", "Ship it?"].map((title, at) => ({
@@ -480,7 +479,8 @@ test("with the sidebar folded away, its toggle tells a reader how many wait on t
         })),
       },
     ],
-  };
+  });
+  const waiting: Partial<TasksControl> = { tasks: [DOCUMENT_TASK] };
   assert.deepEqual(titleBarButtons(mount(false, waiting)), [
     "Show sidebar, 3 need you",
     "New task",
@@ -976,18 +976,12 @@ function spokenName(item: HTMLElement): string {
 test("on a phone the bar's Inbox wears the count of what needs the reader, named in the sidebar's words, and none at zero", async () => {
   // Note that main lists the three questions it counts, as its read of the account does.
   const asks = ["q-1", "q-2", "q-3"].map((id) => ({ id, agentId: "a-1", title: id, postedAt: 0 }));
-  const listed = {
-    tasks: [DOCUMENT_TASK],
-    inbox: [{ taskId: DOCUMENT_TASK.id, items: asks }],
-    inboxTasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
-  };
+  handInbox({
+    waiting: [{ taskId: DOCUMENT_TASK.id, items: asks }],
+    tasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
+  });
   const page = await mountNarrow(
-    {
-      at: SHELL_AT.BOARD,
-      listed,
-      inbox: listed.inbox,
-      inboxTasks: listed.inboxTasks,
-    },
+    { at: SHELL_AT.BOARD, listed: { tasks: [DOCUMENT_TASK] } },
     { overlay: SIDEBAR_OVERLAY.OPEN },
   );
   const inbox = barItems(page).find((item) => spokenName(item) === "Inbox, 3 need you");
@@ -996,6 +990,7 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
+  handInbox({});
   const none = await mountNarrow({ at: SHELL_AT.BOARD });
   assert.deepEqual(
     barItems(none)

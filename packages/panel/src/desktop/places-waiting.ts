@@ -7,7 +7,11 @@ import type {
 import { useMinute } from "@repo/ui";
 import { useMemo } from "react";
 import { listedIn, waitsOnReader } from "../tasks/inbox-model.js";
-import { useInboxTaskless } from "../tasks/use-inbox-slices.js";
+import {
+  useInboxTaskHoldings,
+  useInboxTaskless,
+  useInboxWaitingTasks,
+} from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
@@ -63,12 +67,13 @@ function toDoByTask(
  */
 function waitingThreads(
   tasks: TasksControl,
+  inboxWaiting: readonly AppInboxTask[],
   inboxTaskless: readonly AppInboxTasklessItem[],
   now: number,
 ): readonly AppInboxWaitingItem[] {
   // Note that only the standing tasks are counted, as To do lists them, so a task not listed yet counts nowhere.
   const standing = new Set(tasks.listed.tasks.map((task) => task.id));
-  const ofTasks = tasks.inbox
+  const ofTasks = inboxWaiting
     .filter((task) => standing.has(task.taskId))
     .flatMap((task) => task.items);
   const taskless = inboxTaskless.filter(
@@ -82,10 +87,9 @@ function waitingThreads(
 /** How many threads wait on the developer on each task, by task, as main counts them, less those reminded for later; a task where none waits is left out, and every one while signed out. */
 export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number> {
   const now = useMinute();
-  const byTask = useMemo(
-    () => toDoByTask(tasks.inboxTasks, tasks.inbox, now),
-    [tasks.inboxTasks, tasks.inbox, now],
-  );
+  const holdings = useInboxTaskHoldings();
+  const waiting = useInboxWaitingTasks();
+  const byTask = useMemo(() => toDoByTask(holdings, waiting, now), [holdings, waiting, now]);
   return tasks.signedIn ? byTask : NO_COUNTS;
 }
 
@@ -97,6 +101,7 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
  */
 export function useInboxWaiting(tasks: TasksControl): number {
   const now = useMinute();
+  const waiting = useInboxWaitingTasks();
   const taskless = useInboxTaskless();
-  return tasks.signedIn ? waitingThreads(tasks, taskless, now).length : 0;
+  return tasks.signedIn ? waitingThreads(tasks, waiting, taskless, now).length : 0;
 }

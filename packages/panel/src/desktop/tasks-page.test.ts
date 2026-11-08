@@ -36,7 +36,7 @@ import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { handInbox, tasksControl } from "../testing/tasks-control.js";
 import { leavingBy, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useInboxWaiting } from "./places-waiting.js";
@@ -108,6 +108,8 @@ beforeEach(() => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
   fakeActPort({});
+  // Main's read of the account's inbox holds what waits on Acme's tasks.
+  handInbox({ waiting: WAITING, tasks: HOLDINGS });
   handMembers(() => ({ rows: { members: MEMBERS } }));
 });
 
@@ -217,8 +219,6 @@ async function mountPage(
   const draw = (workspace: Workspace) => {
     const control = tasksControl({
       tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
-      inbox: WAITING,
-      inboxTasks: HOLDINGS,
       workspace,
       workspaces: [ACME, BETA],
       me: DEAN,
@@ -318,9 +318,7 @@ test("a row and a card count the threads waiting on the reader, as the sidebar c
   const page = await mountPage();
   const sidebar = { count: -1 };
   function Sidebar() {
-    sidebar.count = useInboxWaiting(
-      tasksControl({ tasks: [...TASKS], inbox: WAITING, inboxTasks: HOLDINGS, me: DEAN }),
-    );
+    sidebar.count = useInboxWaiting(tasksControl({ tasks: [...TASKS], me: DEAN }));
     return null;
   }
   const sidebarRoot = createRoot(document.createElement("div"));

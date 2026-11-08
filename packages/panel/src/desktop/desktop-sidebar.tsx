@@ -146,7 +146,7 @@ import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
-import { useFailedRuns, useInboxTaskless } from "../tasks/use-inbox-slices.js";
+import { useFailedRuns, useInboxTaskless, useListedInbox } from "../tasks/use-inbox-slices.js";
 import {
   type AgentPin,
   isAgentPin,
@@ -1861,6 +1861,7 @@ function SidebarColumn({
   const automationsRunning = runningRuns(workspaceRuns);
   const failedRuns = useFailedRuns();
   const inboxTaskless = useInboxTaskless();
+  const listedInbox = useListedInbox(tasks);
   const automationFailed = useFailedRunsMark(
     failedRuns,
     tasks.workspace?.id,
@@ -2089,7 +2090,7 @@ function SidebarColumn({
     listedRows.tasks.filter(
       (task) => task.pinnedAt === undefined && !sectioned.taskIds.has(task.id),
     ),
-    { unread, inbox: tasks.listed.inbox, shown: current, pullRequests: listedPullRequests },
+    { unread, inbox: listedInbox.inbox, shown: current, pullRequests: listedPullRequests },
   );
   // An automation's finished runs leave Tasks once they hold nothing of the reader's (`finished-runs.ts`).
   const unpinnedAgents = withoutFinishedRuns(

@@ -8,7 +8,7 @@ import {
   taskHoldings,
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";
-import { useInboxAgents } from "./use-inbox-slices.js";
+import { useInboxAgents, useListedInbox } from "./use-inbox-slices.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -45,7 +45,8 @@ function useListedInboxGroups(tasks: TasksControl): {
   readonly groups: readonly InboxGroup[];
   readonly read: HolderInboxItems;
 } {
-  const { inboxTasks, tasks: listed } = tasks.listed;
+  const { inboxTasks } = useListedInbox(tasks);
+  const listed = tasks.listed.tasks;
   // Note that every plan holding an item is read, not only those main counts as waiting on the
   // account, because those are its own agents' alone, and the Inbox lists every member's.
   const holdings = useMemo(

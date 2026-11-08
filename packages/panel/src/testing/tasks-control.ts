@@ -14,6 +14,7 @@ import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import type {
   AppHostRead,
   AppInboxAgentHolding,
+  AppInboxSlice,
   AppInboxTasklessItem,
   AppInboxWaitingItem,
   AppTranscript,
@@ -381,7 +382,16 @@ export function handInboxTaskless(
   taskless: readonly AppInboxTasklessItem[],
   agents: readonly AppInboxAgentHolding[] = agentHoldingsOf(taskless),
 ): void {
-  const patch = { inbox: { ...stateWith({}, {}).inbox, taskless, agents } };
+  handInbox({ taskless, agents });
+}
+
+/**
+ * Hands the window main's document with its inbox read holding the slices
+ * given, nothing in the rest; written into the test's Query client too, so
+ * a case that draws synchronously finds them in its first frame.
+ */
+export function handInbox(inbox: Partial<AppInboxSlice>): void {
+  const patch = { inbox: { ...stateWith({}, {}).inbox, ...inbox } };
   handState({}, patch);
   writeAppState(stateWith({}, patch));
 }
@@ -463,8 +473,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     tasks: [],
     listed: {
       tasks: overrides.tasks ?? [],
-      inbox: overrides.inbox ?? [],
-      inboxTasks: overrides.inboxTasks ?? [],
     },
     listedAgents: { standing: [], archived: [] },
     workspaces: [],
@@ -588,9 +596,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onCommentRevealed: ignore,
     onSectionRevealed: ignore,
     onShowInbox: ignore,
-    inbox: [],
     inboxShown: null,
-    inboxTasks: [],
     inboxView: {
       onClear: ignore,
       pages: undefined,

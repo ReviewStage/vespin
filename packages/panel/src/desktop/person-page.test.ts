@@ -27,6 +27,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppHostRead,
   type AppInboxItems,
+  type AppInboxSlice,
   type AppWorkspaceMembersRead,
   UNREAD,
 } from "@repo/host/app-state";
@@ -52,7 +53,8 @@ import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import {
-  handInboxTaskless,
+  agentHoldingsOf,
+  handInbox,
   listedAgent,
   tasksControl,
   waitingOf,
@@ -249,10 +251,14 @@ const INBOXES = new Map<string, readonly InboxItem[]>([[RETRIES.id, [RETRY_429, 
 const SWEEP_AGENT = "5e6f7081-92a3-4b4c-8d5e-6f708192a3b4";
 const SWEEP_ITEM: InboxItem = { ...item(9, "Quarantine the flaky test?", SWEEP_AGENT, MINUTE) };
 
-const HOLDING: Pick<TasksControl, "inbox" | "inboxTasks"> = {
-  inbox: [{ taskId: RETRIES.id, items: [waitingOf(RETRY_429), waitingOf(ROLLOUT)] }],
-  inboxTasks: [{ taskId: RETRIES.id, items: 2, updatedAt: RETRY_429.updatedAt }],
+/** Main's read of the inbox: the two questions waiting on `RETRIES`. */
+const HOLDING: Partial<AppInboxSlice> = {
+  waiting: [{ taskId: RETRIES.id, items: [waitingOf(RETRY_429), waitingOf(ROLLOUT)] }],
+  tasks: [{ taskId: RETRIES.id, items: 2, updatedAt: RETRY_429.updatedAt }],
 };
+
+/** Main's read of the inbox the next mount hands the window. */
+let inboxRead: Partial<AppInboxSlice> = HOLDING;
 
 let root: Root | undefined;
 /** Whether the Inbox's reads are refused, as a read that failed is. */
@@ -273,6 +279,7 @@ let answerMembers: () => void = () => undefined;
 let copied: string[] = [];
 
 beforeEach(() => {
+  inboxRead = HOLDING;
   inboxRefused = false;
   automationsRefused = false;
   inboxHeld = false;
@@ -368,6 +375,7 @@ function mountWith(
   away?: { label: string; onPress: () => void },
 ) {
   const opened: Opened = { tasks: [], agents: [], settings: [] };
+  handInbox(inboxRead);
   const reads = handHostReads({ items: feedNow() });
   // Note that the workspace's automations are laid as the page holds them, unless the test holds or refuses them.
   holdAutomations(reads.deliverAutomations, {
@@ -383,8 +391,7 @@ function mountWith(
       me: DEAN.userId,
       workspace: { ...ACME, memberCount },
       tasks: TASKS,
-      listed: { tasks: TASKS, ...HOLDING },
-      ...HOLDING,
+      listed: { tasks: TASKS },
       onSelect: (taskId) => opened.tasks.push(taskId),
       onShowAgent: (taskId, agentId) => opened.agents.push([taskId, agentId]),
       ...overrides,
@@ -592,7 +599,7 @@ test("an agent's row says its failure at its end and hangs the agent's card whil
   const broken = agent(9, "Flaky retry", CHARLES, AGENT_STATUS.FAILED, 5 * MINUTE);
   const failing = task(9, "Retry flake hunt", CHARLES, 5 * MINUTE, [broken]);
   const { page } = mountWith(
-    { tasks: [...TASKS, failing], listed: { tasks: [...TASKS, failing], ...HOLDING } },
+    { tasks: [...TASKS, failing], listed: { tasks: [...TASKS, failing] } },
     CHARLES.userId,
   );
   await settle();
@@ -627,7 +634,7 @@ test("someone who left whom only the place that opened the page names keeps that
 });
 
 test("the reader's own page lists no question of an agent with no task, whose starter nobody names", async () => {
-  handInboxTaskless([
+  const taskless = [
     {
       id: SWEEP_ITEM.id,
       agentId: SWEEP_AGENT,
@@ -641,7 +648,8 @@ test("the reader's own page lists no question of an agent with no task, whose st
       repository: "acme/relay",
       workspaceId: ACME.id,
     },
-  ]);
+  ];
+  inboxRead = { ...HOLDING, taskless, agents: agentHoldingsOf(taskless) };
   const { page } = mountWith({});
   await settle();
 
@@ -668,10 +676,7 @@ test("a person's tasks assigned to them stand above those they created, a task b
   );
   const own = task(11, "Charles's own retries", CHARLES, 60 * MINUTE, [], CHARLES);
   const listed = [...TASKS, ...handed, own];
-  const { page } = mountWith(
-    { tasks: listed, listed: { tasks: listed, ...HOLDING } },
-    CHARLES.userId,
-  );
+  const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
   await settle();
 
   const drawn = sections(page);
@@ -691,10 +696,7 @@ test("a person's tasks assigned to them stand above those they created, a task b
 test("a person's task is the Tasks page's row: its status before its name, one from before statuses under Todo, and its card hung beside it while rested on", async () => {
   const started = { ...DASHBOARD, status: TASK_STATUS.IN_PROGRESS };
   const listed = [RETRIES, CACHE, started, SHIM];
-  const { page } = mountWith(
-    { tasks: listed, listed: { tasks: listed, ...HOLDING } },
-    CHARLES.userId,
-  );
+  const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
   await settle();
   const row = (name: string) =>
     [...page.querySelectorAll('section[aria-label="Created"] li')].find((each) =>
@@ -1077,7 +1079,7 @@ test("a task no longer theirs slides out of its section, drawn on out of reach u
   await settle();
 
   const left = TASKS.filter((each) => each.id !== DASHBOARD.id);
-  redraw({ tasks: left, listed: { tasks: left, ...HOLDING } });
+  redraw({ tasks: left, listed: { tasks: left } });
   const leaving = page.querySelector(`[data-motion-key="${DASHBOARD.id}"]`);
   assert.equal(leaving?.hasAttribute("data-leaving"), true, "drawn on while it goes");
   assert.equal(leaving?.hasAttribute("inert"), true, "out of reach");

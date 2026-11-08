@@ -167,7 +167,19 @@ async function inbox(options: {
       : [waitingSweep(options.sweep.item, options.sweep.workspaceId)];
   const state = {
     ...signedIn,
-    inbox: { ...signedIn.inbox, taskless, agents: agentHoldingsOf(taskless) },
+    inbox: {
+      ...signedIn.inbox,
+      waiting:
+        options.taskItems.length === 0
+          ? []
+          : [{ taskId: TASK.id, items: options.taskItems.map(waitingOf) }],
+      tasks:
+        options.taskItems.length === 0
+          ? []
+          : [{ taskId: TASK.id, items: options.taskItems.length, updatedAt: 2_000 }],
+      taskless,
+      agents: agentHoldingsOf(taskless),
+    },
     tasks: {
       ...IDLE_TASKS_VIEW,
       tasks: [TASK],
@@ -212,18 +224,7 @@ async function inbox(options: {
         : { agentId: sweep.item.agentId, itemId: sweep.item.id };
   function Page() {
     return createElement(DesktopInbox, {
-      tasks: tasksControl({
-        workspace: options.listed,
-        tasks: [TASK],
-        inbox:
-          options.taskItems.length === 0
-            ? []
-            : [{ taskId: TASK.id, items: options.taskItems.map(waitingOf) }],
-        inboxTasks:
-          options.taskItems.length === 0
-            ? []
-            : [{ taskId: TASK.id, items: options.taskItems.length, updatedAt: 2_000 }],
-      }),
+      tasks: tasksControl({ workspace: options.listed, tasks: [TASK] }),
     });
   }
   const container = document.body.appendChild(document.createElement("div"));
