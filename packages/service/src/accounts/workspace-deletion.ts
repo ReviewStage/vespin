@@ -2,32 +2,70 @@
  * workspace-deletion.ts -- what a workspace's deletion does of its own around Better Auth's `deleteOrganization`, which its hooks run (`deletion-hooks.ts`).
  *
  * Better Auth deletes the workspace's row, every row of the workspace
- * cascading with it, its agents among them. An agent's conversation names
- * the account that ran it rather than the workspace, so it outlasts the
- * agent: before the delete the conversations of every agent of the
- * workspace are read, and after it they are deleted, as a deleted task's
- * are (`conversation-delete.ts`), their sandboxes' snapshots left to expire
- * on Vercel's own schedule. Nothing is deleted before the workspace,
- * because a delete refused after that would leave a standing workspace's
- * agents with their transcripts gone.
+ * cascading with it, its agents and automations among them. What outlives
+ * those rows is settled here, read before the delete and settled after it:
+ * an agent's conversation names the account that ran it rather than the
+ * workspace, so the conversations of every agent of the workspace are
+ * deleted, as a deleted task's are (`conversation-delete.ts`); each agent's
+ * sandboxes are deleted with the drives they own, as an archive deletes
+ * them (`session-sandboxes.ts`'s `deletedWithWorkspace`), past the answer;
+ * and each scheduled automation's schedule is deleted at Vercel, as
+ * deleting the automation does (`automation-writes.ts`'s
+ * `removeAutomationAs`), since nothing else would stop it firing. Nothing
+ * is deleted before the workspace, because a delete refused after that
+ * would leave a standing workspace's agents with their transcripts gone,
+ * and a failure after it is logged, since the workspace is already gone.
  */
 
+import { workspaceScheduledAutomations } from "@repo/database/models/automation-store";
 import { deleteConversations } from "@repo/database/models/conversation-delete";
-import { workspaceConversationIds } from "@repo/database/models/workspace-store";
+import { workspaceAgentConversations } from "@repo/database/models/workspace-store";
 import { Effect } from "effect";
+import { deletedWithWorkspace, deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
+import { AutomationCadence } from "../automations/automation-cadence.js";
 
 /** What the deletion read before Better Auth deleted the workspace, which it settles after. */
 export interface WorkspaceDeletionPending {
   readonly conversationIds: readonly string[];
+  /** The sessions the workspace's agents ran in, whose sandboxes are deleted. */
+  readonly sessionIds: readonly string[];
+  /** The scheduled automations, named as their schedules are kept at Vercel. */
+  readonly schedules: readonly { readonly id: string; readonly organizationId: string }[];
 }
 
 /** What the deletion reads before Better Auth deletes the workspace; a store that cannot be read refuses the delete. */
 export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWorkspaceDeletion")(
   function* (organizationId: string) {
-    const conversationIds = yield* workspaceConversationIds(organizationId);
-    return { conversationIds } satisfies WorkspaceDeletionPending;
+    const agents = yield* workspaceAgentConversations(organizationId);
+    const schedules = yield* workspaceScheduledAutomations(organizationId);
+    return {
+      conversationIds: agents.map((agent) => agent.conversationId),
+      sessionIds: agents.flatMap((agent) => (agent.sessionId === null ? [] : [agent.sessionId])),
+      schedules,
+    } satisfies WorkspaceDeletionPending;
   },
 );
+
+/** Each schedule deleted at Vercel, one that stands logged as `removeAutomationAs` logs it. */
+const forgetSchedules = Effect.fnUntraced(function* (
+  schedules: WorkspaceDeletionPending["schedules"],
+) {
+  const cadence = yield* AutomationCadence;
+  yield* Effect.forEach(
+    schedules,
+    (schedule) =>
+      cadence
+        .forget(schedule)
+        .pipe(
+          Effect.catch((failure) =>
+            Effect.logWarning(
+              `a deleted automation's schedule stands: ${failure.code ?? "unreachable"}`,
+            ),
+          ),
+        ),
+    { discard: true },
+  );
+});
 
 /** What the deletion settles once Better Auth has deleted the workspace, a failure logged since the workspace is already gone. */
 export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorkspaceDeletion")(
@@ -40,5 +78,7 @@ export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorksp
         ),
       ),
     );
+    yield* deletedWithWorkspace(deploymentSandboxDeletes, pending.sessionIds);
+    yield* forgetSchedules(pending.schedules);
   },
 );

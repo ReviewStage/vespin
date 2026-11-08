@@ -15,8 +15,8 @@
  * revoked at Vercel Connect, as a Disconnect revokes one, a revoke that fails
  * logged by its word. A sandbox left behind expires with its snapshot
  * (`@repo/sandbox`'s retention), and a deleted workspace's agents'
- * conversations are deleted by its own delete's hooks
- * (`workspace-deletion.ts`).
+ * conversations and sandboxes, and its automations' schedules, are deleted
+ * by its own delete's hooks (`workspace-deletion.ts`).
  */
 
 import { standingSessionsOf } from "@repo/database/models/recorded-session";

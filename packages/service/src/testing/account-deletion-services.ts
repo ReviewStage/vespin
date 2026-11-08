@@ -4,10 +4,12 @@
  * The auth route hands each request's services to Better Auth's deletion
  * hooks (`accounts/deletion-hooks.ts`), so a test that mounts the
  * route provides them: an environment with no analytics key, so no person is
- * asked to be erased; a Connect that revokes any grant; and no network, so
- * nothing leaves the test.
+ * asked to be erased; a Connect that revokes any grant; sandboxes kept in
+ * memory, holding none, for a deleted workspace's agents' to be looked for
+ * in; and no network, so nothing leaves the test.
  */
 
+import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer } from "effect";
 import { HostedEnvironment } from "../environment.js";
@@ -28,5 +30,6 @@ export const accountDeletionTestServices = Layer.mergeAll(
     previewApiKeys: {},
   }),
   integrationConnectOf(() => ({ ...CONNECTOR_ASKED_NOTHING, revoke: () => Effect.void })),
+  memorySandbox().layer,
   noNetwork,
 );

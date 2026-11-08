@@ -8,9 +8,16 @@ import {
 import { workspaceSeams } from "@repo/database/models/workspace-seams";
 import { agentTable } from "@repo/database/schemas/agent";
 import { organization as organizationTable, session, user } from "@repo/database/schemas/auth";
+import { automation } from "@repo/database/schemas/automation";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { conversations } from "@repo/database/schemas/storage";
 import { openMigratedPglite, openTaskAgent, sqlClientOverPglite } from "@repo/database/testing";
+import {
+  AUTOMATION_ACTION,
+  AUTOMATION_DEFAULT_GUARDS,
+  AUTOMATION_TRIGGER,
+} from "@repo/features/automation-wire";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
@@ -19,6 +26,8 @@ import { Effect, Layer, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { accountDeletionSteps, workspaceDeletionSteps } from "../accounts/deletion-hooks.js";
+import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
+import { AutomationCadence } from "../automations/automation-cadence.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { accountDeletionTestServices } from "../testing/account-deletion-services.js";
 import { authApp } from "./auth-app.js";
@@ -68,10 +77,18 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
         }),
       ],
     });
+    const sandboxes = memorySandbox();
+    const forgotten: string[] = [];
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       accountDeletionTestServices,
+      sandboxes.layer,
+      Layer.succeed(AutomationCadence, {
+        keep: () => Effect.void,
+        forget: (scheduled) => Effect.sync(() => void forgotten.push(scheduled.id)),
+        publish: () => Effect.void,
+      }),
     );
     const { handler, dispose } = HttpRouter.toWebHandler(
       authApp((request) => auth.handler(request), workspaceSeams(auth.api)).pipe(
@@ -110,10 +127,10 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
         const { id } = decodeSignedUp(yield* Effect.promise(() => answered.json())).user;
         return { id, cookie };
       });
-    return { auth, post, signUp };
+    return { auth, post, signUp, sandboxes, forgotten };
   });
 
-/** A workspace of Ada's alone, holding a GitHub connection and an agent a member who has since left ran, and one she shares with Grace. */
+/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox, and that member's scheduled automation, and one she shares with Grace. */
 const openWorkspaces = (
   route: Effect.Success<ReturnType<typeof openAuthRoute>>,
   ada: string,
@@ -150,11 +167,38 @@ const openWorkspaces = (
       .from(agentTable)
       .where(eq(agentTable.id, agentId));
     assert.ok(agent);
-    return { solo: solo.id, shared: shared.id, leftBehind: agent.conversationId };
+    yield* db
+      .update(conversations)
+      .set({ runtimeSessionId: "session-of-grace" })
+      .where(eq(conversations.id, agent.conversationId));
+    route.sandboxes.stand({
+      name: "sandbox-of-grace",
+      tags: { [SESSION_TAG]: "session-of-grace" },
+    });
+    const [scheduled] = yield* db
+      .insert(automation)
+      .values({
+        userId: grace,
+        organizationId: solo.id,
+        name: "Every morning",
+        enabled: true,
+        triggerKind: AUTOMATION_TRIGGER.SCHEDULE,
+        trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * *", timezone: "UTC" },
+        action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage the issues" },
+        guards: AUTOMATION_DEFAULT_GUARDS,
+      })
+      .returning({ id: automation.id });
+    assert.ok(scheduled);
+    return {
+      solo: solo.id,
+      shared: shared.id,
+      leftBehind: agent.conversationId,
+      schedule: scheduled.id,
+    };
   });
 
 it.effect(
-  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations it left, and leaves a workspace others share",
+  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left and its automations' schedules, and leaves a workspace others share",
   () =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
@@ -165,7 +209,7 @@ it.effect(
         const route = yield* openAuthRoute(client);
         const ada = yield* route.signUp("ada");
         const grace = yield* route.signUp("grace");
-        const { shared, leftBehind } = yield* openWorkspaces(route, ada.id, grace.id);
+        const { shared, leftBehind, schedule } = yield* openWorkspaces(route, ada.id, grace.id);
 
         const deleted = yield* route.post("delete-user", {}, ada.cookie);
 
@@ -185,6 +229,8 @@ it.effect(
             .where(eq(conversations.id, leftBehind)),
           [],
         );
+        assert.deepEqual(route.sandboxes.state.deleted, ["sandbox-of-grace"]);
+        assert.deepEqual(route.forgotten, [schedule]);
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
 );
@@ -231,6 +277,38 @@ it.effect(
             .select({ id: conversations.id })
             .from(conversations)
             .where(eq(conversations.id, leftBehind))).length,
+          1,
+        );
+      }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
+    }),
+);
+
+it.effect(
+  "the organization plugin's own delete stays shut over HTTP, so a workspace is deleted only with its last member's account",
+  () =>
+    Effect.gen(function* () {
+      const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
+        Effect.promise(() => opened.close()),
+      );
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        const route = yield* openAuthRoute(client);
+        const ada = yield* route.signUp("ada");
+        const grace = yield* route.signUp("grace");
+        const { solo } = yield* openWorkspaces(route, ada.id, grace.id);
+
+        const refused = yield* route.post(
+          "organization/delete",
+          { organizationId: solo },
+          ada.cookie,
+        );
+
+        assert.equal(refused.status, HOSTED_HTTP_STATUS.NOT_FOUND);
+        assert.equal(
+          (yield* db
+            .select({ id: organizationTable.id })
+            .from(organizationTable)
+            .where(eq(organizationTable.id, solo))).length,
           1,
         );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);

@@ -1,5 +1,5 @@
 /**
- * session-sandboxes.ts -- a session's sandboxes deleted when its agent is archived.
+ * session-sandboxes.ts -- a session's sandboxes deleted when its agent is archived, or its workspace deleted.
  *
  * Whatever shows a session's sandbox in use touches it (`@repo/sandbox`'s
  * `touch`); what is here deletes it, and never resumes one stopped.
@@ -14,7 +14,11 @@
  * as well, so an unarchive opens a sandbox afresh, its checkout made from
  * its repository's base drive and its pushed branch, as a sandbox whose
  * snapshot lapsed is; a local agent's archive queues its device a discard
- * line there too (`device-discard.ts`). Nothing here reads a sandbox's files
+ * line there too (`device-discard.ts`). A deleted workspace's agents'
+ * sandboxes are deleted the same way (`deletedWithWorkspace`), from the
+ * sessions its delete read while they stood; a local agent's device is told
+ * nothing there, since its discard line is queued under the agent's rows,
+ * which the delete has taken. Nothing here reads a sandbox's files
  * or a word of any account: what is asked of the sandboxes is a tag and a
  * name, and what is logged of a failure is the sandbox's own words.
  */
@@ -35,7 +39,7 @@ const ARCHIVE_DELETE = {
    * hold the function's instance for the rest of its life.
    */
   TIMEOUT: Duration.seconds(15),
-  /** How many agents of an archived task are deleted at once. */
+  /** How many agents of an archived task, or of a deleted workspace, are deleted at once. */
   CONCURRENCY: 5,
 } as const;
 
@@ -167,5 +171,36 @@ export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
       ],
       { concurrency: 2, discard: true },
     ),
+  );
+});
+
+/**
+ * The sandboxes of a deleted workspace's agents deleted, with the drives
+ * they own, as an archive's are, by the sessions the workspace's delete read
+ * while its agents stood. Unlike `deletedInBackground`, nothing is read
+ * again first, since the agents are gone and none can resume its sandbox.
+ * The deletes are handed to the reach to keep the function awake for, so
+ * this returns without waiting on them; one that fails or runs past its
+ * bound is logged and left, its sandbox stopping on its own once idle.
+ */
+export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
+  reach: SandboxDeleteReach,
+  sessionIds: readonly string[],
+) {
+  const deleteOne = (sessionId: string) =>
+    SessionSandboxes.use((sandboxes) => sandboxes.deleteFor(sessionId)).pipe(
+      Effect.provide(reach.sessionSandboxes),
+      Effect.timeout(ARCHIVE_DELETE.TIMEOUT),
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `a deleted workspace's agent's sandbox was not deleted: ${describeDeleteFailure(failure)}`,
+        ),
+      ),
+    );
+  yield* reach.keepAwake(
+    Effect.forEach(sessionIds, deleteOne, {
+      concurrency: ARCHIVE_DELETE.CONCURRENCY,
+      discard: true,
+    }),
   );
 });
