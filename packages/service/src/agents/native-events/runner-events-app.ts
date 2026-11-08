@@ -37,7 +37,7 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
-import { SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   Cause,
@@ -645,6 +645,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       held.launch,
       now,
     );
+    const heldTurnId = state.turn?.id;
     // The next turn the runner opens is the one its line queued, where one stands queued.
     let queuedTurnId = Option.getOrUndefined(yield* queuedTurnOf(conversationId));
     const { launch } = held;
@@ -715,6 +716,15 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       state.turn !== undefined &&
       (state.keptAliveAt === undefined ||
         now - state.keptAliveAt >= Duration.toMillis(SANDBOX_TOUCH_EVERY));
+    // A runner silent past the sandbox's idle window through a turn that ran all along left the sandbox to
+    // stop under it, so the gap is said: one ending as the sandbox stopped tells that the runner went quiet.
+    const silent = state.keptAliveAt === undefined ? 0 : now - state.keptAliveAt;
+    const sameTurn = heldTurnId !== undefined && state.turn?.id === heldTurnId;
+    if (keepsAlive && sameTurn && silent > Duration.toMillis(SANDBOX_IDLE)) {
+      yield* Effect.logWarning(
+        `runner-events: a runner posted nothing for ${Math.round(silent / 1000)}s while its turn ran`,
+      ).pipe(Effect.annotateLogs({ agentId: applying.agentId, conversationId }));
+    }
     if (keepsAlive) state = { ...state, keptAliveAt: now };
     const result = {
       applied: { applied: events.length, sequence: last ?? held.sequence } satisfies Applied,
