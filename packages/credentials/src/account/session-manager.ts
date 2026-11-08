@@ -811,7 +811,8 @@ export class AccountSessionManager {
       const standingOf = (failure: AccountClientFailure) =>
         accountNotFound(failure) ? ACCOUNT_STANDING.GONE : ACCOUNT_STANDING.UNKNOWN;
       const held = yield* this.#options.store.readAccount();
-      if (held === undefined) return ACCOUNT_STANDING.UNKNOWN;
+      // Note that a held account other than the one the deletion was asked for says nothing of it.
+      if (held === undefined || !sameAccount(stored, held)) return ACCOUNT_STANDING.UNKNOWN;
       const read = yield* Effect.result(client.userInfo(held.accessToken, held.provider));
       if (Result.isSuccess(read)) return identityStanding(stored, read.success);
       if (!accessTokenNeedsRefresh(read.failure)) return standingOf(read.failure);
