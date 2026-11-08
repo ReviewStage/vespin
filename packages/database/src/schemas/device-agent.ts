@@ -18,8 +18,8 @@ import { device } from "./device.js";
  * to, and is claimed once, by that Mac, under that account
  * (`../models/device-agent-store.ts`). A row stands only while its work does:
  * the expiry withdraws what no Mac claimed in time, and a request's caller
- * withdraws it once it read the answer. Every row goes with its agent, its
- * Mac, and its account alike.
+ * withdraws it once it read the answer. Every row goes with its Mac and its
+ * account, and a request with its agent too.
  */
 
 /**
@@ -43,14 +43,18 @@ import { device } from "./device.js";
  * which the agent's transcript words until its harness's first event; null
  * before the Mac reports one, from a Mac that reports none, and for every
  * other kind.
+ *
+ * A line names its agent by id alone, never a foreign key, so it outlives
+ * the agent's row: a discard queued for an agent its workspace's delete
+ * took still reaches its Mac (`../models/device-agent-store.ts`), which
+ * reads no other line of an agent gone, and the expiry withdraws what is
+ * left.
  */
 export const deviceAgentLine = pgTable(
   "device_agent_line",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id")
-      .notNull()
-      .references(() => agentTable.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id").notNull(),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

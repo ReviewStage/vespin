@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { pinnedPictureUrl } from "@repo/features/account-picture";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
 import {
@@ -307,8 +308,11 @@ const findMemberWorkspaceIds = SqlSchema.findAll({
 });
 
 const WorkspaceAgentConversationSchema = Schema.Struct({
+  agentId: Schema.String,
+  userId: Schema.String,
   conversationId: Schema.String,
   sessionId: Schema.NullOr(Schema.String),
+  deviceId: Schema.NullOr(Schema.String),
 });
 
 const findWorkspaceAgentConversations = SqlSchema.findAll({
@@ -318,8 +322,13 @@ const findWorkspaceAgentConversations = SqlSchema.findAll({
     Database.use((db) =>
       db
         .select({
+          agentId: agentTable.id,
+          userId: agentTable.userId,
           conversationId: agentTable.conversationId,
           sessionId: conversations.runtimeSessionId,
+          deviceId: sql<
+            string | null
+          >`case when ${agentTable.machine} = ${AGENT_MACHINE.DEVICE} then ${agentTable.deviceId} end`,
         })
         .from(agentTable)
         .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -840,7 +849,7 @@ export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonl
   );
 }
 
-/** An agent's conversation as a workspace's delete reads it: its id, and the runtime session it last ran, where it ran one. */
+/** An agent's conversation as a workspace's delete reads it: its id, the runtime session it last ran, where it ran one, and the agent, its starter, and the device it was pinned to, where it is a local agent pinned to one. */
 export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema.Type;
 
 /**
@@ -848,7 +857,8 @@ export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema
  * the session it runs in. A conversation names the account that ran it
  * rather than the workspace, so a workspace's delete reads these while its
  * agents stand and, once they are gone, deletes the conversations, as a
- * task's delete does its own, and the sessions' sandboxes.
+ * task's delete does its own, the sessions' sandboxes, and the local
+ * agents' folders on their devices.
  */
 export function workspaceAgentConversations(
   organizationId: string,

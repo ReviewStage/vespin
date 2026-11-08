@@ -9,6 +9,9 @@
  * deleted, as a deleted task's are (`conversation-delete.ts`); each agent's
  * sandboxes are deleted with the drives they own, as an archive deletes
  * them (`session-sandboxes.ts`'s `deletedWithWorkspace`), past the answer;
+ * each local agent's device is told to stop its runner and remove its
+ * folder, as an archive tells it (`device-discard.ts`'s
+ * `discardedWithWorkspace`), by a line that outlives the agent's row;
  * and each scheduled automation's schedule is deleted at Vercel, as
  * deleting the automation does (`automation-writes.ts`'s
  * `removeAutomationAs`), since nothing else would stop it firing. Nothing
@@ -21,6 +24,7 @@ import { workspaceScheduledAutomations } from "@repo/database/models/automation-
 import { deleteConversations } from "@repo/database/models/conversation-delete";
 import { workspaceAgentConversations } from "@repo/database/models/workspace-store";
 import { Effect } from "effect";
+import { discardedWithWorkspace } from "../agents/device-discard.js";
 import { deletedWithWorkspace, deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
 import { schedulesForgotten } from "../automations/automation-cadence.js";
 
@@ -29,6 +33,12 @@ export interface WorkspaceDeletionPending {
   readonly conversationIds: readonly string[];
   /** The sessions the workspace's agents ran in, whose sandboxes are deleted. */
   readonly sessionIds: readonly string[];
+  /** The local agents, each by the device it was pinned to, which is told to discard it. */
+  readonly devices: readonly {
+    readonly userId: string;
+    readonly agentId: string;
+    readonly deviceId: string;
+  }[];
   /** The scheduled automations, named as their schedules are kept at Vercel. */
   readonly schedules: readonly { readonly id: string; readonly organizationId: string }[];
 }
@@ -41,6 +51,9 @@ export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWork
     return {
       conversationIds: agents.map((agent) => agent.conversationId),
       sessionIds: agents.flatMap((agent) => (agent.sessionId === null ? [] : [agent.sessionId])),
+      devices: agents.flatMap(({ userId, agentId, deviceId }) =>
+        deviceId === null ? [] : [{ userId, agentId, deviceId }],
+      ),
       schedules,
     } satisfies WorkspaceDeletionPending;
   },
@@ -58,6 +71,7 @@ export const afterWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/afterWorksp
       ),
     );
     yield* deletedWithWorkspace(deploymentSandboxDeletes, pending.sessionIds);
+    yield* discardedWithWorkspace(pending.devices);
     yield* schedulesForgotten(pending.schedules);
   },
 );

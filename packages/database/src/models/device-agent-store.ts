@@ -29,6 +29,12 @@
  * runner is. That is what keeps an agent's lines committed in the order of
  * their `seq`: the sequence is shared by every agent and holds no lock, so
  * two lines queued at once outside the lease could commit out of order.
+ *
+ * A line names its agent by id alone and outlives the agent's row
+ * (`../schemas/device-agent.ts`), so a Mac reads, claims, and is held to a
+ * line of an agent gone only where it is a discard: the one line a deleted
+ * workspace's agent is queued after its row is gone, with no lease, since
+ * nothing else can be queued for it then.
  */
 
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
@@ -144,6 +150,12 @@ function pinnedAgent(userId: string, agentId: string) {
     eq(device.userId, userId),
   );
 }
+
+/** The line's agent still stands. */
+const lineAgentStands = sql`exists (select 1 from ${agentTable} where ${agentTable.id} = ${deviceAgentLine.agentId})`;
+
+/** A line its Mac may take: a discard whatever stands, and any other only while its agent stands. */
+const lineTakeable = or(eq(deviceAgentLine.kind, DEVICE_AGENT_LINE_KIND.DISCARD), lineAgentStands);
 
 /** A local agent as its machine finds it: its starter, and the Mac it is pinned to, none once that Mac is gone. */
 const DeviceAgentPinSchema = Schema.Struct({
@@ -386,6 +398,44 @@ const insertLine = SqlSchema.findAll({
     ),
 });
 
+/** A discard line for an agent whose row is gone, to the account's Mac it was pinned to, where that Mac registered `discard`. */
+const insertGoneDiscard = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    deviceId: Schema.String,
+    now: Schema.Date,
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, agentId, deviceId, now }) =>
+    Database.use((db) =>
+      db
+        .insert(deviceAgentLine)
+        .select((qb) =>
+          qb
+            .select({
+              id: sql<string>`gen_random_uuid()`.as("id"),
+              agentId: sql<string>`${agentId}::uuid`.as("agent_id"),
+              userId: sql<string>`${device.userId}`.as("user_id"),
+              deviceId: sql<string>`${device.id}`.as("device_id"),
+              kind: sql<DeviceAgentLineKind>`${DEVICE_AGENT_LINE_KIND.DISCARD}`.as("kind"),
+              payload: sql<DeviceAgentObject>`'{}'::jsonb`.as("payload"),
+              sealedSecrets: sql<string | null>`null::text`.as("sealed_secrets"),
+              createdAt: sql<Date>`${now}::timestamptz`.as("created_at"),
+            })
+            .from(device)
+            .where(
+              and(
+                eq(device.id, deviceId),
+                eq(device.userId, userId),
+                arrayContains(device.capabilities, [DEVICE_CAPABILITY.DISCARD]),
+              ),
+            ),
+        )
+        .returning({ id: deviceAgentLine.id }),
+    ),
+});
+
 /**
  * The lines waiting for the Mac, first to last, as far as their payloads fit
  * `DEVICE_AGENT_BOUNDS.MAX_LINES_READ_BYTES`, and always the first. Note that
@@ -418,6 +468,7 @@ const findWaitingLines = SqlSchema.findAll({
             eq(deviceAgentLine.userId, userId),
             eq(deviceAgentLine.deviceId, deviceId),
             isNull(deviceAgentLine.claimedAt),
+            lineTakeable,
           ),
         )
         .as("waiting");
@@ -457,6 +508,7 @@ const claimLine = SqlSchema.findOneOption({
             eq(deviceAgentLine.userId, userId),
             eq(deviceAgentLine.deviceId, deviceId),
             isNull(deviceAgentLine.claimedAt),
+            lineTakeable,
           ),
         )
         .returning({
@@ -755,6 +807,7 @@ const findOpenLaunches = SqlSchema.findAll({
             eq(deviceAgentLine.deviceId, deviceId),
             eq(deviceAgentLine.kind, DEVICE_AGENT_LINE_KIND.LAUNCH),
             isNull(deviceAgentLine.settledAt),
+            lineAgentStands,
             sql`not exists (${db
               .select({ one: sql`1` })
               .from(stopLine)
@@ -908,6 +961,27 @@ export function queueDeviceAgentLine(
 }
 
 /**
+ * Queues a discard line for the account's local agent whose row is already
+ * gone, as a deleted workspace's agents are, to the Mac it was pinned to;
+ * whether it was queued, which it is not where the account no longer holds
+ * that Mac or the Mac never registered `discard`. Note that no runner lease
+ * is taken, unlike for every other line, because the lease goes with the
+ * agent's row, and no line can be queued after this one, since every other
+ * queue selects that row.
+ */
+export function queueGoneDeviceAgentDiscard(
+  userId: string,
+  agent: { readonly agentId: string; readonly deviceId: string },
+): DeviceAgentEffect<boolean> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    Effect.map(
+      insertGoneDiscard({ userId, agentId: agent.agentId, deviceId: agent.deviceId, now }),
+      (rows) => rows.length > 0,
+    ),
+  );
+}
+
+/**
  * The local agent whose conversation runs in the session named, its starter
  * and its Mac; nothing where no agent on a Mac runs in it. Read with no
  * account in hand, because a machine is asked by the session alone; only
@@ -969,7 +1043,7 @@ export function deviceAgentLineStanding(
   return findLineStanding({ userId, id });
 }
 
-/** The lines waiting for the account's Mac, in the order they were queued, without their secrets, as far as one read's budget goes. */
+/** The lines waiting for the account's Mac, in the order they were queued, without their secrets, as far as one read's budget goes; none of an agent gone but a discard. */
 export function deviceAgentLinesWaiting(
   userId: string,
   deviceId: string,
@@ -983,7 +1057,7 @@ export function deviceAgentLinesWaiting(
  * in the same statement. The same claim asked again under the same token is
  * answered the line again, without its secrets, until the line is settled.
  * None where it is not that Mac's, another claim took it first, it was
- * settled, or the expiry withdrew it.
+ * settled, the expiry withdrew it, or its agent is gone and it is no discard.
  *
  * Note that the claim asked again is a read beside the claim rather than a
  * wider claim, because only the statement that takes a waiting line ever
@@ -1056,9 +1130,10 @@ export function deviceAgentLineSettlement(
 
 /**
  * The ids of the account's launch lines to the device given that are still
- * open, claimed or not, with no stop queued after them, oldest first: the
- * runs the service holds the device to, which its beat answers so it stops
- * what it holds no longer and settles what it runs nothing for.
+ * open, claimed or not, with no stop queued after them and their agent still
+ * standing, oldest first: the runs the service holds the device to, which
+ * its beat answers so it stops what it holds no longer and settles what it
+ * runs nothing for.
  */
 export function openDeviceAgentLaunches(
   userId: string,

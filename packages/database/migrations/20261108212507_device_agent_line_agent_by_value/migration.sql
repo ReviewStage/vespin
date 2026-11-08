@@ -1,0 +1,1 @@
+ALTER TABLE "device_agent_line" DROP CONSTRAINT "device_agent_line_agent_id_agent_id_fkey";
