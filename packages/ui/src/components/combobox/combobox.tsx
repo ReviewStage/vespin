@@ -2,6 +2,7 @@ import type { ComponentPropsWithRef, ReactNode, Ref, RefObject } from "react";
 import { useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { cn } from "../../cn.js";
 import { CheckIcon, ChevronRightIcon } from "../../face/glyphs.js";
+import { offsetWithin } from "../../offset-within.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
@@ -425,12 +426,20 @@ export function ComboboxList({
       bringIn(at);
       return;
     }
+    // Note that the row is placed within its group's run, which places it
+    // in turn, so its place is read up to the list rather than off the row
+    // alone, which would count a later group's rows from that group's top.
+    const rowTop = offsetWithin(row, box);
+    // Note that a group's first row brings its heading in with it, so the keys never leave a row named by no heading in view.
+    const group = row.getAttribute("aria-posinset") === "1" ? row.closest('[role="group"]') : null;
+    const headTop =
+      group instanceof HTMLElement && box.contains(group) ? offsetWithin(group, box) : rowTop;
     // Note that the row is brought clear of a faded edge too, which the list's scroll padding is as deep as.
     const clear = getComputedStyle(box);
-    const top = row.offsetTop - (Number.parseFloat(clear.scrollPaddingTop) || 0);
+    const top = headTop - (Number.parseFloat(clear.scrollPaddingTop) || 0);
     if (top < box.scrollTop) box.scrollTop = top;
     const bottom =
-      row.offsetTop +
+      rowTop +
       row.offsetHeight +
       (Number.parseFloat(clear.scrollPaddingBottom) || 0) -
       box.clientHeight;

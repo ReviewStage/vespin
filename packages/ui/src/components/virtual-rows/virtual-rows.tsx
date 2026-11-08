@@ -26,6 +26,7 @@ import {
   useState,
 } from "react";
 import { joinRefs } from "../../join-refs.js";
+import { offsetWithin } from "../../offset-within.js";
 import { motionRows } from "../list-motion/list-motion.js";
 import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/roving-keys.js";
 
@@ -201,38 +202,6 @@ export function sizeWhileShown<Item extends Element>(
 /** The room a run takes its view to have before its scroller is measured: the window's, which no view of it outgrows. */
 function windowRect(): Rect {
   return { width: window.innerWidth, height: window.innerHeight };
-}
-
-/** How far down `element` stands from the box `ancestor` places it from, through every box placing it on the way; from the page where none does. */
-function offsetTo(element: HTMLElement, ancestor: Element | null): number {
-  let top = 0;
-  let at: HTMLElement = element;
-  for (;;) {
-    top += at.offsetTop;
-    const parent = at.offsetParent;
-    if (!(parent instanceof HTMLElement) || parent === ancestor) return top;
-    top += parent.clientTop;
-    at = parent;
-  }
-}
-
-/**
- * How far down the scroller's content `block` starts, which the virtualizer
- * counts its rows from: read from where each is laid out, which no scroll
- * or transform moves, through the boxes placing the block up to the first
- * that is the scroller or holds it, the scroller's own place in that box
- * taken off where it is not the scroller. Note that a box placing the block
- * may stand inside the scroller, as a list's own body does around a run of
- * its rows, so the block's own offset alone is not its place.
- */
-function offsetWithin(block: HTMLElement, scroller: HTMLElement): number {
-  let holder = block.offsetParent;
-  while (holder instanceof HTMLElement && holder !== scroller && !holder.contains(scroller)) {
-    holder = holder.offsetParent;
-  }
-  return holder === scroller
-    ? offsetTo(block, scroller)
-    : offsetTo(block, holder) - offsetTo(scroller, holder) - scroller.clientTop;
 }
 
 /** Whether two runs of keys name the same rows in the same order. */
