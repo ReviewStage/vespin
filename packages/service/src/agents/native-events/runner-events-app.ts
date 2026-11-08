@@ -645,13 +645,14 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       held.launch,
       now,
     );
-    // A runner silent past the sandbox's idle window through a turn that ran all along, whether or not
-    // this batch ends it, left the sandbox to stop under it, so the gap is said: one ending as the
-    // sandbox stopped tells that the runner went quiet.
-    const silent = state.keptAliveAt === undefined ? 0 : now - state.keptAliveAt;
-    if (state.turn !== undefined && silent > Duration.toMillis(SANDBOX_IDLE)) {
+    // A sandbox stops its idle window after its last touch, so a turn that ran all along, whether or not
+    // this batch ends it, whose runner left it untouched past that window had it stop under the turn, and
+    // the gap is said. Note that it is measured from the last touch, not the last post, because the touch
+    // is what the stop counts from; one ending as the sandbox stopped tells that the runner went quiet.
+    const untouched = state.keptAliveAt === undefined ? 0 : now - state.keptAliveAt;
+    if (state.turn !== undefined && untouched > Duration.toMillis(SANDBOX_IDLE)) {
       yield* Effect.logWarning(
-        `runner-events: a runner posted nothing for ${Math.round(silent / 1000)}s while its turn ran`,
+        `runner-events: a running turn's sandbox went ${Math.round(untouched / 1000)}s without a touch`,
       ).pipe(Effect.annotateLogs({ agentId: applying.agentId, conversationId }));
     }
     // The next turn the runner opens is the one its line queued, where one stands queued.
