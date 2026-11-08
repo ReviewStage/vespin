@@ -9,7 +9,7 @@
  * Each agent runs in a sandbox of its own, so what the source never
  * committed and pushed would be lost to the agent started from it. As that
  * Start is made, the service reaches the source's sandbox by its
- * session's tag (`../agent-sandbox-open.ts`), wakes it where it stopped, as
+ * session's name (`../agent-sandbox-open.ts`), wakes it where it stopped, as
  * the Terminal tab's resume does, and records its checkout whole: what it
  * committed, what it changed, and every file it made that git does not
  * ignore, as one commit on top of its `HEAD`, or `HEAD` itself where
@@ -42,11 +42,12 @@ import {
   SANDBOX_STATUS,
   Sandbox,
   type SandboxRunning,
+  UP_STATUSES,
 } from "@repo/sandbox";
 import { Duration, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import type { GitHubApp } from "../../github/github-app.js";
-import { SESSION_TAG } from "../agent-sandbox-open.js";
+import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { type RepositoryCredential, sandboxFirewall } from "../sandbox-firewall.js";
 import { CODER } from "./bounds.js";
@@ -168,9 +169,15 @@ function stderrTail(stderr: string): string {
 const copyIn = <R>(ask: SnapshotAsk<R>) =>
   Effect.gen(function* () {
     const sandboxes = yield* Sandbox;
-    const [sandbox] = yield* sandboxes.listTagged(SESSION_TAG, ask.sessionId);
+    const sandbox = yield* agentSandboxOf(sandboxes, ask.sessionId);
     if (sandbox === undefined) {
       return { copied: false, miss: SNAPSHOT_MISS.NO_SANDBOX } as const;
+    }
+    // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; a stopped one with a
+    // snapshot is handed by it instead (`takeover.ts`'s `sourceWorkOf`), and one in any other
+    // state is a miss.
+    if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
+      return { copied: false, miss: SNAPSHOT_MISS.FAILED } as const;
     }
     const running = runningOf(sandbox) ?? (yield* resumedRunning(sandbox.name));
     const owner = { userId: ask.userId, name: sandbox.name, sandboxSessionId: running.running };

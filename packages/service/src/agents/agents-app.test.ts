@@ -559,15 +559,11 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
-      const sandbox = sourceSandbox(
-        checkout,
-        "stopped",
-        snapshotted ? agentSandboxName("wrun_source") : undefined,
-      );
+      const sandbox = sourceSandbox(checkout, "stopped", snapshotted);
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
       );
-      yield* claimRuntimeSession(opened.stored, "wrun_source", new Date());
+      yield* claimRuntimeSession(opened.stored, SOURCE_SANDBOX.SESSION, new Date());
       yield* sourceIdle(opened.stored);
       const continued = Effect.gen(function* () {
         const started = readAnswer(
@@ -648,7 +644,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             .from(agentTable)
             .where(eq(agentTable.id, started.id)),
         );
-        assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName("wrun_source"));
+        assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName(SOURCE_SANDBOX.SESSION));
       }),
   );
 

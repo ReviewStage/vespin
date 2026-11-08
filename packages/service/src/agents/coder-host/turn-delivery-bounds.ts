@@ -26,6 +26,13 @@ export const TURN_DELIVERY = {
   /** How long a delivery that found the agent's runner lease held waits before it comes again: a launch under way holds it for seconds, a sandbox's open for most of a minute. */
   BUSY_AGAIN: Duration.seconds(5),
   /**
+   * How long a runner up has to take a line before its delivery comes again
+   * and launches another in its place: well past a held read's wake and the
+   * batch that posts its ACCEPTED, since a runner takes a message the moment
+   * it reads it, whether or not a turn of its runs.
+   */
+  TAKE_GRACE: Duration.seconds(30),
+  /**
    * How long a publish is waited on before it is given up and said in the
    * log, so a stalled call to the queue never holds the request that
    * published past it; a send answers in milliseconds.

@@ -43,8 +43,9 @@
  * later line from the service (`../coder-host/runner-sessions.ts`), so this machine
  * writes no line to it.
  *
- * The doors read the sandbox carrying the agent's session id as its tag, as
- * every agent's sandbox does, and only the run it is up in: nothing is
+ * The doors read the sandbox named after the agent's session
+ * (`../agent-sandbox-open.ts`'s `agentSandboxOf`), and only the run it is
+ * up in: nothing is
  * resumed, since the agent calling the tool runs in that sandbox, so a
  * sandbox not up has nothing to read from. A file is read by a command the
  * sandbox's default user runs. A repository's command is
@@ -52,7 +53,7 @@
  * on the command line rather than by the API, as our other commands are
  * run (`@repo/sandbox`).
  *
- * A place is found again by the session's tag, and its runner by the record
+ * A place is found again by its session's name, and its runner by the record
  * a launch writes in our store under the agent's runner lease
  * (`@repo/database/models/agent-runner-record`): the command, the sandbox
  * run it runs in, and the launch's first event number and fingerprint.
@@ -66,10 +67,10 @@
  * sandbox under its session's name is the same `getOrCreate`, which makes
  * it anew from the image where its snapshot expired, its checkout cloned
  * again before the relaunch, and says so, since the harness's own session
- * and whatever the agent never pushed went with the old disk. A sandbox
- * opened before `getOrCreate`, under a UUID, resumes from its
- * last snapshot and is a place gone once that expired; the one opened in
- * its place is the session's own.
+ * and whatever the agent never pushed went with the old disk. A legacy
+ * sandbox, opened before `getOrCreate` under a UUID, is used where it runs,
+ * and otherwise moved to its session's name from its last snapshot
+ * (`reopenedOf`), never resumed in place.
  */
 
 import {
@@ -107,13 +108,15 @@ import {
 import { Brand, Context, Duration, Effect, Layer, Option, Redacted, Result, Tracer } from "effect";
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import {
-  AGENT_TAG,
   type AgentSnapshotSource,
   agentSandboxName,
+  agentSandboxOf,
   agentSandboxTags,
+  agentTag,
+  legacySandboxOf,
   openAgentSandbox,
+  reopenedOf,
   SANDBOX_ENV,
-  SESSION_TAG,
 } from "../agent-sandbox-open.js";
 import {
   BASE_DRIVE,
@@ -170,7 +173,6 @@ import {
   type MachineName,
   type MachinePlace,
   type MachineRunning,
-  PLACE_RESUME,
   type RecordedRunner,
   RUNNER_RECORD,
   type RunnerCredential,
@@ -178,20 +180,6 @@ import {
   type RunnerMark,
   type RunnerRecord,
 } from "./agent-machine.js";
-
-/**
- * The agent tag's name before the product's rename, read after `AGENT_TAG`'s
- * and never written. Note that a sandbox's tags are written only as it is
- * created, so one made before carries the old name for as long as it lives;
- * it can go once no sandbox named `SANDBOX_NAME_BEFORE_RENAME` is listed,
- * since only such a sandbox can carry it.
- */
-const AGENT_TAG_BEFORE_RENAME = "lukeAgent";
-
-/** The agent a sandbox's tags name, under the tag's name or the one it had before the rename. */
-export function agentTag(tags: Readonly<Record<string, string>> | undefined): string | undefined {
-  return tags?.[AGENT_TAG] ?? tags?.[AGENT_TAG_BEFORE_RENAME];
-}
 
 /**
  * Where a message's files that the harness takes no block of are written
@@ -214,15 +202,6 @@ const SANDBOX_LAYOUT: MachineLayout = {
   linesRead: true,
   transcriptsKept: true,
 };
-
-/**
- * What a sandbox opened before the product's rename is named as, which the
- * sweeps still find and nothing opens. Note that it can go only once no
- * sandbox is listed under it, because a sandbox in steady use resumes from
- * its own snapshot, under its own name, for as long as it lives; one goes on
- * a reset, on the first message after its snapshot lapsed, or at its purge.
- */
-export const SANDBOX_NAME_BEFORE_RENAME = "luke-agent-";
 
 /** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */
 const RUNNER_SCRIPT = `${RUNNER_DIRECTORY}/${RUNNER_UNIT.BUNDLE}`;
@@ -518,9 +497,10 @@ function runnerInSession(
   };
 }
 
-/** What a place this machine found keeps for its own later calls: the account its record is kept under. */
+/** What a place this machine found keeps for its own later calls: the account its record is kept under, and the sandbox as it was read. */
 interface KeptPlace {
   readonly userId: string;
+  readonly sandbox: ListedSandbox;
 }
 
 /** A listed sandbox as the place a later call finds, under the account's session given, with the session's record where it was written for this sandbox. */
@@ -537,7 +517,7 @@ function foundOf(
     sandbox.status === SANDBOX_STATUS.RUNNING && sandbox.running !== undefined
       ? sandboxPlace(session, sandbox.name, sandbox.running)
       : undefined;
-  const kept: KeptPlace = { userId };
+  const kept: KeptPlace = { userId, sandbox };
   return {
     machine: AGENT_MACHINE.VERCEL,
     session,
@@ -546,7 +526,7 @@ function foundOf(
     running,
     runner: own === undefined ? undefined : runnerInSession(session, sandbox, own),
     launch: own === undefined ? undefined : markOf(own),
-    // SAFETY: what is kept is this machine's own to read back in `discard`; no caller reads it.
+    // SAFETY: what is kept is this machine's own to read back in `discard` and `resume`; no caller reads it.
     kept: kept as unknown as MachineKept,
   };
 }
@@ -665,23 +645,26 @@ function readFileCommand(path: string, maxBytes: number) {
  */
 export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
   const firewall = sandboxFirewall(api);
-  /** The run of the sandbox tagged with the session; unavailable where none is up. */
+  /** The run of the session's sandbox; unavailable where it is not up. */
   const runningSession = (sessionId: string) =>
     Effect.gen(function* () {
-      const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
-      const up = sandboxes.find((sandbox) => UP_STATUSES.has(sandbox.status));
-      if (up?.running === undefined) return yield* new SandboxUnavailable({});
+      const up = yield* agentSandboxOf(api, sessionId);
+      if (up === undefined || !UP_STATUSES.has(up.status) || up.running === undefined) {
+        return yield* new SandboxUnavailable({});
+      }
       return { name: up.name, running: up.running } satisfies SandboxRunning;
     });
 
   return {
-    findPlaces: (userId, session) =>
+    findPlace: (userId, session) =>
       Effect.map(
-        Effect.all([api.listTagged(SESSION_TAG, session), readAgentRunnerRecord(userId, session)], {
+        Effect.all([agentSandboxOf(api, session), readAgentRunnerRecord(userId, session)], {
           concurrency: "unbounded",
         }),
-        ([sandboxes, record]) =>
-          sandboxes.map((sandbox) => foundOf(userId, session, sandbox, record)),
+        ([sandbox, record]) =>
+          Option.map(Option.fromNullishOr(sandbox), (found) =>
+            foundOf(userId, session, found, record),
+          ),
       ),
 
     recordRunner: recordedIn,
@@ -694,11 +677,15 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
 
     stop: (place) => api.stop(place),
 
+    // MIGRATION: a legacy sandbox the session moved off is deleted first, so a discard that fails
+    // between the two never leaves its old disk to be moved again.
     discard: (found) =>
-      Effect.andThen(
-        api.delete(found.name),
-        forgetAgentRunnerRecord(keptOf(found).userId, found.session, found.name),
-      ),
+      Effect.gen(function* () {
+        const legacy = yield* legacySandboxOf(api, found.session);
+        if (legacy !== undefined && legacy.name !== found.name) yield* api.delete(legacy.name);
+        yield* api.delete(found.name);
+        yield* forgetAgentRunnerRecord(keptOf(found).userId, found.session, found.name);
+      }),
 
     writeFiles: (place, files) => api.writeFiles(place, files),
 
@@ -1150,30 +1137,31 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         );
       }),
 
-    // A sandbox under its session's name is run again as it was opened, through `getOrCreate`
-    // (`gotOn`): resumed where it stands, or made again from the image where its snapshot is gone,
-    // set up with nothing to check out, since the relaunch clones the checkout it finds missing
-    // (`ownCheckoutRestored`). One opened before, under a UUID, resumes from its snapshot alone, and
-    // is gone once that lapsed.
+    // The session's sandbox is run again as it was opened, through `getOrCreate` (`gotOn`): resumed
+    // where it stands, or made again from the image where its snapshot is gone, set up with nothing
+    // to check out, since the relaunch clones the checkout it finds missing (`ownCheckoutRestored`).
+    // MIGRATION: a legacy sandbox (`agentSandboxOf`) is used where it runs, and otherwise made anew
+    // under the session's name from its last snapshot (`reopenedOf`), its disk kept, or from the
+    // image where that snapshot is gone, so it is never resumed in place; it is read again on each
+    // try, so one that was still stopping is seen stopped.
     resume: (found, agent) =>
       Effect.gen(function* () {
-        if (found.name === agentSandboxName(found.session)) {
-          const { name, running, created } = yield* gotOn(
-            agent,
-            found.session,
-            FROM_IMAGE,
-            undefined,
-          );
-          return { place: sandboxPlace(found.session, name, running), created };
-        }
-        const resumed = yield* Effect.result(api.resume(found.name));
-        if (Result.isFailure(resumed)) {
-          if (resumed.failure._tag === "SnapshotGone") return PLACE_RESUME.GONE;
-          return yield* resumed.failure;
-        }
+        const legacy = found.name !== agentSandboxName(found.session);
+        if (legacy && found.running !== undefined) return { place: found.running, created: false };
+        const standing = legacy
+          ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
+          : keptOf(found).sandbox;
+        const { snapshot } = yield* reopenedOf(found.session, standing);
+        const attempts: readonly CreateAttempt[] =
+          snapshot === undefined
+            ? [FROM_IMAGE]
+            : [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE];
+        const { opened } = yield* openedFromFirst(agent, found.session, attempts, undefined);
+        if (Result.isFailure(opened)) return yield* opened.failure;
+        const { name, running, created, from } = opened.success;
         return {
-          place: sandboxPlace(found.session, found.name, resumed.success.running),
-          created: false,
+          place: sandboxPlace(found.session, name, running),
+          created: created && from === CREATED_FROM.IMAGE,
         };
       }),
 

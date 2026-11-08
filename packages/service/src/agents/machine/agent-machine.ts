@@ -40,7 +40,15 @@ import type { Agent } from "@repo/database/models/agent-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
-import { type Brand, Context, Data, type Duration, type Effect, type Redacted } from "effect";
+import {
+  type Brand,
+  Context,
+  Data,
+  type Duration,
+  type Effect,
+  type Option,
+  type Redacted,
+} from "effect";
 import type { AgentImage, AgentImageMissing } from "../coder-host/agent-image.js";
 import type { CheckoutRefused, CheckoutServices } from "../coder-host/checkout.js";
 import type {
@@ -152,9 +160,6 @@ export interface FoundPlace {
   readonly launch: RunnerMark | undefined;
   readonly kept: MachineKept;
 }
-
-/** A found place's resume where it can never run again, its disk lost. */
-export const PLACE_RESUME = { GONE: "gone" } as const;
 
 /**
  * A found place running again: where it runs now, and whether it was made
@@ -318,11 +323,11 @@ export interface AgentMachineService {
     E | EB | LaunchRefused | { readonly _tag: string },
     R | RB | MachineServices
   >;
-  /** Every place opened under the account's session, the newest first; none where none stands. */
-  readonly findPlaces: (
+  /** The place opened under the account's session; none where none stands. */
+  readonly findPlace: (
     userId: string,
     session: string,
-  ) => Effect.Effect<readonly FoundPlace[], SandboxError | StoreFailure, DatabaseServices>;
+  ) => Effect.Effect<Option.Option<FoundPlace>, SandboxError | StoreFailure, DatabaseServices>;
   /** What the place's record says of its runner, in place of whatever it said, kept under the account given. */
   readonly recordRunner: (
     place: {
@@ -338,14 +343,13 @@ export interface AgentMachineService {
   readonly firewall: MachineFirewall;
   /**
    * The agent's found place run again, where it is not, and where it runs
-   * now: made anew on the machine's own terms where its disk is lost, or
-   * gone where the machine cannot make it again.
+   * now: made anew on the machine's own terms where its disk is lost.
    */
   readonly resume: (
     found: FoundPlace,
     agent: Agent,
   ) => Effect.Effect<
-    ResumedPlace | typeof PLACE_RESUME.GONE,
+    ResumedPlace,
     SandboxError | CheckoutRefused | AgentImageMissing,
     AgentImage | DatabaseServices
   >;

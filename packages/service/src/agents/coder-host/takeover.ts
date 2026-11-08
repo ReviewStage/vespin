@@ -46,7 +46,7 @@ import {
 import { logStoreFailure } from "../../http/store-failure.js";
 import { ModelCatalog } from "../../providers/model-catalog.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
-import { agentSandboxName } from "../agent-sandbox-open.js";
+import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
@@ -430,8 +430,8 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
 
 /**
  * Where the source's work reaches the new agent. A source whose sandbox
- * stands under its session's name, stopped on a snapshot, hands that
- * sandbox, whose latest snapshot the new agent's is created from at its
+ * stands stopped on a snapshot (`agentSandboxOf`), a legacy one among them,
+ * hands that sandbox, whose latest snapshot the new agent's is created from at its
  * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
  * other has its work copied to a branch (`snapshot.ts`). Note that a
  * sandbox still running is copied rather than handed, because its snapshot
@@ -457,7 +457,7 @@ const sourceWorkOf = (
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
         : [];
     if (session !== undefined) {
-      const found = yield* (yield* Sandbox).get(agentSandboxName(session.sessionId));
+      const found = yield* agentSandboxOf(yield* Sandbox, session.sessionId);
       if (found?.status === SANDBOX_STATUS.STOPPED && found.snapshotId !== undefined) {
         return { on: TAKEN_ON.SNAPSHOT, sandbox: found.name } satisfies SourceWork;
       }

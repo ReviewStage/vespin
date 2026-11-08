@@ -17,9 +17,11 @@
  * the turn's row first and acknowledges a turn no longer queued, gone,
  * running, settled, or failed, without acting. A turn still queued is handed
  * over once by the harness its agent runs on (`runtime-sessions.ts`'s
- * `turnHandedOver`): nothing where a runner is up to read its lines, else
- * the place opened, as a Start's first turn finds it, or resumed, and the
- * runner launched for them, and acknowledged; a
+ * `turnHandedOver`): where a runner is up to read its lines, its delivery
+ * comes once more after `TURN_DELIVERY.TAKE_GRACE`, which finds the turn
+ * running where the runner took its line, and else launches the runner
+ * again; where none is up, the place opened, as a Start's first turn finds
+ * it, or resumed, and the runner launched for them, and acknowledged; a
  * hand-over that cannot succeed fails the turn with why through the store
  * writer, and is acknowledged. Where another call holds the agent's runner
  * lease, at work on its runner, the delivery comes again after
@@ -119,6 +121,7 @@ export const consumeTurnDelivery = /* @__PURE__ */ Effect.fn("web/consumeTurnDel
     if (!Option.contains(status, TURN_STATUS.QUEUED)) return QUEUE_ACKNOWLEDGED;
     const handover = yield* turnHandedOver(turn);
     if (handover === TURN_HANDOVER.BUSY) return deliveredAgainAfter(TURN_DELIVERY.BUSY_AGAIN);
+    if (handover === TURN_HANDOVER.AWAITED) return deliveredAgainAfter(TURN_DELIVERY.TAKE_GRACE);
     if (handover === TURN_HANDOVER.UNREACHED) {
       yield* Effect.logWarning("a queued turn's agent was not reached, so nothing was handed over");
     }

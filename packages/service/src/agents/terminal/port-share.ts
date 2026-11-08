@@ -30,8 +30,7 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { Duration, Effect } from "effect";
-import { AGENT_TAG, SESSION_TAG } from "../agent-sandbox-open.js";
-import { agentTag } from "../machine/sandbox-machine.js";
+import { AGENT_TAG, agentTag, SESSION_TAG } from "../agent-sandbox-open.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 

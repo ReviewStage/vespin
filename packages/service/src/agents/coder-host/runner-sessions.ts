@@ -7,10 +7,9 @@
  * `codex-sessions.ts`): the credential its runner is started with, its
  * config line, and the lines that go ahead of a message to a runner already
  * running. Its session is our own: an id minted as the session opens,
- * which the machine finds the agent's place by (in a sandbox, its
- * `sessionId` tag, so the Terminal tab, the stop and the cleanup sweep find
- * the sandbox by it: `terminal/agent-sandbox.ts`,
- * `session-sandboxes.ts`). The
+ * which the machine finds the agent's place by (in a sandbox, the name the
+ * sandbox is opened under, so the Terminal tab and the stop find the
+ * sandbox by it: `../agent-sandbox-open.ts`'s `agentSandboxOf`). The
  * harness's own session or thread id is the conversation's
  * `native_session`, which the events route records from what the runner
  * reports, and a relaunch resumes.
@@ -116,7 +115,6 @@ import {
   type LaunchPath,
   RUNNER_END,
   RUNNER_ENV,
-  RUNNER_EXIT,
   type RunnerConfig,
   type RunnerEnd,
   type RunnerTrace,
@@ -152,7 +150,7 @@ import {
   ANY_LAUNCH,
   clearRunnerLines,
   queueRunnerLine,
-  runnerLinesWaiting,
+  runnerLineWaitingSince,
   waitingRunnerFiles,
   withdrawRunnerLine,
 } from "@repo/database/models/runner-line-store";
@@ -164,7 +162,6 @@ import { AGENT_MACHINE, type AgentMachineKind, CONTEXT_WINDOW } from "@repo/feat
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
-  type CommandExit,
   isSandboxError,
   type Sandbox,
   type SandboxError,
@@ -175,17 +172,7 @@ import {
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
-import {
-  Clock,
-  Context,
-  Duration,
-  Effect,
-  Exit,
-  Option,
-  Redacted,
-  Result,
-  Schedule,
-} from "effect";
+import { Clock, Context, Duration, Effect, Exit, Option, Redacted, Result, Schedule } from "effect";
 import { SqlError } from "effect/sql/SqlError";
 import { HostedEnvironment } from "../../environment.js";
 import {
@@ -207,7 +194,6 @@ import {
   type MachineLifecycle,
   type MachineName,
   type MachinePlace,
-  PLACE_RESUME,
   type RecordedRunner,
   RUNNER_RECORD,
   type RunnerCredential,
@@ -244,10 +230,12 @@ import {
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   TURN_HANDOVER,
+  type TurnHandover,
 } from "./runtime-sessions.js";
 import { nativeSkills } from "./skills.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import type { TurnHanded } from "./turn-context.js";
+import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 import {
   coderTurnMessage,
   handedValue,
@@ -675,50 +663,6 @@ const RESUME_WHILE_ENDING = {
   times: CODER.RESUME_WHILE_ENDING.TRIES,
   while: sandboxEnding,
 };
-
-/** The place found first under the account's session: the newest, which is listed first (`findPlaces`). */
-function firstPlace(machine: MachineLifecycle, userId: string, sessionId: string) {
-  return Effect.map(machine.findPlaces(userId, sessionId), (places) =>
-    Option.fromNullishOr(places[0]),
-  );
-}
-
-/**
- * A recorded runner's exit said in the log where it failed, so a runner that
- * ended with nothing posted, as one whose config line never came
- * (`RUNNER_EXIT.UNCONFIGURED`), is known after its sandbox's stop takes its
- * own output with it; one that ended cleanly, runs, or is gone says nothing.
- */
-function exitSaid(exit: CommandExit): Effect.Effect<void> {
-  if (typeof exit !== "number" || exit === RUNNER_EXIT.ENDED) return Effect.void;
-  return Effect.logWarning(
-    exit === RUNNER_EXIT.UNCONFIGURED
-      ? "A recorded runner had exited: its config line never came"
-      : `A recorded runner had exited: exit ${exit}`,
-  );
-}
-
-/**
- * The runner the found place records, where it is up in the session that
- * runner was started in, and that runner has not exited. Only an exit read,
- * or a command no longer known, says the runner is down; the machine not
- * answering fails the call, so a passing outage neither relaunches a runner
- * beside one still running nor drops a Stop. The exit is waited for at most
- * `within`, the machine's own wait where none is given, which a live runner
- * costs whole.
- */
-function liveRunner(
-  machine: MachineLifecycle,
-  found: FoundPlace,
-  within?: Duration.Duration,
-): Effect.Effect<RecordedRunner | undefined, SandboxError> {
-  const runner = found.runner;
-  if (runner === undefined) return Effect.succeed(undefined);
-  return machine.runnerExit(runner.handle, within).pipe(
-    Effect.tap(exitSaid),
-    Effect.map((exit) => (exit === null ? runner : undefined)),
-  );
-}
 
 /** A file a message names, as its runner line carries it to the launch that takes it. */
 function carriedFile(file: SandboxFile): RunnerLineFile {
@@ -1501,7 +1445,6 @@ export const runnerSessions = <
     const relaunched = (
       agent: Agent,
       sessionId: string,
-      name: MachineName,
       running: MachinePlace,
       layout: MachineLayout,
       sent: RunnerMessage | undefined,
@@ -1523,7 +1466,7 @@ export const runnerSessions = <
         );
         yield* launch(
           agent,
-          { name, running, session: sessionId },
+          { name: running.name, running, session: sessionId },
           layout,
           sent,
           from,
@@ -1560,6 +1503,22 @@ export const runnerSessions = <
       });
 
     /**
+     * The runner the found place records let go, its caller holding the
+     * agent's runner lease: its command ended, one already gone counting as
+     * ended, its bearer dropped, so nothing it posts on its way down is
+     * taken, and the place's record cleared of it, so the next launch reads
+     * no runner up rather than one on its way down.
+     */
+    const letGo = (found: FoundPlace, agentId: string, handle: RunnerHandle) =>
+      Effect.gen(function* () {
+        yield* machine.kill(handle);
+        yield* recordAgentRunnerToken(userId, agentId, null);
+        yield* machine.recordRunner(recordOf(found, userId, agentId), {
+          kind: RUNNER_RECORD.NONE,
+        });
+      });
+
+    /**
      * A message to the session, under the agent's runner lease: the place and
      * the agent read afresh, since a call the lease waited behind may have
      * relaunched. `handsOn` says whether a runner that must be resumed or
@@ -1579,7 +1538,7 @@ export const runnerSessions = <
       Effect.gen(function* () {
         // The agent is read beside the place, and its read answers only for a place found or opening.
         const [found, agentRead] = yield* Effect.all(
-          [firstPlace(machine, userId, sessionId), Effect.exit(agentOf(message.conversationId))],
+          [machine.findPlace(userId, sessionId), Effect.exit(agentOf(message.conversationId))],
           { concurrency: "unbounded" },
         );
         const standing = Option.getOrUndefined(found);
@@ -1591,7 +1550,7 @@ export const runnerSessions = <
           standing === undefined &&
           handsOn &&
           Exit.isSuccess(agentRead) &&
-          (yield* runnerLinesWaiting(userId, agentRead.value.id));
+          Option.isSome(yield* runnerLineWaitingSince(userId, agentRead.value.id));
         if (standing === undefined && !opening) {
           return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         }
@@ -1667,20 +1626,14 @@ export const runnerSessions = <
             (yield* stopWritten(machine, running)) ||
             (yield* staleWarm(agent, layout, running.mark, turnRunning))
           ) {
-            yield* machine.kill(running.handle);
             if (handsOn) {
-              // Note that the ended runner is let go and its record cleared, as a halt leaves them,
-              // so the turn's delivery reads no runner up rather than one still on its way down.
-              yield* recordAgentRunnerToken(userId, agent.id, null);
-              yield* machine.recordRunner(recordOf(standing, userId, agent.id), {
-                kind: RUNNER_RECORD.NONE,
-              });
+              yield* letGo(standing, agent.id, running.handle);
               return yield* queuedForDelivery;
             }
+            yield* machine.kill(running.handle);
             yield* relaunched(
               agent,
               sessionId,
-              standing.name,
               runnerPlace,
               layout,
               sent,
@@ -1763,11 +1716,9 @@ export const runnerSessions = <
         // machine takes up (`device-machine.ts`), whose place is never lost the way a sandbox's is.
         const wasUp = standing.running !== undefined;
         const place = yield* machine.resume(standing, agent);
-        if (place === PLACE_RESUME.GONE) return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         yield* relaunched(
           agent,
           sessionId,
-          standing.name,
           place.place,
           layout,
           sent,
@@ -1789,7 +1740,7 @@ export const runnerSessions = <
      */
     const cancelHolding = (sessionId: string, turnId: string, agent: Agent) =>
       Effect.gen(function* () {
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found) || found.value.agentId !== agent.id) {
           return { outcome: SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN } as const;
         }
@@ -1799,7 +1750,7 @@ export const runnerSessions = <
           return { outcome: SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN } as const;
         }
         // Note that its exit is read at most `CODER.RUNNER_EXIT_READ`, so a Stop never waits out a live runner's exit.
-        const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
+        const live = found.value.runner;
         if (live === undefined) return { outcome: SESSION_CANCEL_OUTCOME.ACCEPTED } as const;
         yield* delivered(agent, live, [stopLine(live.mark.firstSequence)]).pipe(
           Effect.catchIf(sandboxGone, () => Effect.void),
@@ -1839,20 +1790,16 @@ export const runnerSessions = <
             const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
             if (turn?.id !== turnId || !RUNNING_TURN_STATUSES.has(turn.status)) return;
             if (turn.cancelRequestedAt === null) return;
-            const found = yield* firstPlace(machine, userId, sessionId);
+            const found = yield* machine.findPlace(userId, sessionId);
             const live =
               Option.isSome(found) && found.value.agentId === agent.id
-                ? yield* liveRunner(machine, found.value)
+                ? found.value.runner
                 : undefined;
             if (Option.isSome(found) && live !== undefined && live.mark.firstSequence === launch) {
               yield* Effect.logWarning(
                 `A ${harness.name} runner did not end its turn on a Stop, and was ended`,
               );
-              yield* machine.kill(live.handle);
-              yield* recordAgentRunnerToken(userId, agent.id, null);
-              yield* machine.recordRunner(recordOf(found.value, userId, agent.id), {
-                kind: RUNNER_RECORD.NONE,
-              });
+              yield* letGo(found.value, agent.id, live.handle);
             }
             const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
             const now = yield* Clock.currentTimeMillis;
@@ -1867,18 +1814,17 @@ export const runnerSessions = <
      * at most `CODER.RUNNER_HALT`, its command ended where it still runs and
      * waited for again, its bearer let go, so nothing it posts on the way
      * down is taken, and the place's record cleared of it. Note that the
-     * record is what says a runner runs (`liveRunner`), and a machine may
-     * still answer a command it was just told to end as running, so a
-     * message sent next would otherwise be written to a runner on its way
-     * down and lost. A session no runner runs in has nothing to end.
+     * record is what says a runner runs, so a message sent next would
+     * otherwise be written to a runner on its way down and lost. A session
+     * no runner runs in has nothing to end.
      */
     const haltHolding = (sessionId: string, conversationId: string) =>
       Effect.gen(function* () {
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found)) return;
         const agent = yield* agentOf(conversationId);
         if (found.value.agentId !== agent.id) return;
-        const live = yield* liveRunner(machine, found.value);
+        const live = found.value.runner;
         if (live === undefined) return;
         const { handle } = live;
         yield* delivered(agent, live, [stopLine(live.mark.firstSequence)]);
@@ -1898,11 +1844,11 @@ export const runnerSessions = <
     /** A change of model or effort, under the agent's runner lease. */
     const retuneHolding = (sessionId: string, conversationId: string) =>
       Effect.gen(function* () {
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found)) return RUNNER_CHOICE.NOT_LIVE;
         const agent = yield* agentOf(conversationId);
         if (found.value.agentId !== agent.id) return RUNNER_CHOICE.NOT_LIVE;
-        const live = yield* liveRunner(machine, found.value);
+        const live = found.value.runner;
         if (live === undefined) return RUNNER_CHOICE.NOT_LIVE;
         const ahead = yield* harness.ahead(agent);
         const model = ahead.lines.filter((each) => each.type === INPUT_LINE.MODEL);
@@ -1922,7 +1868,7 @@ export const runnerSessions = <
      */
     const checkOutHolding = (sessionId: string, conversationId: string) =>
       Effect.gen(function* () {
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found)) return RUNNER_CHECKOUT.NOT_LIVE;
         const agent = yield* agentOf(conversationId);
         const running = found.value.running;
@@ -1937,8 +1883,8 @@ export const runnerSessions = <
 
     /**
      * The runner launched with no message of its own where none runs, its
-     * caller holding the agent's runner lease: the place resumed, or a fresh
-     * one opened where its disk is gone, and the runner launched on the
+     * caller holding the agent's runner lease: the place resumed, made anew
+     * where its disk is gone, and the runner launched on the
      * harness's session, reading whatever lines wait for it. A resume that
      * meets the sandbox still stopping or being snapshotted waits it out
      * (`RESUME_WHILE_ENDING`), since no request waits on it. Nothing where
@@ -1949,19 +1895,17 @@ export const runnerSessions = <
      */
     const launchedWithoutMessage = (sessionId: string, agent: Agent) =>
       Effect.gen(function* () {
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found) || found.value.agentId !== agent.id) return undefined;
-        if ((yield* liveRunner(machine, found.value)) !== undefined) return undefined;
+        if (found.value.runner !== undefined) return undefined;
         const layout = yield* machine.layout(agent);
         if (!layout.linesRead) return undefined;
         const wasUp = found.value.running !== undefined;
         const resumed = yield* Effect.gen(function* () {
           const place = yield* machine.resume(found.value, agent);
-          if (place === PLACE_RESUME.GONE) return place;
           yield* relaunched(
             agent,
             sessionId,
-            found.value.name,
             place.place,
             layout,
             undefined,
@@ -1970,20 +1914,6 @@ export const runnerSessions = <
           );
           return place;
         }).pipe(Effect.retry(RESUME_WHILE_ENDING));
-        if (resumed === PLACE_RESUME.GONE) {
-          yield* openedPlace(
-            agent,
-            sessionId,
-            layout,
-            undefined,
-            yield* harness.launch(agent, layout),
-            undefined,
-            undefined,
-            LAUNCH_PATH.FRESH,
-          );
-          yield* Effect.ignore(machine.discard(found.value));
-          return SERVER_HANDOFF_PATH.FRESH;
-        }
         if (resumed.created) return SERVER_HANDOFF_PATH.FRESH;
         return wasUp ? SERVER_HANDOFF_PATH.RELAUNCHED : SERVER_HANDOFF_PATH.RESUMED;
       });
@@ -2010,22 +1940,45 @@ export const runnerSessions = <
     /**
      * The lines a queued turn awaits handed on, under the agent's runner
      * lease: where a message line no launch took still has its turn waiting
-     * on it (`runnerLinesWaiting`), the place its session opens, a Start's
-     * first among them, is opened (`openedForWaiting`), or the runner is
-     * launched again in the place it has where none is up
+     * on it (`runnerLineWaitingSince`), the place its session opens, a
+     * Start's first among them, is opened (`openedForWaiting`), or the runner
+     * is launched again in the place it has where none is up
      * (`launchedWithoutMessage`), and how a message reached it counted, as a
-     * Start's first message is not. Nothing
-     * where none waits, as a Mac's lines, which its own runner's launch line
-     * carries.
+     * Start's first message is not. Nothing where none waits, as a Mac's
+     * lines, which its own runner's launch line carries.
+     *
+     * A runner the place's record names up reads its lines itself, and takes
+     * a message the moment it reads it, its turn running or not, so its turn
+     * is awaited (`TURN_HANDOVER.AWAITED`), and its delivery comes once more
+     * after `TURN_DELIVERY.TAKE_GRACE`. A line still untaken past that grace
+     * is one the runner is not reading, whatever its command's exit says, so
+     * the runner is let go and launched again, once: the delivery is then
+     * acknowledged, and a relaunch that takes nothing either is the pickup
+     * deadline's to fail.
      */
     const deliveredHolding = (sessionId: string, agent: Agent) =>
       Effect.gen(function* () {
-        if (!(yield* runnerLinesWaiting(userId, agent.id))) return;
-        const found = yield* firstPlace(machine, userId, sessionId);
-        if (Option.isNone(found)) return yield* openedForWaiting(sessionId, agent);
+        const waiting = yield* runnerLineWaitingSince(userId, agent.id);
+        if (Option.isNone(waiting)) return TURN_HANDOVER.HANDED;
+        const found = yield* machine.findPlace(userId, sessionId);
+        if (Option.isNone(found)) {
+          yield* openedForWaiting(sessionId, agent);
+          return TURN_HANDOVER.HANDED;
+        }
+        const runner = found.value.agentId === agent.id ? found.value.runner : undefined;
+        if (runner !== undefined) {
+          const waited = (yield* Clock.currentTimeMillis) - waiting.value.getTime();
+          if (waited < Duration.toMillis(TURN_DELIVERY.TAKE_GRACE)) return TURN_HANDOVER.AWAITED;
+          yield* Effect.logWarning(
+            `A ${harness.name} runner left its line untaken past its grace, and was launched again`,
+          );
+          yield* letGo(found.value, agent.id, runner.handle);
+        }
         const path = yield* launchedWithoutMessage(sessionId, agent);
-        if (path === undefined) return;
-        yield* handoffCounted(agent, path, false, null, yield* Clock.currentTimeMillis);
+        if (path !== undefined) {
+          yield* handoffCounted(agent, path, false, null, yield* Clock.currentTimeMillis);
+        }
+        return TURN_HANDOVER.HANDED;
       });
 
     /**
@@ -2043,13 +1996,13 @@ export const runnerSessions = <
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
         if (turn?.status === TURN_STATUS.RUNNING) return;
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
         // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
         if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
           yield* touchSandbox(found.value.name);
         }
-        const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
+        const live = found.value.runner;
         if (live !== undefined) {
           return yield* deliveredTo(machine, userId, agent.id, live, [{ type: INPUT_LINE.WARM }]);
         }
@@ -2130,7 +2083,7 @@ export const runnerSessions = <
         // A session another agent's place stands for has ended for this one, as `sendHolding`
         // answers it. Note that no place at all is no answer yet, because a Start's launch still
         // opening its sandbox holds the lease, which is the very case this queue is for.
-        const found = yield* firstPlace(machine, userId, sessionId);
+        const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isSome(found) && found.value.agentId !== agent.id) {
           return { outcome: SESSION_SEND_OUTCOME.RETIRED } as const;
         }
@@ -2280,7 +2233,7 @@ export const runnerSessions = <
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);
           return yield* Effect.gen(function* () {
-            const found = yield* firstPlace(machine, userId, sessionId);
+            const found = yield* machine.findPlace(userId, sessionId);
             const agentId = Option.isSome(found) ? found.value.agentId : undefined;
             const agent = agentId === undefined ? Option.none() : yield* readAgent(userId, agentId);
             if (Option.isNone(agent)) {
@@ -2312,24 +2265,15 @@ export const runnerSessions = <
 
       reset: (sessionId) =>
         Effect.gen(function* () {
-          const places = yield* machine.findPlaces(userId, sessionId);
-          if (places.length === 0)
+          const found = yield* machine.findPlace(userId, sessionId);
+          // A session whose place is another account's agent's is none of this account's to retire.
+          if (Option.isNone(found) || !(yield* ownsPlace(found.value))) {
             return { outcome: SESSION_RESET_OUTCOME.NO_ACTIVE_SESSION } as const;
-          let retired = 0;
-          for (const place of places) {
-            if (!(yield* ownsPlace(place))) continue;
-            retired += 1;
-            // The bearer goes first, so a runner still up is refused by us before its place is gone.
-            if (place.agentId !== undefined) {
-              yield* recordAgentRunnerToken(userId, place.agentId, null);
-            }
-            yield* machine.discard(place);
           }
-          // A session whose places are all another account's agents' is none of this account's to retire.
-          if (retired === 0) return { outcome: SESSION_RESET_OUTCOME.NO_ACTIVE_SESSION } as const;
-          // Note that each place found was deleted directly by its discard, and a sandbox opened under
-          // the session's tag while the reset ran is none of them, so it is left to lapse with its
-          // snapshot (`@repo/sandbox`'s retention) rather than queued for a later delete.
+          // The bearer goes first, so a runner still up is refused by us before its place is gone.
+          const { agentId } = found.value;
+          if (agentId !== undefined) yield* recordAgentRunnerToken(userId, agentId, null);
+          yield* machine.discard(found.value);
           return { outcome: SESSION_RESET_OUTCOME.RESET } as const;
         }).pipe(
           Effect.catch(unavailable("reset")),
@@ -2375,7 +2319,7 @@ export const runnerSessions = <
             agent.value.id,
             deliveredHolding(sessionId, agent.value),
           ).pipe(
-            Effect.map((held) => (Option.isSome(held) ? TURN_HANDOVER.HANDED : TURN_HANDOVER.BUSY)),
+            Effect.map(Option.getOrElse((): TurnHandover => TURN_HANDOVER.BUSY)),
             Effect.catchIf(
               (failure) => !mayTakeAgain(failure),
               (failure) =>
@@ -2492,9 +2436,9 @@ interface WarmRunner {
 const retiredHolding = (machine: MachineLifecycle, retiring: WarmRunner) =>
   Effect.gen(function* () {
     if (yield* runnerMayBeAtWork(retiring.agentId)) return false;
-    const found = yield* firstPlace(machine, retiring.userId, retiring.sessionId);
+    const found = yield* machine.findPlace(retiring.userId, retiring.sessionId);
     if (Option.isNone(found)) return false;
-    const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
+    const live = found.value.runner;
     if (live === undefined || live.handle.running !== retiring.running) return false;
     const retire: InputLine = { type: INPUT_LINE.RETIRE };
     yield* deliveredTo(machine, retiring.userId, retiring.agentId, live, [retire]);
@@ -2545,8 +2489,9 @@ export const RUNNER_ENDED = {
 } as const;
 
 /**
- * A launch's end, as its END event tells it, for either harness: the place
- * left as it stands, for its own idle stop, and where a message waits for the
+ * A launch's end, as its END event tells it, for either harness: a
+ * sandbox's runner cleared from its place's record, and the place left as
+ * it stands, for its own idle stop, and where a message waits for the
  * launch the turn's delivery starts, said so, for the END to hand it on;
  * nothing for an END older than the launch its place runs now. Decided under
  * the agent's runner lease, read again once it is held, so a delivery
@@ -2556,7 +2501,7 @@ export const RUNNER_ENDED = {
  */
 export const runnerEnded = Effect.fn("web/runnerEnded")(function* (ending: RunnerEnding) {
   const machine = yield* deploymentLifecycle;
-  const found = yield* firstPlace(machine, ending.target.userId, ending.sessionId);
+  const found = yield* machine.findPlace(ending.target.userId, ending.sessionId);
   if (Option.isNone(found)) return RUNNER_ENDED.STALE;
   const { agentId } = found.value;
   // A place no agent is recorded for was never launched into, so no runner of it has a lease to wait out.
@@ -2580,7 +2525,7 @@ export const runnerEnded = Effect.fn("web/runnerEnded")(function* (ending: Runne
  */
 export const runnerIdled = Effect.fn("web/runnerIdled")(function* (idle: RunnerEnding) {
   const machine = yield* deploymentLifecycle;
-  const found = yield* firstPlace(machine, idle.target.userId, idle.sessionId);
+  const found = yield* machine.findPlace(idle.target.userId, idle.sessionId);
   if (Option.isNone(found) || found.value.machine !== AGENT_MACHINE.DEVICE) return false;
   const { agentId, launch, running } = found.value;
   if (agentId === undefined || running === undefined) return false;
@@ -2599,17 +2544,23 @@ const leftAtEnd = Effect.fn("web/leftAtEnd")(function* (
   machine: MachineLifecycle,
   ending: RunnerEnding,
 ) {
-  const found = yield* firstPlace(machine, ending.target.userId, ending.sessionId);
+  const found = yield* machine.findPlace(ending.target.userId, ending.sessionId);
   if (Option.isNone(found)) return RUNNER_ENDED.STALE;
   // Read apart from the runner's record, which a launch writes only once its command started.
   const { launch, running, agentId } = found.value;
   if (launch !== undefined && ending.sequence < launch.firstSequence) return RUNNER_ENDED.STALE;
   if (running === undefined) return RUNNER_ENDED.STALE;
+  // The runner said it ended, so its record tells of it no longer, its launch kept for a late END:
+  // a message or a delivery after this reads no runner up, and launches one rather than awaiting it.
+  if (launch?.linesRead === true && agentId !== undefined) {
+    const place = recordOf(found.value, ending.target.userId, agentId);
+    yield* machine.recordRunner(place, { kind: RUNNER_RECORD.LAUNCHED, mark: launch });
+  }
   if (
     launch?.linesRead === true &&
     agentId !== undefined &&
     ending.reason !== RUNNER_END.FAILED &&
-    (yield* runnerLinesWaiting(ending.target.userId, agentId))
+    Option.isSome(yield* runnerLineWaitingSince(ending.target.userId, agentId))
   ) {
     return RUNNER_ENDED.LINES_WAITING;
   }

@@ -90,6 +90,8 @@ export const TURN_HANDOVER = {
   HANDED: "handed",
   /** Another call holds the agent's runner lease, at work on its runner, so the hand-over is tried again shortly. */
   BUSY: "busy",
+  /** A runner up reads the turn's lines and has its grace to take them, so the hand-over is tried once more after it (`TURN_DELIVERY.TAKE_GRACE`). */
+  AWAITED: "awaited",
   /** The hand-over could not succeed, and the turn was failed with why. */
   FAILED: "failed",
   /** Nothing here reaches the turn's agent: it runs on no harness, its session never claimed its record, or this function holds no harness. */

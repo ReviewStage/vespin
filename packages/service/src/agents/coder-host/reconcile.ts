@@ -152,7 +152,7 @@ const placeOf = (machine: MachineLifecycle, agent: ReconciledAgent) =>
       conversationId: agent.conversationId,
     });
     if (sessionId === undefined) return undefined;
-    const [found] = yield* machine.findPlaces(agent.userId, sessionId);
+    const found = Option.getOrUndefined(yield* machine.findPlace(agent.userId, sessionId));
     return found?.agentId === agent.id ? found : undefined;
   });
 

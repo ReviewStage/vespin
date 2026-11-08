@@ -271,8 +271,8 @@ export interface FakeSandboxScenario {
   readonly resumeRefusal?: SandboxError;
   /** How many resumes are refused before one is answered, as an image whose preparation finishes; every one where unsaid. */
   readonly resumeRefusals?: number;
-  /** Whether the sandbox stands under its session's name (`agentSandboxName`), which a reopen goes through `getOrCreate` for; under a UUID where unsaid. */
-  readonly named?: true;
+  /** Whether the sandbox is a legacy one, under a UUID, which a reopen moves to its session's name from its snapshot; under its session's name (`agentSandboxName`) where unsaid. */
+  readonly legacy?: true;
   /** Whether its snapshot is gone, so a `getOrCreate` deletes it and makes it again. */
   readonly snapshotGone?: true;
   /** How many vCPUs it is listed with. */
@@ -311,7 +311,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
   let browserUp = false;
   /** Every `getOrCreate` that made the sandbox again, as it was asked. */
   const creates: SandboxGetOrCreate[] = [];
-  const name = scenario.named === true ? agentSandboxName(scenario.sessionId) : FAKE_SANDBOX.NAME;
+  let name = scenario.legacy === true ? FAKE_SANDBOX.NAME : agentSandboxName(scenario.sessionId);
   const refused = () =>
     scenario.unavailable === undefined ? undefined : Effect.fail(new SandboxUnavailable({}));
   let refusedResumes = 0;
@@ -344,8 +344,10 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
     listTagged: (_tag, sessionId) =>
       refused() ??
       Effect.succeed(sessionId === scenario.sessionId && status !== undefined ? [listed()] : []),
-    resume: () => refused() ?? resumeRefused() ?? resumed(),
-    // A sandbox whose snapshot is gone is made again under its name, a fresh disk where no browser runs.
+    get: (asked) =>
+      refused() ?? Effect.succeed(asked === name && status !== undefined ? listed() : undefined),
+    // A sandbox whose snapshot is gone is made again under its name, a fresh disk where no browser
+    // runs; a legacy one is moved to the name asked, as a resume from its snapshot.
     getOrCreate: (ask, onCreate) =>
       refused() ??
       resumeRefused() ??
@@ -358,7 +360,12 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
             await onCreate?.(listed());
             return listed();
           })
-        : resumed()),
+        : Effect.andThen(
+            Effect.sync(() => {
+              name = ask.name;
+            }),
+            resumed(),
+          )),
     run: (target, ask) =>
       refused() ??
       Effect.sync((): CommandRun => {
@@ -405,7 +412,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
 }
 
 /**
- * `AgentBrowser` over a running sandbox tagged with the session given and a
+ * `AgentBrowser` over a running sandbox under the session given and a
  * ready bridge in front of the peer: the double a suite that drives a
  * browser provides.
  */

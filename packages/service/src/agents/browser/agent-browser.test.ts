@@ -305,11 +305,12 @@ it.effect(
     }),
 );
 
-it.effect("a resume whose snapshot is gone is given up on at once, saying so", () =>
+it.effect("a legacy sandbox's move whose snapshot is gone is given up on at once, saying so", () =>
   Effect.gen(function* () {
     const peer = yield* fakeCdpPeer();
     const { service } = browserOver(peer, {
       status: SANDBOX_STATUS.STOPPED,
+      legacy: true,
       resumeRefusal: new SnapshotGone({}),
     });
 
@@ -327,7 +328,6 @@ it.effect(
       const peer = yield* fakeCdpPeer();
       const { service, sandbox } = browserOver(peer, {
         status: SANDBOX_STATUS.STOPPED,
-        named: true,
         resumeRefusal: new ImageNotReady({}),
         resumeRefusals: 2,
       });
@@ -358,7 +358,6 @@ it.effect(
       const sandbox = fakeSandboxApi({
         status: SANDBOX_STATUS.STOPPED,
         sessionId: SESSION,
-        named: true,
         snapshotGone: true,
         vcpus: 4,
       });

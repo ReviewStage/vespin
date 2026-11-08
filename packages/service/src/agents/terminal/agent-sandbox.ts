@@ -1,15 +1,15 @@
 /**
  * agent-sandbox.ts -- a coding agent's sandbox as its Terminal tab reaches it: where it stands, its shells, and the developer's resume.
  *
- * The sandbox is found by the session the agent runs in, whose id it
- * carries as a tag (`../agent-sandbox-open.ts`). Where it stands is read and
- * never changed by a read: a stopped sandbox stays stopped until the
- * developer's resume, which opens it as the agent's next turn does, through
- * the same `getOrCreate` (`../agent-sandbox-open.ts`): the one standing under
- * its session's name is resumed, or made again on the session's drive, with
- * the tags and the size it stood with, where its snapshot is gone. One
- * opened before `getOrCreate`, under a UUID, is resumed by its own name, and
- * stays as it stands once its snapshot is gone. A shell is started, named,
+ * The sandbox is found by the session the agent runs in, after which it is
+ * named (`../agent-sandbox-open.ts`'s `agentSandboxOf`). Where it stands is
+ * read and never changed by a read: a stopped sandbox stays stopped until
+ * the developer's resume, which opens it as the agent's next turn does,
+ * through the same `getOrCreate` (`reopenedOf`): the one standing under its
+ * session's name is resumed, or made again from the image, with the tags
+ * and the size it stood with, where its snapshot is gone; a legacy one,
+ * opened under a UUID, is moved to its session's name from its last
+ * snapshot. A shell is started, named,
  * and ended by a short tmux command run in the sandbox's running session
  * (`tmux.ts`), and the list is
  * read back from tmux, so it is whatever the sandbox holds now. A shell
@@ -49,7 +49,7 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { Context, Effect, Layer, Result } from "effect";
-import { agentSandboxName, openAgentSandboxPromptly, SESSION_TAG } from "../agent-sandbox-open.js";
+import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-sandbox-open.js";
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import {
   type FirewallSession,
@@ -174,7 +174,7 @@ function agentSandboxOver(
    */
   const standing = (sessionId: string) =>
     Effect.gen(function* () {
-      const [sandbox] = yield* api.listTagged(SESSION_TAG, sessionId);
+      const sandbox = yield* agentSandboxOf(api, sessionId);
       const state = stateOf(sandbox);
       const sandboxSessionId = state === SANDBOX_STATE.RUNNING ? sandbox?.running : undefined;
       const running: SandboxRunning | undefined =
@@ -296,15 +296,10 @@ function agentSandboxOver(
       Effect.gen(function* () {
         const { sandbox, state } = yield* standing(sessionId);
         if (sandbox === undefined || state === SANDBOX_STATE.RUNNING) return state;
-        if (sandbox.name !== agentSandboxName(sessionId)) {
-          return stateOf(yield* api.resume(sandbox.name));
-        }
         // A sandbox made again on an image still being prepared is opened after the answer, which says it is starting.
-        const opened = yield* openAgentSandboxPromptly({
-          sessionId,
-          tags: { ...sandbox.tags },
-          vcpus: sandbox.vcpus,
-        }).pipe(
+        const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
+          openAgentSandboxPromptly(of),
+        ).pipe(
           Effect.provideService(AgentImage, image),
           Effect.provideService(Sandbox, api),
           Effect.catchTag("ImageNotReady", () => Effect.succeed(undefined)),
