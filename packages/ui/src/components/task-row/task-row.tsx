@@ -69,10 +69,9 @@ import {
  * the row's end inset: it comes in over the row's end while the row is in
  * hand, holds the keyboard, or has its menu open, nothing in the row moving,
  * as the sidebar's and the inbox's rows do: over the time, which gives
- * way under it, or over the run where the list draws no time and its run
- * only says something, and in a narrow column the list keeps for it where
- * the run ends on a control (an assignee's chip), the owner's end is last,
- * or the name is, so none is ever covered; on a screen with no hover it stands there at
+ * way under it, and in a narrow column the list keeps for it where the
+ * list draws no time, so the run, its flag, and the owner's end are never
+ * covered; on a screen with no hover it stands there at
  * rest, the cells after the name stepping aside for it where it would stand
  * over the last (`task-row.css`). A row may leave its ⋯ out (`more`), as a
  * phone's mail list draws none on its rows, and offer its menu by the long
@@ -167,19 +166,6 @@ const TRAILING: readonly TaskRowCell[] = [
   TASK_ROW_CELL.AGENTS,
   TASK_ROW_CELL.CREATOR,
   TASK_ROW_CELL.ASSIGNEE,
-];
-
-/**
- * The trailing cells that only say something, holding no control, so the ⋯
- * may come in over the run where it stands last and holds only these:
- * every cell but the assignee's chip, the creator's face, and the pull
- * requests' chips.
- */
-const QUIET_TRAILING: readonly TaskRowCell[] = [
-  TASK_ROW_CELL.REPOSITORY,
-  TASK_ROW_CELL.WAITING,
-  TASK_ROW_CELL.SUB_TASKS,
-  TASK_ROW_CELL.AGENTS,
 ];
 
 /** The trailing run's column, which every list stands but one ending in its owner's end alone, as a composer's dock does, whose rows carry no flag. */
@@ -402,17 +388,14 @@ function afterColumns(cells: readonly TaskRowCell[]): readonly AfterColumn[] {
 }
 
 /**
- * The column the ⋯ comes in over: the last, where it is the time, or the
- * trailing run holding only cells that say something; none, where the
- * list keeps the ⋯ a column of its own.
+ * The column the ⋯ comes in over: the time, where it is the last; none,
+ * where the list keeps the ⋯ a column of its own. Note that it never comes
+ * in over the trailing run, because the run's flag says what the row must
+ * go on saying while it is in hand.
  */
 function columnUnderMore(cells: readonly TaskRowCell[]): AfterColumn | undefined {
   const last = afterColumns(cells).at(-1);
-  if (last === TASK_ROW_CELL.UPDATED) return last;
-  const quiet = cells
-    .filter((cell) => TRAILING.includes(cell))
-    .every((cell) => QUIET_TRAILING.includes(cell));
-  return last === TRAIL && quiet ? last : undefined;
+  return last === TASK_ROW_CELL.UPDATED ? last : undefined;
 }
 
 /** A column's cell, holding what its owner stands there; empty where it holds nothing. */

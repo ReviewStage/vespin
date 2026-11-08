@@ -135,7 +135,7 @@ test("a ⌘-click chooses a row without opening it, and a plain press opens it",
   expect(opened).toEqual(["child"]);
 });
 
-test("a row's flag stands in a list that draws no cell after the name", () => {
+test("a row's flag stands in a list that draws no cell after the name, and its ⋯ never comes in over it", () => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -158,4 +158,5 @@ test("a row's flag stands in a list that draws no cell after the name", () => {
     ),
   );
   expect(container.querySelector("[data-flag]")?.textContent).toBe("Blocked");
+  expect(container.querySelector("[data-flag]")?.closest("[data-under-more]")).toBeNull();
 });
