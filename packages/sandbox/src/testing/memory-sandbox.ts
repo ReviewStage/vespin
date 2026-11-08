@@ -404,6 +404,19 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           if (state.drives.delete(ownDriveName(name))) state.deletedDrives.push(ownDriveName(name));
         }),
       ),
+    deleteDrive: (name) =>
+      scripted(
+        SANDBOX_CALL.DRIVE,
+        name,
+        Effect.suspend(() => {
+          const mounted = [...state.sandboxes.values()].some(
+            (record) => record.drive?.name === name && record.status === SANDBOX_STATUS.RUNNING,
+          );
+          if (mounted) return Effect.fail(new SandboxUnavailable({ call: SANDBOX_CALL.DRIVE }));
+          if (state.drives.delete(name)) state.deletedDrives.push(name);
+          return Effect.void;
+        }),
+      ),
     stop: (target) =>
       scripted(
         SANDBOX_CALL.STOP,

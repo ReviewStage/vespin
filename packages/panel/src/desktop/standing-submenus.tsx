@@ -2,7 +2,7 @@ import { TASK_STATUS, TASK_STATUS_ORDER, type TaskStatus } from "@repo/features/
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { type MenuRow, TaskStatusMark } from "@repo/ui";
 import { STATUS_ROWS } from "../tasks/task-standing.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { StandingWrites } from "../tasks/use-standing-writes.js";
 import type { MenuAction, MenuSubmenu } from "./action-menu.js";
 
 /**
@@ -12,7 +12,7 @@ import type { MenuAction, MenuSubmenu } from "./action-menu.js";
  * does: each submenu lists the chip's own rows (`task-standing.tsx`), in its
  * order and with its marks, the value standing checked, and a pick of
  * another sets it as the chip's pick does. Status is set through the window's
- * one way of setting tasks at a status (`onSettleTasks`), whose toast offers
+ * one way of setting tasks at a status (`useStandingWrites`'s `onSettleTasks`), whose toast offers
  * Undo, so the same submenu acts on one task's row, a group's header, and a
  * selection of several tasks alike.
  */
@@ -60,7 +60,7 @@ export function chipSubmenu(
  * every one at it, said in one toast whose Undo puts each back.
  */
 export function statusSubmenu(
-  tasks: Pick<TasksControl, "onSettleTasks">,
+  standing: Pick<StandingWrites, "onSettleTasks">,
   taskIds: readonly string[],
   current: TaskStatus | undefined,
   onActed?: () => void,
@@ -71,7 +71,7 @@ export function statusSubmenu(
     current,
     (id) => {
       const picked = TASK_STATUS_ORDER.find((status) => status === id);
-      if (picked !== undefined) tasks.onSettleTasks(taskIds, picked);
+      if (picked !== undefined) standing.onSettleTasks(taskIds, picked);
       onActed?.();
     },
     <TaskStatusMark status={TASK_STATUS.TODO} />,
@@ -80,12 +80,12 @@ export function statusSubmenu(
 
 /** Status for one task's row, printing S where the key opens it there (`useFocusedRowKeys`). */
 export function keyedStatusSubmenu(
-  tasks: Pick<TasksControl, "onSettleTasks">,
+  standing: Pick<StandingWrites, "onSettleTasks">,
   taskId: string,
   current: TaskStatus,
   keyed: boolean,
 ): MenuSubmenu {
-  const submenu = statusSubmenu(tasks, [taskId], current);
+  const submenu = statusSubmenu(standing, [taskId], current);
   return keyed ? { ...submenu, command: APP_COMMAND.SET_STATUS } : submenu;
 }
 

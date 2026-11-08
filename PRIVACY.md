@@ -313,8 +313,9 @@ Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
 the drive may remain. A sandbox's snapshots otherwise expire and are removed
 seven days after they were last used. A repository's default-branch drive is
-kept for the workspace's agents until we remove it, and a repository snapshot
-made before default-branch drives expires thirty days after its last use. When you delete your account:
+kept for the workspace's agents until the workspace is deleted, and a
+repository snapshot made before default-branch drives expires thirty days after
+its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, integration records, and your phones' push tokens) is deleted
@@ -327,11 +328,10 @@ made before default-branch drives expires thirty days after its last use. When y
 - **Workspaces you own and are the only member of** are deleted at once with
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding
-  their checkouts, and to stop their scheduled automations; where that fails or
-  does not finish in time, the workspace is deleted anyway and a drive may
-  remain. The copy of each of their repositories' default branches on a drive
-  their agents start from is not deleted with them, and is kept until we remove
-  it, as said above. Their GitHub, Slack, and Sentry
+  their checkouts and the copy of each of their repositories' default branches
+  on a drive their agents start from, and to stop their scheduled automations;
+  where that fails or does not finish in time, the workspace is deleted anyway
+  and a drive may remain. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those
   services until you uninstall them there.
 - **Workspaces with other members**, and the memories, comments, and

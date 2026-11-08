@@ -103,7 +103,13 @@ import { restOn } from "./hint-rest.js";
 import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
-import { agentHoldingsOf, listedAgent, tasksControl, waitingOf } from "./tasks-control.js";
+import {
+  agentHoldingsOf,
+  listedAgent,
+  newTaskControl,
+  tasksControl,
+  waitingOf,
+} from "./tasks-control.js";
 import { holdingInboxChoice, leavingBy, windowRouter } from "./window-router.js";
 
 /** Where the window's router stands as the Inbox is drawn: Acme's Inbox. */
@@ -872,9 +878,11 @@ export function mount(
         onTaskAgents: () => undefined,
       },
       onShowTask: (taskId) => asked.shownTasks.push(taskId),
-      onNewTask: () => {
-        asked.newTasks += 1;
-      },
+      newTask: newTaskControl({
+        onOpen: () => {
+          asked.newTasks += 1;
+        },
+      }),
       onShowAgent: (taskId, agentId) => asked.shownAgents.push([taskId, agentId]),
     });
     const inbox =

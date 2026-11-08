@@ -1081,6 +1081,13 @@ const leaving = (plugin: WorkspacePlugin, userId: string, workspaceId: string) =
 const deleting = (plugin: WorkspacePlugin, userId: string, workspaceId: string) =>
   postedInSession(plugin, userId, HOSTED_SERVICE_PATH.WORKSPACES_DELETE, { workspaceId });
 
+/** The owner deleting the workspace only while nobody else is a member of it, as setup's Just me asks, under its session. */
+const deletingIfAlone = (plugin: WorkspacePlugin, userId: string, workspaceId: string) =>
+  postedInSession(plugin, userId, HOSTED_SERVICE_PATH.WORKSPACES_DELETE, {
+    workspaceId,
+    ifAlone: true,
+  });
+
 /** The account renaming the workspace, under its session. */
 const renaming = (plugin: WorkspacePlugin, userId: string, workspaceId: string, name: string) =>
   postedInSession(plugin, userId, HOSTED_SERVICE_PATH.WORKSPACES_RENAME, { workspaceId, name });
@@ -1606,6 +1613,31 @@ it.effect(
         assert.deepEqual(yield* deleting(plugin, ada, personal), notPermitted);
         assert.equal((yield* membersOf(acme)).length, 3);
         assert.equal((yield* membersOf(personal)).length, 1);
+      }).pipe(Effect.provide(plugin.database));
+    }),
+);
+
+it.effect(
+  "a delete asked only while the owner is alone takes a workspace nobody joined, and leaves one someone joined",
+  () =>
+    Effect.gen(function* () {
+      const plugin = yield* openWorkspacePlugin;
+      yield* Effect.gen(function* () {
+        const ada = yield* openGithubAccount("Ada Lovelace");
+        const grace = yield* openGithubAccount("Grace Hopper");
+        const joined = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
+        const solo = yield* openTeam(plugin.api, grace, []);
+
+        const ofJoined = yield* deletingIfAlone(plugin, ada, joined);
+        const ofSolo = yield* deletingIfAlone(plugin, grace, solo);
+
+        assert.deepEqual(
+          ofJoined,
+          refusedAs(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        );
+        assert.equal((yield* membersOf(joined)).length, 2);
+        assert.deepEqual(ofSolo, { status: HOSTED_HTTP_STATUS.OK, body: { workspaceId: solo } });
+        assert.deepEqual(yield* membersOf(solo), []);
       }).pipe(Effect.provide(plugin.database));
     }),
 );

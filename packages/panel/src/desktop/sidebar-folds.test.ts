@@ -15,6 +15,7 @@ import {
   agentHoldingsOf,
   agentsControl,
   handInbox,
+  newTaskControl,
   tasksControl,
 } from "../testing/tasks-control.js";
 import { ArchivedAgents } from "./agent-archive.js";
@@ -162,7 +163,7 @@ test("a repository's header folds on its name, says its pin, counts its plans fo
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [task("p-1", "Invite expiry", "acme/relay"), task("p-2", "Retry audit", "acme/relay")],
-      onNewTaskIn: (repository) => asked.push(repository),
+      newTask: newTaskControl({ onOpenIn: (repository) => asked.push(repository) }),
     }),
   );
   const relay = () => fold(sidebar, "relay");

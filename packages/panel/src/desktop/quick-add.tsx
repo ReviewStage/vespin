@@ -10,7 +10,8 @@ import {
 } from "@repo/ui";
 import { Fragment, type RefObject, useMemo, useRef, useState } from "react";
 import { useMemberDirectory } from "../member-directory.js";
-import type { QuickAddInto, TasksControl } from "../tasks/use-tasks-tab.js";
+import { type QuickAddInto, useQuickAddStart } from "../tasks/use-new-task.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { AssigneeChip, PriorityChip, StatusChip } from "./task-row-parts.js";
 
@@ -105,9 +106,10 @@ export interface QuickAdd {
   readonly onStanding: (standing: TaskStanding) => void;
 }
 
-/** A group's quick add into `into`, through the Tasks tab's quiet start. */
+/** A group's quick add into `into`, in the workspace the tab lists, through a quiet start (`useQuickAddStart`). */
 export function useQuickAdd(tasks: TasksControl, into: QuickAddInto): QuickAdd {
   const { members } = useMemberDirectory();
+  const quickAdd = useQuickAddStart(tasks.workspace?.id);
   const nameOf = (userId: string) => members?.find((member) => member.userId === userId)?.name;
   const [drafting, setDrafting] = useState(false);
   const [round, setRound] = useState(0);
@@ -143,7 +145,7 @@ export function useQuickAdd(tasks: TasksControl, into: QuickAddInto): QuickAdd {
       ...(into.repository === undefined ? undefined : { repository: into.repository }),
       standing: askedOf(draft),
     };
-    void tasks.onQuickAdd(name, asked).then((refused) => {
+    void quickAdd(name, asked).then((refused) => {
       setPending((out) => out.filter((each) => each.id !== id));
       if (refused !== undefined) setNote(refusedWords(name, refused));
     });

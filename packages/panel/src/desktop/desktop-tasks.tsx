@@ -96,13 +96,14 @@ import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-c
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
+import type { StartingTask } from "../tasks/use-new-task.js";
 import { OpenAddressesHere, openPullRequestsHere, useOpenPlace } from "../tasks/use-open-link.js";
 import { usePins } from "../tasks/use-pin-writes.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
 import { useTaskRelationWrites } from "../tasks/use-task-relation-writes.js";
-import type { StartingTask, TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
@@ -873,7 +874,8 @@ function DescriptionDocument({
   const workspaceName = home?.name ?? "";
   // The task's path and its add menu name and offer the tasks of its own workspace, and a press on the parent's crumb opens it as a list's row would.
   const openedWorkspace = opened?.workspaceId;
-  const { tasks: everyTask, onSelect: selectTask, onNewRelatedTask, relationMenu } = tasks;
+  const { tasks: everyTask, onSelect: selectTask, relationMenu } = tasks;
+  const onNewRelatedTask = tasks.newTask.onOpenRelated;
   const { onSetTaskBlock, onSetTaskParent } = relationWrites;
   const blockTasks = useMemo(
     () => everyTask.filter((each) => each.workspaceId === openedWorkspace),
@@ -1602,11 +1604,11 @@ function startingPage(
   room: ShellRoom,
   away: TaskHeadBack | undefined,
 ): React.JSX.Element | undefined {
-  if (tasks.starting === undefined) return undefined;
+  if (tasks.newTask.starting === undefined) return undefined;
   return (
     <StartingTaskPage
       tasks={tasks}
-      starting={tasks.starting}
+      starting={tasks.newTask.starting}
       phoneAway={
         room === SHELL_ROOM.NARROW
           ? (away ?? { label: HOME_BACK, onPress: tasks.onGoHome })

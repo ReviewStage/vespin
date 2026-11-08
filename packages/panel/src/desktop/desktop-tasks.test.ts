@@ -67,7 +67,6 @@ import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { relayout } from "../testing/resize-observer.js";
 import { ToastHost } from "../toast.js";
 import "../file-tree/index.js";
-import { askKept } from "../act.js";
 import {
   handHostReads,
   handMembers,
@@ -1075,6 +1074,13 @@ function standingPageMounted(keeps: boolean) {
     priority: TASK_PRIORITY.HIGH,
   };
   const sent: TaskStanding[] = [];
+  // A change of standing leaves on the act port, which the service keeps or refuses.
+  fakeActPort({
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId: _taskId, ...standing }) => {
+      sent.push(standing);
+      return Promise.resolve(keeps);
+    },
+  });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() =>
@@ -1092,10 +1098,6 @@ function standingPageMounted(keeps: boolean) {
                 activeTaskId: task.id,
                 region: { kind: DOCUMENT_REGION.READY, task },
                 sidePanel: DOCUMENT_PANEL,
-                onSetTaskStanding: (_taskId, standing) => {
-                  sent.push(standing);
-                  return askKept(Promise.resolve(keeps));
-                },
               }),
             }),
             createElement(ToastHost),

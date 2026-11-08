@@ -15,7 +15,19 @@ import {
   type WorkspaceRole,
   workspacePhotoOfDataUrl,
 } from "@repo/features/workspace-wire";
-import { and, asc, eq, exists, inArray, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  inArray,
+  ne,
+  notExists,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { type Cause, DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import {
@@ -294,6 +306,35 @@ const findMemberWorkspace = SqlSchema.findOneOption({
     ),
 });
 
+const otherMember = alias(member, "other_member");
+
+const updateSoleMemberToOwner = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
+  execute: ({ userId, organizationId }) =>
+    Database.use((db) =>
+      db
+        .update(member)
+        .set({ role: WORKSPACE_ROLE.OWNER })
+        .where(
+          and(
+            eq(member.userId, userId),
+            eq(member.organizationId, organizationId),
+            notExists(
+              queryBuilder
+                .select({ one: otherMember.id })
+                .from(otherMember)
+                .where(
+                  and(
+                    eq(otherMember.organizationId, organizationId),
+                    ne(otherMember.userId, userId),
+                  ),
+                ),
+            ),
+          ),
+        ),
+    ),
+});
+
 const findMemberWorkspaceIds = SqlSchema.findAll({
   Request: Schema.String,
   Result: Schema.Struct({ organizationId: Schema.String }),
@@ -309,6 +350,7 @@ const findMemberWorkspaceIds = SqlSchema.findAll({
 const WorkspaceAgentConversationSchema = Schema.Struct({
   conversationId: Schema.String,
   sessionId: Schema.NullOr(Schema.String),
+  repository: Schema.NullOr(Schema.String),
 });
 
 const findWorkspaceAgentConversations = SqlSchema.findAll({
@@ -320,6 +362,7 @@ const findWorkspaceAgentConversations = SqlSchema.findAll({
         .select({
           conversationId: agentTable.conversationId,
           sessionId: conversations.runtimeSessionId,
+          repository: agentTable.repository,
         })
         .from(agentTable)
         .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -833,6 +876,19 @@ export function isWorkspaceMember(
   return Effect.map(findMemberWorkspace({ userId, organizationId }), Option.isSome);
 }
 
+/**
+ * Makes the account the owner of a workspace it is the only member of, so
+ * its account's deletion may delete the workspace through the plugin, which
+ * lets an owner alone delete one; a workspace anyone else is in is left as
+ * it is, in the same statement.
+ */
+export function claimSoleWorkspace(
+  userId: string,
+  organizationId: string,
+): WorkspaceStoreEffect<void> {
+  return updateSoleMemberToOwner({ userId, organizationId });
+}
+
 /** The ids of every workspace the account is a member of, in no order. */
 export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonly string[]> {
   return Effect.map(findMemberWorkspaceIds(userId), (rows) =>
@@ -840,15 +896,16 @@ export function memberWorkspaceIds(userId: string): WorkspaceStoreEffect<readonl
   );
 }
 
-/** An agent's conversation as a workspace's delete reads it: its id, and the runtime session it last ran, where it ran one. */
+/** An agent's conversation as a workspace's delete reads it: its id, the runtime session it last ran, where it ran one, and the repository the agent started in, where it has one. */
 export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema.Type;
 
 /**
  * The conversation of every agent of the workspace, whoever ran it, with
- * the session it runs in. A conversation names the account that ran it
- * rather than the workspace, so a workspace's delete reads these while its
- * agents stand and, once they are gone, deletes the conversations, as a
- * task's delete does its own, and the sessions' sandboxes.
+ * the session it runs in and its repository. A conversation names the
+ * account that ran it rather than the workspace, so a workspace's delete
+ * reads these while its agents stand and, once they are gone, deletes the
+ * conversations, as a task's delete does its own, the sessions' sandboxes,
+ * and the repositories' base drives.
  */
 export function workspaceAgentConversations(
   organizationId: string,

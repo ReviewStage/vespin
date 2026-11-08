@@ -35,7 +35,8 @@ import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
  * an agent alone. An agent is required: its step goes on only once Claude or Codex
  * is connected. A team's workspace is required too, once With my team is
  * chosen, since Back leads to Just me for anyone who changed their mind;
- * once made, its step coming back holds it to change rather than make again.
+ * once made, its step coming back holds it to change rather than make again,
+ * and Just me deletes it while nobody else has joined it.
  * The survey and GitHub may be skipped, and the tools need nothing done. Where setup
  * stands is kept on the account (`APP_SETTING_SCHEMA.setupPlace`), so setup
  * left partway resumes at the same step on another machine or on the web,
@@ -145,6 +146,7 @@ interface SetupStepsProps {
 function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.Element {
   const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
   const { mutateAsync: signOut } = useMutation(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
+  const { mutate: deleteWorkspace } = useMutation(actMutation(ACT_KIND.WORKSPACE_DELETE));
   const [, , keepFinished] = useKept(SETUP_FINISHED, []);
   const stored = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.setupPlace;
   const kept = setupPlaceFrom(stored);
@@ -169,11 +171,24 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   );
   // Note that the place is first kept on the first move rather than as setup opens, because a preferences read that failed lets setup open without the account's place, and nothing written unasked may then put back another machine's.
   const move = (change: Partial<SetupPlace>) => keep({ ...(written.current ?? place), ...change });
+  // Note that Just me deletes the team's workspace setup made only while nobody else is a member, which the service checks rather than this window's list, and that a delete refused or failed leaves it as made, hidden, without a word, so setup goes on as Just me.
+  const dropTeam = (made: string) =>
+    deleteWorkspace(
+      { workspaceId: made, ifAlone: true },
+      {
+        onSuccess: () => {
+          const now = written.current ?? place;
+          if (now.team === made) keep({ audience: now.audience, at: now.at });
+        },
+        onError: (error) => console.warn("Setup's team workspace was left standing.", error),
+      },
+    );
   // A team's workspace made stands listed only while setup is for the team, so Just me goes back to the account's own.
   const setAudience = (chosen: SetupAudience) => {
     move({ audience: chosen });
     const listed = chosen === SETUP_AUDIENCE.TEAM ? team : personal;
     if (team !== undefined && listed !== undefined) tasks.onChooseWorkspace(listed);
+    if (chosen === SETUP_AUDIENCE.ME && team !== undefined) dropTeam(team);
   };
   const setAt = (step: number) => move({ at: step });
   const [agent, setAgent] = useState(false);

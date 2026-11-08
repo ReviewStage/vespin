@@ -431,8 +431,15 @@ export const workspaceTokenRepositoryRequestSchema = EffectSchema.Struct({
 /** The workspace the account left. */
 export const workspaceLeaveAnswerSchema = workspaceLeaveRequestSchema;
 
-/** Its owner deleting a workspace (POST), answered with the workspace deleted. */
-export const workspaceDeleteRequestSchema = EffectSchema.Struct({ workspaceId: workspaceIdSchema });
+/**
+ * Its owner deleting a workspace (POST), answered with the workspace deleted;
+ * `ifAlone` refuses it once anyone but the owner is a member, as setup's Just
+ * me asks of the team's workspace it made.
+ */
+export const workspaceDeleteRequestSchema = EffectSchema.Struct({
+  workspaceId: workspaceIdSchema,
+  ifAlone: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+});
 
 /** The workspace the owner deleted. */
-export const workspaceDeleteAnswerSchema = workspaceDeleteRequestSchema;
+export const workspaceDeleteAnswerSchema = EffectSchema.Struct({ workspaceId: workspaceIdSchema });

@@ -212,6 +212,7 @@ import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
+import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskOrigin } from "../tasks/use-task-origin.js";
 import {
@@ -1558,6 +1559,7 @@ function agentPinRows(
 function taskCommandRows(
   tasks: TasksControl,
   writes: Pick<TaskRelationWrites, "onRemoveTaskParent">,
+  standing: Pick<StandingWrites, "onSettleTasks">,
   reads: ReadMarks,
   rename: OpenTaskRename | undefined,
   choose: (run: () => void) => void,
@@ -1573,7 +1575,7 @@ function taskCommandRows(
       : []),
     {
       item: PANEL_COMMAND.NEW_CHILD_TASK,
-      run: () => tasks.onNewRelatedTask(task.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF),
+      run: () => tasks.newTask.onOpenRelated(task.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF),
     },
     // Add task relation opens the head's add menu on its first kind, whose pinned Relation row switches it.
     {
@@ -1587,7 +1589,7 @@ function taskCommandRows(
       ? [
           {
             item: PANEL_COMMAND.CANCEL_TASK,
-            run: () => tasks.onSettleTasks([task.id], SETTLED_STATUS.CANCELED),
+            run: () => standing.onSettleTasks([task.id], SETTLED_STATUS.CANCELED),
           },
         ]
       : []),
@@ -2196,6 +2198,7 @@ export function CommandPalette({
   const relationWrites = useTaskRelationWrites();
   const agentReads = useAgentReadMarks();
   const pins = usePinWrites(tasks.drawnTasks);
+  const standing = useStandingWrites(tasks.drawnTasks);
   useOpenThingKeys(tasks, pins, inboxStanding, reads, agentReads);
   // The open agent's Archive, asked of `OpenAgentArchive` by the agent it was chosen for.
   const openAgent = openAgentOf(tasks);
@@ -2325,7 +2328,15 @@ export function CommandPalette({
         ...agentReadMarkRows(tasks, agentReads, choose),
         ...taskPinRows(tasks, pins, reads, choose),
         ...agentPinRows(tasks, pins, choose),
-        ...taskCommandRows(tasks, relationWrites, reads, renameOffer, choose, historyOffered),
+        ...taskCommandRows(
+          tasks,
+          relationWrites,
+          standing,
+          reads,
+          renameOffer,
+          choose,
+          historyOffered,
+        ),
         ...agentArchiveRows(openAgent, askArchive, choose),
         ...panelTabRows(tasks, inboxStanding, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),

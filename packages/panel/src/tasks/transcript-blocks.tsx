@@ -727,13 +727,27 @@ const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
  * place draws none, which draws its link instead. `inline` says it stands
  * in a line of words or inside a link the words keep, a press on which
  * follows the link, so the place draws it in that line as GitHub does, with
- * no press of its own.
+ * no press of its own. `size` is the width and height its author wrote on
+ * it, in pixels, which GitHub draws it at, as a bot's 16-pixel glyph is.
  */
 export type GitHubPictureDrawer = (
   src: string,
   alt: string,
   inline: boolean,
+  size: GitHubPictureSize,
 ) => ReactNode | undefined;
+
+/** The width and height a picture's author wrote on it, in pixels; either unset where none is written. */
+export interface GitHubPictureSize {
+  readonly width: number | undefined;
+  readonly height: number | undefined;
+}
+
+/** A size attribute as the drawn tree hands it, a number or its words, read as pixels; none where it is no positive number, as a percentage is not. */
+function pixelsOf(value: unknown): number | undefined {
+  const pixels = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(pixels) && pixels > 0 ? pixels : undefined;
+}
 
 /** Whether what is drawn stands inside a link of GitHub's words. */
 const InsideGitHubLink = createContext(false);
@@ -747,17 +761,21 @@ function GitHubImage({
   src,
   alt,
   inWords,
+  size,
   picture,
 }: {
   src: string;
   alt: string;
   inWords: boolean;
+  size: GitHubPictureSize;
   picture: GitHubPictureDrawer;
 }): ReactNode {
   const linked = useContext(InsideGitHubLink);
   const shown = pictureFor(src, useDrawnDark());
   if (shown === undefined) return null;
-  return picture(shown, alt, inWords || linked) ?? <GitHubPictureLink src={shown} alt={alt} />;
+  return (
+    picture(shown, alt, inWords || linked, size) ?? <GitHubPictureLink src={shown} alt={alt} />
+  );
 }
 
 /** A picture GitHub's rendering names that its place draws none of: a link to where it points, as a transcript's picture is. */
@@ -815,11 +833,12 @@ export function GitHubWords({
           </TranscriptLink>
         </InsideGitHubLink.Provider>
       ),
-      img: ({ src, alt, node }) => (
+      img: ({ src, alt, width, height, node }) => (
         <GitHubImage
           src={String(src ?? "")}
           alt={String(alt ?? "")}
           inWords={node?.properties[INLINE_PICTURE] === true}
+          size={{ width: pixelsOf(width), height: pixelsOf(height) }}
           picture={picture}
         />
       ),

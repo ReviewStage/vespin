@@ -1572,38 +1572,32 @@
   margin-top: var(--ui-item-gap);
 }
 
-/* The description's editor flows as its drawn words do (`@repo/ui`'s
-   `.ui-markdown-flow`), so nothing moves as it opens; a task list open in it
-   stands its boxes in the bullets' place, as drawn below. */
-.pull-request-description-text ul[data-type="taskList"] {
-  padding-left: 0;
+/* A list stands at GitHub's indent, a task list's boxes, the shared
+   read-only `Checkbox` (`@repo/ui/markdown`), in the bullets' place in its
+   gutter (`prose.css`), so a box stands in from the words' edge and its
+   words start where a bullet's would, as GitHub draws them. The
+   description's editor stands in the same room and flows as its drawn words
+   do (`@repo/ui`'s `.ui-markdown-flow`), its boxes in the same gutter, so
+   nothing moves as it opens. */
+.pull-request-words :is(ul, ol) {
+  padding-left: 2em;
 }
 
-/* A task item open in the description's editor stands its box before its
-   words' block, the box apart from them by its own margin, as drawn below. */
-.pull-request-description-text.description-document-text li[data-checked] {
-  display: flex;
-  align-items: baseline;
-}
-
-/* A task list stands as GitHub draws one: its boxes, the shared read-only
-   `Checkbox` (`@repo/ui/markdown`), in the bullets' place. */
-.pull-request-words ul:has(> li > .ui-markdown-task) {
-  padding-left: 0;
-  list-style: none;
-}
-
-.pull-request-words li > .ui-markdown-task {
-  margin: 0 var(--ui-item-gap) 0 0;
-  vertical-align: middle;
+/* GitHub's smallest heading stands at the caption's size in the quiet ink,
+   as a bot's footer of review details is written in one. */
+.pull-request-words .ui-markdown-heading[data-level="6"] {
+  color: var(--ui-color-text-muted);
+  font-size: var(--ui-type-caption-size);
 }
 
 /* A picture GitHub's rendering names, read through the service: as wide as
    the words around it at most, at its own shape, and a quiet box of a
-   screenshot's shape while it is read. */
+   screenshot's shape while it is read, or of the size its author wrote on
+   it, held to the words' width all the same. */
 .pull-request-picture-skeleton {
   display: inline-block;
   width: min(100%, 240px);
+  max-width: 100%;
   aspect-ratio: 16 / 10;
   vertical-align: middle;
 }

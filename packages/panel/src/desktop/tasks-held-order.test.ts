@@ -9,6 +9,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import {
   DEFAULT_BOARD_DISPLAY,
   DEFAULT_LIST_DISPLAY,
@@ -21,10 +22,9 @@ import {
 import { Activity, act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
-import { KEPT } from "../act.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM } from "../shell-room.js";
-import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -131,6 +131,15 @@ async function mountView(
   roots.push(root);
   const sent: [string, unknown][] = [];
   const named: (string | undefined)[] = [];
+  // A change of standing leaves on the act port, with the name the reader knows a member by, which the service keeps.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, assigneeName, ...standing }) => {
+      sent.push([taskId, standing]);
+      named.push(assigneeName);
+      return Promise.resolve(true);
+    },
+  });
   const draw = (listed: readonly TaskSummary[], drawing: Drawing = {}) => {
     const control = tasksControl({
       tasks: [...listed],
@@ -140,11 +149,6 @@ async function mountView(
       listRead: true,
       shown: drawing.shown ?? true,
       ...(drawing.pendingTasks === undefined ? {} : { pendingTasks: drawing.pendingTasks }),
-      onSetTaskStanding: (taskId, standing, assigneeName) => {
-        sent.push([taskId, standing]);
-        named.push(assigneeName);
-        return Promise.resolve(KEPT);
-      },
     });
     const frame = {
       toolbar: null,
@@ -295,7 +299,7 @@ test("in the List, a status the reader picks on a row's chip moves the row at on
   pick("In progress");
   draw(changed(39, { status: TASK_STATUS.IN_PROGRESS }), { pendingTasks: new Set(["t-39"]) });
 
-  assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]));
   assert.deepEqual(laidOut(container), [
     ["In progress", ["ACME-39", "ACME-42"]],
     ["Todo", ["ACME-40", "ACME-41"]],
@@ -347,7 +351,7 @@ test("in the List, a member picked on a row's Assignee chip is sent with the nam
   );
   pick("Charles Pan");
 
-  assert.deepEqual(sent, [["t-41", { assigneeId: CHARLES }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-41", { assigneeId: CHARLES }]]));
   assert.deepEqual(named, ["Charles Pan"]);
 });
 

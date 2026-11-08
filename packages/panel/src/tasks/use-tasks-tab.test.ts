@@ -21,13 +21,7 @@ import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
-import {
-  DESCRIPTION_ACTOR,
-  TASK_CREATE_RELATION_KIND,
-  TASK_PRIORITY,
-  TASK_STATUS,
-  type Task,
-} from "@repo/features/task-wire";
+import { DESCRIPTION_ACTOR, TASK_CREATE_RELATION_KIND, type Task } from "@repo/features/task-wire";
 import {
   IDLE_TASKS_VIEW,
   TASK_CALL_FAILURE,
@@ -57,7 +51,7 @@ import {
   STRIP_TAB_KIND,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, SETTLED_STATUS, TASKS_PAGE } from "@repo/ui/tasks-model";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
@@ -65,7 +59,6 @@ import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
-import { KEPT, type Kept } from "../act.js";
 import { useAdminView } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
@@ -687,40 +680,6 @@ const PLATFORM = {
   github: null,
 };
 
-test("a member assigned from a chip goes to main with the name the reader knows them by, and a refusal answers so", async () => {
-  const tab = mount(
-    { shown: true, tasks: listRead([listed()]) },
-    { [ACT_KIND.TASKS_SET_STANDING]: () => Promise.resolve(false) },
-  );
-  let kept: Promise<Kept> = Promise.resolve(KEPT);
-
-  await act(async () => {
-    kept = tab
-      .control()
-      .onSetTaskStanding(
-        TASK.id,
-        { priority: TASK_PRIORITY.URGENT, assigneeId: "user-charles" },
-        "Charles",
-      );
-  });
-
-  assert.deepEqual(
-    tab.payloads.filter((each) => each.kind === ACT_KIND.TASKS_SET_STANDING),
-    [
-      {
-        kind: ACT_KIND.TASKS_SET_STANDING,
-        payload: {
-          taskId: TASK.id,
-          priority: TASK_PRIORITY.URGENT,
-          assigneeId: "user-charles",
-          assigneeName: "Charles",
-        },
-      },
-    ],
-  );
-  assert.equal((await kept).kept, false);
-});
-
 test("New plan opens its dialog over the open plan, which stays open; a second press leaves it as it stands, only a plan that starts closes it, and leaving the tab puts it away", async () => {
   const answers = [
     { failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE },
@@ -732,15 +691,15 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
     { [ACT_KIND.TASKS_START]: () => Promise.resolve(answers[start++] ?? answers[1]) },
   );
 
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   act(() => tab.control().newTask.onClose());
   assert.equal(tab.control().newTask.open, false, "Cancel puts the dialog away");
-  act(() => tab.control().onNewTaskIn("acme/web"));
+  act(() => tab.control().newTask.onOpenIn("acme/web"));
   assert.equal(tab.control().newTask.open, true);
   assert.deepEqual(tab.control().newTask.preset, { repository: "acme/web" });
   assert.equal(tab.control().page, TASKS_PAGE.DOCUMENT, "the plan behind the dialog stays open");
   assert.ok(!tab.told.includes(ACT_KIND.TASKS_CLOSE), "nothing left the plan");
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   assert.deepEqual(
     tab.control().newTask.preset,
     { repository: "acme/web" },
@@ -763,7 +722,7 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
   assert.equal(note, undefined);
   assert.equal(tab.control().newTask.open, false, "a plan started closes the dialog");
 
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   tab.stand({ shown: false });
   tab.stand({ shown: true });
   assert.equal(tab.control().newTask.open, false, "Settings taking the window put the dialog away");
@@ -775,12 +734,12 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
     shown: true,
     tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces },
   });
-  act(() => home.control().onNewTask());
+  act(() => home.control().newTask.onOpen());
   assert.equal(home.control().newTask.open, false, "no dialog over Home");
   assert.equal(home.control().newTask.homeAsks, 1, "Home's composer is asked for the caret");
 
   act(() => inboxDoorNow().open());
-  act(() => home.control().onNewTask());
+  act(() => home.control().newTask.onOpen());
   assert.equal(home.control().newTask.open, true, "the Inbox gets the dialog");
   assert.equal(home.control().newTask.homeAsks, 1);
 });
@@ -850,7 +809,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
   );
   await settle();
 
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   await act(async () => {
     await tab.control().newTask.start("", null, tab.control().newTask.workspaceId, {
       handed: {
@@ -3929,7 +3888,7 @@ const AGENT_KEY = "5b7e2c1a-9d4f-4a3b-8e6c-2f1d0a9b8c7e";
 async function startAgentTask(tab: ReturnType<typeof mount>) {
   const choice = { model: "anthropic/claude-opus-5.5", effort: "high" };
   const prompt = "Make the sidebar keep its folds.";
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   let note: Failure | undefined = { reason: FAILURE_REASON.OTHER, text: "unanswered" };
   await act(async () => {
     note = await tab.control().newTask.start("", "acme/web", undefined, {
@@ -3948,40 +3907,13 @@ test("New sub-task on the open task the list has not read opens New task as a su
   const tab = mount({ shown: true, tasks: OPEN });
   await settle();
 
-  act(() => tab.control().onNewRelatedTask(TASK.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF));
+  act(() => tab.control().newTask.onOpenRelated(TASK.id, TASK_CREATE_RELATION_KIND.SUB_TASK_OF));
 
   assert.equal(tab.control().newTask.open, true);
   const relation = tab.control().newTask.preset?.relation;
   assert.equal(relation?.kind, "sub-task-of");
   assert.equal(relation?.task.id, TASK.id);
   assert.equal(relation?.task.workspaceId, "workspace-personal");
-});
-
-test("a group's quick add sends one quiet start with the group's standing and no agent, asking no one assigned as nothing", async () => {
-  const tab = mount(
-    { shown: true, tasks: OPEN },
-    { [ACT_KIND.TASKS_START]: () => Promise.resolve({ planId: OTHER_TASK_ID }) },
-  );
-  let refused: Failure | undefined = { reason: FAILURE_REASON.OTHER, text: "unanswered" };
-  await act(async () => {
-    refused = await tab.control().onQuickAdd("Export invoices as CSV", {
-      standing: { status: TASK_STATUS.BACKLOG, priority: TASK_PRIORITY.HIGH, assigneeId: null },
-    });
-  });
-
-  assert.equal(refused, undefined);
-  assert.deepEqual(
-    tab.payloads.filter(({ kind }) => kind === ACT_KIND.TASKS_START).map(({ payload }) => payload),
-    [
-      {
-        name: "Export invoices as CSV",
-        status: TASK_STATUS.BACKLOG,
-        priority: TASK_PRIORITY.HIGH,
-        planning: false,
-        quiet: true,
-      },
-    ],
-  );
 });
 
 test("New task's Agent mode sends one start carrying the agent, its words and model, and opens the task on the agent it started", async () => {
@@ -4147,7 +4079,7 @@ test("New task's agent start opens its page at once on the words as its agent's 
   );
   const prompt = "Make the sidebar keep its folds.";
   const choice = { model: "anthropic/claude-opus-5.5", effort: "high" };
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, {
@@ -4162,8 +4094,12 @@ test("New task's agent start opens its page at once on the words as its agent's 
   });
 
   assert.equal(tab.control().newTask.open, false, "the dialog closes as Start is pressed");
-  assert.equal(tab.control().starting?.line.text, prompt, "the page stands on the words at once");
-  assert.deepEqual(tab.control().starting?.choice, choice, "and on the model picked");
+  assert.equal(
+    tab.control().newTask.starting?.line.text,
+    prompt,
+    "the page stands on the words at once",
+  );
+  assert.deepEqual(tab.control().newTask.starting?.choice, choice, "and on the model picked");
 
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
@@ -4172,7 +4108,7 @@ test("New task's agent start opens its page at once on the words as its agent's 
   });
   tab.stand({ tasks: AGENT_TASK });
   await settle();
-  assert.equal(tab.control().starting, undefined, "the task's own page takes its place");
+  assert.equal(tab.control().newTask.starting, undefined, "the task's own page takes its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
   assert.equal(tab.control().agents.opening?.line.text, prompt);
 });
@@ -4184,7 +4120,7 @@ test("what the developer opened while New task's agent start was out, a page and
     { shown: true, tasks: { ...OPEN, workspaces: [ACME] } },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, {
@@ -4198,7 +4134,7 @@ test("what the developer opened while New task's agent start was out, a page and
     });
   });
   act(() => automationsDoor?.open());
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
 
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
@@ -4207,7 +4143,7 @@ test("what the developer opened while New task's agent start was out, a page and
   });
   assert.equal(views?.automations !== undefined, true, "the page stands");
   assert.equal(tab.control().newTask.open, true, "New task stands");
-  assert.equal(tab.control().starting, undefined);
+  assert.equal(tab.control().newTask.starting, undefined);
 });
 
 test("New task's agent start refused after its page opened opens the card again on the repository, model, and press it held, saying why, over the version history it was asked from", async () => {
@@ -4243,7 +4179,7 @@ test("New task's agent start refused after its page opened opens the card again 
     relations: [],
     words: handed.prompt,
   };
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed, card });
@@ -4257,7 +4193,7 @@ test("New task's agent start refused after its page opened opens the card again 
     refused = await note;
   });
   assert.ok(refused !== undefined);
-  assert.equal(tab.control().starting, undefined, "the page gives way");
+  assert.equal(tab.control().newTask.starting, undefined, "the page gives way");
   assert.equal(tab.control().newTask.open, true, "the card opens again");
   assert.deepEqual(tab.control().newTask.preset?.refused, { card, note: refused });
   assert.equal(tab.control().history.open, true, "the version history stands behind it again");
@@ -4270,7 +4206,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
   act(() => automationsDoor?.open());
-  act(() => tab.control().onNewAutomationAgent());
+  act(() => tab.control().newTask.onOpenForAutomation());
   assert.equal(tab.control().newTask.open, true);
   assert.deepEqual(tab.control().newTask.preset, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
   assert.equal(views?.automations !== undefined, true, "the page stands behind the card");
@@ -4563,39 +4499,6 @@ test("a task opened is timed from the press to its document drawn ready, and one
   );
 });
 
-/** A status write's payload, read back as the act's own schema admits it. */
-const readStanding = Schema.decodeUnknownOption(
-  Schema.Struct({ taskId: Schema.String, status: Schema.optionalKey(Schema.String) }),
-);
-
-test("Mark done's Undo leaves a status chosen since alone, though that choice is still unanswered", async () => {
-  const view: TasksView = {
-    ...IDLE_TASKS_VIEW,
-    listStatus: TASKS_READ.READY,
-    workspaces: [PERSONAL],
-    tasks: [{ ...row("notes", 4), status: TASK_STATUS.TODO }],
-  };
-  let answered = 0;
-  const tab = mount({ tasks: view }, {
-    // The Mark done is kept, and the status chosen after it waits on the service.
-    [ACT_KIND.TASKS_SET_STANDING]: () => {
-      answered += 1;
-      return answered === 1 ? Promise.resolve(true) : new Promise(() => undefined);
-    },
-  } as Parameters<typeof mount>[1]);
-
-  act(() => tab.control().onSettleTasks(["notes"], SETTLED_STATUS.DONE));
-  await settle();
-  void tab.control().onSetTaskStanding("notes", { status: TASK_STATUS.IN_PROGRESS });
-  act(() => _undoButton().click());
-  await settle();
-
-  const written = tab.payloads
-    .filter(({ kind }) => kind === ACT_KIND.TASKS_SET_STANDING)
-    .map(({ payload }) => Option.getOrUndefined(readStanding(payload))?.status);
-  assert.deepEqual(written, [TASK_STATUS.DONE, TASK_STATUS.IN_PROGRESS]);
-});
-
 /**
  * Runs the tab's waits on this clock, as the window's run on its own. Note
  * that the host's holds, the task's cloud Browser tabs among them, are
@@ -4842,6 +4745,6 @@ test("a pinned tab of one agent's opened while the column shows another shows it
 
 test("New task over Home under Admin opens its dialog, since Home's composer is not on screen", () => {
   const tab = mount({ shown: true, admin: true });
-  act(() => tab.control().onNewTask());
+  act(() => tab.control().newTask.onOpen());
   assert.equal(tab.control().newTask.open, true);
 });

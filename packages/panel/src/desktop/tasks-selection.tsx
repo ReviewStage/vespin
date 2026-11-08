@@ -26,6 +26,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useTasksDelete } from "../tasks/task-delete.js";
+import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { sectionGlyph } from "./section-icon-picker.js";
 import {
@@ -113,6 +114,7 @@ function selectionActs(
   doors: {
     /** The sections the account made, as the window lists them now. */
     sections: TaskSections;
+    standing: Pick<StandingWrites, "onSettleTasks">;
     onActed: () => void;
     askNew: SectionDialogs["askNew"];
     move: SectionDialogs["move"];
@@ -125,7 +127,7 @@ function selectionActs(
     onActed();
   };
   const chosen = tasks.tasks.filter((task) => taskIds.includes(task.id));
-  const status = statusSubmenu(tasks, taskIds, sharedStatus(chosen), onActed);
+  const status = statusSubmenu(doors.standing, taskIds, sharedStatus(chosen), onActed);
   const workspaceId = tasks.workspace?.id;
   const sections = workspaceId === undefined ? [] : workspaceSections(doors.sections, workspaceId);
   const move = (sectionId: string | null) =>
@@ -220,6 +222,7 @@ export function useTasksSelection(
 ): TasksSelection {
   // The sections as they stand, which New section's answer reads renders after its act.
   const sections = useSectionDialogs(tasks, tasks.shown);
+  const standing = useStandingWrites(tasks.drawnTasks);
   const latest = useRef(sections.sections);
   latest.current = sections.sections;
   const regionId = useId();
@@ -271,6 +274,7 @@ export function useTasksSelection(
   );
   const acts = selectionActs(tasks, () => latest.current, [...selected], {
     sections: sections.sections,
+    standing,
     onActed: onClear,
     askNew: sections.askNew,
     move: sections.move,

@@ -308,16 +308,27 @@ export class AccountSessionManager {
     NoStoredAccount | DeletionUnconfirmed | AccountClientFailure
   > {
     return Effect.gen({ self: this }, function* () {
+      // Note that the account is held from before it is read: a sign-out or sign-in landing while the deletion runs stops it before it asks a session or a delete for whatever account stands then.
+      const generation = this.#generation;
+      const stillHeld = Effect.suspend(() =>
+        this.#isCurrent(generation)
+          ? Effect.void
+          : Effect.fail(
+              new DeletionUnconfirmed({
+                message: "The account this Mac holds changed while it was being deleted",
+              }),
+            ),
+      );
       const stored = yield* this.#options.store.readAccount();
       if (!stored) {
         return yield* Effect.fail(
           new NoStoredAccount({ message: "No stored account credential to delete with" }),
         );
       }
-      // Note that the account is held from here on: a sign-out or sign-in landing while the deletion runs leaves its account looked for as unknown.
-      const generation = this.#generation;
+      yield* stillHeld;
       // Note that Better Auth deletes the account under the Mac's own session, so one is asked for where none is held, and a fresh one where the service finds the one held too old, a sign-in through the browser's hand-off page each.
       const held = stored.sessionToken ?? (yield* this.#freshSession());
+      yield* stillHeld;
       const deleted = yield* Effect.result(this.#deleteHosted(held));
       if (Result.isFailure(deleted)) {
         if (deletionSessionRefused(deleted.failure)) {
@@ -333,7 +344,10 @@ export class AccountSessionManager {
         } else if (!deletionNeedsNewSession(deleted.failure)) {
           return yield* Effect.fail(deleted.failure);
         }
-        yield* this.#deleteHosted(yield* this.#freshSession());
+        yield* stillHeld;
+        const fresh = yield* this.#freshSession();
+        yield* stillHeld;
+        yield* this.#deleteHosted(fresh);
       }
       return yield* this.signOut();
     });
@@ -376,9 +390,10 @@ export class AccountSessionManager {
    */
   #renew(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const stored = yield* this.#options.store.readAccount();
-      if (!stored || !this.#options.requiresAccount) return;
+      // Note that the generation is taken before the read, so tokens read across a sign-in never pass for the account that signed in.
       const generation = this.#generation;
+      const stored = yield* this.#options.store.readAccount();
+      if (!stored || !this.#options.requiresAccount || !this.#isCurrent(generation)) return;
       const renewed = yield* Effect.result(this.#options.client.refresh(stored.refreshToken));
       if (Result.isFailure(renewed)) {
         if (

@@ -1,5 +1,5 @@
 /**
- * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a base drive filled in a sandbox of its own, a sandbox deleted only while it is the one read, and one resumed until it runs.
+ * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a base drive filled in a sandbox of its own and deleted for good, a sandbox deleted only while it is the one read, and one resumed until it runs.
  *
  * A sandbox is persistent and named: it runs, stops with its disk kept as a
  * snapshot, and resumes from it, each time in a run of its own. A call on
@@ -19,7 +19,9 @@
  * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
  * or a drive of its own forked from one. Every drive call is the package's,
  * made as a sandbox opens or is deleted, so a drive is never a caller's to
- * forget: a sandbox's delete deletes the drive it owns in the same call.
+ * forget: a sandbox's delete deletes the drive it owns in the same call. A
+ * base drive owns no sandbox, so it is deleted by its name alone, with the
+ * fill's sandbox that holds it (`deletedFilledDrive`).
  */
 
 import { Context, Duration, Effect, Option, Schedule, type Scope } from "effect";
@@ -41,6 +43,7 @@ import {
   type SandboxRoute,
   type SandboxRunning,
   type SandboxTarget,
+  UP_STATUSES,
 } from "./vocabulary.js";
 
 export interface SandboxService {
@@ -89,6 +92,13 @@ export interface SandboxService {
    * name, whether the sandbox still stands or not.
    */
   readonly delete: (name: string) => Effect.Effect<void, SandboxError>;
+  /**
+   * Deletes the named drive and everything on it; one already gone counts as
+   * deleted. One still mounted in a running sandbox is refused
+   * (`SandboxUnavailable`), as the provider refuses it, so a caller lets go
+   * of it first (`deletedFilledDrive`).
+   */
+  readonly deleteDrive: (name: string) => Effect.Effect<void, SandboxError>;
   /** Stops the target's run, keeping its disk as a snapshot for a resume; one already gone counts as stopped. */
   readonly stop: (target: SandboxTarget) => Effect.Effect<void, SandboxError>;
   /** Replaces the named sandbox's tags whole, without resuming it. */
@@ -294,6 +304,25 @@ export const filledDrive = <E, R>(
     yield* sandbox.delete(ask.name);
     return true;
   }).pipe(Effect.withSpan("web/fillDrive"));
+
+/**
+ * A drive `filledDrive` filled deleted for good: the fill's sandbox under
+ * its name stopped where it is up and deleted, then the drive. Note that the
+ * sandbox is stopped first, as a fill ends, because a stop lets go of the
+ * drive at once and the provider refuses to delete a drive a running
+ * sandbox mounts; a fill still running is cut off, its steps failing on a
+ * sandbox gone. A drive or a sandbox already gone counts as deleted.
+ */
+export const deletedFilledDrive = (fill: Pick<DriveFill, "name" | "drive">) =>
+  Effect.gen(function* () {
+    const sandbox = yield* Sandbox;
+    const found = yield* sandbox.get(fill.name);
+    if (found?.running !== undefined && UP_STATUSES.has(found.status)) {
+      yield* sandbox.stop({ name: fill.name, running: found.running });
+    }
+    yield* sandbox.delete(fill.name);
+    yield* sandbox.deleteDrive(fill.drive);
+  }).pipe(Effect.withSpan("web/deleteFilledDrive"));
 
 /**
  * The named sandbox resumed and waited on until it runs: the run it is up

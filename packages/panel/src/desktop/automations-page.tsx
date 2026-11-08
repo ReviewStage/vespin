@@ -579,7 +579,7 @@ function AutomationsHead({
                 label: CREATE_WITH_AGENT,
                 icon: <BotIcon />,
                 disabled: workspace === undefined,
-                onSelect: tasks.onNewAutomationAgent,
+                onSelect: tasks.newTask.onOpenForAutomation,
               },
             ],
             ...phoneFindGroups(),
@@ -596,7 +596,7 @@ function AutomationsHead({
         disabled={workspace === undefined}
         focusableWhenDisabled
         hint={workspace === undefined ? NoWorkspaceHint : undefined}
-        onClick={tasks.onNewAutomationAgent}
+        onClick={tasks.newTask.onOpenForAutomation}
       />
       <Tooltip label={workspace === undefined ? NO_WORKSPACE_HINT : undefined}>
         <Button
