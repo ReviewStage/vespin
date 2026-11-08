@@ -113,7 +113,6 @@ const FIXTURE_FIRST: Workspace = {
   experiments: [
     chosen(EXPERIMENT.DESCRIPTIONS, true, FIXTURE_PERSON.ADA, "2026-09-01T09:00:00Z"),
     chosen(EXPERIMENT.MEMORY, true, FIXTURE_PERSON.ADA, "2026-09-01T09:00:00Z"),
-    chosen(EXPERIMENT.PILOT, true, FIXTURE_PERSON.ADA, "2026-09-01T09:00:00Z"),
   ],
 };
 const FIXTURE_TEAM: Workspace = {
@@ -122,11 +121,9 @@ const FIXTURE_TEAM: Workspace = {
   slug: "acme",
   role: WORKSPACE_ROLE.ADMIN,
   github: { login: "acme", active: true },
-  // Acme's owner turned Pilot off, so Settings › Experimental draws a switch turned off by someone else.
   experiments: [
     chosen(EXPERIMENT.DESCRIPTIONS, true, FIXTURE_PERSON.MAYA, "2026-09-01T09:00:00Z"),
     chosen(EXPERIMENT.MEMORY, true, FIXTURE_PERSON.ADA, "2026-10-23T15:00:00Z"),
-    chosen(EXPERIMENT.PILOT, false, FIXTURE_PERSON.MAYA, "2026-11-02T10:00:00Z"),
   ],
 };
 const FIXTURE_WORKSPACES: readonly Workspace[] = [FIXTURE_FIRST, FIXTURE_TEAM];

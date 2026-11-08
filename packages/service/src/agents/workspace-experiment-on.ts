@@ -1,5 +1,5 @@
 /**
- * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions, Pilot, and Memory an agent or a member's call is offered, handed, and told.
+ * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions and Memory an agent or a member's call is offered, handed, and told.
  *
  * Every gate of a workspace experiment asks here, for the workspace the work
  * stands in: an agent's own (`agent.organizationId`), a task's
@@ -57,27 +57,24 @@ export function experimentOnSinceIn(
 
 /**
  * The workspace's experiments as an agent's tools, their words, and its
- * instructions are built by: each of Task descriptions, Pilot, and Memory on
+ * instructions are built by: each of Task descriptions and Memory on
  * or off. An agent is told nothing of one that is off, so every word that
  * names one is chosen by this.
  */
 export interface ExperimentsOn {
   readonly descriptionsOn: boolean;
-  readonly pilotOn: boolean;
   readonly memoryOn: boolean;
 }
 
 /** Every workspace experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
 export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
-  pilotOn: true,
   memoryOn: true,
 };
 
 /** Every workspace experiment off. */
 export const NO_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: false,
-  pilotOn: false,
   memoryOn: false,
 };
 
@@ -95,7 +92,6 @@ export function experimentsReadIn(
         standings.some((standing) => standing.experiment === experiment && standing.on);
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
-        pilotOn: on(EXPERIMENT.PILOT),
         memoryOn: on(EXPERIMENT.MEMORY),
       });
     }),

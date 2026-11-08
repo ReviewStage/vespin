@@ -22,7 +22,7 @@ import {
 } from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { ListedPullRequest, TaskMode } from "@repo/features/task-wire";
+import type { ListedPullRequest } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
@@ -363,8 +363,6 @@ export interface AgentsControl {
   macs: readonly MacOffer[] | undefined;
   /** Asks the host for the models again, as New task opening or the menu's Retry asks. */
   readModels: () => void;
-  /** How the open task, or the page's agent's task, is worked, which says what its members start of their own (`startsOwnAgents`); none for an agent of no task, or before the task list names it. */
-  mode: TaskMode | undefined;
   /** The open task's draft agent; nothing while it has none. */
   draft: AgentDraft | undefined;
   /** Opens a draft agent on the open task, or answers the one it has, by its key. */
@@ -797,8 +795,6 @@ export function useAgents(input: {
   agentId?: string | undefined;
   /** The open task's repository, or null while it names none. */
   repository: string | null;
-  /** How a task is worked, by its id, as the task list names it; none before the list names the task. */
-  modeOf?: ((taskId: string) => TaskMode | undefined) | undefined;
   /**
    * Every agent the task list followed live carries, on a task or with
    * none, the archived ones among them; none where it is not followed, or
@@ -941,9 +937,6 @@ export function useAgents(input: {
     () => standing?.filter((agent) => agent.archivedAt !== undefined),
     [standing],
   );
-  // The task the agents stand on: the open one, or the page's agent's as the list names it.
-  const modeTask = taskId ?? standing?.[0]?.planId ?? undefined;
-  const mode = modeTask === undefined ? undefined : input.modeOf?.(modeTask);
   // Note that the page's agent stands or falls with the task list's row of it, so an agent deleted turns to Not found as the list drops it.
   // An agent the read list has not carried since the page opened, as a teammate's just started or
   // one a notification names ahead of the list, is looked up once by its id: one the service holds
@@ -1674,7 +1667,6 @@ export function useAgents(input: {
     agentRepository,
     agentIds,
     heldIds: standing?.map((agent) => agent.id),
-    mode,
     draft,
     onNewDraft,
     onForkDraft,

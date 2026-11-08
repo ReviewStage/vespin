@@ -114,8 +114,8 @@ import {
  * members; twenty-one tasks across every status and priority, one broken
  * into sub-tasks and some waiting on others, each with a description and comments
  * on it, open, answered, and resolved; eight finished coding agents of
- * Dean's with their transcripts, a pilot and the agents it started among
- * them, on his host where the run starts one, and the pages they showed;
+ * Dean's with their transcripts, one that broke a task down and the agents
+ * it started among them, on his host where the run starts one, and the pages they showed;
  * and their threads and his teammates', with an Inbox of ten waiting on
  * Dean beside those he and they settled.
  *
@@ -132,7 +132,7 @@ import {
  * `DEMO_HOST`'s id, and every agent runs there, kept as his last pick, the
  * seeded ones among them, so a follow-up to one runs on the
  * Mac. Note that Dean started every agent, those on his teammates' tasks
- * and those his pilot started too, because a host runs its owner's agents
+ * and those his rollout agent started too, because a host runs its owner's agents
  * alone, and an agent on a host takes words from its starter alone
  * (`agent-reach.ts`'s `controlsAgent`).
  *
@@ -687,10 +687,9 @@ function seededRuntime(userId: string, model: string) {
 
 /**
  * One finished agent's row on its task, started by whoever sent its first
- * line, and by the agent whose steps started it where one did, of its kind,
- * running where `place` names and paid for as a Start there
+ * line, and by the agent whose steps started it where one did, running where `place` names and paid for as a Start there
  * records it. Its transcript is written once every agent stands, since a
- * pilot's names the agents it started.
+ * rollout agent's names the agents it started.
  */
 function seedAgent(
   agent: DemoAgent,
@@ -705,7 +704,6 @@ function seedAgent(
       first.startedAgo,
       createAgent(first.from.id, {
         taskId: agent.task.id,
-        ...(agent.kind === undefined ? undefined : { kind: agent.kind }),
         descriptionSnapshot: null,
         prompt: first.line,
         idempotencyKey: agent.key,

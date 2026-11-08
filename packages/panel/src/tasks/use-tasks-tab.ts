@@ -39,7 +39,6 @@ import {
   type TaskBlockRequest,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
-  type TaskMode,
   type TaskRelationChangeRequest,
   type TaskRelationKind,
   type TaskRunsOnRequest,
@@ -195,7 +194,6 @@ import {
   localAgentRefusalWords,
   openingLineOf,
   type SentLine,
-  startsOwnAgents,
 } from "./agent-model.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
@@ -524,8 +522,6 @@ export interface NewTaskStart {
   /** The relations the start makes its task in, from the new task's side, written with it in one transaction; none for a task related to none. */
   readonly relations?: readonly TaskCreateRelation[];
   readonly handed?: NewTaskAgent;
-  /** How the task is worked, where the card's choice named it while the Pilot experiment is on; by its agents otherwise. */
-  readonly mode?: TaskMode;
   /** What the card held as it pressed Start, which it opens again on where an agent's start is refused after the card closed. */
   readonly card?: NewTaskCardKept;
 }
@@ -1706,7 +1702,6 @@ export function useTasksTab(input: {
       ? liveAgents
       : undefined,
     listedPullRequests: tasks.agentPullRequests,
-    modeOf: (planId) => tasks.tasks.find((task) => task.id === planId)?.mode,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,
@@ -1737,18 +1732,15 @@ export function useTasksTab(input: {
   );
   mainRef.current = mainTabs;
   // A task opens on its agents, so one with no agent's tab standing, once its agents are read,
-  // opens a new agent's draft, its composer ready; one that starts none of its own, an archived
-  // task's or a pilot's, and any in a narrow room, shows its details instead. Note that the draft
+  // opens a new agent's draft, its composer ready; an archived task, and any in a narrow room,
+  // shows its details instead. Note that the draft
   // is not chosen but stands as the column's last tab, which it falls to, so it is not counted
   // viewed: an agent coming back, as a refused archive brings it, is shown again over it.
   const columnEmpty =
     viewed.activeTaskId !== undefined &&
     agents.agentIds !== undefined &&
     mainTabs.tab === undefined;
-  const opensDraft =
-    input.room !== SHELL_ROOM.NARROW &&
-    agents.onUnarchive === undefined &&
-    startsOwnAgents(agents.mode);
+  const opensDraft = input.room !== SHELL_ROOM.NARROW && agents.onUnarchive === undefined;
   const fillColumn = useSteadyDoor(() => {
     if (opensDraft) agents.onNewDraft();
     else mainTabs.onChoose(MAIN_TAB.OVERVIEW);
@@ -3264,7 +3256,6 @@ export function useTasksTab(input: {
       ...(from.runsOn === undefined || from.handed !== undefined
         ? undefined
         : { runsOn: from.runsOn }),
-      ...(from.mode === undefined ? undefined : { mode: from.mode }),
       ...(from.relations === undefined || from.relations.length === 0
         ? undefined
         : { relations: from.relations }),

@@ -562,7 +562,6 @@ function adminMetrics(query: Readonly<Record<string, string>>): AdminMetrics {
             [AGENT_ORIGIN.HAND, 96],
           ] as const
         ).map(([origin, agents]) => ({ origin, agents, share: agents / 214 })),
-        pilots: 11,
       },
       activity: {
         daily: days.map((day, index) => ({

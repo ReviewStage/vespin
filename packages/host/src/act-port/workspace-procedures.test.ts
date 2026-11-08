@@ -66,7 +66,7 @@ const REFUSAL_ROWS: { readonly [Name in keyof typeof WORKSPACE_ACTS]: RefusalRow
   },
   WORKSPACE_EXPERIMENT_SET: {
     refusal: "Could not change that experiment on this system.",
-    payload: { ...WORKSPACE, experiment: "pilot", on: true },
+    payload: { ...WORKSPACE, experiment: "memory", on: true },
   },
   WORKSPACE_SLUG_SET: {
     refusal: "Could not change that workspace's link on this system.",

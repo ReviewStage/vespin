@@ -76,14 +76,13 @@ export function ActivityNote(): React.JSX.Element {
   );
 }
 
-/** How the agents-by-origin rows split the week's agents, and where pilots stand. */
+/** How the agents-by-origin rows split the week's agents. */
 export function AgentOriginsNote(): React.JSX.Element {
   return (
     <SectionNote>
       Each agent started counts under one origin, the first that fits: an automation's run, then a
       message to the Slack bot, then another agent's start_agent, then by hand, which is every agent
-      the others leave, so the rows sum to the week's agents started. A pilot's coders count under
-      Another agent; pilots counts the task pilots among the week's agents, whatever started them.
+      the others leave, so the rows sum to the week's agents started.
     </SectionNote>
   );
 }

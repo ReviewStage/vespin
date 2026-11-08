@@ -40,7 +40,7 @@ import {
   turnsSync,
   userSync,
 } from "@repo/database/sync/tables";
-import { AGENT_BRIEF, AGENT_KIND, type AgentFailure } from "@repo/features/agent-wire";
+import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { and, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -57,7 +57,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * `withTaskAgents`, and `listTasklessAgents`), with every archived plan
  * and agent among them, as the desktop asks for them: the plans with the
  * reader's own pin and read mark and the owner's name, and the agents with their newest
- * turn, the pilot that started each where one did, when the newest line
+ * turn, when the newest line
  * of the developer's awaiting its turn was written and whether that turn's session ended, when the newest turn to end
  * ended, what each last published, the harness its conversation runs on, the
  * Mac a local one runs on, and the names of the members each names. A third, the issues
@@ -73,7 +73,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * pin, read mark, or block moved, that a moved plan blocks, or that names a
  * moved member, and an agent whose own row, pin, or read mark moved, whose turn or
  * conversation moved, whose plan moved, that names a moved member or Mac,
- * or that a moved pilot or run started. Each keeps its rule of who reads it,
+ * or that a moved run started. Each keeps its rule of who reads it,
  * so a key another workspace's write moved reads no row.
  */
 
@@ -83,7 +83,6 @@ type AgentRow = (typeof TASK_LIST_READ.parts.agents.row)["Encoded"];
 const starter = alias(user, "starter");
 const archiver = alias(user, "archiver");
 const assignee = alias(user, "assignee");
-const starterPilot = alias(agentTable, "starter_pilot");
 
 /**
  * The plans the account reaches, each with the reader's own pin, its
@@ -168,7 +167,7 @@ function issuesStatement() {
  * from the log (`movedAgents`) and a pane waiting on the sandbox connects
  * as it lands. Note that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
- * its own presence read. Note too that a pilot is said by a column of its own.
+ * its own presence read.
  */
 function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
   const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
@@ -190,10 +189,6 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         repository: agentTable.repository,
         starterId: agentTable.userId,
         starterName: outerJoined(starter.name),
-        starterPilotId: outerJoined(starterPilot.id),
-        starterPilotTaskId: starterPilot.taskId,
-        starterPilotTitle: starterPilot.title,
-        starterPilotModel: outerJoined(starterPilot.model),
         automationId: agentTable.automationId,
         automationName: sql<string | null>`${agentTable.automationOrigin} ->> 'name'`,
         runId: agentTable.automationRunId,
@@ -215,7 +210,6 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         turnFailure: sql<AgentFailure | null>`case when ${latest.id} is null then null else ${failureWordOf(latest)} end`,
         turnSessionEnded: sessionEndedOf(latest),
         sandboxOpen: sql<boolean>`${conversations.runtimeSessionId} is not null`,
-        pilot: sql<boolean>`${agentTable.kind} = ${AGENT_KIND.PILOT}`,
         markedUnread: sql<boolean>`coalesce(${agentRead.markedUnread}, false)`,
       },
       instants: {
@@ -244,13 +238,6 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
           and(eq(agentRead.agentId, agentTable.id), eq(agentRead.userId, userId)),
         )
         .leftJoin(starter, eq(starter.id, agentTable.userId))
-        .leftJoin(
-          starterPilot,
-          and(
-            eq(starterPilot.id, agentTable.startedByAgentId),
-            eq(starterPilot.kind, AGENT_KIND.PILOT),
-          ),
-        )
         .leftJoin(automationRun, eq(automationRun.id, agentTable.automationRunId))
         .leftJoin(archiver, eq(archiver.id, sql`${agentTable.archivedBy} ->> 'userId'`))
         .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -289,7 +276,7 @@ function movedPlans(moved: SyncMoved): SQL {
 /**
  * The agents what moved could move: their own rows and the reader's pins and read marks,
  * those whose turn or conversation moved, those of a moved plan, those
- * naming a moved member or Mac, and those a moved pilot or run started.
+ * naming a moved member or Mac, and those a moved run started.
  */
 function movedAgents(moved: SyncMoved): SQL {
   const agents = moved.keys(agentSync, agentTable.id);
@@ -310,7 +297,6 @@ function movedAgents(moved: SyncMoved): SQL {
       liveKeysIn(agentTable.userId, members),
       liveKeysIn(sql`${agentTable.archivedBy} ->> 'userId'`, members),
       liveKeysIn(agentTable.deviceId, moved.keys(deviceSync, device.id)),
-      liveKeysIn(agentTable.startedByAgentId, agents),
       liveKeysIn(agentTable.automationRunId, moved.keys(automationRunSync, automationRun.id)),
     ) ?? sql`false`
   );

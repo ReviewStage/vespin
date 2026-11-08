@@ -80,7 +80,7 @@ import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
-import { type DescriptionEditor, TASK_MODE, type TaskMode } from "@repo/features/task-wire";
+import type { DescriptionEditor } from "@repo/features/task-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import {
   ROW_PART,
@@ -130,13 +130,7 @@ import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
 import { GLYPH_STATE, type GlyphState, glyphStateWords } from "../state-glyph.js";
 import { drawnCall } from "./native-tool-calls.js";
-import {
-  plainWords,
-  remoteCallOf,
-  TOOL_TARGET,
-  type ToolTarget,
-  toolTarget,
-} from "./tool-call-model.js";
+import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 
 /**
  * agent-model.ts -- what the agent tabs, a Start, and an agent's transcript draw, decided from what the service answered.
@@ -695,28 +689,6 @@ export function endLineOffersTryAgain(input: {
   if (input.continued || input.boxClosed) return false;
   if (input.failure === undefined) return true;
   return !mendedByNewAgent(input.failure) && !MENDED_BY_CHOICE.has(input.failure);
-}
-
-/**
- * Whether the developer starts agents of their own on a task worked in this
- * mode: New agent, the draft a task with no tab opens, and a Fork. A pilot
- * task offers none, because its pilot starts every agent on it; a task read
- * from a service before modes is worked by its agents.
- */
-export function startsOwnAgents(mode: TaskMode | undefined): boolean {
-  return mode !== TASK_MODE.PILOT;
-}
-
-/**
- * Whether an agent offers Continue in new agent on a task worked in this
- * mode: every agent, but on a pilot task its pilot alone, whose Continue
- * takes over the agents it started rather than adding one of the developer's.
- */
-export function offersContinue(
-  mode: TaskMode | undefined,
-  agent: { readonly pilot?: true | undefined },
-): boolean {
-  return startsOwnAgents(mode) || agent.pilot === true;
 }
 
 /** Said under an agent's box when the model or effort its chip chose could not be changed. */
@@ -1419,23 +1391,6 @@ export function closesComposer(failure: AgentCallFailure): boolean {
   return (
     failure === AGENT_CALL_FAILURE.AGENT_RETIRED || failure === AGENT_CALL_FAILURE.DEVICE_REMOVED
   );
-}
-
-/**
- * Where the note in an agent's composer's place opens the pilot it reports
- * to: the pilot's tab, where it stands on the agent's own task, as a coding
- * agent's pilot does, else its tab on the pilot's task, as a sub-pilot's does. None for
- * an agent no pilot started, which keeps its composer: a member talks to the
- * top pilot of a pilot tree alone, and to any agent outside one.
- */
-export function pilotTarget(
-  agent: Pick<AgentSummary, "planId" | "startedByPilot">,
-): ToolTarget | undefined {
-  const pilot = agent.startedByPilot;
-  if (pilot === undefined) return undefined;
-  return pilot.taskId === agent.planId
-    ? { kind: TOOL_TARGET.AGENT, agent: pilot.agentId }
-    : { kind: TOOL_TARGET.TASK, task: pilot.taskId, agent: pilot.agentId };
 }
 
 /**

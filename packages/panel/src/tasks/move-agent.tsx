@@ -12,7 +12,7 @@ import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { agentStillWriting, offersContinue } from "./agent-model.js";
+import { agentStillWriting } from "./agent-model.js";
 import { deviceMark, RUNS_ON_WORDS } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
@@ -33,8 +33,7 @@ import type { AgentsControl } from "./use-agents.js";
  * a device that takes no agent now is listed dimmed, saying why. It
  * stands only while Bring your own host is on, and only where a Continue is
  * offered: where a Start from the agent could run (`continueAgent`), under
- * nothing archived, on an agent not archived and at rest, of a task whose
- * mode offers it a continue (`offersContinue`). Note that it also stands
+ * nothing archived, on an agent not archived and at rest. Note that it also stands
  * only where the control lists the agent, its task's or its own page's,
  * because a surface drawing agents of other tasks, such as a person's page,
  * hands the open task's control, whose continue would start on that task.
@@ -52,10 +51,10 @@ const NO_DEVICES: readonly MacOffer[] = [];
 const TO_THE_CLOUD: AgentRunsOnRequest = { machine: AGENT_MACHINE.VERCEL };
 
 /** The agent a move is offered on, as Move to reads it. */
-type MovedAgent = Pick<AgentSummary, "id" | "status" | "archivedAt" | "machine" | "mac" | "pilot">;
+type MovedAgent = Pick<AgentSummary, "id" | "status" | "archivedAt" | "machine" | "mac">;
 
 /** What Move to reads of the control: where a continue could start, the agents it lists, and the member's devices. */
-type MoveDoors = Pick<AgentsControl, "agents" | "continueAgent" | "macs" | "mode" | "onUnarchive">;
+type MoveDoors = Pick<AgentsControl, "agents" | "continueAgent" | "macs" | "onUnarchive">;
 
 /** Whether the agent offers a move at all, on the terms the header says, the continue that carries it aside. */
 function useMoveOffered(agent: MovedAgent, agents: MoveDoors): boolean {
@@ -65,8 +64,7 @@ function useMoveOffered(agent: MovedAgent, agents: MoveDoors): boolean {
     agents.onUnarchive === undefined &&
     agents.agents?.some((each) => each.id === agent.id) === true &&
     agent.archivedAt === undefined &&
-    !agentStillWriting(agent.status) &&
-    offersContinue(agents.mode, agent)
+    !agentStillWriting(agent.status)
   );
 }
 

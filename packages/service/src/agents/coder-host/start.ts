@@ -9,7 +9,6 @@ import {
   discardAgent,
   readAgentByKey,
   readNewestAgentPlace,
-  taskPilotStands,
 } from "@repo/database/models/agent-store";
 import type { HandedFile } from "@repo/database/models/attached-file-parts";
 import { devicesNamed } from "@repo/database/models/device-store";
@@ -22,7 +21,6 @@ import {
   readTask,
   type StoredTask,
 } from "@repo/database/models/task-store";
-import { workspaceExperimentOn } from "@repo/database/models/workspace-experiment-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
@@ -40,12 +38,10 @@ import {
   type StartNoteHeading,
 } from "@repo/features/agent-replay";
 import {
-  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_SOURCE,
   type AgentAlsoRepository,
   type AgentAttachment,
-  type AgentKind,
   type AgentMachineKind,
   type AgentRunsOnRequest,
   type AgentSource,
@@ -59,7 +55,7 @@ import { descriptionMarkdown } from "@repo/features/description-markdown";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
 import { automationRun } from "@repo/features/model-label";
 import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wire";
-import { TASK_MODE, type Task } from "@repo/features/task-wire";
+import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
@@ -131,8 +127,6 @@ import {
   openedTakingOver,
   type ReplayFitter,
   type StartWhere,
-  TAKEOVER,
-  type Takeover,
   type TakeoverRules,
   takeoverOf,
   takeoverRules,
@@ -173,7 +167,7 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  * inherits from that agent what `takeover.ts` decides and reads: its brief,
  * its transcript replayed, its work, its choice, servers, place, branch, and
  * extra repositories where the ask names none, and for a continue its stop
- * once its harness has taken the new agent, a pilot taking over from a pilot.
+ * once its harness has taken the new agent.
  * An ask that names a branch has its agent's checkout cloned at that branch
  * rather than the default one, which the agent's row keeps; the branch is
  * read on GitHub through the same installation before anything is made, so
@@ -193,11 +187,8 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  * a prompt, and opens no session: its first words, typed or spoken, open
  * one as they reach it (`steer.ts`), and leaves its task's status where it
  * stands, since no work was handed. It runs on the choice any Start does.
- * A fresh Start on a task worked in pilot mode (`TASK_MODE.PILOT`) where no
- * pilot stands unarchived makes the task's pilot, whoever asks, a member or a
- * coding agent's `start_agent`, which is how a pilot gives a child task its
- * sub-pilot; every later one makes a coder, as every Start on any other task
- * does. A pilot is refused for an account with the Pilot experiment off.
+ * Every Start makes a coder, on a task stored in pilot mode, from before
+ * Pilot was removed, as on any other.
  * A Start with no task names a prompt, and a repository where it works in
  * one; one that names none works in none.
  * A Start may name repositories its agent works in beside its own
@@ -242,8 +233,6 @@ export type StartPlace = StartWhere & {
   readonly from?: AgentStartFrom | undefined;
   /** Whether the agent is handed nothing, neither the description nor a prompt, its first words coming later; such a Start names no prompt, note, or source. */
   readonly blank?: boolean | undefined;
-  /** What the agent is: a coder unless named, or a pilot where a continue of a task's pilot asks for one. */
-  readonly kind?: AgentKind | undefined;
 };
 
 /** What a Start asks: where it goes, the key a retry carries again, the choice where one was made, the files attached to a prompt, the MCP servers its draft switched off, and the automation whose run asks, with that run. */
@@ -467,36 +456,10 @@ const handedOf = Effect.fnUntraced(function* (
   return { text: written(fitted?.replay), startedFrom: fitted?.startedFrom };
 });
 
-/**
- * What a fresh Start on the task asks for: its pilot where the task is worked
- * in pilot mode and no pilot of it stands unarchived, whoever started it,
- * else a coder. A pilot is refused as not permitted where the task's
- * workspace has the Pilot experiment off, whoever the Start is made for.
- * Note that the store asks again under the task's lock (`createAgent`), so a
- * Start that raced another to the task's pilot makes a coder.
- */
-const freshKindOn = Effect.fnUntraced(function* (
-  task: Task,
-): Effect.fn.Return<
-  typeof AGENT_KIND.CODER | typeof AGENT_KIND.PILOT,
-  HostedRefusal,
-  DatabaseServices
-> {
-  if (task.mode !== TASK_MODE.PILOT) return AGENT_KIND.CODER;
-  if (yield* hostedStoreOrUnavailable(taskPilotStands(task.id))) return AGENT_KIND.CODER;
-  if (
-    !(yield* hostedStoreOrUnavailable(workspaceExperimentOn(task.workspaceId, EXPERIMENT.PILOT)))
-  ) {
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  }
-  return AGENT_KIND.PILOT;
-});
-
 /** The task read as the account, or the workspace the account must be a member of; either refused as naming nothing. On a task the agent is handed its document or the prompt, its brief or name in place of its document where its workspace has Task descriptions off, in a workspace the prompt, with the replay of the agent it takes over from after either where there is one, whose brief stands for the prompt, or nothing for a blank Start on a task. */
 const landingOf = Effect.fnUntraced(function* (
   userId: string,
   place: StartPlace,
-  takeover: Takeover,
   fitter: ReplayFitter | undefined,
   noteFiles: NoteFiles | undefined,
   landed: StoredTask | undefined,
@@ -531,8 +494,6 @@ const landingOf = Effect.fnUntraced(function* (
   if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { task, ownerId } = read.value;
   const mover = ownerId === userId ? userId : undefined;
-  // A Start from another agent goes its source's way; only a fresh one can make the task's pilot.
-  const kind = takeover === TAKEOVER.FRESH ? yield* freshKindOn(task) : AGENT_KIND.CODER;
   if (place.blank === true) {
     return {
       startedFrom: undefined,
@@ -540,7 +501,7 @@ const landingOf = Effect.fnUntraced(function* (
       repository: task.repository,
       task,
       mover,
-      place: { taskId: place.taskId, descriptionSnapshot: null, prompt: null, kind },
+      place: { taskId: place.taskId, descriptionSnapshot: null, prompt: null },
     };
   }
   // A workspace with Task descriptions off hands no description: the task's brief in its place, or else its name.
@@ -557,8 +518,8 @@ const landingOf = Effect.fnUntraced(function* (
     mover,
     place:
       words === undefined
-        ? { taskId: place.taskId, descriptionSnapshot: handed.text, prompt: null, kind }
-        : { taskId: place.taskId, descriptionSnapshot: null, prompt: handed.text, kind },
+        ? { taskId: place.taskId, descriptionSnapshot: handed.text, prompt: null }
+        : { taskId: place.taskId, descriptionSnapshot: null, prompt: handed.text },
   };
 });
 
@@ -976,13 +937,13 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   const inherited: Inherited = { from: taken.from, rules };
   // An agent started from another runs on that agent's choice unless the Start names one, and is
   // landed with that agent's replay fitted to the choice's window.
-  const { read, landing, carried, pilotStarter } = yield* landedInheriting(
+  const { read, landing, carried } = yield* landedInheriting(
     userId,
     ask,
     inherited,
     acceptedChoiceRead(userId, rules.choice),
     (model, keys) => startRuntimeOf(userId, model, keys),
-    (fitter, noteFiles) => landingOf(userId, ask, rules.kind, fitter, noteFiles, ask.landed),
+    (fitter, noteFiles) => landingOf(userId, ask, fitter, noteFiles, ask.landed),
   );
   const { choice, keys } = read;
   // An automation's agent reaches through the workspace's installation alone; a Start by hand, on the starter's token too.
@@ -1020,11 +981,6 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
         );
   // GitHub's answers and the store's reads of the mentions wait on none of each other, so they are asked together.
   const [[reached, branch], reads] = yield* bothInOrder(bothInOrder(reach, branchOf), mentions);
-  // A continue of a pilot is a pilot, which takes over the agents its source started.
-  const place =
-    rules.takesOver !== undefined && brief.taskId !== null
-      ? { ...brief, kind: AGENT_KIND.PILOT }
-      : brief;
   // Where it runs, the runtime, and the payer are decided as the agent is made, by the place it names or else its source or its starter's default, and its model, and never change.
   const where = yield* machineOfStart(userId, ask, rules.source, landing.task);
   // A start from another agent works in the repositories its source worked in beside its own, unless it names others.
@@ -1039,14 +995,13 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   const placed = yield* startMachineOf(userId, where.asked, runtime.runtime, reached?.access);
   const started = yield* hostedStoreOrUnavailable(
     createAgent(userId, {
-      ...place,
+      ...brief,
       automationId: ask.automationId,
       automationOrigin: ask.automationOrigin,
       automationRunId: ask.automationRunId,
       startedFrom: landing.startedFrom,
       source: sourceOf(ask.carried),
-      startedByAgentId: ask.startedBy?.id ?? pilotStarter,
-      takesOverFrom: rules.takesOver?.id,
+      startedByAgentId: ask.startedBy?.id,
       title: rules.title,
       idempotencyKey: ask.idempotencyKey,
       model: choice.model,
@@ -1214,17 +1169,10 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   );
   // The source's transcript is the new agent's own before its first open forks it, and a continue's
   // source stops once it opened, since the work goes on in the new agent; a fork's goes on beside it.
-  const archived = yield* openedTakingOver(
-    agentSessions,
-    userId,
-    ask.startedBy,
-    inherited,
-    agent,
-    opening,
-  );
+  yield* openedTakingOver(agentSessions, ask.startedBy, inherited, agent, opening);
   // The Start answers the last transaction it committed in, which Realtime delivers after every
   // one before it, so a client waiting on it sees the agent and its task's standing alike.
-  let committed = Option.getOrElse(archived, () => txid);
+  let committed = txid;
   if (landing.task !== undefined) {
     // A blank agent was handed no work, so its task stands where it is.
     if (handed !== null) {

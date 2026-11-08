@@ -103,7 +103,7 @@ describe("the menu bar's drawer", () => {
     );
 
     show();
-    show({ experiments: experimentsOn(EXPERIMENT.PILOT), capabilities: [] });
+    show({ experiments: experimentsOn(EXPERIMENT.SKILLS), capabilities: [] });
 
     const update = {
       act: "restart",

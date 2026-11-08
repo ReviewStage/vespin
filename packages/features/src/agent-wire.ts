@@ -221,9 +221,8 @@ export type NativeAgentRuntime = (typeof NATIVE_AGENT_RUNTIMES)[number];
 
 /**
  * What kind of agent a row is: a coder, which every agent started on work is;
- * or a pilot, which stands on a task worked in pilot mode (`TASK_MODE.PILOT`),
- * breaks it into child tasks, and runs coders on them, started on its task
- * and repository as a coder is.
+ * or a pilot, which a row from before Pilot was removed may still hold, and
+ * which every reader treats as a coder. Nothing writes a pilot now.
  */
 export const AGENT_KIND = {
   CODER: "coder",
@@ -1204,11 +1203,6 @@ export const agentSummarySchema = EffectSchema.Struct({
   runtime: EffectSchema.optionalKey(EffectSchema.Literals(NATIVE_AGENT_RUNTIMES)),
   /** The agent's title as its tab shows it; null until one is generated, and after a rename cleared it, when the tab shows the model's name. */
   title: EffectSchema.NullOr(EffectSchema.String),
-  /**
-   * True where the agent is its task's pilot, which a breakdown's answer goes
-   * to; absent for every other agent.
-   */
-  pilot: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
   /**
@@ -1291,23 +1285,6 @@ export const agentSummarySchema = EffectSchema.Struct({
    * their account is gone, and from a service before it.
    */
   startedBy: EffectSchema.optionalKey(memberRefSchema),
-  /**
-   * The pilot that started the agent and that it reports to: a coding agent
-   * or a sub-pilot in a pilot tree, which takes no member's message, since a
-   * member talks to the top pilot alone. Named by its id, its task, its
-   * title, and its model, as the account's inbox names its agent, since a
-   * sub-pilot's pilot stands on another task, whose list the reader may not
-   * hold. Absent for an agent a member or any other kind of agent started,
-   * from the held reads, which do not read it, and from a service before it.
-   */
-  startedByPilot: EffectSchema.optionalKey(
-    EffectSchema.Struct({
-      agentId: wireUuidSchema,
-      taskId: wireUuidSchema,
-      title: EffectSchema.NullOr(EffectSchema.String),
-      model: EffectSchema.String,
-    }),
-  ),
   /** The automation whose run started the agent; absent for one started by hand, once that automation is deleted, and from a service before it. */
   automationId: EffectSchema.optionalKey(wireUuidSchema),
   /**

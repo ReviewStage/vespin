@@ -92,7 +92,7 @@ test("each tile compares the last seven days with the seven before, past a short
   assert.deepEqual(overview.headline.prsOpened, { opened: 5, merged: 3 });
 });
 
-test("the week's agents split by origin sum to the agents started, by hand the rest, pilots beside", () => {
+test("the week's agents split by origin sum to the agents started, by hand the rest", () => {
   const overview = buildAdminOverview(
     {
       ...emptyOverviewSource(),
@@ -102,7 +102,6 @@ test("the week's agents split by origin sum to the agents started, by hand the r
         [DAILY_COUNT.AGENTS_FROM_AUTOMATIONS, { "2026-10-20": 2, "2026-10-14": 50 }],
         [DAILY_COUNT.AGENTS_FROM_SLACK, { "2026-10-16": 3 }],
         [DAILY_COUNT.AGENTS_FROM_AGENTS, { "2026-10-20": 1 }],
-        [DAILY_COUNT.PILOTS_STARTED, { "2026-10-20": 2 }],
       ]),
     },
     NOW,
@@ -117,7 +116,6 @@ test("the week's agents split by origin sum to the agents started, by hand the r
       { origin: AGENT_ORIGIN.AGENT, agents: 1, share: 0.1 },
       { origin: AGENT_ORIGIN.HAND, agents: 4, share: 0.4 },
     ],
-    pilots: 2,
   });
 
   const quiet = buildAdminOverview(emptyOverviewSource(), NOW, ADMIN_METRICS_WINDOW.MONTH);

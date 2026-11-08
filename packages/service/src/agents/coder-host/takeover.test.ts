@@ -1,14 +1,14 @@
 /**
  * takeover.test.ts -- what each kind of Start inherits and does to its source, decided from the
  * source and the ask alone: a fresh Start keeps the ask's own values, a continue stops its source
- * and is named after it, a continue of a pilot takes it over, and a fork leaves its source be.
+ * and is named after it, and a fork leaves its source be.
  * Synthetic agents; nothing reaches a database or a session.
  */
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { Agent } from "@repo/database/models/agent-store";
-import { AGENT_KIND, type AgentKind, CONTEXT_WINDOW } from "@repo/features/agent-wire";
+import { AGENT_KIND, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { START_LINE_BRIEF } from "@repo/wire";
 import { it } from "vitest";
@@ -18,8 +18,8 @@ import { TAKEN_ON } from "./replay.js";
 import { SNAPSHOT_MISS } from "./snapshot.js";
 import { TAKEOVER, takeoverRules } from "./takeover.js";
 
-/** A source agent of the given kind that stopped with nothing published, on a branch it was started on. */
-const sourceOf = (kind: AgentKind): Agent => ({
+/** A source agent that stopped with nothing published, on a branch it was started on. */
+const coder: Agent = {
   id: randomUUID(),
   userId: randomUUID(),
   taskId: randomUUID(),
@@ -44,9 +44,9 @@ const sourceOf = (kind: AgentKind): Agent => ({
   disabledServers: [],
   author: null,
   githubAccess: GITHUB_ACCESS.APP,
-  kind,
+  kind: AGENT_KIND.CODER,
   createdAt: new Date(0),
-});
+};
 
 /** A Start from `source`, continued, or forked at a message where one is named. */
 const fromOf = (source: Agent, messageId: string | undefined): StartFrom => ({
@@ -72,9 +72,6 @@ const fromOf = (source: Agent, messageId: string | undefined): StartFrom => ({
   },
 });
 
-const coder = sourceOf(AGENT_KIND.CODER);
-const pilot = sourceOf(AGENT_KIND.PILOT);
-
 it.each([
   {
     start: "a fresh Start",
@@ -82,7 +79,6 @@ it.each([
     expected: {
       kind: TAKEOVER.FRESH,
       stops: false,
-      takesOver: undefined,
       title: undefined,
       branch: null,
       startKind: SERVER_AGENT_START_KIND.FRESH,
@@ -95,7 +91,6 @@ it.each([
     expected: {
       kind: TAKEOVER.CONTINUE,
       stops: true,
-      takesOver: undefined,
       title: "Build the store (continued)",
       branch: "stack/base",
       startKind: SERVER_AGENT_START_KIND.CONTINUE,
@@ -103,25 +98,11 @@ it.each([
     },
   },
   {
-    start: "a continue of a pilot",
-    from: fromOf(pilot, undefined),
-    expected: {
-      kind: TAKEOVER.CONTINUE,
-      stops: true,
-      takesOver: pilot.id,
-      title: "Build the store (continued)",
-      branch: "stack/base",
-      startKind: SERVER_AGENT_START_KIND.CONTINUE,
-      line: START_LINE_BRIEF.CONTINUE,
-    },
-  },
-  {
-    start: "a fork of a pilot",
-    from: fromOf(pilot, randomUUID()),
+    start: "a fork",
+    from: fromOf(coder, randomUUID()),
     expected: {
       kind: TAKEOVER.FORK,
       stops: false,
-      takesOver: undefined,
       title: undefined,
       branch: "stack/base",
       startKind: SERVER_AGENT_START_KIND.FORK,
@@ -138,11 +119,9 @@ it.each([
     });
 
     assert.equal(rules.kind, expected.kind);
-    // A continue stops its source, so its plan must admit the starter, and a member's reports where its source did.
+    // A continue stops its source, so its plan must admit the starter.
     assert.equal(rules.stopsSource, expected.stops);
     assert.equal(rules.checksPlanWriter, expected.stops);
-    assert.equal(rules.readsPilotStarter, expected.stops);
-    assert.equal(rules.takesOver?.id, expected.takesOver);
     assert.equal(rules.title, expected.title);
     assert.equal(rules.branch, expected.branch);
     assert.equal(rules.startKind, expected.startKind);

@@ -17,10 +17,10 @@ import { InstantColumnSchema } from "@repo/database/models/columns";
 import { agentTable } from "@repo/database/schemas/agent";
 import { member, session, user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
+import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { integrationConnection } from "@repo/database/schemas/integration";
-import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { task } from "@repo/database/schemas/task";
 import {
   DAILY_COUNT,
@@ -31,7 +31,7 @@ import {
   type ReachFeature,
 } from "@repo/features/admin-overview-vocabulary";
 import type { AdminMetricsScope, AdminMetricsWindow } from "@repo/features/admin-wire";
-import { AGENT_KIND, AGENT_SOURCE, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { AGENT_SOURCE, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_STATUS } from "@repo/features/automation-wire";
 import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
@@ -177,12 +177,6 @@ export function dailyCountRows(since: Date, until?: Date) {
       STARTED_BY_AGENT,
       not(STARTED_BY_AUTOMATION),
       not(STARTED_FROM_SLACK),
-    ),
-    agentsStartedRows(
-      DAILY_COUNT.PILOTS_STARTED,
-      since,
-      until,
-      eq(agentTable.kind, AGENT_KIND.PILOT),
     ),
     queryBuilder
       .select({

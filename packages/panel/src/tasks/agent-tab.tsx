@@ -161,10 +161,8 @@ import {
   messageSender,
   messageWords,
   nativeSubagent,
-  offersContinue,
   offersStop,
   type PlacedMessage,
-  pilotTarget,
   placedMessages,
   planPayerOf,
   providerOf,
@@ -237,7 +235,6 @@ import {
   useMessageReveal,
 } from "./message-links.js";
 import { useMoveToCloud } from "./move-agent.js";
-import { PilotComposerNote } from "./pilot-note.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
@@ -2654,7 +2651,6 @@ function AgentTabView({
   endTrail,
   closedRemedy,
   continuedNote,
-  pilotNote,
   continuable = false,
   onMoveToCloud,
   bringIn,
@@ -2717,8 +2713,6 @@ function AgentTabView({
   closedRemedy?: ReactNode;
   /** What stands in the box's place once another agent continued this one (`ContinuedComposerNote`); none while none has. */
   continuedNote?: ReactNode;
-  /** What stands in the box's place, before every other note, once a pilot started the agent (`PilotComposerNote`); none for any other. */
-  pilotNote?: ReactNode;
   /** Whether the tab offers Continue somewhere, or another agent continued this one, so the end line tells no one to start a new one. */
   continuable?: boolean;
   /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers; none where Move to would not. */
@@ -2742,10 +2736,7 @@ function AgentTabView({
   const controlsQueue = starter === undefined;
   // A rewind writes in the box, so it is offered only while the box takes words.
   const boxOpen =
-    pilotNote === undefined &&
-    onUnarchive === undefined &&
-    continuedNote === undefined &&
-    composer.closed === undefined;
+    onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined;
   const onEdit = useSteady(boxOpen ? composer.edit : undefined);
   const onCancelEdit = useSteady(composer.dropEdit);
   const onSendEdit = useSteady(boxOpen ? composer.sendEdit : undefined);
@@ -2789,10 +2780,7 @@ function AgentTabView({
   const standing = tabTurnOf(agent, composer);
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
-    pilotNote === undefined &&
-    onUnarchive === undefined &&
-    continuedNote === undefined &&
-    composer.closed === undefined
+    onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
       ? {
           host: agent.mac?.name,
           repository: published?.repository ?? undefined,
@@ -2870,7 +2858,6 @@ function AgentTabView({
   const replyThroughBox = useCallback((words: string) => replyDoor.current?.(words), []);
   // Note that Reply stands only while the box takes a change, as a file's + does.
   const replies =
-    pilotNote === undefined &&
     onUnarchive === undefined &&
     continuedNote === undefined &&
     composer.closed === undefined &&
@@ -3029,9 +3016,7 @@ function AgentTabView({
             onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
           />
         </AgentPicturesProvider>
-        {pilotNote !== undefined ? (
-          pilotNote
-        ) : onUnarchive !== undefined ? (
+        {onUnarchive !== undefined ? (
           <ArchivedComposerNote
             onUnarchive={onUnarchive}
             stop={offersStop(agent) ? onStop : undefined}
@@ -3354,9 +3339,6 @@ function AgentTabBody({
             },
             () => undefined,
           ));
-  // An agent a pilot started reports to it and takes no member's message, so its box names the pilot instead.
-  const pilot = agent.startedByPilot;
-  const reportsTo = pilotTarget(agent);
   // The agents that continued this one, as its summary or the task's list names them: a fork is none.
   const continued = continuedByIds(agent, control.agents, control.archived);
   const continuedDoors = {
@@ -3371,8 +3353,6 @@ function AgentTabBody({
     attachments: composer.unsent.attachments,
     taskId: agent.planId,
   };
-  // On a pilot task only its pilot continues, so a coding agent there offers no Continue anywhere.
-  const continues = offersContinue(control.mode, agent);
   // The failed end line holds the press, Continue again once another agent continued this one.
   const { status, failure } = tabTurnOf(agent, composer);
   const ending = {
@@ -3383,9 +3363,8 @@ function AgentTabBody({
     boxClosed: composer.closed !== undefined,
   };
   const pressed = endLineOffersContinue(ending);
-  // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is a pilot's or an archived task's note.
-  const triesAgain =
-    endLineOffersTryAgain(ending) && reportsTo === undefined && control.onUnarchive === undefined;
+  // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
+  const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
   const readIds = useKept(
     messages.map((message) => message.id),
@@ -3450,14 +3429,13 @@ function AgentTabBody({
               agentId={agent.id}
               control={control}
               carry={continued.length > 0 ? carry : undefined}
-              offers={continues}
               label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
             />
           ) : triesAgain ? (
             <TryAgainPress onPress={() => control.onRetry(agent.id, RETRY_LINE)} />
           ) : undefined
         }
-        continuable={continued.length > 0 || (continues && control.continueAgent !== undefined)}
+        continuable={continued.length > 0 || control.continueAgent !== undefined}
         onMoveToCloud={moveToCloud}
         endTrail={
           // Note that the box's note names them while it stands, so the transcript names them only where an archive took the box.
@@ -3476,20 +3454,7 @@ function AgentTabBody({
             />
           )
         }
-        closedRemedy={
-          <ContinueAgent agentId={agent.id} control={control} carry={carry} offers={continues} />
-        }
-        pilotNote={
-          pilot === undefined || reportsTo === undefined ? undefined : (
-            <PilotComposerNote
-              pilot={pilot}
-              target={reportsTo}
-              control={control}
-              onOpenTarget={onOpenTarget}
-              stop={offersStop(agent) ? () => control.onStop(agent.id) : undefined}
-            />
-          )
-        }
+        closedRemedy={<ContinueAgent agentId={agent.id} control={control} carry={carry} />}
       />
     </MessagePlaceProvider>
   );
