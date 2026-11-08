@@ -306,6 +306,13 @@ test("each refused save says why and what to do next, and keeps the field", asyn
   });
 });
 
+test("a paste too short to be a token says GitHub's invalid words, and is sent nowhere", async () => {
+  await mountAndOpen();
+  await paste("ghp_bad");
+  assert.match(dialog().textContent ?? "", /GitHub rejected this token\./u);
+  assert.deepEqual(sent, []);
+});
+
 test("a saved token GitHub rejected says to disconnect it and add a new one", async () => {
   stored = { ...KEPT, status: GITHUB_TOKEN_STATUS.INVALID };
   await mountAndOpen();
