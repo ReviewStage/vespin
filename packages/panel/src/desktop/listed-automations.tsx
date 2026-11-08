@@ -1,8 +1,10 @@
+import type { AppInboxTasklessItem } from "@repo/host/app-state";
 import { type ReactNode, useCallback } from "react";
 import { AutomationDirectory } from "../automation-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { listedIn } from "../tasks/inbox-model.js";
+import { useInboxTaskless } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
@@ -16,7 +18,10 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  */
 
 /** Whether an agent the window lists names the automation that started it: a listed task's, followed live, the open task's, or one with no task whose question waits in the listed workspace, as Home's rows name it. */
-function namesAutomation(tasks: TasksControl): boolean {
+function namesAutomation(
+  tasks: TasksControl,
+  inboxTaskless: readonly AppInboxTasklessItem[],
+): boolean {
   const listed = new Set(tasks.tasks.map((task) => task.id));
   const lines = (tasks.liveAgents ?? []).filter(
     (agent) => agent.planId !== null && listed.has(agent.planId) && agent.archivedAt === undefined,
@@ -24,7 +29,7 @@ function namesAutomation(tasks: TasksControl): boolean {
   const agents = [...(tasks.agents.agents ?? []), ...(tasks.agents.archived ?? [])];
   return (
     [...lines, ...agents].some((agent) => agent.automationId !== undefined) ||
-    tasks.inboxTaskless.some(
+    inboxTaskless.some(
       (waiting) => waiting.automationId !== null && listedIn(waiting, tasks.workspace?.id),
     )
   );
@@ -39,6 +44,7 @@ export function ListedAutomations({
   children: ReactNode;
 }): React.JSX.Element {
   const { open: onOpen } = useAutomationsDoor(tasks);
+  const taskless = useInboxTaskless();
   const openAutomation = useCallback(
     (automationId: string) => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpen],
@@ -46,7 +52,7 @@ export function ListedAutomations({
   return (
     <AutomationDirectory
       workspace={tasks.workspace}
-      wanted={namesAutomation(tasks)}
+      wanted={namesAutomation(tasks, taskless)}
       onOpen={openAutomation}
     >
       {children}

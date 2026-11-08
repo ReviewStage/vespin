@@ -25,7 +25,7 @@ import { NewTaskComposer } from "../tasks/new-task-composer.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
-import { letGoOfFocus, useHomeNewTask, welcomed } from "./desktop-welcome.js";
+import { letGoOfFocus, useHomeNewTask, useWelcomed } from "./desktop-welcome.js";
 import { PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
@@ -276,11 +276,12 @@ export function DesktopHome({
   const now = useMinute();
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
   const arriving = useArriving(tasks, read, waiting.length);
+  const fresh = useWelcomed(tasks);
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.
     <LinkWorkspaceProvider value={tasks.workspace?.slug ?? tasks.workspace?.id}>
       {/* Note that the greeting welcomes the reader back while the list is read, because an account is new but once. */}
-      <DetailPage frame={PAGE_FRAME.PAGE} title={greeting(accountName, welcomed(tasks))}>
+      <DetailPage frame={PAGE_FRAME.PAGE} title={greeting(accountName, fresh)}>
         <HomeComposer tasks={tasks} takesFocus={takesFocus} />
         {/* Note that the box lays nothing out: it only hears the arrows its rows walk by. */}
         <div className="home-rows contents" {...roving}>

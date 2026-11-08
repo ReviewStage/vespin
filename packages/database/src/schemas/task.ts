@@ -72,7 +72,7 @@ export const task = pgTable(
     parentTaskId: uuid("parent_task_id").references((): AnyPgColumn => task.id, {
       onDelete: "set null",
     }),
-    /** How the task is worked (`TASK_MODE`): by its agents, or by a pilot; fixed as it starts. */
+    /** How the task is worked (`TASK_MODE`): by its agents; a pilot-mode task from before Pilot was removed is read as an agent-mode one. */
     mode: text("mode").$type<TaskMode>().notNull().default(TASK_MODE.AGENT),
     /** Where the task stands (`TASK_STATUS`). */
     status: text("status").$type<TaskStatus>().notNull().default(TASK_STATUS.TODO),

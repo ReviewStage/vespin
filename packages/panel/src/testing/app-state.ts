@@ -40,6 +40,7 @@ import {
   type AppHostRead,
   type AppHostReads,
   type AppInboxItems,
+  type AppInboxSlice,
   type AppIntegrationTools,
   type AppPages,
   type AppProviderKeyList,
@@ -412,6 +413,8 @@ export interface HostReadsHanded {
   readonly deliverTranscripts: (next: AppTranscripts) => void;
   /** The account's task list, as the host lays it whole. */
   readonly deliverTasks: (next: TasksView) => void;
+  /** Main's read of the account's inbox, as the host lays it whole. */
+  readonly deliverInbox: (next: AppInboxSlice) => void;
 }
 
 /** The id the signed-in account of a test's document goes by where the document names none, since the host holds the account's own reads by it. */
@@ -425,8 +428,8 @@ function withAccountId(snapshot: AppStateSnapshot): AppStateSnapshot {
 }
 
 /**
- * Lays the host's reads as given, the account's feed of every item, the
- * holders' own inboxes, the pull requests' chapters, the servers' tools, the
+ * Lays the host's reads as given, the account's feed of every item, main's
+ * read of the account's inbox, the holders' own inboxes, the pull requests' chapters, the servers' tools, the
  * signed-in account's keys, preferences, and models, the workspaces' people and token
  * repositories, the agents' transcripts and where their `run_on_mac` stands, over whatever document the window was handed, its
  * experiments and the reads handed before among it, and answers with how
@@ -446,6 +449,7 @@ export function handHostReads(first: {
   readonly tokenRepositories?: AppTokenRepositories;
   readonly transcripts?: AppTranscripts;
   readonly workspaceTools?: AppWorkspaceTools;
+  readonly inbox?: AppInboxSlice;
 }): HostReadsHanded {
   const handed = fakeAppBridgeCalls().requestAppState;
   const earlier = fakeAppBridgeCalls().onAppState;
@@ -493,6 +497,7 @@ export function handHostReads(first: {
         ...(first.workspaceTools === undefined
           ? undefined
           : { [LIVE_READ.WORKSPACE_TOOLS]: first.workspaceTools }),
+        ...(first.inbox === undefined ? undefined : { inbox: first.inbox }),
       };
     },
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
@@ -534,6 +539,7 @@ export function handHostReads(first: {
     deliverTokenRepositories: (next) => deliver({ [LIVE_READ.TOKEN_REPOSITORIES]: next }),
     deliverTranscripts: (next) => deliver({ [LIVE_READ.TRANSCRIPT]: next }),
     deliverTasks: (next) => deliver({ tasks: next }),
+    deliverInbox: (next) => deliver({ inbox: next }),
   };
 }
 

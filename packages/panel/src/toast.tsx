@@ -557,8 +557,8 @@ export function useWithdrawToast(): (subject: string) => void {
   return withdrawToast;
 }
 
-/** Withdraws every toast standing or waiting about `subject` (`useWithdrawToast`). */
-function withdrawToast(subject: string): void {
+/** Withdraws every toast standing or waiting about `subject` (`useWithdrawToast`), from outside React as `showToast` shows one. */
+export function withdrawToast(subject: string): void {
   stepToasts({ kind: TOAST_STEP.WITHDRAW, subject });
 }
 

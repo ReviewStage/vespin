@@ -125,7 +125,10 @@ function SettingsSections(): React.JSX.Element {
             title="For everyone in Acme"
             caption="These change the app for every member and agent in Acme. Only admins can change them."
           >
-            <SwitchRow label="Pilot" description="Start a new task with one pilot agent." />
+            <SwitchRow
+              label="Memory"
+              description="Agents keep settled facts about how your team works."
+            />
           </SettingsSection>
         </div>
       </CatalogSection>

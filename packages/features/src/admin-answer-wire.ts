@@ -191,8 +191,6 @@ export interface AdminOverview {
     agentsStarted: number;
     /** Every origin, in the vocabulary's order, each agent under one; their agents sum to `agentsStarted`. */
     origins: AdminAgentOriginRow[];
-    /** Of those agents, how many are task pilots, whatever started them. */
-    pilots: number;
   };
   activity: {
     /** The window's UTC days, oldest first, zero-filled. */

@@ -277,6 +277,9 @@ export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
 export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
+export const selectInboxTaskless = (state: AppStateSnapshot) => state.inbox.taskless;
+export const selectInboxAgents = (state: AppStateSnapshot) => state.inbox.agents;
+export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 export const selectMacCommands = (state: AppStateSnapshot) => state.macCommands;

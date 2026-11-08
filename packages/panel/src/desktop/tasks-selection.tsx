@@ -24,6 +24,7 @@ import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { useTasksDelete } from "../tasks/task-delete.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { sectionGlyph } from "./section-icon-picker.js";
 import {
@@ -242,7 +243,7 @@ export function useTasksSelection(
     surface: FAILURE_SURFACE.TASK_DELETE,
   });
   // Note that a refusal leaves only the tasks refused asked of, so Retry sends none already deleted.
-  const deleting = useMutation(tasks.deleteTasks);
+  const deleting = useMutation(useTasksDelete());
   const deletionAct = useConfirmAct(deleting, {
     send: async () => {
       const answers = await deleting.mutateAsync(doomed);

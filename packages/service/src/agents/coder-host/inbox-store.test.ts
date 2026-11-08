@@ -970,6 +970,11 @@ it.layer(getTestDB())("the inbox store", (it) => {
         assert.equal(closed?.status, INBOX_STATUS.CLOSED);
         assert.deepEqual(closed?.closedBy, { userId: teammate, name: "Test User" });
         assert.equal(closed?.closedReason, undefined);
+        assert.equal(
+          closed?.thread?.[0]?.ask?.withdrawnBy,
+          teammate,
+          "the ask names who closed it, which outlasts the item's own closer",
+        );
         assert.equal(closed?.unread, false, "the member's own close leaves it read for them");
         assert.ok(
           Option.isNone(yield* answerDone(agent.userId, posted)),
@@ -981,6 +986,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const reopened = Option.getOrUndefined(yield* withdrawInboxClose(teammate, id, key));
         assert.equal(reopened?.status, INBOX_STATUS.OPEN);
         assert.equal(reopened?.closedBy, undefined);
+        assert.equal(reopened?.thread?.[0]?.ask?.withdrawnBy, undefined);
 
         const later = randomUUID();
         assert.ok(Option.isSome(yield* closeInboxItemAsMember(teammate, id, 1, later)));

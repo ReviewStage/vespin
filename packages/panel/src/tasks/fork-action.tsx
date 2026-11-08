@@ -19,7 +19,7 @@ import { ArrowRightIcon, SplitIcon, XIcon } from "lucide-react";
 import { createContext, Fragment, type ReactNode, useContext } from "react";
 import { ActorRef } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
-import { agentActor, agentName, offersContinue, startsOwnAgents } from "./agent-model.js";
+import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { type AgentFork, FORK_WORDS, type ForkCut, forksOf, messageOpening } from "./fork-model.js";
 import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
@@ -121,13 +121,12 @@ function agentChip(
 /**
  * What an agent's tab hands its messages for forking: the press, where
  * what the agent stands under, its task or, with none, the agent itself, is
- * not archived and the place opens a draft, and the task is not a pilot's
- * (`startsOwnAgents`, `offersContinue`), and the agents started from each
- * of its messages as chips.
+ * not archived and the place opens a draft, and the agents started from
+ * each of its messages as chips.
  */
 export function agentForkDoors(input: {
   agent: AgentSummary;
-  control: Pick<AgentsControl, "agents" | "archived" | "onUnarchive" | "mode">;
+  control: Pick<AgentsControl, "agents" | "archived" | "onUnarchive">;
   onFork: ((fork: AgentFork) => void) | undefined;
   /** Opens the draft, the task's or the agent page's, as a continue of an agent, by its id, with the words and files given; none where no draft opens. */
   onContinue?:
@@ -152,13 +151,8 @@ export function agentForkDoors(input: {
   // Note that an agent with no task is forked and continued as a task's is, its draft on its own page,
   // and that an archived one, on its page or in its task's tab, opens no draft.
   const drafts = control.onUnarchive === undefined && agent.archivedAt === undefined;
-  // Note that a local agent has no sandbox snapshot to fork from, so it offers no fork, and
-  // that a pilot task's agents fork to none, since a fork is an agent of the developer's own.
-  const forkable =
-    onFork !== undefined &&
-    drafts &&
-    agent.machine !== AGENT_MACHINE.DEVICE &&
-    startsOwnAgents(control.mode);
+  // Note that a local agent has no sandbox snapshot to fork from, so it offers no fork.
+  const forkable = onFork !== undefined && drafts && agent.machine !== AGENT_MACHINE.DEVICE;
   const open =
     onOpenTarget === undefined
       ? undefined
@@ -169,7 +163,7 @@ export function agentForkDoors(input: {
           onFork({ agentId: agent.id, messageId, opening: messageOpening(words), ...cut })
       : undefined,
     onContinue:
-      onContinue !== undefined && drafts && offersContinue(control.mode, agent)
+      onContinue !== undefined && drafts
         ? (words, attachments) => onContinue(agent.id, words, attachments)
         : undefined,
     forkedTo: (messageId) =>

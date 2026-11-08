@@ -284,10 +284,10 @@ it.effect(
       service.experimentAnswered = Deferred.await(answered);
 
       const turning = yield* Effect.forkChild(
-        act("WORKSPACE_EXPERIMENT_SET", { workspaceId: ACME.id, experiment: "pilot", on: true }),
+        act("WORKSPACE_EXPERIMENT_SET", { workspaceId: ACME.id, experiment: "memory", on: true }),
       );
       yield* settled;
-      const drawn = { experiment: "pilot", on: true, changedAt: 0 };
+      const drawn = { experiment: "memory", on: true, changedAt: 0 };
       assert.deepEqual(last()?.workspaces, [
         PERSONAL,
         { ...ACME, experiments: [{ ...drawn, changedBy: { id: "user-dana", name: "Dana" } }] },

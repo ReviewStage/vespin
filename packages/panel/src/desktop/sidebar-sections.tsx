@@ -16,6 +16,7 @@ import {
 } from "@repo/features/task-section-writes";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { countWords, TERM } from "@repo/features/words";
+import { ACT_KIND } from "@repo/host/acts";
 import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
@@ -70,7 +71,7 @@ import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useReadMarks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { undoToast, useToast } from "../toast.js";
+import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
@@ -238,6 +239,98 @@ function undeleteWrites(
   return [made, ...moved, ...placeAllWrites(remade, members, id, now)];
 }
 
+/** How a section's write is sent: the caller's `onWriteSections`, behind the act it rides. */
+type SectionsSend = RowDoors<TaskSections, typeof ACT_KIND.TASKS_WRITE_SECTION>["send"];
+
+/** Sends `writes` on `send`, where there are any. */
+function sentWrites(send: SectionsSend, writes: readonly TaskSectionWrite[]): Promise<void> {
+  const [first, ...rest] = writes;
+  if (first === undefined) return Promise.resolve();
+  return send({ writes: [first, ...rest] }).then(() => undefined);
+}
+
+/** A section deleted: the section, and the sections as they stood before. */
+interface SectionDeleted {
+  readonly section: TaskSection;
+  readonly before: TaskSections;
+}
+
+/** Rows moved into a section, or out of every section under null: the sections before, the rows that move, and the writes that move them. */
+interface SectionMove {
+  readonly members: readonly SectionMember[];
+  readonly movedTo: string | null;
+  readonly writes: readonly TaskSectionWrite[];
+}
+
+/** A move as a press read it, with the sections before and the title of the section it moves into, none for out of every section. */
+interface SectionMoved extends SectionMove {
+  readonly before: TaskSections;
+  readonly title: string | null;
+}
+
+/** Whether `section` stands among `sections`. */
+function sectionStands(sections: TaskSections, sectionId: string): boolean {
+  return sections.sections.some((section) => section.id === sectionId);
+}
+
+/**
+ * The section writes ⌘Z takes back, which ask nothing first since each can
+ * be put back: a section deleted, made again only while it is still gone,
+ * and rows moved, put back while any still stands where the move put it.
+ * A refusal is said by `onWriteSections` itself, which draws each write at
+ * once, so none is said here.
+ */
+const SECTION_UNDO = {
+  DELETE: {
+    words: SECTION_DELETED,
+    kind: ACT_KIND.TASKS_WRITE_SECTION,
+    read: (before, section) => ({ section, before }),
+    act: (send, { section }) =>
+      sentWrites(send, [{ kind: TASK_SECTION_WRITE.DELETE, id: section.id }]),
+    undo: (send, { section, before }, now) =>
+      sentWrites(send, undeleteWrites(before, now, section, Date.now())),
+    holds: (now, { section }) => !sectionStands(now, section.id),
+    undone: (now, { section }) => sectionStands(now, section.id),
+    refused: () => undefined,
+    surface: FAILURE_SURFACE.SECTION_WRITE,
+  } satisfies UndoWrite<
+    TaskSections,
+    TaskSection,
+    SectionDeleted,
+    typeof ACT_KIND.TASKS_WRITE_SECTION,
+    void
+  >,
+  MOVE: {
+    words: ({ members, title }) => movedNote(members.length, title),
+    // Note that a move out of every section names no section, so its words are all the app's own.
+    unmasked: ({ title }) => title === null,
+    kind: ACT_KIND.TASKS_WRITE_SECTION,
+    read: (before, move) => {
+      if (move.members.length === 0) return undefined;
+      const title =
+        move.movedTo === null
+          ? null
+          : (before.sections.find((section) => section.id === move.movedTo)?.title ?? "");
+      return { ...move, before, title };
+    },
+    act: (send, { writes }) => sentWrites(send, writes),
+    undo: (send, { before, members, movedTo }, now) =>
+      sentWrites(send, restoreWrites(before, now, members, movedTo, Date.now())),
+    holds: (now, { members, movedTo }) =>
+      members.some((member) => (memberSection(now, member) ?? null) === movedTo),
+    undone: (now, { before, members }) =>
+      members.every((member) => memberSection(now, member) === memberSection(before, member)),
+    refused: () => undefined,
+    surface: FAILURE_SURFACE.SECTION_WRITE,
+  } satisfies UndoWrite<
+    TaskSections,
+    SectionMove,
+    SectionMoved,
+    typeof ACT_KIND.TASKS_WRITE_SECTION,
+    void
+  >,
+} as const;
+
 /**
  * New section's dialog, standing only while `surfaceOpen` and an account is
  * signed in, for where no sidebar head is in sight to name one in place:
@@ -259,9 +352,17 @@ export function useSectionDialogs(
   const [icon, setIcon] = useState<TaskSectionIcon | undefined>(undefined);
   const [picking, setPicking] = useState(false);
   const field = useRef<HTMLInputElement | null>(null);
-  const toast = useToast();
   const latest = useRef(tasks);
   latest.current = tasks;
+  // Note that a section's write is drawn at once and its refusal said by
+  // `onWriteSections` itself, so the door answers kept as it sends.
+  const doors: RowDoors<TaskSections, typeof ACT_KIND.TASKS_WRITE_SECTION> = {
+    rows: () => latest.current.taskSections,
+    send: ({ writes }) => {
+      latest.current.onWriteSections(writes);
+      return Promise.resolve(true);
+    },
+  };
   const writing = useMutation({
     mutationFn: (): Promise<ActionResult> => {
       const trimmed = title.trim();
@@ -357,34 +458,13 @@ export function useSectionDialogs(
       confirm.ask();
     },
     askDelete: (section, from) => {
-      const before = tasks.taskSections;
       // Note that focus goes on to the section beside it now, while this one
       // still stands, rather than falling to the window as it is taken away.
       if (from !== null) nextRowOrHead(from)()?.focus({ preventScroll: true });
-      tasks.onWriteSections([{ kind: TASK_SECTION_WRITE.DELETE, id: section.id }]);
-      toast({
-        ...undoToast(SECTION_DELETED, () => {
-          const now = latest.current;
-          now.onWriteSections(undeleteWrites(before, now.taskSections, section, Date.now()));
-        }),
-        replayUnmasked: true,
-      });
+      void pressWrite(SECTION_UNDO.DELETE, doors, section);
     },
     move: (members, movedTo, writes) => {
-      if (members.length === 0) return;
-      const before = tasks.taskSections;
-      tasks.onWriteSections(writes);
-      const title =
-        movedTo === null
-          ? null
-          : (before.sections.find((section) => section.id === movedTo)?.title ?? "");
-      const undo = undoToast(movedNote(members.length, title), () => {
-        const now = latest.current;
-        const back = restoreWrites(before, now.taskSections, members, movedTo, Date.now());
-        if (back.length > 0) now.onWriteSections(back);
-      });
-      // Note that a move out of every section names no section, so its words are all the app's own.
-      toast(title === null ? { ...undo, replayUnmasked: true } : undo);
+      void pressWrite(SECTION_UNDO.MOVE, doors, { members, movedTo, writes });
     },
     dialog,
   };

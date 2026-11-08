@@ -136,8 +136,6 @@ const agentLiveRowSchema = EffectSchema.Struct({
   effort: EffectSchema.String,
   contextWindow: EffectSchema.NullOr(EffectSchema.String),
   title: EffectSchema.NullOr(EffectSchema.String),
-  /** Whether the agent is its task's pilot; absent from a statement before pilots. */
-  pilot: EffectSchema.optionalKey(EffectSchema.Boolean),
   /** Whether the agent was handed a prompt rather than its description. */
   /** What the agent was handed as its first message: the description, the developer's prompt, or nothing, for one started blank. */
   brief: EffectSchema.Literals(Object.values(AGENT_BRIEF)),
@@ -145,11 +143,6 @@ const agentLiveRowSchema = EffectSchema.Struct({
   repository: EffectSchema.NullOr(EffectSchema.String),
   starterId: EffectSchema.String,
   starterName: EffectSchema.NullOr(EffectSchema.String),
-  /** The pilot that started the agent, by its id, task, title, and model; null where no pilot did, and absent from a statement before it was carried. */
-  starterPilotId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
-  starterPilotTaskId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
-  starterPilotTitle: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
-  starterPilotModel: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   automationId: EffectSchema.NullOr(EffectSchema.String),
   automationName: EffectSchema.NullOr(EffectSchema.String),
   /** The run the agent belongs to, and the automation that run belongs to; null where it belongs to none, and absent from a statement before they were carried. */
@@ -452,20 +445,6 @@ function continuationOf(row: AgentLiveRow, messageId: string | undefined): Conti
 }
 
 /** The Mac a local agent runs on as its summary names it, with no beat; none for one in a sandbox, or whose Mac is gone. */
-/** The pilot that started the agent, as its summary names it; none where no pilot did. */
-function startedByPilotOf(row: AgentLiveRow): AgentSummary["startedByPilot"] {
-  const { starterPilotId, starterPilotTaskId, starterPilotModel } = row;
-  if (starterPilotId == null || starterPilotTaskId == null || starterPilotModel == null) {
-    return undefined;
-  }
-  return {
-    agentId: starterPilotId,
-    taskId: starterPilotTaskId,
-    title: row.starterPilotTitle ?? null,
-    model: starterPilotModel,
-  };
-}
-
 function macOf(row: AgentLiveRow): AgentSummary["mac"] {
   const { deviceId, deviceName } = row;
   if (row.machine !== AGENT_MACHINE.DEVICE || deviceId == null || deviceName == null) {
@@ -490,7 +469,6 @@ function agentSummaryOf(
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
   const mac = macOf(row);
-  const startedByPilot = startedByPilotOf(row);
   const owner = agentOwnerOf({
     taskId: row.planId,
     runId: row.runId ?? null,
@@ -506,7 +484,6 @@ function agentSummaryOf(
       : undefined),
     ...(runtime === undefined ? undefined : { runtime }),
     title: row.title,
-    ...(row.pilot === true ? { pilot: true } : undefined),
     ...(row.machine === AGENT_MACHINE.DEVICE ? { machine: AGENT_MACHINE.DEVICE } : undefined),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: row.createdAt,
@@ -520,7 +497,6 @@ function agentSummaryOf(
     ...(row.starterName === null
       ? undefined
       : { startedBy: { userId: row.starterId, name: row.starterName } }),
-    ...(startedByPilot === undefined ? undefined : { startedByPilot }),
     ...(row.automationId === null ? undefined : { automationId: row.automationId }),
     ...(row.automationName === null ? undefined : { automationName: row.automationName }),
     ...(row.source == null ? undefined : { source: row.source }),

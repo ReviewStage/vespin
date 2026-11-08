@@ -5,7 +5,7 @@ import {
   conversationMediaTypeSchema,
   type KeptPicture,
 } from "@repo/features/conversation-picture-wire";
-import { and, eq, sum } from "drizzle-orm";
+import { and, eq, inArray, sum } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
@@ -56,15 +56,22 @@ const KEPT_COLUMNS = {
   byteCount: attachment.byteCount,
 };
 
-const findByHash = SqlSchema.findOneOption({
-  Request: Schema.Struct({ conversationId: Schema.String, sha256: Schema.String }),
-  Result: KeptRowSchema,
-  execute: ({ conversationId, sha256 }) =>
+/** A kept row with the hash it is keyed by, so a set's rows are matched back to its pictures. */
+const KeptHashRowSchema = Schema.Struct({ ...KeptRowSchema.fields, sha256: Schema.String });
+
+const KEPT_HASH_COLUMNS = { ...KEPT_COLUMNS, sha256: attachment.sha256 };
+
+const findByHashes = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, sha256s: Schema.Array(Schema.String) }),
+  Result: KeptHashRowSchema,
+  execute: ({ conversationId, sha256s }) =>
     Database.use((db) =>
       db
-        .select(KEPT_COLUMNS)
+        .select(KEPT_HASH_COLUMNS)
         .from(attachment)
-        .where(and(eq(attachment.conversationId, conversationId), eq(attachment.sha256, sha256))),
+        .where(
+          and(eq(attachment.conversationId, conversationId), inArray(attachment.sha256, sha256s)),
+        ),
     ),
 });
 
@@ -80,27 +87,40 @@ const sumKept = SqlSchema.findAll({
     ),
 });
 
-const insertPicture = SqlSchema.findAll({
+const PictureRowSchema = Schema.Struct({
+  sha256: Schema.String,
+  contentType: conversationMediaTypeSchema,
+  width: Schema.Int,
+  height: Schema.Int,
+  bytes: Schema.Uint8Array,
+});
+
+const insertPictures = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
     conversationId: Schema.String,
-    sha256: Schema.String,
-    contentType: conversationMediaTypeSchema,
-    width: Schema.Int,
-    height: Schema.Int,
-    bytes: Schema.Uint8Array,
+    pictures: Schema.Array(PictureRowSchema),
     now: Schema.Date,
   }),
-  Result: KeptRowSchema,
-  execute: ({ now, bytes, ...row }) =>
+  Result: KeptHashRowSchema,
+  execute: ({ userId, conversationId, pictures, now }) =>
     Database.use((db) =>
       db
         .insert(attachment)
-        .values({ ...row, bytes, byteCount: bytes.byteLength, createdAt: now })
+        .values(
+          pictures.map(({ bytes, ...row }) => ({
+            ...row,
+            userId,
+            conversationId,
+            bytes,
+            byteCount: bytes.byteLength,
+            createdAt: now,
+          })),
+        )
         .onConflictDoNothing({
           target: [attachment.conversationId, attachment.sha256],
         })
-        .returning(KEPT_COLUMNS),
+        .returning(KEPT_HASH_COLUMNS),
     ),
 });
 
@@ -139,41 +159,80 @@ function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/** The rows of `found` by the hash each is keyed by. */
+function byHash(
+  found: readonly (typeof KeptHashRowSchema.Type)[],
+): ReadonlyMap<string, KeptPicture> {
+  return new Map(found.map((row) => [row.sha256, keptPicture(row)]));
+}
+
 /**
- * Keeps one picture beside the conversation, and answers it as a stored
- * output names it: the row already kept for the same bytes, or a new one;
- * nothing where keeping it would take the conversation past its bytes. Note
- * that a write that raced another to the same bytes reads the winner's row,
- * because the insert stands down on the hash rather than failing.
+ * Keeps a set of pictures beside the conversation, and answers each as a
+ * stored output names it, in the order handed in: the row already kept for
+ * the same bytes, or a new one; nothing where keeping the set's new bytes
+ * would take the conversation past its bytes, so a set is kept whole or not
+ * at all. The set is read, summed, and written in a statement each rather
+ * than a few a picture. Note that a write that raced another to the same
+ * bytes reads the winner's row, because the insert stands down on the hash
+ * rather than failing.
  */
+export function keepConversationPictures(
+  target: ConversationTarget,
+  pictures: readonly PictureToKeep[],
+): TaskStoreEffect<Option.Option<readonly KeptPicture[]>> {
+  return Effect.gen(function* () {
+    const { conversationId } = target;
+    const hashed = pictures.map((picture) => ({ ...picture, sha256: sha256Hex(picture.bytes) }));
+    const sha256s = [...new Set(hashed.map((picture) => picture.sha256))];
+    const held = byHash(yield* findByHashes({ conversationId, sha256s }));
+    // Note that bytes the set names twice are kept once.
+    const fresh = [
+      ...new Map(
+        hashed
+          .filter((picture) => !held.has(picture.sha256))
+          .map((picture) => [picture.sha256, picture]),
+      ).values(),
+    ];
+    let kept = held;
+    if (fresh.length > 0) {
+      const [summed] = yield* sumKept({ conversationId });
+      const keptBytes = summed?.kept ?? 0;
+      const freshBytes = fresh.reduce((total, picture) => total + picture.bytes.byteLength, 0);
+      if (keptBytes + freshBytes > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION) {
+        return Option.none();
+      }
+      const now = yield* DateTime.nowAsDate;
+      const inserted = byHash(
+        yield* insertPictures({ userId: target.userId, conversationId, pictures: fresh, now }),
+      );
+      const raced = fresh
+        .map((picture) => picture.sha256)
+        .filter((sha256) => !inserted.has(sha256));
+      const winners =
+        raced.length === 0
+          ? new Map<string, KeptPicture>()
+          : byHash(yield* findByHashes({ conversationId, sha256s: raced }));
+      kept = new Map([...held, ...inserted, ...winners]);
+    }
+    const answered: KeptPicture[] = [];
+    for (const { sha256 } of hashed) {
+      const one = kept.get(sha256);
+      if (one === undefined) return Option.none();
+      answered.push(one);
+    }
+    return Option.some(answered);
+  });
+}
+
+/** Keeps one picture beside the conversation, as `keepConversationPictures` keeps a set of one. */
 export function keepConversationPicture(
   target: ConversationTarget,
   picture: PictureToKeep,
 ): TaskStoreEffect<Option.Option<KeptPicture>> {
-  return Effect.gen(function* () {
-    const { conversationId } = target;
-    const sha256 = sha256Hex(picture.bytes);
-    const held = yield* findByHash({ conversationId, sha256 });
-    if (Option.isSome(held)) return Option.some(keptPicture(held.value));
-    const [summed] = yield* sumKept({ conversationId });
-    const keptBytes = summed?.kept ?? 0;
-    if (
-      keptBytes + picture.bytes.byteLength >
-      CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION
-    ) {
-      return Option.none();
-    }
-    const now = yield* DateTime.nowAsDate;
-    const [inserted] = yield* insertPicture({
-      ...picture,
-      userId: target.userId,
-      conversationId,
-      sha256,
-      now,
-    });
-    if (inserted !== undefined) return Option.some(keptPicture(inserted));
-    return Option.map(yield* findByHash({ conversationId, sha256 }), keptPicture);
-  });
+  return Effect.map(
+    keepConversationPictures(target, [picture]),
+    Option.flatMap(([one]) => Option.fromNullishOr(one)),
+  );
 }
 
 /** One kept picture of the conversation: its type and its bytes; nothing where the conversation keeps no such picture. */

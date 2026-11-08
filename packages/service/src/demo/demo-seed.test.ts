@@ -14,7 +14,7 @@ import {
   sqlClientOverPglite,
   syncListenerOverPglite,
 } from "@repo/database/testing";
-import { AGENT_KIND, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { INBOX_CURSOR_START } from "@repo/features/inbox-wire";
 import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
@@ -121,7 +121,7 @@ it.effect("Dean reads back acme, its tasks, his Inbox, and his agents' credentia
           tasks.find((task) => task.name === "Webhook retries")?.status,
           TASK_STATUS.DONE,
         );
-        // The pilot's four sub-tasks stand under the task it broke down, and the tasks waiting on an open one read blocked.
+        // The rollout agent's four sub-tasks stand under the task it broke down, and the tasks waiting on an open one read blocked.
         const billing = tasks.find((task) => task.name === "Usage-based billing");
         assert.deepEqual(
           new Set(
@@ -188,7 +188,7 @@ it.effect("Dean reads back acme, its tasks, his Inbox, and his agents' credentia
         });
         // Bring your own host stays off, since with it on the app would enroll the Mac's own account install with the demo's server.
         assert.equal(ownHosts, false);
-        // The seeded agents are Dean's on that host, paid for by his plan, so a follow-up to one runs there, those his pilot started among them.
+        // The seeded agents are Dean's on that host, paid for by his plan, so a follow-up to one runs there, those his rollout agent started among them.
         assert.deepEqual(
           agents.map((agent) => [agent.userId, agent.machine, agent.deviceId]),
           Array.from({ length: 8 }, () => [DEMO_DEAN.id, AGENT_MACHINE.DEVICE, DEMO_HOST.id]),
@@ -197,12 +197,12 @@ it.effect("Dean reads back acme, its tasks, his Inbox, and his agents' credentia
           payers,
           Array.from({ length: 8 }, () => AGENT_PAYER.CLAUDE_SUBSCRIPTION),
         );
-        const pilot = agents.find((agent) => agent.kind === AGENT_KIND.PILOT);
-        assert.equal(pilot?.taskId, billing?.id);
+        const rollout = agents.find((agent) => agent.title === "Roll out usage-based billing");
+        assert.equal(rollout?.taskId, billing?.id);
         assert.deepEqual(
           new Set(
             agents
-              .filter((agent) => agent.startedByAgentId === pilot?.id)
+              .filter((agent) => agent.startedByAgentId === rollout?.id)
               .map((agent) => agent.title),
           ),
           new Set(["Meter API calls per workspace", "Roll usage up by day"]),

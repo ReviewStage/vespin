@@ -29,6 +29,6 @@ export function standingFor(
   return {
     agent: Option.none(),
     open: new Set(open),
-    experiments: { descriptionsOn: descriptions, memoryOn: memory, pilotOn: false },
+    experiments: { descriptionsOn: descriptions, memoryOn: memory },
   };
 }

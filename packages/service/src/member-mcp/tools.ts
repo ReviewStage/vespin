@@ -729,7 +729,7 @@ const FOLLOW_WORDS =
   "Nothing reports back to you, since an agent the member reaches from here has no starting " +
   `agent: follow it with ${MEMBER_MCP_TOOL.READ_AGENT}, which reads what it last said and did.`;
 
-/** A task the member makes names the workspace it is made in, and what the agents' own make names, bar a pilot's mode, which only a pilot asks for. */
+/** A task the member makes names the workspace it is made in, and what the agents' own make names. */
 const CreateTaskInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   name: CREATE_TASK_TOOL.inputSchema.fields.name,

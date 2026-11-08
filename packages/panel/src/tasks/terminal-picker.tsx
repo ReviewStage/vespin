@@ -3,7 +3,6 @@ import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { PlusIcon, Shortcut } from "@repo/ui";
 import { CommandDialog, type CommandGroup } from "@repo/ui/command";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { startsOwnAgents } from "./agent-model.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
@@ -11,8 +10,7 @@ import type { AgentsControl } from "./use-agents.js";
  *
  * A terminal belongs to one agent (`terminal-entry.ts`), whose rules never
  * ask which; a task with none has no terminal to open, so the command
- * offers to start an agent, as the command palette's own dialog and row. A
- * pilot task's agents are its pilot's to start, so it offers nothing, and
+ * offers to start an agent, as the command palette's own dialog and row;
  * while the task's agents are still being read it says so.
  */
 
@@ -56,8 +54,7 @@ export function TerminalPicker({
 }): React.JSX.Element {
   // Note that a task whose agents are not read yet offers nothing until they are.
   const read = agents.agents !== undefined;
-  const offersStart = read && startsOwnAgents(agents.mode);
-  const groups: readonly CommandGroup[] = offersStart
+  const groups: readonly CommandGroup[] = read
     ? [
         {
           id: START_ROW,
@@ -87,7 +84,7 @@ export function TerminalPicker({
       placeholder={PICKER_LABEL}
       replayUnmasked
       groups={groups}
-      selected={offersStart && start.available ? START_ROW : ""}
+      selected={read && start.available ? START_ROW : ""}
       onSelectedChange={() => undefined}
       empty={noMatchWords(TERM.AGENT)}
       {...(read ? {} : { loading: readingWords(`the task’s ${TERM.AGENT.many}`) })}

@@ -22,7 +22,7 @@ import {
 } from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { ListedPullRequest, TaskMode } from "@repo/features/task-wire";
+import type { ListedPullRequest } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
@@ -62,8 +62,15 @@ import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameShape } from "../rename-write.js";
 import { rendererPause } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { TOAST_HOLD, undoToast, useToast, useWithdrawToast } from "../toast.js";
-import { pressRows, ROW_WRITE, type RowDoors } from "../undo-stack.js";
+import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import {
+  type LocalWrite,
+  pressLocal,
+  pressRows,
+  ROW_WRITE,
+  type RowDoors,
+  withdrawUndo,
+} from "../undo-stack.js";
 import {
   appStateQuery,
   memoizedSelect,
@@ -363,8 +370,6 @@ export interface AgentsControl {
   macs: readonly MacOffer[] | undefined;
   /** Asks the host for the models again, as New task opening or the menu's Retry asks. */
   readModels: () => void;
-  /** How the open task, or the page's agent's task, is worked, which says what its members start of their own (`startsOwnAgents`); none for an agent of no task, or before the task list names it. */
-  mode: TaskMode | undefined;
   /** The open task's draft agent; nothing while it has none. */
   draft: AgentDraft | undefined;
   /** Opens a draft agent on the open task, or answers the one it has, by its key. */
@@ -664,6 +669,34 @@ function closedDraft(on: string, draft: AgentDraft): ClosedDraft | undefined {
   };
 }
 
+/** Where a closed draft is read and put back: the plan the drafts stand on now, the draft standing there, and the hook's own letting go and putting back. */
+interface DraftDoors {
+  readonly startsOn: string | undefined;
+  readonly draft: AgentDraft | undefined;
+  readonly letGo: (draftId: string) => void;
+  readonly restore: (closed: ClosedDraft) => void;
+}
+
+/** Whether `draft` holds the words and files `words` names, as a draft put back holds them until they are written anew. */
+function holdsWords(draft: AgentDraft, words: ClosedDraft["words"]): boolean {
+  return draft.prompt === words.text && draft.attachments.length === words.attachments.length;
+}
+
+/**
+ * A draft closed while it held words or files, as ⌘Z and its toast's Undo
+ * take it back: put back only while the plan it was closed on is open and
+ * it is still closed, and closed again by ⇧⌘Z only while it stands as Undo
+ * put it back, under its own key with its words unchanged.
+ */
+const DRAFT_CLOSING = {
+  words: DRAFT_CLOSED,
+  act: ({ letGo }, { choices }) => letGo(choices.id),
+  undo: ({ restore }, closed) => restore(closed),
+  holds: ({ startsOn, draft }, { on, choices }) => on === startsOn && draft?.id !== choices.id,
+  undone: ({ startsOn, draft }, { on, choices, words }) =>
+    on === startsOn && draft?.id === choices.id && holdsWords(draft, words),
+} satisfies LocalWrite<DraftDoors, ClosedDraft>;
+
 /** A Start on its way or asked again: the task, the key the press minted, and the choice it was for. */
 interface PendingStart {
   taskId: string;
@@ -797,8 +830,6 @@ export function useAgents(input: {
   agentId?: string | undefined;
   /** The open task's repository, or null while it names none. */
   repository: string | null;
-  /** How a task is worked, by its id, as the task list names it; none before the list names the task. */
-  modeOf?: ((taskId: string) => TaskMode | undefined) | undefined;
   /**
    * Every agent the task list followed live carries, on a task or with
    * none, the archived ones among them; none where it is not followed, or
@@ -941,9 +972,6 @@ export function useAgents(input: {
     () => standing?.filter((agent) => agent.archivedAt !== undefined),
     [standing],
   );
-  // The task the agents stand on: the open one, or the page's agent's as the list names it.
-  const modeTask = taskId ?? standing?.[0]?.planId ?? undefined;
-  const mode = modeTask === undefined ? undefined : input.modeOf?.(modeTask);
   // Note that the page's agent stands or falls with the task list's row of it, so an agent deleted turns to Not found as the list drops it.
   // An agent the read list has not carried since the page opened, as a teammate's just started or
   // one a notification names ahead of the list, is looked up once by its id: one the service holds
@@ -1296,29 +1324,26 @@ export function useAgents(input: {
   ) => writeWords((was) => ({ ...was, attachments: next(was.attachments) }));
 
   // Note that a draft holding words or files is let go at once, as every
-  // act that can be taken back is, and its toast's Undo puts it back.
+  // act that can be taken back is, and ⌘Z and its toast's Undo put it back.
   const onDiscardDraft = (draftId: string) => {
     const closed =
       startsOn === undefined || draft?.id !== draftId ? undefined : closedDraft(startsOn, draft);
-    letGo(draftId);
-    if (closed === undefined) return;
-    undoable.current = closed.choices.id;
-    toast({
-      ...undoToast(DRAFT_CLOSED, () => restoreNow.current(closed)),
-      replayUnmasked: true,
-      subject: closed.choices.id,
-    });
+    if (closed === undefined) {
+      letGo(draftId);
+      return;
+    }
+    undoable.current.add(closed.choices.id);
+    pressLocal(DRAFT_CLOSING, () => draftDoors.current, closed, closed.choices.id);
   };
 
-  // The closed draft whose Undo stands, withdrawn as the plan it was closed on leaves.
-  const undoable = useRef<string | undefined>(undefined);
-  const withdrawToast = useWithdrawToast();
+  // The drafts closed on the plan open, whose Undo, on its toast and on ⌘Z, is withdrawn as the plan leaves.
+  const undoable = useRef(new Set<string>());
   useEffect(
     () => () => {
-      if (undoable.current !== undefined) withdrawToast(undoable.current);
-      undoable.current = undefined;
+      for (const subject of undoable.current) withdrawUndo(subject);
+      undoable.current.clear();
     },
-    [startsOn, withdrawToast],
+    [startsOn],
   );
 
   // Note that Undo stands only while the plan the draft was closed on is
@@ -1329,8 +1354,6 @@ export function useAgents(input: {
   // its own, as a continue's are, since that is another request.
   const restoreDraft = (closed: ClosedDraft) => {
     const { on, choices, words } = closed;
-    if (on !== startsOn) return;
-    undoable.current = undefined;
     const standing = draft?.id === choices.id ? undefined : draft;
     const keeps = standing !== undefined && !holdsNothing(standing);
     const id = keeps ? mintKey() : choices.id;
@@ -1344,8 +1367,8 @@ export function useAgents(input: {
     }
     latest.current.onDraftRestored?.(on, id);
   };
-  const restoreNow = useRef(restoreDraft);
-  restoreNow.current = restoreDraft;
+  const draftDoors = useRef<DraftDoors>({ startsOn, draft, letGo, restore: restoreDraft });
+  draftDoors.current = { startsOn, draft, letGo, restore: restoreDraft };
 
   // Note that the draft's key is the Start's every time it is sent, because
   // nothing a refused send asked was made, and a send whose answer was lost
@@ -1674,7 +1697,6 @@ export function useAgents(input: {
     agentRepository,
     agentIds,
     heldIds: standing?.map((agent) => agent.id),
-    mode,
     draft,
     onNewDraft,
     onForkDraft,

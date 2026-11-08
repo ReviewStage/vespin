@@ -285,6 +285,7 @@ export const PRODUCT_EXPERIMENT = {
   LOCAL_AGENTS: "local-agents",
   /** Removed with Channels, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   CHANNELS: "channels",
+  /** Removed with Pilot, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   PILOT: "pilot",
   SKILLS: "skills",
   BRING_YOUR_OWN_HOST: "bring-your-own-host",

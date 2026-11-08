@@ -1301,7 +1301,7 @@ test("message_agent refuses a malformed id, empty words, and words over the boun
     }),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: MESSAGE_AGENT_REFUSAL.TOO_LONG(length) },
   );
-  assert.deepEqual(await call(AGENT_TOOL.MESSAGE_AGENT, { agentId: "the pilot", text: NOTE }), {
+  assert.deepEqual(await call(AGENT_TOOL.MESSAGE_AGENT, { agentId: "the starter", text: NOTE }), {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: MESSAGE_AGENT_REFUSAL.MALFORMED_ID,
   });
@@ -1422,37 +1422,49 @@ test("start_agent with a title names the agent by it from the start, and a title
   }
 });
 
-test("start_agent on a pilot task with no pilot starts its pilot, held to Pilot as the task's workspace has it, and refused saying why where it is off", async () => {
-  const { workspaceId, agents, plans } = await openWorkspaces();
-  const { caller, teammates } = agents;
+test("an agent stored as a pilot, on a task stored in pilot mode, makes a child task asking pilot mode and starts an agent on it, a coder on a task its agents work", async () => {
+  const { workspaceId, plans, agents } = await openWorkspaces();
+  const alice = agents.caller.userId;
   const agentSessions = await fakeCoderSessions(workspaceId);
-  const call = await peerCaller(hostOf(), caller, agentSessions.services);
+  const pilot = await claimed(alice, {
+    ...AGENT_CHOICE,
+    idempotencyKey: randomUUID(),
+    taskId: plans.billing,
+    descriptionSnapshot: "# Billing",
+    prompt: null,
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+  });
+  // Note that nothing writes a pilot now, so both rows are made one in place, as a release before stored them.
   await database.run(
     Effect.flatMap(Database, (db) =>
-      db.update(task).set({ mode: TASK_MODE.PILOT }).where(eq(task.id, plans.billing)),
+      Effect.andThen(
+        db.update(task).set({ mode: TASK_MODE.PILOT }).where(eq(task.id, plans.billing)),
+        db.update(agentTable).set({ kind: AGENT_KIND.PILOT }).where(eq(agentTable.id, pilot.id)),
+      ),
     ),
   );
-  const start = { taskId: plans.billing, prompt: "Bill by seat." };
+  const call = await peerCaller(hostOf(), pilot, agentSessions.services);
 
-  assert.deepEqual(await call(AGENT_TOOL.START_AGENT, start, "call-pilot-off"), {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: EXPERIMENT_OFF_REFUSAL,
-  });
-  assert.equal(agentSessions.sent.length, 0, "a refused pilot starts nothing");
-  await database.run(
-    setWorkspaceExperiment({
-      organizationId: workspaceId,
-      experiment: EXPERIMENT.PILOT,
-      on: true,
-      by: teammates.userId,
-    }),
+  const made = await call(
+    AGENT_TOOL.CREATE_TASK,
+    { name: "Meter usage", parentTaskId: plans.billing, mode: TASK_MODE.PILOT },
+    "call-make",
   );
-  const started = await call(AGENT_TOOL.START_AGENT, start, "call-pilot-on");
+  assert.ok(isRecord(made.task) && isWireString(made.task.id), JSON.stringify(made));
+  const started = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: made.task.id, prompt: "Meter usage per workspace." },
+    "call-start",
+  );
 
   assert.equal(started.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(started));
   assert.ok(isRecord(started.agent) && isWireString(started.agent.id));
-  const pilot = Option.getOrThrow(await database.run(readAgent(caller.userId, started.agent.id)));
-  assert.equal(pilot.kind, AGENT_KIND.PILOT);
+  const child = Option.getOrThrow(await database.run(readTask(alice, made.task.id)));
+  const coder = Option.getOrThrow(await database.run(readAgent(alice, started.agent.id)));
+  assert.deepEqual(
+    [child.task.mode, child.task.parentTaskId, coder.kind, coder.startedByAgentId],
+    [TASK_MODE.AGENT, plans.billing, AGENT_KIND.CODER, pilot.id],
+  );
 });
 
 test("start_agent with a branch starts an agent whose checkout is cloned at that branch and who is told to cut its own from it, and a branch GitHub does not hold is refused before anything starts", async () => {
@@ -1818,16 +1830,15 @@ test("start_agent from another agent refuses, in words the model acts on and sta
   assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
 });
 
-test("start_agent refuses a coder continuing the pilot that started it, directly or through the coder between them, starting nothing, and still forks it", async () => {
+test("start_agent refuses a coder continuing the agent that started it, directly or through the coder between them, starting nothing, and still forks it", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const { caller } = agents;
-  const pilot = await claimed(caller.userId, {
+  const starter = await claimed(caller.userId, {
     ...AGENT_CHOICE,
     idempotencyKey: randomUUID(),
     taskId: tasks.invitations,
     descriptionSnapshot: "# Teammate invitations",
     prompt: null,
-    kind: AGENT_KIND.PILOT,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
   const coder = await claimed(caller.userId, {
@@ -1836,7 +1847,7 @@ test("start_agent refuses a coder continuing the pilot that started it, directly
     taskId: tasks.invitations,
     descriptionSnapshot: "# Teammate invitations",
     prompt: null,
-    startedByAgentId: pilot.id,
+    startedByAgentId: starter.id,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
   const grandchild = await claimed(caller.userId, {
@@ -1848,23 +1859,26 @@ test("start_agent refuses a coder continuing the pilot that started it, directly
     startedByAgentId: coder.id,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
-  await saidTurnOn(pilot, "Handed the invitations on.");
+  await saidTurnOn(starter, "Handed the invitations on.");
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), coder, agentSessions.services);
   const deepCall = await peerCaller(hostOf(), grandchild, agentSessions.services);
-  const [messageId] = tailMessageIds(await call(AGENT_TOOL.READ_AGENT, { agentId: pilot.id }));
+  const [messageId] = tailMessageIds(await call(AGENT_TOOL.READ_AGENT, { agentId: starter.id }));
   assert.ok(messageId !== undefined);
 
-  assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { from: { agentId: pilot.id } }, "call-up"), {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: START_AGENT_REFUSAL.STARTER_CONTINUE,
-  });
   assert.deepEqual(
-    await deepCall(AGENT_TOOL.START_AGENT, { from: { agentId: pilot.id } }, "call-up-deep"),
+    await call(AGENT_TOOL.START_AGENT, { from: { agentId: starter.id } }, "call-up"),
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: START_AGENT_REFUSAL.STARTER_CONTINUE,
+    },
+  );
+  assert.deepEqual(
+    await deepCall(AGENT_TOOL.START_AGENT, { from: { agentId: starter.id } }, "call-up-deep"),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.STARTER_CONTINUE },
   );
   assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
-  const forked = await call(AGENT_TOOL.START_AGENT, { from: { agentId: pilot.id, messageId } });
+  const forked = await call(AGENT_TOOL.START_AGENT, { from: { agentId: starter.id, messageId } });
   assert.equal(forked.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(forked));
 });
 
@@ -2339,41 +2353,6 @@ test("an agent whose starter has left the workspace makes no task in it", async 
   const refused = await call(AGENT_TOOL.CREATE_TASK, { name: "Left behind" });
   assert.equal(refused.status, ACTION_RESULT_STATUS.REJECTED, JSON.stringify(refused));
   assert.deepEqual(await tasksNamed(agents.caller.userId, workspaceId, "Left behind"), []);
-});
-
-test("only a pilot makes a task in pilot mode, as a child of another", async () => {
-  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
-  const agentSessions = await fakeCoderSessions(workspaceId);
-  const alice = agents.caller.userId;
-  const asked = { name: "Billing rewrite", parentTaskId: tasks.invitations, mode: TASK_MODE.PILOT };
-  const call = (as: Awaited<ReturnType<typeof peerCaller>>) =>
-    as(AGENT_TOOL.CREATE_TASK, asked, `call-${randomUUID()}`);
-
-  // A coder asking for one makes nothing.
-  const coder = await peerCaller(hostOf(), agents.caller, agentSessions.services);
-  assert.deepEqual(await call(coder), {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: CREATE_TASK_REFUSAL.NOT_PILOT,
-  });
-  assert.deepEqual(await tasksNamed(alice, workspaceId, asked.name), []);
-
-  // A pilot makes its child a pilot task.
-  const pilot = await claimed(alice, {
-    ...AGENT_CHOICE,
-    idempotencyKey: randomUUID(),
-    taskId: tasks.invitations,
-    kind: AGENT_KIND.PILOT,
-    descriptionSnapshot: "# Teammate invitations",
-    prompt: null,
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-  });
-  const made = await call(await peerCaller(hostOf(), pilot, agentSessions.services));
-  assert.ok(isRecord(made.task) && isWireString(made.task.id), JSON.stringify(made));
-  const stored = Option.getOrThrow(await database.run(readTask(alice, made.task.id)));
-  assert.deepEqual(
-    [stored.task.mode, stored.task.parentTaskId],
-    [TASK_MODE.PILOT, tasks.invitations],
-  );
 });
 
 test("create_task makes a task related to another in one write, refusing a parent named both ways and taking the task back with a relation refused", async () => {
@@ -3006,55 +2985,6 @@ test("message_agent hands another agent of the workspace the words under the sen
       reason: MESSAGE_AGENT_REFUSAL.SELF,
     },
   );
-});
-
-test("message_agent to a pilot a continue took over and archived reaches the pilot that took it over, and answers that pilot", async () => {
-  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
-  const agentSessions = await fakeCoderSessions(workspaceId);
-  const host = hostOf();
-  const start = {
-    ...AGENT_CHOICE,
-    taskId: tasks.invitations,
-    descriptionSnapshot: "# Teammate invitations",
-    prompt: null,
-  };
-  const pilot = await claimed(agents.caller.userId, {
-    ...start,
-    idempotencyKey: randomUUID(),
-    kind: AGENT_KIND.PILOT,
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-  });
-  const worker = await claimed(agents.caller.userId, {
-    ...start,
-    idempotencyKey: randomUUID(),
-    startedByAgentId: pilot.id,
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-  });
-  const continued = await claimed(agents.caller.userId, {
-    ...start,
-    idempotencyKey: randomUUID(),
-    kind: AGENT_KIND.PILOT,
-    startedFrom: { agentId: pilot.id, steps: 1, totalSteps: 1 },
-    takesOverFrom: pilot.id,
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-  });
-  await database.run(archiveAgent(agents.caller.userId, pilot.id, true));
-
-  const sent = await directMessage(host, worker, pilot, agentSessions.services);
-
-  assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(sent));
-  assert.equal(isRecord(sent.agent) ? sent.agent.id : undefined, continued.id);
-  const [line] = await database.run(
-    Database.use((db) =>
-      db
-        .select({ metadata: messages.metadata })
-        .from(messages)
-        .where(eq(messages.conversationId, continued.conversationId))
-        .orderBy(desc(messages.seq))
-        .limit(1),
-    ),
-  );
-  assert.deepEqual(line?.metadata, { channel: MESSAGE_CHANNEL.AGENT_MESSAGE });
 });
 
 test("a message to an agent whose session its harness no longer runs opens a fresh session over its conversation rather than being refused, and settles the turn the ended session was running as failed for its session's end, once", async () => {

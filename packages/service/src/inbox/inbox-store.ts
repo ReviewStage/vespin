@@ -784,18 +784,26 @@ const AskStandingSchema = Schema.Struct({
   withdrawnReason: Schema.NullOr(Schema.String),
   /** When a withdrawn ask was withdrawn, in epoch milliseconds; null on any other standing. */
   withdrawnAt: Schema.NullOr(Schema.Number),
+  /** The member whose close withdrew the ask, by their id; null on any other standing. */
+  withdrawnBy: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
 
 /**
  * The keys of an ask's standing merged over the ask as it was kept, a null
  * one left out. Note that nothing else of the ask is written, because a
  * deployment that does not know the ask's type must never strip the keys it
- * does not read, and that a withdrawal's time is taken off first, so an ask
- * opened again never keeps the time of a withdrawal that no longer stands.
+ * does not read, and that a withdrawal's time and closer are taken off
+ * first, so an ask opened again never keeps those of a withdrawal that no
+ * longer stands.
  */
-function askStanding({ status, withdrawnReason, withdrawnAt }: typeof AskStandingSchema.Type): SQL {
-  const standing = sql`jsonb_strip_nulls(jsonb_build_object('status', ${status}::text, 'withdrawnReason', ${withdrawnReason}::text, 'withdrawnAt', ${withdrawnAt}::bigint))`;
-  return sql`(${inboxMessage.ask} - 'withdrawnAt') || ${standing}`;
+function askStanding({
+  status,
+  withdrawnReason,
+  withdrawnAt,
+  withdrawnBy = null,
+}: typeof AskStandingSchema.Type): SQL {
+  const standing = sql`jsonb_strip_nulls(jsonb_build_object('status', ${status}::text, 'withdrawnReason', ${withdrawnReason}::text, 'withdrawnAt', ${withdrawnAt}::bigint, 'withdrawnBy', ${withdrawnBy}::text))`;
+  return sql`(${inboxMessage.ask} - 'withdrawnAt' - 'withdrawnBy') || ${standing}`;
 }
 
 /** Whether a message's ask stands open, as it was kept. */
@@ -2961,8 +2969,8 @@ export function withdrawInboxAnswer(
 /**
  * The item closed by a member without an answer, at the revision named and
  * under the key their client sent the close with, where it is open there,
- * and the ask it held open withdrawn with no reason, which is how a
- * member's close reads on the thread; nothing where it is not open there,
+ * and the ask it held open withdrawn with no reason and naming the member,
+ * which is how a member's close reads on the thread; nothing where it is not open there,
  * or where a message of the thread holds the key.
  * The revision stays, as an answer's does. The close is the member's own,
  * so it leaves the item read for them, as an answer does; a message is
@@ -3000,13 +3008,14 @@ export function closeInboxItemAsMember(
             now,
           });
         }
-        // Note that the reason is left out, because an agent's close always says why and a member's never does.
+        // Note that the reason is left out, because an agent's close always says why and a member's never does, and the closer is kept on the ask, since the item forgets them once a post opens it again.
         yield* settleOpenAsks({
           itemId,
           except: null,
           status: INBOX_ASK_STATUS.WITHDRAWN,
           withdrawnReason: null,
           withdrawnAt: now.getTime(),
+          withdrawnBy: userId,
         });
         yield* upsertRead({ userId, itemId });
         const { txid } = closed.value;

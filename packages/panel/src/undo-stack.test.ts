@@ -9,7 +9,9 @@ import { afterEach, test } from "vitest";
 import {
   forgetUndo,
   type HeldWrite,
+  type LocalWrite,
   pressHeld,
+  pressLocal,
   pressRows,
   pressWrite,
   ROW_WRITE,
@@ -19,6 +21,7 @@ import {
   UNDO_RAN,
   type UndoWrite,
   undoLast,
+  withdrawUndo,
 } from "./undo-stack.js";
 
 /**
@@ -168,4 +171,24 @@ test("⌘Z takes a held write back once, without letting its hold go, and leaves
   assert.equal(again, undefined);
   assert.equal(redone, undefined);
   assert.deepEqual(sent, ["act item-1", "undo item-1"]);
+});
+
+/** A line of held words as a window holds them alone, and its removal of one by key. */
+const HELD_REMOVAL = {
+  words: "Removed",
+  act: (held, word) => held.delete(word),
+  undo: (held, word) => held.add(word),
+  holds: (held, word) => !held.has(word),
+  undone: (held, word) => held.has(word),
+} satisfies LocalWrite<Set<string>, string>;
+
+test("⌘Z leaves a local write withdrawn by its subject as it stands", async () => {
+  const held = new Set(["first"]);
+  pressLocal(HELD_REMOVAL, () => held, "first", TASK_ID);
+  withdrawUndo(TASK_ID);
+
+  const undone = await undoLast();
+
+  assert.equal(undone, undefined);
+  assert.deepEqual([...held], []);
 });

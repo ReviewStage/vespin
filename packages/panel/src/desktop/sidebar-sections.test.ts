@@ -487,7 +487,8 @@ test("deleting a section removes it at once with no dialog, and Undo brings it b
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Invite expiry", "Retry audit"]);
   assert.match(newestToastSays() ?? "", /Section deleted/u);
 
-  act(() => newestToastAction()?.click());
+  // Note that the Undo runs through the undo stack, after every run before it, so it lands a turn later.
+  await act(async () => newestToastAction()?.click());
   await draw(applied(deleted, writes));
 
   assert.deepEqual(stood, ["Someday", "Launch"]);

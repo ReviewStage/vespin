@@ -1,5 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
+import { keepConversationPictures } from "@repo/database/models/conversation-pictures";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { asPictureList } from "@repo/features/agent-pictures-model";
@@ -11,7 +11,7 @@ import {
 import { INBOX_BOUNDS } from "@repo/features/inbox-wire";
 import { mediaDimensions, sniffMediaType } from "@repo/features/media-signature";
 import { describeWire, readEither } from "@repo/wire/effect";
-import { Data, Effect, Option, Result, Schema } from "effect";
+import { Effect, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
@@ -132,32 +132,18 @@ function readPicture(
   );
 }
 
-/** A set the transcript has no room for whole, which rolls back what of it was kept. */
-class SetPastBudget extends Data.TaggedError("SetPastBudget") {}
-
 /**
  * Every picture kept, in order, in one transaction; nothing where the
- * transcript has room for only part of the set. Note that a refusal fails
- * the transaction rather than returning from it, because the pictures kept
- * before it would otherwise stand, counted against the budget, named by no
- * answer.
+ * transcript has room for only part of the set. Note that the set is kept
+ * in one transaction, because its budget is read before its rows are
+ * written.
  */
 function keepAll(
   target: ConversationTarget,
   pictures: readonly ReadPicture[],
 ): Effect.Effect<Option.Option<readonly KeptPicture[]>, TaskStoreFailure, DatabaseServices> {
-  const all = Effect.gen(function* () {
-    const kept: KeptPicture[] = [];
-    for (const picture of pictures) {
-      const one = yield* keepConversationPicture(target, picture);
-      if (Option.isNone(one)) return yield* Effect.fail(new SetPastBudget());
-      kept.push(one.value);
-    }
-    return kept;
-  });
-  return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(all)).pipe(
-    Effect.map(Option.some),
-    Effect.catchTag("SetPastBudget", () => Effect.succeed(Option.none())),
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(keepConversationPictures(target, pictures)),
   );
 }
 

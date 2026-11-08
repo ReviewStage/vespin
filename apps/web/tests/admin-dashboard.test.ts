@@ -63,7 +63,6 @@ function overview(overrides: Partial<AdminOverview> = {}): AdminOverview {
         { origin: AGENT_ORIGIN.AGENT, agents: 8, share: 0.2 },
         { origin: AGENT_ORIGIN.HAND, agents: 16, share: 0.4 },
       ],
-      pilots: 3,
     },
     activity: {
       daily: [
@@ -314,7 +313,7 @@ test("the funnel and reach read each row's count and its share of the base", asy
   expect(page.textContent).toContain("of 12 active developers");
 });
 
-test("the week's agents read by origin, each row's count and share of the agents started, pilots beside", async () => {
+test("the week's agents read by origin, each row's count and share of the agents started", async () => {
   const page = await render([metrics()]);
   const thisWeek = regions(page).find((region) => region.name === "This week")?.words;
 
@@ -324,7 +323,7 @@ test("the week's agents read by origin, each row's count and share of the agents
     "Another agent | 8 | 20%",
     "By hand | 16 | 40%",
   ]);
-  expect(thisWeek).toContain("of 40 agents started · 3 pilots");
+  expect(thisWeek).toContain("of 40 agents started");
   expect(thisWeek).toContain("the first that fits");
 });
 

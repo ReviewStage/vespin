@@ -14,7 +14,7 @@ import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { PromptInput, submitPromptInput } from "../ai-elements/prompt-input.js";
 import { useSideBundles } from "../bundle-loader.js";
 import { useConnected } from "../connection.js";
@@ -104,8 +104,9 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * Words selected in the thread over the box and answered with Reply
  * are laid into the box as a quote block where the caret stands, the box
  * then taking the caret, as the agent's own box takes them
- * (`reply-to-selection.tsx`); a quote goes out as a Markdown blockquote,
- * part of the reply like any other words. The box stands Reply itself,
+ * (`reply-to-selection.tsx`), and the thread is told (`onQuoted`), which
+ * scrolls to its end so the whole box stands in view; a quote goes out as
+ * a Markdown blockquote, part of the reply like any other words. The box stands Reply itself,
  * over the thread it is handed, and only while its editor is loaded and
  * takes a quote, never while a nod or a thread start holds the box or a
  * dictation does, since a press lets the selection go.
@@ -434,6 +435,8 @@ interface AnswerBoxProps {
   replyScope: RefObject<HTMLElement | null>;
   /** Hears the door a quote is laid into the box through while the box takes one, and none once it does not, for the pages the thread draws (`shown-page.tsx`). */
   onQuoteDoor?: ((door: ((words: string) => void) | undefined) => void) | undefined;
+  /** Hears a quote laid into the box, by Reply over the thread or a page it draws, so the thread can bring the whole box into view. */
+  onQuoted?: (() => void) | undefined;
   /** Brings the item's agent back from the archive, offered after a send it refused for being archived. */
   onUnarchiveAgent: () => Promise<ActionResult>;
   /** The new thread the checkbox under the card starts instead of a reply; none where the page offers none. */
@@ -467,6 +470,7 @@ function AnswerCard({
   keywords,
   replyScope,
   onQuoteDoor,
+  onQuoted,
   onUnarchiveAgent,
   newThread,
   statuses,
@@ -607,12 +611,21 @@ function AnswerCard({
   };
   // Note that Reply stands only while the editor stands and takes a quote, and no nod or start is out, since a press lets the selection go.
   const quotes = !sending && !dictating && module !== undefined;
+  // A quote laid in is heard, so the thread can bring the box in whole rather than its caret's line alone.
+  const quoted = useRef(onQuoted);
+  quoted.current = onQuoted;
+  const layQuote = useCallback(
+    (words: string) => {
+      if (editor.current?.insertQuote(words) === true) quoted.current?.();
+    },
+    [editor],
+  );
   // The thread's pages lay their quotes in through the same door, while the box takes one.
   useEffect(() => {
     if (onQuoteDoor === undefined || !quotes) return undefined;
-    onQuoteDoor((words) => editor.current?.insertQuote(words));
+    onQuoteDoor(layQuote);
     return () => onQuoteDoor(undefined);
-  }, [onQuoteDoor, quotes]);
+  }, [onQuoteDoor, quotes, layQuote]);
   return (
     <div ref={box} className={COMPOSER_ROOM_CLASS} {...files.drop.target}>
       <AnswerForm
@@ -683,14 +696,7 @@ function AnswerCard({
       {newThread === undefined ? null : (
         <NewThreadChoice offer={newThread} checked={asNew} held={sending} onChange={setAsNew} />
       )}
-      {quotes ? (
-        <ReplyToSelection
-          scope={replyScope}
-          onReply={(words) => {
-            editor.current?.insertQuote(words);
-          }}
-        />
-      ) : null}
+      {quotes ? <ReplyToSelection scope={replyScope} onReply={layQuote} /> : null}
     </div>
   );
 }

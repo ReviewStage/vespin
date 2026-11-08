@@ -364,7 +364,7 @@ export interface ServerEventProperties {
     is_from_automation: boolean;
     started_by: Values<typeof SERVER_AGENT_STARTER>;
     has_task: boolean;
-    /** What the agent is: a coder, or a task's pilot. */
+    /** What the agent is: a coder, as every agent started now is. */
     agent_kind: AgentKind;
   };
   [SERVER_EVENT.PULL_REQUEST_CREATE]: {

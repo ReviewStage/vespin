@@ -18,7 +18,6 @@ import {
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
-  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentArchivedBy,
@@ -398,9 +397,7 @@ function summaryFields(
       : undefined),
     ...(standing.runtime === undefined ? undefined : { runtime: standing.runtime }),
     title: agent.title,
-    // Note that a pilot says it is one, so a coder's summary is as it was.
-    ...(agent.kind === AGENT_KIND.PILOT ? { pilot: true } : undefined),
-    // Likewise only a local agent says where it runs, so a sandboxed agent's summary is as it was.
+    // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
     ...(agent.machine === AGENT_MACHINE.DEVICE ? { machine: agent.machine } : undefined),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: agent.createdAt.getTime(),

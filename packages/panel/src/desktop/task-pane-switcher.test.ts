@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import type { Task } from "@repo/features/task-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, draftTab, pageTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
@@ -17,8 +18,7 @@ import { useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
-import { taskRenameMutation } from "../tasks/use-tasks-tab.js";
-import { fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -122,6 +122,13 @@ function mount(
   draft = false,
 ) {
   const told: string[] = [];
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
+      told.push(`rename ${taskId} ${name}`);
+      return Promise.resolve(true);
+    },
+  });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -155,10 +162,6 @@ function mount(
                   activeTaskId: TASK.id,
                   region: { kind: DOCUMENT_REGION.READY, task: TASK },
                   pages: paged ? [PAGE] : undefined,
-                  renameTask: taskRenameMutation(({ taskId, name }) => {
-                    told.push(`rename ${taskId} ${name}`);
-                    return Promise.resolve(true);
-                  }, undefined),
                   repositoryMenu:
                     repositoryAsk === undefined
                       ? undefined
@@ -483,12 +486,12 @@ function RefusingTask(): React.JSX.Element {
       activeTaskId: TASK.id,
       region: { kind: DOCUMENT_REGION.READY, task },
       onDraftName: (_taskId, name) => setDraft(name),
-      renameTask: taskRenameMutation(() => Promise.resolve(false), undefined),
     }),
   });
 }
 
 test("on a wide window a refused rename keeps the name typed in the description's title, with the refusal beside it", async () => {
+  fakeActPort({ ...fakeActPortCalls(), [ACT_KIND.TASKS_RENAME]: () => Promise.resolve(false) });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

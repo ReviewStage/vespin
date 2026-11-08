@@ -127,6 +127,8 @@ import {
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
+import { relayout } from "../testing/resize-observer.js";
+import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { viewerPlace } from "../testing/viewer-place.js";
 
@@ -1570,12 +1572,23 @@ test("words selected in a thread stand Reply over them, which quotes them into t
   selectInPane(page, "Should it page", "Should", "too?");
   assert.notEqual(replyPress(), undefined, "a teammate's words may be quoted too");
 
+  // The thread opens at its end, and the reader scrolls up it, 400 pixels down a 1,000 pixel board over 3,000 of rows.
+  const board =
+    pane.querySelector<HTMLElement>('[role="log"]') ?? assert.fail("the board is drawn");
+  layScrollerOut(board, 1_000, 3_000);
+  act(() => relayout());
+  await settle();
+  act(() => {
+    board.scrollTop = 400;
+  });
+  await settle();
   selectInPane(page, "Only in business hours.", "Only", "hours.");
   const reply = replyPress() ?? assert.fail("Reply stands over the agent's words");
   act(() => reply.click());
   await settle();
   assert.equal(replyPress(), undefined, "Reply goes once pressed");
   assert.equal(document.activeElement, composerEditor(pane), "the box takes the caret");
+  assert.equal(board.scrollTop, 2_000, "the thread is taken to its end, the whole box in view");
   typeInComposer(pane, "Page at night for a full outage.");
   pressInComposer(pane, "Enter");
   await settle();
