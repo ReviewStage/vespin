@@ -166,7 +166,10 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     { label: "Ada" },
   );
   assert.deepEqual(
-    titled({ inboxView: { ...base.inboxView, open: true, narrowed: TASK_ID } }, "INBOX"),
+    titled({}, "INBOX", {
+      ...VIEWS_AWAY,
+      inbox: { open: true, chosen: undefined, narrowed: TASK_ID },
+    }),
     { label: "Inbox", detail: "Auth refactor" },
   );
   assert.deepEqual(titled({ agentView: { ...base.agentView, agentId: "agent-1" } }, "AGENT"), {

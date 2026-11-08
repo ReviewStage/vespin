@@ -80,11 +80,8 @@ test("a task's step listed later on its Overview is named by the task and its pa
 test("the Inbox's step names the task its item is of, Settings and Home are named alone, and Admin's step as the place under it", () => {
   const chosen: InboxChoice = { itemId: "item-1", taskId: TASK.id };
   const base = tasksControl({ tasks: [TASK] });
-  const inbox = tasksControl({
-    tasks: [TASK],
-    inboxView: { ...base.inboxView, open: true, chosen },
-  });
-  assert.deepEqual(stepTitle(ROUTED_PLACE.INBOX, inbox, VIEWS_AWAY), {
+  const inbox = { ...VIEWS_AWAY, inbox: { open: true, chosen, narrowed: undefined } };
+  assert.deepEqual(stepTitle(ROUTED_PLACE.INBOX, base, inbox), {
     label: "Inbox",
     detail: "Auth refactor",
   });

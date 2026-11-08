@@ -1,8 +1,8 @@
 /**
- * routed-doors.ts -- the doors into and out of the Board, a person's page, Admin, and the Automations pages, each its route's move held by the window's leave guard.
+ * routed-doors.ts -- the doors into and out of the Board, a person's page, Admin, the Automations pages, and the Inbox, each its route's move held by the window's leave guard.
  *
  * A routed place's open and close are its route's moves (`workspace-routes.ts`,
- * `admin/admin-route.ts`, `automations-route.ts`)
+ * `admin/admin-route.ts`, `automations-route.ts`, `inbox-route.ts`)
  * made through the window's leave guard (`PlaceLeave.arrive`): a move to the
  * place already standing, which navigates nowhere, still asks while a page
  * holds unsaved work, as a move away would, and a close, which the window's
@@ -11,15 +11,20 @@
  * threaded through. Opening a person's page lists their workspace first,
  * which only the Tasks tab can, so that door is the tab's (`onOpenPerson`).
  * Admin's close and read ahead are its route's own, unasked, as they have
- * always been.
+ * always been, and so are the moves within the Inbox standing: choosing a
+ * row's item and widening its list. Going back to the Inbox's list from its
+ * item is the tab's (`TasksControl.inboxView.onClear`), so the window's
+ * history can take that way back (`navigation-history.ts`'s `throughHistory`).
  */
 
 import type { Workspace } from "@repo/features/workspace-wire";
 import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
 import { useAutomationsRoute } from "../automations-route.js";
+import { type InboxAt, useInboxRoute } from "../inbox-route.js";
+import { beginPanelSpan, PANEL_SPAN } from "../panel-spans.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useBoardRoute, usePersonRoute } from "../workspace-routes.js";
 
 /** A way of landing that does nothing more than the move. */
@@ -119,5 +124,50 @@ export function useAutomationsDoor(
         if (workspace !== undefined) route.onOpen(place, stepOf(workspace));
       }, NOTHING),
     close: () => placeLeave.arrive(NOTHING, route.onClose),
+  };
+}
+
+/** The window's Inbox: the presses that open it, choose in it, widen its list, and leave it. */
+export interface InboxDoor {
+  /** Opens the Inbox on nothing chosen, every task's items listed. */
+  readonly open: () => void;
+  /** Opens the Inbox on `chosen`, from wherever the window stands, keeping the narrowing of the Inbox standing for an item of the task it is narrowed to. */
+  readonly openItem: (chosen: InboxChoice) => void;
+  /** Chooses `chosen` in the Inbox standing, as a row's press does. */
+  readonly choose: (chosen: InboxChoice) => void;
+  /** Lists every task's items again, where the list is narrowed to one. */
+  readonly widen: () => void;
+}
+
+/** The Inbox's doors, under the listed workspace as the tab stands. */
+export function useInboxDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace">): InboxDoor {
+  const route = useInboxRoute();
+  const { placeLeave, workspace } = tasks;
+  const { open: standing, narrowed } = route;
+  // Note that it opens on nothing chosen, so one column shows the list and two an empty pane beside it (`inbox-columns.ts`),
+  // and that where the item chosen stands is held once the move lands, so a move kept at a page's leave ask holds nothing.
+  const stand = (keepNarrowing: boolean, chosen: InboxChoice | undefined) => {
+    if (workspace === undefined) return;
+    const at: InboxAt = {
+      workspace: stepOf(workspace),
+      narrowed: keepNarrowing ? narrowed : undefined,
+    };
+    placeLeave.arrive(
+      () => {
+        if (chosen === undefined) route.onOpen(at);
+        else route.onGoTo(chosen, at);
+      },
+      () => {
+        // Note that the Inbox already open has no opening to time.
+        if (!standing) beginPanelSpan(PANEL_SPAN.INBOX_OPEN);
+        if (chosen !== undefined) route.onHold(chosen);
+      },
+    );
+  };
+  return {
+    open: () => stand(false, undefined),
+    openItem: (chosen) => stand(true, chosen),
+    choose: (chosen) => route.onChoose(chosen),
+    widen: route.onWiden,
   };
 }

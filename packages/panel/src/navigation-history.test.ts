@@ -39,7 +39,7 @@ import { useTaskRoute } from "./task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 import { isOverviewTab } from "./tasks/use-main-tabs.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
-import type { TasksControl } from "./tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads } from "./testing/app-state.js";
@@ -61,9 +61,17 @@ import {
 const TASK_ID = "0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60";
 const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 
+/** The Tasks tab as a window stands it, and the Inbox standing over it, on the item `chosen` names or on its list, where it stands. */
+type Standing = TasksControl & {
+  readonly inboxStands?: { readonly chosen?: InboxChoice | undefined } | undefined;
+};
+
 /** The Tasks tab with Acme read and listed, `overrides` laid over it, as a window past its workspaces' read stands. */
-function listedTab(overrides: Partial<TasksControl> = {}): TasksControl {
-  return tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides });
+function listedTab({
+  inboxStands,
+  ...overrides
+}: Partial<TasksControl> & Pick<Standing, "inboxStands"> = {}): Standing {
+  return { ...tasksControl({ workspaces: [ACME], workspace: ACME, ...overrides }), inboxStands };
 }
 
 const roots: Root[] = [];
@@ -82,7 +90,7 @@ afterEach(unmountAll);
 
 /** The window's history over the Tasks tab as `plans` stands, restood by the returned setter, kept in a memory history of its own under the window's router as a window's root mounts one, and its addresses written from the window's own Copy link, as the root wires it. */
 function mount(
-  initial: TasksControl,
+  initial: Standing,
   held: TestWindowRouter = windowRouter(),
   titled?: (
     tasks: TasksControl,
@@ -153,18 +161,8 @@ function mount(
         standing.onUnbindTask();
         setTasks((held) => ({ ...held, boundFor: undefined }));
       },
-      // The Inbox stands where the router does, as the window's root reads it, its doors the router's.
-      inboxView: {
-        ...standing.inboxView,
-        open: inbox.open,
-        chosen: inbox.chosen,
-        narrowed: inbox.narrowed,
-        onOpen: () => openInbox(undefined),
-        onClose: inbox.onClose,
-        onChoose: (chosen) => inbox?.onChoose(chosen),
-        onClear: inbox.onClear,
-        onWiden: inbox.onWiden,
-      },
+      // The Inbox stands where the router does, as the window's root reads it, its way back to its list the router's.
+      inboxView: { ...standing.inboxView, onClear: inbox.onClear },
       onShowInbox: ({ taskId }) => openInbox(taskId),
       onAutomationRuns: automations.onRuns,
     };
@@ -218,11 +216,11 @@ function mount(
     return null;
   }
   // The Inbox `tasks` says stands, open or not and on the item it names, stood by the router as its own doors stand it.
-  const standInbox = (tasks: TasksControl) => {
-    const want = tasks.inboxView;
+  const standInbox = (tasks: Standing) => {
+    const want = tasks.inboxStands;
     const workspace = tasks.workspaces.find((each) => each.id === tasks.workspace?.id)?.slug;
     if (inbox === undefined) return;
-    if (!want.open) {
+    if (want === undefined) {
       if (inbox.open) inbox.onClose();
       return;
     }
@@ -233,8 +231,8 @@ function mount(
   };
   // A window opening on the Inbox opens at its address, as a reloaded one does.
   const initialStep = initial.workspaces.find((each) => each.id === initial.workspace?.id)?.slug;
-  if (initial.inboxView.open && initialStep !== undefined) {
-    const item = initial.inboxView.chosen?.itemId;
+  if (initial.inboxStands !== undefined && initialStep !== undefined) {
+    const item = initial.inboxStands.chosen?.itemId;
     held.history.replace(`/${initialStep}/inbox${item === undefined ? "" : `/${item}`}`);
   }
   const container = document.createElement("div");
@@ -249,7 +247,7 @@ function mount(
       return history;
     },
     /** Stands the window on `tasks`, its Inbox by the router, as the Inbox's own doors stand it. */
-    stand: (tasks: TasksControl) =>
+    stand: (tasks: Standing) =>
       act(() => {
         restand?.(tasks);
         standInbox(tasks);
@@ -376,14 +374,13 @@ test("a move landing on an entry holding no step at /app stands Home, which lets
 });
 
 /** The window on Acme's Inbox, which the router stands, or on the task `onTask` stands, each task left recorded in `left`. */
-function inboxOrTask(onTask: boolean, left: string[]): TasksControl {
-  const base = listedTab();
+function inboxOrTask(onTask: boolean, left: string[]): Standing {
   return listedTab({
     ...(onTask ? { page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID } : {}),
     workspaces: [ACME],
     workspace: ACME,
     onLeaveTask: () => left.push(TASK_ID),
-    inboxView: { ...base.inboxView, open: !onTask },
+    inboxStands: onTask ? undefined : {},
   });
 }
 
@@ -615,10 +612,10 @@ test("each step's address is the path of the link ⇧⌘C copies there", async (
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const listed = { workspaces: [ACME], workspace: ACME };
-  const places: TasksControl[] = [
+  const places: Standing[] = [
     onTask([ACME], 42),
     listedTab(listed),
-    listedTab({ ...listed, inboxView: { ...tasksControl().inboxView, open: true } }),
+    listedTab({ ...listed, inboxStands: {} }),
   ];
   const addresses: string[] = [];
   for (const tasks of places) {
@@ -682,7 +679,7 @@ test("Copy link copies the Admin view while Admin stands over the Inbox, the pla
     listedTab({
       workspaces: [ACME],
       workspace: ACME,
-      inboxView: { ...tasksControl().inboxView, open: true },
+      inboxStands: {},
     }),
   );
   window.openAdmin({ kind: ADMIN_TAB.COST });
@@ -696,9 +693,7 @@ test("with no workspace listed, a place in a workspace has no link, so it stands
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const none = { workspaces: [], workspace: undefined };
-  const places: TasksControl[] = [
-    listedTab({ ...none, inboxView: { ...tasksControl().inboxView, open: true } }),
-  ];
+  const places: Standing[] = [listedTab({ ...none, inboxStands: {} })];
   const addresses: string[] = [];
   for (const tasks of places) {
     const window = mount(tasks);
@@ -976,7 +971,7 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
     return listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      inboxView: { ...base.inboxView, open: true, chosen: { itemId, taskId } },
+      inboxStands: { chosen: { itemId, taskId } },
       sidePanel: {
         ...base.sidePanel,
         open: side !== undefined,
@@ -1044,7 +1039,7 @@ test("an Inbox item chosen by a press where the Inbox splits is a step of its ow
     listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      inboxView: { ...tasksControl().inboxView, open: true, chosen: { itemId, taskId: TASK_ID } },
+      inboxStands: { chosen: { itemId, taskId: TASK_ID } },
     });
   const window = mount(onInbox("item-1"));
   press();
@@ -1168,12 +1163,11 @@ test("a task the Inbox is narrowed to is a step linked by it and named by the ta
     github: null,
   };
   const taskId = "a1000001-0000-4000-8000-0000000000b1";
-  const base = listedTab();
   const onInbox = listedTab({
     workspace,
     workspaces: [workspace],
     tasks: [{ ...DOCUMENT_TASK, id: taskId, name: "Auth refactor" }],
-    inboxView: { ...base.inboxView, open: true },
+    inboxStands: {},
   });
   const window = mount(onInbox, windowRouter(), stepTitleOf);
   await settle();
@@ -1219,7 +1213,7 @@ test("each surface the window opens is counted once, by its kind and layout alon
     listedTab({
       workspace: ACME,
       workspaces: [ACME],
-      inboxView: { ...tasksControl().inboxView, open: true },
+      inboxStands: {},
     }),
   );
   assert.deepEqual(counted.slice(3), [opened("inbox")]);

@@ -26,7 +26,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
 import { inboxItemHomeQueryOptions } from "./tasks/agent-reads.js";
-import type { InboxChoice } from "./tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 
 /** The Inbox's routes by id. */
 const INBOX_LEAF = {
@@ -69,6 +69,15 @@ export interface InboxRoute {
   readonly onClose: () => void;
   /** Stands the Inbox of `workspace` in the step's place, on its list, as another workspace listed under it does. */
   readonly onTurn: (workspace: string) => void;
+}
+
+/** The window's Inbox as a surface reads it: whether it stands, the item chosen in the listed workspace's list, and the task the list is narrowed to. */
+export interface InboxView {
+  readonly open: boolean;
+  /** The item chosen, none until one is, or while the one chosen is a task's of another workspace than the one listed. */
+  readonly chosen: InboxChoice | undefined;
+  /** The task the list is narrowed to, none where it lists every task's items. */
+  readonly narrowed: string | undefined;
 }
 
 /** The navigation that stands the list at `at`. */
@@ -197,4 +206,28 @@ export function useInboxRoute(): InboxRoute {
       void navigate({ to: "/$workspace/inbox", params: { workspace }, replace: true });
     },
   };
+}
+
+/**
+ * The item `chosen` as the listed workspace's Inbox holds it: the Inbox lists
+ * the listed workspace's items alone, so a choice another workspace's list
+ * made gives way with it. Note that an agent's with no task, or one named by
+ * its id alone, is held to the listed workspace by the list itself.
+ */
+export function listedInboxChoice(
+  chosen: InboxChoice | undefined,
+  tasks: Pick<TasksControl, "tasks" | "workspace">,
+): InboxChoice | undefined {
+  if (chosen === undefined || !("taskId" in chosen) || tasks.workspace === undefined) return chosen;
+  const listedId = tasks.workspace.id;
+  const listed = tasks.tasks.some(
+    (task) => task.id === chosen.taskId && task.workspaceId === listedId,
+  );
+  return listed ? chosen : undefined;
+}
+
+/** The window's Inbox as the router stands it, its choice as the listed workspace's list holds it. */
+export function useInboxView(tasks: Pick<TasksControl, "tasks" | "workspace">): InboxView {
+  const { open, chosen, narrowed } = useInboxRoute();
+  return { open, chosen: listedInboxChoice(chosen, tasks), narrowed };
 }

@@ -139,7 +139,12 @@ import {
   PANEL_SPAN_ATTRIBUTE,
 } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
-import { useAdminDoor, useAutomationsDoor, useBoardDoor } from "../places/routed-doors.js";
+import {
+  useAdminDoor,
+  useAutomationsDoor,
+  useBoardDoor,
+  useInboxDoor,
+} from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
@@ -1855,9 +1860,10 @@ function SidebarColumn({
   const board = useBoardDoor(tasks);
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
+  const inbox = useInboxDoor(tasks);
   const automationsStanding = useAutomationsPlace();
   const inAdmin = place === ROUTED_PLACE.ADMIN;
-  const inInbox = onTasks && !inAdmin && tasks.inboxView.open;
+  const inInbox = onTasks && !inAdmin && place === ROUTED_PLACE.INBOX;
   const inAutomations = onTasks && automationsStanding.open;
   const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
   const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
@@ -1905,7 +1911,7 @@ function SidebarColumn({
   const newTask = () => newTaskOver(() => tasks.onNewTask());
   const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
-  const openInbox = () => tasks.inboxView.onOpen();
+  const openInbox = () => inbox.open();
   const openBoard = () => board.open();
   const openAutomations = () => automations.open();
   const openAdmin = () => admin.open();

@@ -6,7 +6,8 @@ import { searchTokens } from "@repo/ui/search-tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
-import { useAutomationsDoor } from "../places/routed-doors.js";
+import { useInboxView } from "../inbox-route.js";
+import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import {
@@ -166,6 +167,8 @@ function useChoiceFirst(
  */
 export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const view = tasks.inboxView;
+  const inbox = useInboxView(tasks);
+  const { choose: onChoose } = useInboxDoor(tasks);
   const choices = useInboxViewChoices();
   const { open: onOpenAutomations } = useAutomationsDoor(tasks);
   // Note that the Inbox reads the automations whenever it stands, because the items of agents with no task it lists are every one an automation's.
@@ -193,14 +196,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     readTasks.has(id) && !read.feedHoldsNothing[INBOX_SCOPE_KIND.PLAN].has(id);
   const settlesAgent = (id: string) =>
     readAgents.has(id) && !read.feedHoldsNothing[INBOX_SCOPE_KIND.AGENT].has(id);
-  const { onChoose, onClear } = view;
+  const { onClear } = view;
   // Note that the item chosen here is drawn before the window holds it (`useChoiceFirst`).
   const {
     chosen: asked,
     settling,
     choose: chooseFirst,
     clear,
-  } = useChoiceFirst(view.chosen, onChoose, onClear);
+  } = useChoiceFirst(inbox.chosen, onChoose, onClear);
   const chosenTask =
     asked !== undefined && "taskId" in asked
       ? tasks.tasks.find((task) => task.id === asked.taskId)
@@ -328,7 +331,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     standing,
     filter,
     asked?.itemId,
-    view.open && tasks.shown,
+    inbox.open && tasks.shown,
   );
   const listedRows = useMemo(() => listedItems(list), [list]);
   const askedId = asked?.itemId;

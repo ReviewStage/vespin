@@ -523,6 +523,7 @@ test("an agent's row hangs a card naming the agent and the automation that start
   // Note that the listed workspace has no slug, so its address names it by its id.
   assert.equal(windowPath(), `/workspace-acme/automation/${SWEEP.id}`);
 
+  act(() => world.setInboxOpen(true));
   act(() => rowNamed(page, "Bump the Node image?").click());
   await settle();
   // Note that no automation stands behind its crumb, so the crumb is words, opening nothing.

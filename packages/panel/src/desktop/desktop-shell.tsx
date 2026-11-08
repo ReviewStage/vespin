@@ -59,6 +59,7 @@ import {
   useAdminDoor,
   useAutomationsDoor,
   useBoardDoor,
+  useInboxDoor,
   usePersonDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
@@ -524,6 +525,7 @@ function usePlaceCommands(
   const board = useBoardDoor(tasks);
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
+  const inbox = useInboxDoor(tasks);
   useAppCommand(APP_COMMAND.BACK, pastGate && history.canGoBack ? history.onBack : undefined);
   useAppCommand(
     APP_COMMAND.FORWARD,
@@ -554,7 +556,7 @@ function usePlaceCommands(
     pastGate && tasks.signedIn
       ? () => {
           onTabChange(PANEL_TAB.TASKS);
-          tasks.inboxView.onOpen();
+          inbox.open();
         }
       : undefined,
   );
@@ -616,7 +618,7 @@ function titleSubject(
 ): Parameters<typeof useWindowTitle>[0] {
   const { signedIn } = tasks;
   if (tab === PANEL_TAB.SETTINGS) return { signedIn, subject: "Settings", workspace: undefined };
-  if (tasks.inboxView.open) {
+  if (place === ROUTED_PLACE.INBOX) {
     return { signedIn, subject: "Inbox", workspace: tasks.workspace };
   }
   if (tasks.agentView.agentId !== undefined) {
@@ -795,12 +797,12 @@ export function DesktopShell({
   const setup = useSetupGate(tasks, signedInId, finishedHere === signedInId);
   const keptStanding =
     !gated && tasks.signedIn && tab !== PANEL_TAB.SETTINGS && !tasks.history.open;
-  const inboxKept = usePageKept(tasks.inboxView.open, tasks.workspace?.id, keptStanding);
+  // Where the window stands: the routed place, the Board, a person's page, or a workspace the router finds not there for the reader (`panel-router.tsx`) among them, and the Inbox, the Automations page, and Admin's view.
+  const bar = useBarStanding(tasks);
+  const inboxKept = usePageKept(bar.inbox.open, tasks.workspace?.id, keptStanding);
   const [tasksPagesHeld] = useState(() => new TasksPagesHeld());
   const focusHolder = useSettingsFocusHolder(tab === PANEL_TAB.SETTINGS);
   const keepOverlay = useFloatDismiss({ state: sidebar.overlay, onState: sidebar.onOverlay });
-  // The routed place the window stands on: the Board, a person's page, or a workspace the router finds not there for the reader (`panel-router.tsx`) among them.
-  const bar = useBarStanding();
   const { place } = bar;
   const inAutomations = bar.automations !== undefined;
   // A phone's drawer follows a finger swiping in from the screen's left edge, or back out, as a phone's own drawers do.
@@ -835,7 +837,7 @@ export function DesktopShell({
   // The window's title names what stands in it, the plan only while it is on screen, and its workspace;
   // the Inbox, an agent's or a person's page, the Automations page, or the Board standing in its place is not the plan.
   const standingIn =
-    tasks.inboxView.open ||
+    bar.inbox.open ||
     tasks.agentView.agentId !== undefined ||
     place === ROUTED_PLACE.PERSON ||
     inAutomations ||
@@ -1033,11 +1035,11 @@ export function ShellPlaces(): React.JSX.Element {
   } = useShellPlaces();
   const { account } = settings;
   useFocusHandedBack(focusHolder);
-  const inboxOpen = tasks.inboxView.open;
   const pageAgent = tasks.agentView.agentId;
-  const bar = useBarStanding();
+  const bar = useBarStanding(tasks);
+  const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
-  const inboxItemShown = tasks.inboxView.chosen !== undefined;
+  const inboxItemShown = bar.inbox.chosen !== undefined;
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
     (descriptionToggle && room !== SHELL_ROOM.NARROW) ||
@@ -1246,7 +1248,7 @@ export function HomePlace(): React.JSX.Element {
 /** The Board's frame while its chunk loads; nothing on a phone, whose Tasks page is the sidebar's tree pinned in the work's place (`mobile-bar.tsx`). */
 export function BoardRouteLoading(): React.JSX.Element | null {
   const { tasks, room } = useShellPlaces();
-  const bar = useBarStanding();
+  const bar = useBarStanding(tasks);
   const board = useBoardDoor(tasks);
   if (mobileBarShown(room, tasks, bar)) return null;
   return <TasksLoading onExit={board.close} />;

@@ -319,8 +319,8 @@ export function useCopyLink(
   const copy = (held: LinkAtHand) =>
     copyWords(linkOf(held.link.place, held.link.workspace), LINK_COPY.COPIED);
   const [pageWorkspace, onPageWorkspace] = useState<PageWorkspace | undefined>(undefined);
-  const inboxTask = tasks.inboxView.narrowed;
   const views = useRoutedViews();
+  const inboxTask = views.inbox.narrowed;
   const linksAt = (sidePanelFocused: boolean) =>
     linksAtHand(tasks, views, {
       settings,

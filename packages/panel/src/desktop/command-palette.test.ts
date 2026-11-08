@@ -82,7 +82,11 @@ import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
-import { windowRouter } from "../testing/window-router.js";
+import {
+  holdingInboxChoice,
+  type TestWindowRouter,
+  windowRouter,
+} from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { CommandPalette } from "./command-palette.js";
 import { DesktopTasks } from "./desktop-tasks.js";
@@ -95,6 +99,9 @@ interface Sent {
 }
 
 const roots: Root[] = [];
+
+/** The router of the window each palette opened by `openPalette` stands under, the latest last. */
+const windows: TestWindowRouter[] = [];
 
 beforeEach(installScrollIntoView);
 
@@ -129,13 +136,24 @@ function LinkedPalette({ page, place, ...props }: WindowPaletteProps): React.JSX
   );
 }
 
-/** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read. */
+/** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read, an Inbox item there standing where `held` says. */
 function WindowPalette({
   at = "/app",
+  held,
   ...props
-}: WindowPaletteProps & { at?: string | undefined }): React.JSX.Element {
-  const [router] = useState(() => windowRouter(createMemoryHistory({ initialEntries: [at] })));
-  return router.provide(createElement(LinkedPalette, props));
+}: WindowPaletteProps & {
+  at?: string | undefined;
+  held?: InboxChoice | undefined;
+}): React.JSX.Element {
+  const [router] = useState(() => {
+    const made = windowRouter(createMemoryHistory({ initialEntries: [at] }));
+    windows.push(made);
+    return made;
+  });
+  const holding = held === undefined ? null : holdingInboxChoice(held);
+  return router.provide(
+    createElement(Fragment, null, holding, createElement(LinkedPalette, props)),
+  );
 }
 
 /** The palette over a window on its Tasks tab, opened by ⌘K's command, every page it opens recorded. */
@@ -150,6 +168,8 @@ function openPalette(
   place?: RoutedPlace,
   /** The address the window's router stands at, which a place the router alone stands, a person's page, is read from. */
   at = "/app",
+  /** Where the Inbox item its address names stands, as the door that chose it held it. */
+  held?: InboxChoice,
 ): Sent {
   const sent: Sent = { tabs: [], views: [] };
   const host = document.createElement("div");
@@ -173,6 +193,7 @@ function openPalette(
     page,
     place,
     at,
+    held,
   });
   // The repository's files are read whole through the act port, by the plan they stand on.
   fakeActPort({
@@ -1144,7 +1165,6 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
       },
     ],
     region: { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
-    inboxView: { ...base.inboxView, open: inbox !== undefined, chosen: inbox?.chosen },
     sidePanel: { ...base.sidePanel, onOpenFile: (ref) => opened.push(ref.path) },
     agents: agentsControl({
       agents: [agent],
@@ -1183,6 +1203,11 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
     undefined,
     DESKTOP_CAPABILITIES,
     PANEL_TAB.TASKS,
+    inbox === undefined ? undefined : ROUTED_PLACE.INBOX,
+    inbox === undefined
+      ? undefined
+      : `/acme/inbox${inbox.chosen === undefined ? "" : `/${inbox.chosen.itemId}`}`,
+    inbox?.chosen,
   );
   type("#42");
   const pulls = rows().filter((row) => row.startsWith("#42"));
@@ -1889,21 +1914,11 @@ test("⇧⌘C copies the link of what is open, the most specific first: the Inbo
   const listed = { workspaces: ON_AGENT_TAB.workspaces, workspace: ON_AGENT_TAB.workspaces[0] };
   for (const [tasks, place, at] of [
     [ON_AGENT_TAB, undefined, undefined],
-    [
-      tasksControl({
-        ...listed,
-        inboxView: {
-          ...tasksControl().inboxView,
-          open: true,
-          chosen: { agentId: LINKED_AGENT, itemId },
-        },
-      }),
-      ROUTED_PLACE.INBOX,
-      undefined,
-    ],
+    [tasksControl(listed), ROUTED_PLACE.INBOX, `/acme/inbox/${itemId}`],
     [tasksControl(listed), ROUTED_PLACE.AUTOMATIONS, `/acme/automation/${automationId}`],
   ] as const) {
-    openPalette(tasks, undefined, undefined, undefined, undefined, place, at);
+    const held = place === ROUTED_PLACE.INBOX ? { agentId: LINKED_AGENT, itemId } : undefined;
+    openPalette(tasks, undefined, undefined, undefined, undefined, place, at, held);
     act(() => {
       runAppCommand(APP_COMMAND.COMMAND_PALETTE);
       runAppCommand(APP_COMMAND.COPY_LINK);
@@ -2555,33 +2570,42 @@ test("with a task open, ⌘K offers Pin task, which pins it under Pinned and tur
   assert.deepEqual(pinRows(), ["Pin task"]);
 });
 
-/** The palette over the task given, on the test's Query client holding the window's state as handed, under a window's router standing at `/app`, whose path it answers. */
-async function paletteUnderState(tasks: TasksControl): Promise<() => string> {
+/** The palette over the task given, on the test's Query client holding the window's state as handed, under a window's router standing at `at`, `/app` unless said, an Inbox item there standing where `held` says, whose path it answers. */
+async function paletteUnderState(
+  tasks: TasksControl,
+  at = "/app",
+  held?: InboxChoice,
+): Promise<() => string> {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
-  const router = windowRouter();
+  const router = windowRouter(createMemoryHistory({ initialEntries: [at] }));
   act(() =>
     root.render(
       withExperiments(
         experimentsOn(EXPERIMENT.DESCRIPTIONS),
         router.provide(
-          createElement(LinkedPalette, {
-            available: true,
-            tab: PANEL_TAB.TASKS,
-            onTabChange: () => undefined,
-            tasks,
-            settings: {
-              rows: {
-                settings: settingsView(),
-                accountDrawn: true,
+          createElement(
+            Fragment,
+            null,
+            held === undefined ? null : holdingInboxChoice(held),
+            createElement(LinkedPalette, {
+              available: true,
+              tab: PANEL_TAB.TASKS,
+              onTabChange: () => undefined,
+              tasks,
+              settings: {
+                rows: {
+                  settings: settingsView(),
+                  accountDrawn: true,
+                  capabilities: DESKTOP_CAPABILITIES,
+                },
                 capabilities: DESKTOP_CAPABILITIES,
+                onViewChange: () => undefined,
               },
-              capabilities: DESKTOP_CAPABILITIES,
-              onViewChange: () => undefined,
-            },
-          }),
+            }),
+          ),
         ),
       ),
     ),
@@ -2665,12 +2689,13 @@ test('over an Inbox item of the open task, ⌘K\'s "This task" lists the pages t
     pages: [],
     inboxView: {
       ...base.inboxView,
-      open: true,
-      chosen: { taskId: DOCUMENT_TASK.id, itemId: "item-1" },
       pages: [{ id: "page-2", title: "Review notes", version: 1, at: 1 }],
     },
   });
-  await paletteUnderState(tasks);
+  await paletteUnderState(tasks, "/acme/inbox/item-1", {
+    taskId: DOCUMENT_TASK.id,
+    itemId: "item-1",
+  });
   chooseFilter("This task");
   const listed = rows();
   assert.ok(listed.includes(`Review notes · ${DOCUMENT_TASK.name}`), "the Inbox's page is listed");
@@ -2960,6 +2985,15 @@ const ASKER = {
 } as const;
 
 /** A task holding Inbox items, its agent summed up so each item's tile names it. */
+/** The listed workspace the Inbox's task is in. */
+const ROTATION_HOME = {
+  id: "workspace-personal",
+  name: "Personal",
+  slug: "personal",
+  role: WORKSPACE_ROLE.OWNER,
+  github: null,
+} as const;
+
 const ROTATION: TaskSummary = {
   id: "7e4f0a9b-0000-4000-8000-0000000000b2",
   workspaceId: "workspace-personal",
@@ -3024,23 +3058,22 @@ function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   };
 }
 
-/** The palette over a window whose listed workspace's task holds the items the account's feed holds as `inbox` says, main's word of it last changed at `changed`, every Inbox item it opens recorded; and how the feed moves. */
+/** The palette over a window whose listed workspace's task holds the items the account's feed holds as `inbox` says, main's word of it last changed at `changed`; how the feed moves, and where the window stands, which an Inbox item it opens takes it. */
 function paletteOverInbox(inbox: FedInbox, changed = 9_000) {
   const deliver = handInboxItems(fedOf(inbox));
-  const opened: InboxChoice[] = [];
   const tasks = tasksControl({
     tasks: [ROTATION],
+    workspace: ROTATION_HOME,
     inboxTasks: [{ taskId: ROTATION.id, items: 2, updatedAt: changed }],
   });
   writeExperiments({});
-  openPalette(
-    { ...tasks, inboxView: { ...tasks.inboxView, onOpenItem: (choice) => opened.push(choice) } },
-    undefined,
-    undefined,
-    DESKTOP_CAPABILITIES,
-    PANEL_TAB.TASKS,
-  );
-  return { deliver: (next: FedInbox) => deliver(fedOf(next)), opened };
+  openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
+  const window = windows.at(-1);
+  assert.ok(window, "the palette stands under a window's router");
+  return {
+    deliver: (next: FedInbox) => deliver(fedOf(next)),
+    at: () => window.history.location.pathname,
+  };
 }
 
 test("the Inbox searched lists what needs you first, each item beside its task", async () => {
@@ -3097,7 +3130,7 @@ test("an Inbox item is found under All by words its thread says, which its row s
 });
 
 test("choosing an Inbox item opens it in the Inbox, as a notification's would", async () => {
-  const { opened } = paletteOverInbox({ items: [PREVIEWS, ROTATE] });
+  const { at } = paletteOverInbox({ items: [PREVIEWS, ROTATE] });
   chooseFilter("Inbox");
   await settle();
 
@@ -3106,9 +3139,7 @@ test("choosing an Inbox item opens it in the Inbox, as a notification's would", 
   );
   press("Use acme.dev for previews? · Billing usage alerts");
 
-  assert.deepEqual(opened, [
-    { taskId: ROTATION.id, itemAgentId: PREVIEWS.agentId, itemId: PREVIEWS.id, opened: true },
-  ]);
+  assert.equal(at(), `/${ROTATION_HOME.slug}/inbox/${PREVIEWS.id}`);
   assert.equal(paletteShown(), false, "the palette closed");
 });
 

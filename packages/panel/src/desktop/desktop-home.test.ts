@@ -14,13 +14,14 @@ import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { OpenSettingsProvider } from "../open-settings.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -34,6 +35,7 @@ import { composerEditor, editorBundleLanded, installEditorLayout } from "../test
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { DesktopHome } from "./desktop-home.js";
 
 /**
@@ -46,6 +48,9 @@ const NOW = Date.now();
 const MINUTE = 60_000;
 const ACME = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
+
+/** Acme's Home, by the id its address names it by, as it has no slug. */
+const HOME_AT = `/${ACME.id}`;
 
 function task(n: number, name: string, ago: number): TaskSummary {
   return {
@@ -121,28 +126,31 @@ afterEach(() => {
 });
 
 /** Home for Dean over `tasks` in `room`, each place of Settings it opens heard by `onSettings`. */
-function home(tasks: TasksControl, room: ShellRoom, onSettings: (link: SettingsLink) => void) {
+function home(
+  router: TestWindowRouter,
+  tasks: TasksControl,
+  room: ShellRoom,
+  onSettings: (link: SettingsLink) => void,
+) {
   return withQueryClient(
-    createElement(
-      OpenSettingsProvider,
-      { value: onSettings },
-      createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+    router.provide(
+      createElement(
+        OpenSettingsProvider,
+        { value: onSettings },
+        createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+      ),
     ),
   );
 }
 
-/** Home over Acme with `items` waiting on `RETRIES`, read by Dean, with `overrides`, their feed refused where `refused` says; each task, item, and place of Settings it opens recorded. */
+/** Home over Acme with `items` waiting on `RETRIES`, read by Dean, with `overrides`, their feed refused where `refused` says; each task and place of Settings it opens recorded, and the window's router, where an item it opens takes it. */
 function mount(
   overrides: Partial<TasksControl> = {},
   items: readonly InboxItem[] = [RETRY_429],
   room: ShellRoom = SHELL_ROOM.WIDE,
   refused = false,
 ) {
-  const opened: { tasks: string[]; items: InboxChoice[]; settings: SettingsLink[] } = {
-    tasks: [],
-    items: [],
-    settings: [],
-  };
+  const opened: { tasks: string[]; settings: SettingsLink[] } = { tasks: [], settings: [] };
   handInboxItems(
     refused
       ? { failed: true }
@@ -169,17 +177,15 @@ function mount(
     ...holding,
     onSelect: (taskId) => opened.tasks.push(taskId),
     onResume: (taskId) => opened.tasks.push(taskId),
-    inboxView: {
-      ...tasksControl().inboxView,
-      onOpenItem: (chosen) => opened.items.push(chosen),
-    },
     ...overrides,
   });
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  act(() => root?.render(home(tasks, room, (link) => opened.settings.push(link))));
-  return { page: container, opened, tasks };
+  // Note that Home stands at Acme's address, which names it by its id, as it has no slug.
+  const router = windowRouter(createMemoryHistory({ initialEntries: [HOME_AT] }));
+  act(() => root?.render(home(router, tasks, room, (link) => opened.settings.push(link))));
+  return { page: container, opened, tasks, router };
 }
 
 /** Lets every promise settled so far run its continuations, and every notification TanStack Query queued reach what it draws. */
@@ -214,7 +220,7 @@ function row(page: HTMLElement, name: string): HTMLElement {
 }
 
 test("Home greets the reader by first name over New task's composer, the items waiting on them, and the tasks worked on latest, newest first", async () => {
-  const { page, opened } = mount();
+  const { page, opened, router } = mount();
   await settle();
 
   assert.equal(page.querySelector("h1")?.textContent, "Welcome back, Dean");
@@ -230,10 +236,7 @@ test("Home greets the reader by first name over New task's composer, the items w
   act(() => row(page, CACHE.name).click());
   act(() => row(page, RETRY_429.title).click());
   assert.deepEqual(opened.tasks, [CACHE.id]);
-  assert.deepEqual(
-    opened.items.map((chosen) => chosen.itemId),
-    [RETRY_429.id],
-  );
+  assert.equal(router.history.location.pathname, `${HOME_AT}/inbox/${RETRY_429.id}`);
 });
 
 test("while the task list is read, Home greets the reader over the composer, asks for no repository, and says it is reading in place of its sections", async () => {
@@ -328,7 +331,7 @@ test("↓ and ↑ walk from the Inbox's rows into Recent's as one list", async (
 });
 
 test("a right-click on an Inbox row opens the Inbox row's own menu, and opens no item", async () => {
-  const { page, opened } = mount();
+  const { page, router } = mount();
   const press = await vi.waitFor(() => row(page, RETRY_429.title));
   act(() => {
     press.dispatchEvent(
@@ -346,7 +349,7 @@ test("a right-click on an Inbox row opens the Inbox row's own menu, and opens no
       `the menu offers ${offered}: ${words.join(", ")}`,
     );
   }
-  assert.deepEqual(opened.items, []);
+  assert.equal(router.history.location.pathname, HOME_AT, "no item opens");
 });
 
 test("nothing waiting draws no Inbox section, but an Inbox that could not be read says so, and a list that could not be read says so under Recent", async () => {
@@ -411,10 +414,10 @@ test("the composer's words take the caret as Home shows, but on a phone, whose p
 });
 
 test("New task pressed while Home stands hands the composer's words the caret, on a phone too", async () => {
-  const { page, tasks } = mount({}, [RETRY_429], SHELL_ROOM.NARROW);
+  const { page, tasks, router } = mount({}, [RETRY_429], SHELL_ROOM.NARROW);
   await settle();
   assert.ok(document.activeElement !== composerEditor(page));
   const pressed = { ...tasks, newTask: { ...tasks.newTask, homeAsks: 1 } };
-  act(() => root?.render(home(pressed, SHELL_ROOM.NARROW, () => undefined)));
+  act(() => root?.render(home(router, pressed, SHELL_ROOM.NARROW, () => undefined)));
   assert.ok(document.activeElement === composerEditor(page), "the words take the caret");
 });

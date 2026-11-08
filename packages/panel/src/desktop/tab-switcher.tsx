@@ -63,8 +63,10 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import {
   type AutomationsDoor,
   type BoardDoor,
+  type InboxDoor,
   useAutomationsDoor,
   useBoardDoor,
+  useInboxDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
@@ -292,7 +294,7 @@ function standingOf(
   const column = mainTabs.tab;
   return shownStop({
     over: tab === PANEL_TAB.SETTINGS || place === ROUTED_PLACE.ADMIN || tasks.history.open,
-    inbox: tasks.inboxView.open,
+    inbox: place === ROUTED_PLACE.INBOX,
     agentId: tasks.agentView.agentId,
     person:
       userId === undefined
@@ -379,7 +381,11 @@ export function TabSwitcher({
   const pressesMoved = useRef(0);
   // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
   const listed = useRef(new Set<string>());
-  const places = { board: useBoardDoor(tasks), automations: useAutomationsDoor(tasks) };
+  const places = {
+    board: useBoardDoor(tasks),
+    automations: useAutomationsDoor(tasks),
+    inbox: useInboxDoor(tasks),
+  };
   const views = useRoutedViews();
   const doors = useRef({ tab, tasks, onTabChange, places });
   doors.current = { tab, tasks, onTabChange, places };
@@ -686,7 +692,11 @@ function showTask(tasks: TasksControl, stop: Extract<Stop, { kind: typeof STOP_K
 /** Opens a place through its own door. */
 function openPlace(
   tasks: TasksControl,
-  doors: { readonly board: BoardDoor; readonly automations: AutomationsDoor },
+  doors: {
+    readonly board: BoardDoor;
+    readonly automations: AutomationsDoor;
+    readonly inbox: InboxDoor;
+  },
   place: SwitcherPlace,
 ): void {
   switch (place) {
@@ -694,7 +704,7 @@ function openPlace(
       tasks.onGoHome();
       return;
     case SWITCHER_PLACE.INBOX:
-      tasks.inboxView.onOpen();
+      doors.inbox.open();
       return;
     case SWITCHER_PLACE.BOARD:
       doors.board.open();

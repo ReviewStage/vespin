@@ -697,7 +697,7 @@ function AppWindow(): React.JSX.Element {
       // reaching the plan the Inbox stands over.
       if (runAppCommand(APP_COMMAND.EXIT_SETTINGS)) return;
       if (runAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY)) return;
-      if (runAppCommand(APP_COMMAND.INBOX_LIST) || tasks.inboxView.open) return;
+      if (runAppCommand(APP_COMMAND.INBOX_LIST) || inboxView.open) return;
       if (runAppCommand(APP_COMMAND.EXIT_AGENT_PAGE)) return;
       if (runAppCommand(APP_COMMAND.EXIT_PERSON_PAGE)) return;
       if (runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS)) return;
@@ -713,7 +713,7 @@ function AppWindow(): React.JSX.Element {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [signIn.cancelSignIn, signIn.signInWait, tasks.inboxView.open]);
+  }, [signIn.cancelSignIn, signIn.signInWait, inboxView.open]);
 
   // The window's shortcuts, from the keys and from the menu bar alike.
   useAppKeymap(true);

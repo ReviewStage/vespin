@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -107,8 +108,17 @@ function resizeStage(width: number): void {
   act(() => relayout());
 }
 
-/** The window's shell resting on the Inbox, on a stage of a width, its sidebar the real fold kept in storage. */
-function mount(width: number, onOpenInbox: () => void = ignore): HTMLElement {
+/** The workspace the window lists, whose Inbox it rests on. */
+const ACME: Workspace = {
+  id: "workspace-acme",
+  name: "Acme",
+  slug: "acme",
+  role: WORKSPACE_ROLE.MEMBER,
+  github: null,
+};
+
+/** The window's shell resting at `at`, the Inbox where none is named, on a stage of a width, its sidebar the real fold kept in storage. */
+function mount(width: number, at: string = SHELL_AT.INBOX): HTMLElement {
   stageWidth = width;
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
@@ -136,7 +146,8 @@ function mount(width: number, onOpenInbox: () => void = ignore): HTMLElement {
       },
       tasks: tasksControl({
         page: TASKS_PAGE.HOME,
-        inboxView: { ...tasksControl().inboxView, open: true, onOpen: onOpenInbox },
+        workspace: ACME,
+        workspaces: [ACME],
       }),
       history: {
         canGoBack: false,
@@ -158,7 +169,7 @@ function mount(width: number, onOpenInbox: () => void = ignore): HTMLElement {
     });
     return createElement("div", { ref: stage.ref, className: "app-stage" }, shell);
   }
-  act(() => root?.render(withQueryClient(underRouter(createElement(Window)))));
+  act(() => root?.render(withQueryClient(underRouter(createElement(Window), at))));
   return container;
 }
 
@@ -307,8 +318,7 @@ test("a sidebar its toggle floats in a narrow window holds the keyboard: Tab wal
 });
 
 test("the floating sidebar stays for a press inside it and goes at a press outside it, or once a choice in it is made", () => {
-  let inbox = 0;
-  const page = mount(1000, () => (inbox += 1));
+  const page = mount(1000, SHELL_AT.PLACES);
   act(() => toggle(page).click());
   pressDown(sidebarOf(page).querySelector(".sidebar-rule") ?? sidebarOf(page));
   assert.equal(standing(page), "floating");
@@ -321,7 +331,10 @@ test("the floating sidebar stays for a press inside it and goes at a press outsi
   const inboxRow = rowNamed(sidebarOf(page), "Inbox");
   assert.ok(inboxRow);
   act(() => inboxRow.click());
-  assert.deepEqual([inbox, standing(page)], [1, "away"]);
+  assert.deepEqual(
+    [routed().router.history.location.pathname, standing(page)],
+    [SHELL_AT.INBOX, "away"],
+  );
 });
 
 test("the pointer at the window's left edge peeks the folded sidebar out, which goes once the pointer leaves it, a press in it or not, as Linear's does; a wide window's toggle pins it from a peek", () => {

@@ -140,7 +140,7 @@ import { appPlatform } from "../app-platform.js";
 import { useAutomationsRoute } from "../automations-route.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
-import { type InboxAt, useInboxRoute } from "../inbox-route.js";
+import { type InboxAt, listedInboxChoice, useInboxRoute } from "../inbox-route.js";
 import {
   descriptionDocumentQuery,
   descriptionDocumentRetryMutation,
@@ -322,25 +322,13 @@ export type InboxChoice =
  * where the Inbox shows one column (`inbox-columns.ts`).
  */
 interface InboxViewControl {
-  readonly open: boolean;
-  /** The item chosen in it, none until one is. */
-  readonly chosen: InboxChoice | undefined;
-  /** Opens the Inbox, as the places bar, the sidebar, and its chord do, on nothing chosen; asked first where leaving would lose unsaved work. */
-  readonly onOpen: () => void;
-  readonly onClose: () => void;
-  readonly onChoose: (chosen: InboxChoice) => void;
   /**
-   * Opens the Inbox on an item, from wherever the window stands: the
-   * command palette, a person's page, or a link. Asked first where leaving
-   * would lose unsaved work, as every door that moves the place is.
+   * Chooses no item, which stands the list alone where the Inbox shows one column. Its route's own move, unasked
+   * (`inbox-route.ts`); this is the tab's so the window's history can take the way back to the list
+   * (`navigation-history.ts`'s `throughHistory`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
+   * and where it stands, what is chosen in it, and its narrowing are read through `useInboxView`.
    */
-  readonly onOpenItem: (chosen: InboxChoice) => void;
-  /** Chooses no item, which stands the list alone where the Inbox shows one column. */
   readonly onClear: () => void;
-  /** The task the list is narrowed to, none where it lists every task's items. */
-  readonly narrowed: string | undefined;
-  /** Lists every task's items again, where the list is narrowed to one; the door the task's chip over the list clears it by. */
-  readonly onWiden: () => void;
   /** Whether the open Inbox shows one column by its own width (`inbox-columns.ts`), which the window's history steps between its list and its item by. */
   readonly single?: boolean;
   /** Says whether the Inbox shows one column. */
@@ -1723,13 +1711,10 @@ export function useTasksTab(input: {
   );
   // The Inbox lists the listed workspace's items alone, so a choice another workspace's list made gives way with it.
   // Note that an agent's with no task is held to the listed workspace by the list itself, which lists its workspace's alone.
-  const inboxAsked = inboxView?.chosen;
-  const inboxChosen =
-    inboxAsked !== undefined &&
-    (!("taskId" in inboxAsked) ||
-      inWorkspace([inboxAsked], tasks.tasks, listedWorkspaceId).length > 0)
-      ? inboxAsked
-      : undefined;
+  const inboxChosen = listedInboxChoice(inboxView?.chosen, {
+    tasks: tasks.tasks,
+    workspace: listedWorkspace,
+  });
   // While the Inbox stands, the panel beside it is the chosen item's task's, or its agent's where it
   // has no task, as that agent's page's is: what the item opens there, its files, its task's pages,
   // and its agents' pull requests, and none of the fixed kinds, which the task's page draws.
@@ -4311,23 +4296,9 @@ export function useTasksTab(input: {
     inboxAgents: input.inboxAgents,
     failedRuns: input.failedRuns,
     onThreadsShown: setThreadsShown,
-    // The window's Inbox stands over the task's place, so a version history there gives way.
+    // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {
-      open: inboxView !== undefined,
-      chosen: inboxChosen,
-      // Note that it opens on nothing chosen, so one column shows the list and two an empty pane beside it (`inbox-columns.ts`).
-      // It leaves any task it was narrowed to, so the Inbox lists every item.
-      onOpen: () => standInbox(inboxIn(listedWorkspace?.id, undefined), undefined),
-      onClose: closeFirst(routedInbox.onClose),
-      onChoose: (chosen) => routedInbox.onChoose(chosen),
-      onOpenItem: (chosen: InboxChoice) => {
-        // Note that the Inbox standing keeps its narrowing for an item of the task it is narrowed to, as a row's choice does.
-        const narrowed = inboxView === undefined ? undefined : inboxView.narrowed;
-        standInbox(inboxIn(listedWorkspace?.id, narrowed), chosen);
-      },
       onClear: routedInbox.onClear,
-      narrowed: inboxView?.narrowed,
-      onWiden: routedInbox.onWiden,
       single: inboxView !== undefined && inboxSingle,
       onSingle: setInboxSingle,
       pages: inboxPages,

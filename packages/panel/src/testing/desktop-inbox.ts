@@ -70,6 +70,7 @@ import { useDraftsOwner } from "../composer-drafts.js";
 import { DesktopInbox } from "../desktop/desktop-inbox.js";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { DRAFT_WORD } from "../draft-mark.js";
+import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
@@ -103,10 +104,13 @@ import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
 import { agentHoldingsOf, listedAgent, tasksControl, waitingOf } from "./tasks-control.js";
-import { windowRouter } from "./window-router.js";
+import { holdingInboxChoice, leavingBy, windowRouter } from "./window-router.js";
 
 /** Where the window's router stands as the Inbox is drawn: Acme's Inbox. */
 const INBOX_AT = "/acme/inbox";
+
+/** Acme's Home, which the Inbox is left for. */
+const HOME_AT = "/acme";
 
 const TASK_ID = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 
@@ -297,11 +301,11 @@ class InboxWorld {
   setTasks: (tasks: readonly TaskSummary[]) => void = () => undefined;
   /** Lands the account's first read of its task list, where a test mounted the Inbox before it. */
   setListRead: (read: boolean) => void = () => undefined;
-  /** Leaves the Inbox for another place and comes back to it, as the window's sidebar does. */
+  /** Leaves the Inbox for Home, and comes back to it by Back, as the window's history does. */
   setInboxOpen: (open: boolean) => void = () => undefined;
-  /** Chooses an item from outside the list, as a notification's click does. */
+  /** Chooses an item from outside the list, through the Inbox's route, as a notification's click does. */
   chooseFromOutside: (chosen: InboxChoice) => void = () => undefined;
-  /** Narrows the Inbox to one task's items, as its address does (`inbox-route.ts`), or lists every task's again. */
+  /** Narrows the Inbox to one task's items, as its address does (`inbox-route.ts`), or lists every task's again, as visits. */
   narrowTo: (taskId: string | undefined) => void = () => undefined;
   /** Moves main's read of what waits on the agents with no task, and of the agents holding items, those it names unless given, as main does when an item opens or is answered. */
   setTaskless: (
@@ -686,7 +690,7 @@ interface Asked {
   readonly shownAgents: [string, string][];
   /** The agents whose transcripts it was asked to show beside the item, in the panel. */
   readonly previewedAgents: string[];
-  /** How many times it was asked to close. */
+  /** How many times the window was asked to leave it, through its routed exits (`leavingBy`). */
   closed: number;
   /** Each task it was asked to mark, by the mark, in order. */
   readonly marks: [string, TaskMark][];
@@ -778,18 +782,10 @@ export function mount(
   function Page({ sidePanel }: { sidePanel?: SidePanelControl | undefined }) {
     // The drafts are handed to the account signed in, none here, as the panel's root hands them.
     useDraftsOwner(undefined);
-    const [chosen, setChosen] = useState<InboxChoice | undefined>(firstChosen);
-    const [inboxOpen, setOpen] = useState(true);
-    world.setInboxOpen = setOpen;
-    world.chooseFromOutside = setChosen;
-    const [narrowed, setNarrowed] = useState<string | undefined>(undefined);
-    world.narrowTo = setNarrowed;
-    // Note that an item of another task than the one the list is narrowed to widens it, as the Inbox's door does.
-    const choose = (next: InboxChoice) => {
-      setChosen(next);
-      const holder = "taskId" in next ? next.taskId : undefined;
-      setNarrowed((held) => (held === undefined || held === holder ? held : undefined));
-    };
+    // Note that the Inbox stands, its item chosen, and its list narrowed as its address says, as the window's router stands them.
+    const route = useInboxRoute();
+    world.chooseFromOutside = (chosen) => route.onChoose(chosen);
+    const inboxOpen = route.open;
     const [holding, setHeld] = useState(firstHolding);
     const [listed, setListed] = useState<readonly TaskSummary[]>(listUnread ? [] : standing);
     const [listRead, setRead] = useState(!listUnread);
@@ -830,10 +826,19 @@ export function mount(
       const { taskAgents: _held, ...rest } = heldList;
       reads.deliverTasks(onTasks === undefined ? rest : { ...rest, taskAgents: onTasks });
     }, [heldList, onTasks]);
+    // Note that the tasks stand in the workspace listed, where one is, as the window lists that workspace's tasks, and its Inbox their items alone.
+    const { listedWorkspace } = world;
+    const inListed = useMemo(
+      () =>
+        listedWorkspace === undefined
+          ? listed
+          : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id })),
+      [listed, listedWorkspace],
+    );
     const control = tasksControl({
       ...(readerKnown ? { me: READER.userId } : {}),
-      workspace: world.listedWorkspace,
-      tasks: listed,
+      workspace: listedWorkspace,
+      tasks: inListed,
       // The agents the task list followed live carries, none while it has carried none yet.
       liveAgents: world.agentListHeld ? undefined : liveAgents,
       listRead,
@@ -850,17 +855,7 @@ export function mount(
       inboxTaskless: taskless,
       inboxAgents: agents,
       inboxView: {
-        open: inboxOpen,
-        chosen,
-        onOpen: () => undefined,
-        onClose: () => {
-          asked.closed += 1;
-        },
-        onChoose: choose,
-        onOpenItem: choose,
-        onClear: () => setChosen(undefined),
-        narrowed,
-        onWiden: () => setNarrowed(undefined),
+        onClear: route.onClear,
         pages: undefined,
         onTaskAgents: () => undefined,
       },
@@ -901,8 +896,20 @@ export function mount(
       : createElement(Paneled, { at: room });
   const shown = toasts ? createElement(Fragment, null, inbox, createElement(ToastHost)) : inbox;
   const page = bundles === undefined ? shown : onSideBundles(bundles, shown);
-  const router = windowRouter(createMemoryHistory({ initialEntries: [INBOX_AT] }));
-  act(() => world.root?.render(withQueryClient(router.provide(page))));
+  const at = firstChosen === undefined ? INBOX_AT : `${INBOX_AT}/${firstChosen.itemId}`;
+  const router = windowRouter(createMemoryHistory({ initialEntries: [at] }));
+  world.setInboxOpen = (open) => {
+    if (open) router.history.back();
+    else router.history.push(HOME_AT);
+  };
+  world.narrowTo = (taskId) =>
+    router.history.push(taskId === undefined ? INBOX_AT : `${INBOX_AT}/task/${taskId}`);
+  const leaves = leavingBy(() => {
+    asked.closed += 1;
+  });
+  const held = firstChosen === undefined ? null : holdingInboxChoice(firstChosen);
+  const drawn = createElement(Fragment, null, leaves, held, page);
+  act(() => world.root?.render(withQueryClient(router.provide(drawn))));
   return { page: container, asked, windowPath: () => router.history.location.pathname };
 }
 

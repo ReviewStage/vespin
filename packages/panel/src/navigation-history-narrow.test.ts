@@ -123,6 +123,8 @@ function tasksTab(
     region: onTask
       ? { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, workspaceId: ACME.id } }
       : base.region,
+    // Note that the task is listed in Acme, as the Inbox's item of it is listed there.
+    tasks: [{ ...DOCUMENT_TASK, workspaceId: ACME.id }],
     workspaces: [ACME],
     workspace: ACME,
     sidePanel: {
@@ -156,18 +158,8 @@ function tasksTab(
     },
     // As the real doors do, the Inbox opens by the router, narrowed to the task named or to none.
     onShowInbox: ({ taskId }) => inbox.onOpen(inboxAt(taskId)),
-    inboxView: {
-      ...base.inboxView,
-      open: inbox.open,
-      chosen: inbox.chosen,
-      narrowed: inbox.narrowed,
-      single: at.inbox.single ?? false,
-      onOpen: () => inbox.onOpen(inboxAt(undefined)),
-      onClose: inbox.onClose,
-      onChoose: (chosen) => inbox.onChoose(chosen),
-      onClear: inbox.onClear,
-      onWiden: inbox.onWiden,
-    },
+    // As the real tab does, the Inbox's way back to its list is the router's, and whether it shows one column its own.
+    inboxView: { ...base.inboxView, single: at.inbox.single ?? false, onClear: inbox.onClear },
     // As the real history does, each choice is a move of the router's.
     history: {
       ...base.history,
@@ -535,7 +527,7 @@ test("on a narrow stage an Inbox item opened from its list is a step, and the In
   });
   // A row pressed chooses its item and stands it alone, as the Inbox's columns do.
   window.press(() => {
-    window.shown().inboxView.onChoose(ITEM);
+    window.inbox().onChoose(ITEM);
   });
 
   assert.deepEqual(window.addresses(), ["/acme/inbox", "/acme/inbox/item-1"]);
@@ -556,7 +548,7 @@ test("an Inbox narrowed to a task, showing one column, steps its item's way back
   });
   window.press(() => window.shown().onShowInbox({ taskId: DOCUMENT_TASK.id }));
   window.press(() => {
-    window.shown().inboxView.onChoose(ITEM);
+    window.inbox().onChoose(ITEM);
   });
   window.press(() => window.shown().inboxView.onClear());
 
@@ -570,7 +562,7 @@ test("in a room still wide, as a 700px stage is, an Inbox showing one column by 
     inbox: { open: true, chosen: undefined, single: true },
   });
   window.press(() => {
-    window.shown().inboxView.onChoose(ITEM);
+    window.inbox().onChoose(ITEM);
   });
 
   assert.deepEqual(window.addresses(), ["/acme/inbox", "/acme/inbox/item-1"]);
@@ -589,7 +581,7 @@ test("on the desktop's width an Inbox item stands at its own address, which Copy
       ...ON_TASK,
       inbox: { open: true, chosen: undefined, single },
     });
-    window.press(() => window.shown().inboxView.onChoose(ITEM));
+    window.press(() => window.inbox().onChoose(ITEM));
     assert.equal(window.standingAddress(), "/acme/inbox/item-1");
     assert.equal(copiedHere(), "/acme/inbox/item-1", "Copy link names the item at hand");
     unmountAll();

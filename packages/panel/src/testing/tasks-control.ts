@@ -385,11 +385,12 @@ export const NO_LEAVE_ASK: PlaceLeave = {
   transitionalLeaveFirst: (leave) => leave,
 };
 
-/** The Board, a person's page, and the Automations pages standing nowhere, as a step's name and Copy link read them. */
+/** The Board, a person's page, the Automations pages, and the Inbox standing nowhere, as a step's name and Copy link read them. */
 export const VIEWS_AWAY: RoutedViews = {
   board: false,
   person: { userId: undefined, name: undefined, workspace: undefined },
   automations: undefined,
+  inbox: { open: false, chosen: undefined, narrowed: undefined },
 };
 
 /** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */
@@ -586,15 +587,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     inboxShown: null,
     inboxTasks: [],
     inboxView: {
-      open: false,
-      chosen: undefined,
-      onOpen: ignore,
-      onClose: ignore,
-      onChoose: ignore,
-      onOpenItem: ignore,
       onClear: ignore,
-      narrowed: undefined,
-      onWiden: ignore,
       pages: undefined,
       onTaskAgents: () => undefined,
     },

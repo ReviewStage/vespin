@@ -20,6 +20,7 @@
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useAutomationsPlace } from "./automations-route.js";
+import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
 import { placeParamsOf } from "./places/place-params.js";
 import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
@@ -160,17 +161,21 @@ export interface RoutedViews {
   readonly person: Pick<PersonRoute, "userId" | "name" | "workspace">;
   /** The Automations page standing, none while none does. */
   readonly automations: AutomationsPlace | undefined;
+  /** Whether the Inbox stands, the item chosen in it as its address names it, of whichever workspace (`listedInboxChoice`), and the task its list is narrowed to. */
+  readonly inbox: Pick<InboxRoute, "open" | "chosen" | "narrowed">;
 }
 
-/** The Board, a person's page, and the Automations pages as the router stands them. */
+/** The Board, a person's page, the Automations pages, and the Inbox as the router stands them. */
 export function useRoutedViews(): RoutedViews {
   const { open } = useBoardRoute();
   const { userId, name, workspace } = usePersonRoute();
   const automations = useAutomationsPlace();
+  const inbox = useInboxRoute();
   return {
     board: open,
     person: { userId, name, workspace },
     automations: automations.open ? automations.place : undefined,
+    inbox: { open: inbox.open, chosen: inbox.chosen, narrowed: inbox.narrowed },
   };
 }
 

@@ -31,9 +31,10 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { besideItem } from "../inbox-item-links.js";
+import { useInboxView } from "../inbox-route.js";
 import { MemberDirectory } from "../member-directory.js";
 import { NOT_FOUND_THING, NotFound } from "../not-found.js";
-import { type AutomationsDoor, useAutomationsDoor } from "../places/routed-doors.js";
+import { type AutomationsDoor, useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { addressOf, HERE, placeAddress, ROUTE, THING } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
@@ -211,8 +212,9 @@ export const DesktopInbox = memo(function DesktopInbox({
   // New task is the way on from an Inbox with nothing in it, wherever an account can start one.
   const newTask = tasks.signedIn ? tasks.onNewTask : undefined;
   const automations = useAutomationsDoor(tasks);
+  const inbox = useInboxDoor(tasks);
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
-  const narrowedTask = tasks.inboxView.narrowed;
+  const narrowedTask = useInboxView(tasks).narrowed;
   const narrowedTaskRow = tasks.tasks.find((task) => task.id === narrowedTask);
   const narrowedTaskName = narrowedTaskRow?.name;
   const {
@@ -300,7 +302,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   const newThread: InboxNewThread | undefined = tasks.signedIn
     ? startedThreads(startInboxThread, (item, itemId) => {
         const holder = chosen?.item.id === item.id ? chosen.holder : undefined;
-        view.onChoose({
+        inbox.choose({
           ...(holder?.kind === INBOX_HOLDER.TASK
             ? { taskId: holder.task.id }
             : { agentId: item.agentId }),
@@ -424,7 +426,7 @@ export const DesktopInbox = memo(function DesktopInbox({
               : { agentId, itemId, opened: true };
         if (choice === undefined) return false;
         // Note that the Inbox's door widens a list narrowed to another task, so the list it opens in holds it (`inbox-route.ts`).
-        view.onChoose(choice);
+        inbox.choose(choice);
         return true;
       }
       // Note that the panel beside an item draws no worker, so the table opens none there.
@@ -645,7 +647,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                         : {
                             name: narrowedTaskName,
                             status: narrowedTaskRow?.status,
-                            onClear: tasks.inboxView.onWiden,
+                            onClear: inbox.widen,
                           },
                   }}
                   models={named.models}

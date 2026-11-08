@@ -93,18 +93,16 @@ interface StandingProps {
   readonly tasks?: {
     readonly agentView?: { readonly agentId?: string | undefined };
     readonly history?: { readonly open?: boolean };
-    readonly inboxView?: { readonly open?: boolean };
     readonly page?: string;
   };
 }
 
-/** Where a shell stands by its props: Settings where its tab is, a version history, the Inbox, an agent's page where one stands, a task's place where one is open, else Home; the Board, a person's page, Admin, and the Automations pages stand only where a test names them, as they are their routes' alone. */
+/** Where a shell stands by its props: Settings where its tab is, a version history, an agent's page where one stands, a task's place where one is open, else Home; the Inbox, the Board, a person's page, Admin, and the Automations pages stand only where a test names them, as they are their routes' alone. */
 function standingOf(shell: ReactElement): string {
   const props: StandingProps =
     typeof shell.props === "object" && shell.props !== null ? shell.props : {};
   if (props.tab === PANEL_TAB.SETTINGS) return SHELL_AT.SETTINGS;
   if (props.tasks?.history?.open === true) return SHELL_AT.VERSION_HISTORY;
-  if (props.tasks?.inboxView?.open === true) return SHELL_AT.INBOX;
   const agent = props.tasks?.agentView?.agentId;
   if (agent !== undefined) return agentAt(agent);
   return props.tasks?.page === TASKS_PAGE.DOCUMENT ? SHELL_AT.TASK : SHELL_AT.PLACES;

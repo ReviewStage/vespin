@@ -12,9 +12,10 @@ import {
   RouterContextProvider,
   type RouterHistory,
 } from "@tanstack/react-router";
-import { createElement, type ReactElement } from "react";
+import { createElement, type ReactElement, useState } from "react";
 import { createPanelRouter, PanelRouterProvider } from "../panel-router.js";
-import { RoutedExitsProvider, useRoutedExits } from "../places/routed-exits.js";
+import { RoutedExitsProvider, useRoutedExits, useRoutedMemory } from "../places/routed-exits.js";
+import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 
 /** The router a test's window stands under. */
@@ -84,4 +85,16 @@ function LeavesBy({ leave }: { readonly leave: () => void }): null {
 /** An element that, drawn under a window's router, has its routed places left by `leave`, so a test hears a place's close. */
 export function leavingBy(leave: () => void): ReactElement {
   return createElement(LeavesBy, { leave });
+}
+
+/** Holds where `chosen` stands in the window's memory before anything is drawn, as the door that chose it holds it. */
+function HoldsInboxChoice({ chosen }: { readonly chosen: InboxChoice }): null {
+  const { inboxChoices } = useRoutedMemory();
+  useState(() => inboxChoices.setState((held) => new Map(held).set(chosen.itemId, chosen)));
+  return null;
+}
+
+/** An element that, drawn under a window's router before the Inbox, holds where `chosen` stands, so an Inbox address naming its item stands on it as its door chose it (`inbox-route.ts`). */
+export function holdingInboxChoice(chosen: InboxChoice): ReactElement {
+  return createElement(HoldsInboxChoice, { chosen });
 }

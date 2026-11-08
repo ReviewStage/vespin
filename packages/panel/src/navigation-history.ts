@@ -1389,7 +1389,7 @@ export function useWindowHistory(input: {
   /** What the history reads of a version history beyond where it stands: the list under a narrow room's version (`version-history-route.ts`). */
   versionHistory: Pick<VersionHistoryRoute, "listAddress">;
   /** What the history reads of the Inbox beyond where it stands: the list under its item, the item chosen, and the doors that stand its list (`inbox-route.ts`). */
-  inbox: Pick<InboxRoute, "listAddress" | "chosen" | "choiceOf" | "onOpen" | "onClear">;
+  inbox: Pick<InboxRoute, "open" | "listAddress" | "chosen" | "choiceOf" | "onOpen" | "onClear">;
   /** Home as the router stands it, which a routed place left with no task bound opens (`workspace-routes.ts`). */
   home: Pick<HomeRoute, "onOpen">;
   /** The room the panel's stage gives, narrow where it shows one pane at a time. */
@@ -1404,7 +1404,6 @@ export function useWindowHistory(input: {
     | "onGoHome"
     | "history"
     | "signedIn"
-    | "inboxView"
     | "agentView"
     | "workspace"
     | "onAutomationRuns"
@@ -1424,7 +1423,7 @@ export function useWindowHistory(input: {
   const narrow = input.room === SHELL_ROOM.NARROW;
   const { boundFor } = tasks;
   const historyOpen = tasks.history.open;
-  const inboxOpen = tasks.inboxView.open;
+  const inboxOpen = input.inbox.open;
   // The item chosen in the Inbox, whose side panel its step holds beside its address.
   const inboxChosen = input.inbox.chosen;
   const panelOpen = tasks.sidePanel.open;

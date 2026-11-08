@@ -41,6 +41,7 @@ import {
   taskName,
   VERSION_HISTORY_WORDS,
 } from "../history-titles.js";
+import { listedInboxChoice } from "../inbox-route.js";
 import {
   agentPageLinks,
   inboxItemPlace,
@@ -516,12 +517,12 @@ export const ROUTED_PLACE = {
     overThePlan: true,
     inTaskPlace: true,
     listedOnly: true,
-    title: (tasks, under) => {
-      if (!tasks.inboxView.open) return under();
-      const { chosen } = tasks.inboxView;
+    title: (tasks, under, views) => {
+      if (!views.inbox.open) return under();
+      const chosen = listedInboxChoice(views.inbox.chosen, tasks);
       const holder = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
       // An Inbox narrowed to a task is named by the task, every item it shows being that task's.
-      const detail = taskName(tasks, holder) ?? taskName(tasks, tasks.inboxView.narrowed);
+      const detail = taskName(tasks, holder) ?? taskName(tasks, views.inbox.narrowed);
       return { label: INBOX_WORDS, detail };
     },
     // An Inbox step is named by its chosen item's task, else the one its list is narrowed to.
@@ -530,15 +531,15 @@ export const ROUTED_PLACE = {
       const narrowed = params.taskId ?? search.get("task") ?? undefined;
       return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed };
     },
-    links: ({ tasks, at, listed, under }) => {
-      if (!tasks.inboxView.open) return under();
+    links: ({ tasks, views, at, listed, under }) => {
+      if (!views.inbox.open) return under();
       // An Inbox narrowed to a task is linked by it, so a copied link or a reload opens it narrowed again.
       const inboxPlace: LinkPlace =
         at.inboxTask === undefined
           ? { kind: LINK_PLACE.INBOX }
           : { kind: LINK_PLACE.INBOX, planId: at.inboxTask };
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
-      const { chosen } = tasks.inboxView;
+      const chosen = listedInboxChoice(views.inbox.chosen, tasks);
       if (chosen === undefined) return [inbox];
       const item = inboxItemPlace(chosen);
       // An item standing alone, in a narrow room or an Inbox showing one column by its own width, is a step of its own.

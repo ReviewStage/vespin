@@ -102,7 +102,7 @@ export type StepTitleTasks = Pick<
   | "pages"
   | "mainTabs"
   | "sidePanel"
-  | "inboxView"
+  | "workspace"
   | "agentView"
   | "history"
 >;

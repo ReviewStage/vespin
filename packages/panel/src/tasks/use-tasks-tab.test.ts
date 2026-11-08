@@ -71,7 +71,7 @@ import { useAdminView } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
-import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
+import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
 import {
   type TaskVisits,
@@ -93,10 +93,12 @@ import {
   type AdminDoor,
   type AutomationsDoor,
   type BoardDoor,
+  type InboxDoor,
   type PersonDoor,
   useAdminDoor,
   useAutomationsDoor,
   useBoardDoor,
+  useInboxDoor,
   usePersonDoor,
 } from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
@@ -294,6 +296,20 @@ let automationsDoor: AutomationsDoor | undefined;
 let views: RoutedViews | undefined;
 /** Admin's view as the router of the window last mounted stands it, none while it does not stand. */
 let adminStanding: AdminView | undefined;
+/** The Inbox's doors in the window last mounted, as a surface holds them. */
+let inboxDoor: InboxDoor | undefined;
+/** The Inbox as a surface of the window last mounted reads it. */
+let inboxStanding: InboxView | undefined;
+
+/** The Inbox's doors in the window last mounted. */
+function inboxDoorNow(): InboxDoor {
+  return inboxDoor ?? assert.fail("the Inbox's doors stand");
+}
+
+/** The Inbox as a surface of the window last mounted reads it now. */
+function inboxNow(): InboxView {
+  return inboxStanding ?? assert.fail("the Inbox's route stands");
+}
 
 function mount(
   initial: Partial<Standing> = {},
@@ -449,6 +465,8 @@ function mount(
     personDoor = usePersonDoor(control);
     adminDoor = useAdminDoor(control);
     automationsDoor = useAutomationsDoor(control);
+    inboxDoor = useInboxDoor(control);
+    inboxStanding = useInboxView(control);
     views = useRoutedViews();
     const adminView = useAdminView();
     adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
@@ -756,7 +774,7 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   assert.equal(home.control().newTask.open, false, "no dialog over Home");
   assert.equal(home.control().newTask.homeAsks, 1, "Home's composer is asked for the caret");
 
-  act(() => home.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   act(() => home.control().onNewTask());
   assert.equal(home.control().newTask.open, true, "the Inbox gets the dialog");
   assert.equal(home.control().newTask.homeAsks, 1);
@@ -1226,8 +1244,8 @@ test('Show panel on a plan whose strip holds no tab opens the tab last closed th
 
 test("Show panel beside the Inbox, its item's plan's strip holding no tab, asks for the \"+\" at the toggle rather than showing the panel empty, though another plan stands open behind it", () => {
   const tab = mount({ shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "billing" } });
-  act(() => tab.control().inboxView.onOpen());
-  act(() => tab.control().inboxView.onChoose({ taskId: "notes", itemId: "notes-item-0" }));
+  act(() => inboxDoorNow().open());
+  act(() => inboxDoorNow().choose({ taskId: "notes", itemId: "notes-item-0" }));
   assert.deepEqual(tab.control().sidePanel.strip, []);
 
   act(() => tab.control().sidePanel.onToggle());
@@ -1721,7 +1739,7 @@ async function agentOpenedBy(href: string) {
     panel: panelOf(tab),
     message: control.messageReveal?.messageId,
     thread: control.threadReveal?.threadId,
-    inbox: control.inboxView.open,
+    inbox: inboxNow().open,
   };
 }
 
@@ -1817,8 +1835,8 @@ async function placeOpenedBy(href: string) {
     version: control.history.open ? control.history.spot?.revision : undefined,
     board: views?.board,
     person: views?.person.userId,
-    inbox: control.inboxView.open
-      ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
+    inbox: inboxNow().open
+      ? { chosen: inboxNow().chosen, narrowed: inboxNow().narrowed }
       : undefined,
     automations: views?.automations,
     admin: adminStanding,
@@ -1979,9 +1997,9 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
     },
   );
   const opened = () => ({
-    open: tab.control().inboxView.open,
-    chosen: tab.control().inboxView.chosen,
-    taskId: tab.control().inboxView.narrowed,
+    open: inboxNow().open,
+    chosen: inboxNow().chosen,
+    taskId: inboxNow().narrowed,
     panel: tab.control().sidePanel.tab,
   });
 
@@ -2022,7 +2040,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
     taskId: undefined,
     panel: undefined,
   });
-  assert.equal(tab.control().inboxView.open, false);
+  assert.equal(inboxNow().open, false);
   assert.deepEqual(views?.automations, {
     kind: AUTOMATIONS_PAGE.EDIT,
     automationId,
@@ -2056,7 +2074,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
     }),
   );
   await settle();
-  const found = tab.control().inboxView.chosen;
+  const found = inboxNow().chosen;
   const listed = tab.control().workspace?.id;
   act(() =>
     tab.control().onOpenLink({
@@ -2068,8 +2086,8 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
 
   assert.deepEqual(found, { taskId: alerts, itemAgentId: AGENT_ID, itemId, opened: true });
   assert.equal(listed, ACME.id);
-  assert.equal(tab.control().inboxView.open, true);
-  assert.deepEqual(tab.control().inboxView.chosen, { itemId: unknownId, opened: true });
+  assert.equal(inboxNow().open, true);
+  assert.deepEqual(inboxNow().chosen, { itemId: unknownId, opened: true });
 
   act(() =>
     tab.control().onOpenLink({
@@ -2080,7 +2098,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   await settle();
 
   assert.deepEqual(
-    tab.control().inboxView.chosen,
+    inboxNow().chosen,
     { taskId: alerts, itemAgentId: AGENT_ID, itemId: unknownId, opened: true },
     "a link to the item standing missing asks the service again",
   );
@@ -2126,18 +2144,18 @@ test.each([
       },
     );
     await settle();
-    act(() => tab.control().inboxView.onOpen());
+    act(() => inboxDoorNow().open());
     act(() => tab.control().onOpenLink({ workspace: "acme", place }));
     const row = { taskId: "notes", itemId: "thread", opened: true } as const;
-    act(() => tab.control().inboxView.onChoose(row));
+    act(() => inboxDoorNow().choose(row));
     await act(async () => {
       await vi.waitFor(() => assert.ok(answers.length > 0));
       answers[0]?.();
     });
     await settle();
 
-    assert.equal(tab.control().inboxView.open, true);
-    assert.deepEqual(tab.control().inboxView.chosen, row);
+    assert.equal(inboxNow().open, true);
+    assert.deepEqual(inboxNow().chosen, row);
   },
 );
 
@@ -2175,7 +2193,7 @@ test.each([
       },
     );
     await settle();
-    act(() => tab.control().inboxView.onOpen());
+    act(() => inboxDoorNow().open());
     act(() => tab.control().onOpenLink(linkAt(href)));
     tab.replace("/personal/tasks");
     await act(async () => {
@@ -2185,7 +2203,7 @@ test.each([
     await settle();
 
     assert.equal(tab.at(), "/personal/tasks");
-    assert.equal(tab.control().inboxView.open, false);
+    assert.equal(inboxNow().open, false);
     assert.equal(tab.control().agentView.agentId, undefined);
   },
 );
@@ -2194,9 +2212,9 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, {});
   await settle();
   const narrowedTo = () => ({
-    open: tab.control().inboxView.open,
-    chosen: tab.control().inboxView.chosen,
-    taskId: tab.control().inboxView.narrowed,
+    open: inboxNow().open,
+    chosen: inboxNow().chosen,
+    taskId: inboxNow().narrowed,
   });
 
   act(() => tab.control().onShowInbox({ taskId: "notes" }));
@@ -2210,7 +2228,7 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
   const linked = narrowedTo();
   act(() => tab.control().onShowInbox({ taskId: "alerts", itemId: "thread" }));
   const thread = narrowedTo();
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
 
   assert.deepEqual(door, { open: true, chosen: undefined, taskId: "notes" });
   assert.deepEqual(linked, { open: true, chosen: undefined, taskId: "alerts" });
@@ -2224,7 +2242,7 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
 
 test("a Vespin link to a person opens their page in the workspace its slug names, in the place of the Inbox", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
 
   act(() =>
     tab.control().onOpenLink({
@@ -2234,7 +2252,7 @@ test("a Vespin link to a person opens their page in the workspace its slug names
   );
 
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
-  assert.equal(tab.control().inboxView.open, false);
+  assert.equal(inboxNow().open, false);
   assert.equal(views?.person.userId, "user-charles");
   assert.equal(views?.person.workspace, PERSONAL.slug);
 });
@@ -2598,13 +2616,13 @@ test("the Inbox lists the chosen workspace's share of what waits, and a plan the
 test("an Inbox item chosen in one workspace gives way as another is listed, so its plan's Inbox no longer stands on screen", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
 
-  act(() => tab.control().inboxView.onOpen());
-  act(() => tab.control().inboxView.onChoose({ taskId: "notes", itemId: "notes-item-0" }));
-  const chosen = tab.control().inboxView.chosen;
+  act(() => inboxDoorNow().open());
+  act(() => inboxDoorNow().choose({ taskId: "notes", itemId: "notes-item-0" }));
+  const chosen = inboxNow().chosen;
   act(() => tab.control().onChooseWorkspace(ACME.id));
 
   assert.deepEqual(chosen, { taskId: "notes", itemId: "notes-item-0" });
-  assert.equal(tab.control().inboxView.chosen, undefined);
+  assert.equal(inboxNow().chosen, undefined);
   assert.equal(tab.control().inboxShown, null);
 });
 
@@ -2614,16 +2632,16 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
     { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
   );
   const choose = () => {
-    act(() => tab.control().inboxView.onOpenItem({ taskId: TASK.id, itemId: "item-1" }));
+    act(() => inboxDoorNow().openItem({ taskId: TASK.id, itemId: "item-1" }));
     act(() => boardDoor?.open());
   };
 
   choose();
-  act(() => tab.control().inboxView.onOpen());
-  const fromRow = tab.control().inboxView.chosen;
+  act(() => inboxDoorNow().open());
+  const fromRow = inboxNow().chosen;
   choose();
   act(() => tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_PLACE.INBOX } }));
-  const fromLink = tab.control().inboxView.chosen;
+  const fromLink = inboxNow().chosen;
 
   assert.equal(fromRow, undefined);
   assert.equal(fromLink, undefined);
@@ -2749,7 +2767,7 @@ test.each([
           new Promise((_resolve, reject) => refusals.push(() => reject(new Error("Refused.")))),
       },
     );
-    act(() => tab.control().inboxView.onOpen());
+    act(() => inboxDoorNow().open());
     act(() => press(tab));
     act(() => boardDoor?.open());
     await act(async () => {
@@ -2759,7 +2777,7 @@ test.each([
     await settle();
 
     assert.deepEqual(
-      { board: views?.board, inbox: tab.control().inboxView.open },
+      { board: views?.board, inbox: inboxNow().open },
       { board: true, inbox: false },
     );
   },
@@ -2797,7 +2815,7 @@ test("a start refused while the Inbox item it was pressed over was still being f
   });
   await settle();
 
-  assert.deepEqual(tab.control().inboxView.chosen, {
+  assert.deepEqual(inboxNow().chosen, {
     taskId: "notes",
     itemAgentId: AGENT_ID,
     itemId,
@@ -3498,7 +3516,7 @@ function listRead(tasks: TasksView["tasks"]): TasksView {
 
 test("while a page stands its ask, a way out asks instead of going, Leave goes where was asked, and once the ask is down the doors go at once", async () => {
   const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   const asked: (() => void)[] = [];
   const ask: LeaveAsk = (leave) => void asked.push(leave);
   let down: () => void = () => undefined;
@@ -3510,7 +3528,7 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
   act(() => boardDoor?.open());
   await settle();
   act(() => tab.control().onChooseWorkspace("workspace-other"));
-  assert.equal(tab.control().inboxView.open, true, "the page stands while it is asked about");
+  assert.equal(inboxNow().open, true, "the page stands while it is asked about");
   assert.equal(asked.length, 2, "the workspace switcher asks as the Board's move does");
 
   act(() => asked[0]?.());
@@ -3518,9 +3536,9 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
   assert.equal(views?.board, true, "Leave goes where the first way out went");
 
   act(() => down());
-  act(() => tab.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   await settle();
-  assert.equal(tab.control().inboxView.open, true);
+  assert.equal(inboxNow().open, true);
   assert.equal(asked.length, 2, "nothing is asked once the ask is down");
 });
 
@@ -3528,9 +3546,7 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
 const BILLING = row("billing", 2);
 
 /** The window on the Inbox over the open task, as the doors below are pressed from it, or on `away`'s place instead. */
-async function onInbox(
-  away: (control: TasksControl) => void = (control) => control.inboxView.onOpen(),
-) {
+async function onInbox(away: (control: TasksControl) => void = () => inboxDoorNow().open()) {
   const tab = mount(
     {
       shown: true,
@@ -3557,8 +3573,8 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
     entries: tab.entries(),
     bound: control.boundFor,
     asked: opensAsked(tab.payloads),
-    inbox: control.inboxView.open
-      ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
+    inbox: inboxNow().open
+      ? { chosen: inboxNow().chosen, narrowed: inboxNow().narrowed }
       : undefined,
     agentPage: control.agentView.agentId,
     automations: views?.automations !== undefined,
@@ -3619,11 +3635,11 @@ const ROUTED_DOORS: [
     (control) => control.onOpenPerson("user-ada", "Ada", ACME.id),
   ],
   ["Automations", () => automationsDoor?.open()],
-  ["the Inbox", (control) => control.inboxView.onOpen(), FROM_BOARD],
+  ["the Inbox", () => inboxDoorNow().open(), FROM_BOARD],
   [
     "an Inbox item",
-    (control) =>
-      control.inboxView.onOpenItem({
+    () =>
+      inboxDoorNow().openItem({
         taskId: BILLING.id,
         itemAgentId: AGENT_ID,
         itemId: ITEM_ID,
@@ -3650,7 +3666,6 @@ const ROUTED_DOORS: [
     (control) => control.agentView.onOpen(AGENT_ID),
   ],
   ["Automations' close", () => automationsDoor?.close(), () => automationsDoor?.open()],
-  ["the Inbox's close", (control) => control.inboxView.onClose()],
 ];
 
 test.each(ROUTED_DOORS)(
@@ -3679,7 +3694,7 @@ test("an Inbox item kept at a page's leave ask holds nothing, so its address lan
     down = tab.control().placeLeave.stand((_leave, stay) => stay());
   });
   act(() =>
-    tab.control().inboxView.onOpenItem({
+    inboxDoorNow().openItem({
       taskId: BILLING.id,
       itemAgentId: AGENT_ID,
       itemId: ITEM_ID,
@@ -3691,7 +3706,7 @@ test("an Inbox item kept at a page's leave ask holds nothing, so its address lan
   tab.arrive(`/personal/inbox/${ITEM_ID}`);
   await settle();
 
-  assert.deepEqual(tab.control().inboxView.chosen, { itemId: ITEM_ID, opened: true });
+  assert.deepEqual(inboxNow().chosen, { itemId: ITEM_ID, opened: true });
 });
 
 test.each<[string, (control: TasksControl) => void]>([
@@ -3774,12 +3789,12 @@ async function askedOver(
 }
 
 test("the Board stands in the plan's place over the Inbox, which it puts away", () => {
-  const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
-  act(() => tab.control().inboxView.onOpen());
+  mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
+  act(() => inboxDoorNow().open());
   act(() => boardDoor?.open());
 
   assert.equal(views?.board, true);
-  assert.equal(tab.control().inboxView.open, false);
+  assert.equal(inboxNow().open, false);
 });
 
 test("Home from an open plan leaves it, and from Home only puts the page in its place away, asking the host nothing", async () => {
@@ -3792,11 +3807,11 @@ test("Home from an open plan leaves it, and from Home only puts the page in its 
   assert.equal(tab.control().boundFor, undefined);
 
   const home = mount({ shown: true, tasks: listRead([]) });
-  act(() => home.control().inboxView.onOpen());
+  act(() => inboxDoorNow().open());
   const toldBefore = home.told.length;
   act(() => home.control().onGoHome());
   await settle();
-  assert.equal(home.control().inboxView.open, false);
+  assert.equal(inboxNow().open, false);
   assert.equal(home.control().page, TASKS_PAGE.HOME);
   assert.deepEqual(home.told.slice(toldBefore), [], "the host is asked nothing");
 });

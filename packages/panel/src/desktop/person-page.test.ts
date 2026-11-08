@@ -37,7 +37,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
 import { OpenSettingsProvider } from "../open-settings.js";
-import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -310,7 +310,6 @@ afterEach(() => {
 interface Opened {
   readonly tasks: string[];
   readonly agents: [string, string][];
-  readonly inbox: (InboxChoice | "inbox")[];
   readonly settings: SettingsLink[];
 }
 
@@ -363,7 +362,7 @@ function mountWith(
   memberCount = MEMBERS.length,
   away?: { label: string; onPress: () => void },
 ) {
-  const opened: Opened = { tasks: [], agents: [], inbox: [], settings: [] };
+  const opened: Opened = { tasks: [], agents: [], settings: [] };
   const reads = handHostReads({ items: feedNow() });
   // Note that the workspace's automations are laid as the page holds them, unless the test holds or refuses them.
   holdAutomations(reads.deliverAutomations, {
@@ -383,19 +382,6 @@ function mountWith(
       ...HOLDING,
       onSelect: (taskId) => opened.tasks.push(taskId),
       onShowAgent: (taskId, agentId) => opened.agents.push([taskId, agentId]),
-      inboxView: {
-        open: false,
-        chosen: undefined,
-        onOpen: () => opened.inbox.push("inbox"),
-        onClose: () => undefined,
-        onChoose: (chosen) => opened.inbox.push(chosen),
-        onOpenItem: (chosen) => opened.inbox.push(chosen),
-        onClear: () => undefined,
-        narrowed: undefined,
-        onWiden: () => undefined,
-        pages: undefined,
-        onTaskAgents: () => undefined,
-      },
       ...overrides,
       ...more,
     });
@@ -423,7 +409,7 @@ function mountWith(
   draw(control({}));
   /** Draws the page again over the workspace with `more` on top of what it was mounted with. */
   const redraw = (more: Partial<TasksControl>) => draw(control(more));
-  return { page: container, opened, redraw };
+  return { page: container, opened, redraw, router };
 }
 
 async function settle(): Promise<void> {
@@ -567,7 +553,7 @@ test("a member with nothing here yet is named, and the page says there is nothin
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {
-  const { page, opened } = mount(CHARLES.userId);
+  const { page, opened, router } = mount(CHARLES.userId);
   await settle();
 
   button(page, "Jittered backoff").click();
@@ -575,9 +561,8 @@ test("each row opens what it names: an agent its tab, an item the Inbox on it, a
   button(page, "Retry budget dashboard").click();
 
   assert.deepEqual(opened.agents, [[RETRIES.id, BACKOFF.id]]);
-  assert.deepEqual(opened.inbox, [
-    { taskId: RETRIES.id, itemAgentId: RETRY_429.agentId, itemId: RETRY_429.id },
-  ]);
+  // Note that Acme has no slug, so the Inbox's address names it by its id.
+  assert.equal(router.history.location.pathname, `/${ACME.id}/inbox/${RETRY_429.id}`);
   assert.deepEqual(opened.tasks, [DASHBOARD.id]);
 });
 
