@@ -9,6 +9,7 @@ import {
   POPOVER_WIDTH,
   type PopoverAlign,
   type PopoverPlace,
+  type PopoverSide,
   type PopoverWidth,
   popoverPlace,
   samePlace,
@@ -16,7 +17,7 @@ import {
 import { type PressAway, usePressAway } from "./press-away.js";
 
 /**
- * anchored-popover.tsx -- the layer a popover hangs from its own button in: above it, a small gap off, from one of its edges, inside the room around it.
+ * anchored-popover.tsx -- the layer a popover hangs from its own button in: above it unless it asks for below, a small gap off, from one of its edges, inside the room around it.
  *
  * The desktop composer's chips open their menus here, so a menu stands right
  * over the button that opened it rather than over the card the button sits
@@ -161,6 +162,7 @@ function askedWidth(layer: HTMLElement, width: number | PopoverWidth): number {
 export function AnchoredPopover({
   open,
   align,
+  side,
   width = DEFAULT_WIDTH,
   bounds = POPOVER_BOUNDS.ROOM,
   onPressAway,
@@ -170,6 +172,8 @@ export function AnchoredPopover({
   /** Whether what it holds stands open; closed, the layer stays where it stood while that fades. */
   open: boolean;
   align: PopoverAlign;
+  /** The side it asks to hang on, above where none is named; it still turns where only the other has room. */
+  side?: PopoverSide | undefined;
   /** The width it asks for, in pixels or by name, a form's wider than a menu's. */
   width?: number | PopoverWidth | undefined;
   /** What it keeps within: its marked room unless its owner asks for the window. */
@@ -196,6 +200,7 @@ export function AnchoredPopover({
         width: askedWidth(drawn, width),
         height: drawn.getBoundingClientRect().height,
         align,
+        side,
       });
       setPlace((last) => (samePlace(last, next) ? last : next));
     };
@@ -228,7 +233,7 @@ export function AnchoredPopover({
       viewport?.removeEventListener("scroll", measure);
       document.removeEventListener("scroll", measure, { capture: true });
     };
-  }, [open, align, width, bounds]);
+  }, [open, align, side, width, bounds]);
 
   return (
     <div

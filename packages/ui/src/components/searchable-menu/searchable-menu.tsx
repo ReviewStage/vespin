@@ -10,6 +10,7 @@ import {
   POPOVER_WIDTH,
   type PopoverAlign,
   type PopoverBounds,
+  type PopoverSide,
   type PopoverWidth,
   roomAround,
 } from "../anchored-popover/anchored-popover.js";
@@ -133,6 +134,8 @@ type SearchableMenuPlace =
       layer?: typeof SEARCHABLE_MENU_LAYER.ANCHORED | undefined;
       /** The button's edge the menu hangs from. */
       align: PopoverAlign;
+      /** The side of its button it asks to hang on, above where none is named. */
+      side?: PopoverSide | undefined;
       /** What it keeps within: its marked room unless its owner asks for the window. */
       bounds?: PopoverBounds | undefined;
       /** How wide it stands, the room allowing: regular where none is named. */
@@ -1182,6 +1185,7 @@ export function SearchableMenu(
     <AnchoredPopover
       open={!leaving}
       align={props.align}
+      side={props.side}
       bounds={props.bounds}
       width={props.width ?? POPOVER_WIDTH.REGULAR}
     >

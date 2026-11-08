@@ -2,6 +2,7 @@ import {
   type MenuPanel,
   type MenuRow,
   type PopoverAlign,
+  type PopoverSide,
   SEARCHABLE_MENU_LAYER,
   SearchableMenu,
 } from "@repo/ui";
@@ -41,8 +42,10 @@ export interface ActionSearch {
   readonly replayUnmasked?: boolean | undefined;
 }
 
-/** Where the menu stands: hung from its owner's button's edge, or in a panel of the window's menu, which places it. */
-type ActionSearchPlace = { readonly align: PopoverAlign } | { readonly embedded: true };
+/** Where the menu stands: hung from its owner's button's edge, on the side it asks for, or in a panel of the window's menu, which places it. */
+type ActionSearchPlace =
+  | { readonly align: PopoverAlign; readonly side?: PopoverSide | undefined }
+  | { readonly embedded: true };
 
 /** Each action as a row, named by its place among the actions, which a pick hands back. */
 function actionRows(actions: readonly MenuAction[]): readonly MenuRow[] {
@@ -96,7 +99,7 @@ export function ActionSearchMenu({
     <SearchableMenu
       {...("embedded" in place
         ? { layer: SEARCHABLE_MENU_LAYER.EMBEDDED }
-        : { align: place.align })}
+        : { align: place.align, side: place.side })}
       id={id ?? minted}
       ref={menuRef}
       leaving={leaving}

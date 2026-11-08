@@ -16,6 +16,7 @@ import {
   POPOVER_SIDE,
   POPOVER_WIDTH,
   type PopoverAlign,
+  type PopoverSide,
   type PopoverWidth,
   ProviderMark,
   RectFloat,
@@ -36,7 +37,8 @@ import { CatalogSection } from "../section";
 
 /**
  * searchable-menu.tsx -- the picker menu hung from its button at each of its
- * three widths, over synthetic repositories under their owners, the one
+ * three widths, and below it, as a pull request's reviewer and label pickers
+ * hang under their presses, over synthetic repositories under their owners, the one
  * chosen checked and one that cannot be picked now saying why; a menu with
  * rows pinned under its list, one opening a submenu of efforts, and the
  * last line under them saying who pays, Manage usage at its end; and the
@@ -105,15 +107,17 @@ interface Held {
   pinned?: boolean;
 }
 
-/** A button and the menu it opens, hung from the edge `align` names at `width`. */
+/** A button and the menu it opens, hung from the edge `align` names, on the side `side` asks for, at `width`. */
 function Hung({
   label,
   align,
+  side,
   width,
   held,
 }: {
   label: string;
   align: PopoverAlign;
+  side?: PopoverSide;
   width?: PopoverWidth;
   held: Held;
 }): React.JSX.Element {
@@ -153,6 +157,7 @@ function Hung({
           note={held.note}
           noMatch="No repositories match"
           align={align}
+          side={side}
           width={width}
           foot={
             held.pinned === true
@@ -524,6 +529,16 @@ function SearchableMenuExample(): React.JSX.Element {
               held={{ rows: REPOSITORIES }}
             />
           </Inline>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="searchable-menu-below" title="Hung below its button">
+        <div className="catalog-popover-stage">
+          <Hung
+            label="Below"
+            align={POPOVER_ALIGN.START}
+            side={POPOVER_SIDE.BELOW}
+            held={{ rows: REPOSITORIES }}
+          />
         </div>
       </CatalogSection>
       <CatalogSection id="searchable-menu-pinned" title="Pinned rows and a submenu">

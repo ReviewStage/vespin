@@ -17,6 +17,7 @@ import {
   cssCustomProperties,
   MenuNoteRow,
   POPOVER_ALIGN,
+  POPOVER_SIDE,
   Spinner,
   Tooltip,
 } from "@repo/ui";
@@ -414,7 +415,7 @@ function OptionsPicker({
         <ActionSearchMenu
           id={menuId}
           search={search}
-          place={{ align: POPOVER_ALIGN.START }}
+          place={{ align: POPOVER_ALIGN.START, side: POPOVER_SIDE.BELOW }}
           leaving={drawn.leaving}
           menuRef={drawn.ref}
           onDone={close}
