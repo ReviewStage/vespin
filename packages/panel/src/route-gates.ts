@@ -10,7 +10,6 @@
  * routed place's declaration names its gate (`places/routed-places.ts`).
  */
 
-import type { TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
@@ -28,10 +27,10 @@ import {
   settingsPageExperimentStands,
   settingsPageWaitsOnWorkspaces,
 } from "./settings/settings-rows.js";
-import { loadedTasksFixture } from "./tasks/tasks-fixture-loader.js";
 import {
   appStateIn,
   appStateQuery,
+  selectListedTasks,
   selectSettingsHeld,
   selectStoredExperimentChoices,
 } from "./use-app-state.js";
@@ -91,18 +90,13 @@ function selectAdminStands(state: AppStateSnapshot): boolean {
   return state.access.pending === true || state.access.admin === true;
 }
 
-/** The task list the window lists from: main's document's, or a fixture run's synthetic one, which main's document holds none of. */
-function listedTasksView(state: AppStateSnapshot): TasksView | undefined {
-  return loadedTasksFixture()?.fixtureTasksView(state.run) ?? state.tasks;
-}
-
 /**
  * The reader's workspaces as the window lists them: main's document's, or a
  * fixture run's synthetic ones, so a fixture run's gates read what its
  * window draws.
  */
 function selectWorkspaces(state: AppStateSnapshot): readonly GateWorkspace[] {
-  return listedTasksView(state)?.workspaces ?? NO_WORKSPACES;
+  return selectListedTasks(state).workspaces;
 }
 
 /**

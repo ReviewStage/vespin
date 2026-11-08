@@ -9,7 +9,6 @@ import type {
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
-import type { GitHubConnection } from "@repo/features/github-connection-wire";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItemHome } from "@repo/features/inbox-wire";
 import {
@@ -585,12 +584,6 @@ export interface TasksControl {
   newWorkspace: { open: boolean; onOpen: () => void; onClose: () => void };
   /** Opens Settings on its Workspace page, showing the listed workspace. */
   onOpenWorkspaceSettings: () => void;
-  /** Whether the account has GitHub connected, and its login; absent before the first read lands. */
-  github: GitHubConnection | undefined;
-  /** Opens the page that connects the account's own GitHub in the browser; answers whether it opened, a refusal saying why in a toast. */
-  onConnectAccountGitHub: () => Promise<boolean>;
-  /** Disconnects the account's own GitHub, under the Mac's session; answers whether it did, a refusal saying why in a toast. */
-  onDisconnectAccountGitHub: () => Promise<boolean>;
   activeTaskId: string | undefined;
   /**
    * The task the tab is on its way to: the one a press asked the host for,
@@ -1343,10 +1336,6 @@ export function useTasksTab(input: {
   // none invalidates a query, since what each changes comes back through app state.
   const queryClient = useQueryClient();
   const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
-  const { mutateAsync: sendGitHubConnect } = useMutation(actMutation(ACT_KIND.GITHUB_CONNECT));
-  const { mutateAsync: sendGitHubDisconnect } = useMutation(
-    actMutation(ACT_KIND.GITHUB_DISCONNECT),
-  );
   const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
   const { mutateAsync: sendTaskRename } = useMutation(actMutation(ROW_WRITE.TASK_RENAME.kind));
   const { mutateAsync: sendTaskPin } = useMutation(actMutation(ROW_WRITE.TASK_PIN.kind));
@@ -2822,28 +2811,6 @@ export function useTasksTab(input: {
     () => repositoriesIn(repositoriesOf),
     [repositoriesIn, repositoriesOf],
   );
-  // A fixture's GitHub is connected nowhere. Connecting opens the service's
-  // page, and the connection arrives on the view once the panel comes forward
-  // again; disconnecting asks the service under the Mac's session, and the
-  // view takes the answer at once. A refusal of either says why in a toast.
-  const accountGitHub = (
-    kind: typeof ACT_KIND.GITHUB_CONNECT | typeof ACT_KIND.GITHUB_DISCONNECT,
-  ): Promise<boolean> => {
-    if (fixture !== undefined) return Promise.resolve(false);
-    const send = kind === ACT_KIND.GITHUB_CONNECT ? sendGitHubConnect : sendGitHubDisconnect;
-    return send().then(
-      () => true,
-      (refused: Error) => {
-        toast({
-          words: refused.message,
-          tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.GITHUB_ACCOUNT, act: kind, cause: refused },
-        });
-        return false;
-      },
-    );
-  };
   // A fixture's tasks are given no repository, as they are read from nowhere.
   const setRepository = (
     taskId: string,
@@ -4481,9 +4448,6 @@ export function useTasksTab(input: {
       if (next !== undefined) chooseListed(next.id);
       leaveTask();
     },
-    github: viewed.github,
-    onConnectAccountGitHub: () => accountGitHub(ACT_KIND.GITHUB_CONNECT),
-    onDisconnectAccountGitHub: () => accountGitHub(ACT_KIND.GITHUB_DISCONNECT),
     activeTaskId: tasks.activeTaskId,
     boundFor,
     listFailed: tasks.listStatus === TASKS_READ.FAILED,

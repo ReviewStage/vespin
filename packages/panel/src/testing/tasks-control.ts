@@ -467,9 +467,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     moveTask: taskMoveMutation(({ taskId, workspaceId, quiet }) =>
       onMoveTask(taskId, workspaceId, { quiet }),
     ),
-    github: undefined,
-    onConnectAccountGitHub: () => Promise.resolve(false),
-    onDisconnectAccountGitHub: () => Promise.resolve(false),
     activeTaskId: undefined,
     boundFor: overrides.activeTaskId,
     listFailed: false,

@@ -1,5 +1,6 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { TasksView } from "@repo/features/tasks-view";
 import {
   type AppStateDelivery,
   type AppStateSnapshot,
@@ -284,6 +285,19 @@ export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
+
+/**
+ * The task list the window lists from: main's document's, or a fixture run's
+ * synthetic one, which main's document holds none of. Note that the fixture
+ * has landed before a fixture run's first document is handed on (`staged`),
+ * so the select reads it at once.
+ */
+export const selectListedTasks = (state: AppStateSnapshot): TasksView =>
+  loadedTasksFixture()?.fixtureTasksView(state.run) ?? state.tasks;
+
+/** Whether a fixture run's synthetic tasks stand in for the account's, so its writes go nowhere. */
+export const selectFixtureStaged = (state: AppStateSnapshot): boolean =>
+  loadedTasksFixture()?.fixtureTasksView(state.run) !== undefined;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;

@@ -35,7 +35,6 @@ import {
   TASKS_READ,
   type TasksView,
 } from "@repo/features/tasks-view";
-import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -115,7 +114,6 @@ import {
   fakeActs,
   fakeAppBridge,
   fakeAppBridgeCalls,
-  refusedOnPort,
 } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
@@ -278,8 +276,6 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.TASKS_FIND,
   ACT_KIND.AGENTS_PAGE,
   ACT_KIND.AGENTS_INBOX_ITEM_HOME,
-  ACT_KIND.GITHUB_CONNECT,
-  ACT_KIND.GITHUB_DISCONNECT,
   ACT_KIND.TASKS_REVISIONS,
 ];
 
@@ -3204,26 +3200,6 @@ test("before the workspaces are read every plan is listed and New plan names no 
   assert.deepEqual(startedIn(tab.payloads), [undefined]);
 });
 
-test("Settings' GitHub row is the connection main's view holds, its Connect and Disconnect ask main, and a refused Disconnect says why", async () => {
-  const tab = mount(
-    { shown: true, tasks: { ...TWO_WORKSPACES, github: { connected: true, login: null } } },
-    { [ACT_KIND.GITHUB_CONNECT]: () => Promise.resolve(undefined) },
-  );
-
-  act(() => {
-    void tab.control().onConnectAccountGitHub();
-  });
-  act(() => {
-    void tab.control().onDisconnectAccountGitHub();
-  });
-  await settle();
-
-  assert.deepEqual(tab.control().github, { connected: true, login: null });
-  assert.deepEqual(tab.told.slice(-2), [ACT_KIND.GITHUB_CONNECT, ACT_KIND.GITHUB_DISCONNECT]);
-  // The test leaves Disconnect unanswered, a failure on the way to the service rather than a refusal.
-  assert.equal(newestToastSays(), ACT_UNREACHED_WORDS);
-});
-
 test("the repository chooser says the account manages the workspace it owns, and not one it is a member of", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, UNSTARTED);
 
@@ -3232,21 +3208,6 @@ test("the repository chooser says the account manages the workspace it owns, and
 
   assert.equal(personal, true);
   assert.equal(tab.control().repositories.manages, false);
-});
-
-test("a Disconnect whose page did not open says why in a toast", async () => {
-  const refusal = "Could not disconnect GitHub on this system.";
-  const tab = mount(
-    { shown: true, tasks: { ...TWO_WORKSPACES, github: { connected: true, login: null } } },
-    { [ACT_KIND.GITHUB_DISCONNECT]: () => Promise.reject(refusedOnPort(refusal)) },
-  );
-
-  act(() => {
-    void tab.control().onDisconnectAccountGitHub();
-  });
-  await settle();
-
-  assert.equal(newestToastSays(), refusal);
 });
 
 test("the repository chip holds the chosen workspace's repositories on the new-plan page, and the open plan's on its page", async () => {

@@ -113,6 +113,7 @@ import { WindowAccountContext, windowAccountOf } from "./tasks/window-account.js
 import { ToastHost, useToastsOwner } from "./toast.js";
 import { forgetUndo, redoLast, undoLast, useUndoWaits } from "./undo-stack.js";
 import { useReadyToast, useUpdatedToast } from "./update-toast.js";
+import { useAccountGitHub } from "./use-account-github.js";
 import {
   appStateQuery,
   selectAccount,
@@ -814,14 +815,7 @@ function AppWindow(): React.JSX.Element {
       tasks.onMoveTask,
     ],
   );
-  const gitHubConnect = useMemo(
-    () => ({
-      connection: tasks.github,
-      connect: tasks.onConnectAccountGitHub,
-      disconnect: tasks.onDisconnectAccountGitHub,
-    }),
-    [tasks.github, tasks.onConnectAccountGitHub, tasks.onDisconnectAccountGitHub],
-  );
+  const gitHubConnect = useAccountGitHub();
   const messageReveal = useMemo(
     () => ({ reveal: tasks.messageReveal, onRevealed: tasks.onMessageRevealed }),
     [tasks.messageReveal, tasks.onMessageRevealed],
