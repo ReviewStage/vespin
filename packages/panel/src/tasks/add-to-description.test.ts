@@ -18,6 +18,7 @@ import { readExperiments } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
+import { forgetUndo, redoLast, UNDO_RAN, undoLast } from "../undo-stack.js";
 import { type AgentPictureDoor, AgentPicturesProvider } from "./agent-pictures.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
@@ -85,6 +86,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  forgetUndo();
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -237,7 +239,7 @@ function viewerButton(words: string): HTMLButtonElement | undefined {
 
 const LINE = `![Members page](https://vespin.dev/acme/task/${TASK_ID}/files/${KEPT_ID})`;
 
-test("Add to description keeps the picture on the description and writes its line at the description's end, and Undo takes it back out", async () => {
+test("Add to description keeps the picture on the description and writes its line at the description's end, and Undo or ⌘Z takes it back out", async () => {
   await opened(await drawn(PAGE));
   const add = viewerButton("Add to description");
   assert.ok(add);
@@ -260,10 +262,14 @@ test("Add to description keeps the picture on the description and writes its lin
   const undo = newestToastAction();
   assert.ok(undo);
   await act(async () => undo.click());
-  await settled(() => held === PAGE_TEXT && /Taken out/u.test(newestToastSays() ?? ""));
-
+  await settled(() => held === PAGE_TEXT);
   assert.equal(held, PAGE_TEXT);
-  assert.match(newestToastSays() ?? "", /Taken out of the description/u);
+
+  // ⇧⌘Z writes the line again, and ⌘Z takes it back out, as the same entry.
+  assert.equal(await act(() => redoLast()), UNDO_RAN.APPLIED);
+  assert.equal(held, `${PAGE_TEXT}\n${LINE}\n`);
+  assert.equal(await act(() => undoLast()), UNDO_RAN.APPLIED);
+  assert.equal(held, PAGE_TEXT);
 });
 
 test("a description that moved on under the page is written on as it stands", async () => {

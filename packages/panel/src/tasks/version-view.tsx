@@ -1,6 +1,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { dayAndTimeText, momentText } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
+import type { PortActKind } from "@repo/host/contract";
 import {
   BUTTON_VARIANT,
   Button,
@@ -26,6 +27,7 @@ import { PhoneHead, PlaceMore, phoneFindGroups } from "../desktop/phone-head.js"
 import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { TOAST_HOLD, type ToastNotice, undoToast, useToast } from "../toast.js";
+import type { UndoWrite } from "../undo-stack.js";
 import { VERSION_CHANGE, type VersionDiff, versionDiff } from "./description-history-model.js";
 import { DescriptionPictures, useDescriptionPictureDrawer } from "./description-pictures.js";
 import { DocumentScroll } from "./document-frame.js";
@@ -91,9 +93,20 @@ const BAR_SKELETON = {
   RESTORE: "148px",
 } as const;
 
-/** What the toast says once a version is restored, and why its Undo did nothing. */
-const VERSION_RESTORED_NOTE = "Version restored";
-const RESTORE_UNDO_REFUSED_NOTE = "The restore could not be undone. Try again.";
+/**
+ * A version's restore, in the undo stack's terms but never on it: its
+ * toast's words, what its Undo's refusal says, and what a refusal of it or
+ * its Undo is reported as. Note that its Undo stays on its toast alone and
+ * never reaches ⌘Z, because a restore rewrites the whole description.
+ */
+const VERSION_RESTORE = {
+  words: "Version restored",
+  refused: (undone) => (undone.kept ? undefined : "The restore could not be undone. Try again."),
+  surface: FAILURE_SURFACE.DESCRIPTION_RESTORE,
+} satisfies Pick<
+  UndoWrite<unknown, unknown, unknown, PortActKind, Kept>,
+  "words" | "refused" | "surface"
+>;
 
 /** Why Restore this version is unavailable over the newest version. */
 const CURRENT_HINT = "This version is already current";
@@ -293,7 +306,7 @@ export function useVersionRestore(
           words: result.reason,
           tone: STATUS_TONE.DANGER,
           hold: TOAST_HOLD.FAILED,
-          failure: { surface: FAILURE_SURFACE.DESCRIPTION_RESTORE, cause: result },
+          failure: { surface: VERSION_RESTORE.surface, cause: result },
         });
       }
     });
@@ -313,7 +326,7 @@ export function sayRestored(
   if (undo === undefined) {
     toast({
       replayUnmasked: true,
-      words: VERSION_RESTORED_NOTE,
+      words: VERSION_RESTORE.words,
       tone: STATUS_TONE.COMPLETE,
       hold: TOAST_HOLD.DONE,
     });
@@ -321,13 +334,14 @@ export function sayRestored(
   }
   toast({
     replayUnmasked: true,
-    ...undoToast(VERSION_RESTORED_NOTE, () => {
+    ...undoToast(VERSION_RESTORE.words, () => {
       undo().then((undone) => {
-        if (undone.kept) return;
+        const words = VERSION_RESTORE.refused(undone);
+        if (words === undefined || undone.kept) return;
         toast({
           replayUnmasked: true,
-          words: RESTORE_UNDO_REFUSED_NOTE,
-          failure: { surface: FAILURE_SURFACE.DESCRIPTION_RESTORE, cause: undone.cause },
+          words,
+          failure: { surface: VERSION_RESTORE.surface, cause: undone.cause },
           tone: STATUS_TONE.DANGER,
           hold: TOAST_HOLD.FAILED,
         });
