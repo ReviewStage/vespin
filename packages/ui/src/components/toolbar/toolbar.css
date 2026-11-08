@@ -128,6 +128,13 @@
     gap: var(--ui-space-8);
   }
 
+  /* A title renamed in place on a phone keeps its words centered where
+     they stood, since its field is as wide as the heading lets it be rather
+     than as wide as its words. */
+  .ui-toolbar[data-look="phone"] .ui-inline-edit {
+    text-align: center;
+  }
+
   /* A phone's tag stands under its title, both centered, as a phone's
      header says what a page covers under its name, so the name stays the
      row's center rather than moving aside for the tag beside it. */

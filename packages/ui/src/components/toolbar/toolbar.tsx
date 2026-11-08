@@ -171,7 +171,7 @@ const TITLE_PRESS =
  */
 const TITLE_EDIT =
   "ui-toolbar-title-edit flex min-w-0 items-center [&>.ui-inline-edit]:min-w-0 [&>.ui-inline-edit]:flex-auto";
-const TITLE_EDIT_PRESS = `${TITLE_EDIT} h-control gap-icon-gap px-ui-8 [&_svg]:size-control-icon`;
+const TITLE_EDIT_PRESS = `${TITLE_EDIT} h-control gap-icon-gap px-ui-8 [&_svg]:size-control-icon [&_svg]:flex-none`;
 
 /** What holds the title and takes the focus back from its rename: its press, or the box holding the page's menu. */
 const TITLE_FOCUS = ".ui-toolbar-title-press, .ui-toolbar-title-menu[tabindex]";
