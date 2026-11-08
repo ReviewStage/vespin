@@ -35,7 +35,8 @@
  * - A task's page and an agent's page (`use-open-link.ts`'s
  *   `openPullRequestsHere`) open beside them a pull request one of their
  *   agents opened, an archived one's among them, in its Pull request tab,
- *   and any other of their repository by its number in their first agent's;
+ *   and any other of their repository no listed agent opened by its number
+ *   in their first agent's;
  *   and a page of any other task or agent on no task, read on its own place,
  *   their own pages being the window's to open as the panel's.
  * - The window (`use-open-link.ts`'s `throughWindow`) goes to every place in
@@ -63,6 +64,7 @@ import {
   pageRepositoryOf,
 } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
+import type { listedPullRequestOf } from "@repo/ui/pull-request-link";
 import { type LinkRouter, type RoutedLink, routedPressOf } from "./link-places.js";
 
 /** The kinds of address a press names. */
@@ -92,6 +94,8 @@ export type Address =
       readonly href: string;
       readonly repository: string;
       readonly number: number;
+      /** The agent of a task or the agent on no task the window lists that opened it, and its task; none where the window lists none, or is not asked. */
+      readonly listed: ReturnType<typeof listedPullRequestOf>;
     }
   | {
       readonly kind: typeof ADDRESS.FILE;
@@ -248,7 +252,9 @@ export function addressOf(
   const link = readLink(href);
   if (link !== undefined) return placeAddress(settle(link), router, href);
   const pullRequest = pullRequestAddressOf(href);
-  if (pullRequest !== undefined) return { kind: ADDRESS.PULL_REQUEST, href, ...pullRequest };
+  if (pullRequest !== undefined) {
+    return { kind: ADDRESS.PULL_REQUEST, href, ...pullRequest, listed: undefined };
+  }
   const repository = pageRepositoryOf(href);
   const mention = decodeMention(href, repository ?? null);
   if (mention?.kind === MENTION_KIND.FILE) {
