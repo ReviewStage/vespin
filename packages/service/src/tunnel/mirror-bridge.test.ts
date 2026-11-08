@@ -80,7 +80,12 @@ it("the open sends git's files without ignored ones or symlinks, and a request i
   assert.deepEqual(await frame(), { bridge: "ready" });
   send({ type: "open", channel: CHANNEL });
 
-  assert.deepEqual(await next(), { type: "header" });
+  // Note that the header is read raw, because desktops released before the mirror copied its files read its base commit, which the schema reads past.
+  const header = await frame();
+  assert.match(
+    JSON.parse(Buffer.from(header.data, "base64").toString("utf8")).base,
+    /^[0-9a-f]{40}$/u,
+  );
   const manifest = await next();
   assert.equal(manifest.type, "manifest");
   assert.deepEqual(

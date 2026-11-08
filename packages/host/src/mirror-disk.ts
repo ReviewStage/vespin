@@ -108,7 +108,7 @@ export const mirrorDeleted = (root: string, file: string) =>
 
 /**
  * A manifest matched against the mirror at `root`, whose own files are
- * `listed`: each listed file the manifest lacks is deleted, and
+ * `listed`, each refused as a written path is: each listed file the manifest lacks is deleted, and
  * the paths whose size or hash differ from the manifest's, or that the
  * mirror lacks, are answered in the manifest's order for the caller to ask
  * for. A file is hashed only where its size agrees.
@@ -125,7 +125,9 @@ export const mirrorMatched = (
       listed,
       (file) =>
         Effect.gen(function* () {
-          const at = path.join(root, file);
+          const target = yield* mirrorTarget(root, file);
+          if (Option.isNone(target)) return undefined;
+          const at = target.value;
           if (Option.isSome(yield* Effect.option(fileSystem.readLink(at)))) return undefined;
           const info = yield* Effect.option(fileSystem.stat(at));
           if (Option.isNone(info) || info.value.type !== "File") return undefined;

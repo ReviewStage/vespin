@@ -345,7 +345,7 @@ export function composeMirrors(
     const made = (agentId: string) =>
       Effect.gen(function* () {
         const files = filesOf(agentId);
-        yield* Effect.orDie(fileSystem.makeDirectory(files, { recursive: true }));
+        yield* fileSystem.makeDirectory(files, { recursive: true });
         return files;
       });
 

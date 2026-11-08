@@ -262,8 +262,8 @@ function localLink(agentId: string): ShellLink {
     agentId,
     open: (size) =>
       tracedSend(SENTRY_SEND_SPAN.LOCAL_TERMINAL_OPEN, async () => {
-        // Note that the tab wakes a stopped sandbox once as it opens, because the mirror never wakes one itself; a refusal leaves the mirror's own wait to say why.
-        await askAct(ACT_KIND.TERMINAL_RESUME, { agentId }).catch(() => undefined);
+        // Note that the tab wakes a stopped sandbox once as it opens, without waiting on it, because the mirror never wakes one itself and one already on this Mac opens at once; a refusal leaves the mirror's own wait to say why.
+        tellAct(ACT_KIND.TERMINAL_RESUME, { agentId });
         const mirrored = await askAct(ACT_KIND.MAC_SHELL_MIRROR, { agentId }).catch(
           () => undefined,
         );

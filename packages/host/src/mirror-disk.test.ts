@@ -48,41 +48,48 @@ describe("mirror-disk", () => {
     }).pipe(Effect.provide(disk)),
   );
 
-  it.effect("a match deletes what the manifest lacks and asks for what differs or is missing", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const root = yield* temporaryDirectoryScoped("mirror-match-");
-      const own = {
-        "same.txt": "same",
-        "changed.txt": "aaaa",
-        "longer.txt": "a",
-        "extra.txt": "x",
-      };
-      for (const [file, text] of Object.entries(own)) {
-        yield* fileSystem.writeFileString(path.join(root, file), text);
-      }
-      // Note that a link the worktree checked out is no file of the mirror's, as the bridge lists none.
-      yield* fileSystem.symlink("same.txt", path.join(root, "link"));
+  it.effect(
+    "a match deletes what the manifest lacks, asks for what differs or is missing, and reads nothing outside the mirror",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const folder = yield* temporaryDirectoryScoped("mirror-match-");
+        const root = path.join(folder, "repository");
+        yield* fileSystem.makeDirectory(root);
+        // Note that a file beside the mirror with the bytes a manifest names is never read as the mirror's own.
+        yield* fileSystem.writeFileString(path.join(folder, "outside.txt"), "same");
+        const own = {
+          "same.txt": "same",
+          "changed.txt": "aaaa",
+          "longer.txt": "a",
+          "extra.txt": "x",
+        };
+        for (const [file, text] of Object.entries(own)) {
+          yield* fileSystem.writeFileString(path.join(root, file), text);
+        }
+        // Note that a link the worktree checked out is no file of the mirror's, as the bridge lists none.
+        yield* fileSystem.symlink("same.txt", path.join(root, "link"));
 
-      const requested = yield* mirrorMatched(
-        root,
-        [...Object.keys(own), "link"],
-        [
-          { path: "same.txt", size: 4, hash: sha256("same") },
-          { path: "changed.txt", size: 4, hash: sha256("bbbb") },
-          { path: "longer.txt", size: 3, hash: sha256("abc") },
-          { path: "missing.txt", size: 1, hash: sha256("m") },
-        ],
-      );
+        const requested = yield* mirrorMatched(
+          root,
+          [...Object.keys(own), "link", "../outside.txt"],
+          [
+            { path: "same.txt", size: 4, hash: sha256("same") },
+            { path: "../outside.txt", size: 4, hash: sha256("same") },
+            { path: "changed.txt", size: 4, hash: sha256("bbbb") },
+            { path: "longer.txt", size: 3, hash: sha256("abc") },
+            { path: "missing.txt", size: 1, hash: sha256("m") },
+          ],
+        );
 
-      assert.deepEqual(requested, ["changed.txt", "longer.txt", "missing.txt"]);
-      assert.deepEqual((yield* fileSystem.readDirectory(root)).sort(), [
-        "changed.txt",
-        "link",
-        "longer.txt",
-        "same.txt",
-      ]);
-    }).pipe(Effect.provide(disk)),
+        assert.deepEqual(requested, ["../outside.txt", "changed.txt", "longer.txt", "missing.txt"]);
+        assert.deepEqual((yield* fileSystem.readDirectory(root)).sort(), [
+          "changed.txt",
+          "link",
+          "longer.txt",
+          "same.txt",
+        ]);
+      }).pipe(Effect.provide(disk)),
   );
 });
