@@ -56,9 +56,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { HostedApiError } from "@repo/features";
+import { HOSTED_API_ERROR, type HostedApiError } from "@repo/features";
 import { AGENT_QUEUE_BOUNDS, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
-import type { AgentAttachment } from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import { and, asc, count, eq, exists, isNotNull, isNull, lte, max, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -68,6 +68,14 @@ import { agentQueue, queuedMessage } from "../schemas/agent-queue.js";
 import { agentReachableBy } from "./workspace-store.js";
 
 type AgentQueueEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/** One file of a queued message as a write hands it to its row (`QueuedFile`). */
+const QueuedFileSchema = Schema.Struct({
+  name: Schema.String,
+  mediaType: Schema.Literals(Object.values(AGENT_ATTACHMENT_TYPE)),
+  data: Schema.String,
+  id: Schema.String,
+});
 
 /** One queued message as its row keeps it. */
 const QueuedRowSchema = Schema.Struct({
@@ -216,7 +224,7 @@ const insertMessage = SqlSchema.findAll({
     position: Schema.Number,
     id: Schema.String,
     text: Schema.String,
-    attachments: Schema.NullOr(Schema.Array(Schema.Unknown)),
+    attachments: Schema.NullOr(Schema.Array(QueuedFileSchema)),
     now: Schema.Date,
   }),
   Result: Schema.Struct({ id: Schema.String }),
@@ -226,8 +234,7 @@ const insertMessage = SqlSchema.findAll({
         .insert(queuedMessage)
         .values({
           ...row,
-          // SAFETY: the files are a message request's, which their schema read.
-          attachments: attachments as readonly QueuedFile[] | null,
+          attachments,
           createdAt: now,
           updatedAt: now,
         })
@@ -243,7 +250,7 @@ const updateEdit = SqlSchema.findAll({
     agentId: Schema.String,
     messageId: Schema.String,
     text: Schema.String,
-    attachments: Schema.NullOr(Schema.Array(Schema.Unknown)),
+    attachments: Schema.NullOr(Schema.Array(QueuedFileSchema)),
     now: Schema.Date,
   }),
   Result: Schema.Struct({ id: Schema.String }),
@@ -253,8 +260,7 @@ const updateEdit = SqlSchema.findAll({
         .update(queuedMessage)
         .set({
           text,
-          // SAFETY: the files are a queue change's, which their schema read.
-          attachments: attachments as readonly QueuedFile[] | null,
+          attachments,
           editing: false,
           updatedAt: now,
         })
@@ -305,7 +311,7 @@ const updateClaim = SqlSchema.findAll({
     edit: Schema.NullOr(
       Schema.Struct({
         text: Schema.String,
-        attachments: Schema.NullOr(Schema.Array(Schema.Unknown)),
+        attachments: Schema.NullOr(Schema.Array(QueuedFileSchema)),
       }),
     ),
     now: Schema.Date,
@@ -323,8 +329,7 @@ const updateClaim = SqlSchema.findAll({
             ? undefined
             : {
                 text: edit.text,
-                // SAFETY: the files are a queue change's, which their schema read.
-                attachments: edit.attachments as readonly QueuedFile[] | null,
+                attachments: edit.attachments,
               }),
         })
         .where(
@@ -480,14 +485,14 @@ const insertPause = SqlSchema.findAll({
   Request: Schema.Struct({
     agentId: Schema.String,
     because: Schema.Literals(PAUSES),
-    refusal: Schema.NullOr(Schema.String),
+    refusal: Schema.NullOr(Schema.Literals(Object.values(HOSTED_API_ERROR))),
   }),
   Result: Schema.Struct({ agentId: Schema.String }),
   execute: ({ agentId, because, refusal }) =>
     Database.use((db) =>
       db
         .update(agentQueue)
-        .set({ pausedBecause: because, pausedRefusal: refusal as HostedApiError | null })
+        .set({ pausedBecause: because, pausedRefusal: refusal })
         .where(
           and(
             eq(agentQueue.agentId, agentId),
