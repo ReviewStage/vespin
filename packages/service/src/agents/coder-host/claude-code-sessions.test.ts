@@ -70,7 +70,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import type { Sandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
@@ -2393,7 +2393,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
     }),
   );
 
-  it.effect("a sandbox opens on the short timeout", () =>
+  it.effect("a sandbox opens on the idle timeout", () =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
       const api = runnerSandboxApi();
@@ -2405,7 +2405,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       );
 
       assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-      assert.equal(api.sandboxes[0]?.timeout, CODER.SANDBOX_TIMEOUT_MS);
+      assert.equal(api.sandboxes[0]?.timeout, Duration.toMillis(SANDBOX_IDLE));
     }),
   );
 

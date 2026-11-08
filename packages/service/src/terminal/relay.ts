@@ -19,10 +19,9 @@
  * holding it within two minutes. Nothing here closes a connection for want
  * of typing; the host ends it when the tab goes, or once the terminal has
  * gone ten minutes unused (`@repo/host`'s `compose-terminals.ts`). While a terminal is connected
- * it also keeps the sandbox alive past its short timeout, every keep-alive
- * interval (`CODER.SANDBOX_KEEP_ALIVE_EVERY`,
- * `agents/sandbox-keep-alive.ts`), so a developer typing after the agent's
- * turn ended is never cut off by it. While a terminal is connected, the GitHub token at the sandbox's firewall
+ * it also touches the sandbox (`@repo/sandbox`'s `touch`) every
+ * `SANDBOX_TOUCH_EVERY`, so a developer typing after the agent's turn ended
+ * is never cut off by its idle stop. While a terminal is connected, the GitHub token at the sandbox's firewall
  * is kept fresh on the rule the agent's own steps keep it by, claimed
  * through the lease so two windows mint one token between them: the
  * connection reads when the token was last set on its sandbox session,
@@ -47,7 +46,7 @@ import {
   TERMINAL_RELAY_FRAME,
   terminalRelayResizeSchema,
 } from "@repo/features/terminal-wire";
-import type { InteractiveShell, SandboxError } from "@repo/sandbox";
+import { type InteractiveShell, SANDBOX_TOUCH_EVERY, type SandboxError } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -129,8 +128,8 @@ export interface RelayDependencies {
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
   readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
-  /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
-  readonly keepAlive: (sessionId: string) => Effect.Effect<void>;
+  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
+  readonly touch: (sessionId: string) => Effect.Effect<void>;
   /** Claims the token's renewal on the running sandbox session, once per lease per session within the refresh rule. */
   readonly claimRenewal: (
     conversationId: string,
@@ -376,12 +375,12 @@ export function relayTerminal(
           : TERMINAL_RELAY_CLOSE.STARTING,
       );
     }
-    // An attached terminal is the developer using the sandbox: it is held and kept alive from the attach for as long as the connection stands.
+    // An attached terminal is the developer using the sandbox: it is held and touched from the attach for as long as the connection stands.
     yield* holdWhileConnected(deps, agent);
     const { sessionId } = agent;
     yield* Effect.forkScoped(
-      Effect.repeat(deps.keepAlive(sessionId), {
-        schedule: Schedule.spaced(CODER.SANDBOX_KEEP_ALIVE_EVERY),
+      Effect.repeat(deps.touch(sessionId), {
+        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
       }),
     );
     // Note that the desktop's frames are read from here on into a queue of the relay's own, because the first renewal waits on the desktop leaving while what it typed waits for the shell.

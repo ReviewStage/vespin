@@ -1,11 +1,12 @@
 /**
- * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, and a delete wakes nothing.
+ * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, and a touch lengthens a running session alone, by the rule `TOUCH` sets.
  */
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Duration, Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
+import { TestClock } from "effect/testing";
 import { Sandbox, type SandboxService } from "../sandbox.js";
 import { SANDBOX_CALL, type SandboxCall, type SandboxError } from "../vocabulary.js";
 import {
@@ -13,6 +14,7 @@ import {
   sandboxDeleted,
   sandboxFetchOver,
   sandboxFound,
+  sessionAnswered,
 } from "./testing/vercel-sandbox-fake.js";
 import { SandboxToken, vercelSandboxLayer } from "./vercel-sdk.js";
 
@@ -35,7 +37,6 @@ const CREATE_ASK = {
   name: NAME,
   from: { image: "agent-image:fixture" },
   tags: {},
-  timeoutMs: 60_000,
   vcpus: 2,
   env: { SECRET: SECRET_ENV },
 } as const;
@@ -290,5 +291,44 @@ it.effect(
           : Response.json(sandboxFound(RUNNING_SANDBOX)),
       );
       assert.equal((yield* minted.openInteractive(NAME)).url, "wss://sbx-fixture.vercel.run/ws");
+    }),
+);
+
+it.effect(
+  "a touch makes a running session end five minutes from now, only where that moves it more than 30 seconds, never past 24 hours from its start, and touches nothing not running",
+  () =>
+    Effect.gen(function* () {
+      const minutes = (count: number) => Duration.toMillis(Duration.minutes(count));
+      let status = "running";
+      let timeout = minutes(5);
+      const extensions: number[] = [];
+      const api = yield* apiOver((url, init) => {
+        if (status === "gone") return refusedWith(404)();
+        if (!new URL(url).pathname.endsWith("/extend-timeout")) {
+          return Response.json(sandboxFound({ ...RUNNING_SANDBOX, status, timeout }));
+        }
+        const { duration } = JSON.parse(String(init.body)) as { readonly duration: number };
+        extensions.push(duration);
+        timeout += duration;
+        return Response.json(
+          sessionAnswered({ id: SESSION, status, createdAt: CREATED_AT, timeout }),
+        );
+      });
+      const touchedAt = (since: number) =>
+        Effect.andThen(TestClock.setTime(CREATED_AT + since), api.touch(NAME));
+
+      // Ends at 5:00; touched at 0:20 it would end at 5:20, too little to extend.
+      yield* touchedAt(Duration.toMillis(Duration.seconds(20)));
+      // Touched at 2:00, it ends at 7:00.
+      yield* touchedAt(minutes(2));
+      // Touched a minute short of 24 hours, it ends at 24 hours, and touched again, stays there.
+      yield* touchedAt(minutes(24 * 60 - 1));
+      yield* touchedAt(minutes(24 * 60 - 1) + 1);
+      status = "stopped";
+      yield* touchedAt(minutes(24 * 60 + 10));
+      status = "gone";
+      yield* touchedAt(minutes(24 * 60 + 20));
+
+      assert.deepEqual(extensions, [minutes(2), minutes(24 * 60 - 7)]);
     }),
 );

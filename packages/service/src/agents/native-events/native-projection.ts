@@ -148,7 +148,7 @@ const NativeProjectionSchema = Schema.Struct({
   rateLimitResetsAt: Schema.optionalKey(Schema.Number),
   /** The running total a harness that reports one (Codex) last reported, which the next report is metered against. */
   metered: Schema.optionalKey(UsageSchema),
-  /** When a batch last kept the runner's sandbox alive (`../sandbox-keep-alive.ts`), in epoch milliseconds. */
+  /** When a batch last touched the runner's sandbox (`runner-events-app.ts`), in epoch milliseconds. */
   keptAliveAt: Schema.optionalKey(Schema.Number),
   /** Whether the launch went warm at its turn's IDLE with no turn since, so a failure it ends on is no turn's. */
   warm: Schema.optionalKey(Schema.Boolean),

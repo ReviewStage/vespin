@@ -13,7 +13,6 @@ const CREATE_ASK = {
   name: "luke-native-fixture",
   from: { image: "agent-image:fixture" },
   tags: {},
-  timeoutMs: 60_000,
   vcpus: 2,
   env: {},
 } as const;

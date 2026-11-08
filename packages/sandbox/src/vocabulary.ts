@@ -46,7 +46,7 @@ export const SANDBOX_CALL = {
   DELETE: "delete",
   STOP: "stop",
   RUN: "run",
-  EXTEND: "extend",
+  TOUCH: "touch",
   NETWORK_POLICY: "network-policy",
   INTERACTIVE: "interactive",
   SNAPSHOT: "snapshot",
@@ -270,15 +270,15 @@ export interface SandboxUser {
 
 /**
  * A sandbox opened from an image or a snapshot: its name, what it is opened
- * from, its tags, how long a run may last and how large, how long its kept
- * snapshot lasts after its last use, and its variables. It keeps its newest
- * snapshot alone, which is all a resume reads.
+ * from, its tags, how large a run is, how long its kept snapshot lasts after
+ * its last use, and its variables. Each run lasts `SANDBOX_IDLE` past its
+ * last touch, which no caller chooses. It keeps its newest snapshot alone,
+ * which is all a resume reads.
  */
 export interface SandboxCreate {
   readonly name: string;
   readonly from: SandboxSource;
   readonly tags: Readonly<Record<string, string>>;
-  readonly timeoutMs: number;
   /** How many vCPUs it runs on; where unsaid, the provider's default. */
   readonly vcpus?: number;
   /** How long its kept snapshot lasts after its last use; where unsaid, the package's default. */

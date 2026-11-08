@@ -22,7 +22,6 @@ import { type OpenedSandbox, Sandbox, SandboxUnavailable } from "@repo/sandbox";
 import { Duration, Effect, Schedule } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
-import { CODER } from "./coder-host/bounds.js";
 
 /**
  * What a sandbox we open is named as, beside a digest of its session's id
@@ -128,7 +127,6 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
         name: agentSandboxName(of.sessionId),
         from,
         tags: of.tags,
-        timeoutMs: CODER.SANDBOX_TIMEOUT_MS,
         ...(of.vcpus === undefined ? undefined : { vcpus: of.vcpus }),
         env: SANDBOX_ENV,
         ...(of.snapshot?.holdsUser === true

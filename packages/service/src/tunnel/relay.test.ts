@@ -59,7 +59,7 @@ type Scripted = Effect.Success<typeof scriptedSocket>;
 /** The relay's world: the agent reached, its sandbox standing as given, the lease, and every keep-alive asked. */
 function world(pty: Scripted, standing: SandboxState = SANDBOX_STATE.RUNNING) {
   let heldUntil = 0;
-  const asked = { opened: 0, connected: 0, keptAlive: [] as number[] };
+  const asked = { opened: 0, connected: 0, touched: [] as number[] };
   const deps: TunnelDependencies = {
     reach: () => Effect.succeed(Option.some({ conversationId: CONVERSATION, sessionId: "wrun_1" })),
     open: () =>
@@ -78,9 +78,9 @@ function world(pty: Scripted, standing: SandboxState = SANDBOX_STATE.RUNNING) {
       Effect.sync(() => {
         heldUntil = Math.max(heldUntil, until.getTime());
       }),
-    keepAlive: () =>
+    touch: () =>
       Effect.flatMap(Clock.currentTimeMillis, (at) =>
-        Effect.sync(() => void asked.keptAlive.push(at)),
+        Effect.sync(() => void asked.touched.push(at)),
       ),
   };
   return { deps, asked, heldUntil: () => heldUntil };
@@ -150,11 +150,11 @@ it.effect(
 
       yield* TestClock.adjust(Duration.minutes(2));
       yield* Fiber.join(relay);
-      const keptAlive = asked.keptAlive.length;
+      const touched = asked.touched.length;
       yield* TestClock.adjust(Duration.minutes(30));
 
       assert.deepEqual(device.closed, [TUNNEL_CLOSE.IDLE]);
-      assert.equal(asked.keptAlive.length, keptAlive);
-      assert.ok(keptAlive >= 3);
+      assert.equal(asked.touched.length, touched);
+      assert.ok(touched >= 3);
     }),
 );

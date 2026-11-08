@@ -10,47 +10,14 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
  *
  * A coding agent is one native harness's session over a `coding_agent`
  * conversation, run by the runner we launch on its machine
- * (`runner-sessions.ts`). What differs is named here: how long its sandbox may
- * live, how it is kept alive, and how large it is, how often the repository credential at its
- * firewall is renewed, where its checkout stands, how a transcript read
- * waits, how full its context grows before its harness compacts it, and how much
- * a worker it delegates to may spend.
+ * (`runner-sessions.ts`). What differs is named here: how large its sandbox
+ * is, how often the repository credential at its firewall is renewed, where
+ * its checkout stands, how a transcript read waits, how full its context
+ * grows before its harness compacts it, and how much a worker it delegates to
+ * may spend. How long an idle sandbox lives is `@repo/sandbox`'s
+ * (`SANDBOX_IDLE`).
  */
 export const CODER = {
-  /**
-   * How long a Vercel Sandbox session lives past its last sign of use: the
-   * timeout it opens with, and how far ahead of now each keep-alive puts its
-   * end (`sandbox-keep-alive.ts`). A native runner keeps its sandbox alive by
-   * its heartbeat for as long as it runs, warm included and a wait on a
-   * wakeup too, since the CLI fires the wakeup only while it runs, and its
-   * end, once its warm window passes (`RUNNER_WARM`), stops it. What its end leaves up, as a
-   * developer's Terminal holds it, is stopped by this timeout once nothing
-   * keeps it alive, its snapshot taken as at any stop, so this is how an
-   * idle sandbox ends, and it bills its memory until then: at the default
-   * size, 4 GB for twenty minutes. Twenty, because a live turn shows use far
-   * more often than that: a native runner posts at least every heartbeat
-   * (`RUNNER_HEARTBEAT`, five minutes), a terminal closes after ten idle
-   * minutes, and a watched browser after five. Each of them keeps it alive at most every
-   * `SANDBOX_KEEP_ALIVE_EVERY`.
-   */
-  SANDBOX_TIMEOUT_MS: 20 * 60 * 1_000,
-  /**
-   * The longest a Vercel Sandbox session may live in all, however often it is
-   * kept alive: the platform's maximum on Pro and Enterprise, past which it
-   * refuses an extension.
-   */
-  SANDBOX_MAX_LIFETIME_MS: 24 * 60 * 60 * 1_000,
-  /**
-   * How often a live turn, a terminal, or a watched browser keeps the
-   * sandbox alive: one list and at most one extension each time, so a
-   * step's start or an event batch costs nothing more between them, and an
-   * extension only once less than the timeout less this is left
-   * (`keepAliveExtension`). Five minutes, a quarter of the timeout, so a
-   * keep-alive that found no extension due, and the heartbeat's five minutes
-   * before the next sign of use past this, still land before the sandbox
-   * would stop.
-   */
-  SANDBOX_KEEP_ALIVE_EVERY: Duration.minutes(5),
   /**
    * The sandbox's vCPUs, each with 2 GB of memory, where its repository asks
    * for no more (`SANDBOX_VCPUS_BY_REPOSITORY`); also the size a repository

@@ -27,9 +27,8 @@
  * holds it, a turn of the source began meanwhile, or another Start's copy
  * still holds it past this one's own hold; one already up stays as it was.
  * That stop's calls run on a fiber of its own, so the Start never
- * waits on them, and one they never confirmed stops at the sandbox's own
- * timeout (`CODER.SANDBOX_TIMEOUT_MS`), which its wake reapplied, once
- * nothing keeps it alive. A copy that fails logs the tail of what
+ * waits on them, and one they never confirmed stops `SANDBOX_IDLE` after
+ * its last touch (`@repo/sandbox`), as every idle sandbox does. A copy that fails logs the tail of what
  * it printed on stderr, credential-shaped runs redacted.
  * Files named the way credentials are kept are never copied. No copy is
  * made where the task moved to another repository since the source
@@ -208,8 +207,7 @@ const stopUp = <R>(ask: SnapshotAsk<R>) =>
  * The sandbox this step woke stopped again, unless it must stay up. The
  * stop, which asks whether it must stay up and is bounded by itself, is
  * forked detached, so it outlives the Start's own fiber and the Start never
- * waits on it; one it never confirms stops at the sandbox's own timeout once
- * nothing keeps it alive.
+ * waits on it; one it never confirms stops idle once nothing touches it.
  */
 const stopWoken = <R>(ask: SnapshotAsk<R>) => Effect.asVoid(Effect.forkDetach(stopUp(ask)));
 
@@ -330,7 +328,7 @@ export const copySourceWork = /* @__PURE__ */ Effect.fn("web/copySourceWork")(fu
     const target = { userId, conversationId: source.conversationId };
     // The copy holds the sandbox as a terminal does for as long as it may take, so a copy beside it
     // for another Start reads it held past its own hold and leaves it up, and a sandbox no copy
-    // stopped stops at its own timeout once nothing keeps it alive.
+    // stopped stops idle once nothing touches it.
     const heldUntil = new Date(
       (yield* Clock.currentTimeMillis) +
         Duration.toMillis(Duration.sum(SNAPSHOT.TIMEOUT, SNAPSHOT.STOP_TIMEOUT)),

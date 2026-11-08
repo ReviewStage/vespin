@@ -5,8 +5,8 @@
  * which the sweep lists by, one page a minute. A running one's last visit is
  * read from its helper's folder: past the idle bound, the share is closed as
  * the developer's own close does; within it, the sandbox's lease is held
- * from that visit and the sandbox kept alive, as a forwarded port's traffic
- * holds it. A stopped one is left until it runs again, when its old visit
+ * from that visit and the sandbox touched, as a forwarded port's traffic
+ * touches it. A stopped one is left until it runs again, when its old visit
  * closes it. What is logged of a failure is the sandbox's own words.
  */
 
@@ -19,11 +19,10 @@ import {
   SANDBOX_STATUS,
   Sandbox,
   type SandboxService,
+  touchSandbox,
 } from "@repo/sandbox";
 import { Duration, Effect, Option, Result } from "effect";
-import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
 import { agentTag } from "../agents/machine/sandbox-machine.js";
-import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
 import {
   PORT_SHARE,
   readSharedPort,
@@ -49,8 +48,7 @@ const sweptShare = (api: SandboxService, sandbox: ListedSandbox, now: Date) =>
     if (Option.isSome(conversation)) {
       yield* holdSandbox(conversation.value.conversationId, shareHeldUntil(visitedAt));
     }
-    const sessionId = sandbox.tags?.[SESSION_TAG];
-    if (sessionId !== undefined) yield* keepSessionSandboxAlive(sessionId);
+    yield* touchSandbox(sandbox.name);
     return false;
   }).pipe(
     Effect.catchIf(isSandboxError, (failure) =>

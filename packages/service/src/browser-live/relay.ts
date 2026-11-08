@@ -55,10 +55,9 @@
  * idle bound, or nothing but that it is watching for `INPUT_IDLE`, since a
  * pane left shown on a window nobody uses says it is watching for good;
  * the sweep stops the sandbox once the lease lapses. While
- * the browser is reached, the connection also keeps the sandbox alive past
- * its short timeout every keep-alive interval
- * (`CODER.SANDBOX_KEEP_ALIVE_EVERY`, `agents/sandbox-keep-alive.ts`), so a
- * member watching after the agent's turn ended is never cut off by it.
+ * the browser is reached, the connection also touches the sandbox
+ * (`@repo/sandbox`'s `touch`) every `SANDBOX_TOUCH_EVERY`, so a member
+ * watching after the agent's turn ended is never cut off by its idle stop.
  */
 
 import type { ReachedBrowserTab } from "@repo/database/models/agent-browser-tabs";
@@ -82,6 +81,7 @@ import {
   type BrowserLiveServerMessage,
   browserLiveClientMessageSchema,
 } from "@repo/features/browser-live-wire";
+import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -102,7 +102,6 @@ import {
 import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs-procedures.js";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { BROWSER_UNREACHABLE, type BrowserUnreachable } from "../agents/browser/agent-browser.js";
-import { CODER } from "../agents/coder-host/bounds.js";
 import { EXCESS_KEYS, type UnparsedWireValue } from "../core.js";
 import type { ServerAgentTool } from "../events/server-events.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
@@ -168,8 +167,8 @@ export interface BrowserLiveDependencies {
     page: { readonly address: string; readonly title: string },
   ) => Effect.Effect<void>;
   readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
-  /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
-  readonly keepAlive: (sessionId: string) => Effect.Effect<void>;
+  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
+  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** The panel left: it is sent no close. */
@@ -974,10 +973,10 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
         : BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
     }
     const cdp = connected.success;
-    // The connect resumed the sandbox where it was stopped, so it is kept alive from here for as long as the view stands.
+    // The connect resumed the sandbox where it was stopped, so it is touched from here for as long as the view stands.
     yield* Effect.forkScoped(
-      Effect.repeat(deps.keepAlive(session.success.value), {
-        schedule: Schedule.spaced(CODER.SANDBOX_KEEP_ALIVE_EVERY),
+      Effect.repeat(deps.touch(session.success.value), {
+        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
       }),
     );
     // The tab is read again, since a browser that started afresh reopened it on a new target.

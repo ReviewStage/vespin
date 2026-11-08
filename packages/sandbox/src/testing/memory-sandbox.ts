@@ -11,7 +11,7 @@
  */
 
 import { Clock, Duration, Effect, Layer, Redacted } from "effect";
-import { Sandbox, type SandboxService } from "../sandbox.js";
+import { SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
   type CommandAsk,
@@ -47,7 +47,6 @@ export interface MemorySandboxRecord {
   snapshotId: string | undefined;
   readonly createdAt: number;
   readonly from: SandboxSource;
-  readonly timeoutMs: number;
   readonly vcpus: number | undefined;
   readonly env: Readonly<Record<string, string>>;
   readonly user: SandboxUser | undefined;
@@ -114,6 +113,8 @@ export interface MemorySandboxState {
   readonly resumed: { readonly name: string; readonly running: string }[];
   /** Every run a PTY was minted for, in order. */
   readonly interactive: { readonly name: string; readonly running: string }[];
+  /** Every running run a touch reached, in order. */
+  readonly touched: { readonly name: string; readonly running: string }[];
 }
 
 /** A memory `Sandbox`: its layer, its state, and how a suite moves a command's exit. */
@@ -147,7 +148,7 @@ function listedOf(record: MemorySandboxRecord): OpenedSandbox {
     tags: record.tags,
     snapshotId: record.snapshotId,
     createdAt: record.createdAt,
-    timeout: record.timeoutMs,
+    timeout: Duration.toMillis(SANDBOX_IDLE),
     vcpus: record.vcpus,
     expiresAt: record.expiresAt,
     routes: record.routes,
@@ -167,6 +168,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     deleted: [],
     resumed: [],
     interactive: [],
+    touched: [],
   };
   const nextRun = counter("run_");
   const nextSnapshot = counter("snap_");
@@ -217,7 +219,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         snapshotId: undefined,
         createdAt: yield* Clock.currentTimeMillis,
         from: ask.from,
-        timeoutMs: ask.timeoutMs,
         vcpus: ask.vcpus,
         env: { ...ask.env },
         user: ask.user,
@@ -500,12 +501,15 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           return id;
         }),
       ),
-    extendTimeout: (target, durationMs) =>
+    touch: (name) =>
       scripted(
-        SANDBOX_CALL.EXTEND,
-        nameOf(target),
-        Effect.map(up(SANDBOX_CALL.EXTEND, target), (record) => {
-          record.expiresAt = (record.expiresAt ?? 0) + durationMs;
+        SANDBOX_CALL.TOUCH,
+        name,
+        Effect.gen(function* () {
+          const record = state.sandboxes.get(name);
+          if (record?.status !== SANDBOX_STATUS.RUNNING) return;
+          record.expiresAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(SANDBOX_IDLE);
+          state.touched.push({ name, running: record.running });
         }),
       ),
   };
@@ -522,7 +526,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         snapshotId: undefined,
         createdAt: 0,
         from: { image: "memory-image" },
-        timeoutMs: 0,
         vcpus: undefined,
         env: {},
         user: undefined,

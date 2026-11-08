@@ -37,9 +37,20 @@ import {
   type Session,
   StreamError,
 } from "@vercel/sandbox";
-import { Context, Data, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
+import {
+  Clock,
+  Context,
+  Data,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Result,
+  Schema,
+} from "effect";
 import { HttpClient } from "effect/http";
-import { Sandbox, type SandboxService } from "../sandbox.js";
+import { SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
   type CommandAsk,
@@ -133,6 +144,18 @@ const STATUS_OF_VERCEL: ReadonlyMap<string, SandboxStatus> = new Map([
  */
 const KEPT_SNAPSHOTS = { COUNT: 1, EXPIRATION: Duration.days(7), DELETE_EVICTED: true } as const;
 
+/**
+ * How a touch lengthens a running session (`touch`). Vercel's extension adds
+ * to the session's timeout, so the touch reads where the session ends and
+ * extends it by the difference to `SANDBOX_IDLE` from now: only where that
+ * is more than `LEAST`, so touches close together cost one read and no
+ * write, and never past `LONGEST_RUN` from the session's start, the longest
+ * Vercel lets a session run on Pro and Enterprise, past which it refuses an
+ * extension. Note that two touches at once may each extend, ending the
+ * session up to twice `SANDBOX_IDLE` on, which is let be.
+ */
+const TOUCH = { LEAST: Duration.seconds(30), LONGEST_RUN: Duration.hours(24) } as const;
+
 const SANDBOX_API = {
   /**
    * A tag's value names few sandboxes, so the first page is all of them.
@@ -164,7 +187,7 @@ const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.DELETE]: "web/sandboxDelete",
   [SANDBOX_CALL.STOP]: "web/sandboxStop",
   [SANDBOX_CALL.RUN]: "web/sandboxSession",
-  [SANDBOX_CALL.EXTEND]: "web/sandboxExtend",
+  [SANDBOX_CALL.TOUCH]: "web/sandboxTouch",
   [SANDBOX_CALL.NETWORK_POLICY]: "web/sandboxNetworkPolicy",
   [SANDBOX_CALL.INTERACTIVE]: "web/sandboxInteractive",
   [SANDBOX_CALL.SNAPSHOT]: "web/sandboxSnapshot",
@@ -461,7 +484,7 @@ async function madeUser(
   if (closed.exitCode !== 0) throw new Error(`${user.homeDir} could not be closed`);
 }
 
-/** A create as `@vercel/sandbox` takes it: persistent, from the image or the snapshot the ask names, keeping its newest snapshot alone (`KEPT_SNAPSHOTS`), on the open internet. */
+/** A create as `@vercel/sandbox` takes it: persistent, each run `SANDBOX_IDLE` long, from the image or the snapshot the ask names, keeping its newest snapshot alone (`KEPT_SNAPSHOTS`), on the open internet. */
 function createParams(ask: SandboxCreate) {
   return {
     ...("image" in ask.from
@@ -470,7 +493,7 @@ function createParams(ask: SandboxCreate) {
     name: ask.name,
     persistent: true,
     tags: { ...ask.tags },
-    timeout: ask.timeoutMs,
+    timeout: Duration.toMillis(SANDBOX_IDLE),
     ...(ask.vcpus === undefined ? undefined : { resources: { vcpus: ask.vcpus } }),
     keepLastSnapshots: {
       count: KEPT_SNAPSHOTS.COUNT,
@@ -484,6 +507,34 @@ function createParams(ask: SandboxCreate) {
 
 /** A sandbox as the SDK's list names it. */
 type ListedMetadata = Awaited<ReturnType<typeof SdkSandbox.list>>["sandboxes"][number];
+
+/**
+ * The sandbox opened with each run `SANDBOX_IDLE` long: one created with
+ * another timeout, which Vercel reapplies at every resume, has it replaced,
+ * so its next run opens with this one. Note that the run already up keeps
+ * the end it opened with, since Vercel only lengthens a running session.
+ */
+async function idleTimed(sandbox: SdkSandbox, signal: AbortSignal): Promise<SdkSandbox> {
+  const idle = Duration.toMillis(SANDBOX_IDLE);
+  if (sandbox.timeout === undefined || sandbox.timeout === idle) return sandbox;
+  await sandbox.update({ timeout: idle }, { signal });
+  return sandbox;
+}
+
+/**
+ * How much to lengthen a running session so it ends `SANDBOX_IDLE` from now
+ * (`TOUCH`); nothing where that is `TOUCH.LEAST` or less.
+ */
+function touchExtension(session: Session, now: number): number | undefined {
+  const startedAt = (session.startedAt ?? session.createdAt).getTime();
+  const endsAt = startedAt + session.timeout;
+  const wanted = Math.min(
+    now + Duration.toMillis(SANDBOX_IDLE),
+    startedAt + Duration.toMillis(TOUCH.LONGEST_RUN),
+  );
+  const extension = wanted - endsAt;
+  return extension > Duration.toMillis(TOUCH.LEAST) ? extension : undefined;
+}
 
 /** A listed sandbox as the package reads it. */
 function listedOf(listed: ListedMetadata): ListedSandbox {
@@ -658,8 +709,8 @@ function vercelSandbox(
     resume: (name) =>
       said(
         Effect.map(
-          asked(SANDBOX_CALL.GET, (signal, under) =>
-            SdkSandbox.get({ ...under, name, resume: true, signal }),
+          asked(SANDBOX_CALL.GET, async (signal, under) =>
+            idleTimed(await SdkSandbox.get({ ...under, name, resume: true, signal }), signal),
           ),
           openedOf,
         ).pipe(Effect.withSpan("web/sandboxResume")),
@@ -683,13 +734,14 @@ function vercelSandbox(
               await onCreate?.(openedOf(created));
             };
             try {
-              return await SdkSandbox.getOrCreate({
+              const opened = await SdkSandbox.getOrCreate({
                 ...under,
                 ...createParams(ask),
                 resume: true,
                 signal,
                 onCreate: setUp,
               });
+              return await idleTimed(opened, signal);
             } catch (failure) {
               // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw.
               if (!(failure instanceof APIError) || failure.response.status !== NAME_TAKEN_STATUS) {
@@ -702,7 +754,7 @@ function vercelSandbox(
                 signal,
               });
               await setUp(joined);
-              return joined;
+              return await idleTimed(joined, signal);
             }
           }),
           openedOf,
@@ -858,11 +910,22 @@ function vercelSandbox(
           return (await session.snapshot({ expiration, signal })).snapshotId;
         }),
       ),
-    extendTimeout: (target, durationMs) =>
+    touch: (name) =>
       said(
-        on(SANDBOX_CALL.EXTEND, target, (session, signal) =>
-          session.extendTimeout(durationMs, { signal }),
-        ),
+        Effect.gen(function* () {
+          const sandbox = yield* found(SANDBOX_CALL.TOUCH, name).pipe(
+            Effect.map(Option.some),
+            Effect.catchIf(isGone, () => Effect.succeed(Option.none<SdkSandbox>())),
+          );
+          if (Option.isNone(sandbox)) return;
+          const session = sandbox.value.currentSession();
+          if (STATUS_OF_VERCEL.get(session.status) !== SANDBOX_STATUS.RUNNING) return;
+          const extension = touchExtension(session, yield* Clock.currentTimeMillis);
+          if (extension === undefined) return;
+          yield* sdkCall(SANDBOX_CALL.TOUCH, (signal) =>
+            session.extendTimeout(extension, { signal }),
+          ).pipe(Effect.catchIf(sessionGone, () => Effect.void));
+        }),
       ),
   };
 }

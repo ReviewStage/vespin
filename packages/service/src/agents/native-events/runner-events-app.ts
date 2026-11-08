@@ -37,12 +37,13 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
-import type { Sandbox } from "@repo/sandbox";
+import { SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   Cause,
   Clock,
   Data,
+  Duration,
   Effect,
   ErrorReporter,
   Layer,
@@ -75,13 +76,12 @@ import {
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
+import { agentSandboxName } from "../agent-sandbox-open.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
 import { estimatedTokens } from "../coder-host/token-estimate.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
-import { keepAliveDue } from "../sandbox-keep-alive.js";
-import { keepSessionSandboxAlive } from "../session-sandboxes.js";
 import { admitRunnerBearer, presentedBearer, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
@@ -114,14 +114,15 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * racing, write nothing twice. A write the writer refuses is said in the
  * log and passed over, since the runner
  * posting the batch again would be refused again. The answer names the last
- * event applied, which a relaunch numbers its events after. A runner posting
- * is a run under way, so a post keeps its sandbox alive past its short
- * timeout, at most every keep-alive interval (`../sandbox-keep-alive.ts`),
- * stamped in the projection under the same lock, unless it ends the launch,
- * whose sandbox is stopped instead. A batch with no events is the runner's
- * heartbeat (`@repo/agent-runner`'s `RUNNER_HEARTBEAT`), posted while its
- * harness says nothing, as it may for an hour while a background command
- * runs; it applies nothing but that. The running turn's progress deadline
+ * event applied, which a relaunch numbers its events after. A post while a
+ * turn runs touches the runner's sandbox (`@repo/sandbox`'s `touch`), at
+ * most every `SANDBOX_TOUCH_EVERY`, stamped in the projection under the same
+ * lock, unless it ends the launch, whose sandbox is stopped instead; a warm
+ * runner with no turn touches nothing, so it cannot keep its own sandbox up.
+ * A batch with no events is the runner's heartbeat (`@repo/agent-runner`'s
+ * `RUNNER_HEARTBEAT`), posted every minute whatever its harness says, as it
+ * may say nothing for an hour while a background command runs; it applies
+ * nothing but that. The running turn's progress deadline
  * (`@repo/database/models/turn-state`), which the minute sweep fails it by
  * once it passes, is pushed on only by the turn's progress short of the
  * launch's end (`native-projection.ts`'s `turnProgressed`): any event, or a
@@ -213,7 +214,7 @@ interface Applied {
   readonly sequence: number | null;
 }
 
-/** A run whose sandbox a batch keeps alive: the conversation, and the session its sandbox is tagged with. */
+/** A run whose sandbox a batch touches: the conversation, and the session its sandbox is named for. */
 export interface RunnerAlive {
   readonly target: ConversationTarget;
   readonly sessionId: string | undefined;
@@ -245,8 +246,8 @@ export interface RunnerEventsOptions<R = never> {
    */
   readonly idled?: (idled: RunnerEnded) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
-   * Told once a batch due a keep-alive has landed, after its transaction:
-   * the run's sandbox kept alive (`sandboxKeptAlive`). Nothing where left out.
+   * Told once a batch due a touch has landed, after its transaction: the
+   * run's sandbox touched (`sandboxTouched`). Nothing where left out.
    */
   readonly alive?: (alive: RunnerAlive) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
   /**
@@ -261,14 +262,14 @@ export interface RunnerEventsOptions<R = never> {
 }
 
 /**
- * A run's sandbox kept alive as a batch of its runner's events lands
- * (`../session-sandboxes.ts`'s `keepSessionSandboxAlive`), which logs a
- * keep-alive the sandbox did not confirm, since the next due batch tries again.
+ * A run's sandbox touched as a batch of its runner's events lands
+ * (`@repo/sandbox`'s `touchSandbox`), which logs a touch the sandbox did not
+ * confirm, since the next due batch, a minute on, touches it again.
  */
-export function sandboxKeptAlive(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
+export function sandboxTouched(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
   const { sessionId } = alive;
   if (sessionId === undefined) return Effect.void;
-  return keepSessionSandboxAlive(sessionId);
+  return touchSandbox(agentSandboxName(sessionId));
 }
 
 /**
@@ -687,12 +688,17 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       ends.length === 0
         ? runnerEventsOf(batch, held.sequence, RUNNER_EVENT.IDLE).at(-1)
         : undefined;
-    // Any post is the runner still running, a heartbeat with no events among them, but a batch that
-    // ends the launch keeps nothing alive, since its sandbox is stopped once it lands; and a launch
-    // that has applied nothing yet has a sandbox that opened moments ago.
+    // Any post while a turn runs is its sandbox in use, a heartbeat with no events among them, but a
+    // warm runner with no turn keeps nothing up, a batch that ends the launch touches nothing, since
+    // its sandbox is stopped once it lands, and a launch that has applied nothing yet has a sandbox
+    // that opened moments ago.
     const sequence = last ?? held.sequence;
     const keepsAlive =
-      sequence !== null && ends.length === 0 && keepAliveDue(state.keptAliveAt, now);
+      sequence !== null &&
+      ends.length === 0 &&
+      state.turn !== undefined &&
+      (state.keptAliveAt === undefined ||
+        now - state.keptAliveAt >= Duration.toMillis(SANDBOX_TOUCH_EVERY));
     if (keepsAlive) state = { ...state, keptAliveAt: now };
     const result = {
       applied: { applied: events.length, sequence: last ?? held.sequence } satisfies Applied,

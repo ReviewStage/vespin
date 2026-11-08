@@ -39,13 +39,14 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, eq } from "drizzle-orm";
-import { Clock, Effect, ErrorReporter, Layer, Option } from "effect";
+import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -58,7 +59,6 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
-import { CODER } from "../coder-host/bounds.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
@@ -436,7 +436,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a run under way keeps its sandbox alive at its first batch and once a keep-alive interval after the last, and a batch that ends the launch keeps nothing alive",
+    "a running turn touches its sandbox at its first batch and once a touch interval after the last, and a batch that ends the launch touches nothing",
     () =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
@@ -449,10 +449,10 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, events.slice(0, 3));
         yield* post(agent.bearer, events.slice(3, 6));
         const withinInterval = told.length;
-        yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
         yield* post(agent.bearer, events.slice(6, 11));
         // The batch carrying the launch's END, past another interval, is the stop's to settle.
-        yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
         yield* post(agent.bearer, events.slice(11));
 
         assert.equal(withinInterval, 1, "a batch inside the interval asks Vercel nothing");
@@ -464,7 +464,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect.each(HEARTBEAT_SILENCES)(
-    "a heartbeat with no events keeps a run's sandbox alive through its harness's silence, applying nothing, and none before the launch applied an event, and holds its turn only where $name",
+    "a heartbeat with no events touches a running turn's sandbox through its harness's silence, applying nothing, and none before the launch applied an event, and holds its turn only where $name",
     ({ upTo, holds }) =>
       Effect.gen(function* () {
         const told: RunnerAlive[] = [];
@@ -479,7 +479,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const silence = [];
         // An hour and more of the harness saying nothing, and the runner beating.
         for (const _beat of [1, 2, 3, 4, 5, 6, 7]) {
-          yield* TestClock.adjust(CODER.SANDBOX_KEEP_ALIVE_EVERY);
+          yield* TestClock.adjust(Duration.minutes(5));
           silence.push(yield* post(agent.bearer, []));
         }
         const midway = yield* transcriptOf(agent.target.conversationId);
@@ -712,12 +712,14 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a warm launch's IDLE settles its turn as a turn's end does and is told once, and the END that retires it later settles nothing more",
+    "a warm launch's IDLE settles its turn as a turn's end does and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
     () =>
       Effect.gen(function* () {
         const told: RunnerEnded[] = [];
+        const touched: RunnerAlive[] = [];
         const post = yield* standingWith({
           idled: (idled) => Effect.sync(() => void told.push(idled)),
+          alive: (alive) => Effect.sync(() => void touched.push(alive)),
         });
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
@@ -740,6 +742,9 @@ it.layer(SUITE)("the runner events route", (it) => {
 
         yield* post(agent.bearer, events.slice(0, turn.length));
         const idle = yield* transcriptOf(agent.target.conversationId);
+        // The warm runner beats on with no turn, and keeps nothing up.
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+        yield* post(agent.bearer, []);
         yield* post(agent.bearer, events.slice(turn.length));
         const ended = yield* transcriptOf(agent.target.conversationId);
 
@@ -753,6 +758,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           told.map((each) => [each.target, each.sequence]),
           [[agent.target, turn.length - 1]],
         );
+        assert.deepEqual(touched, []);
       }),
   );
 

@@ -784,14 +784,15 @@ export interface RunnerEventBatch {
 
 /**
  * How often a launch tells the service it still runs, as a batch with no events,
- * for as long as it runs. A harness may say nothing for an hour while a
- * background command or a wakeup it waits on runs, and the service keeps the
- * sandbox alive only on what the runner posts (its keep-alive interval is
- * ten minutes, its timeout an hour), so five minutes leaves room for a
- * heartbeat the service did not take, and costs one small post each.
+ * for as long as it runs, on its own timer whatever its harness says. A harness
+ * may say nothing for an hour while a background command or a wakeup it waits
+ * on runs, and the service touches the sandbox during a turn only on what the
+ * runner posts, about once a minute, against a sandbox that stops five idle
+ * minutes after its last touch, so a minute leaves room for heartbeats the
+ * service did not take, and costs one small post each.
  */
 export const RUNNER_HEARTBEAT = {
-  EVERY_MS: 5 * 60 * 1_000,
+  EVERY_MS: 60 * 1_000,
   /**
    * How long one heartbeat waits on the service's answer before it is let go, well
    * inside the interval, so a post the service never answers cannot hold back the

@@ -14,13 +14,13 @@
  * counted, here or anywhere the relay writes.
  *
  * Where the bridge's kind holds the sandbox (`TUNNEL_HOLDS_SANDBOX`), the
- * connection keeps the sandbox alive past its timeout every keep-alive
- * interval (`CODER.SANDBOX_KEEP_ALIVE_EVERY`) for as long as it stands, and
+ * connection touches the sandbox (`@repo/sandbox`'s `touch`) every
+ * `SANDBOX_TOUCH_EVERY` for as long as it stands, and
  * writes the lease every terminal shares (`sandbox-terminal-lease.ts`) as
  * the sign the turn-end stop reads that someone is using the sandbox: at
  * the open, and as bytes cross, at most once a minute. A connection closes
  * as idle once no byte has crossed it either way for the idle bound, which
- * ends its keep-alive, so the sandbox's own timeout stops it from there.
+ * ends its touches, so the sandbox's idle stop takes it from there.
  *
  * How the connection ended is the close code the desktop reads as the
  * tunnel's state (`@repo/features/sandbox-tunnel-wire`'s `TUNNEL_CLOSE`).
@@ -32,7 +32,12 @@
 
 import { TUNNEL_CLOSE, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { type InteractiveShell, ptyLinesOf, type SandboxError } from "@repo/sandbox";
+import {
+  type InteractiveShell,
+  ptyLinesOf,
+  SANDBOX_TOUCH_EVERY,
+  type SandboxError,
+} from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   Clock,
@@ -49,7 +54,6 @@ import {
   type Scope,
   Stream,
 } from "effect";
-import { CODER } from "../agents/coder-host/bounds.js";
 import type { SandboxOpen } from "../agents/terminal/agent-sandbox.js";
 import { EXCESS_KEYS } from "../core.js";
 import { jsonOf } from "../http/http-effect.js";
@@ -102,8 +106,8 @@ export interface TunnelDependencies {
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
   readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
-  /** Keeps the running sandbox the session is tagged with alive the timeout from now; a keep-alive that fails is logged, for the next to try again. */
-  readonly keepAlive: (sessionId: string) => Effect.Effect<void>;
+  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
+  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** How the relay ends its own socket to the PTY, whatever ended the pipe: the bridge ends with its input. */
@@ -310,7 +314,7 @@ export function relayTunnel(
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NOT_RUNNING);
     }
-    // An open is the developer using the sandbox: where the kind holds it, it is held and kept alive from here.
+    // An open is the developer using the sandbox: where the kind holds it, it is held and touched from here.
     const holds = TUNNEL_HOLDS_SANDBOX[ask.bridge.kind];
     const openedAt = yield* DateTime.nowAsDate;
     const lastCrossed = yield* Ref.make(openedAt.getTime());
@@ -318,8 +322,8 @@ export function relayTunnel(
     if (holds) {
       yield* deps.hold(agent.conversationId, heldFrom(openedAt));
       yield* Effect.forkScoped(
-        Effect.repeat(deps.keepAlive(sessionId), {
-          schedule: Schedule.spaced(CODER.SANDBOX_KEEP_ALIVE_EVERY),
+        Effect.repeat(deps.touch(sessionId), {
+          schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
         }),
       );
     }

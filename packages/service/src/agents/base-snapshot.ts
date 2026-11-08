@@ -61,7 +61,7 @@ import {
 export const BASE_SNAPSHOT = {
   /** Every base snapshot's sandbox is named with this, its digest after it. */
   NAME_PREFIX: "agent-base-",
-  /** How long a fill's sandbox may run before it is taken for one left behind: past the build's own bound (`SNAPSHOT_BUILD.TIMEOUT`). */
+  /** How long a fill's sandbox may run before it is taken for one left behind: past any fill's clone and install. */
   FILL_GRACE: Duration.minutes(15),
   /** How long after its last use a base snapshot is kept; each sandbox created from it is a use. */
   LAPSE: Duration.days(30),

@@ -192,7 +192,6 @@ const standing = (
   sandbox: Layer.Layer<AgentSandbox>,
   sessionSandboxes: Layer.Layer<SessionSandboxes> = Layer.succeed(SessionSandboxes, {
     stopFor: () => Effect.die("the terminals routes stop no sandbox"),
-    keepAliveFor: () => Effect.die("the terminals routes keep no sandbox alive"),
   }),
   keepAwake: SandboxStopReach["keepAwake"] = keepAwakeDetached,
 ) =>

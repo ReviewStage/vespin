@@ -8,7 +8,7 @@
  * partial messages costs a post per round trip rather than per token. Beside
  * the sender, a heartbeat posts a batch with no events every
  * `RUNNER_HEARTBEAT` for as long as the launch runs, once each, since the
- * next is never far, so the service keeps the sandbox alive through a harness's
+ * next is never far, so the service touches the sandbox through a harness's
  * long silence; it stops as the sink drains.
  */
 

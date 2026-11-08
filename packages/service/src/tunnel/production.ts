@@ -11,13 +11,13 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { hasRepository, readVisibleAgent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
-import { Sandbox } from "@repo/sandbox";
+import { Sandbox, touchSandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { controlsAgent } from "../agents/agent-reach.js";
+import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { connectPty } from "../agents/sandbox-pty.js";
-import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import type { TunnelDependencies } from "./relay.js";
 
@@ -61,6 +61,6 @@ export const tunnelDependencies: Effect.Effect<TunnelDependencies, never, Tunnel
         run(holdSandbox(conversationId, heldUntil)).pipe(
           Effect.catch(() => Effect.logWarning("a tunnel's lease was not moved on")),
         ),
-      keepAlive: (sessionId) => run(keepSessionSandboxAlive(sessionId)),
+      touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
     };
   });

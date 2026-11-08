@@ -9,6 +9,12 @@
  * resumes a sandbox but `resume`, `getOrCreate`, and what is built on them
  * here. The production layer is the provider's (`vercel/`, which the app's
  * edge provides); a test's is `@repo/sandbox/testing`'s.
+ *
+ * A run stops `SANDBOX_IDLE` after its last touch: every open and create
+ * runs for that long, and whatever holds a sandbox in use touches it
+ * (`touch`, `touchSandbox`) about every `SANDBOX_TOUCH_EVERY`, which no
+ * caller times any other way. A stopped sandbox keeps its disk as a
+ * snapshot, so an idle one bills nothing but that.
  */
 
 import { Context, Duration, Effect, Option, Schedule, type Scope } from "effect";
@@ -30,7 +36,6 @@ import {
   type SandboxRoute,
   type SandboxRunning,
   type SandboxTarget,
-  SandboxUnavailable,
 } from "./vocabulary.js";
 
 export interface SandboxService {
@@ -154,22 +159,30 @@ export interface SandboxService {
     expiresAfter: Duration.Duration,
   ) => Effect.Effect<string, SandboxError>;
   /**
-   * Lengthens the target's timeout by the duration given, which the
-   * provider takes from a second up and refuses past its maximum lifetime.
+   * The named sandbox in use now: its running run lengthened so it ends
+   * `SANDBOX_IDLE` from now, where that moves its end out by more than a
+   * little and within the provider's longest run; nothing where it is not
+   * running, and nothing resumed.
    */
-  readonly extendTimeout: (
-    target: SandboxTarget,
-    durationMs: number,
-  ) => Effect.Effect<void, SandboxError>;
+  readonly touch: (name: string) => Effect.Effect<void, SandboxError>;
 }
 
 export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/sandbox/Sandbox") {}
 
-/** How a snapshot is built in a sandbox of its own (`buildSnapshot`). */
-export const SNAPSHOT_BUILD = {
-  /** How long a build may take, its sandbox's own timeout included. */
-  TIMEOUT: Duration.minutes(10),
-} as const;
+/**
+ * How long a sandbox runs past its last touch: what every open and create
+ * runs for, and how far ahead of now each touch puts its end, so this alone
+ * decides when an idle sandbox stops. Five minutes, because an idle sandbox
+ * bills its memory until it stops, and a resume from its snapshot is quick.
+ */
+export const SANDBOX_IDLE = Duration.minutes(5);
+
+/**
+ * How often whatever holds a sandbox in use touches it: a minute, well
+ * inside `SANDBOX_IDLE`, so a touch that failed is followed by another long
+ * before the sandbox would stop, and none of them is tried again.
+ */
+export const SANDBOX_TOUCH_EVERY = Duration.minutes(1);
 
 /** How a resumed sandbox is waited on until it runs (`resumedRunning`). */
 const RESUME_WAIT = { POLL: Duration.seconds(1) } as const;
@@ -194,6 +207,16 @@ export const deletedIfStill = (read: ListedSandbox) =>
     return true;
   });
 
+/**
+ * The named sandbox touched (`touch`), as a caller that holds it in use asks
+ * it: a touch the sandbox did not confirm is logged in its own words and let
+ * be, since the next one comes well before the sandbox would stop.
+ */
+export const touchSandbox = (name: string): Effect.Effect<void, never, Sandbox> =>
+  Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(name)).pipe(
+    Effect.catch((failure) => Effect.logWarning(`a sandbox was not touched: ${failure.message}`)),
+  );
+
 /** What a snapshot is built as: the sandbox's name, the image it starts from, its size, and how long the snapshot lasts after its last use. */
 export interface SnapshotBuild {
   readonly name: string;
@@ -204,12 +227,13 @@ export interface SnapshotBuild {
 
 /**
  * A snapshot built in a sandbox of its own: created from the image under the
- * name, the caller's steps run in it, and snapshotted, which stops it; the
- * snapshot's id, or none where another build holds the name, which this one
- * leaves be. The sandbox stays stopped holding the snapshot, which is where
- * a reader finds it, since deleting it deletes the snapshot with it. A build
- * that failed or outlasted `SNAPSHOT_BUILD.TIMEOUT` deletes its sandbox,
- * where it is still this build's.
+ * name, the caller's steps run in it, touched every `SANDBOX_TOUCH_EVERY`
+ * while they run, and snapshotted, which stops it; the snapshot's id, or none
+ * where another build holds the name, which this one leaves be. The sandbox
+ * stays stopped holding the snapshot, which is where a reader finds it, since
+ * deleting it deletes the snapshot with it. A build that failed deletes its
+ * sandbox, where it is still this build's; one whose caller went stops
+ * touching it, so it stops `SANDBOX_IDLE` later.
  */
 export const buildSnapshot = <E, R>(
   ask: SnapshotBuild,
@@ -222,7 +246,6 @@ export const buildSnapshot = <E, R>(
         name: ask.name,
         from: { image: ask.image },
         tags: {},
-        timeoutMs: Duration.toMillis(SNAPSHOT_BUILD.TIMEOUT),
         ...(ask.vcpus === undefined ? undefined : { vcpus: ask.vcpus }),
         snapshotLapse: ask.lapse,
         env: {},
@@ -234,13 +257,15 @@ export const buildSnapshot = <E, R>(
     if (Option.isNone(created)) return Option.none<string>();
     const running = { name: ask.name, running: created.value.running };
     return yield* Effect.gen(function* () {
+      yield* touchSandbox(ask.name).pipe(
+        Effect.delay(SANDBOX_TOUCH_EVERY),
+        Effect.forever,
+        Effect.forkScoped,
+      );
       yield* steps(running);
       return Option.some(yield* sandbox.snapshot(running, ask.lapse));
     }).pipe(
-      Effect.timeoutOrElse({
-        duration: SNAPSHOT_BUILD.TIMEOUT,
-        orElse: () => Effect.fail(new SandboxUnavailable({ detail: "the build timed out" })),
-      }),
+      Effect.scoped,
       // Only this build's own sandbox goes, so a build that failed after another replaced it leaves that one be.
       Effect.tapError(() => Effect.ignore(deletedIfStill(created.value))),
     );

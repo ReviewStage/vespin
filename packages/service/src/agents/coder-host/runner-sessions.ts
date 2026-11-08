@@ -172,6 +172,7 @@ import {
   type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
+  touchSandbox,
 } from "@repo/sandbox";
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
@@ -2045,7 +2046,9 @@ export const runnerSessions = <
 
     /**
      * An agent on screen kept warm, under its runner lease, where none of its
-     * turns runs: a runner that runs is written a `warm` line, which runs its
+     * turns runs: its running sandbox touched (`@repo/sandbox`'s `touch`),
+     * since nothing else keeps it up between turns, a runner that runs is
+     * written a `warm` line, which runs its
      * warm window again from now, and where none runs, the runner is launched
      * with no message (`launchedWithoutMessage`), warm from its start, for the
      * next message to go into its running session as a line. A turn that runs
@@ -2058,6 +2061,10 @@ export const runnerSessions = <
         if (turn?.status === TURN_STATUS.RUNNING) return;
         const found = yield* firstPlace(machine, userId, sessionId);
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
+        // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
+        if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
+          yield* touchSandbox(found.value.name);
+        }
         const live = yield* liveRunner(machine, found.value, CODER.RUNNER_EXIT_READ);
         if (live !== undefined) {
           return yield* deliveredTo(machine, userId, agent.id, live, [{ type: INPUT_LINE.WARM }]);

@@ -19,14 +19,14 @@ import {
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
 import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
-import type { Sandbox } from "@repo/sandbox";
+import { type Sandbox, touchSandbox } from "@repo/sandbox";
 import { Effect, Layer, Option } from "effect";
 import type { HttpClient } from "effect/http";
+import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import { AgentBrowser, agentBrowserLayer } from "../agents/browser/agent-browser.js";
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { sandboxPtyLayer } from "../agents/sandbox-pty.js";
-import { keepSessionSandboxAlive } from "../agents/session-sandboxes.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
@@ -88,6 +88,6 @@ export const browserLiveDependencies: Effect.Effect<
       run(holdSandbox(conversationId, heldUntil)).pipe(
         Effect.catch(() => Effect.logWarning("a watched browser's lease was not moved on")),
       ),
-    keepAlive: (sessionId) => run(keepSessionSandboxAlive(sessionId)),
+    touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
   };
 });

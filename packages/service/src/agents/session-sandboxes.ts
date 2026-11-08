@@ -1,11 +1,8 @@
 /**
- * session-sandboxes.ts -- a session's sandboxes kept alive while it is used, or stopped.
+ * session-sandboxes.ts -- a session's sandboxes stopped.
  *
- * Whatever shows a session's sandbox in use asks `keepAliveFor` on the
- * rule `sandbox-keep-alive.ts` sets: the list names when the running run
- * ends, and it is extended so it ends the timeout from now. A sandbox that is
- * not running has nothing to keep alive, and a stopped one is never resumed
- * here.
+ * Whatever shows a session's sandbox in use touches it (`@repo/sandbox`'s
+ * `touch`); what is here stops it, and never resumes one stopped.
  *
  * An agent's session has one persistent sandbox (`agent-sandbox-open.ts`),
  * tagged with the session's id; a stopped sandbox keeps its checkout in
@@ -25,18 +22,16 @@ import { type Agent, readAgent } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import {
   isSandboxError,
-  SANDBOX_STATUS,
   Sandbox,
   type SandboxError,
   type SandboxService,
   SandboxUnavailable,
   UP_STATUSES,
 } from "@repo/sandbox";
-import { Clock, Context, Duration, Effect, Layer, Option } from "effect";
+import { Context, Duration, Effect, Layer, Option } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { SESSION_TAG } from "./agent-sandbox-open.js";
 import { discardedOrLogged } from "./device-discard.js";
-import { keepAliveExtension } from "./sandbox-keep-alive.js";
 
 const ARCHIVE_STOP = {
   /**
@@ -51,12 +46,6 @@ const ARCHIVE_STOP = {
 
 export interface SessionSandboxesService {
   /**
-   * Keeps every running sandbox tagged with the session alive the timeout
-   * from now; answers how many were extended. A sandbox not running, or one already ending far enough ahead,
-   * is left as it is.
-   */
-  readonly keepAliveFor: (sessionId: string) => Effect.Effect<number, SandboxError>;
-  /**
    * Stops every running sandbox tagged with the session, keeping its
    * filesystem for a later resume; answers how many were stopped.
    */
@@ -67,25 +56,9 @@ export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionS
   "SessionSandboxes",
 ) {}
 
-/** A session's sandboxes, kept alive or stopped, over `Sandbox`. */
+/** A session's sandboxes stopped, over `Sandbox`. */
 function sessionSandboxesOver(api: SandboxService): SessionSandboxesService {
   return {
-    keepAliveFor: (sessionId) =>
-      Effect.gen(function* () {
-        const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
-        let extended = 0;
-        for (const sandbox of sandboxes) {
-          const running = sandbox.running;
-          const endsAt = sandbox.expiresAt;
-          if (sandbox.status !== SANDBOX_STATUS.RUNNING || running === undefined) continue;
-          if (endsAt === undefined) continue;
-          const extension = keepAliveExtension(endsAt, yield* Clock.currentTimeMillis);
-          if (extension === undefined) continue;
-          yield* api.extendTimeout({ name: sandbox.name, running }, extension);
-          extended += 1;
-        }
-        return extended;
-      }),
     stopFor: (sessionId) =>
       Effect.gen(function* () {
         const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
@@ -109,21 +82,6 @@ export const sessionSandboxesLayer: Layer.Layer<SessionSandboxes, never, Sandbox
   SessionSandboxes,
   Effect.map(Sandbox, sessionSandboxesOver),
 );
-
-/**
- * The session's sandbox kept alive, as a caller that shows it in use asks
- * it: a keep-alive the sandbox did not confirm is logged in its own words,
- * since the next one tries again well before the sandbox would stop.
- */
-export function keepSessionSandboxAlive(sessionId: string): Effect.Effect<void, never, Sandbox> {
-  return Effect.flatMap(SessionSandboxes, (sandboxes) => sandboxes.keepAliveFor(sessionId)).pipe(
-    Effect.provide(sessionSandboxesLayer),
-    Effect.asVoid,
-    Effect.catch((failure) =>
-      Effect.logWarning(`a session's sandbox was not kept alive: ${failure.message}`),
-    ),
-  );
-}
 
 /** What an archive of an agent asks of the deployment beside it: the service that stops its sandbox, over the runtime's `Sandbox` in production and a script's in a test, and what keeps the function awake for the stop. */
 export interface SandboxStopReach {
