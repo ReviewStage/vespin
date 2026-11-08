@@ -2,16 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import {
-  recordAgentRepositoryHead,
-  recordAgentRepositoryPublished,
-} from "@repo/database/models/agent-repositories";
+import { recordAgentRepositoryHead } from "@repo/database/models/agent-repositories";
 import {
   type AgentLatestTurn,
   archiveAgent,
   createAgent,
   lineSendersOf,
-  recordAgentPublished,
   takeAgentMentionedServers,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
@@ -21,7 +17,7 @@ import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, startTask } from "@repo/database/testing";
+import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import {
   AGENT_BOUNDS,
   AGENT_PAYER,
@@ -251,19 +247,24 @@ const runningTurn = (owner: string, conversationId: string) =>
     }),
   );
 
-/** The agent's row keeping pull request 41 with its head at the commit given, as a read of it leaves the row. */
+/** Pull request 41 linked to the agent with its head at the commit given, as a read of it leaves its row. */
 const publishedAt = (owner: string, agentId: string, headSha: string) =>
-  recordAgentPublished(owner, agentId, {
-    number: 41,
-    title: "Expire invitations",
-    url: `https://github.com/${RELAY_FULL_NAME}/pull/41`,
-    state: PULL_REQUEST_STATE.OPEN,
-    checks: CHECK_SUMMARY.PENDING,
-    additions: 1,
-    deletions: 0,
-    changedFiles: 1,
-    headSha,
-  });
+  openedPullRequest(
+    owner,
+    agentId,
+    {
+      number: 41,
+      title: "Expire invitations",
+      url: `https://github.com/${RELAY_FULL_NAME}/pull/41`,
+      state: PULL_REQUEST_STATE.OPEN,
+      checks: CHECK_SUMMARY.PENDING,
+      additions: 1,
+      deletions: 0,
+      changedFiles: 1,
+      headSha,
+    },
+    RELAY_FULL_NAME,
+  );
 
 /** The page GitHub names for the check run of the id given. */
 function runPage(id: number): string {
@@ -626,10 +627,9 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         yield* endedTurn(owner, agent.conversationId, MADE_AT - 60_000);
         const ref = "luke/relay-invitations";
         yield* recordAgentRepositoryHead(owner, agent.id, RELAY_FULL_NAME, ref);
-        yield* recordAgentRepositoryPublished(
+        yield* openedPullRequest(
           owner,
           agent.id,
-          RELAY_FULL_NAME,
           {
             number: 41,
             title: "Expire invitations",
@@ -640,7 +640,8 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
             deletions: 0,
             changedFiles: 1,
           },
-          { at: MADE_AT, branch: ref, pushed: true },
+          RELAY_FULL_NAME,
+          ref,
         );
         const github = githubReaching([installation]).layer;
         const review = Option.getOrThrow(

@@ -9,6 +9,7 @@ import {
 } from "@repo/database/models/workspace-store";
 import {
   agentPin,
+  agentPullRequest,
   agentRead,
   conversations,
   device,
@@ -23,6 +24,7 @@ import { taskBlock } from "@repo/database/schemas/task-block";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
   agentPinSync,
+  agentPullRequestSync,
   agentReadSync,
   agentSync,
   automationRunSync,
@@ -59,7 +61,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * reader's own pin and read mark and the owner's name, and the agents with their newest
  * turn, when the newest line
  * of the developer's awaiting its turn was written and whether that turn's session ended, when the newest turn to end
- * ended, what each last published, the harness its conversation runs on, the
+ * ended, what each last published and every pull request it opened, the harness its conversation runs on, the
  * Mac a local one runs on, and the names of the members each names. A third, the issues
  * the plans linked, answers no rows now that a plan links none, and stands
  * because a released desktop follows it. Every column stands
@@ -197,6 +199,9 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         archiverName: outerJoined(archiver.name),
         disabledServers: agentTable.disabledServers,
         published: agentTable.published,
+        pullRequests: sql<
+          AgentRow["pullRequests"]
+        >`array(select ${agentPullRequest.pullRequest} from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentTable.id} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc)`,
         startedFrom: agentTable.startedFrom,
         source: agentTable.source,
         runtime: conversations.runtime,
@@ -287,6 +292,7 @@ function movedAgents(moved: SyncMoved): SQL {
         ...agents,
         ...moved.keys(agentPinSync, agentPin.agentId),
         ...moved.keys(agentReadSync, agentRead.agentId),
+        ...moved.keys(agentPullRequestSync, agentPullRequest.agentId),
         ...moved.topics(turnsSync, TOPIC.AGENT),
       ]),
       liveKeysIn(agentTable.conversationId, [
@@ -331,6 +337,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     agentSync,
     agentPinSync,
     agentReadSync,
+    agentPullRequestSync,
     automationSync,
     automationRunSync,
     userSync,

@@ -54,7 +54,8 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * its event, its action, the repository's id and full name, and the branches it
  * names are read, and none of them is logged: the branch finds the
  * agents whose rows stand on it, of whichever account, by their own
- * repository or one they work in beside it, and what each
+ * repository or one they work in beside it, and those that linked a pull
+ * request from it whichever branch they stand on now, and what each
  * published is read again from GitHub on its owner's own token, exactly as
  * the agent's tab reads it (`packages/service/src/agents/coder-host/published.ts`), which writes
  * it on the agent's row for the task list. A delivery is therefore
@@ -390,7 +391,7 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
   const landed = yield* Effect.forEach(
     agents,
     ({ userId, agent }) =>
-      agentPublished(userId, agent).pipe(
+      agentPublished(userId, agent, target.branches).pipe(
         Effect.as(true),
         // The kind alone: nothing of the delivery or the owner's token rides the line.
         Effect.catch((failure) =>

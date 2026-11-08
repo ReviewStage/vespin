@@ -57,10 +57,23 @@ const PULL_REQUEST_ORDER = [
   new Set<TaskPullRequestLine["state"]>([PULL_REQUEST_STATE.CLOSED]),
 ] as const;
 
+/** Where a pull request stands in `PULL_REQUEST_ORDER`, earliest first. */
+function rankOf(pullRequest: Pick<TaskPullRequestLine, "state">): number {
+  return PULL_REQUEST_ORDER.findIndex((states) => states.has(pullRequest.state));
+}
+
+/** Items in the order a task's readers name their pull requests (`pullRequestOf`): those still to be acted on first, then merged, then closed, each rank in the order handed. */
+export function inPullRequestOrder<Item>(
+  items: readonly Item[],
+  pullRequestOf: (item: Item) => Pick<TaskPullRequestLine, "state">,
+): readonly Item[] {
+  return items.toSorted((a, b) => rankOf(pullRequestOf(a)) - rankOf(pullRequestOf(b)));
+}
+
 /** The pull request a task's status names: the first of the earliest state in `PULL_REQUEST_ORDER`. */
-function markedPullRequest(
-  pullRequests: readonly TaskPullRequestLine[],
-): TaskPullRequestLine | undefined {
+function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state">>(
+  pullRequests: readonly PullRequest[],
+): PullRequest | undefined {
   for (const states of PULL_REQUEST_ORDER) {
     const found = pullRequests.find((each) => states.has(each.state));
     if (found !== undefined) return found;
@@ -131,6 +144,19 @@ export function pullRequestsOfTask(
   taskId: string,
 ): readonly TaskPullRequestLine[] {
   return listed?.find((each) => each.taskId === taskId)?.pullRequests ?? [];
+}
+
+/**
+ * The one pull request an agent's own row names of every one it opened,
+ * listed newest first: the first of the earliest state in
+ * `PULL_REQUEST_ORDER`, as its task's status picks among its agents', so an
+ * agent whose newest merged while an older one waits names the one that
+ * waits, as its task does; none where it opened none.
+ */
+export function agentMarkedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state">>(
+  pullRequests: readonly PullRequest[],
+): PullRequest | undefined {
+  return markedPullRequest(pullRequests);
 }
 
 /** The one status a task's row wears for what its agents are doing and what they published, its pull requests every one it opened (`pullRequestsOfTask`). */

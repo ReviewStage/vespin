@@ -32,6 +32,7 @@ import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentDelegationTable, agentTable } from "../../schemas/agent.js";
 import { agentPin } from "../../schemas/agent-pin.js";
+import { agentPullRequest } from "../../schemas/agent-pull-request.js";
 import { agentRepository } from "../../schemas/agent-repository.js";
 import { member, organization, user } from "../../schemas/auth.js";
 import { inboxItem } from "../../schemas/inbox.js";
@@ -42,11 +43,15 @@ import {
   CONVERSATION_RUNTIME,
   MESSAGE_SENDER,
 } from "../../storage-vocabulary.js";
-import { getTestDB, joinWorkspace, leaveWorkspace, openInboxItem } from "../../testing/index.js";
 import {
-  recordAgentRepositoryHead,
-  recordAgentRepositoryPublished,
-} from "../agent-repositories.js";
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openedPullRequest,
+  openInboxItem,
+} from "../../testing/index.js";
+import { recordAgentPullRequests } from "../agent-pull-requests.js";
+import { recordAgentRepositoryHead } from "../agent-repositories.js";
 import {
   type Agent,
   type AgentLine,
@@ -813,16 +818,22 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
         const stale = yield* archiveUnmovedAgent(starter, agentId, read.seq);
         // Its pull request reopened after the read, which moves no line of its conversation.
         const pullRequest = (state: PullRequestState) =>
-          recordAgentPublished(starter, agentId, {
-            number: 7,
-            title: "Expire teammate invitations",
-            url: "https://github.com/acme/relay/pull/7",
-            state,
-            checks: CHECK_SUMMARY.PASSING,
-            additions: 12,
-            deletions: 3,
-            changedFiles: 2,
-          });
+          recordAgentPullRequests(starter, agentId, [
+            {
+              repository: "acme/relay",
+              headBranch: "agent/invite",
+              pullRequest: {
+                number: 7,
+                title: "Expire teammate invitations",
+                url: "https://github.com/acme/relay/pull/7",
+                state,
+                checks: CHECK_SUMMARY.PASSING,
+                additions: 12,
+                deletions: 3,
+                changedFiles: 2,
+              },
+            },
+          ]);
         yield* pullRequest(PULL_REQUEST_STATE.OPEN);
         const reopened = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1);
         yield* pullRequest(PULL_REQUEST_STATE.MERGED);
@@ -1257,11 +1268,11 @@ it.layer(getTestDB())("the coding-agent store's merged pull request on a task", 
           );
         const open = yield* agentOn();
         const merged = yield* agentOn();
-        yield* recordAgentPublished(starter, open, pullRequest(false));
+        yield* openedPullRequest(starter, open, pullRequest(false));
 
         assert.equal(yield* taskHasMergedPullRequest(starter, task.id), false);
 
-        yield* recordAgentPublished(starter, merged, pullRequest(true));
+        yield* openedPullRequest(starter, merged, pullRequest(true));
         yield* archiveAgent(starter, merged, true);
 
         assert.equal(yield* taskHasMergedPullRequest(starter, task.id), true);
@@ -1270,10 +1281,12 @@ it.layer(getTestDB())("the coding-agent store's merged pull request on a task", 
 
         // The one merged pull request on the starter's own token, which the teammate's token does not read, still counts for the teammate.
         yield* archiveAgent(starter, merged, false);
-        yield* recordAgentPublished(starter, merged, null);
+        yield* Database.use((db) =>
+          db.delete(agentPullRequest).where(eq(agentPullRequest.agentId, merged)),
+        );
         const onToken = yield* agentOn(GITHUB_ACCESS.TOKEN);
         assert.equal(yield* taskHasMergedPullRequest(teammate, task.id), false);
-        yield* recordAgentPublished(starter, onToken, pullRequest(true));
+        yield* openedPullRequest(starter, onToken, pullRequest(true));
         assert.equal(yield* taskHasMergedPullRequest(teammate, task.id), true);
       }),
   );
@@ -1304,10 +1317,10 @@ it.layer(getTestDB())("the coding-agent store's agents by their pull request", (
         const elsewhere = yield* tasklessAgent(dean, deans, { repository: "acme/web" });
         // An agent that published nothing yet is found by no pull request.
         yield* tasklessAgent(dean, deans);
-        yield* recordAgentPublished(dean, author.agentId, pullRequest(12));
-        yield* recordAgentPublished(charles, reviewer.agentId, pullRequest(12));
-        yield* recordAgentPublished(dean, other.agentId, pullRequest(13));
-        yield* recordAgentPublished(dean, elsewhere.agentId, pullRequest(12));
+        yield* openedPullRequest(dean, author.agentId, pullRequest(12));
+        yield* openedPullRequest(charles, reviewer.agentId, pullRequest(12));
+        yield* openedPullRequest(dean, other.agentId, pullRequest(13));
+        yield* openedPullRequest(dean, elsewhere.agentId, pullRequest(12), "acme/web");
 
         const found = yield* listAgentsOnPullRequest("acme/api", 12, 10);
         assert.deepEqual(
@@ -1364,26 +1377,39 @@ it.layer(getTestDB())("the coding-agent store's agents on a branch", (it) => {
         assert.deepEqual(yield* listAgentsOnBranches("acme/api", ["Agent/Invite"], 10), []);
 
         // The extra's pull request, as GitHub last answered it, finds the agent by its number too.
-        yield* recordAgentRepositoryPublished(
-          dean,
-          beside.agentId,
-          "acme/api",
-          {
-            number: 12,
-            title: "Invite flow",
-            url: "https://github.com/acme/api/pull/12",
-            state: PULL_REQUEST_STATE.OPEN,
-            checks: CHECK_SUMMARY.PASSING,
-            additions: 1,
-            deletions: 0,
-            changedFiles: 1,
-          },
-          { at: 0, branch: "agent/invite", pushed: true },
-        );
+        const invite = {
+          number: 12,
+          title: "Invite flow",
+          url: "https://github.com/acme/api/pull/12",
+          state: PULL_REQUEST_STATE.OPEN,
+          checks: CHECK_SUMMARY.PASSING,
+          additions: 1,
+          deletions: 0,
+          changedFiles: 1,
+        };
+        yield* openedPullRequest(dean, beside.agentId, invite, "acme/api", "agent/invite");
         const numbered = yield* listAgentsOnPullRequest("Acme/Api", 12, 10);
         assert.deepEqual(
           numbered.map(({ agent, on }) => [agent.id, on.extra]),
           [[beside.agentId, true]],
+        );
+
+        // A pull request the agent opened from a branch it has since left still finds it there.
+        yield* openedPullRequest(
+          dean,
+          own.agentId,
+          { ...invite, number: 13 },
+          "Acme/API",
+          "agent/invite",
+        );
+        yield* updateAgentBranch(dean, own.agentId, "agent/next");
+        const left = yield* listAgentsOnBranches("acme/api", ["agent/invite"], 10);
+        assert.deepEqual(
+          left.map(({ agent, on }) => [agent.id, on.branch, on.extra]),
+          [
+            [beside.agentId, "agent/invite", true],
+            [own.agentId, "agent/invite", false],
+          ],
         );
       }),
   );

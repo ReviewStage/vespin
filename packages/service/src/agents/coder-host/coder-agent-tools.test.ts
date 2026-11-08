@@ -13,7 +13,6 @@ import {
   createAgent,
   fillAgentTitle,
   readAgent,
-  recordAgentPublished,
 } from "@repo/database/models/agent-store";
 import {
   claimAutomationRun,
@@ -54,6 +53,7 @@ import {
   DEVICE_LAYOUT,
   joinWorkspace,
   leaveWorkspace,
+  openedPullRequest,
   openHostedStoreTestDatabase,
   openWorkspace,
   startTask,
@@ -2634,7 +2634,7 @@ test("update_task, asked by a call from before tasks stopped being archived, set
   assert.deepEqual(await standing(), { status: TASK_STATUS.IN_PROGRESS, finished: false });
 
   await database.run(
-    recordAgentPublished(agents.teammates.userId, agents.teammates.id, {
+    openedPullRequest(agents.teammates.userId, agents.teammates.id, {
       number: 7,
       title: "Seat billing",
       url: `https://github.com/${RELAY_FULL_NAME}/pull/7`,

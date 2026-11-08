@@ -11,7 +11,6 @@ import {
   latestTurnsOfReached,
   pinAgent,
   readAgent,
-  recordAgentPublished,
   takeAgentMentionedServers,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
@@ -30,7 +29,13 @@ import { inboxItem } from "@repo/database/schemas/inbox";
 import { conversations } from "@repo/database/schemas/storage";
 import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  openedPullRequest,
+  openWorkspace,
+  startTask,
+} from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
   AGENT_ARCHIVER,
@@ -786,7 +791,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           finished: false,
         });
 
-        yield* recordAgentPublished(owner, agent.id, {
+        yield* openedPullRequest(owner, agent.id, {
           number: 7,
           title: "Invite teammates",
           url: "https://github.com/acme/relay/pull/7",

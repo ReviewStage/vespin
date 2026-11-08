@@ -27,6 +27,7 @@ import {
   FAILURE_SURFACE,
   type FailureAbout,
 } from "@repo/features/shown-failure";
+import { pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import {
@@ -147,6 +148,7 @@ import {
   continuedByIds,
   continuedByTitles,
   delegates,
+  dockedPullRequests,
   type EndLineParts,
   endLineOffersContinue,
   endLineOffersTryAgain,
@@ -196,7 +198,7 @@ import {
   useAgentPictureDoor,
 } from "./agent-pictures.js";
 import { AgentPlace } from "./agent-place.js";
-import { type PublishedDoors, PublishedRow } from "./agent-published.js";
+import { type PublishedDoors, PublishedRows } from "./agent-published.js";
 import { AgentQueueDock } from "./agent-queue-dock.js";
 import { SendingAgent } from "./agent-ref.js";
 import type { AgentServersControl } from "./agent-servers.js";
@@ -831,18 +833,35 @@ function TodosDock({
   );
 }
 
-/** The agent's pull request, pinned over the box under the to-do list for as long as it stands, whether the agent works or has ended; nothing before one does. */
+/** Every task's pull requests the window's task list carries. */
+const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
+
+/** Every pull request the agent opened, pinned over the box under the to-do list for as long as it stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
   published,
+  agentId,
+  taskId,
   doors,
 }: {
   published: AgentPullRequestAnswer | undefined;
+  agentId: string;
+  taskId: string | null;
   doors: PublishedDoors;
 }): ReactNode {
-  if (published === undefined || published.pullRequest === null) return null;
+  const listed = useQuery({ ...appStateQuery, select: selectTaskPullRequests }).data;
+  const docked = useMemo(
+    () =>
+      dockedPullRequests(
+        published,
+        taskId === null ? [] : pullRequestsOfTask(listed, taskId),
+        agentId,
+      ),
+    [published, listed, taskId, agentId],
+  );
+  if (docked.length === 0) return null;
   return (
     <div className={`agent-published-dock ${COMPOSER_DOCK_CLASS}`}>
-      <PublishedRow pullRequest={published.pullRequest} branch={published.branch} doors={doors} />
+      <PublishedRows docked={docked} doors={doors} />
     </div>
   );
 }
@@ -2984,7 +3003,12 @@ function AgentTabView({
       </MacOwnerProvider>
       <AgentTabFoot>
         <TodosDock messages={lines} working={standing.working} />
-        <PublishedDock published={published} doors={doors} />
+        <PublishedDock
+          published={published}
+          agentId={agent.id}
+          taskId={agent.planId}
+          doors={doors}
+        />
         <ThreadsDock threads={threads} />
         <AgentPicturesProvider value={pictures}>
           <AgentQueueDock

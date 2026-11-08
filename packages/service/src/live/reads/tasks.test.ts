@@ -11,7 +11,6 @@ import {
   type NewAgent,
   pinAgent,
   pinAgentCommitted,
-  recordAgentPublished,
   renameAgentCommitted,
 } from "@repo/database/models/agent-store";
 import { createAutomation, recordAutomationRun } from "@repo/database/models/automation-store";
@@ -37,6 +36,7 @@ import {
   getTestDB,
   joinWorkspace,
   mutableFunctionsOf,
+  openedPullRequest,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -437,7 +437,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         // A plan's agents in every standing the list says.
         const done = yield* openAgent(owner, { taskId: plan.id }, 60 * 60_000);
         yield* turnOf(done, TURN_STATUS.SETTLED, 50 * 60_000, { settled: true });
-        yield* recordAgentPublished(owner, done.id, PUBLISHED);
+        yield* openedPullRequest(owner, done.id, PUBLISHED);
         const stopping = yield* openAgent(teammate, { taskId: plan.id }, 30 * 60_000);
         const stoppingTurn = yield* turnOf(stopping, TURN_STATUS.RUNNING, 20 * 60_000, {
           canceled: true,
@@ -678,14 +678,14 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const numbers = [41, 42, 43, 44, 45];
         for (const [index, number] of numbers.entries()) {
           const agent = yield* openAgent(owner, { taskId: plan.id }, (index + 1) * 60_000);
-          yield* recordAgentPublished(owner, agent.id, {
+          yield* openedPullRequest(owner, agent.id, {
             ...published,
             number,
             url: `https://github.com/acme/relay/pull/${number}`,
           });
         }
         const archived = yield* openAgent(owner, { taskId: plan.id }, 6 * 60_000);
-        yield* recordAgentPublished(owner, archived.id, {
+        yield* openedPullRequest(owner, archived.id, {
           ...published,
           number: 40,
           url: "https://github.com/acme/relay/pull/40",
@@ -709,6 +709,43 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           [40, 41, 42, 43, 44, 45],
           "each agent's own, the archived agent's among them",
         );
+      }),
+  );
+
+  it.effect(
+    "an agent that opened a pull request before its newest names the older one while it stands open and its newest merged, as the plan's row does, live as held",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const { queued: _, ...published } = PUBLISHED;
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        yield* openedPullRequest(owner, agent.id, {
+          ...published,
+          number: 41,
+          url: "https://github.com/acme/relay/pull/41",
+        });
+        yield* openedPullRequest(owner, agent.id, {
+          ...published,
+          number: 42,
+          url: "https://github.com/acme/relay/pull/42",
+          state: PULL_REQUEST_STATE.MERGED,
+        });
+
+        const rows = yield* liveRowsOf(owner);
+        const every = taskPullRequestsOfLiveRows(rows).find((each) => each.taskId === plan.id);
+        assert.deepEqual(
+          every?.pullRequests.map((each) => [each.number, each.state]),
+          [
+            [41, PULL_REQUEST_STATE.OPEN],
+            [42, PULL_REQUEST_STATE.MERGED],
+          ],
+        );
+        assert.deepEqual(
+          agentPullRequestsOfLiveRows(rows).map((each) => each.pullRequest.number),
+          [41],
+        );
+        assert.deepEqual(yield* liveListOf(owner, NOW), yield* heldListOf(owner, NOW));
       }),
   );
 
@@ -770,7 +807,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         // An agent with no task that opened a pull request, and one continuing it, archived as it left a task.
         const loose = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 20 * 60_000);
-        yield* recordAgentPublished(owner, loose.id, PUBLISHED);
+        yield* openedPullRequest(owner, loose.id, PUBLISHED);
         const continued = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 10 * 60_000);
         yield* db
           .update(agentTable)

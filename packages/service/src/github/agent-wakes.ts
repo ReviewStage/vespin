@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { readAgentRepositories } from "@repo/database/models/agent-repositories";
+import { readAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -9,7 +9,6 @@ import {
   listAgentsOnBranches,
   listAgentsOnPullRequest,
   type OwnedAgent,
-  readAgentPublished,
 } from "@repo/database/models/agent-store";
 import { linkedGitHubUserIds } from "@repo/database/models/github-token-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
@@ -1078,20 +1077,15 @@ function checksOfWake(
   }
 }
 
-/** Whether the row of the repository the agent was found on keeps the wake's commit as its pull request's head, as the read of its pull request this delivery made left it: the agent's own row, or that extra repository's (`readAgentRepositories`). */
+/** Whether a pull request the agent linked in the repository it was found on has the wake's commit as its head, as the read of its pull requests this delivery made left them (`agent_pull_request`). */
 const standsOnHead = (wake: AgentWake, { userId, agent, on }: OwnedAgent) =>
-  Effect.map(
-    on.extra
-      ? Effect.map(
-          readAgentRepositories(userId, agent.id),
-          (repositories) =>
-            repositories
-              .slice(1)
-              .find((each) => each.repository.toLowerCase() === on.repository.toLowerCase())
-              ?.pullRequest ?? null,
-        )
-      : readAgentPublished(userId, agent.id),
-    (published) => published?.headSha !== undefined && published.headSha === wake.sha,
+  Effect.map(readAgentPullRequests(userId, agent.id), (rows) =>
+    rows.some(
+      ({ repository, pullRequest }) =>
+        repository.toLowerCase() === on.repository.toLowerCase() &&
+        pullRequest.headSha !== undefined &&
+        pullRequest.headSha === wake.sha,
+    ),
   );
 
 /**

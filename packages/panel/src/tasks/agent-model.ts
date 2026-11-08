@@ -78,7 +78,17 @@ import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
+<<<<<<< HEAD
 import type { DescriptionEditor } from "@repo/features/task-wire";
+=======
+import { inPullRequestOrder } from "@repo/features/task-agents-model";
+import {
+  type DescriptionEditor,
+  TASK_MODE,
+  type TaskMode,
+  type TaskPullRequestLine,
+} from "@repo/features/task-wire";
+>>>>>>> 5060b2b1f (fix(service): keep a task open while any pull request an agent opened is open)
 import { dayAndTimeText } from "@repo/features/time-format";
 import {
   ROW_PART,
@@ -2923,6 +2933,44 @@ export function publishedUrl(published: AgentPullRequestAnswer): string | undefi
   if (published.pullRequest !== null) return published.pullRequest.url;
   if (published.branch === null || published.repository === null) return undefined;
   return `https://github.com/${published.repository}/compare/${githubPath(published.branch)}?expand=1`;
+}
+
+/** What the agent's dock draws of a pull request: the parts its row reads, and its page. */
+export type DockedPullRequestParts = Pick<
+  AgentPullRequest,
+  "number" | "title" | "state" | "checks" | "additions" | "deletions" | "queued"
+> & { readonly url: string };
+
+/** A pull request the agent's dock draws, the branch it is from where known, and whether it is the one the agent stands on now, which opens in the side panel. */
+export interface DockedPullRequest {
+  readonly pullRequest: DockedPullRequestParts;
+  readonly branch: string | null;
+  readonly current: boolean;
+}
+
+/**
+ * Every pull request the agent's dock draws: the one from the branch it
+ * stands on, as its tab read it from GitHub, and every other one the task's
+ * list names it as having opened (`lines`), each once by its page, those
+ * still to be acted on first, then merged, then closed, the one it stands on
+ * first within its rank; none before it opened one.
+ */
+export function dockedPullRequests(
+  published: AgentPullRequestAnswer | undefined,
+  lines: readonly TaskPullRequestLine[],
+  agentId: string,
+): readonly DockedPullRequest[] {
+  const current = published?.pullRequest ?? null;
+  const own: DockedPullRequest[] =
+    current === null || published === undefined
+      ? []
+      : [{ pullRequest: current, branch: published.branch, current: true }];
+  const others = lines.flatMap((line): DockedPullRequest[] => {
+    const { url } = line;
+    if (line.agentId !== agentId || url === undefined || url === current?.url) return [];
+    return [{ pullRequest: { ...line, url }, branch: null, current: false }];
+  });
+  return inPullRequestOrder([...own, ...others], (each) => each.pullRequest);
 }
 
 /** The number as the chip and the row spell it. */

@@ -11,13 +11,14 @@ import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { inboxItem } from "../../schemas/inbox.js";
 import { inboxMessage } from "../../schemas/inbox-message.js";
-import { getTestDB, openInboxItem, openTaskAgent, openWorkspace } from "../../testing/index.js";
 import {
-  archiveAgent,
-  readAgent,
-  recordAgentPublished,
-  unarchiveAgentFrom,
-} from "../agent-store.js";
+  getTestDB,
+  openedPullRequest,
+  openInboxItem,
+  openTaskAgent,
+  openWorkspace,
+} from "../../testing/index.js";
+import { archiveAgent, readAgent, unarchiveAgentFrom } from "../agent-store.js";
 import { beginTaskWork, createTask, finishTaskWork, updateTask } from "../task-store.js";
 
 /**
@@ -177,7 +178,7 @@ it.layer(getTestDB())("an inbox item settling with its task", (it) => {
       const workspace = yield* openWorkspace(dean);
       const { id: taskId } = yield* createTask(dean, { organizationId: workspace });
       const agentId = yield* openTaskAgent(dean, workspace, taskId);
-      yield* recordAgentPublished(dean, agentId, {
+      yield* openedPullRequest(dean, agentId, {
         number: 42,
         title: "Teammate invitations",
         url: "https://github.com/acme/api/pull/42",

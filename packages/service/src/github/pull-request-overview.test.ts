@@ -2,14 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import {
-  createAgent,
-  recordAgentPublished,
-  updateAgentBranch,
-} from "@repo/database/models/agent-store";
+import { createAgent, updateAgentBranch } from "@repo/database/models/agent-store";
 import { account, user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, openWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, openedPullRequest, openWorkspace, startTask } from "@repo/database/testing";
 import {
   AGENT_AUTHOR,
   CHECK_STATE,
@@ -258,16 +254,22 @@ const agentPublishing = (userId: string, branch: string, number: number) =>
     assert.ok(Option.isSome(started));
     const { agent } = started.value;
     yield* updateAgentBranch(userId, agent.id, branch);
-    yield* recordAgentPublished(userId, agent.id, {
-      number,
-      title: `Pull request ${number}`,
-      url: `https://github.com/acme/relay/pull/${number}`,
-      state: PULL_REQUEST_STATE.OPEN,
-      checks: CHECK_SUMMARY.NONE,
-      additions: 1,
-      deletions: 0,
-      changedFiles: 1,
-    });
+    yield* openedPullRequest(
+      userId,
+      agent.id,
+      {
+        number,
+        title: `Pull request ${number}`,
+        url: `https://github.com/acme/relay/pull/${number}`,
+        state: PULL_REQUEST_STATE.OPEN,
+        checks: CHECK_SUMMARY.NONE,
+        additions: 1,
+        deletions: 0,
+        changedFiles: 1,
+      },
+      REPOSITORY,
+      branch,
+    );
     return agent;
   });
 

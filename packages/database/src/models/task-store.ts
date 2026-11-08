@@ -63,7 +63,7 @@ import {
 } from "../core/query.js";
 import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import { agentTable, type StoredArchive } from "../schemas/agent.js";
-import { agentRepository } from "../schemas/agent-repository.js";
+import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { attachment } from "../schemas/attachment.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { conversations } from "../schemas/storage.js";
@@ -2189,10 +2189,9 @@ const OPEN_PULL_REQUEST_STATES: readonly string[] = [
 ];
 
 /**
- * Where the pull requests of the task's standing agents stand, as their rows
- * keep them: each agent's own, then each one in a repository it works in
- * beside its own (`agent_repository`); a repository whose row keeps none has
- * no line here, so an agent in one repository reads as it always did.
+ * Where every pull request the task's standing agents opened stands, as
+ * GitHub last answered (`agent_pull_request`): each agent's newest and those
+ * it opened before, in its own repository or one it works in beside it.
  */
 const findStandingPullRequestStates = SqlSchema.findAll({
   Request: Schema.Struct({ taskId: Schema.String }),
@@ -2200,28 +2199,10 @@ const findStandingPullRequestStates = SqlSchema.findAll({
   execute: ({ taskId }) =>
     Database.use((db) =>
       db
-        .select({ state: sql<string>`${agentTable.published} ->> 'state'`.as("state") })
-        .from(agentTable)
-        .where(
-          and(
-            eq(agentTable.taskId, taskId),
-            isNull(agentTable.archivedAt),
-            isNotNull(agentTable.published),
-          ),
-        )
-        .unionAll(
-          db
-            .select({ state: sql<string>`${agentRepository.published} ->> 'state'`.as("state") })
-            .from(agentRepository)
-            .innerJoin(agentTable, eq(agentTable.id, agentRepository.agentId))
-            .where(
-              and(
-                eq(agentTable.taskId, taskId),
-                isNull(agentTable.archivedAt),
-                isNotNull(agentRepository.published),
-              ),
-            ),
-        ),
+        .select({ state: agentPullRequest.state })
+        .from(agentPullRequest)
+        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
+        .where(and(eq(agentTable.taskId, taskId), isNull(agentTable.archivedAt))),
     ),
 });
 

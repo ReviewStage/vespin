@@ -9,7 +9,6 @@ import {
   readAgent,
   readAgentContext,
   readAgentRouting,
-  recordAgentPublished,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
@@ -24,7 +23,7 @@ import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, startTask } from "@repo/database/testing";
+import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import {
   AGENT_FAILURE,
   AGENT_KIND,
@@ -358,7 +357,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         // The task was marked done, and the agent's pull request merged: its turn takes the task
         // up again, and the turn's end, everyone then idle, finishes it (`tasks/task-finish.ts`).
         yield* updateTask(agent.userId, agent.taskId, { status: TASK_STATUS.DONE });
-        yield* recordAgentPublished(agent.userId, agent.agentId, MERGED);
+        yield* openedPullRequest(agent.userId, agent.agentId, MERGED);
 
         const first = yield* post(agent.bearer, events.slice(0, 11));
         const midway = yield* transcriptOf(agent.target.conversationId);

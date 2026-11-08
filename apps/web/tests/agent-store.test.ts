@@ -25,7 +25,7 @@ import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openedPullRequest, startTask } from "@repo/database/testing";
 import {
   AGENT_BRIEF,
   type AgentPullRequest,
@@ -163,15 +163,15 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
         // Another account's write names no agent of theirs, and another account's read names none of this one's.
         yield* recordAgentPublished(userId, theirs.id, PULL_REQUEST);
         assert.deepEqual(yield* listPublishedAgents(userId, [taskId, other.taskId]), [
-          { agent: listedLine(agent), published: PULL_REQUEST },
+          { agent: listedLine(agent), published: PULL_REQUEST, pullRequests: [] },
         ]);
         assert.deepEqual(yield* listPublishedAgents(other.userId, [other.taskId]), [
-          { agent: listedLine(theirs), published: null },
+          { agent: listedLine(theirs), published: null, pullRequests: [] },
         ]);
 
         yield* recordAgentPublished(userId, agent.id, null);
         assert.deepEqual(yield* listPublishedAgents(userId, [taskId]), [
-          { agent: listedLine(agent), published: null },
+          { agent: listedLine(agent), published: null, pullRequests: [] },
         ]);
       }),
   );
@@ -186,7 +186,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
 
       assert.deepEqual(yield* listPublishedAgents(userId, [taskId]), []);
       assert.deepEqual(yield* listPublishedAgents(userId, [taskId], { includeArchived: true }), [
-        { agent: listedLine(archived), published: null },
+        { agent: listedLine(archived), published: null, pullRequests: [] },
       ]);
     }),
   );
@@ -214,7 +214,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
           );
         const published = yield* taskless("acme/web");
         const quiet = yield* taskless("acme/web");
-        yield* recordAgentPublished(userId, published.id, PULL_REQUEST);
+        yield* openedPullRequest(userId, published.id, PULL_REQUEST, "acme/web");
 
         const rows = yield* listTasklessAgents(userId, { includeArchived: false });
         const { number, title, url, state, checks } = PULL_REQUEST;
@@ -233,7 +233,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
     Effect.gen(function* () {
       const { userId, taskId } = yield* openTask;
       const agent = started(yield* createAgent(userId, start(taskId)));
-      yield* recordAgentPublished(userId, agent.id, PULL_REQUEST);
+      yield* openedPullRequest(userId, agent.id, PULL_REQUEST, "acme/web");
 
       const [listed] = yield* withTaskAgents(userId, yield* listTasks(userId));
       assert.deepEqual(
@@ -392,7 +392,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
 
         assert.deepEqual(yield* listAgents(teammate, task.id), [agent]);
         assert.deepEqual(yield* listPublishedAgents(teammate, [task.id]), [
-          { agent: listedLine(agent), published: null },
+          { agent: listedLine(agent), published: null, pullRequests: [] },
         ]);
         assert.deepEqual(yield* readAgent(teammate, agent.id), Option.some(agent));
         assert.deepEqual(

@@ -46,7 +46,6 @@ import {
   ne,
   not,
   notExists,
-  notInArray,
   or,
   type SQL,
   type SQLWrapper,
@@ -68,6 +67,7 @@ import {
   type StoredStartedFrom,
 } from "../schemas/agent.js";
 import { agentPin } from "../schemas/agent-pin.js";
+import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentRead } from "../schemas/agent-read.js";
 import { agentRepository } from "../schemas/agent-repository.js";
 import { organization, user } from "../schemas/auth.js";
@@ -1016,13 +1016,20 @@ const updateAgentTitle = SqlSchema.findOneOption({
  * after the caller read it is left standing.
  */
 /**
- * An agent with no pull request open or in draft, as GitHub last answered:
- * what an archive the developer did not ask for waits on, since an archived
+ * An agent with no pull request open or in draft, as GitHub last answered,
+ * of every one it opened in any repository it works in: what an archive the developer did not ask for waits on, since an archived
  * agent is woken by no review, comment, or check on its pull request.
  */
-export const noOpenPullRequest: SQL = notInArray(
-  sql`coalesce(${agentTable.published}->>'state', '')`,
-  [PULL_REQUEST_STATE.OPEN, PULL_REQUEST_STATE.DRAFT],
+export const noOpenPullRequest: SQL = notExists(
+  queryBuilder
+    .select({ one: agentPullRequest.agentId })
+    .from(agentPullRequest)
+    .where(
+      and(
+        eq(agentPullRequest.agentId, agentTable.id),
+        inArray(agentPullRequest.state, [PULL_REQUEST_STATE.OPEN, PULL_REQUEST_STATE.DRAFT]),
+      ),
+    ),
 );
 
 /**
@@ -1846,6 +1853,11 @@ const lockAgentPublished = SqlSchema.findOneOption({
     ),
 });
 
+/** Every pull request the agent a statement reads opened (`agent_pull_request`), newest first, as one JSON list. */
+const PULL_REQUESTS_OF_AGENT = sql<
+  readonly AgentPullRequest[]
+>`(select coalesce(jsonb_agg(${agentPullRequest.pullRequest} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc), '[]'::jsonb) from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentTable.id})`;
+
 const findAgentsOfTasks = SqlSchema.findAll({
   Request: Schema.Struct({
     userId: Schema.String,
@@ -1855,11 +1867,16 @@ const findAgentsOfTasks = SqlSchema.findAll({
   Result: Schema.Struct({
     ...AgentLineRowSchema.fields,
     published: Schema.NullOr(agentPullRequestSchema),
+    pullRequests: Schema.Array(agentPullRequestSchema),
   }),
   execute: ({ userId, taskIds, includeArchived }) =>
     Database.use((db) =>
       db
-        .select({ ...AGENT_LINE_COLUMNS, published: agentTable.published })
+        .select({
+          ...AGENT_LINE_COLUMNS,
+          published: agentTable.published,
+          pullRequests: PULL_REQUESTS_OF_AGENT,
+        })
         .from(agentTable)
         .innerJoin(task, eq(task.id, agentTable.taskId))
         .where(
@@ -1893,20 +1910,17 @@ const findMergedAgentOfTask = SqlSchema.findOneOption({
           and(
             eq(task.id, taskId),
             taskReachableBy(userId),
-            or(
-              isNotNull(sql`${agentTable.published} ->> 'mergedAt'`),
-              // Note that a pull request in a repository the agent works in beside its own counts as its own does.
-              exists(
-                queryBuilder
-                  .select({ one: agentRepository.agentId })
-                  .from(agentRepository)
-                  .where(
-                    and(
-                      eq(agentRepository.agentId, agentTable.id),
-                      isNotNull(sql`${agentRepository.published} ->> 'mergedAt'`),
-                    ),
+            // Note that every pull request the agent opened counts, in any repository it works in.
+            exists(
+              queryBuilder
+                .select({ one: agentPullRequest.agentId })
+                .from(agentPullRequest)
+                .where(
+                  and(
+                    eq(agentPullRequest.agentId, agentTable.id),
+                    eq(agentPullRequest.state, PULL_REQUEST_STATE.MERGED),
                   ),
-              ),
+                ),
             ),
           ),
         )
@@ -1919,11 +1933,16 @@ const findPublishedAgentsById = SqlSchema.findAll({
   Result: Schema.Struct({
     ...AgentRowSchema.fields,
     published: Schema.NullOr(agentPullRequestSchema),
+    pullRequests: Schema.Array(agentPullRequestSchema),
   }),
   execute: ({ userId, agentIds }) =>
     Database.use((db) =>
       db
-        .select({ ...AGENT_COLUMNS, published: agentTable.published })
+        .select({
+          ...AGENT_COLUMNS,
+          published: agentTable.published,
+          pullRequests: PULL_REQUESTS_OF_AGENT,
+        })
         .from(agentTable)
         .where(and(inArray(agentTable.id, [...agentIds]), agentVisibleTo(userId)))
         .orderBy(asc(agentTable.createdAt), asc(agentTable.id)),
@@ -1980,11 +1999,6 @@ const findStartedFrom = SqlSchema.findAll({
  */
 function namesDeliveredRepository(column: SQLWrapper, repository: string): SQL {
   return eq(sql`lower(${column})`, repository.toLowerCase());
-}
-
-/** The number of the pull request a `published` column keeps, as its lookup's index is built on it. */
-function publishedNumber(column: SQLWrapper): SQL {
-  return sql`(${column}->>'number')::int`;
 }
 
 /** An agent a delivery found, with the repository of its it was found on: its own, or one it works in beside it, and that repository's head branch. */
@@ -2056,23 +2070,35 @@ const findAgentsOnExtraBranches = SqlSchema.findAll({
     ),
 });
 
-const findAgentsOnPullRequest = SqlSchema.findAll({
-  Request: OnPullRequestSchema,
-  Result: AgentOnRepositoryRowSchema,
-  execute: ({ repository, number, limit }) =>
+/** An agent a delivery found through a pull request it linked, with whether that pull request stands in a repository it works in beside its own. */
+const AgentOnLinkedRowSchema = Schema.Struct({
+  ...AgentOnRepositoryRowSchema.fields,
+  onExtra: Schema.Boolean,
+});
+
+/** The columns an agent found through a pull request it linked is read with: the agent, and the pull request's repository and head branch. */
+const ON_LINKED_COLUMNS = {
+  ...AGENT_COLUMNS,
+  userId: agentTable.userId,
+  onRepository: agentPullRequest.repository,
+  onBranch: sql<string | null>`${agentPullRequest.headBranch}`,
+  onExtra: sql<boolean>`lower(${agentPullRequest.repository}) <> lower(coalesce(${agentTable.repository}, ''))`,
+};
+
+/** The agents that linked a pull request from one of a delivery's branches (`agent_pull_request`), whichever branch they stand on now. */
+const findAgentsOnLinkedBranches = SqlSchema.findAll({
+  Request: OnBranchesSchema,
+  Result: AgentOnLinkedRowSchema,
+  execute: ({ repository, branches, limit }) =>
     Database.use((db) =>
       db
-        .select({
-          ...AGENT_COLUMNS,
-          userId: agentTable.userId,
-          onRepository: sql<string>`${agentTable.repository}`,
-          onBranch: agentTable.branch,
-        })
-        .from(agentTable)
+        .select(ON_LINKED_COLUMNS)
+        .from(agentPullRequest)
+        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
         .where(
           and(
-            namesDeliveredRepository(agentTable.repository, repository),
-            eq(publishedNumber(agentTable.published), number),
+            namesDeliveredRepository(agentPullRequest.repository, repository),
+            inArray(agentPullRequest.headBranch, [...branches]),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2080,25 +2106,20 @@ const findAgentsOnPullRequest = SqlSchema.findAll({
     ),
 });
 
-/** The agents whose extra repository a delivery names keeps its pull request numbered, as `findAgentsOnPullRequest` finds them by their own. */
-const findAgentsOnExtraPullRequest = SqlSchema.findAll({
+/** The agents that linked a delivery's pull request by its number, in their own repository or an extra one. */
+const findAgentsOnPullRequest = SqlSchema.findAll({
   Request: OnPullRequestSchema,
-  Result: AgentOnRepositoryRowSchema,
+  Result: AgentOnLinkedRowSchema,
   execute: ({ repository, number, limit }) =>
     Database.use((db) =>
       db
-        .select({
-          ...AGENT_COLUMNS,
-          userId: agentTable.userId,
-          onRepository: agentRepository.repository,
-          onBranch: agentRepository.headBranch,
-        })
-        .from(agentRepository)
-        .innerJoin(agentTable, eq(agentTable.id, agentRepository.agentId))
+        .select(ON_LINKED_COLUMNS)
+        .from(agentPullRequest)
+        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
         .where(
           and(
-            namesDeliveredRepository(agentRepository.repository, repository),
-            eq(publishedNumber(agentRepository.published), number),
+            namesDeliveredRepository(agentPullRequest.repository, repository),
+            eq(agentPullRequest.number, number),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2618,16 +2639,18 @@ export function taskNamesOf(
   );
 }
 
-/** One agent, and the pull request from its branch as GitHub last answered; null before a read found one. */
+/** One agent, the pull request from its branch as GitHub last answered, null before a read found one, and every pull request it opened, newest first. */
 export interface PublishedAgent {
   readonly agent: Agent;
   readonly published: AgentPullRequest | null;
+  readonly pullRequests: readonly AgentPullRequest[];
 }
 
-/** One agent's line, and the pull request from its branch as GitHub last answered; null before a read found one. */
+/** One agent's line, the pull request from its branch as GitHub last answered, null before a read found one, and every pull request it opened, newest first. */
 export interface PublishedAgentLine {
   readonly agent: AgentLine;
   readonly published: AgentPullRequest | null;
+  readonly pullRequests: readonly AgentPullRequest[];
 }
 
 /** Every agent standing on the plans named, by any member, each as its line reads with what it published, in the order they were started, an archived one left out unless `includeArchived` asks for it; a plan of a workspace the account is not in names none. */
@@ -2639,7 +2662,7 @@ export function listPublishedAgents(
   if (taskIds.length === 0) return Effect.succeed([]);
   const includeArchived = options.includeArchived === true;
   return Effect.map(findAgentsOfTasks({ userId, taskIds, includeArchived }), (rows) =>
-    rows.map(({ published, ...agent }) => ({ agent, published })),
+    rows.map(({ published, pullRequests, ...agent }) => ({ agent, published, pullRequests })),
   );
 }
 
@@ -2650,7 +2673,7 @@ export function listPublishedAgentsById(
 ): AgentStoreEffect<readonly PublishedAgent[]> {
   if (agentIds.length === 0) return Effect.succeed([]);
   return Effect.map(findPublishedAgentsById({ userId, agentIds }), (rows) =>
-    rows.map(({ published, ...agent }) => ({ agent, published })),
+    rows.map(({ published, pullRequests, ...agent }) => ({ agent, published, pullRequests })),
   );
 }
 
@@ -2783,26 +2806,32 @@ export interface OwnedAgent {
   readonly on: AgentFoundOn;
 }
 
+/** One agent a delivery found, and whether on a repository it works in beside its own. */
+interface FoundAgent {
+  readonly row: typeof AgentOnRepositoryRowSchema.Type;
+  readonly extra: boolean;
+}
+
 /**
- * The agents found on their own repository, then those found on an extra
- * one, as one list newest started first and at most `limit` long, as one
- * query ordered so would have answered it.
+ * The agents a delivery found, each once on each repository of its, newest
+ * started first and at most `limit` long, as one query ordered so would
+ * have answered it.
  */
-function ownedNewestFirst(
-  own: readonly (typeof AgentOnRepositoryRowSchema.Type)[],
-  extra: readonly (typeof AgentOnRepositoryRowSchema.Type)[],
-  limit: number,
-): readonly OwnedAgent[] {
-  const found = [
-    ...own.map((row) => ({ row, extra: false })),
-    ...extra.map((row) => ({ row, extra: true })),
-  ];
-  found.sort(
+function ownedNewestFirst(found: readonly FoundAgent[], limit: number): readonly OwnedAgent[] {
+  const once = found.filter(
+    (each, at) =>
+      found.findIndex(
+        (other) =>
+          other.row.id === each.row.id &&
+          other.row.onRepository.toLowerCase() === each.row.onRepository.toLowerCase(),
+      ) === at,
+  );
+  const sorted = once.toSorted(
     (a, b) =>
       b.row.createdAt.getTime() - a.row.createdAt.getTime() ||
       (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0),
   );
-  return found.slice(0, limit).map(({ row, extra: onExtra }) => {
+  return sorted.slice(0, limit).map(({ row, extra: onExtra }) => {
     const { onRepository, onBranch, ...agent } = row;
     return {
       userId: agent.userId,
@@ -2812,11 +2841,18 @@ function ownedNewestFirst(
   });
 }
 
+/** The agents found through a pull request they linked, each with whether it stands in an extra repository. */
+function linkedFound(rows: readonly (typeof AgentOnLinkedRowSchema.Type)[]): readonly FoundAgent[] {
+  return rows.map(({ onExtra, ...row }) => ({ row, extra: onExtra }));
+}
+
 /**
  * The agents of any account with a repository on one of the repository's
  * branches named, newest started first and at most `limit` of them; none for
  * no branch: the row's own repository and branch, and each extra repository
- * it works in beside it and that one's pull request head branch, the
+ * it works in beside it and that one's pull request head branch, and every
+ * pull request it linked from one of them whichever branch it stands on now
+ * (`agent_pull_request`), each agent once on each repository, the
  * repository matched as GitHub matches one, its case aside, and the branch
  * exactly. This is the one read that names no account, since GitHub's
  * delivery names a repository and a branch and nothing of who started an
@@ -2830,14 +2866,27 @@ export function listAgentsOnBranches(
   if (branches.length === 0) return Effect.succeed([]);
   const request = { repository, branches, limit };
   return Effect.map(
-    Effect.all([findAgentsOnBranches(request), findAgentsOnExtraBranches(request)]),
-    ([own, extra]) => ownedNewestFirst(own, extra, limit),
+    Effect.all([
+      findAgentsOnBranches(request),
+      findAgentsOnExtraBranches(request),
+      findAgentsOnLinkedBranches(request),
+    ]),
+    ([own, extra, linked]) =>
+      ownedNewestFirst(
+        [
+          ...own.map((row) => ({ row, extra: false })),
+          ...extra.map((row) => ({ row, extra: true })),
+          ...linkedFound(linked),
+        ],
+        limit,
+      ),
   );
 }
 
 /**
- * The agents of any account with a pull request, as GitHub last answered
- * it, that is the repository's one numbered, newest started first and at
+ * The agents of any account that linked the repository's pull request
+ * numbered (`agent_pull_request`), its newest or one opened before, newest
+ * started first and at
  * most `limit` of them: what a delivery about a pull request finds them by
  * where it names no branch, as a comment's does, on their own repository or
  * an extra one, matched as the read by branches matches. Like that read, it
@@ -2849,9 +2898,8 @@ export function listAgentsOnPullRequest(
   limit: number,
 ): AgentStoreEffect<readonly OwnedAgent[]> {
   const request = { repository, number, limit };
-  return Effect.map(
-    Effect.all([findAgentsOnPullRequest(request), findAgentsOnExtraPullRequest(request)]),
-    ([own, extra]) => ownedNewestFirst(own, extra, limit),
+  return Effect.map(findAgentsOnPullRequest(request), (linked) =>
+    ownedNewestFirst(linkedFound(linked), limit),
   );
 }
 

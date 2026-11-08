@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { createAgent, readAgent, recordAgentPublished } from "@repo/database/models/agent-store";
+import { createAgent, readAgent } from "@repo/database/models/agent-store";
 import {
   linkSlackInstallation,
   recordSlackAgentThread,
@@ -12,7 +12,7 @@ import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
-import { getTestDB, startTask } from "@repo/database/testing";
+import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import { AGENT_ARCHIVER, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
@@ -169,7 +169,7 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
         const worker = yield* openAgent(userId, task.id);
         const orchestrator = yield* openAgent(userId, task.id);
         yield* reopenTaskForWork(userId, task.id);
-        yield* recordAgentPublished(userId, worker.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
+        yield* openedPullRequest(userId, worker.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
         yield* turnOf(orchestrator, TURN_STATUS.SETTLED);
         const running = yield* turnOf(worker, TURN_STATUS.RUNNING);
 
@@ -288,7 +288,7 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
         const task = yield* startTask(userId, { name: "Teammate invitations" });
         const agent = yield* openAgent(userId, task.id);
         yield* turnOf(agent, TURN_STATUS.SETTLED);
-        yield* recordAgentPublished(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
+        yield* openedPullRequest(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
         const poster = { userId, taskId: task.id, agentId: agent.id };
         const posted = yield* postInboxThread(poster, {
           key: "branch-protection",
@@ -361,7 +361,7 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
         const userId = yield* openUser;
         const task = yield* startTask(userId, { name: "Teammate invitations" });
         const agent = yield* openAgent(userId, task.id);
-        yield* recordAgentPublished(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
+        yield* openedPullRequest(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
         yield* turnOf(agent, TURN_STATUS.SETTLED);
 
         // Its pull request merged and its turn ended: the service finishes the task and leaves the

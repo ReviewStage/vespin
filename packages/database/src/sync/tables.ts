@@ -26,6 +26,7 @@
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
+import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
 import { agentRead } from "../schemas/agent-read.js";
 import { attachment } from "../schemas/attachment.js";
@@ -122,6 +123,27 @@ export const agentSync = defineSyncTable(agentTable, {
     { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
   ],
   ignore: [agentTable.lastStep, agentTable.publishedRead],
+  log: LOG.EVERY,
+});
+
+/**
+ * A pull request a coding agent opened, on its agent's topic and, through
+ * its agent, that agent's task's and workspace's, so the task list hears a
+ * pull request open, merge, or close as it hears the agent move.
+ */
+export const agentPullRequestSync = defineSyncTable(agentPullRequest, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentPullRequest.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentPullRequest.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
   log: LOG.EVERY,
 });
 
@@ -730,6 +752,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskSync,
   taskBlockSync,
   agentSync,
+  agentPullRequestSync,
   memberSync,
   userSync,
   deviceSync,

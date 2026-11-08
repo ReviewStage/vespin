@@ -8,7 +8,6 @@ import {
   createAgent,
   lineSendersOf,
   readAgent,
-  recordAgentPublished,
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
 import {
@@ -31,7 +30,13 @@ import { agentTable } from "@repo/database/schemas/agent";
 import { automationRun, automation as automationTable } from "@repo/database/schemas/automation";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, leaveWorkspace, startTask } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openedPullRequest,
+  startTask,
+} from "@repo/database/testing";
 import {
   AGENT_BOUNDS,
   AGENT_PAYER,
@@ -752,7 +757,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
         );
         assert.ok(Result.isSuccess(question));
         const published = (state: PullRequestState) =>
-          recordAgentPublished(archiving.owner, publishing, {
+          openedPullRequest(archiving.owner, publishing, {
             number: 42,
             title: "Retry the queue",
             url: "https://github.com/acme/relay/pull/42",

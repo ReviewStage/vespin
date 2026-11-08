@@ -28,8 +28,9 @@ import {
 /**
  * task-finish.ts -- a task's status following its work: done once the work is finished, in progress again once an agent takes it up.
  *
- * A task is finished when one of its agents has a merged pull request, none
- * of them has one still open or a draft, every one of them stands idle, and
+ * A task is finished when one of its agents has a merged pull request, no
+ * pull request any of them opened, its newest or one before
+ * (`agent_pull_request`), is still open or a draft, every one of them stands idle, and
  * no inbox question of its waits on the developer; its status then moves to
  * done on its own (`task-store.ts`'s `finishTaskWork`), under the task's
  * lock, so nobody finishes a task by hand that its agents finished. The
