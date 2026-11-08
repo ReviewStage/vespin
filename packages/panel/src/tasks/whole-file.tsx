@@ -9,7 +9,6 @@ import type { FileLineRange, FileViewHandle, FileViewProps } from "../diff-view/
 import { failureShown } from "../failure-report.js";
 import { type FIND_STEP, type FindSource, type FindTally, useFindSource } from "../find-in-tab.js";
 import {
-  type FindPainting,
   findRanges,
   NO_PAINTING,
   repaint,
@@ -132,7 +131,7 @@ function useWholeFileFind(
       query: "",
       matches: [] as FileMatch[],
       at: -1,
-      painting: NO_PAINTING as FindPainting,
+      painting: NO_PAINTING,
       // Whether the match the find is at still waits to be brought into view, once drawn.
       pending: false,
       // The text and notes the matches were read from.

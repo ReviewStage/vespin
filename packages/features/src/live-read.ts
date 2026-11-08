@@ -371,7 +371,7 @@ export function liveRead<
 export function liveProcedure<Read extends AnyLiveRead>(read: Read) {
   return (
     declaredProcedure
-      .errors(read.errors as Read["errors"])
+      .errors(read.errors)
       .meta(openapi({ method: HTTP_METHOD.GET, path: read.path }))
       // SAFETY: a query's fields decode with no services, so it is the codec from its `Encoded` to its `Type`.
       .input(read.input as unknown as Schema.Codec<Read["input"]["Type"], Read["input"]["Encoded"]>)

@@ -141,7 +141,7 @@ function parseAccountPreferences(
     }
   }
   // SAFETY: Every key is an account preference field and every value passed that field's guard.
-  return preferences as AccountPreferences;
+  return preferences;
 }
 
 /** The snapshot's shared `preferences` part as a client or the service sent it; nothing where a value in it is refused. */
@@ -183,7 +183,7 @@ function ownChoices(record: Partial<Record<OwnPartField, UnparsedWireValue>>): A
     if (record[field] !== undefined) chosen[field] = record[field];
   }
   // SAFETY: each value is an own part's choice, read by its guard where it came off a wire.
-  return chosen as AccountPreferences;
+  return chosen;
 }
 
 /** An account's preferences without its own parts' choices: its shared part. */
@@ -191,7 +191,7 @@ function sharedOf(preferences: AccountPreferences): AccountPreferences {
   const shared: Record<string, UnparsedWireValue> = { ...preferences };
   for (const field of OWN_PART_FIELDS) delete shared[field];
   // SAFETY: what is left is the record's shared preferences, as they were.
-  return shared as AccountPreferences;
+  return shared;
 }
 
 /** An account's preferences split into the parts of the snapshot that carry them. */
@@ -257,7 +257,7 @@ export function accountPreferencesToWrite(
     }
   }
   // SAFETY: each value is the device's own choice or the preference's default.
-  return written as AccountPreferences;
+  return written;
 }
 
 /**
@@ -277,7 +277,7 @@ export function accountPreferencesToPush(
     if (written[field] === baseline?.[field]) delete written[field];
   }
   // SAFETY: what is left is what the device writes, less its unchanged own parts.
-  return written as AccountPreferences;
+  return written;
 }
 
 const SettingsResetScopeSchema = Schema.Literals(Object.values(SETTINGS_RESET_SCOPE));

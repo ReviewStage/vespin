@@ -770,7 +770,7 @@ function recordServerEventOf<Name extends ServerEventName, E, R>(
               userId: actor.userId,
               ...(actor.workspaceId === undefined ? undefined : { workspaceId: actor.workspaceId }),
               properties,
-            } as ServerEvent);
+            });
           }),
         ),
   );

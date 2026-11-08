@@ -409,7 +409,7 @@ export function openEntityStore(
           }
           const byWorkspace = { ...byWorkspaceOf<Read>(reads, kept), [workspaceId]: rows };
           // SAFETY: the read `kept` names is set to a record of its own rows, each workspace's `KeptRows[Read][string]`.
-          reads = { ...reads, [kept]: byWorkspace } as Partial<KeptRows>;
+          reads = { ...reads, [kept]: byWorkspace };
           dirty = true;
           return woken;
         }),

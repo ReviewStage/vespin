@@ -750,7 +750,7 @@ export function Tooltip({
     },
     [],
   );
-  const ownRef = (children.props as AnchorProps).ref;
+  const ownRef = children.props.ref;
   const anchorRef = useCallback(
     (element: HTMLElement | null) => {
       handRef(ownRef, element);

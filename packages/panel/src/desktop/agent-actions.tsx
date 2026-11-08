@@ -265,7 +265,7 @@ export type RowDoors = Omit<AgentDoors, keyof typeof NOT_ON_A_ROW>;
 /** The doors a row offers of those an agent offers, `NOT_ON_A_ROW`'s left out. */
 export function rowDoors(doors: AgentDoors): RowDoors {
   const offered = Object.entries(doors).filter(([door]) => !Object.hasOwn(NOT_ON_A_ROW, door));
-  return Object.fromEntries(offered) as RowDoors;
+  return Object.fromEntries(offered);
 }
 
 /** The doors a column opens an agent's terminals through, by the agent; each none where it is not offered. */
