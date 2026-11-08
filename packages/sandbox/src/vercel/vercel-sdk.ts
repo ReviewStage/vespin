@@ -103,14 +103,15 @@ const NAME_TAKEN_STATUS = 409;
 const SESSION_STOPPED = { STATUS: 410, CODE: "sandbox_stopped" } as const;
 
 /**
- * Vercel's answer for a resume or a create whose snapshot is gone: expired
- * past the expiration it was kept for, or deleted, its body naming
- * `snapshot_not_found`, as the SDK's own check reads it. Note that Vercel
- * answers 410 for a call to a stopped sandbox too (`SESSION_STOPPED`), which
- * a resume mends, and that a body that could not be read names no code, so
- * only a 410 that names this code says the snapshot is gone.
+ * Vercel's answer for a resume or a create whose snapshot is gone, expired
+ * past the expiration it was kept for or deleted: a 410 whose body names the
+ * snapshot, as its code (`snapshot_not_found`, which the SDK's own check
+ * reads) or its words (`bad_request: Snapshot expired or deleted.`, which
+ * Vercel also answers). Note that Vercel answers 410 for a call to a stopped
+ * sandbox too (`SESSION_STOPPED`), which a resume mends and whose body names
+ * no snapshot.
  */
-const SNAPSHOT_GONE = { STATUS: 410, CODE: "snapshot_not_found" } as const;
+const SNAPSHOT_GONE = { STATUS: 410, BODY: /snapshot/iu } as const;
 
 /**
  * Vercel's answer for a call to a session that is stopping, or being
@@ -213,6 +214,7 @@ const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.KILL]: "web/sandboxKill",
   [SANDBOX_CALL.TAGS]: "web/sandboxUpdateTags",
   [SANDBOX_CALL.GET]: "web/sandboxGet",
+  [SANDBOX_CALL.DRIVE]: "web/sandboxDrive",
   [SANDBOX_CALL.LIST]: "web/sandboxList",
   [SANDBOX_CALL.DELETE]: "web/sandboxDelete",
   [SANDBOX_CALL.STOP]: "web/sandboxStop",
@@ -253,7 +255,7 @@ function neutralOf(refusal: Refused): SandboxError {
   if (status === NAME_TAKEN_STATUS && code !== DRIVE_CODE.ATTACHED) {
     return new SandboxNameTaken({ call });
   }
-  if (status === SNAPSHOT_GONE.STATUS && code === SNAPSHOT_GONE.CODE) {
+  if (status === SNAPSHOT_GONE.STATUS && SNAPSHOT_GONE.BODY.test(refusal.detail ?? "")) {
     return new SnapshotGone({ call });
   }
   if (status === SESSION_ENDING.STATUS && code !== undefined && SESSION_ENDING.CODES.has(code)) {
@@ -406,6 +408,15 @@ function errorCode(text: string): string | undefined {
   if (Result.isFailure(read)) return undefined;
   const { code } = read.success.error;
   return code !== undefined && ERROR_CODE.test(code) ? code : undefined;
+}
+
+/** Whether the SDK's failure is Vercel's answer that the snapshot it opens from is gone (`SNAPSHOT_GONE`). */
+function snapshotGoneFailure(failure: unknown): boolean {
+  return (
+    failure instanceof APIError &&
+    failure.response.status === SNAPSHOT_GONE.STATUS &&
+    SNAPSHOT_GONE.BODY.test(failure.text ?? "")
+  );
 }
 
 function succeeded(status: number): boolean {
@@ -609,11 +620,23 @@ async function openedWithDrive(
 /** Whether a resume's failure says no sandbox stands to resume: none under the name, or one whose snapshot is gone, which a create replaces. */
 function noneToResume(failure: unknown): boolean {
   if (!(failure instanceof APIError)) return false;
-  const { status } = failure.response;
-  return (
-    status === NOT_FOUND_STATUS ||
-    (status === SNAPSHOT_GONE.STATUS && errorCode(failure.text ?? "") === SNAPSHOT_GONE.CODE)
+  return failure.response.status === NOT_FOUND_STATUS || snapshotGoneFailure(failure);
+}
+
+/**
+ * Whether a sandbox stood under the name to be deleted, as one whose
+ * snapshot is gone is, so a create may take its name: what the SDK's own
+ * `getOrCreate` does only for the code it reads (`SNAPSHOT_GONE`). Note
+ * that the sandbox's own drive is left standing, for the create to mount
+ * again.
+ */
+async function clearedStale(name: string, under: Under, signal: AbortSignal): Promise<boolean> {
+  const stale = await SdkSandbox.get({ ...under, name, resume: false, signal }).catch(
+    absentIfNotFound,
   );
+  if (stale === undefined) return false;
+  await stale.delete({ signal }).catch(absentIfNotFound);
+  return true;
 }
 
 /**
@@ -660,6 +683,18 @@ async function idleTimed(sandbox: SdkSandbox, signal: AbortSignal): Promise<SdkS
   if (sandbox.timeout === undefined || sandbox.timeout === idle) return sandbox;
   await sandbox.update({ timeout: idle }, { signal });
   return sandbox;
+}
+
+/**
+ * Closes every public port of a sandbox a resume woke, handed to the SDK as
+ * its `onResume`. Note that Vercel keeps a sandbox's ports in its config and
+ * serves them again at every resume, so without this a port opened in one
+ * run would stay public in every later one.
+ */
+function portsClosedOnResume(signal: AbortSignal) {
+  return async (resumed: SdkSandbox) => {
+    if (resumed.routes.length > 0) await resumed.update({ ports: [] }, { signal });
+  };
 }
 
 /**
@@ -847,11 +882,27 @@ function vercelSandbox(
           Effect.catchIf(isGone, () => Effect.succeed(undefined)),
         ),
       ),
+    driveStands: (name) =>
+      said(
+        asked(SANDBOX_CALL.DRIVE, (signal, under) => Drive.get({ ...under, name, signal })).pipe(
+          Effect.as(true),
+          Effect.catchIf(isGone, () => Effect.succeed(false)),
+        ),
+      ),
     resume: (name) =>
       said(
         Effect.map(
           asked(SANDBOX_CALL.GET, async (signal, under) =>
-            idleTimed(await SdkSandbox.get({ ...under, name, resume: true, signal }), signal),
+            idleTimed(
+              await SdkSandbox.get({
+                ...under,
+                name,
+                resume: true,
+                signal,
+                onResume: portsClosedOnResume(signal),
+              }),
+              signal,
+            ),
           ),
           openedOf,
         ).pipe(Effect.withSpan("web/sandboxResume")),
@@ -879,6 +930,7 @@ function vercelSandbox(
                 name: ask.name,
                 resume: true,
                 signal,
+                onResume: portsClosedOnResume(signal),
               }).catch((failure: unknown) => {
                 if (noneToResume(failure)) return undefined;
                 throw failure;
@@ -892,13 +944,21 @@ function vercelSandbox(
                 if (ask.user !== undefined) await madeUser(created, ask.user, signal);
                 await onCreate?.(openedOf(created));
               };
-              try {
-                const opened = await SdkSandbox.getOrCreate({
+              const gotOrCreated = () =>
+                SdkSandbox.getOrCreate({
                   ...under,
                   ...createParams(ask, mounted),
                   resume: true,
                   signal,
                   onCreate: setUp,
+                  onResume: portsClosedOnResume(signal),
+                });
+              try {
+                const opened = await gotOrCreated().catch(async (failure: unknown) => {
+                  // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
+                  if (!snapshotGoneFailure(failure)) throw failure;
+                  if (!(await clearedStale(ask.name, under, signal))) throw failure;
+                  return await gotOrCreated();
                 });
                 stands();
                 return await idleTimed(opened, signal);

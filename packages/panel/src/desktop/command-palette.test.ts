@@ -357,6 +357,7 @@ const SETTINGS_PAGES = [
   "Account",
   "Workspace",
   "Environment",
+  "Cloud setup",
   "Agents",
   "Integrations",
   "Vespin MCP",
@@ -381,7 +382,13 @@ test("the Settings filter lists Memory after Environment only while the listed w
   await paletteUnderState(tasksControl({ workspaces: [acme], workspace: acme }));
   chooseFilter("Settings");
 
-  assert.deepEqual(rows().slice(0, 4), ["Account", "Workspace", "Environment", "Memory"]);
+  assert.deepEqual(rows().slice(0, 5), [
+    "Account",
+    "Workspace",
+    "Environment",
+    "Cloud setup",
+    "Memory",
+  ]);
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 

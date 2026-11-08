@@ -175,7 +175,7 @@ import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, useMentionPicker } from "./mention-picker.js";
 import { type HeldComment, PAGE_REVIEW_WORDS, type PageReviewControl } from "./page-review.js";
 import { PendingWords } from "./pending-comments.js";
-import { ComposerQuoteView, pressPlace, ReplyPress } from "./reply-to-selection.js";
+import { ComposerQuoteView, pressPlace, ReplyPress, roomAround } from "./reply-to-selection.js";
 import { type TaskMentionsValue, useMentionLink, useTaskMentions } from "./task-mentions.js";
 import { DICTATION_PHASE, type DictationControl, useDictation } from "./use-dictation.js";
 import { useKnownNames } from "./use-known-names.js";
@@ -3903,6 +3903,11 @@ function SelectedReply({
   onReply: (selected: PagePicked) => void;
 }): React.JSX.Element | null {
   const box = inWindow(room.current, selected.box);
-  if (box === undefined) return null;
-  return <ReplyPress place={pressPlace(box)} onReply={() => onReply(selected)} />;
+  if (box === undefined || room.current === null) return null;
+  return (
+    <ReplyPress
+      place={pressPlace(box, roomAround(room.current))}
+      onReply={() => onReply(selected)}
+    />
+  );
 }

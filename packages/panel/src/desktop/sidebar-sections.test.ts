@@ -54,6 +54,9 @@ const WORKSPACE: Workspace = {
 
 const LAUNCH = "0a1b2c3d-0000-4000-8000-000000000001";
 
+/** Where this Mac keeps the icons it chose last, as the picker keeps them. */
+const RECENT_ICONS = "app.recentSectionIcons";
+
 const roots: Root[] = [];
 
 beforeEach(() => {
@@ -544,15 +547,15 @@ test("deleting the last section hands focus to the first, rather than letting it
   assert.ok(sectionHeader(sidebar, "Someday").contains(document.activeElement));
 });
 
-test("a section holding tasks offers Rename, its move, and Delete last, leaving what acts on all its tasks to the selection bar", async () => {
+test("a section holding tasks offers Rename, Change icon, its move, and Delete last, leaving what acts on all its tasks to the selection bar", async () => {
   const sidebar = await mountSidebar([], ICONLESS);
 
   openSectionMenu(sidebar, "Launch");
 
-  assert.deepEqual(menuLabels(), ["Rename", "Move up", "Delete section"]);
+  assert.deepEqual(menuLabels(), ["Rename", "Change icon", "Move up", "Delete section"]);
 });
 
-test("a section holding no task offers only Rename, its move, and Delete", async () => {
+test("a section holding no task offers only Rename, Add icon where it wears none, its move, and Delete", async () => {
   const sidebar = await mountSidebar([], {
     sections: ICONLESS.sections,
     entries: ICONLESS.entries.filter((entry) => entry.sectionId !== SOMEDAY),
@@ -561,7 +564,7 @@ test("a section holding no task offers only Rename, its move, and Delete", async
 
   openSectionMenu(sidebar, "Someday");
 
-  assert.deepEqual(menuLabels(), ["Rename", "Move down", "Delete section"]);
+  assert.deepEqual(menuLabels(), ["Rename", "Add icon", "Move down", "Delete section"]);
 });
 
 test("⌘-clicking a section's task and one under Tasks chooses both, opening neither, and a right-click on either offers Status for both, which S on the focused one opens", async () => {
@@ -1163,20 +1166,24 @@ test("a pin dragged below the next one reorders the pins", async () => {
   assert.ok((asked.moves[0]?.position ?? "") > second.pinPosition, "it sorts after Pin review");
 });
 
-test("an icon found by searching, in a color chosen, is the new section's", async () => {
+test("a glyph found by searching asks its color over the grid, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+  document.documentElement.setAttribute("data-ui-theme", "dark");
+  onTestFinished(() => document.documentElement.removeAttribute("data-ui-theme"));
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
   await dialogPicker(sidebar);
-  act(() => dialogButton("Teal").click());
   typeInto(dialogField("Search icons and emoji"), "telescope");
   await settleLoaded();
   act(() => dialogButton("Telescope").click());
-  await settleLoaded();
+  const colors =
+    document.querySelector(".section-icon-colors") ?? assert.fail("the glyph's colors are asked");
+  assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
+  act(() => dialogButton("Teal").click());
   assert.equal(
     document.querySelector('input[aria-label="Search icons and emoji"]'),
     null,
-    "a choice puts the picker away",
+    "a color chosen puts the picker away",
   );
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
@@ -1188,18 +1195,24 @@ test("an icon found by searching, in a color chosen, is the new section's", asyn
     glyph: "telescope",
     color: TASK_SECTION_ICON_COLOR.TEAL,
   });
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(RECENT_ICONS) ?? "[]")[0], {
+    kind: TASK_SECTION_ICON_KIND.GLYPH,
+    glyph: "telescope",
+    color: TASK_SECTION_ICON_COLOR.TEAL,
+  });
 });
 
-test("Rename opens a section's head, whose icon well opens its picker, where a color chosen recolors the glyph it wears", async () => {
+test("Change icon opens a section's head with its picker open, where the glyph it wears, pressed, asks its color again from the one it wears", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes, GLYPHS);
 
-  sectionMenuChoose(sidebar, "Stars", "Rename");
-  act(() => dialogButton("Change icon").click());
+  sectionMenuChoose(sidebar, "Stars", "Change icon");
   await settleLoaded();
-  assert.equal(dialogButton("Telescope").getAttribute("aria-pressed"), "true");
-  act(() => dialogButton("No color").click());
-  assert.ok(dialogButton("Telescope"), "a color leaves the picker standing");
+  const telescope = dialogButton("Telescope");
+  assert.equal(telescope.getAttribute("aria-pressed"), "true");
+  act(() => telescope.click());
+  assert.equal(dialogButton("Teal").getAttribute("aria-pressed"), "true");
+  act(() => dialogButton("Black").click());
   await press(sectionNameField(), "Enter");
 
   assert.deepEqual(writes, [
@@ -1273,7 +1286,7 @@ test("Icons and Emoji are tabs over the picker's panel, which the tab shown name
   assert.ok(shown("Emoji").querySelector('button[aria-label="grinning face"]'));
 });
 
-test("Shift-Enter in the search chooses the first glyph it found, as Enter does", async () => {
+test("Shift-Enter in the search presses the first glyph it found, as Enter does, the keyboard taken to its colors, walked by the arrows, and Escape there goes back to the glyph", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -1282,6 +1295,15 @@ test("Shift-Enter in the search chooses the first glyph it found, as Enter does"
   typeInto(search, "telescope");
   await settleLoaded();
   await press(search, "Enter", true);
+  const noColor = document.activeElement ?? assert.fail("nothing has the focus");
+  assert.equal(noColor.getAttribute("aria-label"), "Black");
+  await press(noColor as HTMLElement, "ArrowRight");
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Red");
+  await press(document.activeElement as HTMLElement, "Escape");
+  assert.equal(document.querySelector(".section-icon-colors"), null);
+  assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
+  act(() => dialogButton("Telescope").click());
+  act(() => (document.activeElement as HTMLButtonElement).click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
 
@@ -1333,6 +1355,34 @@ test("the arrows move the grid's one tab stop with the focus", async () => {
   assert.equal(folder.getAttribute("tabindex"), "-1");
 });
 
+test("with a glyph's colors open, the arrows step the glyphs past them, and another glyph pressed takes the keyboard to its own colors", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  act(() => dialogButton("Folder").click());
+  const layers = dialogButton("Layers");
+  act(() => layers.focus());
+  await press(layers, "ArrowRight");
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Heart");
+
+  act(() => dialogButton("Star").click());
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
+  assert.equal(document.querySelectorAll(".section-icon-colors").length, 1);
+});
+
+test("a glyph pressed again while its colors stand open closes them, its press taking the focus first as a pointer's does", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  const folder = dialogButton("Folder");
+  act(() => folder.click());
+  assert.ok(document.querySelector(".section-icon-colors"), "the colors are asked");
+  act(() => folder.focus());
+  act(() => folder.click());
+
+  assert.equal(document.querySelector(".section-icon-colors"), null);
+});
+
 test("an emoji typed into the search is offered first, one the grid leaves out included", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
@@ -1350,19 +1400,38 @@ test("an emoji typed into the search is offered first, one the grid leaves out i
   assert.deepEqual(made.icon, { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: "🫩" });
 });
 
-test("an icon chosen is offered first under Recent the next time the picker opens", async () => {
-  const sidebar = await mountSidebar([]);
+test("a glyph this Mac chose last is offered first under Recent in the color it was chosen in, which its colors start on", async () => {
+  window.localStorage.setItem(
+    RECENT_ICONS,
+    JSON.stringify([
+      {
+        kind: TASK_SECTION_ICON_KIND.GLYPH,
+        glyph: "telescope",
+        color: TASK_SECTION_ICON_COLOR.RED,
+      },
+    ]),
+  );
+  const writes: TaskSectionWrite[] = [];
+  const sidebar = await mountSidebar(writes);
 
   await dialogPicker(sidebar);
-  typeInto(dialogField("Search icons and emoji"), "telescope");
-  await settleLoaded();
-  act(() => dialogButton("Telescope").click());
-  await settleLoaded();
-  act(() => dialogButton("Change icon").click());
-  await settleLoaded();
-
   const recent = document.querySelector('section[aria-label="Recent"]') ?? assert.fail("no Recent");
-  assert.equal(recent.querySelector("button")?.getAttribute("aria-label"), "Telescope");
+  const first = recent.querySelector("button") ?? assert.fail("nothing under Recent");
+  assert.equal(first.getAttribute("aria-label"), "Telescope");
+  assert.equal(first.querySelector("svg")?.getAttribute("data-icon-color"), "red");
+  act(() => first.click());
+  assert.equal(dialogButton("Red").getAttribute("aria-pressed"), "true");
+  act(() => dialogButton("Teal").click());
+  typeInto(dialogField("Name"), "Stars");
+  await act(async () => dialogButton("Create section").click());
+
+  const made = writes[0];
+  assert.equal(made?.kind, TASK_SECTION_WRITE.CREATE);
+  assert.deepEqual(made.icon, {
+    kind: TASK_SECTION_ICON_KIND.GLYPH,
+    glyph: "telescope",
+    color: TASK_SECTION_ICON_COLOR.TEAL,
+  });
 });
 
 /** Answers the window's media queries as a phone does, its pointer a finger. */

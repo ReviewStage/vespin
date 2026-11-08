@@ -1,4 +1,4 @@
-import type { NavigationHistory } from "../navigation-history.js";
+import type { NavigationHistory } from "../places/window-history.js";
 
 /**
  * back-place.ts -- what a way back that takes a step of the window's history calls the place it goes to.

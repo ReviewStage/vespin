@@ -1,4 +1,5 @@
 import {
+  BUTTON_SIZE,
   FolderIcon,
   GROUP_ACTION_STATE,
   GROUP_ACTIONS,
@@ -245,6 +246,7 @@ function Renamed(): React.JSX.Element {
                   icon={<FolderIcon />}
                   label="Change icon"
                   title="Icon"
+                  size={BUTTON_SIZE.COMPACT}
                   open={picking}
                   onOpenChange={(open, away) => {
                     setPicking(open);

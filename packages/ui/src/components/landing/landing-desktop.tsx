@@ -7,10 +7,9 @@ import {
   ComposeIcon,
   GearIcon,
   SearchIcon,
-  SidebarIcon,
-  SidePanelIcon,
 } from "../../face/glyphs.js";
 import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
+import { SidebarIcon, SidePanelIcon } from "../../icons/lucide-glyphs.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";

@@ -43,7 +43,8 @@ import { type PressAway, usePressAway } from "./press-away.js";
  * the resize is measured. A press outside the layer and its button is
  * handed to the owner, who closes it (`press-away.ts`). A popover asks for its width in pixels or by one
  * of the three names a menu's width is chosen from (`POPOVER_WIDTH`), whose
- * token the layer is drawn at and measured by. An owner that closes its
+ * token the layer is drawn at and measured by, or as `fit`, drawn as wide
+ * as what it holds and measured at that. An owner that closes its
  * popover through `open` keeps the layer drawn where it last stood, so what
  * it holds fades out in place (`PopoverPanel`'s `open`), while the layer
  * hears no press away and measures nothing until it opens again.
@@ -80,8 +81,8 @@ const LAYER =
 /** The width a popover asks for unless its owner asks another, the desktop's searchable menu's own, which the room may narrow. */
 const DEFAULT_WIDTH = 340;
 
-/** The token each named width is drawn at. */
-const WIDTH_TOKEN: Record<PopoverWidth, string> = {
+/** The token each named width is drawn at, `fit`'s being none, since it is drawn as wide as what it holds. */
+const WIDTH_TOKEN: Record<Exclude<PopoverWidth, typeof POPOVER_WIDTH.FIT>, string> = {
   [POPOVER_WIDTH.NARROW]: "--ui-popover-width-narrow",
   [POPOVER_WIDTH.REGULAR]: "--ui-popover-width-regular",
   [POPOVER_WIDTH.WIDE]: "--ui-popover-width-wide",
@@ -134,6 +135,7 @@ export function roomAround(
 
 /** The width asked for before it is measured: its pixels, or its token's. */
 export function askedStyleWidth(width: number | PopoverWidth): number | string {
+  if (width === POPOVER_WIDTH.FIT) return "max-content";
   return typeof width === "number" ? width : `var(${WIDTH_TOKEN[width]})`;
 }
 
@@ -144,6 +146,8 @@ export function askedStyleWidth(width: number | PopoverWidth): number | string {
  */
 function askedWidth(layer: HTMLElement, width: number | PopoverWidth): number {
   if (typeof width === "number") return width;
+  // Note that a fit popover is drawn at its content's width before it is measured, so its box is the width it asks for.
+  if (width === POPOVER_WIDTH.FIT) return layer.getBoundingClientRect().width;
   const token = Number.parseFloat(getComputedStyle(layer).getPropertyValue(WIDTH_TOKEN[width]));
   return Number.isFinite(token) ? token : layer.getBoundingClientRect().width;
 }

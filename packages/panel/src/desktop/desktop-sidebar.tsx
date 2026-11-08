@@ -88,7 +88,6 @@ import {
   drawnTaskRows,
   homedTaskRows,
   NO_REPOSITORY,
-  openParentIds,
   orderTaskRows,
   type RepositoryGroup,
   repositoryGroups,
@@ -125,7 +124,6 @@ import { DraftMark } from "../draft-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
-import type { NavigationHistory } from "../navigation-history.js";
 import {
   endWindowSpan,
   leaveWindowSpan,
@@ -140,6 +138,7 @@ import {
   useInboxDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
+import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
@@ -192,7 +191,6 @@ import {
   NEW_SECTION,
   PINNED_DROP_ZONE,
   rowMember,
-  type ShownSection,
   SidebarSections,
   TASKS_DROP_ZONE,
   useSectionDialogs,
@@ -297,18 +295,18 @@ const UNNAMED_STEP = "Earlier page";
  */
 function historyGroups(
   steps: readonly HistoryStep[],
-  onGoTo: (at: number) => void,
+  onGoTo: (number: number) => void,
 ): (readonly MenuAction[])[] {
   const groups: MenuAction[][] = [];
   let page: HistoryPage | undefined;
   for (const step of steps) {
     const item: MenuAction = {
-      // Note that a step is keyed by its place on the trail, because two steps of one page may be called alike, as a task's Plan and Code are.
-      key: step.at,
+      // Note that a step is keyed by its number, because two steps of one page may be called alike, as a task's Plan and Code are.
+      key: step.number,
       label: step.title?.label ?? UNNAMED_STEP,
       detail: step.title?.detail,
       replayMasked: true,
-      onSelect: () => onGoTo(step.at),
+      onSelect: () => onGoTo(step.number),
     };
     if (page !== undefined && sameHistoryPage(step.page, page)) groups.at(-1)?.push(item);
     else groups.push([item]);
@@ -337,7 +335,7 @@ function HistoryButton({
   able: boolean;
   onPress: () => void;
   steps: readonly HistoryStep[];
-  onGoTo: (at: number) => void;
+  onGoTo: (number: number) => void;
 }): React.JSX.Element {
   const menu = useMenu(able);
   const button = useRef<HTMLButtonElement>(null);
@@ -1297,7 +1295,7 @@ function withTaskLists(
 }
 
 /** A section as it draws `rows` (`homedTaskRows`): the entries of its own rows among them, a child task standing under a parent it holds after them with no entry. */
-function homedSection(drawn: ShownSection, rows: readonly TaskRow[]): ShownSection {
+function homedSection(drawn: DrawnSection, rows: readonly TaskRow[]): DrawnSection {
   const kept = new Set(rows);
   const entries = drawn.entries.filter((_, at) => {
     const row = drawn.rows[at];
@@ -1656,23 +1654,17 @@ function sectionedTasks(
 }
 
 /**
- * A section as the view leaves it: its tasks to do and in progress, any
- * with no status, an agent's among them, and any parent a child task keeps
- * open, of those Assigned to holds, each with its entry, in its order; and
- * whether Assigned to leaves any out. Note that a row only the statuses
- * shown leave out counts for nothing, because the section still reads as
- * one to drag tasks into.
+ * A section as the view leaves it: its tasks to do and in progress, and
+ * any with no status, an agent's among them, of those Assigned to holds,
+ * each with its entry, in its order.
  */
 function sectionInView(
   drawn: DrawnSection,
-  openParents: ReadonlySet<string>,
   assignedTo: AssignedTo,
   readerId: string | undefined,
-): ShownSection {
-  const people = taskRowsAssignedTo(drawn.rows, assignedTo, readerId);
-  const held = new Set(people);
-  const shown = (row: TaskRow) =>
-    held.has(row) && taskRowInStatuses(row, SHOWN_STATUSES, openParents);
+): DrawnSection {
+  const held = new Set(taskRowsAssignedTo(drawn.rows, assignedTo, readerId));
+  const shown = (row: TaskRow) => held.has(row) && taskRowInStatuses(row, SHOWN_STATUSES);
   const kept = drawn.rows.flatMap((row, at) => {
     const entry = drawn.entries[at];
     return entry !== undefined && shown(row) ? [{ entry, row }] : [];
@@ -1681,7 +1673,6 @@ function sectionInView(
     ...drawn,
     entries: kept.map(({ entry }) => entry),
     rows: kept.map(({ row }) => row),
-    othersHeld: people.length < drawn.rows.length,
   };
 }
 
@@ -1961,13 +1952,8 @@ function SidebarColumn({
     listedAgents.standing.filter((agent) => agent.pinnedAt === undefined),
   );
   // The view's filters thin the sections' tasks as they thin the list's, a row dropped among them landing among those drawn.
-  // A parent stays while the view shows any child task under it, whatever its own status.
-  const openParents = useMemo(
-    () => openParentIds(tasks.listed.tasks, SHOWN_STATUSES),
-    [tasks.listed.tasks],
-  );
   const shownSections = sectioned.sections.map((drawn) =>
-    sectionInView(drawn, openParents, assignedTo, tasks.me),
+    sectionInView(drawn, assignedTo, tasks.me),
   );
   const sectionDialogs = useSectionDialogs(tasks, tasks.shown && overlay.inSight);
   const sectionEdits = useSectionEdits();
@@ -2123,7 +2109,7 @@ function SidebarColumn({
   const unpinned = [...unpinnedTasks.map(taskRow), ...unpinnedAgents.map(agentRow)];
   const rows = taskRowsAssignedTo(unpinned, assignedTo, tasks.me);
   // The list holds the tasks to do and in progress; the Tasks page holds the rest.
-  const statusRows = taskRowsInStatuses(rows, SHOWN_STATUSES, openParents);
+  const statusRows = taskRowsInStatuses(rows, SHOWN_STATUSES);
   const orderView: TaskOrderView = {
     workspaceId: tasks.workspace?.id,
     grouping: taskView.view.grouping,

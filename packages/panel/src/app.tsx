@@ -68,12 +68,6 @@ import { useLastSignIn } from "./last-sign-in.js";
 import { LinkMenu } from "./link-menu.js";
 import { PageWorkspaceProvider, useCopyLink } from "./links-at-hand.js";
 import { MacCommandAskDialog } from "./mac-command-ask.js";
-import {
-  type TaskVisits,
-  useHistoryMouseButtons,
-  useRoutedStanding,
-  useWindowHistory,
-} from "./navigation-history.js";
 import { useOfflineRefusedToast } from "./offline-refused-toast.js";
 import { OpenFeedbackProvider } from "./open-feedback.js";
 import { OpenSettingsProvider } from "./open-settings.js";
@@ -89,6 +83,12 @@ import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
 import { useAdminDoor, useAutomationsDoor, usePersonDoor } from "./places/routed-doors.js";
 import { RoutedExitsProvider, useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
+import {
+  type TaskVisits,
+  useHistoryMouseButtons,
+  useRoutedStanding,
+  useWindowHistory,
+} from "./places/window-history.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
 import { settingsRowsInput, shownSettingsView } from "./settings/settings-rows.js";

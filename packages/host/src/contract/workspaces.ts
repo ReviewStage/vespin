@@ -29,6 +29,11 @@ import {
   workspaceVariablePutRequestSchema,
 } from "@repo/features/workspace-environment-wire";
 import { workspaceInvitationSchema } from "@repo/features/workspace-invitation-wire";
+import {
+  workspaceInstallScriptPutRequestSchema,
+  workspaceRepositorySetupPutRequestSchema,
+  workspaceSandboxSetupAnswerSchema,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { workspaceMemberSchema, workspaceSchema } from "@repo/features/workspace-wire";
 import { WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { ACT } from "@repo/sync";
@@ -227,6 +232,27 @@ export const WORKSPACE_ACTS = declaredActs({
     input: workspaceVariableDeleteRequestSchema,
     output: workspaceEnvironmentAnswerSchema,
     refusal: "Could not delete that variable on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_SANDBOX_SETUP_READ: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: workspaceSandboxSetupAnswerSchema,
+    refusal: "Could not read that workspace's cloud setup on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+  WORKSPACE_INSTALL_SCRIPT_PUT: hostAct({
+    input: workspaceInstallScriptPutRequestSchema,
+    output: workspaceSandboxSetupAnswerSchema,
+    refusal: "Could not save that install script on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_REPOSITORY_SETUP_PUT: hostAct({
+    input: workspaceRepositorySetupPutRequestSchema,
+    output: workspaceSandboxSetupAnswerSchema,
+    refusal: "Could not save that setup script on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),

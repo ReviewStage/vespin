@@ -42,6 +42,7 @@ export const SANDBOX_CALL = {
   KILL: "kill",
   TAGS: "tags",
   GET: "get",
+  DRIVE: "drive",
   LIST: "list",
   DELETE: "delete",
   STOP: "stop",

@@ -7,7 +7,7 @@
  * address alone, as a person's page is (`workspace-routes.ts`). Opening one
  * is a visit; opening the one already standing moves nothing. The side
  * panel beside it is the window's, which the history saves in the step
- * beside its address (`navigation-history.ts`), as it does an Inbox item's.
+ * beside its address (`places/window-history.ts`), as it does an Inbox item's.
  */
 
 import { useNavigate, useRouter } from "@tanstack/react-router";

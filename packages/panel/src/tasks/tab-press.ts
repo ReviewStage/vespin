@@ -11,7 +11,7 @@
  *   closes the tab it just opened, and ⌘T and ⌘F answer there.
  * - It is a step of the history, which Back undoes: a side panel's tab as
  *   a door naming it opens it (`SidePanelControl.opened`), and a column's
- *   by the press that chose it (`navigation-history.ts`).
+ *   by the press that chose it (`places/window-history.ts`).
  *
  * A page hands the keys to its own column focus as it opens (`useColumnFocus`);
  * a door that opens a tab on another task or page, a link, a pin, or ⌃Tab's

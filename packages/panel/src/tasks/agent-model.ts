@@ -19,7 +19,6 @@ import {
   AGENT_ARCHIVER,
   AGENT_DELEGATE_TOOL,
   AGENT_FAILURE,
-  AGENT_LAUNCH,
   AGENT_PAYER,
   AGENT_RUNTIME,
   AGENT_SENDER,
@@ -27,7 +26,6 @@ import {
   type AgentArchivedBy,
   type AgentAttachment,
   type AgentFailure,
-  type AgentLaunch,
   type AgentPayer,
   type AgentPullRequest,
   type AgentPullRequestAnswer,
@@ -2528,10 +2526,14 @@ export function turnStretches(rows: readonly TurnRow<AgentPart>[]): readonly Tur
 export const WORKING_PHASE = {
   /** It is being taken back to an earlier line (`rewind-action.tsx`), and stopped first where it ran. */
   REWINDING: "rewinding",
-  /** No turn of it is open yet: its first is still to be queued, or the line that opens the next is on its way. */
+  /**
+   * No runner has opened its newest turn yet: its first is still to be
+   * queued, the line that opens the next is on its way, or the turn is
+   * queued while a runner or a host's launch gets to it. Note that the steps
+   * of that wait are never worded, only traced on the service
+   * (`web/claimRunnerLease`, `web/runnerLaunchPrepared`, a host's `lineStep`).
+   */
   STARTING: "starting",
-  /** Its newest turn is queued, waiting for a runner to take its line. */
-  WAITING: "waiting",
   /** Its newest turn runs. */
   WORKING: "working",
   /** A Stop was asked of its newest turn, which runs until its runner ends it. */
@@ -2544,63 +2546,13 @@ export type WorkingPhase = (typeof WORKING_PHASE)[keyof typeof WORKING_PHASE];
 const WORKING_PHASE_WORDS = {
   [WORKING_PHASE.REWINDING]: "Rewinding…",
   [WORKING_PHASE.STARTING]: "Starting…",
-  [WORKING_PHASE.WAITING]: "Waiting for the runner…",
   [WORKING_PHASE.WORKING]: "Working…",
   [WORKING_PHASE.STOPPING]: "Stopping…",
 } as const satisfies Record<WorkingPhase, string>;
 
-/** What the working line says while a local agent's launch stands at a step that names neither its host nor its harness. */
-const LAUNCH_STEP_WORDS = {
-  [AGENT_LAUNCH.PREPARING]: "Preparing the folder…",
-  [AGENT_LAUNCH.FETCHING]: "Fetching the repository…",
-} as const;
-
-/** What the working line says as a local agent's harness starts, by the harness. */
-const HARNESS_START_WORDS = {
-  [AGENT_RUNTIME.CLAUDE_CODE]: "Starting Claude Code…",
-  [AGENT_RUNTIME.CODEX]: "Starting Codex…",
-} as const satisfies Record<NativeAgentRuntime, string>;
-
-/** Who a launch waits on where its host's name is not to hand. */
-const UNNAMED_HOST = "the host";
-
-/** Where a local agent's launch stands as its page said, with what its words name: the host it runs on and the harness it runs. */
-export interface StartingLaunch {
-  readonly launch: AgentLaunch;
-  /** The host's name, as the agent's Runs on chip shows it (`agent-place.tsx`); none where none is to hand. */
-  readonly host?: string | undefined;
-  /** The harness the agent runs, as its summary says; none where unsaid. */
-  readonly runtime?: NativeAgentRuntime | undefined;
-}
-
-/** The phases before a runner opened the turn, which a local agent's launch words in their place. */
-const BEFORE_THE_RUNNER: ReadonlySet<WorkingPhase> = new Set([
-  WORKING_PHASE.STARTING,
-  WORKING_PHASE.WAITING,
-]);
-
-/**
- * What the working line says in a phase. Before a runner opened the turn, a
- * local agent whose page said where its launch stands (`AGENT_LAUNCH`) says
- * what its start waits on: its host, by the name its Runs on chip shows,
- * taking the launch, the folder, the repository, or its harness by name.
- * With no launch said, as for a cloud agent, it says the phase's own words.
- * Note that a launch said once the turn runs says nothing, since the phase
- * has left waiting.
- */
-export function workingLineWords(phase: WorkingPhase, starting?: StartingLaunch): string {
-  if (!BEFORE_THE_RUNNER.has(phase) || starting === undefined) {
-    return WORKING_PHASE_WORDS[phase];
-  }
-  const { launch, host, runtime } = starting;
-  switch (launch) {
-    case AGENT_LAUNCH.WAITING:
-      return `Waiting for ${host ?? UNNAMED_HOST}…`;
-    case AGENT_LAUNCH.STARTING:
-      return runtime === undefined ? WORKING_PHASE_WORDS[phase] : HARNESS_START_WORDS[runtime];
-    default:
-      return LAUNCH_STEP_WORDS[launch];
-  }
+/** What the working line says in a phase. */
+export function workingLineWords(phase: WorkingPhase): string {
+  return WORKING_PHASE_WORDS[phase];
 }
 
 /** What a tab reads its agent standing by (`tabTurnOf`). */
@@ -2657,7 +2609,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   };
 }
 
-/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open, then the open turn's state. */
+/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, then the open turn's state. */
 function workingPhaseOf(
   turn: AgentTurn | undefined,
   open: boolean,
@@ -2666,7 +2618,7 @@ function workingPhaseOf(
   if (rewinding) return WORKING_PHASE.REWINDING;
   if (turn === undefined || !open) return WORKING_PHASE.STARTING;
   if (turn.stopAsked === true) return WORKING_PHASE.STOPPING;
-  return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.WAITING : WORKING_PHASE.WORKING;
+  return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.STARTING : WORKING_PHASE.WORKING;
 }
 
 /** What the working line says of a worker, which has no turn record of its own: starting until its own session reads running. */

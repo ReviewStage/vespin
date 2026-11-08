@@ -2620,14 +2620,20 @@ topic, an id, or a transaction id.
 
 ## The scheduled sweep
 
-`apps/web/server/routes/maintenance/sweep.ts` is what Vercel's cron calls:
-the root `vercel.json` schedules it every minute (`* * * * *`) and
+`apps/web/server/routes/maintenance/sweep.ts` is what Vercel's scheduler calls:
+the root `vercel.json`'s `maintenance-sweep` schedule calls it every minute (`* * * * *`) and
 `apps/web/server/function-durations.ts` gives its function group, `maintenance-sweep`,
 a 60-second duration (`MAINTENANCE_SWEEP.MAX_DURATION_SECONDS` in
 `src/maintenance/maintenance-bounds.ts`). The logic lives in
 `src/maintenance/maintenance-sweep.ts`; the route, through
-`src/maintenance/maintenance-app.ts`, hands it the deployment's seams. Vercel crons run
-only on production deployments.
+`src/maintenance/maintenance-app.ts`, hands it the deployment's seams. A static
+schedule runs only on production unless it is enabled on a Preview branch by hand.
+
+Once a day, at 08:00 UTC, the `base-drive-refresh` schedule calls
+`apps/web/server/routes/maintenance/base-drives.ts` under the same `CRON_SECRET`,
+in a function group of its own (`base-drive-refresh`, 800 seconds). It refills
+every repository's base drive that stands (`src/agents/base-drive-refresh.ts`),
+one after another, each failure logged and passed by for the next day's run.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and

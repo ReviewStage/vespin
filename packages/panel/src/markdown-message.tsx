@@ -14,6 +14,7 @@ import { isWireString } from "@repo/wire";
 import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 import { createContext, memo, type ReactNode, useContext, useMemo } from "react";
 import { DescriptionDiagram } from "./description-diagram.js";
+import { TranscriptCodeBlock } from "./tasks/transcript-markdown.js";
 import { useWordTargets } from "./tasks/use-known-names.js";
 import { TextLink } from "./text-link.js";
 
@@ -363,11 +364,13 @@ const glueDrawnLinks =
  * drawn as a plain one.
  *
  * A heading, a picture, and a quote are the note's own (`@repo/ui/markdown`).
- * A fence is its code, and a Mermaid one draws as its diagram only where the
- * place showing the words asks for it (`diagrams`), as a plan's page does.
+ * A fence is the window's one code card, as a transcript's is (`NoteFence`),
+ * and a Mermaid one draws as its diagram only where the place showing the
+ * words asks for it (`diagrams`), as a plan's page does.
  */
 const COMPONENTS: MarkdownComponents = {
   a: ({ href, children, node }) => plainLink(href, children, node, undefined),
+  pre: NoteFence,
 };
 
 /**
@@ -547,7 +550,39 @@ function editReaches(edit: MarkdownEdit | undefined, block: HastElement | undefi
   return (edit.marks ?? []).some((span) => span.from < to && span.to > from);
 }
 
-/** A fence drawn as its diagram where it may be, and as its code while an edit's marks reach into it. */
+/** A fence's one code element, where it holds its words alone, unmarked by a search or a change. */
+function plainFencedCode(pre: HastElement | undefined): HastElement | undefined {
+  const [code, ...rest] = (pre?.children ?? []).filter((child) => !isBlockBreak(child));
+  if (rest.length > 0 || code?.type !== "element" || code.tagName !== "code") return undefined;
+  return code.children.every((child) => child.type === "text") ? code : undefined;
+}
+
+/**
+ * A fence drawn as a transcript draws one, in the window's one code card
+ * (`TranscriptCodeBlock`), so every rendered text draws code alike; as its
+ * bare code where a search's or an edit's marks reach into it, since the
+ * card draws its words unmarked.
+ */
+function NoteFence({
+  node,
+  children,
+}: {
+  node?: HastElement | undefined;
+  children?: ReactNode;
+}): React.JSX.Element {
+  const edit = useContext(FenceEdit);
+  const code = editReaches(edit, node) ? undefined : plainFencedCode(node);
+  if (code === undefined) return <pre>{children}</pre>;
+  const classes = code.properties.className;
+  return (
+    <TranscriptCodeBlock
+      className={Array.isArray(classes) ? classes.join(" ") : undefined}
+      node={code}
+    />
+  );
+}
+
+/** A fence drawn as its diagram where it may be, and as a note's fence otherwise (`NoteFence`). */
 function DiagramFence({
   node,
   children,
@@ -556,7 +591,7 @@ function DiagramFence({
   children?: ReactNode;
 }): React.JSX.Element {
   const edit = useContext(FenceEdit);
-  const source = <pre>{children}</pre>;
+  const source = <NoteFence node={node}>{children}</NoteFence>;
   const code = editReaches(edit, node) ? undefined : diagramCode(node);
   return code === undefined ? source : <DescriptionDiagram code={code} source={source} />;
 }

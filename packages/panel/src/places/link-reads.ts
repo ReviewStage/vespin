@@ -7,7 +7,7 @@
  * then supersedes it, whatever door made the move: any move of the window's
  * router history to another page, pushed, replaced in the step's place, or
  * Back and Forward. Only the history's own write of the step standing
- * (`navigation-history.ts`), which carries the step it saves and moves no
+ * (`window-history.ts`), which carries the step it saves and moves no
  * one, supersedes nothing, nor does a move within the same page.
  */
 

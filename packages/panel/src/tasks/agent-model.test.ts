@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   AGENT_FAILURE,
-  AGENT_LAUNCH,
   AGENT_PAYER,
   AGENT_RUNTIME,
   AGENT_STATUS,
@@ -58,7 +57,6 @@ import {
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
-  workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
 
@@ -475,7 +473,7 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
   // A send answered with a turn newer than the list's holds the tab at work until the list catches up.
   assert.deepEqual(
     read({ status: AGENT_STATUS.COMPLETED, turn: settled }, { ...idle, turn: queued }),
-    [true, "waiting", AGENT_STATUS.RUNNING, undefined],
+    [true, "starting", AGENT_STATUS.RUNNING, undefined],
   );
   // Once the list names that turn, its record is the one read, here failed with why.
   const failed = turn("t-2", 2_000, TURN_STATUS.FAILED, { failure: AGENT_FAILURE.MODEL });
@@ -518,16 +516,6 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
     AGENT_STATUS.FAILED,
     AGENT_FAILURE.NOT_STARTED,
   ]);
-
-  // A host's launch says what the turn waits on before a runner opens it, naming the host or the harness, and nothing once it runs.
-  const waiting = { launch: AGENT_LAUNCH.WAITING, host: "Studio", runtime: AGENT_RUNTIME.CODEX };
-  assert.equal(workingLineWords("waiting", waiting), "Waiting for Studio…");
-  assert.equal(
-    workingLineWords("starting", { ...waiting, launch: AGENT_LAUNCH.STARTING }),
-    "Starting Codex…",
-  );
-  assert.equal(workingLineWords("working", waiting), "Working…");
-  assert.equal(workingLineWords("waiting"), "Waiting for the runner…");
 });
 
 test("Stop is offered while an agent may still write, a stalled one starting or awaiting its turn included, and not once it has ended", () => {

@@ -6,12 +6,13 @@ import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
 import { askAct } from "../act.js";
+import { codeLanguage, codeTitle } from "../code-language.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
 /**
- * transcript-markdown.tsx -- a transcript's code and tables: a fenced block drawn in the window's one code card, a table as a quiet grid, and an inline span on a subtle fill.
+ * transcript-markdown.tsx -- code and tables as every rendered text draws them: a fenced block in the window's one code card, a note's as a transcript's, a table bare, and an inline span on a subtle fill.
  *
  * Streamdown, the markdown renderer behind AI Elements' Response, draws a
  * fenced block and a table with components of its own: a bordered card on
@@ -34,48 +35,11 @@ import { FileTypeIcon } from "./file-type-icon.js";
  * leaving its lines out are the card's.
  */
 
-/** What a block whose fence names no language is labeled. */
-const PLAIN_LANGUAGE = "text";
-
 /** The language a suggestion is written in, and what a suggestion's block's header calls it. */
 const SUGGESTION = {
   LANGUAGE: "suggestion",
   LABEL: "Suggested change",
 } as const;
-
-/** A language's name as a reader says it, by the extension its files are written with. */
-const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
-  ts: "TypeScript",
-  tsx: "TypeScript",
-  js: "JavaScript",
-  jsx: "JavaScript",
-  py: "Python",
-  sh: "Shell",
-  bash: "Shell",
-  zsh: "Shell",
-  rb: "Ruby",
-  rs: "Rust",
-  go: "Go",
-  json: "JSON",
-  yaml: "YAML",
-  yml: "YAML",
-  css: "CSS",
-  html: "HTML",
-  sql: "SQL",
-  md: "Markdown",
-  diff: "Diff",
-};
-
-/** The extension a language named in full is written with, which its name and file icon are found by. */
-const LANGUAGE_EXTENSION: Readonly<Record<string, string>> = {
-  typescript: "ts",
-  javascript: "js",
-  python: "py",
-  rust: "rs",
-  shell: "sh",
-  ruby: "rb",
-  markdown: "md",
-};
 
 /** The language a diff is fenced in, whose rows are tinted by what they do. */
 const DIFF_LANGUAGE = "diff";
@@ -231,7 +195,7 @@ function addedText(rows: readonly Row[]): string {
  * alone, which is the suggestion. A diff's rows are tinted the same way
  * (`rowsOf`).
  */
-function TranscriptCodeBlock({
+export function TranscriptCodeBlock({
   className,
   node,
 }: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
@@ -244,13 +208,13 @@ function TranscriptCodeBlock({
   // Note that a suggestion names no language of its own to color it in.
   const lines = useColoredLines(language, code, whole && !suggesting);
   const rows = rowsOf(language, code);
-  const id = language.toLowerCase();
-  const extension = LANGUAGE_EXTENSION[id] ?? id;
-  const name = suggesting ? undefined : LANGUAGE_NAMES[extension];
+  const known = codeLanguage(language);
+  const { extension } = known;
+  const name = suggesting ? undefined : known.name;
   return (
     <CodeCard
       glyph={name === undefined ? undefined : <FileTypeIcon name={`code.${extension}`} />}
-      title={suggesting ? SUGGESTION.LABEL : (name ?? (id === "" ? PLAIN_LANGUAGE : id))}
+      title={suggesting ? SUGGESTION.LABEL : codeTitle(language)}
       titleIs={suggesting || name !== undefined ? CODE_CARD_TITLE.WORDS : CODE_CARD_TITLE.NAME}
       code={rows === undefined ? code : rows.map((row) => row.text).join("\n")}
       lines={lines}
@@ -262,19 +226,17 @@ function TranscriptCodeBlock({
 }
 
 /**
- * How a transcript's markdown draws code and tables. A table scrolls
- * sideways inside its own box where it is wider than the column, and a
- * cell keeps the alignment its column's rule gave it, which Streamdown
- * hands on as the cell's style.
+ * How a transcript's markdown draws code and tables: a fenced block in the
+ * window's one code card, an inline span on a subtle fill, and a table bare,
+ * as a note's is, its look the flow's (`@repo/ui`'s prose.css), each part
+ * standing in for Streamdown's own, whose copy, download, and fullscreen
+ * controls no note has. A cell keeps the alignment its column's rule gave
+ * it, which Streamdown hands on as the cell's style.
  */
 export const TRANSCRIPT_CODE_AND_TABLE_COMPONENTS: MarkdownComponents = {
   code: TranscriptCodeBlock,
   inlineCode: ({ children }) => <code className="transcript-inline-code">{children}</code>,
-  table: ({ children }) => (
-    <div className="transcript-table">
-      <table>{children}</table>
-    </div>
-  ),
+  table: ({ children }) => <table>{children}</table>,
   thead: ({ children }) => <thead>{children}</thead>,
   tbody: ({ children }) => <tbody>{children}</tbody>,
   tr: ({ children }) => <tr>{children}</tr>,

@@ -193,6 +193,9 @@ export interface WorkspacesClient {
     | "environment"
     | "putVariable"
     | "deleteVariable"
+    | "sandboxSetup"
+    | "putInstallScript"
+    | "putRepositorySetup"
     | "changeRole"
     | "transfer"
     | "leave"
@@ -1370,6 +1373,26 @@ function workspaceEnvironmentActs(
   };
 }
 
+/** A workspace's cloud sandbox setup's acts: read, and its install script or a repository's setup script saved. */
+function workspaceSandboxSetupActs(
+  reach: WorkspacesReach,
+): Pick<
+  HostActTable<typeof WORKSPACE_ACTS>,
+  "WORKSPACE_SANDBOX_SETUP_READ" | "WORKSPACE_INSTALL_SCRIPT_PUT" | "WORKSPACE_REPOSITORY_SETUP_PUT"
+> {
+  const { client } = reach.dependencies;
+  // Note that the setup is asked of the service on each act and held nowhere
+  // here, because Settings reads it as it opens and lays each save's answer.
+  return {
+    WORKSPACE_SANDBOX_SETUP_READ: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.sandboxSetup(workspaceId)),
+    WORKSPACE_INSTALL_SCRIPT_PUT: ({ workspaceId, script }) =>
+      workspaceAsked(reach, client.workspaces.putInstallScript(workspaceId, script)),
+    WORKSPACE_REPOSITORY_SETUP_PUT: ({ workspaceId, repository, script }) =>
+      workspaceAsked(reach, client.workspaces.putRepositorySetup(workspaceId, repository, script)),
+  };
+}
+
 /** The per-workspace reads the windows hold (`WORKSPACE_FOLLOWS`), each by the workspace its key names. */
 function workspaceFollowActs({
   people,
@@ -1454,6 +1477,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       ...workspaceConnectionActs(reach, parts),
       ...workspaceSettingActs(reach, parts),
       ...workspaceEnvironmentActs(reach),
+      ...workspaceSandboxSetupActs(reach),
       ...github.acts,
       ...adminActs(reach),
       ...workspaceFollowActs(parts),

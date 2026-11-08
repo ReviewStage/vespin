@@ -18,7 +18,7 @@
  * - Opened in the window, its link, canonical as `linkOf` writes it, is
  *   matched here and opened through the Tasks tab's doors, which navigate
  *   once, straight to the step's address, with what it opens in typed
- *   history state (`navigation-history.ts`'s `onVisitTask`), so it never
+ *   history state (`window-history.ts`'s `onVisitTask`), so it never
  *   passes through its own route.
  * - Loaded at its own address, or landed on by the browser on an entry
  *   holding no step, the route standing reads it (`link-landings.ts`),

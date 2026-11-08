@@ -13,6 +13,7 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
+import { MARKDOWN_CLASS } from "@repo/ui/markdown-class";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { usePrefetchEditorBundle } from "../bundle-loader.js";
 import { type DescriptionEditorPlacement, PLACEMENT_END } from "../description-editor/contract.js";
@@ -382,7 +383,7 @@ export function PullRequestDescription({
         roomLabel={DESCRIPTION_WORDS.ROOM}
         placeholder={DESCRIPTION_WORDS.PLACEHOLDER}
         // Note that the words wear the drawn description's own classes, so nothing moves as it opens or closes.
-        className="transcript-markdown pull-request-description-text"
+        className={`${MARKDOWN_CLASS.FLOW} transcript-markdown pull-request-description-text`}
         roomClassName="pull-request-words pull-request-description min-w-0 select-text text-body-size leading-reading text-foreground"
         onDraft={(markdown) => {
           draft.current = markdown;

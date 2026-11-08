@@ -337,6 +337,8 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       return claimed.value;
     }),
     lineStep: deviceAgents.lineStep.effect(function* ({ context, input }) {
+      // Note that the step is traced on the request's span, since the working line never words it: a launch's breakdown is read off these spans.
+      yield* Effect.annotateCurrentSpan("launchStep", input.step);
       yield* followed(context, input.deviceId);
       return yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(

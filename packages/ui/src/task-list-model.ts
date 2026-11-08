@@ -267,27 +267,18 @@ function taskRowStatus(row: TaskRow): TaskStatus | undefined {
   return row.kind === TASK_ROW.TASK ? row.task.status : undefined;
 }
 
-/** Whether the view draws a row: one of a status shown, one with no status to leave it out by, or a parent a child task keeps open (`openParentIds`). */
-export function taskRowInStatuses(
-  row: TaskRow,
-  statuses: readonly TaskStatus[],
-  openParents: ReadonlySet<string>,
-): boolean {
+/** Whether the view draws a row: one of a status shown, or one with no status to leave it out by. */
+export function taskRowInStatuses(row: TaskRow, statuses: readonly TaskStatus[]): boolean {
   const status = taskRowStatus(row);
-  return (
-    status === undefined ||
-    statuses.includes(status) ||
-    (row.kind === TASK_ROW.TASK && openParents.has(row.task.id))
-  );
+  return status === undefined || statuses.includes(status);
 }
 
 /** The rows the view draws by status (`taskRowInStatuses`). */
 export function taskRowsInStatuses(
   rows: readonly TaskRow[],
   statuses: readonly TaskStatus[],
-  openParents: ReadonlySet<string>,
 ): readonly TaskRow[] {
-  return rows.filter((row) => taskRowInStatuses(row, statuses, openParents));
+  return rows.filter((row) => taskRowInStatuses(row, statuses));
 }
 
 /** One row as a list nesting child tasks draws it: how deep it stands, and whether the child tasks under it stand open. */
@@ -468,31 +459,4 @@ export function childTaskCounts(
     });
   }
   return counts;
-}
-
-/**
- * The tasks a child task keeps in the list whatever their own status: each
- * parent of a task of a status the view shows, or of none to leave it out
- * by, and every parent above it, so a parent stays in the sidebar with its
- * child tasks for as long as the view shows any of them, as a done parent
- * with a child task still to do or under way. Note that `tasks` is every
- * task the workspace holds rather than the rows a view draws, since a child
- * task the view would draw only under its parent still keeps that parent.
- */
-export function openParentIds(
-  tasks: readonly TaskSummary[],
-  statuses: readonly TaskStatus[],
-): ReadonlySet<string> {
-  const byId = new Map(tasks.map((task) => [task.id, task]));
-  const open = new Set<string>();
-  for (const task of tasks) {
-    if (task.status !== undefined && !statuses.includes(task.status)) continue;
-    // Note that a loop of parents, which nothing writes, ends the walk where it closes.
-    let parentId = task.parentTaskId;
-    while (parentId !== undefined && parentId !== task.id && !open.has(parentId)) {
-      open.add(parentId);
-      parentId = byId.get(parentId)?.parentTaskId;
-    }
-  }
-  return open;
 }

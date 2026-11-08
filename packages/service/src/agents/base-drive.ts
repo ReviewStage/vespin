@@ -24,15 +24,14 @@
  * apart from the base snapshots' (`agent-base-`) that came before, which are
  * left as they stand for any open still reading them.
  *
- * Nothing refills it on a timer. A launch fills it past its answer where its
- * fork found none, where a fill left it unfinished past its grace, or where
- * the agent's fast-forward from it (`baseRefillPast`) moved a lockfile, which
- * its install would no longer match, or found it lacking a commit that landed
- * on the default branch more than `STALE_AFTER` ago, so each agent's own
- * fetch stays small; a refill mounts the drive as it stands, fetches the
- * default branch over its checkout, and installs again, but for a stale one
- * whose fetch moved no lockfile. An agent's launch never forks a drive a
- * refill holds, which reads filling. Nothing deletes a base drive: an agent's
+ * A launch fills it past its answer where its fork found none, where a fill
+ * left it unfinished past its grace, or where the agent's fast-forward from
+ * it moved a lockfile (`lockfileMoved`), which its install would no longer
+ * match; a refill mounts the drive as it stands, fetches the default branch
+ * over its checkout, and installs again. Once a day the scheduled refresh
+ * (`base-drive-refresh.ts`) refills every base drive that stands the same
+ * way, so each agent's own fetch stays small, and installs again only where
+ * that fetch moved a lockfile. Nothing deletes a base drive: an agent's
  * delete deletes only the fork it owns.
  */
 
@@ -66,8 +65,6 @@ export const BASE_DRIVE = {
   NAME_PREFIX: "agent-base-drive-",
   /** How long a fill's sandbox may run before it is taken for one left behind: past any fill's clone and install. */
   FILL_GRACE: Duration.minutes(15),
-  /** How long a commit may stand on the default branch with the base lacking it before a launch has the base refilled: an hour, so an agent's own fetch is never of much. */
-  STALE_AFTER: Duration.hours(1),
   /** Where every drive an agent's sandbox opens with is mounted: the folder its checkout and the checkout's record stand in. */
   MOUNT: REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE,
 } as const;
@@ -78,14 +75,11 @@ const INSTALL_ERROR_TAIL_CHARS = 500;
 /** The lockfiles whose change on the default branch makes the base's install stale. */
 const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json"] as const;
 
-/** The variable the read past the base reads the base's commit from, so no commit is written into a command. */
+/** The variable the lockfile diff reads the base's commit from, so no commit is written into a command. */
 const BASE_COMMIT_VARIABLE = "APP_BASE_COMMIT";
 
-/** The read past the base's exit where the lockfiles differ, as `git diff --quiet` exits. */
+/** The lockfile diff's exit where the lockfiles differ, as `git diff --quiet` exits. */
 const DIFFERS_EXIT = 1;
-
-/** How many milliseconds a second of a commit's time holds. */
-const MILLIS_PER_SECOND = 1000;
 
 /**
  * The dependencies installed in the checkout: with pnpm where its lockfile
@@ -99,18 +93,8 @@ const INSTALL_SCRIPT = [
   "if [ -f pnpm-lock.yaml ]; then pnpm install; elif [ -f package.json ]; then npm install; fi",
 ].join("\n");
 
-/**
- * What the checkout's HEAD holds past the base's commit: on stdout, the
- * commit time, in seconds, of the first commit the default branch took past
- * the base, nothing where it took none; and exits `DIFFERS_EXIT` where the
- * lockfiles differ between the two. Note that it walks first parents alone,
- * because a merge's second parent may carry commits made long before it
- * landed.
- */
-const PAST_BASE_SCRIPT = [
-  `git log --first-parent --format=%ct "$${BASE_COMMIT_VARIABLE}..HEAD" | tail -n 1`,
-  `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`,
-].join("\n");
+/** Whether the lockfiles differ between the base's commit and the checkout's HEAD: exits `DIFFERS_EXIT` where they do. */
+const LOCKFILE_DIFF_SCRIPT = `git diff --quiet "$${BASE_COMMIT_VARIABLE}" HEAD -- ${LOCKFILES.join(" ")}`;
 
 /** What a fill clones through: a read token for the one repository, and whose it is. */
 interface BaseDriveCredential {
@@ -131,23 +115,23 @@ export const BASE_STATE = { READY: "ready", FILLING: "filling", WANTED: "wanted"
 
 /**
  * Why a base is wanted, as its spans name it: a launch's fork found none, a
- * fill left it unfinished, or a launch's fast-forward moved a lockfile past
- * it or found it stale.
+ * fill left it unfinished, a launch's fast-forward moved a lockfile past
+ * it, or the day's scheduled refresh came round.
  */
 export const BASE_WANTED = {
   MISSING: "missing",
   UNFINISHED: "unfinished",
   LOCKFILE_MOVED: "lockfile_moved",
-  STALE: "stale",
+  SCHEDULED: "scheduled",
 } as const;
 
 type BaseWanted = (typeof BASE_WANTED)[keyof typeof BASE_WANTED];
 
-/** Why a launch's fast-forward from a base's fork asks the base filled again: it moved a lockfile, or the base was stale. */
-export type BasePassed = typeof BASE_WANTED.LOCKFILE_MOVED | typeof BASE_WANTED.STALE;
-
-/** Why a launch asks a base it found free to fork filled: its fork found none, or its fast-forward passed it. */
-export type BaseRefill = typeof BASE_WANTED.MISSING | BasePassed;
+/** Why a base found free to fork is filled: a launch's fork found none, its fast-forward moved a lockfile, or the scheduled refresh asks it. */
+export type BaseRefill =
+  | typeof BASE_WANTED.MISSING
+  | typeof BASE_WANTED.LOCKFILE_MOVED
+  | typeof BASE_WANTED.SCHEDULED;
 
 export type BaseDriveRead =
   | { readonly state: typeof BASE_STATE.READY }
@@ -166,7 +150,7 @@ function digestOf(fields: readonly string[]): string {
 }
 
 /** The base drive's name, and its fill's sandbox's: the prefix and a digest of the workspace and the repository. */
-export function baseDriveName(of: BaseDriveOf): string {
+export function baseDriveName(of: Pick<BaseDriveOf, "workspaceId" | "fullName">): string {
   return `${BASE_DRIVE.NAME_PREFIX}${digestOf([of.workspaceId, snapshotRecordOf(of.fullName)])}`;
 }
 
@@ -239,30 +223,43 @@ export const checkoutCommit = (sandbox: RepositorySandbox) =>
   );
 
 /**
- * Why the base the checkout was at the commit given of is to be filled
- * again, as the checkout's fast-forward to the default branch finds it: the
- * lockfiles moved, so the base's install no longer matches; or the first
- * commit the default branch took past the base landed more than
- * `STALE_AFTER` ago, so the base is stale; none where neither. A read git
- * could not make reads as neither.
+ * Whether the checkout's lockfiles moved since the base's commit given, as
+ * a fast-forward from a base drive's fork finds them: the base's install no
+ * longer matches the default branch, so the base is filled again. A diff git
+ * could not make reads as no move.
  */
-export const baseRefillPast = (sandbox: RepositorySandbox, since: string) =>
-  Effect.gen(function* () {
-    const ran = yield* runInSandbox(
+export const lockfileMoved = (sandbox: RepositorySandbox, since: string) =>
+  Effect.map(
+    runInSandbox(
       sandbox,
       {
-        command: PAST_BASE_SCRIPT,
+        command: LOCKFILE_DIFF_SCRIPT,
         workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
         env: { [BASE_COMMIT_VARIABLE]: since },
       },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
-    );
-    if (ran.exitCode === DIFFERS_EXIT) return BASE_WANTED.LOCKFILE_MOVED;
-    const landed = Number.parseInt(ran.stdout.trim(), 10) * MILLIS_PER_SECOND;
-    const now = yield* Clock.currentTimeMillis;
-    // Note that no commit past the base reads as a landing at NaN, which is never stale.
-    return now - landed > Duration.toMillis(BASE_DRIVE.STALE_AFTER) ? BASE_WANTED.STALE : undefined;
-  });
+    ),
+    (ran) => ran.exitCode === DIFFERS_EXIT,
+  );
+
+/**
+ * Whether the checkout's lockfiles stand as they stood at the commit given,
+ * so an install made there still matches; a diff git could not make reads
+ * as a move.
+ */
+const lockfilesUnmoved = (sandbox: RepositorySandbox, since: string) =>
+  Effect.map(
+    runInSandbox(
+      sandbox,
+      {
+        command: LOCKFILE_DIFF_SCRIPT,
+        workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
+        env: { [BASE_COMMIT_VARIABLE]: since },
+      },
+      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+    ),
+    (ran) => ran.exitCode === 0,
+  );
 
 /**
  * The workspace's repository's base drive filled, where a launch wants it:
@@ -270,14 +267,14 @@ export const baseRefillPast = (sandbox: RepositorySandbox, since: string) =>
  * read, then the drive filled (`filledDrive`) from the image given: the
  * checkout it holds brought up to the default branch, or the default branch
  * cloned whole onto it where it holds none, through the token at the
- * firewall alone, then its dependencies installed, but for a stale base's
- * refill whose fast-forward moved no lockfile, whose install still matches.
- * A base free to fork is filled only where the launch names why (`refill`):
- * its fork found none, or its fast-forward moved a lockfile or found the
- * base stale. Its span records where the base stood and why it was filled.
- * A name another launch took first is that launch's fill, and this one does
- * nothing. `open` is the sandbox as the
- * clone reaches it, over the caller's runner.
+ * firewall alone, then its dependencies installed, but for a scheduled
+ * refill whose fetch left the lockfiles as they stood, whose install still
+ * matches. A base free to fork is filled only where the caller names why
+ * (`refill`): a launch's fork found none, its fast-forward moved a
+ * lockfile, or the scheduled refresh asks it. Its span records where the
+ * base stood and why it was filled. A name another fill took first is that
+ * fill's, and this one does nothing. `open` is the sandbox as the clone
+ * reaches it, over the caller's runner.
  */
 export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
   of: BaseDriveOf,
@@ -309,7 +306,7 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
       Effect.gen(function* () {
         const sandbox = open(running);
         const before =
-          reason === BASE_WANTED.STALE
+          reason === BASE_WANTED.SCHEDULED
             ? yield* Effect.orElseSucceed(checkoutCommit(sandbox), () => undefined)
             : undefined;
         // A drive that holds the checkout already is brought up to date, which refuses one that holds none.
@@ -326,14 +323,11 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
             }).pipe(Effect.as(true)),
           ),
         );
-        // Note that a lockfile read that failed reads as moved, since an install too many costs only time.
+        // Note that a lockfile diff that failed reads as moved, since an install too many costs only time.
         const stillMatches =
           !cloned &&
           before !== undefined &&
-          (yield* Effect.orElseSucceed(
-            baseRefillPast(sandbox, before),
-            () => BASE_WANTED.LOCKFILE_MOVED,
-          )) !== BASE_WANTED.LOCKFILE_MOVED;
+          (yield* Effect.orElseSucceed(lockfilesUnmoved(sandbox, before), () => false));
         if (!stillMatches) yield* installDependencies(sandbox);
       }),
   );

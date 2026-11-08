@@ -7,7 +7,7 @@ import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import type { NavigationHistory } from "../navigation-history.js";
+import type { NavigationHistory } from "../places/window-history.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
 import type { VersionHistoryControl } from "../tasks/use-tasks-tab.js";
@@ -50,7 +50,7 @@ const FROM_INBOX: NavigationHistory = {
   onBack: ignore,
   onForward: ignore,
   steps: {
-    back: [{ at: 0, title: { label: "Inbox" }, page: { kind: "routed", of: "/acme/inbox" } }],
+    back: [{ number: 0, title: { label: "Inbox" }, page: { kind: "routed", of: "/acme/inbox" } }],
     forward: [],
   },
   onGoTo: ignore,

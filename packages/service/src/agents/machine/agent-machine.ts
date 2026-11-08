@@ -238,6 +238,18 @@ export class LaunchRefused extends Data.TaggedError("LaunchRefused")<{
 }> {}
 
 /** What an open asks: the session the place is opened under, the agent whose repository it checks out, and the reads run beside it. */
+/**
+ * The workspace's cloud setup scripts as an open hands them to a sandbox
+ * it creates (Settings › Cloud setup): its install script and the agent's
+ * repository's setup script, each where one is saved, and the workspace's
+ * variables the setup script runs with, every one of them secret.
+ */
+export interface SandboxSetup {
+  readonly install?: string | undefined;
+  readonly repository?: string | undefined;
+  readonly environment: Readonly<Record<string, string>>;
+}
+
 export interface MachineOpen<B, EB, RB> {
   readonly session: string;
   /** The account and conversation the open acts for: the agent's starter's. */
@@ -247,6 +259,8 @@ export interface MachineOpen<B, EB, RB> {
   readonly harness: string;
   /** The caller's reads that need no place, run beside the open, whose result `use` is handed. */
   readonly beside: Effect.Effect<B, EB, RB>;
+  /** The workspace's cloud setup scripts, which a sandbox the open creates runs after its checkout; none where none is saved, and nothing on a machine that runs none, a device's. */
+  readonly setup?: Effect.Effect<SandboxSetup | undefined> | undefined;
 }
 
 /** A place opened: where it stands, its lifecycle's own name for it, where the agent's checkout is, and what is left of the checkout to run beside the launch. */

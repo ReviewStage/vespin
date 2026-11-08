@@ -1,20 +1,5 @@
-import {
-  BUTTON_SIZE,
-  cn,
-  IconButton,
-  MessageFrame,
-  TEXT_ELEMENT,
-  TEXT_VARIANT,
-  Text,
-  Tooltip,
-} from "@repo/ui";
-import {
-  MARKDOWN_LOOK,
-  Markdown,
-  type MarkdownComponents,
-  type MarkdownProps,
-} from "@repo/ui/markdown";
-import { QUOTE_CLASS } from "@repo/ui/quote-face";
+import { BUTTON_SIZE, cn, IconButton, MessageFrame, Tooltip } from "@repo/ui";
+import { MARKDOWN_LOOK, Markdown, type MarkdownProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
 import { type HTMLAttributes, memo, type ReactNode } from "react";
@@ -155,66 +140,6 @@ export function MessageAction({
   if (tooltip === false) return button;
   return <Tooltip label={tooltip === true ? label : tooltip}>{button}</Tooltip>;
 }
-
-/** A message's heading levels, each with the type role that sets it; h4 to h6 take the section role, never a label's, which the web draws smaller than the body. */
-const TRANSCRIPT_HEADING = {
-  1: TEXT_VARIANT.DIALOG,
-  2: TEXT_VARIANT.SECTION,
-  3: TEXT_VARIANT.SECTION,
-  4: TEXT_VARIANT.SECTION,
-  5: TEXT_VARIANT.SECTION,
-  6: TEXT_VARIANT.SECTION,
-} as const;
-
-/**
- * A heading of a rendered message: its look from the role its level maps to,
- * its spacing from tasks.css, and no heading element. Note that a model's `#`
- * line is words in a conversation, not a part of the window's outline, so it
- * is a paragraph, as a note's headings are (`@repo/ui/markdown`).
- */
-function TranscriptHeading({
-  level,
-  children,
-}: {
-  level: keyof typeof TRANSCRIPT_HEADING;
-  children: ReactNode;
-}): React.JSX.Element {
-  return (
-    <Text
-      as={TEXT_ELEMENT.P}
-      variant={TRANSCRIPT_HEADING[level]}
-      className="transcript-heading mx-0 mt-control-gap mb-tight-gap data-[level=1]:mt-block-gap data-[level=2]:mt-block-gap"
-      data-level={level}
-    >
-      {children}
-    </Text>
-  );
-}
-
-/**
- * Markdown drawn at the panel's own scale (`@repo/ui/markdown`'s transcript look). Streamdown's headings and lists
- * are a page's, sized for a document a reader sits down to; a transcript's
- * are a note's, a step above the words around them and no more, a
- * list keeps to the column's own indent, and a quote is the one every
- * Markdown in the window draws (`@repo/ui/quote-face`) rather than
- * Streamdown's, which stood the browser's 40px in from the column. A list and
- * a quote are drawn by their classes; a heading is `Text`, its role chosen by
- * its level. Note that their margins are a step apart, a heading's a step more
- * over the first two levels, and the reply's first and last blocks clear
- * theirs (`.transcript-markdown`, tasks.css).
- */
-export const PANEL_MARKDOWN_COMPONENTS: MarkdownComponents = {
-  h1: ({ children }) => <TranscriptHeading level={1}>{children}</TranscriptHeading>,
-  h2: ({ children }) => <TranscriptHeading level={2}>{children}</TranscriptHeading>,
-  h3: ({ children }) => <TranscriptHeading level={3}>{children}</TranscriptHeading>,
-  h4: ({ children }) => <TranscriptHeading level={4}>{children}</TranscriptHeading>,
-  h5: ({ children }) => <TranscriptHeading level={5}>{children}</TranscriptHeading>,
-  h6: ({ children }) => <TranscriptHeading level={6}>{children}</TranscriptHeading>,
-  ul: ({ children }) => <ul className="my-tight-gap list-disc pl-ui-20">{children}</ul>,
-  ol: ({ children }) => <ol className="my-tight-gap list-decimal pl-ui-20">{children}</ol>,
-  li: ({ children }) => <li className="my-list-gap">{children}</li>,
-  blockquote: ({ children }) => <blockquote className={QUOTE_CLASS}>{children}</blockquote>,
-};
 
 export type MessageResponseProps = Omit<MarkdownProps, "look" | "className"> & {
   /** Whether the words are drawn on one line, as a queued message's row draws them (`MARKDOWN_LOOK.TRANSCRIPT_LINE`). */

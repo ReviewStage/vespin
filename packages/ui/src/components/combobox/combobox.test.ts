@@ -243,7 +243,7 @@ test("an Escape an input method is composing with is kept from what stands behin
 });
 
 /** Lays `element` out as the browser would, which jsdom does not. */
-function layOut(element: HTMLElement, box: Record<string, number>): void {
+function layOut(element: HTMLElement, box: Record<string, number | HTMLElement>): void {
   for (const [name, value] of Object.entries(box)) {
     Object.defineProperty(element, name, { configurable: true, value });
   }
@@ -253,19 +253,24 @@ test("the list scrolls itself to keep the active option in view as the keys move
   const { field } = mount();
   type(field(), "a");
   const list = document.querySelector<HTMLElement>('[role="listbox"]') ?? assert.fail("the list");
-  layOut(list, { clientHeight: 32 });
+  layOut(list, { clientHeight: 64 });
+  // Note that each option is placed within its group's run, as the browser places it, and the run stands under the group's 28px heading.
+  const group = list.querySelector<HTMLElement>('[role="group"]') ?? assert.fail("the group");
+  layOut(group, { offsetParent: list, offsetTop: 0 });
   for (const [index, option] of [
     ...list.querySelectorAll<HTMLElement>('[role="option"]'),
   ].entries()) {
-    layOut(option, { offsetTop: index * 32, offsetHeight: 32 });
+    const run = option.parentElement ?? assert.fail("the option's run");
+    layOut(run, { offsetParent: list, offsetTop: 28 });
+    layOut(option, { offsetParent: run, offsetTop: index * 32, offsetHeight: 32 });
   }
 
   press(field(), { key: "ArrowDown" });
   const down = list.scrollTop;
   press(field(), { key: "Home" });
 
-  assert.equal(down, 32);
-  assert.equal(list.scrollTop, 0);
+  assert.equal(down, 28, "the second option's foot, under the heading, meets the list's");
+  assert.equal(list.scrollTop, 0, "the first option brings its group's heading in with it");
 });
 
 test("an option the pointer makes active is where the pointer is, so the list stands still under it", () => {

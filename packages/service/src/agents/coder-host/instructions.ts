@@ -19,6 +19,7 @@ import { INTEGRATION_NAMES_SAID } from "../../integrations/integrations.js";
 import { SENDER_LABEL_LEAD } from "../attached-files.js";
 import { RECORDING_CURSOR_FILE } from "../browser/recording-cursor.js";
 import { COMMAND_DESCRIPTION_INSTRUCTION } from "../command-description.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
 import { MESSAGE_AGENT_TOOL } from "./agent-message.js";
@@ -621,10 +622,11 @@ function runOnMacWords(standing: AgentStanding): string {
  * What an agent in a sandbox of ours is told it may set up there: anything as
  * root, and Docker, whose daemon the image's `docker` starts on first use
  * (`apps/web/agent-image/Dockerfile`), so a repository's own setup runs as
- * its README says.
+ * its README says; and where the workspace's cloud setup scripts report,
+ * which a sandbox runs as it is created (`../machine/sandbox-machine.ts`'s
+ * `SETUP_RUN_SCRIPT`).
  */
-const SANDBOX_SETUP_WORDS =
-  "You have passwordless `sudo`, so install what the repository's setup needs that the sandbox lacks, such as a system package with `sudo apt-get install`. Docker is installed too: `docker` and `docker compose` start its daemon on first use, and a port a container publishes is on `localhost`.";
+const SANDBOX_SETUP_WORDS = `You have passwordless \`sudo\`, so install what the repository's setup needs that the sandbox lacks, such as a system package with \`sudo apt-get install\`. Docker is installed too: \`docker\` and \`docker compose\` start its daemon on first use, and a port a container publishes is on \`localhost\`. Where your workspace keeps cloud setup scripts, in ${PRODUCT_NAME}'s Settings › Cloud setup, they ran as your sandbox was created, before you started: what they printed and how they exited is in \`${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}\`, and where it ends on anything but \`--- exit 0\`, tell the developer what failed.`;
 
 /** The checkout section's words after where it stands and the tools' own: how GitHub is reached, and the Mac beside the sandbox. */
 function checkoutReachWords(machine: CoderMachine, standing: AgentStanding): string {

@@ -13,7 +13,8 @@
  *   HTML is text, and only the elements a place hands in are drawn its way.
  * - A transcript (`MARKDOWN_LOOK.TRANSCRIPT`) is Streamdown whole, read block
  *   by block while it streams, its HTML parsed and sanitized, its root and
- *   components the place's.
+ *   components the place's, its blocks flowing as a note's do: the same
+ *   gaps, dividers, headings, and lists (`.ui-markdown-flow`).
  * - A transcript's line (`MARKDOWN_LOOK.TRANSCRIPT_LINE`) is a transcript
  *   read as one block, its blocks' words run together into one line, its
  *   line breaks spaces, so a row holding one line draws a message's words,
@@ -123,21 +124,33 @@ function heading(level: number, children: ReactNode): React.JSX.Element {
 }
 
 /**
- * How a note draws the elements whose default would say the wrong thing in
- * it. A heading is styled, never announced: a reader walking the document's
- * headings should meet the window's, not a reply's. A picture has no picture
- * to draw in a caption, so its alternative words stand in for it. A quote is
- * the one every Markdown in the window draws (`quote-face.ts`).
+ * How a note and a transcript alike draw the blocks of their flow, so every
+ * rendered text reads with one look (`prose.css`'s `.ui-markdown-flow`). A
+ * heading is styled, never announced: a reader walking the document's
+ * headings should meet the window's, not a reply's. A quote is the one every
+ * Markdown in the window draws (`quote-face.ts`). A divider, a list, and
+ * strong words are bare, so the flow's rules draw them rather than
+ * Streamdown's own dress.
  */
-const NOTE_COMPONENTS: Components = {
+const FLOW_COMPONENTS: Components = {
   h1: ({ children }) => heading(1, children),
   h2: ({ children }) => heading(2, children),
   h3: ({ children }) => heading(3, children),
   h4: ({ children }) => heading(4, children),
   h5: ({ children }) => heading(5, children),
   h6: ({ children }) => heading(6, children),
-  img: ({ alt }) => <>{alt ?? ""}</>,
   blockquote: ({ children }) => <blockquote className={QUOTE_CLASS}>{children}</blockquote>,
+  hr: () => <hr />,
+  ul: ({ children }) => <ul>{children}</ul>,
+  ol: ({ children, start }) => <ol start={start}>{children}</ol>,
+  li: ({ children, className }) => <li className={className}>{children}</li>,
+  strong: ({ children }) => <strong>{children}</strong>,
+};
+
+/** How a note draws the rest: a picture has no picture to draw in a caption, so its alternative words stand in for it. */
+const NOTE_COMPONENTS: Components = {
+  ...FLOW_COMPONENTS,
+  img: ({ alt }) => <>{alt ?? ""}</>,
 };
 
 /** A tick that asks nothing. */
@@ -412,14 +425,14 @@ export const Markdown = memo(function Markdown({
     [remarkPlugins],
   );
   const transcriptComponents = useMemo<Components>(
-    () => ({ input: readTaskInput, ...components }),
+    () => ({ ...FLOW_COMPONENTS, input: readTaskInput, ...components }),
     [components],
   );
   if (look === MARKDOWN_LOOK.TRANSCRIPT || look === MARKDOWN_LOOK.TRANSCRIPT_LINE) {
     const line = look === MARKDOWN_LOOK.TRANSCRIPT_LINE;
     const steps = line ? lineSteps : remarkPlugins;
-    // Note that a line's root keeps its words from wrapping, over Streamdown's own root, which wraps them.
-    const root = line ? cn(className, "whitespace-nowrap") : className;
+    // Note that a line's root keeps its words from wrapping, over Streamdown's own root, which wraps them, and a whole transcript's flows as a note's does.
+    const root = line ? cn(className, "whitespace-nowrap") : cn(MARKDOWN_CLASS.FLOW, className);
     return (
       <Streamdown
         mode={streaming ? "streaming" : "static"}

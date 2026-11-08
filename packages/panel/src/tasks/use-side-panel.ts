@@ -566,7 +566,7 @@ export interface SidePanelControl {
   tab: SidePanelTab | undefined;
   /** The panel's width in CSS pixels, never under {@link SIDE_PANEL_WIDTH}'s least. */
   width: number;
-  /** How many times a door naming a thing opened it here, a link, a pin, a notification, or a file named in place, as against a tab chosen in the strip, so the history takes each such open as a step of its own (`navigation-history.ts`). */
+  /** How many times a door naming a thing opened it here, a link, a pin, a notification, or a file named in place, as against a tab chosen in the strip, so the history takes each such open as a step of its own (`places/window-history.ts`). */
   opened: number;
   /** Shows or hides the panel; hiding it leaves full screen too. */
   onToggle: () => void;

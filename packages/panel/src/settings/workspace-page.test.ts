@@ -2082,11 +2082,12 @@ const inviteAct = () =>
     each.textContent?.startsWith("Invite"),
   ) ?? assert.fail("no Invite act");
 
-/** The Invite card's roles, each its name and whether it is checked; none where the card offers no role. */
+/** The Invite card's roles, each its words (its name, then what it means or why it is unavailable), whether it is checked, and whether it can be picked. */
 const roleOptions = () =>
-  [...inviteDialog().querySelectorAll<HTMLElement>('[role="radio"]')].map((each) => [
+  [...inviteDialog().querySelectorAll<HTMLButtonElement>('[role="radio"]')].map((each) => [
     each.textContent,
     each.getAttribute("aria-checked"),
+    each.disabled || each.getAttribute("aria-disabled") === "true" ? "unavailable" : "open",
   ]);
 
 /**
@@ -2113,8 +2114,8 @@ async function invite(
     );
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  const admin = [...inviteDialog().querySelectorAll<HTMLElement>('[role="radio"]')].find(
-    (each) => each.textContent === "Admin",
+  const admin = [...inviteDialog().querySelectorAll<HTMLElement>('[role="radio"]')].find((each) =>
+    each.textContent?.startsWith("Admin"),
   );
   if (role === WORKSPACE_ROLE.ADMIN) act(() => admin?.click());
   act(() => {
@@ -2272,8 +2273,8 @@ test("the owner chooses the role from Member and Admin, Member at first, and the
   await invite(page, "alan@example.com", WORKSPACE_ROLE.ADMIN);
 
   assert.deepEqual(offered, [
-    ["Member", "true"],
-    ["Admin", "false"],
+    ["MemberWorks on the workspace's tasks and agents.", "true", "open"],
+    ["AdminAlso invites people and manages members and integrations.", "false", "open"],
   ]);
   assert.deepEqual(
     sent.flatMap((request) =>
@@ -2283,15 +2284,18 @@ test("the owner chooses the role from Member and Admin, Member at first, and the
   );
 });
 
-test("an admin's Invite card offers no role, since only the owner invites admins, and invites a member", async () => {
+test("an admin's Invite card shows the role, Admin unavailable since only the owner invites admins, and invites a member", async () => {
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   act(() => button(page, "Invite").click());
   await settle();
   const offered = roleOptions();
 
-  await invite(page, "alan@example.com", WORKSPACE_ROLE.MEMBER);
+  await invite(page, "alan@example.com", WORKSPACE_ROLE.ADMIN);
 
-  assert.deepEqual(offered, []);
+  assert.deepEqual(offered, [
+    ["MemberWorks on the workspace's tasks and agents.", "true", "open"],
+    ["AdminOnly the owner can invite an admin.", "false", "unavailable"],
+  ]);
   assert.deepEqual(
     sent.flatMap((request) =>
       request.kind === ACT_KIND.WORKSPACE_INVITE ? [request.payload.role] : [],

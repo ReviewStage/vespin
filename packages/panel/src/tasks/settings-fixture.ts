@@ -58,6 +58,7 @@ import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
+import type { WorkspaceSandboxSetupAnswer } from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -635,6 +636,51 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   return { variables: acmeVariables };
 }
 
+/* ----- Settings › Cloud setup ----- */
+
+/** Acme's sandbox setup, as a save leaves it: an install script, and setup scripts for two of its repositories. */
+let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
+  install: {
+    script: [
+      "sudo apt-get update",
+      "sudo apt-get install -y postgresql-client redis-tools",
+      "curl -fsSL https://bun.sh/install | bash",
+    ].join("\n"),
+    updatedAt: NOW - 4 * DAY,
+  },
+  setups: [
+    { repository: "acme/api", script: "uv sync\ndocker compose pull", updatedAt: NOW - DAY },
+    {
+      repository: "acme/relay",
+      script: "pnpm install\ncp .env.example .env\ndocker compose up -d --wait",
+      updatedAt: NOW - 2 * HOUR,
+    },
+  ],
+};
+
+/** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
+function sandboxSetupAnswer(repository: string | undefined, script: string) {
+  const removes = script.trim() === "";
+  if (repository === undefined) {
+    acmeSandboxSetup = {
+      ...acmeSandboxSetup,
+      install: removes ? null : { script, updatedAt: NOW },
+    };
+    return acmeSandboxSetup;
+  }
+  const others = acmeSandboxSetup.setups.filter(
+    (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
+  );
+  const setups = removes ? others : [...others, { repository, script, updatedAt: NOW }];
+  acmeSandboxSetup = {
+    ...acmeSandboxSetup,
+    setups: setups.sort((one, other) =>
+      one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
+    ),
+  };
+  return acmeSandboxSetup;
+}
+
 /* ----- The act door ----- */
 
 type StagedAnswer<Kind extends PortActKind> = (
@@ -682,6 +728,10 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     ]),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: ({ name }) =>
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
+  [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
+  [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
+  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
+    sandboxSetupAnswer(repository, script),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
     skillContent(id) ?? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
   // The command-line tool installed on this Mac, as Settings' MCP page's Install asks, without running the install script: a fixture run reaches no network and installs nothing.

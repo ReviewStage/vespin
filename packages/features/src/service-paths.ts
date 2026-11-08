@@ -387,6 +387,12 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_ENVIRONMENT: "/api/workspaces/environment",
   /** One of a workspace's environment variables removed by an owner or admin (POST), answering the names as they then stand. */
   WORKSPACE_ENVIRONMENT_DELETE: "/api/workspaces/environment/delete",
+  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, to a member (GET, `WORKSPACE_SANDBOX_SETUP_QUERY`) (`workspace-sandbox-setup-wire.ts`). */
+  WORKSPACE_SANDBOX_SETUP: "/api/workspaces/sandbox-setup",
+  /** A workspace's install script saved by an owner or admin (PUT), answering the setup as it then stands. */
+  WORKSPACE_SANDBOX_SETUP_INSTALL: "/api/workspaces/sandbox-setup/install",
+  /** A repository's setup script saved by an owner or admin (PUT), answering the setup as it then stands. */
+  WORKSPACE_SANDBOX_SETUP_REPOSITORY: "/api/workspaces/sandbox-setup/repository",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */

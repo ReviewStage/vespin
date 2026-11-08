@@ -169,6 +169,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   PLAN_TEMPLATE: "plan_template",
   WORKSPACE: "workspace",
   ENVIRONMENT: "environment",
+  CLOUD_SETUP: "cloud_setup",
   ACCOUNT: "account",
   NOTIFICATIONS: "notifications",
   THIS_MAC: "this_mac",

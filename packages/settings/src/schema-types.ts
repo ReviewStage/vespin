@@ -32,6 +32,8 @@ export const SETTINGS_PAGE = {
   WORKSPACE: "workspace",
   /** The environment variables the workspace hands every member's cloud agents, the service's rather than a stored setting, their values never shown. */
   ENVIRONMENT: "environment",
+  /** How the workspace's cloud agent sandboxes are set up, its install script and each repository's setup script, the service's rather than a stored setting. */
+  CLOUD_SETUP: "cloud-setup",
   /** What this Mac lets agents do on it, the stored switch for running commands here, and whether the app opens as it starts. */
   THIS_MAC: "this-mac",
   /** The features the account can turn on before they are finished, each the account's on the service rather than a stored setting. */

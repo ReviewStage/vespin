@@ -16,9 +16,13 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Maximize2,
   MessageSquare,
   MessageSquarePlus,
+  Minimize2,
   Minus,
+  PanelLeft,
+  PanelRight,
   Pin,
   PinOff,
   Plug,
@@ -38,7 +42,7 @@ import { lucideGlyph } from "./lucide-glyph.js";
  * lucide-glyphs.tsx -- the glyphs `glyphs.tsx` once drew as copies of
  * Lucide's, now Lucide's own, under the names their call sites already import.
  *
- * Twenty-four were Lucide's paths redrawn in our stroke and three were
+ * Twenty-eight were Lucide's paths redrawn in our stroke and three were
  * Tabler's (the plug and both pins), each beside a Lucide glyph of the same
  * meaning. They are Lucide's drawing now, in our stroke (`lucide-glyph.tsx`),
  * so there is one drawing of each. A name here goes when the last screen that
@@ -55,6 +59,18 @@ export const PinIcon = lucideGlyph(Pin, "icon-button-glyph");
 
 /** The pin struck through: lets a pinned task back among the rest. */
 export const UnpinIcon = lucideGlyph(PinOff, "icon-button-glyph");
+
+/** A window with a pane down its right side: the side panel beside the document, shown or hidden. */
+export const SidePanelIcon = lucideGlyph(PanelRight, "icon-button-glyph");
+
+/** The window's sidebar, shown or folded away: the side panel's frame with its left column ruled off. */
+export const SidebarIcon = lucideGlyph(PanelLeft, "icon-button-glyph");
+
+/** Two arrows out to opposite corners: a pane grown to fill the window. */
+export const ExpandIcon = lucideGlyph(Maximize2, "icon-button-glyph");
+
+/** Two arrows in from opposite corners: a full-window pane brought back to its place. */
+export const CollapseIcon = lucideGlyph(Minimize2, "icon-button-glyph");
 
 /** An arrow turning round to where it began: tries again what did not land. */
 export const RetryIcon = lucideGlyph(RotateCw, "icon-button-glyph");

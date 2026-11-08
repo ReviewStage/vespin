@@ -105,24 +105,23 @@ test("a transcript draws every sample of its markdown exactly as recorded", asyn
   assert.equal(recorded, await fs.readFile(GOLDEN, "utf8"));
 });
 
-test("a message's headings join no outline: each is a paragraph at its level, set in the role that level maps to, none below the body's", async () => {
+test("a message's headings join no outline: each is a paragraph at its level, drawn as a note's heading is", async () => {
   const box = await drawnInto(
     "# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six",
   );
-  const headings = [...box.querySelectorAll(".transcript-heading")].map((heading) => [
+  const headings = [...box.querySelectorAll(".ui-markdown-heading")].map((heading) => [
     heading.tagName.toLowerCase(),
     heading.getAttribute("data-level"),
-    heading.getAttribute("data-variant"),
     heading.textContent,
   ]);
 
   assert.equal(box.querySelector("h1, h2, h3, h4, h5, h6"), null);
   assert.deepEqual(headings, [
-    ["p", "1", "dialog", "One"],
-    ["p", "2", "section", "Two"],
-    ["p", "3", "section", "Three"],
-    ["p", "4", "section", "Four"],
-    ["p", "5", "section", "Five"],
-    ["p", "6", "section", "Six"],
+    ["p", "1", "One"],
+    ["p", "2", "Two"],
+    ["p", "3", "Three"],
+    ["p", "4", "Four"],
+    ["p", "5", "Five"],
+    ["p", "6", "Six"],
   ]);
 });

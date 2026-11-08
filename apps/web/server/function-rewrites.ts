@@ -382,7 +382,14 @@ const VercelConfig = Schema.Struct({
   $schema: Schema.String,
   git: GitConfig,
   services: Schema.Struct({ web: WebService }),
-  crons: Schema.Array(Schema.Struct({ path: Schema.String, schedule: Schema.String })),
+  schedules: Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      schedule: Schema.String,
+      path: Schema.String,
+      requestMethod: Schema.Literals(["GET", "POST"]),
+    }),
+  ),
   rewrites: Schema.Array(ServiceRewriteSchema),
 });
 export type VercelConfig = typeof VercelConfig.Type;

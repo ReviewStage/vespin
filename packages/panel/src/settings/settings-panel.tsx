@@ -16,6 +16,7 @@ import { AgentComposerSection } from "./agent-composer-section.js";
 import { AgentsPage } from "./agents-page.js";
 import { AppearanceSection } from "./appearance-page.js";
 import { CliPage } from "./cli-page.js";
+import { CloudSetupPage } from "./cloud-setup-page.js";
 import { CommitsSection } from "./commits-section.js";
 import { EnvironmentPage } from "./environment-page.js";
 import { ExperimentalPage } from "./experimental-page.js";
@@ -126,6 +127,14 @@ export function SettingsPanel({
 
       {view !== SETTINGS_VIEW.ENVIRONMENT ? null : signedIn ? (
         <EnvironmentPage control={workspace} />
+      ) : (
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {SIGNED_OUT_WORDS}
+        </Text>
+      )}
+
+      {view !== SETTINGS_VIEW.CLOUD_SETUP ? null : signedIn ? (
+        <CloudSetupPage control={workspace} />
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
           {SIGNED_OUT_WORDS}

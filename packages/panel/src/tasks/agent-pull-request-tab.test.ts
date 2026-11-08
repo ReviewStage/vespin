@@ -783,7 +783,7 @@ test("the tab draws the pull request as a page: its standing and branches, wheth
   const description =
     tab.querySelector('[aria-label="Description"]') ?? assert.fail("the description stands");
   assert.equal(
-    description.querySelector(".transcript-heading")?.textContent,
+    description.querySelector(".ui-markdown-heading")?.textContent,
     "Summary",
     "GitHub's heading stands, as words and no heading element",
   );
@@ -792,7 +792,7 @@ test("the tab draws the pull request as a page: its standing and branches, wheth
     true,
     "its permalink does not",
   );
-  assert.equal(description.querySelector('[data-streamdown="strong"]')?.textContent, "seven days");
+  assert.equal(description.querySelector("strong")?.textContent, "seven days");
   assert.match(
     description.textContent ?? "",
     /@charlespan asked\./u,
@@ -851,7 +851,7 @@ test("the tab draws the pull request as a page: its standing and branches, wheth
   assert.match(entries[0]?.textContent ?? "", /Changes requested/u);
   assert.match(entries[0]?.textContent ?? "", /Rename the flag\./u);
   assert.equal(
-    entries[1]?.querySelector('[data-streamdown="strong"]')?.textContent,
+    entries[1]?.querySelector("strong")?.textContent,
     "plain",
     "a comment GitHub sent no rendering of stands as its markdown",
   );
@@ -1332,10 +1332,7 @@ test("a review that only left line comments draws each thread under it: its file
     ["unified", "none", true],
     "a preview is an excerpt drawn unified, its lines tinted whole",
   );
-  assert.equal(
-    open.querySelector('.pull-request-thread-comment [data-streamdown="strong"]')?.textContent,
-    "once",
-  );
+  assert.equal(open.querySelector(".pull-request-thread-comment strong")?.textContent, "once");
   const more =
     open.querySelector<HTMLAnchorElement>(".annotation-card-more a") ??
     assert.fail("the replies left on GitHub are counted");
@@ -2415,7 +2412,10 @@ test("the pill, the title, and the files' count stand from what Vespin holds bef
     "Expire invitations weekly #42",
     "the read's title replaces what was held",
   );
-  assert.equal(section("Description").querySelector(".transcript-heading")?.textContent, "Summary");
+  assert.equal(
+    section("Description").querySelector(".ui-markdown-heading")?.textContent,
+    "Summary",
+  );
 
   await choose(tab, "Checks");
   assert.deepEqual(waiting(tab), ["Reading checks"]);
@@ -4684,10 +4684,7 @@ test("Files changed draws each review thread under its line, its comments throug
     { key: `${PAGE}#discussion_r1`, side: "additions", line: 13 },
   ]);
   const note = drawn.renderAnnotation("src/invite.ts", `${PAGE}#discussion_r1`);
-  assert.equal(
-    note.querySelector('.pull-request-thread-comment [data-streamdown="strong"]')?.textContent,
-    "once",
-  );
+  assert.equal(note.querySelector(".pull-request-thread-comment strong")?.textContent, "once");
   assert.equal(note.querySelector("details")?.open, true, "a current thread stands open");
   await minimize();
   // Note that the setting's write lands a moment after the press, and the chip with it.

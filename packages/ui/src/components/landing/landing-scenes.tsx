@@ -2,14 +2,7 @@ import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, type RefObject, useRef } from "react";
-import {
-  ComposeIcon,
-  MicrophoneIcon,
-  PlayIcon,
-  PlusIcon,
-  SearchIcon,
-  SidebarIcon,
-} from "../../face/glyphs.js";
+import { ComposeIcon, MicrophoneIcon, PlayIcon, PlusIcon, SearchIcon } from "../../face/glyphs.js";
 import {
   CheckIcon,
   GLYPH,
@@ -21,6 +14,7 @@ import {
   SquareCheckIcon,
   ZapIcon,
 } from "../../icons/icons.js";
+import { SidebarIcon } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
 import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
