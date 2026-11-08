@@ -215,7 +215,10 @@ function TokenRoute({ workspaceId }: { workspaceId: string }): React.JSX.Element
           label="Classic token"
           placeholder="ghp_…"
           value={pasted}
-          onChange={setPasted}
+          onChange={(value) => {
+            setPasted(value);
+            setUnfit(false);
+          }}
           onEnter={save}
         />
         {rejection !== undefined ? (
