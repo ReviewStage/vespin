@@ -461,8 +461,12 @@ function workspacesAnswered(
         .map((each) => each.id),
     );
     const listed = new Set(workspaces.map((each) => each.id));
+    const gone = new Set([...drawn].filter((id) => !listed.has(id)));
     // Note that a workspace leaving the list lets go of all content kept, since what was read in it is no longer the account's to read.
-    if ([...drawn].some((id) => !listed.has(id))) yield* kept.clear;
+    if (gone.size > 0) yield* kept.clear;
+    // A workspace another member deleted, or left the account out of, closes its task open here, as the act that leaves it does.
+    const open = tasks.openTaskLeaving();
+    if (open.workspaceId !== undefined && gone.has(open.workspaceId)) yield* open.close;
     yield* rows.answer(workspaces);
     if (tasks.view().workspacesStatus !== TASKS_READ.READY) {
       tasks.draw({ workspacesStatus: TASKS_READ.READY });

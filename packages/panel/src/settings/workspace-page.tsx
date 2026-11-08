@@ -862,9 +862,10 @@ function OwnerLeave({
  * line saying what goes, and the red button, which asks first and waits on
  * the workspace's name typed, since it is deleted for every member and
  * nobody can bring it back. A delete the service carried turns the window
- * to the personal workspace, as a leave does; a refusal, an agent still
- * starting its turn or offline among them, is said in the dialog, which
- * stays open to try again.
+ * to the personal workspace, as a leave does, saying so in a toast; a
+ * refusal, offline among them, is said in the dialog, which stays open to
+ * try again. An agent still starting never refuses it: the service retires
+ * its session and deletes all the same.
  */
 function WorkspaceDelete({
   workspace,

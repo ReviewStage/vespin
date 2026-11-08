@@ -1362,6 +1362,29 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a workspace leaving the followed list, as another member's delete takes it, closes its plan open here",
+  () =>
+    Effect.gen(function* () {
+      const acmeTask = {
+        ...task(INVITES, "Teammate invitations", "# Draft", 10),
+        workspaceId: ACME.id,
+      };
+      const service = fakeService([acmeTask]);
+      service.memberships = [PERSONAL, ACME];
+      const { call, last, listed, openTask, settled } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listed();
+      yield* openTask(INVITES);
+
+      service.memberships = [PERSONAL];
+      yield* settled;
+
+      assert.deepEqual(last()?.workspaces, [PERSONAL]);
+      assert.equal(last()?.activeTaskId, undefined);
+    }),
+);
+
 it.effect("leaving another workspace than the open plan's keeps the plan open", () =>
   Effect.gen(function* () {
     const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);

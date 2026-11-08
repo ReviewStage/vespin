@@ -285,10 +285,12 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * Every agent of a workspace being deleted let go of as its own starter
  * would, a few at once (`everySettled`): one with a turn to stop is stopped
- * (`canceledTurn`); one still starting, or running with no turn yet to name,
- * has its session retired (`reset`), its runner's bearer revoked and its
- * place thrown away, which needs no turn; one at rest is left, since nothing
- * of it runs. A launch still opening its place when the agent goes throws
+ * (`canceledTurn`); one still starting, running with no turn yet to name, or
+ * whose Stop failed has its session retired (`reset`), its runner's bearer
+ * revoked and its place thrown away, which needs no turn; one at rest is
+ * left, since nothing of it runs. No agent fails the delete: what could not
+ * be done for one is logged and the rest go on, since the workspace goes
+ * whatever its agents' runners did. A launch still opening its place when the agent goes throws
  * that place away itself (`runner-sessions.ts`). Note that each is reached
  * through its starter's account (`sessionsRouter`) rather than the owner's,
  * because the owner deletes every agent of the workspace, one on a member's
@@ -299,9 +301,15 @@ export const everyStoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const everyLetGoByStarter = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   agents: readonly Agent[],
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
+): Effect.fn.Return<void, never, DatabaseServices | HttpClient.HttpClient> {
   const sessionsOf = yield* sessionsRouter;
-  yield* everySettled(agents, (agent) => letGo(writer, sessionsOf(agent.userId), agent));
+  yield* everySettled(agents, (agent) =>
+    letGo(writer, sessionsOf(agent.userId), agent).pipe(
+      Effect.catch((refusal) =>
+        Effect.logWarning(`a deleted workspace's agent was not let go of: ${refusal.error}`),
+      ),
+    ),
+  );
 });
 
 /** One agent let go of as `everyLetGoByStarter` lets each go, over its starter's sessions. */
@@ -311,9 +319,19 @@ const letGo = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Agent,
 ) {
   const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
+  // Note that a Stop that fails, a Mac away or a sandbox out of reach, is logged and the agent's
+  // session retired instead, because the workspace goes whether or not its turn could be stopped.
   if (stoppable(turn)) {
-    yield* canceledTurn(Effect.succeed(sessions), writer, agent);
-    return;
+    const stopped = yield* canceledTurn(Effect.succeed(sessions), writer, agent).pipe(
+      Effect.as(true),
+      Effect.catch((refusal) =>
+        Effect.as(
+          Effect.logWarning(`a deleted workspace's agent was not stopped: ${refusal.error}`),
+          false,
+        ),
+      ),
+    );
+    if (stopped) return;
   }
   const status = yield* statusOf(agent);
   if (status !== AGENT_STATUS.STARTING && status !== AGENT_STATUS.RUNNING) return;
