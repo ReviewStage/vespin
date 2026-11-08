@@ -46,7 +46,6 @@ import {
   ne,
   not,
   notExists,
-  notInArray,
   or,
   type SQL,
   type SQLWrapper,
@@ -1104,16 +1103,34 @@ const updateAgentTitle = SqlSchema.findOneOption({
  * lines have run no further than `seenSeq`, so an agent a message woke
  * after the caller read it is left standing.
  */
+/** That a `published` column keeps a pull request open or in draft. */
+function publishedOpen(column: SQLWrapper): SQL {
+  return sql`coalesce(${column}->>'state', '') in (${PULL_REQUEST_STATE.OPEN}, ${PULL_REQUEST_STATE.DRAFT})`;
+}
+
+/** That an `earlier_published` column keeps a pull request open or in draft. */
+function earlierOpen(column: SQLWrapper): SQL {
+  return sql`coalesce(jsonb_path_exists(${column}, '$[*] ? (@.pullRequest.state == $open || @.pullRequest.state == $draft)', jsonb_build_object('open', ${PULL_REQUEST_STATE.OPEN}::text, 'draft', ${PULL_REQUEST_STATE.DRAFT}::text)), false)`;
+}
+
 /**
  * An agent with no pull request open or in draft, as GitHub last answered,
- * its newest nor any it opened before: what an archive the developer did not
- * ask for waits on, since an archived agent is woken by no review, comment,
- * or check on its pull request.
+ * its newest nor any it opened before, in its own repository nor one it
+ * works in beside it: what an archive the developer did not ask for waits
+ * on, since an archived agent is woken by no review, comment, or check on
+ * its pull request.
  */
-export const noOpenPullRequest: SQL = sql`${notInArray(
-  sql`coalesce(${agentTable.published}->>'state', '')`,
-  [PULL_REQUEST_STATE.OPEN, PULL_REQUEST_STATE.DRAFT],
-)} and not coalesce(jsonb_path_exists(${agentTable.earlierPublished}, '$[*] ? (@.pullRequest.state == $open || @.pullRequest.state == $draft)', jsonb_build_object('open', ${PULL_REQUEST_STATE.OPEN}::text, 'draft', ${PULL_REQUEST_STATE.DRAFT}::text)), false)`;
+export const noOpenPullRequest: SQL = sql`not ${publishedOpen(agentTable.published)} and not ${earlierOpen(agentTable.earlierPublished)} and ${notExists(
+  queryBuilder
+    .select({ one: agentRepository.agentId })
+    .from(agentRepository)
+    .where(
+      and(
+        eq(agentRepository.agentId, agentTable.id),
+        or(publishedOpen(agentRepository.published), earlierOpen(agentRepository.earlierPublished)),
+      ),
+    ),
+)}`;
 
 /**
  * An agent holding no inbox item open: what an archive the developer did not
@@ -2939,7 +2956,8 @@ export interface PublishedWrite {
 /**
  * What a read of GitHub leaves of a row's earlier pull requests, and how
  * many merges the write is the first to keep: each earlier one read again
- * (`reread`) as it stands now, one no longer among them left out; the one
+ * (`reread`) as it stands now, but one the row keeps merged, which never
+ * moves again, and one no longer among them left out; the one
  * the row kept moved to the front where the read found another, since the
  * agent opened a newer one and the older still counts; and the one the read
  * found taken out where it stood among them, the row back on its branch.
@@ -2961,7 +2979,10 @@ export function publishedWrite(
   let firstMerged = newlyMerged(keptCurrent ?? null, published) ? 1 : 0;
   const refreshed = before.map((earlier) => {
     const again = reread.find((each) => each.number === earlier.pullRequest.number);
-    if (again === undefined) return earlier;
+    // Note that a merged pull request never moves again, so a read begun before another wrote its merge keeps it.
+    if (again === undefined || earlier.pullRequest.state === PULL_REQUEST_STATE.MERGED) {
+      return earlier;
+    }
     if (again.number !== current && newlyMerged(earlier.pullRequest, again)) firstMerged += 1;
     return { ...earlier, pullRequest: again };
   });

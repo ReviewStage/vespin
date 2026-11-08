@@ -79,6 +79,7 @@ import {
   openSandboxesOfReached,
   pinAgent,
   readAgent,
+  readAgentEarlierPublished,
   readAgentHeaderOfConversation,
   readAgentKeptPublished,
   readAgentOfConversation,
@@ -1356,6 +1357,43 @@ it.layer(getTestDB())("the coding-agent store's pull requests an agent opened", 
         const merged = pullRequest(41, PULL_REQUEST_STATE.MERGED);
         assert.equal(yield* recordAgentPublished(dean, agentId, merged, first, [merged]), 1);
         assert.equal(yield* recordAgentPublished(dean, agentId, merged, first), 0);
+      }),
+  );
+
+  it.effect(
+    "keeps an earlier pull request merged where a read begun before its merge was written lands after it",
+    () =>
+      Effect.gen(function* () {
+        const dean = yield* openAccount;
+        const workspace = yield* openWorkspace(dean);
+        const { agentId } = yield* tasklessAgent(dean, workspace);
+        const pullRequest = (number: number, state: PullRequestState) => ({
+          number,
+          title: "Invite flow",
+          url: `https://github.com/acme/api/pull/${number}`,
+          state,
+          checks: CHECK_SUMMARY.PASSING,
+          additions: 1,
+          deletions: 0,
+          changedFiles: 1,
+        });
+        const read = { at: 0, branch: "agent/first", pushed: true };
+        const second = { ...read, branch: "agent/second" };
+        const newest = pullRequest(42, PULL_REQUEST_STATE.OPEN);
+        yield* recordAgentPublished(dean, agentId, pullRequest(41, PULL_REQUEST_STATE.OPEN), read);
+        yield* recordAgentPublished(dean, agentId, newest, second);
+
+        const merged = pullRequest(41, PULL_REQUEST_STATE.MERGED);
+        yield* recordAgentPublished(dean, agentId, newest, second, [merged]);
+        const stale = pullRequest(41, PULL_REQUEST_STATE.OPEN);
+        assert.equal(yield* recordAgentPublished(dean, agentId, newest, second, [stale]), 0);
+        assert.deepEqual(
+          (yield* readAgentEarlierPublished(dean, agentId)).map(({ pullRequest }) => [
+            pullRequest.number,
+            pullRequest.state,
+          ]),
+          [[41, PULL_REQUEST_STATE.MERGED]],
+        );
       }),
   );
 });

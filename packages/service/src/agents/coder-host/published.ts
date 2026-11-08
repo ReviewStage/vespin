@@ -106,8 +106,9 @@ import { CODER } from "./bounds.js";
  * open or a draft again, by their numbers, and writes them with the newest,
  * a merge first seen among them counted and its task asked to settle as the
  * newest's would be, so the task waits on every pull request the agent
- * opened, not its newest alone. A read of them that fails is logged and
- * leaves them as they stood.
+ * opened, not its newest alone; a delivery from GitHub about the branch of a
+ * closed one reads it again too, since it may have reopened. A read of one
+ * that fails is logged and leaves it as it stood.
  */
 
 /** The installation of the task's workspace no longer reaches the agent's repository, so nothing of it is read. */
@@ -276,39 +277,49 @@ interface EarlierRead {
   readonly ended: PullRequestEnd | undefined;
 }
 
-/** Whether a pull request still waits on review or on being marked ready, which is all an earlier one is read again for. */
-function stillOpen({ pullRequest }: StoredEarlierPullRequest): boolean {
-  return (
-    pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT
-  );
+/**
+ * Whether an earlier pull request is read again: one still open or a draft,
+ * which may yet merge or close, and one from a branch a delivery from GitHub
+ * names (`delivered`), whatever the row keeps of it, since a closed one may
+ * have reopened. Note that a merged one never moves again.
+ */
+function readAgain(
+  { branch, pullRequest }: StoredEarlierPullRequest,
+  delivered: readonly string[],
+): boolean {
+  if (pullRequest.state === PULL_REQUEST_STATE.MERGED) return false;
+  if (pullRequest.state !== PULL_REQUEST_STATE.CLOSED) return true;
+  return branch !== null && delivered.includes(branch);
 }
 
 /**
  * The pull requests the agent opened in one of its repositories before its
- * newest, those still open or a draft, as GitHub holds them now, read by
- * their numbers on a token for that repository; one GitHub no longer holds
- * is left as the row keeps it. A read that fails is logged by its kind and
- * reads none, since the newest is still read and answered.
+ * newest, those `readAgain` names, as GitHub holds them now, read by their
+ * numbers on a token for that repository; one GitHub no longer holds is left
+ * as the row keeps it. A read that fails, of the token or of one of them, is
+ * logged by its kind and leaves what it would have read as the row keeps it,
+ * since the newest and the rest are still read and written.
  */
 const earlierOnGitHub = (
   userId: string,
   agent: WithRepository<Agent>,
   repository: string,
   earlier: readonly StoredEarlierPullRequest[],
+  delivered: readonly string[],
 ): Effect.Effect<readonly EarlierRead[], never, PublishedServices> =>
   Effect.gen(function* () {
-    const open = earlier.filter(stillOpen);
-    if (open.length === 0) return [];
+    const asked = earlier.filter((each) => readAgain(each, delivered));
+    if (asked.length === 0) return [];
     const { token } = yield* agentPullRequestReach(userId, agent, repository);
     const read = yield* Effect.forEach(
-      open,
+      asked,
       ({ pullRequest: kept }) =>
         Effect.gen(function* () {
           const found = yield* pullRequestByNumber(token, repository, kept.number);
           if (Option.isNone(found)) return [];
           const { stored, ended } = yield* withChecks(token, repository, found.value, kept);
           return stored === null ? [] : [{ stored, ended }];
-        }),
+        }).pipe(Effect.catch(earlierUnread)),
       // Note that an agent opens few pull requests, so they are read together.
       { concurrency: "unbounded" },
     );
@@ -327,15 +338,17 @@ function earlierUnread(failure: unknown): Effect.Effect<readonly EarlierRead[]> 
 
 /**
  * What the agent published as GitHub holds it now, written on its row as
- * read, with the pull requests it opened before it read again beside it.
+ * read, with the pull requests it opened before it read again beside it,
+ * those from a branch a delivery from GitHub names (`delivered`) among them.
  * The routes read it through the cache below; an agent tool's read of one
  * agent (`agents/agent-tools.ts`) reads it afresh, once per ask.
  */
 export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(function* (
   userId: string,
   agent: Agent,
+  delivered: readonly string[] = [],
 ): Effect.fn.Return<AgentPullRequestAnswer, PublishedReadFailure, PublishedServices> {
-  yield* extrasPublished(userId, agent);
+  yield* extrasPublished(userId, agent, delivered);
   const { answer, stored, ended } = yield* publishedOnGitHub(userId, agent);
   const earlier = hasRepository(agent)
     ? yield* earlierOnGitHub(
@@ -343,6 +356,7 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
         agent,
         agent.repository,
         yield* readAgentEarlierPublished(userId, agent.id),
+        delivered,
       )
     : [];
   const at = yield* Clock.currentTimeMillis;
@@ -413,7 +427,7 @@ const extraPublishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
  * logged by its kind and leaves its row as it stood, since the agent's own
  * pull request is still read and answered.
  */
-const extrasPublished = (userId: string, agent: Agent) =>
+const extrasPublished = (userId: string, agent: Agent, delivered: readonly string[]) =>
   Effect.gen(function* () {
     if (!hasRepository(agent)) return;
     const [, ...extras] = yield* readAgentRepositories(userId, agent.id);
@@ -432,6 +446,7 @@ const extrasPublished = (userId: string, agent: Agent) =>
             agent,
             extra.repository,
             extra.earlierPullRequests,
+            delivered,
           );
           const at = yield* Clock.currentTimeMillis;
           const read = { at, branch: headBranch, pushed: answer.branch !== null };

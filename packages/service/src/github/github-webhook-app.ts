@@ -375,7 +375,7 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
   const landed = yield* Effect.forEach(
     agents,
     ({ userId, agent }) =>
-      agentPublished(userId, agent).pipe(
+      agentPublished(userId, agent, target.branches).pipe(
         Effect.as(true),
         // The kind alone: nothing of the delivery or the owner's token rides the line.
         Effect.catch((failure) =>
