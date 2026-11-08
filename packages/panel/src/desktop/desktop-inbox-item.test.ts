@@ -209,7 +209,7 @@ test("a teammate's open item leads with its title alone, and its box still takes
   );
 });
 
-test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan, leaving the Inbox, and its agent's transcript beside the item, with no other way out in its bar", async () => {
+test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
   const { page, asked } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumbs = [
@@ -239,8 +239,8 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   act(() => crumbs[0]?.click());
   act(() => crumbs[1]?.click());
   assert.deepEqual(asked.shownTasks, [BILLING.id]);
-  assert.deepEqual(asked.previewedAgents, [AGENT.id], "the agent reads beside the item");
-  assert.deepEqual(asked.shownAgents, []);
+  assert.deepEqual(asked.shownAgents, [[BILLING.id, AGENT.id]], "the agent opens in its own tab");
+  assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
 /** What an intersection observer reports of the heading it watches: in the thread's view, or scrolled up past its top. */
@@ -685,7 +685,7 @@ function threadRefs(page: HTMLElement): HTMLButtonElement[] {
   ];
 }
 
-test("the thread names its agent as one button wherever it does, its message's comment: it hangs the agent's tab's card, which offers no Open agent, and opens its transcript beside the item", async () => {
+test("the thread names its agent as one button wherever it does, its message's comment: it hangs the agent's tab's card, which offers no Open agent, and opens the agent's own tab on its task", async () => {
   const { page, asked } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const [comment, ...more] = threadRefs(page);
@@ -704,8 +704,8 @@ test("the thread names its agent as one button wherever it does, its message's c
   assert.deepEqual(standingCard(), ["Alerts", undefined]);
   assert.deepEqual(openings("[data-agent-card]"), [], "the name is the way to the tab");
   act(() => comment.click());
-  assert.deepEqual(asked.previewedAgents, [AGENT.id], "the agent reads beside the item");
-  assert.deepEqual(asked.shownAgents, []);
+  assert.deepEqual(asked.shownAgents, [[BILLING.id, AGENT.id]], "the agent opens in its own tab");
+  assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
 test("an archived agent is still named by its name, its card saying it was archived, and an agent the plan does not list goes by Agent, its card saying it is not found; an agent the task does not list opening its tab on its task, which shows the plan where its tab is gone", async () => {
@@ -1804,7 +1804,7 @@ test("files alone make a message: sent from a settled item's box with no words, 
   assert.equal(message.querySelector("[data-inbox-message-text]"), null, "no empty words");
 });
 
-test("a thread read cut to its latest messages says the earlier ones are in the agent's tab, the agent's name opening its transcript beside the item", async () => {
+test("a thread read cut to its latest messages says the earlier ones are in the agent's tab, the agent's name opening that tab on its task", async () => {
   const long: InboxItem = {
     ...RETRY,
     thread: inOrder(
@@ -1834,8 +1834,8 @@ test("a thread read cut to its latest messages says the earlier ones are in the 
   assert.equal(wordsOf(earlier), "Earlier messages are in Alerts’s tab");
   assert.equal(threadOf(page)[1]?.[0], "earlier", "the line stands before the messages");
   act(() => earlier.querySelector<HTMLButtonElement>("button")?.click());
-  assert.deepEqual(asked.previewedAgents, [AGENT.id], "the agent reads beside the item");
-  assert.deepEqual(asked.shownAgents, []);
+  assert.deepEqual(asked.shownAgents, [[BILLING.id, AGENT.id]], "the agent opens in its own tab");
+  assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
 test("what an item's box holds unsent, its words and its files, outlasts every message landing on the item: a teammate's answer settling it, then the agent asking on it again", async () => {

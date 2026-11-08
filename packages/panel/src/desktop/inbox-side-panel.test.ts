@@ -26,7 +26,7 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { NO_EXPERIMENTS } from "@repo/settings";
-import { changesTab, pageTab } from "@repo/ui/tab-strip-model";
+import { changesTab, pageTab, transcriptTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment } from "react";
@@ -412,24 +412,17 @@ test("an archived agent's Pull request tab stands beside the Inbox as any other,
   assert.equal(panelTabs(container), undefined, "the panel shut with its last tab");
 });
 
-test("an agent the item names reads beside the Inbox, its transcript in the panel", async () => {
+test("an agent the item names opens in its own tab on its task, never in the panel beside the Inbox", async () => {
   const { container, left } = await inbox();
   await pressChip(container, "Batch the invitations");
-  const tabs = panelTabs(container);
-  assert.ok(tabs, "the panel stands beside the Inbox");
-  assert.equal(tabs.length, 1);
-  assert.match(tabs[0] ?? "", /^▸ Batch the invitations/);
-  assert.ok(container.querySelector(".inbox-view"), "the Inbox still stands");
-  assert.ok(
-    container.querySelector('aside[aria-label="Panel"] .desktop-agent'),
-    "the agent's transcript stands in the panel",
-  );
-  assert.equal(left.links.length + left.tasks.length, 0, "nothing left the Inbox");
+  assert.deepEqual(left.went, [`${TASK.id} agent ${AGENT.id}`]);
+  assert.equal(panelTabs(container), undefined, "no transcript opened beside the Inbox");
 });
 
-test("an agent's tab beside the Inbox hangs the agent's card, as its tab in the task's column does", async () => {
-  const { container } = await inbox();
-  await pressChip(container, "Batch the invitations");
+test("an agent's tab beside the Inbox, as an earlier version kept it, hangs the agent's card, as its tab in the task's column does", async () => {
+  const { container, panel } = await inbox();
+  act(() => panel().onOpen(transcriptTab(AGENT.id)));
+  await settle();
   const tab = container.querySelector<HTMLElement>('aside[aria-label="Panel"] [role="tab"]');
   assert.ok(tab, "the agent's tab stands beside the Inbox");
   restOn(tab);
@@ -438,9 +431,10 @@ test("an agent's tab beside the Inbox hangs the agent's card, as its tab in the 
   assert.equal(card.querySelector(".ui-hover-card-name")?.textContent, "Batch the invitations");
 });
 
-test("an agent beside the Inbox has the agent's menu on its tab's right-click, whose Open in task, as ⌘O while the panel holds the keys, opens it in its task", async () => {
-  const { container, left } = await inbox();
-  await pressChip(container, "Batch the invitations");
+test("an agent beside the Inbox, as an earlier version kept it, has the agent's menu on its tab's right-click, whose Open in task, as ⌘O while the panel holds the keys, opens it in its task", async () => {
+  const { container, left, panel } = await inbox();
+  act(() => panel().onOpen(transcriptTab(AGENT.id)));
+  await settle();
   const aside = container.querySelector<HTMLElement>('aside[aria-label="Panel"]');
   assert.ok(aside, "the panel stands beside the Inbox");
   /** What the open menu offers, by each item's words, the menu left open. */
@@ -494,9 +488,10 @@ test("an agent beside the Inbox has the agent's menu on its tab's right-click, w
   assert.deepEqual(left.went, [`${TASK.id} agent ${AGENT.id}`, `${TASK.id} agent ${AGENT.id}`]);
 });
 
-test("a link to a page of the item's task, pressed in a transcript beside the Inbox, opens in the panel as the item's own does, the Inbox still standing", async () => {
-  const { container, left } = await inbox();
-  await pressChip(container, "Batch the invitations");
+test("a link to a page of the item's task, pressed in a transcript beside the Inbox as an earlier version kept it, opens in the panel as the item's own does, the Inbox still standing", async () => {
+  const { container, left, panel } = await inbox();
+  act(() => panel().onOpen(transcriptTab(AGENT.id)));
+  await settle();
   assert.match(panelTabs(container)?.[0] ?? "", /^▸ Batch the invitations/);
 
   // Note that the chip is the transcript's, drawn in the panel, not the item's words.

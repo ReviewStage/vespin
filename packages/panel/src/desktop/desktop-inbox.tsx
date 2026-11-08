@@ -20,7 +20,6 @@ import {
   STRIP_TAB_KIND,
   type StripTab,
   sameTab,
-  transcriptTab,
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
@@ -335,7 +334,7 @@ export const DesktopInbox = memo(function DesktopInbox({
       agentIds: named.agentIds,
       heldIds,
     });
-    // An archived agent of the item's task, which its task alone draws, goes to the task on its tab.
+    // An agent of the item's task goes to the task on its own tab, where its transcript reads, never beside the item.
     if (routed.kind === ROUTE.GO) {
       const { place: at } = routed.link;
       if (at.kind !== LINK_PLACE.AGENT || at.planId === undefined) return false;
@@ -366,17 +365,6 @@ export const DesktopInbox = memo(function DesktopInbox({
         return true;
       case THING.CHANGES:
         sidePanel.onOpen(changesTab(thing.agentId));
-        return true;
-      case THING.TRANSCRIPT:
-        sidePanel.onOpen(transcriptTab(thing.agentId));
-        // A message is brought into view as the transcript beside the item lands, as its tab on the task brings it.
-        if (thing.messageId !== undefined) {
-          tasks.onRevealMessage({
-            kind: LINK_PLACE.MESSAGE,
-            agentId: thing.agentId,
-            messageId: thing.messageId,
-          });
-        }
         return true;
       case THING.PULL_REQUEST:
         showPullRequest(
@@ -898,7 +886,8 @@ function InboxSidePanel({
   };
   // An agent's transcript beside the item reads and writes as its tab in the task's column does,
   // through the agents the Inbox read of the item's task, its plan's card naming the task, whose
-  // press opens the plan.
+  // press opens the plan. Note that no press opens one here any more, since an agent opens in its own
+  // tab on the task (`inbox-item-links.ts`); it is drawn only for a tab an earlier version kept.
   const listedTask =
     taskId === undefined ? undefined : tasks.tasks.find((each) => each.id === taskId);
   const cards = taskCards({

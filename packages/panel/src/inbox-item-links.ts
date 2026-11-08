@@ -77,14 +77,6 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
     holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)
       ? beside({ kind: THING.THREAD, agentId: at.agentId, threadId: at.threadId, view: at.view })
       : NOTHING,
-  // A message of an agent of the item's own task the panel draws reads beside it, at the message; an archived one's is the window's to open, in its tab on the task.
-  MESSAGE: (at, _workspace, here) =>
-    at.kind === LINK_PLACE.MESSAGE &&
-    here.taskId !== undefined &&
-    holdsAgent(at, here.taskId, here.agentIds) &&
-    here.agentIds?.includes(at.agentId) === true
-      ? beside({ kind: THING.TRANSCRIPT, agentId: at.agentId, messageId: at.messageId })
-      : NOTHING,
   // An Inbox item is chosen in the Inbox the item stands in: one under its task, or one under an agent the item's task
   // holds or the agent on no task that holds the item; any other the window finds by its agent, or by the item alone.
   INBOX_ITEM: (at, _workspace, here) => {
@@ -105,17 +97,17 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
       ? beside({ kind: THING.INBOX_ITEM, itemId, taskId: undefined, agentId })
       : NOTHING;
   },
-  // An agent of the item's own task reads beside it; one on no task, or another task's, is the window's to open.
+  // An agent of the item's own task, archived or not, opens in its own tab on the task, never in the panel
+  // beside the item, so a transcript reads in one place; one on no task, or another task's, is the window's to open.
   AGENT: (at, workspace, here) => {
     if (at.kind !== LINK_PLACE.AGENT) return NOTHING;
-    if (here.taskId === undefined || !holdsAgent(at, here.taskId, here.agentIds)) return NOTHING;
-    // An archived one, which the panel does not draw, is the window's, which opens its tab on the task.
-    return here.agentIds?.includes(at.agentId) === true
-      ? beside({ kind: THING.TRANSCRIPT, agentId: at.agentId })
-      : go({
-          workspace,
-          place: { kind: LINK_PLACE.AGENT, planId: here.taskId, agentId: at.agentId },
-        });
+    if (here.taskId === undefined || !holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)) {
+      return NOTHING;
+    }
+    return go({
+      workspace,
+      place: { kind: LINK_PLACE.AGENT, planId: here.taskId, agentId: at.agentId },
+    });
   },
 };
 
