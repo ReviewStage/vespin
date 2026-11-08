@@ -1403,6 +1403,12 @@
   flex: 0 1 auto;
 }
 
+/* The branches' glyph at a caption's glyph size, as the words it leads. */
+.pull-request-branches-mark > svg {
+  width: var(--ui-icon-12);
+  height: var(--ui-icon-12);
+}
+
 /* The labels at the end of the header's line of people, after the
    pickers: they keep to that line while they fit, and wrap onto the next
    as one compact group where they do not. */

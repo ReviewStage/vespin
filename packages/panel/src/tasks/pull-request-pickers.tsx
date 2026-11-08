@@ -339,7 +339,7 @@ function PickerButton({
         icon={<PlusIcon aria-hidden="true" />}
         // Note that the button is named by the word it draws, since "Edit reviewers" is the hint's and no reader hears a name the screen does not show.
         label={word}
-        variant={BUTTON_VARIANT.OUTLINE}
+        variant={BUTTON_VARIANT.SUBTLE}
         disabled={disabled}
         busy={busy}
         busyLabel={busyLabel}

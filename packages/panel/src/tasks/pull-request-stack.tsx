@@ -70,8 +70,10 @@ function useOpenEntry(): (entry: PullRequestStackEntry) => void {
 }
 
 /**
- * The stack the pull request numbered `number` stands in, as an outline
- * chip saying where in it this one stands, ending in the menu's chevron as
+ * The stack the pull request numbered `number` stands in, as a toolbar
+ * chip at a control's size saying where in it this one stands, its face
+ * lighting only under the pointer and while its menu stands, so the line of
+ * facts it stands in stays quiet, ending in the menu's chevron as
  * every trigger of a menu in the header does, whose menu lists the stack tip
  * first, each by its number and title wearing its state's mark at a menu
  * glyph's size, this one checked; nothing where it stands in no stack.
@@ -108,7 +110,7 @@ export function PullRequestStack({
       <span className="pull-request-stack inline-flex flex-none">
         <Tooltip label={label}>
           <Chip
-            look={CHIP_LOOK.OUTLINE}
+            look={CHIP_LOOK.TOOLBAR}
             chevron
             aria-label={label}
             {...menu.trigger(dropBelowStart)}
