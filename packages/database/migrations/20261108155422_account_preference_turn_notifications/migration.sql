@@ -2,7 +2,7 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "account_preference";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "account_preference";
 --> statement-breakpoint
-ALTER TABLE "account_preference" ADD COLUMN "turn_notifications" boolean;
+ALTER TABLE "account_preference" ADD COLUMN IF NOT EXISTS "turn_notifications" boolean;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_account_preference"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE
