@@ -46,11 +46,12 @@ import {
   writeSlackDefaultRepository,
   writeSlackNotifications,
 } from "@repo/database/models/slack-installation-store";
-import { type Workspace, workspaceOf } from "@repo/database/models/workspace-store";
+import type { Workspace } from "@repo/database/models/workspace-store";
 import type { SlackBotChannel, WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
+import { answeredWorkspace, managedWorkspace } from "../accounts/workspace-access.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
 import {
@@ -65,26 +66,6 @@ import { SlackBot, type SlackBotService } from "./slack-bot.js";
 export interface SlackBotProcedureSeams {
   resolveUserId: UserIdResolver;
 }
-
-/** The workspace named, as the account sees it; one it is not in is not found. */
-const memberWorkspace = Effect.fn("web/slackBotWorkspace")(function* (
-  userId: string,
-  workspaceId: string,
-): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
-  const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, workspaceId));
-  if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  return workspace.value;
-});
-
-/** The workspace named, where the account is an owner or admin of it. */
-const administeredWorkspace = Effect.fn("web/slackBotAdministered")(function* (
-  userId: string,
-  workspaceId: string,
-) {
-  const workspace = yield* memberWorkspace(userId, workspaceId);
-  if (!managesWorkspace(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  return workspace;
-});
 
 /** The team's channels as Settings lists them, each with its default repository; none where Slack could not be read. */
 const listedChannels = Effect.fn("web/slackBotChannels")(function* (
@@ -156,7 +137,7 @@ const connectedWorkspace = Effect.fn("web/slackBotConnected")(function* (
   userId: string,
   workspaceId: string,
 ) {
-  const workspace = yield* administeredWorkspace(userId, workspaceId);
+  const workspace = yield* managedWorkspace(userId, workspaceId);
   const installation = yield* hostedStoreOrUnavailable(workspaceSlackInstallation(workspace.id));
   if (Option.isNone(installation)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const bot = yield* SlackBot;
@@ -170,12 +151,12 @@ export function slackBotProcedures(seams: SlackBotProcedureSeams) {
   return {
     /** The workspace's Slack bot, to any member of it. */
     read: resource.read.effect(function* ({ input, context }) {
-      const workspace = yield* memberWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* answeredWorkspace(context.userId, input.workspaceId);
       return yield* workspaceSlackBot(workspace, context.userId);
     }),
     /** The bot connected to the team its token answers for; unavailable where the deployment holds no bot or Slack did not answer. */
     connect: resource.connect.effect(function* ({ input, context }) {
-      const workspace = yield* administeredWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* managedWorkspace(context.userId, input.workspaceId);
       const bot = yield* SlackBot;
       if (!bot.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
       const team = yield* bot.team.pipe(
@@ -196,13 +177,13 @@ export function slackBotProcedures(seams: SlackBotProcedureSeams) {
     }),
     /** The bot disconnected from the workspace; disconnecting one already gone answers it as it stands. */
     disconnect: resource.disconnect.effect(function* ({ input, context }) {
-      const workspace = yield* administeredWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* managedWorkspace(context.userId, input.workspaceId);
       const txid = yield* hostedStoreOrUnavailable(deleteSlackInstallation(workspace.id));
       return withTxid(yield* workspaceSlackBot(workspace, context.userId), txid);
     }),
     /** The member's own Slack notifications turned on or off, which holds in every workspace, answered with the transaction it was written in. */
     notifications: resource.notifications.effect(function* ({ input, context }) {
-      const workspace = yield* memberWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* answeredWorkspace(context.userId, input.workspaceId);
       const txid = yield* hostedStoreOrUnavailable(
         writeSlackNotifications(context.userId, input.notifications),
       );

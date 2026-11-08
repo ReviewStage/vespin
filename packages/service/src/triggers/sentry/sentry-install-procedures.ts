@@ -31,11 +31,10 @@ import {
   openIntegrationInstallIntent,
   workspaceIntegrationInstallations,
 } from "@repo/database/models/integration-installation-store";
-import { type Workspace, workspaceOf } from "@repo/database/models/workspace-store";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
-import { managesWorkspace } from "@repo/features/workspace-role";
 import { Effect, Option, Result } from "effect";
+import { answeredWorkspace, managedWorkspace } from "../../accounts/workspace-access.js";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -52,26 +51,6 @@ const INSTALL_STATE_QUERY = "state";
 export interface SentryInstallProcedureSeams {
   resolveUserId: UserIdResolver;
 }
-
-/** The workspace named, as the account sees it; one it is not in is not found. */
-const memberWorkspace = Effect.fn("web/sentryInstallWorkspace")(function* (
-  userId: string,
-  workspaceId: string,
-): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
-  const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, workspaceId));
-  if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  return workspace.value;
-});
-
-/** The workspace named, where the account is an owner or admin of it. */
-const administeredWorkspace = Effect.fn("web/sentryInstallAdministered")(function* (
-  userId: string,
-  workspaceId: string,
-) {
-  const workspace = yield* memberWorkspace(userId, workspaceId);
-  if (!managesWorkspace(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  return workspace;
-});
 
 /** The integration's settings, or the unavailable refusal where this deployment holds none. */
 const settingsOrUnavailable = Effect.flatMap(SentryApp, (app) =>
@@ -115,7 +94,7 @@ export function sentryInstallProcedures(seams: SentryInstallProcedureSeams) {
   return {
     /** An intent opened for the workspace, answered as Sentry's install address. */
     install: resource.install.effect(function* ({ input, context }) {
-      const workspace = yield* administeredWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* managedWorkspace(context.userId, input.workspaceId);
       const settings = yield* settingsOrUnavailable;
       const state = yield* hostedStoreOrUnavailable(
         openIntegrationInstallIntent(TRIGGER_PROVIDER.SENTRY, context.userId, workspace.id),
@@ -124,7 +103,7 @@ export function sentryInstallProcedures(seams: SentryInstallProcedureSeams) {
     }),
     /** The workspace's Sentry, to any member of it. */
     installations: resource.installations.effect(function* ({ input, context }) {
-      const workspace = yield* memberWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* answeredWorkspace(context.userId, input.workspaceId);
       return yield* workspaceSentry(workspace.id);
     }),
     /**
@@ -133,7 +112,7 @@ export function sentryInstallProcedures(seams: SentryInstallProcedureSeams) {
      * an installation another workspace linked since the read is left alone.
      */
     disconnect: resource.disconnect.effect(function* ({ input, context }) {
-      const workspace = yield* administeredWorkspace(context.userId, input.workspaceId);
+      const workspace = yield* managedWorkspace(context.userId, input.workspaceId);
       const before = yield* workspaceSentry(workspace.id);
       if (!before.installations.some((one) => one.installationId === input.installationId)) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
