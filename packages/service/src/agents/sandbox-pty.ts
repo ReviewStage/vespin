@@ -7,13 +7,8 @@
  * sandbox exposes no port of its own for any of them.
  */
 
-import {
-  type InteractiveShell,
-  Sandbox,
-  type SandboxError,
-  type SandboxService,
-} from "@repo/sandbox";
-import { Context, Effect, Layer, type Scope } from "effect";
+import type { InteractiveShell, SandboxError, SandboxService } from "@repo/sandbox";
+import { Effect, type Scope } from "effect";
 import { voiceSocket } from "../http/socket.js";
 import type { RelaySocket } from "../terminal/relay.js";
 
@@ -32,12 +27,7 @@ export interface SandboxPtyService {
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
 }
 
-export class SandboxPty extends Context.Service<SandboxPty, SandboxPtyService>()("SandboxPty") {}
-
-/** The PTY as the runtime's `Sandbox` reaches it. @public */
-export const sandboxPtyLayer: Layer.Layer<SandboxPty, never, Sandbox> = Layer.effect(
-  SandboxPty,
-  Effect.map(Sandbox, (sandbox) => ({
-    connect: (shell: InteractiveShell) => connectPty(sandbox, shell),
-  })),
-);
+/** The PTY as `sandbox` reaches it. */
+export function sandboxPtyOf(sandbox: SandboxService): SandboxPtyService {
+  return { connect: (shell) => connectPty(sandbox, shell) };
+}
