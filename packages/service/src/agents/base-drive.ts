@@ -31,12 +31,15 @@
  * over its checkout, and installs again. Once a day the scheduled refresh
  * (`base-drive-refresh.ts`) refills every base drive that stands the same
  * way, so each agent's own fetch stays small, and installs again only where
- * that fetch moved a lockfile. Nothing deletes a base drive: an agent's
- * delete deletes only the fork it owns.
+ * that fetch moved a lockfile. An agent's delete deletes only the fork it
+ * owns, which Vercel keeps apart from the base it was forked from; a base
+ * drive is deleted with its workspace (`workspace-deletion.ts`), the fill's
+ * sandbox under its name with it (`deletedBaseDrive`).
  */
 
 import { createHash } from "node:crypto";
 import {
+  deletedFilledDrive,
   deletedIfStill,
   filledDrive,
   type ListedSandbox,
@@ -153,6 +156,9 @@ function digestOf(fields: readonly string[]): string {
 export function baseDriveName(of: Pick<BaseDriveOf, "workspaceId" | "fullName">): string {
   return `${BASE_DRIVE.NAME_PREFIX}${digestOf([of.workspaceId, snapshotRecordOf(of.fullName)])}`;
 }
+
+/** The base drive of that name deleted for good, a fill still running under its name stopped and deleted first (`deletedFilledDrive`). */
+export const deletedBaseDrive = (name: string) => deletedFilledDrive({ name, drive: name });
 
 /** Whether a sandbox is a fill still within its grace: up, and created less than `FILL_GRACE` ago. */
 function stillFilling(found: ListedSandbox, now: number): boolean {

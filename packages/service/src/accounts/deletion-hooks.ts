@@ -21,6 +21,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { type MemberFailure, pluginCall } from "@repo/database/models/workspace-seams";
+import { claimSoleWorkspace } from "@repo/database/models/workspace-store";
 import { Cause, type Context, Effect, Exit } from "effect";
 import {
   type AccountDeletionPending,
@@ -109,6 +110,8 @@ function settled(effect: Effect.Effect<void, unknown, DeletionServices>): Promis
 /** The account's deletion steps as Better Auth's `deleteUser` hooks await them (`auth-policy.ts`'s `accountDeletion`). */
 export const accountDeletionSteps = {
   before: (userId: string) => run(beforeAccountDeletion(userId)),
+  claim: (userId: string, organizationId: string) =>
+    run(claimSoleWorkspace(userId, organizationId)),
   after: (userId: string, pending: AccountDeletionPending) =>
     settled(afterAccountDeletion(userId, pending)),
 };

@@ -37,6 +37,7 @@ import {
   TASK_STATUS_WORDS,
   useAssigneeRows,
 } from "../tasks/task-standing.js";
+import { useStandingWrites } from "../tasks/use-standing-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
@@ -109,14 +110,15 @@ export function standsAt(task: TaskSummary, standing: TaskStanding): boolean {
  * that refusal. It settles once the service has answered, so a press may wait on it.
  */
 export function useStandingDoor(
-  tasks: Pick<TasksControl, "onSetTaskStanding">,
+  tasks: Pick<TasksControl, "drawnTasks">,
 ): (task: TaskSummary, standing: TaskStanding, onRefused?: () => void) => Promise<void> {
   const toast = useToast();
   const { members } = useMemberDirectory();
+  const { onSetTaskStanding } = useStandingWrites(tasks.drawnTasks);
   return (task, standing, onRefused) => {
     if (standsAt(task, standing)) return Promise.resolve();
     const named = members?.find((member) => member.userId === standing.assigneeId)?.name;
-    return tasks.onSetTaskStanding(task.id, standing, named).then((kept) => {
+    return onSetTaskStanding(task.id, standing, named).then((kept) => {
       if (kept.kept) return;
       onRefused?.();
       toast({

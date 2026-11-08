@@ -543,7 +543,7 @@ function usePlaceCommands(
       ? () => {
           // Note that the card stands over whatever place stands, so only Settings, which takes the window, is left for it.
           if (tab === PANEL_TAB.SETTINGS) onTabChange(PANEL_TAB.TASKS);
-          tasks.onNewTask();
+          tasks.newTask.onOpen();
         }
       : undefined,
   );

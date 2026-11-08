@@ -57,8 +57,8 @@ import {
   type WorkspaceMember,
   type WorkspacePhotoType,
   workspaceCreateRequestSchema,
-  workspaceExperimentSetRequestSchema,
   workspaceDeleteRequestSchema,
+  workspaceExperimentSetRequestSchema,
   workspaceGithubRequestSchema,
   workspaceLeaveRequestSchema,
   workspaceMemberRemovalSchema,
@@ -608,12 +608,15 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** The owner deletes the workspace, answering the workspace deleted; an answer naming another workspace is no answer. */
+  /** The owner deletes the workspace, answering the workspace deleted, refused where `ifAlone` and anyone else is a member; an answer naming another workspace is no answer. */
   delete(
     workspaceId: string,
+    ifAlone?: true,
   ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
-      readEither(workspaceDeleteRequestSchema)({ workspaceId }),
+      readEither(workspaceDeleteRequestSchema)(
+        ifAlone === undefined ? { workspaceId } : { workspaceId, ifAlone },
+      ),
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return Effect.map(

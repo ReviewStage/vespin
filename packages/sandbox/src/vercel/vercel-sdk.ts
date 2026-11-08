@@ -3,11 +3,11 @@
  *
  * Everything a caller asks of a sandbox — one deleted, stopped, resumed, or
  * got or created from an image or a snapshot, the drive it opens with
- * made, forked, mounted and deleted with it, a user made in it and a
- * command started as that user, a short command, a PTY, a network policy, a
- * snapshot, its tags and its public ports — is asked here, of the SDK at the
- * version the catalog pins, which loads in a function's bundle. The SDK
- * tries a 429, a 5xx, and a failure to connect again before it answers (a
+ * made, forked, mounted and deleted with it or by its name, a user made in
+ * it and a command started as that user, a short command, a PTY, a network
+ * policy, a snapshot, its tags and its public ports — is asked here, of the
+ * SDK at the version the catalog pins, which loads in a function's bundle.
+ * The SDK tries a 429, a 5xx, and a failure to connect again before it answers (a
  * 429 waits out Vercel's `Retry-After` up to 20 seconds), so nothing here
  * tries again.
  *
@@ -25,7 +25,7 @@
  * base drive got or created by its name for a fill, or a sandbox's own drive,
  * named after the sandbox (`ownDriveName`), forked from its origin as the
  * sandbox is created, mounted again by a later create under its name, and
- * deleted with the sandbox.
+ * deleted with the sandbox; a base drive is deleted by its name alone.
  *
  * A sandbox is found by a tag its caller gave it, whose value names few
  * sandboxes, so the first page is all of them. What is sent is a tag, a
@@ -1002,6 +1002,14 @@ function vercelSandbox(
             await own.delete({ signal });
           }
           await sandbox?.delete({ deleteOrphanSnapshots: true, signal });
+        }).pipe(Effect.catchIf(isGone, () => Effect.void)),
+      ),
+    deleteDrive: (name) =>
+      said(
+        // Note that Vercel refuses a drive still mounted in a running sandbox (`DRIVE_CODE.ATTACHED`), which reads as unavailable.
+        asked(SANDBOX_CALL.DRIVE, async (signal, under) => {
+          const drive = await Drive.get({ ...under, name, signal }).catch(absentIfNotFound);
+          await drive?.delete({ signal });
         }).pipe(Effect.catchIf(isGone, () => Effect.void)),
       ),
     stop: (target) =>

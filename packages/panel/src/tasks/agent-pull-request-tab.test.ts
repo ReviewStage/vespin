@@ -191,7 +191,7 @@ const PULL_REQUEST: AgentOverviewPullRequest = {
     '<p dir="auto"><img src="https://tracker.example.com/pixel.png" alt="pixel"></p>',
     '<p dir="auto"><a href="https://review.example.com"><picture>',
     '<source media="(prefers-color-scheme: dark)" srcset="https://camo.githubusercontent.com/abc123/6461726b">',
-    `<img src="${BADGE}" alt="Request review"></picture></a></p>`,
+    `<img src="${BADGE}" alt="Request review" width="16" height="16"></picture></a></p>`,
     `<p dir="auto"><a href="${SCREENSHOT}"><img src="${SCREENSHOT}" alt="Overview"></a></p>`,
     '<p dir="auto">Run <code class="notranslate">pnpm test</code> first.</p>',
     "<script>window.stolen = true;</script>",
@@ -964,9 +964,14 @@ test("a picture GitHub linked to itself opens over the window rather than in the
     true,
     "GitHub's link to the picture itself is gone",
   );
-  assert.ok(
-    description.querySelector('a[href^="https://review.example.com"] img[alt="Request review"]'),
-    "a badge linked elsewhere keeps its link",
+  const badge =
+    description.querySelector<HTMLImageElement>(
+      'a[href^="https://review.example.com"] img[alt="Request review"]',
+    ) ?? assert.fail("a badge linked elsewhere keeps its link");
+  assert.deepEqual(
+    [badge.width, badge.height],
+    [16, 16],
+    "a badge stands at the size its author wrote on it, as GitHub draws it",
   );
   assert.equal(description.querySelector('[aria-label="Enlarge Request review"]') === null, true);
 

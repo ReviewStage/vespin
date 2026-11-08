@@ -1130,7 +1130,7 @@ export function TasksList({
         <EmptyState
           icon={<ListTodoIcon />}
           replayUnmasked
-          action={newTaskAction(tasks.signedIn ? tasks.onNewTask : undefined)}
+          action={newTaskAction(tasks.signedIn ? tasks.newTask.onOpen : undefined)}
         >
           {noneYetWords(TERM.TASK)}
         </EmptyState>

@@ -23,8 +23,11 @@
  * trigger).
  * `POST /api/workspaces/delete` lets the owner alone delete a workspace,
  * though never the account's own first workspace, which goes only with the
- * account. Every turn under way among the workspace's agents not archived,
- * any member's, one the owner cannot see among them, is stopped first under
+ * account, and, where it is asked `ifAlone`, never one anyone else is a
+ * member of, as setup's Just me asks of the team's workspace it made (its
+ * pending invitations go with it). Every turn under way among the
+ * workspace's agents not archived, any member's, one the owner cannot see
+ * among them, is stopped first under
  * the account that started it (`everyTurnStoppedByStarter`), which nothing
  * past a Stop's own loses should the delete then be refused; the plugin
  * then deletes the workspace and every row of it, and its hooks delete the
@@ -342,9 +345,16 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
      */
     delete: session.delete.effect(function* ({ context, input }) {
       const { userId, sessionHeaders: headers } = context;
-      const { workspaceId } = input;
+      const { workspaceId, ifAlone } = input;
       const workspace = yield* ownedWorkspace(userId, workspaceId);
       if (workspace.personal === true) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      // Note that the members are read here rather than trusted from the asking window, whose list may be stale.
+      if (ifAlone === true) {
+        const members = yield* hostedStoreOrUnavailable(listMembers(workspace.id));
+        if (members.some((member) => member.userId !== userId)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        }
+      }
       yield* everyTurnStoppedByStarter(STOPPER, yield* workspaceAgentsToStop(workspace.id));
       yield* pluginCallOrRefused(seams.deleteWorkspace({ headers, organizationId: workspace.id }));
       yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.DELETE);
