@@ -77,9 +77,6 @@ const NO_CLOCK_EDGE: ClockEdge<unknown> = () => undefined;
 /** What a wait the clock edge ended rather than a write answers. */
 const NO_TXIDS: readonly string[] = [];
 
-/** The span each look of a hold runs under. */
-const LOOK_SPAN = "web/heldLook";
-
 /**
  * Reads until a read is one `moved` says moved, which it answers, or the
  * hold ends, answering none, waiting between reads on a watch of the
@@ -88,10 +85,11 @@ const LOOK_SPAN = "web/heldLook";
  * latest. Note that the watch is opened before the first read, so a write
  * that commits while that read runs still wakes the look after it.
  *
- * Note that each look runs under a span of its own (`LOOK_SPAN`), because
- * Sentry reports the same statement repeated under one parent span as an
- * N+1 query, and a hold's looks, the same statements read again after each
- * wait, were most of the N+1 issues it raised.
+ * Note that only the first look is traced, and each look after it runs
+ * with the tracer off, because a hold reads the same statements again after
+ * every wait, and Sentry reported each hold's looks as an N+1 query whatever
+ * span they ran under: they were most of the N+1 issues it raised. A trace
+ * still shows the hold's span, its first look, and the read that answers.
  */
 export function heldUntil<A, E, R>(
   read: Effect.Effect<A, E, R>,
@@ -101,13 +99,13 @@ export function heldUntil<A, E, R>(
   hold: Duration.Duration,
   edge: ClockEdge<A> = NO_CLOCK_EDGE,
 ): Effect.Effect<Option.Option<Held<A>>, E, R> {
-  const look = Effect.withSpan(read, LOOK_SPAN);
+  const again = Effect.withTracerEnabled(read, false);
   return Effect.scoped(
     Effect.gen(function* () {
       const watch = yield* (yield* Sync).watch(topics, poll);
       const woken = new Set<string>();
       let heardAt = Option.none<number>();
-      let standing = yield* look;
+      let standing = yield* read;
       while (!moved(standing)) {
         const at = edge(standing);
         const wait =
@@ -120,7 +118,7 @@ export function heldUntil<A, E, R>(
         for (const txid of Option.getOrElse(heard, () => NO_TXIDS)) woken.add(txid);
         // Note that only the wake before the look that moved is kept, since an earlier one that moved nothing, as a parent's write may on a worker's read, is not what this read answers; a wait its clock edge ended was woken by no write.
         heardAt = Option.isSome(heard) ? yield* watch.heardAt : Option.none();
-        standing = yield* look;
+        standing = yield* again;
       }
       return { read: standing, txids: [...woken], heardAt };
     }),

@@ -326,7 +326,8 @@ const heldParts = /* @__PURE__ */ Effect.fnUntraced(function* <Part extends stri
     }
     return { ...answer, queries: wokenBy(answer.queries, woken.value.txids) };
   }
-  const standing = yield* looked;
+  // Note that the look at the hold's end runs untraced, as every look after a hold's first does (`heldUntil`).
+  const standing = yield* Effect.withTracerEnabled(looked, false);
   return moved(standing) ? yield* read : standing;
 });
 
