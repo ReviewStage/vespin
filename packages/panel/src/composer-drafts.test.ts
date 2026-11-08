@@ -17,6 +17,7 @@ import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { Clock, Context, Effect, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment } from "react";
@@ -32,7 +33,6 @@ import {
   useDraftsOwner,
   useDraftWriter,
 } from "./composer-drafts.js";
-import { DesktopSidebar } from "./desktop/desktop-sidebar.js";
 import { DesktopTasks } from "./desktop/desktop-tasks.js";
 import { SidebarTask } from "./desktop/task-actions.js";
 import { DRAFT_WORD } from "./draft-mark.js";
@@ -56,9 +56,10 @@ import {
   typeInComposer,
 } from "./testing/composer.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
-import { sidebarProps } from "./testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "./testing/desktop-sidebar.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, listedAgent, tasksControl } from "./testing/tasks-control.js";
+import { windowRouter } from "./testing/window-router.js";
 
 /**
  * A draft as the developer meets it: words typed in one task's agent's box
@@ -746,9 +747,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () =>
-    root.render(withQueryClient(signedOut(createElement(DesktopSidebar, sidebarProps(tasks))))),
-  );
+  await act(async () => root.render(withQueryClient(signedOut(drawnSidebar(sidebarProps(tasks))))));
   await settle();
   return (name: string) =>
     (
@@ -786,12 +785,21 @@ function newTaskEntry(workspaceId: string, issueId?: string) {
 }
 
 /** Whether the sidebar's New task row wears the Draft pencil, drawn over `tasks` with the drafts storage holds. */
-async function newTaskDrafted(tasks: TasksControl): Promise<boolean> {
+async function newTaskDrafted(tasks: TasksControl, at?: string): Promise<boolean> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   await act(async () =>
-    root.render(withQueryClient(signedOut(createElement(DesktopSidebar, sidebarProps(tasks))))),
+    root.render(
+      withQueryClient(
+        signedOut(
+          drawnSidebar(
+            sidebarProps(tasks),
+            windowRouter(createMemoryHistory({ initialEntries: [at ?? "/app"] })),
+          ),
+        ),
+      ),
+    ),
   );
   await settle();
   const row =
@@ -823,11 +831,7 @@ test("words left in New task's card mark its sidebar row with the Draft pencil w
   const home = { ...inWorkspace(), page: TASKS_PAGE.HOME, activeTaskId: undefined, atHome: true };
   assert.equal(await newTaskDrafted(home), false, "Home's composer shows them");
   assert.equal(
-    await newTaskDrafted({
-      ...home,
-      atHome: false,
-      personView: { ...tasksControl().personView, userId: "user-sam", name: "Sam" },
-    }),
+    await newTaskDrafted({ ...home, atHome: false }, "/acme/person/user-sam"),
     true,
     "a person's page opened from Home stands in its composer's place",
   );

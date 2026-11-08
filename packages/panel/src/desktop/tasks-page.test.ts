@@ -37,6 +37,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { leavingBy, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useInboxWaiting } from "./places-waiting.js";
 import { TasksPage } from "./tasks-page.js";
@@ -211,6 +212,8 @@ async function mountPage(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+  // The window's router, whose routed exits the page's close leaves by, as the window's history does.
+  const { provide } = windowRouter();
   const draw = (workspace: Workspace) => {
     const control = tasksControl({
       tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
@@ -222,12 +225,6 @@ async function mountPage(
       listRead: true,
       taskSections: sections,
       onSelect: (taskId) => opened.push(taskId),
-      boardView: {
-        open: true,
-        onOpen: () => undefined,
-        onClose: () => (closed += 1),
-        onPreload: () => undefined,
-      },
       onSetTaskStanding: (taskId, standing) => {
         sent.push([taskId, standing]);
         return askKept(Promise.resolve(keeps));
@@ -238,11 +235,14 @@ async function mountPage(
     });
     root.render(
       withQueryClient(
-        createElement(
-          Fragment,
-          null,
-          createElement(TasksPage, { tasks: control, room }),
-          createElement(ToastHost),
+        provide(
+          createElement(
+            Fragment,
+            null,
+            leavingBy(() => (closed += 1)),
+            createElement(TasksPage, { tasks: control, room }),
+            createElement(ToastHost),
+          ),
         ),
       ),
     );

@@ -32,6 +32,7 @@ import {
 } from "@repo/host/app-state";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
@@ -51,6 +52,7 @@ import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 import { PersonPage } from "./person-page.js";
 
 /**
@@ -397,14 +399,20 @@ function mountWith(
       ...overrides,
       ...more,
     });
+  // The page stands at its person's address under Acme, as the router stands it.
+  const router = windowRouter(
+    createMemoryHistory({ initialEntries: [`/acme/person/${encodeURIComponent(userId)}`] }),
+  );
   const draw = (tasks: TasksControl) =>
     act(() =>
       root?.render(
         withQueryClient(
-          createElement(
-            OpenSettingsProvider,
-            { value: (link: SettingsLink) => opened.settings.push(link) },
-            createElement(PersonPage, { tasks, userId, name, away }),
+          router.provide(
+            createElement(
+              OpenSettingsProvider,
+              { value: (link: SettingsLink) => opened.settings.push(link) },
+              createElement(PersonPage, { tasks, userId, name, away }),
+            ),
           ),
         ),
       ),
@@ -490,7 +498,6 @@ function mountLinked(userId: string) {
   return mountWith(
     {
       workspaces: [{ ...ACME, slug: "acme" }],
-      personView: { ...tasksControl().personView, userId, workspaceId: ACME.id },
     },
     userId,
   );
@@ -771,11 +778,6 @@ test("Copy link copies their page's link under the slug of the workspace it stan
   const { page } = mountWith(
     {
       workspaces: [{ ...ACME, slug: "acme" }],
-      personView: {
-        ...tasksControl().personView,
-        userId: CHARLES.userId,
-        workspaceId: ACME.id,
-      },
     },
     CHARLES.userId,
   );

@@ -19,7 +19,6 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { DesktopInbox } from "./desktop/desktop-inbox.js";
-import { DesktopSidebar } from "./desktop/desktop-sidebar.js";
 import { DesktopVersionHistory, taskVersionSubject } from "./desktop/desktop-version-history.js";
 import { SIDEBAR_OVERLAY } from "./desktop/sidebar-collapse.js";
 import { PANEL_TAB } from "./panel-tabs.js";
@@ -38,6 +37,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads, handInboxItems, handState } from "./testing/app-state.js";
 import { ChangesTabReading } from "./testing/changes-tab.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, tasksControl } from "./testing/tasks-control.js";
@@ -130,7 +130,7 @@ function assertSaidAlike(failure: ReturnType<typeof readFailure>, words: string)
 
 /** The sidebar over `tasks`, expanded, for an account signed in. */
 function sidebarOver(tasks: TasksControl): React.ReactElement {
-  return createElement(DesktopSidebar, {
+  return drawnSidebar({
     sidebar: {
       collapsed: false,
       compact: false,

@@ -14,7 +14,7 @@ import {
 } from "@tanstack/react-router";
 import { createElement, type ReactElement } from "react";
 import { createPanelRouter, PanelRouterProvider } from "../panel-router.js";
-import { RoutedExitsProvider } from "../places/routed-exits.js";
+import { RoutedExitsProvider, useRoutedExits } from "../places/routed-exits.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 
 /** The router a test's window stands under. */
@@ -73,4 +73,15 @@ export function windowRouter(
       }),
     drawn: () => createElement(PanelRouterProvider, { router }),
   };
+}
+
+/** Fills the window's routed exits' leave with `leave`, as the window's root fills it from its history. */
+function LeavesBy({ leave }: { readonly leave: () => void }): null {
+  useRoutedExits().leave = leave;
+  return null;
+}
+
+/** An element that, drawn under a window's router, has its routed places left by `leave`, so a test hears a place's close. */
+export function leavingBy(leave: () => void): ReactElement {
+  return createElement(LeavesBy, { leave });
 }

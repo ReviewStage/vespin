@@ -9,7 +9,7 @@ import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
+import { WORKSPACE_ROLE, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -86,6 +86,7 @@ import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
+import { usePersonDoor } from "../places/routed-doors.js";
 import { stateEndMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
@@ -99,6 +100,7 @@ import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems } from "../tasks/use-waiting-items.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
+import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { AgentListRow } from "./agent-list-row.js";
@@ -375,13 +377,14 @@ const PERSON = "Person";
 
 /**
  * The workspace the page's links are written under: the one its page stands
- * in, by its slug where it has one, else by its id; none where it is not
- * known, so nothing copies a link that names no workspace.
+ * in, by its address step `standing`, by its slug where it has one, else by
+ * its id; none where it is not known, so nothing copies a link that names no
+ * workspace.
  */
-function linkWorkspaceOf(tasks: TasksControl): string | undefined {
-  const homeId = tasks.personView.workspaceId ?? tasks.workspace?.id;
-  const home = tasks.workspaces.find((each) => each.id === homeId);
-  return home?.slug ?? homeId;
+function linkWorkspaceOf(tasks: TasksControl, standing: string | undefined): string | undefined {
+  const theirs = standing === undefined ? undefined : workspaceOfSlug(tasks.workspaces, standing);
+  const home = theirs ?? tasks.workspace;
+  return home?.slug ?? home?.id;
 }
 
 /**
@@ -408,6 +411,7 @@ function PersonActions({
   phone?: boolean;
 }): React.JSX.Element {
   const openSettings = useOpenSettings();
+  const standing = usePersonRoute().workspace;
   const copy = useCopyToast();
   const chord = useChordLinks();
   const menu = useMenu(tasks.shown);
@@ -420,7 +424,7 @@ function PersonActions({
     workspace !== undefined &&
     (workspace.role === WORKSPACE_ROLE.OWNER || workspace.role === WORKSPACE_ROLE.ADMIN);
   const email = member?.email;
-  const slug = linkWorkspaceOf(tasks);
+  const slug = linkWorkspaceOf(tasks, standing);
   const link = slug === undefined ? undefined : linkOf({ kind: LINK_PLACE.PERSON, userId }, slug);
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
   const copies = [
@@ -722,6 +726,7 @@ function PersonColumn({
   away: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const now = useMinute();
+  const standing = usePersonRoute().workspace;
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
   const listed = tasks.listed.tasks;
@@ -942,7 +947,7 @@ function PersonColumn({
   );
   // Every link on the page, a row's Copy link among them, is written under the workspace it stands in.
   const linked = (
-    <LinkWorkspaceProvider value={linkWorkspaceOf(tasks)}>{detail}</LinkWorkspaceProvider>
+    <LinkWorkspaceProvider value={linkWorkspaceOf(tasks, standing)}>{detail}</LinkWorkspaceProvider>
   );
   if (away === undefined) return linked;
   return (
@@ -975,7 +980,7 @@ export function PersonPage({
   /** A phone's way back out of the page (`WindowHistory`'s `onLeave`), which heads it as a phone's page; none elsewhere. */
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_PERSON_PAGE, tasks.personView.onClose);
+  useAppCommand(APP_COMMAND.EXIT_PERSON_PAGE, usePersonDoor(tasks).close);
   return (
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
       <PersonColumn tasks={tasks} userId={userId} name={name} staged={staged} away={away} />

@@ -22,6 +22,7 @@ import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
 import { stripTabLink } from "./tasks/strip-tab-kinds.js";
 import type { SidePanelTab } from "./tasks/use-side-panel.js";
 import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
+import { type RoutedViews, useRoutedViews } from "./workspace-routes.js";
 
 /**
  * links-at-hand.ts -- the links the window can copy right now: what is open or focused, the most specific first.
@@ -225,16 +226,20 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
 }
 
 /** Every link the window can copy now, the most specific first; none for a place whose workspace is unknown. */
-function linksAtHand(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
-  return placesAtHand(tasks, at).filter((each) => each.link.workspace !== "");
+function linksAtHand(tasks: TasksControl, views: RoutedViews, at: WindowAt): readonly LinkAtHand[] {
+  return placesAtHand(tasks, views, at).filter((each) => each.link.workspace !== "");
 }
 
 /** The links of what is open or focused, the most specific first, each under the workspace it is in, empty where that is unknown: a routed place's by its declaration, over the links of the place the window's state says. */
-function placesAtHand(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
+function placesAtHand(
+  tasks: TasksControl,
+  views: RoutedViews,
+  at: WindowAt,
+): readonly LinkAtHand[] {
   const listed = slugOf(tasks.workspaces, tasks.workspace?.id);
   const under = () => stateLinks(tasks, at);
   if (at.place === undefined || at.underRouted === true) return under();
-  return at.place.links({ tasks, at, listed, under });
+  return at.place.links({ tasks, views, at, listed, under });
 }
 
 /** The links of an agent's own page: the page's, under the workspace the page read its agent into, else the one listed, and the tab of the panel beside it with a link of its own, first where the panel holds the keys. */
@@ -315,8 +320,9 @@ export function useCopyLink(
     copyWords(linkOf(held.link.place, held.link.workspace), LINK_COPY.COPIED);
   const [pageWorkspace, onPageWorkspace] = useState<PageWorkspace | undefined>(undefined);
   const inboxTask = tasks.inboxView.narrowed;
+  const views = useRoutedViews();
   const linksAt = (sidePanelFocused: boolean) =>
-    linksAtHand(tasks, {
+    linksAtHand(tasks, views, {
       settings,
       place,
       admin,
@@ -340,7 +346,7 @@ export function useCopyLink(
   };
   useHoldChordLinks(firstLink(false), firstLink(true));
   const standing = linksAt(false).find((each) => each.step === true)?.link;
-  const placed = linksAtHand(tasks, {
+  const placed = linksAtHand(tasks, views, {
     settings: undefined,
     underRouted: true,
     sidePanelFocused: false,

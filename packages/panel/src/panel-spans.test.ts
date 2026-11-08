@@ -5,7 +5,6 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { DesktopSidebar } from "./desktop/desktop-sidebar.js";
 import {
   beginPanelSpan,
   endWindowSpanOnFirstDraw,
@@ -21,7 +20,7 @@ import { useInboxItemOpenSpan, useInboxOpenSpan } from "./tasks/use-inbox-spans.
 import type { TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeActPortAnswering } from "./testing/app-bridge.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
-import { sidebarProps } from "./testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "./testing/desktop-sidebar.js";
 import { keyPressed, reportEventTiming } from "./testing/event-timing.js";
 import { tasksControl } from "./testing/tasks-control.js";
 
@@ -93,11 +92,7 @@ async function sidebarOver(tasks: TasksControl): Promise<(next: TasksControl) =>
   roots.push(root);
   const draw = async (next: TasksControl) => {
     act(() =>
-      root.render(
-        withQueryClient(
-          createElement(DesktopSidebar, { ...sidebarProps(next), room: SHELL_ROOM.WIDE }),
-        ),
-      ),
+      root.render(withQueryClient(drawnSidebar({ ...sidebarProps(next), room: SHELL_ROOM.WIDE }))),
     );
     await settle();
   };

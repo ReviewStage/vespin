@@ -9,10 +9,9 @@ import { afterEach, beforeEach, test } from "vitest";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 import { ArchivedAgents } from "./agent-archive.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-folds.test.ts -- every group that folds folds under one
@@ -59,7 +58,7 @@ function mount(element: ReactElement): HTMLElement {
 
 /** The sidebar on the Tasks tab, open, listing what `tasks` lists. */
 function mountSidebar(tasks: TasksControl): HTMLElement {
-  return mount(createElement(DesktopSidebar, sidebarProps(tasks)));
+  return mount(drawnSidebar(sidebarProps(tasks)));
 }
 
 /** The fold whose words start with `name`. */

@@ -43,7 +43,7 @@
  */
 
 import type { TaskSummary } from "@repo/features/task-wire";
-import type { WorkspaceMember } from "@repo/features/workspace-wire";
+import { type WorkspaceMember, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
@@ -60,6 +60,7 @@ import { liveStepTitle, memberName, NAMED_STEP, stepTitle } from "../history-tit
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
 import type { StepTitle } from "../navigation-history.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { type BoardDoor, useBoardDoor } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
@@ -68,6 +69,7 @@ import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
+import { type RoutedViews, useRoutedViews } from "../workspace-routes.js";
 import { type HeldLook, heldLook, LOOK_STRIP } from "./switcher-looks.js";
 import {
   forgotten,
@@ -278,18 +280,27 @@ function standingOf(
   tab: PanelTab,
   tasks: TasksControl,
   place: RoutedPlace | undefined,
+  views: RoutedViews,
 ): Stop | undefined {
-  const { mainTabs, sidePanel, personView } = tasks;
+  const { mainTabs, sidePanel } = tasks;
+  const { userId, name, workspace } = views.person;
   const column = mainTabs.tab;
   return shownStop({
     over: tab === PANEL_TAB.SETTINGS || tasks.adminView.open || tasks.history.open,
     inbox: tasks.inboxView.open,
     agentId: tasks.agentView.agentId,
     person:
-      personView.userId === undefined
+      userId === undefined
         ? undefined
-        : { userId: personView.userId, name: personView.name, workspaceId: personView.workspaceId },
-    board: tasks.boardView.open,
+        : {
+            userId,
+            name,
+            workspaceId:
+              workspace === undefined
+                ? undefined
+                : workspaceOfSlug(tasks.workspaces, workspace)?.id,
+          },
+    board: views.board,
     automations: tasks.automationsView.open,
     home: place === ROUTED_PLACE.HOME,
     boundFor: tasks.boundFor,
@@ -363,8 +374,10 @@ export function TabSwitcher({
   const pressesMoved = useRef(0);
   // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
   const listed = useRef(new Set<string>());
-  const doors = useRef({ tab, tasks, onTabChange });
-  doors.current = { tab, tasks, onTabChange };
+  const board = useBoardDoor(tasks);
+  const views = useRoutedViews();
+  const doors = useRef({ tab, tasks, onTabChange, board });
+  doors.current = { tab, tasks, onTabChange, board };
   // The switcher's waits are called off as it leaves, since what they would do is draw it.
   useEffect(
     () => () => {
@@ -426,8 +439,8 @@ export function TabSwitcher({
   }, []);
 
   // The window's stops follow where it stands, each render, and what Back's list calls the stop standing.
-  const now = standingOf(tab, tasks, place);
-  const title = stepTitle(place, tasks);
+  const now = standingOf(tab, tasks, place, views);
+  const title = stepTitle(place, tasks, views);
   useEffect(() => {
     const before = shown.current;
     shown.current = now;
@@ -460,7 +473,7 @@ export function TabSwitcher({
 
   // Goes to a stop through the window's own doors, as any move there would, all of it past one ask of the leave guard, so a leave canceled moves nothing, the stops' order included.
   const go = (stop: Stop) => {
-    const { tasks: control, onTabChange: changeTab } = doors.current;
+    const { tasks: control, onTabChange: changeTab, board: boardDoor } = doors.current;
     control.placeLeave.transitionalLeaveFirst(() => {
       // A routed place standing, Settings or Admin, is left for the stop.
       changeTab(PANEL_TAB.TASKS);
@@ -472,10 +485,10 @@ export function TabSwitcher({
           control.agentView.onOpen(stop.agentId);
           break;
         case STOP_KIND.PERSON:
-          control.personView.onOpen(stop.userId, stop.name, stop.workspaceId);
+          control.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
           break;
         case STOP_KIND.PLACE:
-          openPlace(control, stop.place);
+          openPlace(control, boardDoor, stop.place);
           break;
       }
       // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
@@ -666,7 +679,7 @@ function showTask(tasks: TasksControl, stop: Extract<Stop, { kind: typeof STOP_K
 }
 
 /** Opens a place through its own door. */
-function openPlace(tasks: TasksControl, place: SwitcherPlace): void {
+function openPlace(tasks: TasksControl, board: BoardDoor, place: SwitcherPlace): void {
   switch (place) {
     case SWITCHER_PLACE.HOME:
       tasks.onGoHome();
@@ -675,7 +688,7 @@ function openPlace(tasks: TasksControl, place: SwitcherPlace): void {
       tasks.inboxView.onOpen();
       return;
     case SWITCHER_PLACE.BOARD:
-      tasks.boardView.onOpen();
+      board.open();
       return;
     case SWITCHER_PLACE.AUTOMATIONS:
       tasks.automationsView.onOpen();

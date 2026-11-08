@@ -88,6 +88,12 @@ import { useLinkPlaceLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
+import {
+  type BoardDoor,
+  type PersonDoor,
+  useBoardDoor,
+  usePersonDoor,
+} from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { useWindowPlace } from "../places/routed-places.js";
 import { ADDRESS, addressOf } from "../route.js";
@@ -120,7 +126,13 @@ import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
-import { type HomeRoute, useHomeRoute, useUnknownWorkspaceRoute } from "../workspace-routes.js";
+import {
+  type HomeRoute,
+  type RoutedViews,
+  useHomeRoute,
+  useRoutedViews,
+  useUnknownWorkspaceRoute,
+} from "../workspace-routes.js";
 import { FIXTURE_AGENT_ID } from "./agent-fixture.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { REVISION_SOURCE } from "./description-history-model.js";
@@ -264,6 +276,13 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.GITHUB_DISCONNECT,
   ACT_KIND.TASKS_REVISIONS,
 ];
+
+/** The Board's doors in the window last mounted, as a surface holds them. */
+let boardDoor: BoardDoor | undefined;
+/** A person's page's doors in the window last mounted, as a surface holds them. */
+let personDoor: PersonDoor | undefined;
+/** The Board and a person's page as the router of the window last mounted stands them. */
+let views: RoutedViews | undefined;
 
 function mount(
   initial: Partial<Standing> = {},
@@ -414,6 +433,10 @@ function mount(
       // A link's step is written by the window's history beside the tab, where one stands, else the task's place opens by its own door.
       visitTask: (at, step) => windowHistory?.onVisitTask(at, step) ?? false,
     });
+    // The Board's and a person's page's doors, and how they stand, as the window's surfaces hold them.
+    boardDoor = useBoardDoor(control);
+    personDoor = usePersonDoor(control);
+    views = useRoutedViews();
     // A link place the router lands on is read by its route and opened as its link is, as the window's root has it.
     useLinkPlaceLandings(openLanded);
     // The place standing and the task bound follow each other, as the window's root keeps them; with no history beside
@@ -1139,7 +1162,7 @@ test("in a narrow room a task with no page behind it leaves for Home, not the Bo
   await settle();
   const left = {
     closed: tab.told.includes(ACT_KIND.TASKS_CLOSE),
-    board: tab.control().boardView.open,
+    board: views?.board,
   };
   act(() => tab.history().onBack());
 
@@ -1777,8 +1800,8 @@ async function placeOpenedBy(href: string) {
     listed: control.workspace?.slug,
     task: opensAsked(tab.payloads).at(-1),
     version: control.history.open ? control.history.spot?.revision : undefined,
-    board: control.boardView.open,
-    person: control.personView.userId,
+    board: views?.board,
+    person: views?.person.userId,
     inbox: control.inboxView.open
       ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
       : undefined,
@@ -2197,8 +2220,8 @@ test("a Vespin link to a person opens their page in the workspace its slug names
 
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
   assert.equal(tab.control().inboxView.open, false);
-  assert.equal(tab.control().personView.userId, "user-charles");
-  assert.equal(tab.control().personView.workspaceId, PERSONAL.id);
+  assert.equal(views?.person.userId, "user-charles");
+  assert.equal(views?.person.workspace, PERSONAL.slug);
 });
 
 test("a Vespin link whose slug names no workspace of the account's leaves the listed one, and opens its place all the same, whose read decides", () => {
@@ -2577,7 +2600,7 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
   );
   const choose = () => {
     act(() => tab.control().inboxView.onOpenItem({ taskId: TASK.id, itemId: "item-1" }));
-    act(() => tab.control().boardView.onOpen());
+    act(() => boardDoor?.open());
   };
 
   choose();
@@ -2666,14 +2689,14 @@ test("a start refused after the Board was opened leaves the Board standing rathe
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed });
   });
-  act(() => tab.control().boardView.onOpen());
+  act(() => boardDoor?.open());
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
     answers[0]?.({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE });
     await note;
   });
 
-  assert.equal(tab.control().boardView.open, true);
+  assert.equal(views?.board, true);
   assert.equal(tab.control().agentView.agentId, undefined);
 });
 
@@ -2713,7 +2736,7 @@ test.each([
     );
     act(() => tab.control().inboxView.onOpen());
     act(() => press(tab));
-    act(() => tab.control().boardView.onOpen());
+    act(() => boardDoor?.open());
     await act(async () => {
       await vi.waitFor(() => assert.ok(refusals.length > 0));
       refusals[0]?.();
@@ -2721,7 +2744,7 @@ test.each([
     await settle();
 
     assert.deepEqual(
-      { board: tab.control().boardView.open, inbox: tab.control().inboxView.open },
+      { board: views?.board, inbox: tab.control().inboxView.open },
       { board: true, inbox: false },
     );
   },
@@ -2770,18 +2793,18 @@ test("a start refused while the Inbox item it was pressed over was still being f
 test("a person's page is theirs in the workspace it opened in: another listed in its place closes it, and one opened from another workspace lists that one first", async () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
 
-  act(() => tab.control().personView.onOpen("user-charles", "Charles Pan"));
-  const opened = tab.control().personView.userId;
+  act(() => tab.control().onOpenPerson("user-charles", "Charles Pan"));
+  const opened = views?.person.userId;
   act(() => tab.control().onChooseWorkspace(ACME.id));
   // The page gives way through the router, whose move lands once the page's own has.
   await act(async () => undefined);
-  const afterSwitch = tab.control().personView.userId;
-  act(() => tab.control().personView.onOpen("user-maya", "Maya Okafor", PERSONAL.id));
+  const afterSwitch = views?.person.userId;
+  act(() => tab.control().onOpenPerson("user-maya", "Maya Okafor", PERSONAL.id));
 
   assert.equal(opened, "user-charles");
   assert.equal(afterSwitch, undefined);
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
-  assert.equal(tab.control().personView.userId, "user-maya");
+  assert.equal(views?.person.userId, "user-maya");
 });
 
 test("a person's page opened in another workspace lists it without reopening its last plan, so no refused reopen takes the page with it", async () => {
@@ -2801,12 +2824,12 @@ test("a person's page opened in another workspace lists it without reopening its
   });
   const opensBefore = opensAsked(tab.payloads).length;
 
-  act(() => tab.control().personView.onOpen("user-maya", "Maya Okafor", ACME.id));
+  act(() => tab.control().onOpenPerson("user-maya", "Maya Okafor", ACME.id));
   await settle();
 
   assert.equal(tab.control().workspace?.id, ACME.id);
   assert.equal(opensAsked(tab.payloads).length, opensBefore);
-  assert.equal(tab.control().personView.userId, "user-maya");
+  assert.equal(views?.person.userId, "user-maya");
 });
 
 /** The tasks each open the tab asked of main named, in order. */
@@ -2840,12 +2863,12 @@ test("a person's page opened while a plan's open is still out stands when the op
   );
 
   act(() => tab.control().onSelect("alerts"));
-  act(() => tab.control().personView.onOpen("user-maya", "Maya Okafor", PERSONAL.id));
+  act(() => tab.control().onOpenPerson("user-maya", "Maya Okafor", PERSONAL.id));
   await act(async () => answer(true));
   await settle();
 
   assert.equal(tab.control().workspace?.id, PERSONAL.id);
-  assert.equal(tab.control().personView.userId, "user-maya");
+  assert.equal(views?.person.userId, "user-maya");
 });
 
 test("a plan opened from another workspace says the window switched, and Back lists the workspace left with the plan that stood open there", async () => {
@@ -3469,7 +3492,7 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
   });
 
   // Note that the router's move waits a turn on its blocker, which stands while the page holds its ask.
-  act(() => tab.control().boardView.onOpen());
+  act(() => boardDoor?.open());
   await settle();
   act(() => tab.control().onChooseWorkspace("workspace-other"));
   assert.equal(tab.control().inboxView.open, true, "the page stands while it is asked about");
@@ -3477,7 +3500,7 @@ test("while a page stands its ask, a way out asks instead of going, Leave goes w
 
   act(() => asked[0]?.());
   await settle();
-  assert.equal(tab.control().boardView.open, true, "Leave goes where the first way out went");
+  assert.equal(views?.board, true, "Leave goes where the first way out went");
 
   act(() => down());
   act(() => tab.control().inboxView.onOpen());
@@ -3524,8 +3547,8 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
       : undefined,
     agentPage: control.agentView.agentId,
     automations: control.automationsView.open,
-    board: control.boardView.open,
-    person: control.personView.userId,
+    board: views?.board,
+    person: views?.person.userId,
     admin: control.adminView.open,
     history: control.history.open,
     listed: control.workspace?.id,
@@ -3565,7 +3588,7 @@ const TAB_DOORS: [string, (control: TasksControl) => void][] = [
 ];
 
 /** The window on the Board, as the Inbox's doors below are pressed from it. */
-const FROM_BOARD = (control: TasksControl) => control.boardView.onOpen();
+const FROM_BOARD = () => boardDoor?.open();
 
 /** The doors of the router's places, each pressed from the Inbox over the open task, or from `away`'s place where named. */
 const ROUTED_DOORS: [
@@ -3574,11 +3597,11 @@ const ROUTED_DOORS: [
   ((control: TasksControl) => void)?,
 ][] = [
   ["Admin", (control) => control.adminView.onOpen()],
-  ["the Board", (control) => control.boardView.onOpen()],
-  ["a person's page", (control) => control.personView.onOpen("user-ada", "Ada")],
+  ["the Board", () => boardDoor?.open()],
+  ["a person's page", (control) => control.onOpenPerson("user-ada", "Ada")],
   [
     "a person's page in another workspace, which it lists",
-    (control) => control.personView.onOpen("user-ada", "Ada", ACME.id),
+    (control) => control.onOpenPerson("user-ada", "Ada", ACME.id),
   ],
   ["Automations", (control) => control.automationsView.onOpen()],
   ["the Inbox", (control) => control.inboxView.onOpen(), FROM_BOARD],
@@ -3600,11 +3623,11 @@ const ROUTED_DOORS: [
     FROM_BOARD,
   ],
   ["the version history, sought to a version", (control) => control.history.onOpen(BILLING.id, 1)],
-  ["the Board's close", (control) => control.boardView.onClose(), FROM_BOARD],
+  ["the Board's close", () => boardDoor?.close(), FROM_BOARD],
   [
     "a person's page's close",
-    (control) => control.personView.onClose(),
-    (control) => control.personView.onOpen("user-ada", "Ada"),
+    () => personDoor?.close(),
+    (control) => control.onOpenPerson("user-ada", "Ada"),
   ],
   [
     "an agent's page's close",
@@ -3742,9 +3765,9 @@ async function askedOver(
 test("the Board stands in the plan's place over the Inbox, which it puts away", () => {
   const tab = mount({ shown: true, tasks: { ...listRead([listed()]), workspaces: [ACME] } });
   act(() => tab.control().inboxView.onOpen());
-  act(() => tab.control().boardView.onOpen());
+  act(() => boardDoor?.open());
 
-  assert.equal(tab.control().boardView.open, true);
+  assert.equal(views?.board, true);
   assert.equal(tab.control().inboxView.open, false);
 });
 

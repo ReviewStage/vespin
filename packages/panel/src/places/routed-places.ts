@@ -21,6 +21,7 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_PLACE, type LinkPlace, taskLinkStep } from "@repo/features/link-grammar";
+import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import {
@@ -64,6 +65,7 @@ import { MAIN_TAB, type MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";
+import type { RoutedViews } from "../workspace-routes.js";
 import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 import { openPanelTab, type TaskStep } from "./task-step.js";
@@ -96,9 +98,11 @@ interface PlaceShown {
   readonly columnKnown: boolean;
 }
 
-/** What a declaration reads to offer its links: the Tasks tab, where the window stands, the workspace listed's address step, and the links of the place the window's state says under it. */
+/** What a declaration reads to offer its links: the Tasks tab, the Board and a person's page as their routes stand them, where the window stands, the workspace listed's address step, and the links of the place the window's state says under it. */
 interface PlaceLinks {
   readonly tasks: TasksControl;
+  /** The Board and a person's page as their routes stand them. */
+  readonly views: RoutedViews;
   readonly at: WindowAt;
   readonly listed: string;
   readonly under: () => readonly LinkAtHand[];
@@ -136,6 +140,7 @@ export interface PlaceDeclaration {
   readonly title: (
     tasks: StepTitleTasks,
     under: () => StepTitle | undefined,
+    views: RoutedViews,
   ) => StepTitle | undefined;
   /** What a step of it listed later is named again by, by the ids its address names; none where its kept name stands. */
   readonly named: (
@@ -297,12 +302,10 @@ export const ROUTED_PLACE = {
     overThePlan: true,
     inTaskPlace: false,
     listedOnly: true,
-    title: (tasks, under) => (tasks.boardView.open ? { label: "Tasks" } : under()),
+    title: (_tasks, under, views) => (views.board ? { label: "Tasks" } : under()),
     named: () => undefined,
-    links: ({ tasks, listed, under }) =>
-      tasks.boardView.open
-        ? [stepLink({ kind: LINK_PLACE.BOARD }, LINK_THING.BOARD, listed)]
-        : under(),
+    links: ({ views, listed, under }) =>
+      views.board ? [stepLink({ kind: LINK_PLACE.BOARD }, LINK_THING.BOARD, listed)] : under(),
     narrowList: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.BOARD }],
     draft: noDraft,
@@ -316,19 +319,24 @@ export const ROUTED_PLACE = {
     overThePlan: true,
     inTaskPlace: false,
     listedOnly: true,
-    title: (tasks, under) =>
-      tasks.personView.userId === undefined
-        ? under()
-        : { label: tasks.personView.name ?? "Profile" },
+    title: (_tasks, under, views) =>
+      views.person.userId === undefined ? under() : { label: views.person.name ?? "Profile" },
     // A person's step is listed by the name they go by now.
     named: (params) =>
       params.userId === undefined ? undefined : { kind: NAMED_STEP.PERSON, userId: params.userId },
     // A person's page is theirs in the workspace it opened in, which their link names.
-    links: ({ tasks, listed, under }) => {
-      const { userId, workspaceId } = tasks.personView;
+    links: ({ tasks, views, listed, under }) => {
+      const { userId, workspace } = views.person;
       if (userId === undefined) return under();
-      const home = workspaceId === undefined ? listed : slugOf(tasks.workspaces, workspaceId);
-      return [stepLink({ kind: LINK_PLACE.PERSON, userId }, LINK_THING.PERSON, home)];
+      const home =
+        workspace === undefined ? undefined : workspaceOfSlug(tasks.workspaces, workspace);
+      return [
+        stepLink(
+          { kind: LINK_PLACE.PERSON, userId },
+          LINK_THING.PERSON,
+          home === undefined ? listed : (home.slug ?? home.id),
+        ),
+      ];
     },
     narrowList: undefined,
     surfaces: (params) => [{ surface: PRODUCT_SURFACE.PERSON, of: params.userId }],

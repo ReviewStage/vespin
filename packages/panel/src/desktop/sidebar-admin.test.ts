@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { SHELL_ROOM } from "../shell-room.js";
 import { fakeActPortAnswering, type SentPortAct } from "../testing/app-bridge.js";
 import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-admin.test.ts -- the Admin row stands after Automations for an
@@ -58,11 +57,7 @@ async function mount(admin: boolean): Promise<{ sidebar: HTMLElement; opened: nu
   const root = createRoot(container);
   roots.push(root);
   act(() =>
-    root.render(
-      withQueryClient(
-        createElement(DesktopSidebar, { ...sidebarProps(control), room: SHELL_ROOM.WIDE }),
-      ),
-    ),
+    root.render(withQueryClient(drawnSidebar({ ...sidebarProps(control), room: SHELL_ROOM.WIDE }))),
   );
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();

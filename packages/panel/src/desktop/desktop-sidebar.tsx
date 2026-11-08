@@ -138,6 +138,8 @@ import {
   PANEL_SPAN_ATTRIBUTE,
 } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { useBoardDoor } from "../places/routed-doors.js";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
@@ -1848,11 +1850,13 @@ function SidebarColumn({
   const bodyRef = useMemo(() => joinRefs(body, roving.ref), [roving.ref]);
   // The window's Inbox, an agent's or a person's page, the Automations page, the Board, and Admin stand in the task's place, so while one does no task is the place shown.
   // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
+  const { place } = useWindowPlace();
+  const board = useBoardDoor(tasks);
   const inAdmin = tasks.adminView.open;
   const inInbox = onTasks && !inAdmin && tasks.inboxView.open;
   const inAutomations = onTasks && tasks.automationsView.open;
-  const inBoard = onTasks && !inAdmin && tasks.boardView.open;
-  const inPerson = onTasks && !inAdmin && tasks.personView.userId !== undefined;
+  const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
+  const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
   // Opening an automation sees its failed run, which the Automations row is marked for until then.
   const { place: automationsPlace } = tasks.automationsView;
   // The workspace's runs, followed while the sidebar stands, as the Runs tab follows them, for the row to count the ones still at work.
@@ -1898,7 +1902,7 @@ function SidebarColumn({
   const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
   const openInbox = () => tasks.inboxView.onOpen();
-  const openBoard = () => tasks.boardView.onOpen();
+  const openBoard = () => board.open();
   const openAutomations = () => tasks.automationsView.onOpen();
   const openAdmin = () => tasks.adminView.onOpen();
   const goHome = () => arriveFor(() => tasks.onGoHome());
@@ -2222,8 +2226,7 @@ function SidebarColumn({
               tasks={tasks}
               // A person's page stands in Home's place without leaving its page, and draws no composer.
               shown={
-                tasks.newTask.open ||
-                (atHome && tasks.signedIn && tasks.personView.userId === undefined)
+                tasks.newTask.open || (atHome && tasks.signedIn && place !== ROUTED_PLACE.PERSON)
               }
               onNewTask={chosen(newTask)}
             />
@@ -2251,7 +2254,7 @@ function SidebarColumn({
             current={inBoard}
             disabled={!tasks.signedIn}
             onOpen={chosen(openBoard)}
-            onPreload={tasks.boardView.onPreload}
+            onPreload={board.preload}
           />
         )}
         <SidebarAutomationsRow

@@ -37,6 +37,7 @@ import { experimentsOn, settingsView } from "@repo/settings/testing";
 import { agentTab, changesTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASK_MARK, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -74,7 +75,7 @@ import {
   writeExperiments,
 } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -82,9 +83,9 @@ import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { CommandPalette } from "./command-palette.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { ListedAutomations } from "./listed-automations.js";
 
@@ -112,15 +113,14 @@ function AgentPageTelling(props: { agentId: string; workspaceId: string }): null
   return null;
 }
 
-/** The palette as the window draws it, offering the links at hand through the window's own Copy link, beside an agent's page where one tells its workspace. */
-function WindowPalette({
-  page,
-  place,
-  ...props
-}: Omit<Parameters<typeof CommandPalette>[0], "links"> & {
+/** The palette's props as the window hands them, beside an agent's page where one tells its workspace, and the routed place it stands on. */
+type WindowPaletteProps = Omit<Parameters<typeof CommandPalette>[0], "links"> & {
   page?: { agentId: string; workspaceId: string } | undefined;
   place?: RoutedPlace | undefined;
-}): React.JSX.Element {
+};
+
+/** The palette offering the links at hand through the window's own Copy link. */
+function LinkedPalette({ page, place, ...props }: WindowPaletteProps): React.JSX.Element {
   const links = useCopyLink(props.tasks, undefined, true, SHELL_ROOM.WIDE, undefined, place);
   return createElement(
     PageWorkspaceProvider,
@@ -128,6 +128,15 @@ function WindowPalette({
     createElement(CommandPalette, { ...props, links }),
     page === undefined ? null : createElement(AgentPageTelling, page),
   );
+}
+
+/** The palette as the window draws it, under a window's router standing at `at`, `/app` unless said, whose place its links read. */
+function WindowPalette({
+  at = "/app",
+  ...props
+}: WindowPaletteProps & { at?: string | undefined }): React.JSX.Element {
+  const [router] = useState(() => windowRouter(createMemoryHistory({ initialEntries: [at] })));
+  return router.provide(createElement(LinkedPalette, props));
 }
 
 /** The palette over a window on its Tasks tab, opened by ⌘K's command, every page it opens recorded. */
@@ -140,6 +149,8 @@ function openPalette(
   tab: PanelTab = PANEL_TAB.TASKS,
   /** The routed place the window stands on, which offers its own links. */
   place?: RoutedPlace,
+  /** The address the window's router stands at, which a place the router alone stands, a person's page, is read from. */
+  at = "/app",
 ): Sent {
   const sent: Sent = { tabs: [], views: [] };
   const host = document.createElement("div");
@@ -162,6 +173,7 @@ function openPalette(
     },
     page,
     place,
+    at,
   });
   // The repository's files are read whole through the act port, by the plan they stand on.
   fakeActPort({
@@ -1951,17 +1963,13 @@ test("on a person's page ⌘K offers Copy link to profile and ⇧⌘C copies the
     tasksControl({
       workspaces: ON_AGENT_TAB.workspaces,
       workspace: acme,
-      personView: {
-        ...tasksControl().personView,
-        userId: "user-charles",
-        workspaceId: acme?.id,
-      },
     }),
     undefined,
     undefined,
     undefined,
     undefined,
     ROUTED_PLACE.PERSON,
+    "/acme/person/user-charles",
   );
   type("copy link");
   const listed = rows().filter((row) => row.startsWith("Copy link to "));
@@ -2084,13 +2092,12 @@ test("People lists the listed workspace's members as every people menu does, the
   ];
   membersAnswer(members);
   const opened: string[] = [];
-  const base = tasksControl();
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const sent = openPalette(
     tasksControl({
       me: "user-dean",
       workspace: { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null },
-      personView: { ...base.personView, onOpen: (userId) => opened.push(userId) },
+      onOpenPerson: (userId) => opened.push(userId),
     }),
     undefined,
     undefined,
@@ -2489,7 +2496,7 @@ function PinnableTask(): React.JSX.Element {
     Fragment,
     null,
     createElement(Looker, { looked: listed }),
-    createElement(DesktopSidebar, sidebarProps(tasks)),
+    drawnSidebar(sidebarProps(tasks)),
     createElement(WindowPalette, {
       available: true,
       tab: PANEL_TAB.TASKS,

@@ -8,7 +8,8 @@ import { stepTitle } from "../history-titles.js";
 import { createPanelRouter } from "../panel-router.js";
 import type { RouteAccess } from "../route-gates.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { tasksControl, VIEWS_AWAY } from "../testing/tasks-control.js";
+import type { RoutedViews } from "../workspace-routes.js";
 import { type PlaceThere, ROUTED_PLACE, routedPlaceOf, routedStepStands } from "./routed-places.js";
 
 /**
@@ -146,9 +147,10 @@ test("each place over the plan names its step for itself, and Admin's as the pla
   const titled = (
     overrides: Parameters<typeof tasksControl>[0],
     place: keyof typeof ROUTED_PLACE,
-  ) => stepTitle(ROUTED_PLACE[place], tasksControl({ tasks: [task], ...overrides }));
+    views: RoutedViews = VIEWS_AWAY,
+  ) => stepTitle(ROUTED_PLACE[place], tasksControl({ tasks: [task], ...overrides }), views);
 
-  assert.deepEqual(titled({ boardView: { ...base.boardView, open: true } }, "BOARD"), {
+  assert.deepEqual(titled({}, "BOARD", { ...VIEWS_AWAY, board: true }), {
     label: "Tasks",
   });
   assert.deepEqual(
@@ -156,7 +158,10 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     { label: "Automations" },
   );
   assert.deepEqual(
-    titled({ personView: { ...base.personView, userId: "user-ada", name: "Ada" } }, "PERSON"),
+    titled({}, "PERSON", {
+      ...VIEWS_AWAY,
+      person: { userId: "user-ada", name: "Ada", workspace: "acme" },
+    }),
     { label: "Ada" },
   );
   assert.deepEqual(

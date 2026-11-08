@@ -11,12 +11,16 @@ import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, RouterContextProvider } from "@tanstack/react-router";
 import { createElement, type ReactElement } from "react";
 import { createPanelRouter } from "../panel-router.js";
+import { RoutedExitsProvider } from "../places/routed-exits.js";
 
-/** `element` under the window's router, standing at `at`. */
+/** `element` under the window's router, standing at `at`, with a window's routed exits and memory, as its root draws it. */
 export function underWindowRouter(element: ReactElement, at = "/acme/inbox"): ReactElement {
   const router = createPanelRouter(
     createMemoryHistory({ initialEntries: [at] }),
     new QueryClient(),
   );
-  return createElement(RouterContextProvider, { router, children: element });
+  return createElement(RouterContextProvider, {
+    router,
+    children: createElement(RoutedExitsProvider, null, element),
+  });
 }

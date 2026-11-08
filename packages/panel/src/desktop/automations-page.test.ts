@@ -47,6 +47,7 @@ import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { OpenFeedbackProvider } from "../open-feedback.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "../places/place-leave.js";
+import { useBoardDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
@@ -349,7 +350,6 @@ beforeEach(() => {
   runHeld = false;
   runRefusal = undefined;
   agentsOpened = [];
-  boardOpens = [];
   defaultRefused = false;
   catalogReads = 0;
   catalogRefused = false;
@@ -886,8 +886,8 @@ test("with no workspace listed the list and a linked automation stand as quiet b
 /** The workspace the account made first, its personal one, where everything is its own. */
 const PERSONAL: Workspace = { ...WORKSPACE, id: "workspace-personal", name: "Ada" };
 
-/** Each time the Board was opened past the page, as the sidebar's Tasks row opens it. */
-let boardOpens: number[] = [];
+/** The path the window's router stands at. */
+let windowPath: () => string = () => "";
 
 /** Opens the Board as the sidebar's Tasks row would, through the window's guarded door. */
 let openBoard: () => void = () => undefined;
@@ -951,12 +951,6 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
           arriveAt(`/${WORKSPACE.slug}/agent/${agentId}`, () => agentsOpened.push(agentId)),
         onClose: () => undefined,
       },
-      boardView: {
-        open: false,
-        onOpen: () => arriveAt(`/${WORKSPACE.slug}/tasks`, () => boardOpens.push(1)),
-        onClose: () => undefined,
-        onPreload: () => undefined,
-      },
       workspace: listed,
       workspaces: [PERSONAL, WORKSPACE],
       automationsView: {
@@ -972,7 +966,9 @@ function mountPages(start: AutomationsPlace, workspace: Workspace = WORKSPACE): 
       },
     });
     const base = tasks.newTask;
-    openBoard = tasks.boardView.onOpen;
+    const board = useBoardDoor(tasks);
+    windowPath = () => router.history.location.pathname;
+    openBoard = board.open;
     return createElement(AutomationsPage, {
       tasks: {
         ...tasks,
@@ -1461,12 +1457,13 @@ test("a new automation with something written asks before any way out leaves it,
   act(() => button("Cancel").click());
   await settle();
 
+  const editing = windowPath();
   act(() => openBoard());
   await settle();
-  assert.deepEqual(boardOpens, [], "the sidebar's row waits on the question too");
+  assert.equal(windowPath(), editing, "the sidebar's row waits on the question too");
   act(() => button("Leave").click());
   await settle();
-  assert.deepEqual(boardOpens, [1]);
+  assert.equal(windowPath(), `/${WORKSPACE.id}/tasks`);
 });
 
 test("the shell hears the page's ask only while an edit is unsaved, and asking through it waits on the page's question", async () => {

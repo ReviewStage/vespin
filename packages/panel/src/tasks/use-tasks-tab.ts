@@ -371,25 +371,6 @@ interface AgentViewControl {
   readonly onClose: () => void;
 }
 
-/**
- * One person's page, standing in the plan's place as an agent's does: a
- * member of the listed workspace, the reader among them, or someone who left
- * it, by their account id (`person-page.tsx`).
- */
-interface PersonViewControl {
-  /** The person whose page stands, none while none does. */
-  readonly userId: string | undefined;
-  /** The name the place that opened the page knew them by, which names someone the page finds nowhere else. */
-  readonly name: string | undefined;
-  /** The workspace the page is the person's in, which their link names. */
-  readonly workspaceId: string | undefined;
-  /** Opens their page in `workspaceId`, the window listing it first where it lists another; in the listed workspace where none is named. */
-  readonly onOpen: (userId: string, name?: string, workspaceId?: string) => void;
-  readonly onClose: () => void;
-  /** Reads their page ahead of a press the pointer says is coming, in `workspaceId`, or the listed workspace where none is named. */
-  readonly onPreload: (userId: string, workspaceId?: string) => void;
-}
-
 /** The places that are an agent's own, which open on its task where it has one, else on its page. */
 type AgentPlaceKind =
   | typeof LINK_PLACE.AGENT
@@ -437,15 +418,6 @@ export interface AdminViewControl {
   readonly onOpen: (view?: AdminView) => void;
   readonly onClose: () => void;
   /** Reads the place ahead of a press the pointer says is coming, its chunk, charts and all. */
-  readonly onPreload: () => void;
-}
-
-/** The window's Board: whether it stands in the task's place, and the presses that open and leave it. */
-interface BoardViewControl {
-  readonly open: boolean;
-  readonly onOpen: () => void;
-  readonly onClose: () => void;
-  /** Reads the Board ahead of a press the pointer says is coming. */
   readonly onPreload: () => void;
 }
 
@@ -750,18 +722,20 @@ export interface TasksControl {
   onThreadsShown: (agentId: string | undefined) => void;
   /** One agent's page: which agent's stands in the task's place, if any, and its presses. */
   agentView: AgentViewControl;
-  /** One person's page: whose stands in the plan's place, if anyone's, and its presses (`person-page.tsx`). */
-  personView: PersonViewControl;
+  /**
+   * Opens `userId`'s page in `workspaceId`, the window listing it first where it lists another; in the listed workspace
+   * where none is named. `name` is what the place that opened it knew them by, which names someone the page finds nowhere
+   * else. Its page stands, is left, and is read ahead through its route (`places/routed-doors.ts`).
+   */
+  onOpenPerson: (userId: string, name?: string, workspaceId?: string) => void;
   /** The window's Admin place, an admin's alone: whether it takes the window, its view, and its presses (`desktop-admin.tsx`). */
   adminView: AdminViewControl;
   /** The window's Automations page: whether it stands in the task's place, and its presses (`automations-page.tsx`). */
   automationsView: AutomationsViewControl;
-  /** The window's Board of the listed workspace's tasks by status: whether it stands in the plan's place, and its presses (`tasks-board.tsx`). */
   /** Whether Home stands, the page of no task bound, which only its own route draws (`ROUTED_PLACE.HOME`), with no task still bound there. */
   atHome: boolean;
   /** Whether the task's own place stands, with neither Home nor any routed place, the not-found page among them, standing in its place. */
   taskPlaceStands: boolean;
-  boardView: BoardViewControl;
   /** A Home or Board link whose first step names none of the reader's workspaces, which stands as not found (`desktop-shell.tsx`). */
   /** Opens a task's file in its side panel at the commit named, or its default branch's head where none is, the reference's lines lit, opening the task first where it is not the open one: what an inbox item's code opens. */
   onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) => void;
@@ -4399,24 +4373,14 @@ export function useTasksTab(input: {
       onClose: closeFirst(input.agentView.onClose),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
-    personView: {
-      userId: routedPerson.userId,
-      name: routedPerson.name,
-      workspaceId: personWorkspace,
-      onOpen: (userId: string, name?: string, workspaceId?: string) => {
-        openPerson(
-          userId,
-          name,
-          workspaceId === undefined
-            ? undefined
-            : viewed.workspaces.find((each) => each.id === workspaceId),
-        );
-      },
-      onClose: closeFirst(routedPerson.onClose),
-      onPreload: (userId: string, workspaceId?: string) => {
-        const home = viewed.workspaces.find((each) => each.id === workspaceId) ?? listedWorkspace;
-        if (home !== undefined) routedPerson.onPreload(userId, stepOf(home));
-      },
+    onOpenPerson: (userId: string, name?: string, workspaceId?: string) => {
+      openPerson(
+        userId,
+        name,
+        workspaceId === undefined
+          ? undefined
+          : viewed.workspaces.find((each) => each.id === workspaceId),
+      );
     },
     // The Admin place is the router's, which draws it in the task's place (`admin-route.ts`); opening it is only the
     // router's move, which asks as it goes while a page holds unsaved work.
@@ -4434,16 +4398,6 @@ export function useTasksTab(input: {
         moveFirst(() => openAutomations(place)),
       onRuns: routedAutomations.onRuns,
       onClose: closeFirst(routedAutomations.onClose),
-    },
-    // The Board is the router's, which draws it in the plan's place (`workspace-routes.ts`); opening it is only the
-    // router's move, which asks as it goes while a page holds unsaved work.
-    boardView: {
-      open: routedBoard.open,
-      onOpen: () => moveFirst(() => openBoard(listedWorkspace)),
-      onClose: closeFirst(routedBoard.onClose),
-      onPreload: () => {
-        if (listedWorkspace !== undefined) routedBoard.onPreload(stepOf(listedWorkspace));
-      },
     },
     onShowFile: showFile,
     // A version's Open lands where its writer wrote it: an agent's tab.

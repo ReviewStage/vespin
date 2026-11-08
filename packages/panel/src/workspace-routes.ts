@@ -150,6 +150,21 @@ export function usePersonRoute(): PersonRoute {
   };
 }
 
+/** The Board and a person's page as their routes stand them, which a step's name and Copy link read. */
+export interface RoutedViews {
+  /** Whether the Board stands. */
+  readonly board: boolean;
+  /** Whose page stands, if anyone's, by the name it was opened with and the address step of the workspace it is theirs in. */
+  readonly person: Pick<PersonRoute, "userId" | "name" | "workspace">;
+}
+
+/** The Board and a person's page as the router stands them. */
+export function useRoutedViews(): RoutedViews {
+  const { open } = useBoardRoute();
+  const { userId, name, workspace } = usePersonRoute();
+  return { board: open, person: { userId, name, workspace } };
+}
+
 /** A workspace's address naming none of the reader's as the router stands it, not found. */
 export interface UnknownWorkspaceRoute {
   /** The address step of the workspace not there, while its address stands. */

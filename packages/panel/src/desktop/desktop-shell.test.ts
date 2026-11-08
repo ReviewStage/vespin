@@ -53,7 +53,7 @@ import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.j
 import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
-import { agentAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
+import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -173,6 +173,11 @@ function shellProps(
   };
 }
 
+/** The tasks' state a shell under test is handed, and the routed place it stands at where that is the router's alone, the Board or a person's page. */
+interface ShellOverrides extends Partial<TasksControl> {
+  readonly at?: string;
+}
+
 /**
  * The window's shell with no task open and the sidebar folded, the Inbox
  * open over it or not, New task opening its dialog and Cancel putting it
@@ -180,7 +185,7 @@ function shellProps(
  */
 function mount(
   inboxOpen: boolean,
-  overrides: Partial<TasksControl> = {},
+  { at: routedTo, ...overrides }: ShellOverrides = {},
   tab: PanelTab = PANEL_TAB.TASKS,
   onTabChange: (tab: PanelTab) => void = ignore,
   sidebarPatch: Partial<SidebarCollapse> = {},
@@ -220,13 +225,13 @@ function mount(
     (overrides.page ?? TASKS_PAGE.HOME) === TASKS_PAGE.HOME &&
     overrides.inboxView?.open !== true &&
     overrides.adminView?.open !== true &&
-    overrides.boardView?.open !== true &&
+    routedTo === undefined &&
     overrides.automationsView?.open !== true &&
     overrides.history?.open !== true &&
-    overrides.personView?.userId === undefined &&
     overrides.agentView?.agentId === undefined;
   const at =
-    tab === PANEL_TAB.SETTINGS
+    routedTo ??
+    (tab === PANEL_TAB.SETTINGS
       ? SHELL_AT.SETTINGS
       : overrides.adminView?.open === true
         ? SHELL_AT.ADMIN
@@ -236,7 +241,7 @@ function mount(
             ? SHELL_AT.VERSION_HISTORY
             : (overrides.inboxView?.open ?? inboxOpen)
               ? SHELL_AT.INBOX
-              : undefined;
+              : undefined);
   act(() => root?.render(withQueryClient(underRouter(createElement(Shell), at))));
   return container;
 }
@@ -554,9 +559,7 @@ test("the sidebar's Home row is the place shown on Home, and not over the Inbox"
 });
 
 test("a person's page stands over Home with no row of the place under it current", async () => {
-  const page = mount(false, {
-    personView: { ...tasksControl().personView, userId: "user-charles" },
-  });
+  const page = mount(false, { at: personAt("user-charles") });
   await settle();
 
   assert.equal(homeRow(page).getAttribute("aria-current"), null);
@@ -841,23 +844,22 @@ test("New task, by its chord or the sidebar's row, opens its card over the Inbox
 
 test("the Tasks row pressed while the Board stands leaves nothing, the Board being the router's place it opens", async () => {
   const tabs: PanelTab[] = [];
-  const opened: string[] = [];
   const page = mount(
     false,
-    {
-      boardView: { ...tasksControl().boardView, open: true, onOpen: () => opened.push("board") },
-    },
+    { at: SHELL_AT.BOARD, workspaces: [ACME], workspace: ACME },
     PANEL_TAB.TASKS,
     (tab) => tabs.push(tab),
   );
   await settle();
+  const { history } = routed().router;
+  const before = history.length;
   const row = placeRow(page, "Tasks");
   assert.ok(row);
   act(() => row.click());
+  await settle();
 
   // Note that leaving would stand the window's state over the Board, which opening the Board standing does not undo.
-  assert.deepEqual(tabs, []);
-  assert.deepEqual(opened, ["board"]);
+  assert.deepEqual([tabs, history.location.pathname, history.length], [[], SHELL_AT.BOARD, before]);
 });
 
 test("a press on the Automations row in a floating sidebar puts the sidebar away, as every row's does", async () => {
@@ -883,7 +885,7 @@ test("the sidebar offers no Issues row, with every experiment on, since Vespin k
 
 /** The shell in a narrow room, a phone's, over `overrides`, the sidebar patched as given. */
 async function mountNarrow(
-  overrides: Partial<TasksControl>,
+  { at, ...overrides }: ShellOverrides,
   sidebarPatch: Partial<SidebarCollapse> = {},
   room: ShellRoom = SHELL_ROOM.NARROW,
 ): Promise<HTMLElement> {
@@ -898,6 +900,7 @@ async function mountNarrow(
             ...shellProps(tasks, PANEL_TAB.TASKS, ignore, sidebarPatch),
             room,
           }),
+          at,
         ),
       ),
     ),
@@ -925,7 +928,7 @@ function barItem(page: HTMLElement, name: string): HTMLButtonElement {
 test("on a phone the Tasks page stands over a bar of the window's places, its own marked, the bar's Inbox opening the Inbox and its New task New task", async () => {
   const asked: string[] = [];
   const page = await mountNarrow({
-    boardView: { ...tasksControl().boardView, open: true },
+    at: SHELL_AT.BOARD,
     inboxView: {
       ...tasksControl().inboxView,
       onOpen: () => asked.push("inbox"),
@@ -941,17 +944,18 @@ test("on a phone the Tasks page stands over a bar of the window's places, its ow
 });
 
 test("on a phone the bar's Tasks opens the Tasks page, which stands the sidebar's tree in the work's place", async () => {
-  const asked: string[] = [];
   const page = await mountNarrow({
     inboxView: { ...tasksControl().inboxView, open: true },
-    boardView: { ...tasksControl().boardView, onOpen: () => asked.push("tasks") },
+    workspaces: [ACME],
+    workspace: ACME,
   });
   act(() => barItem(page, "Tasks").click());
-  assert.deepEqual(asked, ["tasks"]);
+  await act(() => routed().settled());
+  assert.equal(routed().router.history.location.pathname, SHELL_AT.BOARD);
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const tasksPage = await mountNarrow({ boardView: { ...tasksControl().boardView, open: true } });
+  const tasksPage = await mountNarrow({ at: SHELL_AT.BOARD });
   const shell = tasksPage.querySelector(".desktop-shell") ?? assert.fail("the shell stands");
   assert.equal(
     shell.getAttribute("data-sidebar-collapsed"),
@@ -964,7 +968,7 @@ test("on a phone the bar's Tasks opens the Tasks page, which stands the sidebar'
 
 test("on a phone the places bar stands over the Tasks page though the task left behind it holds its panel open, which is not on screen", async () => {
   const page = await mountNarrow({
-    boardView: { ...tasksControl().boardView, open: true },
+    at: SHELL_AT.BOARD,
     sidePanel: { ...tasksControl().sidePanel, open: true, fullScreen: true, fullScreenOnly: true },
   });
   assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
@@ -987,7 +991,7 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
   };
   const page = await mountNarrow(
     {
-      boardView: { ...tasksControl().boardView, open: true },
+      at: SHELL_AT.BOARD,
       listed,
       inbox: listed.inbox,
       inboxTasks: listed.inboxTasks,
@@ -1000,9 +1004,7 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const none = await mountNarrow({
-    boardView: { ...tasksControl().boardView, open: true },
-  });
+  const none = await mountNarrow({ at: SHELL_AT.BOARD });
   assert.deepEqual(
     barItems(none)
       .slice(0, 3)
@@ -1069,11 +1071,7 @@ test("the places bar stands only on a phone's lists: an open task, an Inbox item
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const wide = await mountNarrow(
-    { boardView: { ...tasksControl().boardView, open: true } },
-    {},
-    SHELL_ROOM.WIDE,
-  );
+  const wide = await mountNarrow({ at: SHELL_AT.BOARD }, {}, SHELL_ROOM.WIDE);
   assert.deepEqual(barItems(wide), [], "a wide window keeps its sidebar");
 });
 
@@ -1088,11 +1086,16 @@ test("the Automations page's sidebar row and its command stand with no experimen
 test("⇧⌘B opens the Tasks page, bringing the Tasks tab forward from Settings, and the Tasks row names the chord", async () => {
   handState({});
   const went: string[] = [];
-  const boardView = { ...tasksControl().boardView, onOpen: () => went.push("tasks page") };
-  mount(false, { boardView }, PANEL_TAB.SETTINGS, (tab) => went.push(tab));
+  mount(false, { workspaces: [ACME], workspace: ACME }, PANEL_TAB.SETTINGS, (tab) =>
+    went.push(tab),
+  );
   await settle();
   assert.equal(runAppCommand(APP_COMMAND.TASKS), true);
-  assert.deepEqual(went, [PANEL_TAB.TASKS, "tasks page"]);
+  await act(() => routed().settled());
+  assert.deepEqual(
+    [went, routed().router.history.location.pathname],
+    [[PANEL_TAB.TASKS], SHELL_AT.BOARD],
+  );
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
@@ -1248,7 +1251,7 @@ function placed(place: Place) {
     [PLACE.OTHER_TASK]: onTask,
     [PLACE.INBOX]: { inboxView: { ...control.inboxView, open: true } },
     [PLACE.AGENT_PAGE]: { agentView: { ...control.agentView, agentId: "agent-page-1" } },
-    [PLACE.PERSON_PAGE]: { personView: { ...control.personView, userId: "user-charles" } },
+    [PLACE.PERSON_PAGE]: {},
     [PLACE.AUTOMATIONS]: { automationsView: { ...control.automationsView, open: true } },
     // Note that the panel fills the window over an agent's tab, since the task's details take its room.
     [PLACE.SIDE_PANEL_FULL_SCREEN]: {
@@ -1374,6 +1377,7 @@ function routedAt(place: Place): string | undefined {
   if (place === PLACE.SETTINGS) return SHELL_AT.SETTINGS;
   if (place === PLACE.OTHER_TASK || place === PLACE.SIDE_PANEL_FULL_SCREEN) return SHELL_AT.TASK;
   if (place === PLACE.AGENT_PAGE) return agentAt("agent-page-1");
+  if (place === PLACE.PERSON_PAGE) return personAt("user-charles");
   return place === PLACE.VERSION_HISTORY ? SHELL_AT.VERSION_HISTORY : undefined;
 }
 
@@ -1799,7 +1803,6 @@ test("a find on the Tasks page stands as it was after a visit to Admin over it",
       page: TASKS_PAGE.HOME,
       workspaces: [ACME],
       workspace: ACME,
-      boardView: { ...tasksControl().boardView, open: true },
       adminView: { ...tasksControl().adminView, open: admin },
     });
     return createElement(DesktopShell, shellProps(tasks, PANEL_TAB.TASKS, ignore, {}));
@@ -1857,7 +1860,6 @@ test("the Inbox left stays drawn, hidden from a reader, and comes back as it sto
       workspaces: [ACME],
       workspace: ACME,
       inboxView: { ...tasksControl().inboxView, open: open.inbox },
-      boardView: { ...tasksControl().boardView, open: open.board },
     });
     return createElement(DesktopShell, shellProps(tasks, PANEL_TAB.TASKS, ignore, {}));
   }

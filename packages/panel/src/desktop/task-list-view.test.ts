@@ -19,12 +19,12 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handHostReads, handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
+import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 import { SIDEBAR_OVERLAY } from "./sidebar-collapse.js";
 
 /**
@@ -61,7 +61,6 @@ const roots: Root[] = [];
 
 beforeEach(() => {
   openedAgents = [];
-  tasksPageOpened = 0;
   copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   pinsAsked = [];
@@ -173,8 +172,8 @@ let copied: string[] = [];
 /** Each agent's pin the sidebar asked for, in order, as `agentId:pinned`. */
 let pinsAsked: string[] = [];
 
-/** How many times the sidebar opened the Tasks page. */
-let tasksPageOpened = 0;
+/** The window's router the sidebar last mounted stands under, which its doors move. */
+let sidebarRouter: TestWindowRouter = windowRouter();
 
 /** Keeps Assigned to › Anyone for `workspace`, as a reader who chose it on an earlier launch has, for a test of what the list draws whoever's it is. */
 function keepAnyone(workspace: Workspace = ACME): void {
@@ -195,6 +194,7 @@ function mountSidebar(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+  sidebarRouter = windowRouter();
   const control = tasksControl({
     tasks: [...tasks],
     workspace,
@@ -210,14 +210,6 @@ function mountSidebar(
       onClose: () => undefined,
     },
     onPinAgent: (agentId, pinned) => pinsAsked.push(`${agentId}:${String(pinned)}`),
-    boardView: {
-      open: false,
-      onOpen: () => {
-        tasksPageOpened += 1;
-      },
-      onClose: () => undefined,
-      onPreload: () => undefined,
-    },
   });
   act(() =>
     root.render(
@@ -225,7 +217,7 @@ function mountSidebar(
         createElement(
           Fragment,
           null,
-          createElement(DesktopSidebar, sidebarProps(control)),
+          drawnSidebar(sidebarProps(control), sidebarRouter),
           createElement(ToastHost),
         ),
       ),
@@ -647,7 +639,7 @@ test("a one-off agent's menu goes with a floating sidebar as it is put away", as
     act(() =>
       root.render(
         withQueryClient(
-          createElement(DesktopSidebar, {
+          drawnSidebar({
             ...props,
             sidebar: { ...props.sidebar, collapsed: true, overlay },
           }),
@@ -798,7 +790,7 @@ test("the hidden tasks' line opens the Tasks page", () => {
   const line = hiddenLine(mountSidebar(ACME, BY_STATUS));
   assert.ok(line, "the hidden tasks' line stands");
   act(() => line.click());
-  assert.equal(tasksPageOpened, 1);
+  assert.equal(sidebarRouter.history.location.pathname, `/${ACME.id}/tasks`);
 });
 
 test("a task from a service before statuses stands among them", () => {

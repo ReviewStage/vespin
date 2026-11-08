@@ -43,6 +43,7 @@ import {
 } from "../desktop/desktop-shell.js";
 import { LAZY_ROUTE } from "../panel-router.js";
 import { PANEL_TAB } from "../panel-tabs.js";
+import { RoutedExitsProvider } from "../places/routed-exits.js";
 import { routeAccessNow } from "../route-gates.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 
@@ -64,7 +65,7 @@ export function agentAt(agentId: string): string {
 }
 
 /** A person's page in the shell under test, under the same workspace as its Board. */
-function personAt(userId: string): string {
+export function personAt(userId: string): string {
   return `/acme/person/${encodeURIComponent(userId)}`;
 }
 
@@ -91,8 +92,6 @@ interface StandingProps {
   readonly tab?: unknown;
   readonly tasks?: {
     readonly adminView?: { readonly open?: boolean };
-    readonly boardView?: { readonly open?: boolean };
-    readonly personView?: { readonly userId?: string | undefined };
     readonly agentView?: { readonly agentId?: string | undefined };
     readonly automationsView?: { readonly open?: boolean };
     readonly history?: { readonly open?: boolean };
@@ -101,20 +100,17 @@ interface StandingProps {
   };
 }
 
-/** Where a shell stands by its props: Settings where its tab is, Admin, the Board, the Automations pages, a version history, the Inbox, an agent's or a person's page where one stands, a task's place where one is open, else Home. */
+/** Where a shell stands by its props: Settings where its tab is, Admin, the Automations pages, a version history, the Inbox, an agent's page where one stands, a task's place where one is open, else Home; the Board and a person's page stand only where a test names them, as they are their routes' alone. */
 function standingOf(shell: ReactElement): string {
   const props: StandingProps =
     typeof shell.props === "object" && shell.props !== null ? shell.props : {};
   if (props.tab === PANEL_TAB.SETTINGS) return SHELL_AT.SETTINGS;
   if (props.tasks?.adminView?.open === true) return SHELL_AT.ADMIN;
-  if (props.tasks?.boardView?.open === true) return SHELL_AT.BOARD;
   if (props.tasks?.automationsView?.open === true) return SHELL_AT.AUTOMATIONS;
   if (props.tasks?.history?.open === true) return SHELL_AT.VERSION_HISTORY;
   if (props.tasks?.inboxView?.open === true) return SHELL_AT.INBOX;
   const agent = props.tasks?.agentView?.agentId;
   if (agent !== undefined) return agentAt(agent);
-  const person = props.tasks?.personView?.userId;
-  if (person !== undefined) return personAt(person);
   return props.tasks?.page === TASKS_PAGE.DOCUMENT ? SHELL_AT.TASK : SHELL_AT.PLACES;
 }
 
@@ -235,7 +231,11 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
   };
   const draw = (shell: ReactElement, to?: string) => {
     if (to !== undefined) go(to);
-    return createElement(ShellElement, { value: shell }, createElement(RouterProvider, { router }));
+    return createElement(
+      ShellElement,
+      { value: shell },
+      createElement(RoutedExitsProvider, null, createElement(RouterProvider, { router })),
+    );
   };
   return {
     router,

@@ -124,6 +124,7 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useBoardDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -934,7 +935,7 @@ export function TasksBoard({
   /** The Tasks page's toolbar, filter chips, filter, and the Board's display. */
   frame: TasksViewFrame;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_BOARD, tasks.boardView.onClose);
+  useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
   const now = useMinute();
   const waitingOn = useTasksWaiting(tasks);
   const ids = useId();

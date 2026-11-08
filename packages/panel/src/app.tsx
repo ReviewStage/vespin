@@ -84,6 +84,7 @@ import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
+import { usePersonDoor } from "./places/routed-doors.js";
 import { RoutedExitsProvider, useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
 import { forgetAccountReads } from "./query-keys.js";
@@ -130,7 +131,7 @@ import { ViewingAs } from "./viewing-as.js";
 import { useWindowFullScreen } from "./window-full-screen.js";
 import { useWindowZoom } from "./window-zoom.js";
 import { useExperimentsIn } from "./workspace-experiments.js";
-import { useHomeRoute, useUnknownWorkspaceRoute } from "./workspace-routes.js";
+import { useHomeRoute, useRoutedViews, useUnknownWorkspaceRoute } from "./workspace-routes.js";
 
 /** No agent ended unseen, as the document reads before main has answered. */
 const NO_UNSEEN_AGENTS: readonly string[] = [];
@@ -607,10 +608,11 @@ function AppWindow(): React.JSX.Element {
   // so a link loaded waits on its own place rather than standing anywhere
   // first.
   const known = run !== undefined && !accountGated && !workspacesUnread;
+  const routedViews = useRoutedViews();
   const history = useWindowHistory({
     known,
     link: copyLink.placed,
-    title: stepTitle(routedHere?.place, tasks),
+    title: stepTitle(routedHere?.place, tasks, routedViews),
     routed: routedHere,
     settingsList: settingsPlace.listAddress,
     onSettingsList: settingsPlace.list,
@@ -795,10 +797,11 @@ function AppWindow(): React.JSX.Element {
   // A person pressed anywhere in the window opens their page on the Plans tab, in the workspace the place named them in.
   // Note that a person's page is the router's place, whose navigation stands it from wherever the window stands, Settings among them.
   const openPerson = useSteadyDoor((userId: string, name?: string, workspaceId?: string) =>
-    tasks.personView.onOpen(userId, name, workspaceId),
+    tasks.onOpenPerson(userId, name, workspaceId),
   );
+  const personDoor = usePersonDoor(tasks);
   const preloadPerson = useSteadyDoor((userId: string, workspaceId?: string) =>
-    tasks.personView.onPreload(userId, workspaceId),
+    personDoor.preload(userId, workspaceId),
   );
 
   const gates = useMemo(

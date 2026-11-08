@@ -25,12 +25,11 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handState } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
-import { sidebarProps } from "../testing/desktop-sidebar.js";
+import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
-import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
  * sidebar-sections.test.ts -- the account's own sections in the sidebar:
@@ -202,7 +201,7 @@ function sidebarOver(
     onWriteSections: (asked) => writes.push(...asked),
     ...rest,
   });
-  return createElement(DesktopSidebar, sidebarProps(tasks));
+  return drawnSidebar(sidebarProps(tasks));
 }
 
 /** The sidebar over `sections`, Launch unless said, and a way to draw it again over other sections, as a refresh does. */
@@ -968,7 +967,7 @@ async function mountDraggable(
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(DesktopSidebar, sidebarProps(tasks)))));
+  act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
   await settle();
   layOutRows();
   return container;
@@ -1131,7 +1130,7 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
       workspace: WORKSPACE,
       taskSections: SECTIONS,
     });
-    act(() => root.render(withQueryClient(createElement(DesktopSidebar, sidebarProps(tasks)))));
+    act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
     await settle();
   };
   await draw([PINNED, INVITES, RETRIES]);
@@ -1538,7 +1537,7 @@ function PinsThatMove(): React.JSX.Element {
         }),
       ),
   });
-  return createElement(DesktopSidebar, sidebarProps(tasks));
+  return drawnSidebar(sidebarProps(tasks));
 }
 
 test("⇧⌘↓ moves the pin that has the keyboard below the next and leaves it focused, so ⇧⌘↑ can move it back", async () => {

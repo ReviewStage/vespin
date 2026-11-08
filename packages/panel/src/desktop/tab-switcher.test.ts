@@ -24,6 +24,8 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { holdMotion, releaseMotion } from "../testing/motion-held.js";
 import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
+import { type PersonRoute, usePersonRoute } from "../workspace-routes.js";
 import { TabSwitcher } from "./tab-switcher.js";
 
 /**
@@ -125,20 +127,36 @@ async function mounted(room: ShellRoom = SHELL_ROOM.WIDE) {
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
-  const draw = async (tasks: TasksControl, place: RoutedPlace | undefined = undefined) => {
+  // The window's router, which stands the Board and a person's page at their addresses, and a person's page opened through its route, as a door opens it.
+  const { history, provide } = windowRouter();
+  let personRoute: PersonRoute | undefined;
+  function PersonDoor(): null {
+    personRoute = usePersonRoute();
+    return null;
+  }
+  /** Draws the switcher over `tasks`, the window's router standing at `at`, `/app` unless said. */
+  const draw = async (
+    tasks: TasksControl,
+    place: RoutedPlace | undefined = undefined,
+    at = "/app",
+  ) => {
+    if (history.location.pathname !== at) act(() => history.push(at));
     act(() =>
       root.render(
         withQueryClient(
-          createElement(
-            ShellRoomContext.Provider,
-            { value: room },
-            createElement(TabSwitcher, {
-              available: true,
-              tab: PANEL_TAB.TASKS,
-              place,
-              onTabChange: () => undefined,
-              tasks,
-            }),
+          provide(
+            createElement(
+              ShellRoomContext.Provider,
+              { value: room },
+              createElement(PersonDoor),
+              createElement(TabSwitcher, {
+                available: true,
+                tab: PANEL_TAB.TASKS,
+                place,
+                onTabChange: () => undefined,
+                tasks,
+              }),
+            ),
           ),
         ),
       ),
@@ -147,7 +165,12 @@ async function mounted(room: ShellRoom = SHELL_ROOM.WIDE) {
       for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
     });
   };
-  return { draw };
+  /** Opens `userId`'s page under Acme with the name a door knew them by, as the window's door opens it, then draws `tasks` over it. */
+  const drawPerson = async (tasks: TasksControl, userId: string, name: string) => {
+    act(() => personRoute?.onOpen(userId, name, "acme"));
+    await draw(tasks, undefined, history.location.pathname);
+  };
+  return { draw, drawPerson };
 }
 
 function key(type: "keydown" | "keyup", init: KeyboardEventInit): KeyboardEvent {
@@ -392,13 +415,8 @@ test("a person's page card wears their face and name, not a generic icon", async
   handCapabilities(DESKTOP_CAPABILITIES);
   const told = asked();
   const window = await mounted();
-  const person = {
-    ...tasksControl().personView,
-    userId: "user-ada",
-    name: "Ada Lovelace",
-    workspaceId: undefined,
-  };
-  await window.draw(onTask(NOTES, told, { personView: person }));
+  await window.draw(onTask(NOTES, told));
+  await window.drawPerson(onTask(NOTES, told), "user-ada", "Ada Lovelace");
   press();
   await window.draw(onTask(NOTES, told));
 
@@ -718,9 +736,10 @@ test("a screen picked with its panel shut shuts the panel, and one with the pane
     doors(
       onTask(NOTES, told, {
         inboxView: { ...inboxOpen(), open: false },
-        boardView: { ...tasksControl().boardView, open: true },
       }),
     ),
+    undefined,
+    "/acme/tasks",
   );
   tab(true);
   letGo();

@@ -51,9 +51,11 @@ import { useVersionHistoryRoute, type VersionHistoryRoute } from "./version-hist
 import {
   type BoardRoute,
   type PersonRoute,
+  type RoutedViews,
   useBoardRoute,
   useHomeRoute,
   usePersonRoute,
+  useRoutedViews,
 } from "./workspace-routes.js";
 
 const TASK_ID = "0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60";
@@ -82,7 +84,11 @@ afterEach(unmountAll);
 function mount(
   initial: TasksControl,
   held: TestWindowRouter = windowRouter(),
-  titled?: (tasks: TasksControl, place: RoutedPlace | undefined) => StepTitle | undefined,
+  titled?: (
+    tasks: TasksControl,
+    place: RoutedPlace | undefined,
+    views: RoutedViews,
+  ) => StepTitle | undefined,
 ) {
   let history: WindowHistoryLists | undefined;
   let shown: TasksControl | undefined;
@@ -169,24 +175,13 @@ function mount(
         onRuns: automations.onRuns,
         onClose: automations.onClose,
       },
-      boardView: { ...standing.boardView, open: board.open },
-      personView: {
-        ...standing.personView,
-        userId: person.userId,
-        name: person.name,
-        workspaceId:
-          person.workspace === undefined
-            ? undefined
-            : standing.workspaces.find(
-                (each) => each.slug === person?.workspace || each.id === person?.workspace,
-              )?.id,
-      },
     };
     // Admin stands where the router does, as the window's root reads it.
     admin = useAdminRoute({
       listedSlug: () => tasks.workspaces.find((each) => each.id === tasks.workspace?.id)?.slug,
     });
     const routed = useRoutedStanding();
+    const views = useRoutedViews();
     const copyLink = useCopyLink(
       tasks,
       undefined,
@@ -206,7 +201,7 @@ function mount(
       inbox,
       home,
       room: SHELL_ROOM.WIDE,
-      title: titled?.(tasks, routed?.place),
+      title: titled?.(tasks, routed?.place, views),
       tasks,
     });
     // Home and the task bound follow each other, as the window's root keeps them.
@@ -831,8 +826,11 @@ function onTabs(input: {
 }
 
 /** Each step named as the window's root names the one it stands on (`stepTitle`). */
-const namedAsShown = (tasks: TasksControl, place: RoutedPlace | undefined): StepTitle | undefined =>
-  stepTitle(place, tasks);
+const namedAsShown = (
+  tasks: TasksControl,
+  place: RoutedPlace | undefined,
+  views: RoutedViews,
+): StepTitle | undefined => stepTitle(place, tasks, views);
 
 /** The task the window lists, under `name`. */
 function listedTask(name: string): TaskSummary {
@@ -1157,8 +1155,12 @@ test("Back's and Forward's steps are listed the nearest first, each named as the
 });
 
 /** Each step named as the window's root names the one it stands on. */
-function stepTitleOf(tasks: TasksControl, place: RoutedPlace | undefined): StepTitle | undefined {
-  return stepTitle(place, tasks);
+function stepTitleOf(
+  tasks: TasksControl,
+  place: RoutedPlace | undefined,
+  views: RoutedViews,
+): StepTitle | undefined {
+  return stepTitle(place, tasks, views);
 }
 
 test("a task the Inbox is narrowed to is a step linked by it and named by the task, which Back leaves for the Inbox and Forward narrows to again", async () => {

@@ -2267,7 +2267,7 @@ export function CommandPalette({
   const tiersOf = {
     [PALETTE_FILTER.THIS_TASK]: () => [agentRows(tasks, offerDoors, onTasks, changesPeople)],
     [PALETTE_FILTER.PEOPLE]: () => [
-      peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.personView.onOpen(userId))),
+      peopleRows(members, tasks.me, (userId) => onTasks(() => tasks.onOpenPerson(userId))),
     ],
     [PALETTE_FILTER.AUTOMATIONS]: () => [
       automationRows(

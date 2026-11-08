@@ -47,7 +47,7 @@ import {
   tasksDeleteMutation,
   type VersionHistoryControl,
 } from "../tasks/use-tasks-tab.js";
-import type { HomeRoute, UnknownWorkspaceRoute } from "../workspace-routes.js";
+import type { HomeRoute, RoutedViews, UnknownWorkspaceRoute } from "../workspace-routes.js";
 import { handHostReads, holdTranscripts, type TranscriptsHeld } from "./app-state.js";
 
 const ignore = () => undefined;
@@ -396,6 +396,12 @@ const ADMIN_AWAY: AdminViewControl = {
 };
 
 /** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */
+/** The Board and a person's page standing nowhere, as a step's name and Copy link read them. */
+export const VIEWS_AWAY: RoutedViews = {
+  board: false,
+  person: { userId: undefined, name: undefined, workspace: undefined },
+};
+
 export const AGENT_AWAY: AgentRoute = {
   agentId: undefined,
   workspace: undefined,
@@ -603,20 +609,12 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     },
     agentView: { agentId: undefined, onOpen: ignore, onClose: ignore },
     onThreadsShown: ignore,
-    personView: {
-      userId: undefined,
-      name: undefined,
-      workspaceId: undefined,
-      onOpen: ignore,
-      onClose: ignore,
-      onPreload: ignore,
-    },
+    onOpenPerson: ignore,
     inboxTaskless: [],
     failedRuns: [],
     adminView: ADMIN_AWAY,
     atHome: false,
     taskPlaceStands: true,
-    boardView: { open: false, onOpen: ignore, onClose: ignore, onPreload: ignore },
     automationsView: {
       open: false,
       place: { kind: AUTOMATIONS_PAGE.LIST },
