@@ -712,7 +712,12 @@ function openingOf(
  * opened. Answers what the open answered, none where its runtime could not be
  * reached or it outlasted the dispatch's deadline; an open that did not take
  * the line takes the line and its turn back with it. Fails where the store
- * wrote no line.
+ * wrote no line, or failed around an open that did not take it. Note that an
+ * open that took the line is answered whatever the store recorded after it,
+ * because the line and its queued turn were written before the open and
+ * stand, the sweep handing that turn on where its record failed
+ * (`republishQueuedTurns`), so the agent is that session's and is never
+ * discarded under it.
  */
 const openingLine = (
   agent: Agent,
@@ -730,22 +735,28 @@ const openingLine = (
       Effect.map((answer) => answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED),
     );
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-    const written = yield* hostedStoreOrUnavailable(
-      writer.writeAwaitingLine(
-        { userId: agent.userId, conversationId: agent.conversationId },
-        {
-          text,
-          clientKey,
-          attachments: files,
-          mentioned,
-          ...opened,
-        },
-        dispatch,
+    const written = yield* Effect.result(
+      hostedStoreOrUnavailable(
+        writer.writeAwaitingLine(
+          { userId: agent.userId, conversationId: agent.conversationId },
+          {
+            text,
+            clientKey,
+            attachments: files,
+            mentioned,
+            ...opened,
+          },
+          dispatch,
+        ),
       ),
     );
-    // A line refused is no line the runner could name back.
-    if (Result.isFailure(written)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-    return yield* Ref.get(answered);
+    const answer = yield* Ref.get(answered);
+    if (answer?.outcome === SESSION_SEND_OUTCOME.ACCEPTED) return answer;
+    // A line refused, or one the store failed around, is no line the runner could name back.
+    if (Result.isFailure(written) || Result.isFailure(written.success)) {
+      return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+    }
+    return answer;
   });
 
 /** Where a Start's agent runs, as `machineOfStart` decides it: the machine and device it asks the runtime and machine choices for. */

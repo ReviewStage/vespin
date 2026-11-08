@@ -1235,7 +1235,8 @@ export const runnerSessions = <
      * before they were kept, the ones standing. A session opened afresh on
      * the agent's own conversation (`replayed`) is handed its steps so far
      * ahead of the turn's words, in the one block they ride in
-     * (`restartReplayOf`).
+     * (`restartReplayOf`). A read of what a line still waiting for its runner
+     * hands that failed fails the message (`readPendingTurnHanded`).
      */
     const openedLine = (
       agent: Agent,
@@ -1243,7 +1244,7 @@ export const runnerSessions = <
       sent: RunnerMessage,
       fresh: boolean,
       replayed = false,
-    ): Effect.Effect<OpenedLine, never, DatabaseServices> =>
+    ): Effect.Effect<OpenedLine, StoreFailure, DatabaseServices> =>
       Effect.gen(function* () {
         const target: ConversationTarget = { userId, conversationId: agent.conversationId };
         // Note that a line still waiting for its runner hands what it composed once taken, so this one goes behind it.
@@ -1318,7 +1319,9 @@ export const runnerSessions = <
      * with until it compacts. Never while a turn runs, which goes on with what
      * it has, the change caught by the next message after it; never for a
      * session opened before its experiments were kept; and never on a read of
-     * them that failed, which says nothing of whether they changed. Note that the experiments
+     * them that failed, which says nothing of whether they changed, while a
+     * read of a waiting line's that failed fails the message as `openedLine`'s
+     * does. Note that the experiments
      * are kept only once a runner took the line that opened the fresh session
      * (`openedLine`'s `taken`), so a restart whose launch failed stays pending,
      * its harness's session already let go, and the next message opens it

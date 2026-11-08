@@ -10,7 +10,7 @@
  * row has handed (`native_handed`, read and written here).
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   readNativeHanded,
@@ -200,15 +200,18 @@ export function readNativeTurnHanded(
 /**
  * What a native harness's session will have been handed once its runner
  * takes the agent's newest line still waiting for one (`pendingRunnerHanded`);
- * none where no such line carries it, where it holds what the schema
- * refuses, or where the read failed, which is logged. The next line is
- * composed against it, so a line queued behind another hands only what that
- * one does not.
+ * none where no such line carries it, or where it holds what the schema
+ * refuses. The next line is composed against it, so a line queued behind
+ * another hands only what that one does not. Note that a read that failed
+ * fails, unlike the row's (`readNativeTurnHanded`), because a line composed
+ * against the row instead, behind one that hands a change, could leave out
+ * what undoes that change, and its take would record the row's state as
+ * handed though the runner last read the waiting line's.
  */
 export function readPendingTurnHanded(
   target: ConversationTarget,
   agentId: string,
-): Effect.Effect<Option.Option<TurnHanded>, never, DatabaseServices> {
+): Effect.Effect<Option.Option<TurnHanded>, StoreFailure, DatabaseServices> {
   return pendingRunnerHanded(target.userId, agentId).pipe(
     Effect.map(
       Option.flatMap((kept) => {
@@ -216,8 +219,6 @@ export function readPendingTurnHanded(
         return Result.isSuccess(read) ? Option.some(read.success) : Option.none();
       }),
     ),
-    Effect.tapError(logStoreFailure),
-    Effect.orElseSucceed(() => Option.none<TurnHanded>()),
   );
 }
 
