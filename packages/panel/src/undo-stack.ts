@@ -1,5 +1,5 @@
 /**
- * undo-stack.ts -- ⌘Z and ⇧⌘Z for the reader's writes in this window: the entries each takes back and puts back, run one at a time, the row entries whose fields before are read off the rows the window shows, and the declared entries whose inverse is an act of its own.
+ * undo-stack.ts -- ⌘Z and ⇧⌘Z for the reader's writes in this window: the entries each takes back and puts back, run one at a time, the row entries whose fields before are read off the rows the window shows, the declared entries whose inverse is an act of its own, and the local entries of state this window holds alone.
  *
  * An entry is one press's write: what it did, in a toast's words, and how
  * to take it back and put it back, each run answering whether it applied.
@@ -29,6 +29,13 @@
  * refusal says and is reported as. The stack sends its act, says what came
  * of it, and keeps it for ⌘Z where the service kept it, so a caller names
  * the declaration and what it asks, and builds no Undo of its own.
+ *
+ * A local entry (`pressLocal`) is built from a declaration of a write to
+ * state this window holds alone (`LocalWrite`): a draft closed, a held
+ * comment removed. Nothing is sent and nothing refuses it, so it is kept for
+ * ⌘Z at the press. One named for a subject leaves both lists, its toast
+ * with it, once its caller withdraws that subject (`withdrawUndo`), as what
+ * it would put back has gone.
  */
 
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
@@ -49,7 +56,7 @@ import { Store, useSelector } from "@tanstack/react-store";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
 import { priorityOf, statusOf } from "./desktop/task-row-parts.js";
 import type { ShownFailure } from "./failure-report.js";
-import { showToast, TOAST_HOLD, undoToast } from "./toast.js";
+import { showToast, TOAST_HOLD, undoToast, withdrawToast } from "./toast.js";
 
 /** The most entries each list keeps; an older one leaves as a newer one comes. */
 const MAX_ENTRIES = 50;
@@ -84,6 +91,8 @@ interface UndoEntry {
   readonly words: string;
   readonly undo: () => Promise<UndoRun>;
   readonly redo: () => Promise<UndoRun>;
+  /** What it is about, by which its caller withdraws it with its toast (`withdrawUndo`); none for an entry that stays until it is run or pushed out. */
+  readonly subject?: string | undefined;
 }
 
 /** The entries waiting on each key, oldest first. */
@@ -231,6 +240,13 @@ export function useUndoWaits(): UndoWaits {
   const undoes = useSelector(undoLine, (line) => line.undo.length > 0);
   const redoes = useSelector(undoLine, (line) => line.redo.length > 0);
   return { undoes, redoes };
+}
+
+/** Every entry about `subject` taken off both lists, and its toast withdrawn, once what it would put back has gone. */
+export function withdrawUndo(subject: string): void {
+  withdrawToast(subject);
+  const kept = (entry: UndoEntry) => entry.subject !== subject;
+  undoLine.setState((now) => ({ undo: now.undo.filter(kept), redo: now.redo.filter(kept) }));
 }
 
 /** Both lists emptied, as the account signed in changes, so no write is taken back under another account. */
@@ -502,6 +518,66 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
     });
     showToast({ ...undoToast(write.words, undo), replayUnmasked: true });
     return true;
+  });
+}
+
+/**
+ * A write to state this window holds alone, which nothing sends and nothing
+ * refuses: its words, the write and its inverse, each made at once, and
+ * whether the state still holds what each made. `Doors` is where its
+ * caller's state is read and written, as it stands at each call, and
+ * `Change` what the press read of it that its inverse needs.
+ */
+export interface LocalWrite<Doors, Change> {
+  /** What its toast says, and what ⌘Z's toast calls it. */
+  readonly words: string;
+  /** Makes the write. */
+  readonly act: (doors: Doors, change: Change) => void;
+  /** Makes its inverse. */
+  readonly undo: (doors: Doors, change: Change) => void;
+  /** Whether `doors` still hold what the act made, so ⌘Z may take it back. */
+  readonly holds: (doors: Doors, change: Change) => boolean;
+  /** Whether `doors` still hold what the inverse made, so ⇧⌘Z may put it back. */
+  readonly undone: (doors: Doors, change: Change) => boolean;
+}
+
+/**
+ * Presses a local write: makes it, keeps it as the newest entry for ⌘Z, and
+ * says so with its toast's Undo, which runs that entry. The entry is taken
+ * back only while `doors` still hold what the act made, and put back only
+ * while they hold what its inverse made. One named for `subject` carries it
+ * on its toast, and leaves with that toast as its caller withdraws it
+ * (`withdrawUndo`).
+ */
+export function pressLocal<Doors, Change>(
+  write: LocalWrite<Doors, Change>,
+  doors: () => Doors,
+  change: Change,
+  subject?: string,
+): void {
+  write.act(doors(), change);
+  const run = (
+    due: (doors: Doors, change: Change) => boolean,
+    make: (doors: Doors, change: Change) => void,
+  ) =>
+    dueRun(
+      [change],
+      (each) => due(doors(), each),
+      (each) => {
+        make(doors(), each);
+        return Promise.resolve(APPLIED_RUN);
+      },
+    );
+  const undo = undoable({
+    words: write.words,
+    undo: () => run(write.holds, write.undo),
+    redo: () => run(write.undone, write.act),
+    subject,
+  });
+  showToast({
+    ...undoToast(write.words, undo),
+    replayUnmasked: true,
+    ...(subject === undefined ? undefined : { subject }),
   });
 }
 

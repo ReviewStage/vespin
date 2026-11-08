@@ -5,6 +5,9 @@ import { IDLE_TASKS_VIEW, type TasksPinParams, type TasksView } from "@repo/feat
 import { ACT_KIND } from "@repo/host/acts";
 import { afterEach, test } from "vitest";
 import {
+  forgetUndo,
+  type LocalWrite,
+  pressLocal,
   pressRows,
   pressWrite,
   ROW_WRITE,
@@ -14,6 +17,7 @@ import {
   UNDO_RAN,
   type UndoWrite,
   undoLast,
+  withdrawUndo,
 } from "./undo-stack.js";
 
 /**
@@ -26,7 +30,7 @@ import {
 
 const TASK_ID = "3f2c8a51-6d0e-4b7a-9c14-2e5f7a9b0d36";
 
-afterEach(() => {});
+afterEach(forgetUndo);
 
 /** The tasks drawn: the one task, pinned or not. */
 function tasksShowing(pinned: boolean): TasksView {
@@ -135,4 +139,24 @@ test("⌘Z leaves a declared write's target changed since as it stands, and send
 
   assert.equal(undone, UNDO_RAN.CHANGED);
   assert.deepEqual(window.sent, [{ taskId: TASK_ID, pinned: true }]);
+});
+
+/** A line of held words as a window holds them alone, and its removal of one by key. */
+const HELD_REMOVAL = {
+  words: "Removed",
+  act: (held, word) => held.delete(word),
+  undo: (held, word) => held.add(word),
+  holds: (held, word) => !held.has(word),
+  undone: (held, word) => held.has(word),
+} satisfies LocalWrite<Set<string>, string>;
+
+test("⌘Z leaves a local write withdrawn by its subject as it stands", async () => {
+  const held = new Set(["first"]);
+  pressLocal(HELD_REMOVAL, () => held, "first", TASK_ID);
+  withdrawUndo(TASK_ID);
+
+  const undone = await undoLast();
+
+  assert.equal(undone, undefined);
+  assert.deepEqual([...held], []);
 });
