@@ -8,13 +8,15 @@
  * `pressRows`), while that item still holds what the press set: an item
  * marked again, or reminded again, since, here, on another Mac, or by an
  * agent's post, is left as it stands. A press over several items is one
- * entry, and one toast says it.
+ * entry, and one toast says it; a refused undo says so in the words the
+ * press's own refusal does.
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
@@ -26,6 +28,20 @@ import { TOAST_HOLD, type ToastNotice, undoToast } from "../toast.js";
 import { type PressedRows, pressRows, type RowWrite } from "../undo-stack.js";
 import { appStateIn } from "../use-app-state.js";
 import { isUnread } from "./inbox-model.js";
+
+/** What one toast says of read marks given to several items: how many the service took, and how many not. */
+export function markedNote(unread: boolean, landed: number, refused: number): string {
+  const state = unread ? "unread" : "read";
+  if (landed === 0) return `Could not mark ${countWords(refused, TERM.INBOX_ITEM)} ${state}`;
+  const kept = `${countWords(landed, TERM.INBOX_ITEM)} marked ${state}`;
+  return refused === 0 ? kept : `${kept}, ${refused} could not be`;
+}
+
+/** What a toast says of a reminder set, or canceled, that the service did not take. */
+export const REMIND_REFUSED = {
+  SET: "Could not set the reminder",
+  CANCEL: "Could not cancel the reminder",
+} as const;
 
 /** Where an inbox write's items are read: the window's document, holding the account's feed and each holder's own inbox, every write still standing drawn over them. */
 type InboxRows = AppStateSnapshot | undefined;
@@ -71,6 +87,7 @@ const INBOX_WRITE = {
     kind: ACT_KIND.AGENTS_INBOX_READ_STATE,
     send: (send, itemId, { unread }) => inboxKept(send({ itemId, unread })),
     surface: FAILURE_SURFACE.INBOX_MARK,
+    refused: (_itemId, { unread }, kept, refused) => ({ words: markedNote(unread, kept, refused) }),
   } satisfies RowWrite<InboxRows, MarkFields, typeof ACT_KIND.AGENTS_INBOX_READ_STATE>,
   REMIND: {
     read: (rows, itemId) => {
@@ -81,6 +98,11 @@ const INBOX_WRITE = {
     kind: ACT_KIND.AGENTS_INBOX_REMIND,
     send: (send, itemId, { remindAt }) => inboxKept(send({ itemId, until: remindAt })),
     surface: FAILURE_SURFACE.INBOX_MARK,
+    // Note that several items refused say it once, each refusal's words being the same.
+    refused: (itemId, { remindAt }) => ({
+      words: remindAt === null ? REMIND_REFUSED.CANCEL : REMIND_REFUSED.SET,
+      about: { inboxItemId: itemId },
+    }),
   } satisfies RowWrite<InboxRows, RemindFields, typeof ACT_KIND.AGENTS_INBOX_REMIND>,
 } as const;
 

@@ -262,6 +262,14 @@ export interface RowWrite<Rows, Fields extends object, Kind extends PortActKind>
   readonly send: (send: RowSend<Kind>, id: string, fields: Fields) => Promise<Kept>;
   /** What a refusal of it is reported as. */
   readonly surface: FailureSurface;
+  /** What a run's refusal says and is about, of the first row refused, the fields sent it, and how many rows the run sent were kept and refused; the stack's own words where none. */
+  readonly refused?: (id: string, sent: Fields, kept: number, refused: number) => RowRefusal;
+}
+
+/** What a row write's refusal says, and what it is about. */
+export interface RowRefusal {
+  readonly words: string;
+  readonly about?: FailureAbout;
 }
 
 /**
@@ -334,8 +342,9 @@ function dueRun<Change>(
 
 /**
  * Each row of `changes` still holding what `from` names sent what `to`
- * names, as one run: it applied where every row sent was kept, and changed
- * where no row still held it.
+ * names, as one run: it applied where every row sent was kept, changed
+ * where no row still held it, and was refused as the first row refused
+ * was, in its declaration's words where it names them.
  */
 function rowsRun<Rows, Fields extends object, Kind extends PortActKind>(
   write: RowWrite<Rows, Fields, Kind>,
@@ -345,20 +354,25 @@ function rowsRun<Rows, Fields extends object, Kind extends PortActKind>(
   to: (change: RowChange<Fields>) => Fields,
 ): Promise<UndoRun> {
   const rows = doors.rows();
-  return dueRun(
-    changes,
-    (change) => {
-      const now = write.read(rows, change.id);
-      return now !== undefined && write.holds(now, from(change));
+  const sent = changes.filter((change) => {
+    const now = write.read(rows, change.id);
+    return now !== undefined && write.holds(now, from(change));
+  });
+  if (sent.length === 0) return Promise.resolve(CHANGED_RUN);
+  return Promise.all(sent.map((change) => write.send(doors.send, change.id, to(change)))).then(
+    (answers): UndoRun => {
+      const at = answers.findIndex((answer) => !answer.kept);
+      const first = answers[at];
+      const change = sent[at];
+      if (first === undefined || first.kept || change === undefined) return APPLIED_RUN;
+      const refused = answers.filter((answer) => !answer.kept).length;
+      const said = write.refused?.(change.id, to(change), answers.length - refused, refused);
+      return {
+        ran: UNDO_RAN.REFUSED,
+        failure: { surface: write.surface, cause: first.cause, about: said?.about },
+        ...(said === undefined ? undefined : { words: said.words }),
+      };
     },
-    (change) =>
-      write
-        .send(doors.send, change.id, to(change))
-        .then((kept) =>
-          kept.kept
-            ? APPLIED_RUN
-            : { ran: UNDO_RAN.REFUSED, failure: { surface: write.surface, cause: kept.cause } },
-        ),
   );
 }
 

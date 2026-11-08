@@ -1,7 +1,6 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
-import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
@@ -14,7 +13,7 @@ import { useAppCommand } from "../app-commands.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { acknowledgedOnOpen, type InboxListed, isUnread } from "./inbox-model.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
-import { keptToast, useInboxPresses } from "./inbox-writes.js";
+import { keptToast, markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
 /**
@@ -64,20 +63,6 @@ export interface InboxReadMarks {
   /** Sets one item's reminder for an instant, offering Undo, or cancels it where none is given, leaving whether it is read alone; answers whether the service took it, and a refusal is toasted. */
   readonly onRemind: InboxReminder;
 }
-
-/** What one toast says of read marks given to several items: how many the service took, and how many not. */
-export function markedNote(unread: boolean, landed: number, refused: number): string {
-  const state = unread ? "unread" : "read";
-  if (landed === 0) return `Could not mark ${countWords(refused, TERM.INBOX_ITEM)} ${state}`;
-  const kept = `${countWords(landed, TERM.INBOX_ITEM)} marked ${state}`;
-  return refused === 0 ? kept : `${kept}, ${refused} could not be`;
-}
-
-/** What a toast says of a reminder set, or canceled, that the service did not take. */
-const REMIND_REFUSED = {
-  SET: "Could not set the reminder",
-  CANCEL: "Could not cancel the reminder",
-} as const;
 
 /** What a mark the act channel refused hears, as the service not answering. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);

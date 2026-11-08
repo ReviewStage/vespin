@@ -9,8 +9,8 @@ import { TOAST_HOLD, useToast } from "../toast.js";
 import { type InboxResolver, RESOLVE } from "./inbox-close.js";
 import { type InboxListed, isUnread } from "./inbox-model.js";
 import { type InboxRemindMany, REMIND_ME, remindManyGroups } from "./inbox-remind.js";
-import { keptToast, useInboxPresses } from "./inbox-writes.js";
-import { type MarkSaying, markedNote } from "./use-inbox-read-marks.js";
+import { keptToast, markedNote, useInboxPresses } from "./inbox-writes.js";
+import type { MarkSaying } from "./use-inbox-read-marks.js";
 
 /**
  * inbox-selection.tsx -- what the Inbox offers for the items chosen in its list, at once: Mark as read or unread, Remind me, and Resolve, which its head draws as glyphs and a chosen row's menu as items.
