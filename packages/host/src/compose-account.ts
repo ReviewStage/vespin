@@ -10,7 +10,8 @@ import { SIGN_IN_FAILURE, type SignInFailure } from "@repo/features/words";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal } from "@repo/gateway";
 import { Effect, FiberSet, Result, type Scope, Stream } from "effect";
 import { AccountAccessClient, accountAccessHolder } from "./account-access-client.js";
-import type { AccountSession } from "./account-source.js";
+import { type AccountSession, DeletionSessionExpired } from "./account-source.js";
+import { ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL } from "./acts.js";
 import type { AppAccessSlice, SessionReplayState } from "./app-state.js";
 import type { SettingsComposer } from "./compose-settings.js";
 import type { Composer } from "./composer.js";
@@ -18,7 +19,7 @@ import type { ACCOUNT_ACTS } from "./contract/index.js";
 import { HostKernelTag, lateService } from "./effect/kernel.js";
 import { AccountSource } from "./effect/seams.js";
 import type { HostMethodTable } from "./gateway-door.js";
-import type { HostActTable } from "./host-acts.js";
+import { ActRefused, type HostActTable } from "./host-acts.js";
 
 /** What a refused account step says, worded by the step alone. */
 const SIGN_IN_REFUSED = "the sign-in did not finish";
@@ -329,7 +330,15 @@ export const composeAccount = /* @__PURE__ */ Effect.fn("host/composeAccount")(f
         });
         yield* settings.flushProductEvents;
         yield* settleHeld;
-        const snapshot = yield* refusedAs(DELETE_REFUSED)(session.deleteEverywhere());
+        const deleted = yield* Effect.result(session.deleteEverywhere());
+        if (Result.isFailure(deleted)) {
+          report(`${DELETE_REFUSED}: ${deleted.failure.message}`);
+          // Note that a session too old to delete under is refused in a sentence of its own, since only a new sign-in answers it and the act's own says to try again.
+          return yield* deleted.failure instanceof DeletionSessionExpired
+            ? new ActRefused({ sentence: ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL })
+            : new RefusedRefusal({ message: DELETE_REFUSED });
+        }
+        const snapshot = deleted.success;
         // Only a deletion that landed stands recording down for the run.
         sessionReplayEndedByDeletion = true;
         // Forked as a daemon rather than a plain fork: the handler's own

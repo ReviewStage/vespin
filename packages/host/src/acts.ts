@@ -20,6 +20,15 @@ import { PORT_ACT_KIND } from "./contract/kinds.js";
 export const ACT_KIND = PORT_ACT_KIND;
 
 /**
+ * What the account's deletion is refused with where Better Auth found the
+ * session signed in longer ago than it deletes an account under
+ * (`SESSION_EXPIRED`), in place of the act's own sentence: a new sign-in
+ * answers it, which no retry under the same session does.
+ */
+export const ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL =
+  "You signed in too long ago to delete the account. Sign out and back in, then delete it again." as const;
+
+/**
  * What a workspace act whose role does not allow it is refused with, in place
  * of its kind's own sentence: a member renaming the workspace, setting its
  * photo, or removing someone, or an owner removed or leaving.
