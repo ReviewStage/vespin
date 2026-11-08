@@ -24,8 +24,6 @@ type SweepRead<A> = Effect.Effect<A, unknown, DatabaseServices | Sandbox>;
 interface MaintenanceSweeps {
   /** Prunes the sync log's transactions older than its keep, a sweep's worth, answering how many rows went. */
   pruneSyncLog: (now: number) => SweepRead<number>;
-  /** Closes the shared ports' links no one has visited for their idle bound, holding the rest's sandboxes, answering how many closed. */
-  sweepPortShares: (now: number) => SweepRead<number>;
   /** Fails, with why, the coding agents' turns past their deadline, a sweep's worth of agents, answering how many turns it settled (`coder-host/reconcile.ts`). */
   reconcileAgents: (now: number) => SweepRead<number>;
   /** Publishes again the coding agents' turns still queued for a runner whose message may have been lost, a sweep's worth, answering how many (`coder-host/turn-delivery.ts`). */
@@ -52,8 +50,6 @@ export interface MaintenanceSweepOptions extends MaintenanceSweeps {
 interface MaintenanceSweepAnswer {
   /** Sync log rows older than its keep, pruned. */
   syncLog: Swept<number>;
-  /** Shared ports' links closed for going unvisited. */
-  portShares: Swept<number>;
   /** Coding agents' turns settled past their deadline. */
   turns: Swept<number>;
   /** Coding agents' turns still queued, published again. */
@@ -93,7 +89,6 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
   const now = yield* Clock.currentTimeMillis;
   return {
     syncLog: yield* isolated("pruneSyncLog", sweeps.pruneSyncLog(now)),
-    portShares: yield* isolated("sweepPortShares", sweeps.sweepPortShares(now)),
     turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
     republished: yield* isolated("republishTurns", sweeps.republishTurns(now)),
   };

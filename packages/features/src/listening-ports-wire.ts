@@ -9,9 +9,9 @@
  * none.
  *
  * One of those ports may be shared at a time by a public link, which anyone
- * holding it can open: Vercel's own route into the running sandbox. Sharing
- * another port replaces the first, and a link no one has visited for ten
- * minutes stops on its own.
+ * holding it can open: Vercel's own route straight to that port in the
+ * running sandbox. Sharing another port replaces the first, and the link
+ * lives only while the sandbox runs.
  */
 
 import { Schema as EffectSchema } from "effect";

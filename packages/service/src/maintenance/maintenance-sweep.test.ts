@@ -26,7 +26,6 @@ function sweepRequest(
 /** The instant each sweep was handed, recorded for the test to read back. */
 interface Recorded {
   syncLog: number[];
-  portShares: number[];
   turns: number[];
   republished: number[];
 }
@@ -34,7 +33,6 @@ interface Recorded {
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
   const recorded: Recorded = {
     syncLog: [],
-    portShares: [],
     turns: [],
     republished: [],
   };
@@ -46,11 +44,6 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
       Effect.sync(() => {
         recorded.syncLog.push(now);
         return 5;
-      }),
-    sweepPortShares: (now) =>
-      Effect.sync(() => {
-        recorded.portShares.push(now);
-        return 0;
       }),
     reconcileAgents: (now) =>
       Effect.sync(() => {
@@ -85,7 +78,6 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
     assert.equal(answer.body.error, HOSTED_API_ERROR.UNAVAILABLE);
     assert.deepEqual(recorded, {
       syncLog: [],
-      portShares: [],
       turns: [],
       republished: [],
     });
@@ -104,13 +96,11 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
     assert.equal(missingAnswer.status, 401);
     assert.deepEqual(wrong.recorded, {
       syncLog: [],
-      portShares: [],
       turns: [],
       republished: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
-      portShares: [],
       turns: [],
       republished: [],
     });
@@ -130,7 +120,6 @@ it.effect(
       assert.ok(instant !== undefined);
       assert.deepEqual(recorded, {
         syncLog: [instant],
-        portShares: [instant],
         turns: [instant],
         republished: [instant],
       });
@@ -144,9 +133,9 @@ it.effect(
       const checkIns: string[] = [];
       const { options, recorded } = sweepOptions({
         pruneSyncLog: () => Effect.fail(new Error("a sync log row could not be read")),
-        sweepPortShares: (now) =>
-          Effect.sync(() => recorded.portShares.push(now)).pipe(
-            Effect.andThen(Effect.die(new Error("a port share's row could not be read"))),
+        reconcileAgents: (now) =>
+          Effect.sync(() => recorded.turns.push(now)).pipe(
+            Effect.andThen(Effect.die(new Error("a turn's row could not be read"))),
           ),
         // The cron monitor as Sentry's check-in reads the run: failed where its effect failed.
         monitor: {
@@ -163,7 +152,7 @@ it.effect(
       assert.equal(answer.status, 500);
       assert.deepEqual(checkIns, ["error"]);
       assert.deepEqual(answer.body.syncLog, SWEEP_FAILED);
-      assert.deepEqual(answer.body.portShares, SWEEP_FAILED);
-      assert.equal(recorded.portShares.length, 1);
+      assert.deepEqual(answer.body.turns, SWEEP_FAILED);
+      assert.equal(recorded.turns.length, 1);
     }),
 );

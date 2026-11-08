@@ -104,7 +104,6 @@ const DECLARED_TABLES = [
   "repository_pin",
   "runner_line",
   "sandbox_firewall",
-  "sandbox_port_share",
   "sandbox_terminal_lease",
   "session",
   "slack_agent_thread",

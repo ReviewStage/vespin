@@ -12,10 +12,10 @@
  * is never woken here, and answers so with no ports; an agent on a Mac has
  * no sandbox, and answers the same.
  *
- * One port may be shared by a public link (`terminal/port-share.ts`), only
- * from a running sandbox: a share is refused as stopped otherwise, and the
- * sweep touches the sandbox while visits come (`maintenance/port-share-sweep.ts`).
- * The share is read back from the sandbox itself, never the store.
+ * One port may be shared by a public link, the sandbox's own route to it,
+ * only from a running sandbox: a share is refused as stopped otherwise, and
+ * the link lives only while the sandbox runs. The share is read back from
+ * the sandbox's routes.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";

@@ -27,7 +27,7 @@
  *
  * The forwarded agent's port shared by public link is read from the service
  * at the first look its sandbox runs, and again at each look while one is
- * shared, so a link the service closed as idle leaves the menu with it;
+ * shared, so a link gone with its stopped sandbox leaves the menu with it;
  * sharing a port or closing its link sets it at once.
  */
 

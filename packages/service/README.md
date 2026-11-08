@@ -2635,7 +2635,6 @@ answers what each did; one that fails is logged and answered as failed while
 the rest still run, and any failure fails the cron's check-in. In order:
 
 - `syncLog`: the sync log's transactions older than its keep pruned.
-- `portShares`: the shared ports' links no one visited for their idle bound closed.
 - `turns`: the coding agents' turns past their deadline failed with why
   (`src/agents/coder-host/reconcile.ts`), a sweep's worth of agents at a time.
 

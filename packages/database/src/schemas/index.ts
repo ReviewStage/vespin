@@ -41,7 +41,6 @@ export * from "./pull-request-chapters.js";
 export * from "./repository-pin.js";
 export * from "./runner-line.js";
 export * from "./sandbox-firewall.js";
-export * from "./sandbox-port-share.js";
 export * from "./sandbox-terminal-lease.js";
 export * from "./slack-installation.js";
 export * from "./storage.js";

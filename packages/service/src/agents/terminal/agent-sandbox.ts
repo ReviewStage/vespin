@@ -19,9 +19,10 @@
  * The ports a server listens on are read the same way, from the kernel's
  * socket tables in the running session (`listening-ports.ts`), and never
  * from a sandbox that is not running. One of them may be shared by a public
- * link (`port-share.ts`), only from a running sandbox, and kept in the store
- * the sweep lists; closing the share closes its route whatever the sandbox
- * stands.
+ * link, the sandbox's own route straight to that port, opened only on a
+ * running sandbox and living only while it runs; sharing never keeps the
+ * sandbox up. Closing the share closes its route whatever the sandbox
+ * stands, and the share is read back from the sandbox's routes alone.
  *
  * The GitHub credential the firewall carries for the agent is set here in
  * the shape its own session and a copy of its work set it
@@ -42,6 +43,7 @@ import {
 import {
   type InteractiveShell,
   type ListedSandbox,
+  SANDBOX_CALL,
   SANDBOX_STATUS,
   Sandbox,
   type SandboxError,
@@ -58,7 +60,6 @@ import {
   sandboxFirewall,
 } from "../sandbox-firewall.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
-import { sharedPortOf, sharePort, unsharePort } from "./port-share.js";
 import {
   holdsTerminal,
   killTerminal,
@@ -110,7 +111,7 @@ export interface AgentSandboxService {
   readonly terminals: (sessionId: string) => Effect.Effect<TerminalsAnswer, SandboxError>;
   /** Whether the agent's sandbox is running, and the ports a server listens on in it; none while it is not running, which a read never changes. */
   readonly listeningPorts: (sessionId: string) => Effect.Effect<ListeningPortsAnswer, SandboxError>;
-  /** The port shared by a public link from the agent's running sandbox, answering the link; none where it is not running, which a share never changes. */
+  /** The port shared by a public link from the agent's running sandbox, replacing any before, answering the link; none where it is not running, which a share never changes. */
   readonly share: (
     sessionId: string,
     port: number,
@@ -229,22 +230,25 @@ function agentSandboxOver(
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return undefined;
-        return yield* Effect.provideContext(
-          sharePort(api, sessionId, sandbox, running, port),
-          context,
+        const route = (yield* api.updatePorts(sandbox.name, [port])).find(
+          (each) => each.port === port,
         );
+        if (route === undefined) {
+          return yield* new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "no route" });
+        }
+        return route.url;
       }),
     unshare: (sessionId) =>
       Effect.gen(function* () {
-        const { sandbox, running } = yield* standing(sessionId);
-        if (sandbox !== undefined)
-          yield* Effect.provideContext(unsharePort(api, sessionId, sandbox, running), context);
+        const { sandbox } = yield* standing(sessionId);
+        if (sandbox !== undefined) yield* api.updatePorts(sandbox.name, []);
       }),
     shared: (sessionId) =>
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return null;
-        return yield* sharedPortOf(api, sandbox, running);
+        const route = (yield* api.get(sandbox.name))?.routes?.[0];
+        return route === undefined ? null : { port: route.port, url: route.url };
       }),
     start: (sessionId, terminalId, title) =>
       inRunning(sessionId, (running) =>

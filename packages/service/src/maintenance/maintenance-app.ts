@@ -11,7 +11,6 @@ import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
-import { sweepPortShares } from "./port-share-sweep.js";
 
 /** The sweep as Sentry's Crons watches it: three minutes in a row missed, late, or failed open an issue. */
 const SWEEP_MONITOR: CronMonitor = {
@@ -39,7 +38,6 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     cronSecret: environment.cronSecret,
     monitor: sentryCronCheckIns(SWEEP_MONITOR),
     pruneSyncLog: (now) => pruneSyncLog(new Date(now)),
-    sweepPortShares: (now) => sweepPortShares(new Date(now)),
     reconcileAgents: (now) =>
       Effect.provideService(reconcileAgents(now), HttpClient.HttpClient, http),
     republishTurns: republishQueuedTurns,
