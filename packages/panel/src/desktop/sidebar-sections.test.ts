@@ -391,7 +391,7 @@ test("the status filter leaves a section's backlog task out as it does the list'
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
 });
 
-test("a section whose only task is done says the view leaves it out in place of Drag tasks here", async () => {
+test("a section whose only task is done still says Drag tasks here", async () => {
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...INVITES, status: TASK_STATUS.DONE },
@@ -400,11 +400,8 @@ test("a section whose only task is done says the view leaves it out in place of 
   });
 
   assert.ok(
-    sidebar
-      .querySelector('nav[aria-label="Sections"]')
-      ?.textContent?.includes("No tasks match this view."),
+    sidebar.querySelector('nav[aria-label="Sections"]')?.textContent?.includes("Drag tasks here"),
   );
-  assert.ok(!sidebar.textContent?.includes("Drag tasks here"));
 });
 
 test("a task's Move to puts it on top of the section chosen", async () => {

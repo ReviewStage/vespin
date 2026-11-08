@@ -1659,7 +1659,9 @@ function sectionedTasks(
  * A section as the view leaves it: its tasks to do and in progress, any
  * with no status, an agent's among them, and any parent a child task keeps
  * open, of those Assigned to holds, each with its entry, in its order; and
- * whether it holds any the view leaves out.
+ * whether Assigned to leaves any out. Note that a row only the statuses
+ * shown leave out counts for nothing, because the section still reads as
+ * one to drag tasks into.
  */
 function sectionInView(
   drawn: DrawnSection,
@@ -1679,7 +1681,7 @@ function sectionInView(
     ...drawn,
     entries: kept.map(({ entry }) => entry),
     rows: kept.map(({ row }) => row),
-    othersHeld: kept.length < drawn.rows.length,
+    othersHeld: people.length < drawn.rows.length,
   };
 }
 

@@ -555,9 +555,9 @@ export interface DrawnSection {
   readonly rows: readonly TaskRow[];
 }
 
-/** A section as the view draws it: the rows it leaves standing, and whether it leaves any out. */
+/** A section as the view draws it: the rows it leaves standing, and whether Assigned to leaves any out. */
 export interface ShownSection extends DrawnSection {
-  /** Whether it holds rows the view leaves out, by status or Assigned to, so that it holds nothing in view is no call to drag tasks in. */
+  /** Whether it holds rows Assigned to leaves out, so that it holds nothing in view is no call to drag tasks in. */
   readonly othersHeld: boolean;
 }
 
@@ -724,8 +724,8 @@ function SectionRows({
 
 /**
  * What a section draws in place of its rows while the view leaves none
- * standing: that the view leaves out what it holds, or a word that tasks are
- * dragged in; nothing while it draws rows.
+ * standing: that Assigned to leaves out what it holds, or a word that tasks
+ * are dragged in; nothing while it draws rows.
  */
 function SectionFoot({ drawn }: { drawn: ShownSection }): React.JSX.Element | null {
   if (drawn.rows.length > 0) return null;
@@ -798,7 +798,7 @@ function SidebarSection({
         glyph={glyph}
         label={<ReplayMask>{section.title}</ReplayMask>}
         fold={sidebarFold(folded, () => context.onToggle(section.id))}
-        // Note that a section the view leaves nothing standing in, though it holds rows, counts none, because a 0 would call it empty.
+        // Note that a section Assigned to leaves nothing standing in, though it holds rows, counts none, because a 0 would call it empty.
         count={
           drawn.rows.length === 0 && drawn.othersHeld
             ? undefined
