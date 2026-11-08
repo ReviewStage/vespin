@@ -563,6 +563,8 @@ const SANDBOX_MODE = "danger-full-access";
 function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
   const mcp = `mcp_servers.${MCP_SERVER}`;
   // Each integration the agent is handed is a server of its own on the same bearer, its tools approved and bounded as ours are.
+  // Note that a cached catalog satisfies an integration's startup (`startup_readiness`) while it connects, so a
+  // known integration holds no first turn; an integration with none waits no longer than Codex's grace for optional servers.
   const integrations = (config.integrations ?? [])
     .filter((integration) => integration.name !== MCP_SERVER)
     .flatMap((integration): (readonly [string, string])[] => {
@@ -572,6 +574,7 @@ function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
         [`${server}.bearer_token_env_var`, toml(RUNNER_ENV.BEARER)],
         [`${server}.default_tools_approval_mode`, toml("approve")],
         [`${server}.startup_timeout_sec`, INTEGRATION_STARTUP_TIMEOUT_SECONDS.toFixed(1)],
+        [`${server}.startup_readiness`, toml("catalog")],
         [`${server}.tool_timeout_sec`, MCP_TOOL_TIMEOUT_SECONDS.toFixed(1)],
       ];
     });

@@ -98,6 +98,9 @@ import {
 import { type LaunchTrace, launchTrace, RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
 
+/** The variable that bounds how long the CLI's first turn waits on a pending MCP server, in milliseconds (Claude Code 2.1.274 on). */
+const CLAUDE_CODE_MCP_STARTUP_WAIT = "CLAUDE_CODE_MCP_STARTUP_WAIT_MS";
+
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
 
@@ -204,7 +207,15 @@ function queryOptions(
     // (`SANDBOX_TOOL_ENV`), less the bearer, which only the runner uses; Node
     // leaves an undefined one unset. Every command the agent runs inherits it,
     // the CLI's credential among it, which in the cloud's sandbox is a placeholder.
-    env: { ...env, ...SANDBOX_TOOL_ENV, [RUNNER_ENV.BEARER]: undefined },
+    // The first turn waits on no server of the checkout's own (`.mcp.json`), which keeps connecting in the
+    // background (`CLAUDE_CODE_MCP_STARTUP_WAIT_MS`). Note that ours and each integration's are SDK servers,
+    // which the CLI waits on whatever the wait is set to (https://code.claude.com/docs/en/agent-sdk/mcp#connection-timing).
+    env: {
+      ...env,
+      ...SANDBOX_TOOL_ENV,
+      [RUNNER_ENV.BEARER]: undefined,
+      [CLAUDE_CODE_MCP_STARTUP_WAIT]: "0",
+    },
     // Note that the SDK puts an HTTP server's config, headers and all, in the
     // CLI's argv, which any process in the sandbox can read, so ours is an
     // SDK server the runner relays over the CLI's own stdio (`mcp-relay.ts`), as is each integration's.
