@@ -13,7 +13,7 @@
  * once and the row never holds them again.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
 import {
@@ -39,7 +39,6 @@ import { Clock, Duration, Effect, Option, Redacted, Result, Schema } from "effec
 import { TURN_STATUS } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { heldUntil } from "../http/held-read.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import { launchStoppedDetail } from "./coder-host/status.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 

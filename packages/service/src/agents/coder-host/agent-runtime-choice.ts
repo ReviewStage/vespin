@@ -40,7 +40,7 @@
  * Codex on a Mac with none, or on no harness at all, is refused by name.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Device, deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { openProviderKey, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import {
@@ -73,7 +73,6 @@ import {
 import { Clock, Data, Duration, Effect, Option, type Redacted, Result } from "effect";
 import { previewKeysOf } from "../../accounts/own-api-key.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
-import type { StoreFailure } from "../../http/store-failure.js";
 import { type AccountFastOffer, providerModelOf } from "../../providers/model-catalog.js";
 import type { NativeRuntime } from "./native-runtime.js";
 

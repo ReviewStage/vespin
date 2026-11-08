@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
@@ -32,7 +32,7 @@ import {
   type UnparsedWireValue,
   wireUuidSchema,
 } from "../../core.js";
-import { logStoreFailure, type StoreFailure } from "../../http/store-failure.js";
+import { logStoreFailure } from "../../http/store-failure.js";
 import {
   DESCRIPTION_SAVE_REFUSAL,
   DESCRIPTION_SAVE_STATUS,

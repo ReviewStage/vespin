@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -105,7 +105,7 @@ import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { ownAgentWorkspace } from "../github/workspace-repository.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../http/http-effect.js";
-import { logStoreFailure, type StoreFailure } from "../http/store-failure.js";
+import { logStoreFailure } from "../http/store-failure.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,

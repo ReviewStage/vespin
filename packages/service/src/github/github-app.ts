@@ -79,7 +79,7 @@
  */
 
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
-import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
@@ -132,7 +132,6 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { type GitHubRepository, text } from "../core.js";
 import { HostedEnvironment, present } from "../environment.js";
-import type { StoreFailure } from "../http/store-failure.js";
 import {
   installationsOfWorkspace,
   mendInstallationStatus,
