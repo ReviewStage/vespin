@@ -88,7 +88,11 @@ export const SURVEY_QUESTION = {
 /** The most characters the words beside an answered Other hold. */
 export const SURVEY_OTHER_MAX_CHARS = 100;
 
-const otherWords = Schema.String.check(Schema.isMaxLength(SURVEY_OTHER_MAX_CHARS));
+/** The words beside an Other: some, and no more than the most it holds. */
+const otherWords = Schema.String.check(
+  Schema.isMaxLength(SURVEY_OTHER_MAX_CHARS),
+  Schema.makeFilter((words) => words.trim() !== ""),
+);
 
 /** Whether words stand only beside the Other they belong to; an Other may stand without them. */
 function wordsBesideOther(answer: string | undefined, words: string | undefined): boolean {

@@ -302,7 +302,7 @@ it.layer(getTestDB())("the preferences snapshot's sound parts", (it) => {
 
 it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
   it.effect(
-    "keeps the account's answers with their words beside Other, records them for PostHog's onboarding survey, keeps no other account's, and refuses an answer no set offers or words beside no Other",
+    "keeps the account's answers with their words beside Other, records them for PostHog's onboarding survey once, keeps no other account's, and refuses an answer no set offers or words beside no Other",
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts;
@@ -311,12 +311,15 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
           partOf(yield* ask(request(owner, { onboardingSurvey: answers })), "onboardingSurvey"),
           answers,
         );
+        // Note that the same answers written again, as a retry or another machine's sync writes them, post nothing more.
+        yield* ask(request(owner, { onboardingSurvey: answers }));
         assert.equal(partOf(yield* ask(request(other)), "onboardingSurvey"), undefined);
 
         // Note that words beside no Other are refused as an answer no set offers is.
         for (const refused of [
           '{"referral":"a billboard"}',
           '{"role":"founder","roleOther":"CEO"}',
+          '{"role":"other","roleOther":"  "}',
         ]) {
           assert.deepEqual(yield* ask(request(owner, { onboardingSurvey: refused })), {
             status: HOSTED_HTTP_STATUS.BAD_REQUEST,

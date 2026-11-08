@@ -57,7 +57,9 @@ import {
   accountPreferencesParts,
   experimentChoicesFrom,
   NO_EXPERIMENTS,
+  type OnboardingSurvey,
   onboardingSurveyFrom,
+  onboardingSurveyStored,
   ownPreferenceFromWire,
 } from "@repo/settings";
 import type { UnparsedWireValue } from "@repo/wire";
@@ -219,6 +221,11 @@ const acceptedAgentChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   return accepted;
 });
 
+/** Whether two sets of the survey's answers answer every question alike, in the same words. */
+function sameSurvey(one: OnboardingSurvey | undefined, other: OnboardingSurvey): boolean {
+  return one !== undefined && onboardingSurveyStored(one) === onboardingSurveyStored(other);
+}
+
 /** The account resource: every procedure but the provider keys' own, which are `provider-keys-procedures.ts`'s. */
 export function accountProcedures(seams: AccountProcedureSeams) {
   const signedIn = hosted.account.use(accountMiddleware(seams.resolveUserId));
@@ -372,10 +379,18 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         write.experiments = experiments;
       }
 
+      // Note that the survey's answers standing before are read first, because a retried or synced write of the same answers must not post them to Slack again.
+      const answeredBefore =
+        write.onboardingSurvey === undefined
+          ? undefined
+          : (yield* hostedStoreOrUnavailable(seams.readPreferences(context.userId)))?.preferences
+              ?.onboardingSurvey;
       const row = yield* hostedStoreOrUnavailable(seams.writePreferences(context.userId, write));
-      // The survey's answers, once kept, are recorded as a response to our onboarding survey.
+      // The survey's answers, once kept and changed, are recorded as a response to our onboarding survey.
       const answered = onboardingSurveyFrom(write.onboardingSurvey);
-      if (answered !== undefined) yield* onboardingSurveyAnswered(context.userId, answered);
+      if (answered !== undefined && !sameSurvey(onboardingSurveyFrom(answeredBefore), answered)) {
+        yield* onboardingSurveyAnswered(context.userId, answered);
+      }
       return { ...snapshotAnswer(row, yield* snapshotAgent(context.userId, row)), txid: row.txid };
     }),
 
