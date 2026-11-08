@@ -93,11 +93,7 @@ export function ChoiceList(props: ChoiceListProps) {
                 )}
               </VStack>
               <Spacer />
-              {recommended.includes(choice.label) ? (
-                <RecommendedBadge colors={colors} />
-              ) : (
-                <Spacer />
-              )}
+              {recommended.includes(choice.label) ? <RecommendedBadge colors={colors} /> : null}
             </HStack>
           </Button>
         );
