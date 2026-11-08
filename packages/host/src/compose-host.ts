@@ -454,20 +454,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           openSocket: yield* TerminalSocket,
           platform: yield* MirrorPlatform,
           agentListed,
-          agentsOpened: () => {
-            const me = accountId();
-            const { taskAgents = [], tasklessAgents = [] } = tasks.snapshot();
-            return [...taskAgents, ...tasklessAgents]
-              .filter(
-                (agent) =>
-                  agent.sandboxOpen === true &&
-                  agent.machine === undefined &&
-                  agent.archivedAt === undefined &&
-                  me !== undefined &&
-                  agent.startedBy?.userId === me,
-              )
-              .map((agent) => agent.id);
-          },
           listings: tasks.pullRequestListings,
           recordProductEvent: settings.recordProductEvent,
         })

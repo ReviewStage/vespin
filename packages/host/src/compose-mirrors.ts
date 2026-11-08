@@ -30,7 +30,7 @@ import {
 import { SENTRY_MIRROR_SPAN } from "@repo/features/sentry-tracing";
 import { GATEWAY_EVENT, GATEWAY_METHOD, RefusedRefusal, readParams } from "@repo/gateway";
 import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
-import { cappedExponential, readEither } from "@repo/wire/effect";
+import { readEither } from "@repo/wire/effect";
 import {
   Clock,
   Data,
@@ -43,7 +43,6 @@ import {
   Option,
   Path,
   Result,
-  Schedule,
   Schema,
   type Scope,
   Semaphore,
@@ -84,15 +83,18 @@ import type { RunMode } from "./run-mode.js";
  * `file` and `delete` written as it arrives (`mirror-disk.ts`). A local edit
  * is simply overwritten.
  *
- * There is one recovery path, which is to reconnect and match: no cursor,
- * no change log, nothing stored between connections. Any socket that drops,
- * is refused, closes as idle, finds the sandbox not running, or fails a
- * step, is opened again on `RECONNECT`, backing off to every 30 seconds,
- * for as long as the mirror stands; the next manifest
- * brings the mirror back in step. Every mirror on disk is kept so from the
- * host's start, and so is one for each of the account's own cloud agents
- * as the task list says its sandbox opened, so its Local tab finds the
- * worktree made rather than waiting on the clone. A mirror is taken away, its worktree removed from the shared
+ * There is one recovery path, which is to connect and match again: no
+ * cursor, no change log, nothing stored between connections. A mirror makes
+ * one attempt each time it is asked and never tries again on its own: a
+ * socket that drops, is refused, closes as idle, finds the sandbox not
+ * running, or fails a step ends the attempt, and an ensure waiting on a
+ * worktree not made yet is refused, for its Local tab to offer Retry. The
+ * window asks again each minute an agent is on screen, beside the warm call
+ * that wakes its sandbox (`@repo/panel`'s `use-warm-agent.ts`), so the mirror
+ * follows the agent being looked at, its worktree usually made by the time
+ * its Local tab opens; the next manifest brings it back in step. Every
+ * mirror on disk is tried once from the host's start, which is how one whose
+ * agent is gone is found. A mirror is taken away, its worktree removed from the shared
  * clone and its folder deleted, when the task list shows its agent archived,
  * or when the tunnel closes as gone: the agent archived, or no agent this
  * account reaches, which is how the first try after the host's start finds
@@ -105,21 +107,15 @@ import type { RunMode } from "./run-mode.js";
  * it, as is the prefetch: named by the agent, and where a step failed, by
  * the step, why (`@repo/features/mirror-steps`), and the HTTP status, close
  * code, or exit code, never by what Git printed. Only a mirror's first
- * `TRACED_ATTEMPTS` attempts in a run are traced, so one whose sandbox
- * stays stopped does not trace every 30 seconds for the app's life. A
+ * `TRACED_ATTEMPTS` attempts in a run are traced, so an agent on screen
+ * whose mirror keeps failing does not trace every minute. A
  * failure is counted (`PRODUCT_EVENT.MIRROR_FAIL`) each time what failed
  * changes, and the first header heard in a run is counted
  * (`PRODUCT_EVENT.MIRROR_READY`). Until its worktree stands, how each
  * mirror stands, waiting on the sandbox, cloning, preparing its files, or
- * failed and trying again, is told to the windows as `MIRRORS_CHANGED`,
+ * failed, is told to the windows as `MIRRORS_CHANGED`,
  * which the client lays in app state (`mirrors`) for the Local tab to say.
  */
-
-/** How long a mirror waits before it opens its tunnel again: from `FIRST`, twice as long each time, never longer than `LONGEST`. */
-const MIRROR_RECONNECT = {
-  FIRST: Duration.seconds(1),
-  LONGEST: Duration.seconds(30),
-} as const;
 
 /** How long a script may run: making a worktree may clone a large repository first, as a local agent's does. */
 const SCRIPT_WITHIN = {
@@ -164,17 +160,13 @@ const WORKTREE_FOLDER = "repository";
 /** The one channel a mirror opens on its tunnel. */
 const CHANNEL = 0;
 
-const RECONNECT = cappedExponential(MIRROR_RECONNECT.FIRST, MIRROR_RECONNECT.LONGEST);
-
-/** How one tunnel's life ended, where the mirror does not try again on its own schedule. */
+/** How one tunnel's life ended, where it did not fail. */
 const TUNNEL_ENDING = {
-  /** The mirror was in step and the socket closed: it opens again, its wait started over. */
+  /** The mirror was in step and the socket closed: the attempt ends, for the next ask to connect again. */
   DROPPED: "dropped",
   /** The agent is archived, or no agent this account reaches: the mirror is taken away. */
   GONE: "gone",
 } as const;
-
-type TunnelEnding = (typeof TUNNEL_ENDING)[keyof typeof TUNNEL_ENDING];
 
 /** The tunnel dropped, or never opened, or a step failed, before the mirror heard its header: which step, why, and its code where it had one. */
 class MirrorDropped extends Data.TaggedError("MirrorDropped")<{
@@ -183,7 +175,7 @@ class MirrorDropped extends Data.TaggedError("MirrorDropped")<{
   readonly code?: number | undefined;
 }> {}
 
-/** The mirror was taken away before its worktree stood. */
+/** The mirror was taken away, or its attempt ended, before its worktree stood. */
 class MirrorGone extends Data.TaggedError("MirrorGone") {}
 
 const mirrorEnsureParamsSchema = Schema.Struct({ agentId: wireUuidSchema });
@@ -216,8 +208,6 @@ export interface MirrorsDependencies {
   platform: MirrorPlatformSeam;
   /** The agent as the task list holds it now; none where it lists no such agent. */
   agentListed: (agentId: string) => MirroredAgent | undefined;
-  /** The account's own cloud agents whose sandbox the task list says stands open, by id, whose mirrors are kept ready before a Local tab asks. */
-  agentsOpened: () => readonly string[];
   /** The task list as each drawing of it stands, from the caller's listening until its scope closes, which archives are read again on. */
   listings: Effect.Effect<Stream.Stream<unknown>, never, Scope.Scope>;
   recordProductEvent: RecordProductEvent;
@@ -225,10 +215,13 @@ export interface MirrorsDependencies {
 
 type MirrorMethods = PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MIRRORS>;
 
-/** One mirror kept on this Mac: the folder its worktree stands in, once it does, whether its prefetch has ended, and how its attempts stand. */
+/** One mirror kept on this Mac: the folder its worktree stands in, once it does, whether its attempt's prefetch has ended, and how its attempts stand. */
 interface Mirror {
-  readonly made: Deferred.Deferred<string, MirrorGone>;
-  readonly prefetched: Deferred.Deferred<boolean>;
+  /** The current attempt's worktree, failed where the attempt ends before it stands. */
+  made: Deferred.Deferred<string, MirrorGone>;
+  prefetched: Deferred.Deferred<boolean>;
+  /** Whether an attempt runs now, so an ask while it does joins it. */
+  trying: boolean;
   /** When the host began keeping it, on the host's clock, in milliseconds. */
   readonly startedAt: number;
   /** How many tunnels it has tried to open in this run, this one among them. */
@@ -657,38 +650,44 @@ export function composeMirrors(
         ),
       );
 
-    /** The mirror kept in step, its prefetch run beside its first tunnel, its tunnel opened again on `RECONNECT`, and `FIRST` after one that was in step, until its agent is gone. */
+    /** One attempt at the mirror, its prefetch run beside it while no worktree stands; a gone agent's mirror taken away, and any other ending leaving the mirror for the next ask, its worktree's waiters refused where it never stood. */
     const kept = (agentId: string, mirror: Mirror) =>
       Effect.gen(function* () {
         const prefetch = yield* Effect.forkChild(prefetched(agentId, mirror));
-        yield* Effect.retry(attempt(agentId, mirror), RECONNECT).pipe(
-          Effect.repeat({
-            schedule: Schedule.spaced(MIRROR_RECONNECT.FIRST),
-            until: (ended: TunnelEnding) => ended === TUNNEL_ENDING.GONE,
-          }),
-        );
+        const ended = yield* Effect.exit(attempt(agentId, mirror));
         yield* Fiber.interrupt(prefetch);
-        yield* removed(agentId);
+        if (Exit.isSuccess(ended) && ended.value === TUNNEL_ENDING.GONE)
+          return yield* removed(agentId);
+        mirror.trying = false;
+        yield* Deferred.fail(mirror.made, new MirrorGone());
       });
 
-    /** The mirror kept for an agent, its tunnel's fiber started where none runs; made at once where its worktree already stands, whether or not the sandbox runs. */
+    /** An attempt at an agent's mirror started where none runs, the one running joined otherwise; made at once where its worktree already stands, whether or not the sandbox runs. */
     const started = (agentId: string) =>
       starting.withPermit(
         Effect.gen(function* () {
           const standing = mirrors.get(agentId);
-          if (standing !== undefined) return standing;
-          const mirror: Mirror = {
-            made: yield* Deferred.make<string, MirrorGone>(),
-            prefetched: yield* Deferred.make<boolean>(),
+          if (standing?.trying === true) return standing;
+          const made = yield* Deferred.make<string, MirrorGone>();
+          const prefetchEnded = yield* Deferred.make<boolean>();
+          const stands = yield* worktreeStands(agentId);
+          const mirror: Mirror = standing ?? {
+            made,
+            prefetched: prefetchEnded,
+            trying: true,
             startedAt: yield* Clock.currentTimeMillis,
             attempts: 0,
-            stands: yield* worktreeStands(agentId),
+            stands,
             heard: false,
             prefetching: false,
             making: false,
             failed: undefined,
             counted: undefined,
           };
+          mirror.made = made;
+          mirror.prefetched = prefetchEnded;
+          mirror.trying = true;
+          mirror.stands = stands;
           mirrors.set(agentId, mirror);
           if (mirror.stands) yield* Deferred.succeed(mirror.made, worktreeOf(agentId));
           else yield* told;
@@ -709,11 +708,6 @@ export function composeMirrors(
           FiberMap.run(fibers, agentId, Effect.provideContext(removed(agentId), context)),
         { discard: true },
       ),
-    );
-
-    /** A mirror kept for each of the account's own agents whose sandbox opened, so its Local tab finds it ready. */
-    const openedStarted = Effect.suspend(() =>
-      Effect.forEach(dependencies.agentsOpened(), started, { discard: true }),
     );
 
     const methods: MirrorMethods = {
@@ -738,7 +732,7 @@ export function composeMirrors(
           const mirror = yield* started(agentId);
           const folder = yield* Effect.mapError(
             Deferred.await(mirror.made),
-            () => new RefusedRefusal({ message: "the agent is gone" }),
+            () => new RefusedRefusal({ message: "the mirror could not be made" }),
           );
           return { folder };
         }),
@@ -754,9 +748,7 @@ export function composeMirrors(
         if (Result.isSuccess(readId(unparsedWire(name)))) yield* started(name);
       }
       const listings = yield* dependencies.listings;
-      yield* Effect.forkScoped(
-        Stream.runForEach(listings, () => Effect.andThen(archivedRemoved, openedStarted)),
-      );
+      yield* Effect.forkScoped(Stream.runForEach(listings, () => archivedRemoved));
     });
 
     return { methods, lifetime };
