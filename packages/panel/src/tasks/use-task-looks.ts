@@ -297,8 +297,13 @@ function readMarkOf(unread: boolean): ReadMark {
   return unread ? READ_MARK.UNREAD : READ_MARK.READ;
 }
 
-/** A mark a menu sets by hand: the plan unread until it next opens, or read through now, a failure said in a toast. */
-function useMarkTask(): ReadMarks["mark"] {
+/**
+ * A mark a menu sets by hand (`ReadMarks.mark`): the plan unread until it
+ * next opens, or read through now, a failure said in a toast. It reads
+ * nothing, so a menu that only writes one never draws again as any plan is
+ * marked.
+ */
+export function useReadMark(): ReadMarks["mark"] {
   const { mutate: markTaskRead } = useMutation(pressMutation(ACT_KIND.TASKS_MARK_READ));
   return useCallback(
     (task, unread) => markTaskRead({ taskId: task.id, readMark: readMarkOf(unread) }),
@@ -310,7 +315,7 @@ function useMarkTask(): ReadMarks["mark"] {
 export function useReadMarks(): ReadMarks {
   const marked = useQuery({ ...appStateQuery, select: selectMarkedUnreadIds }).data ?? NONE_MARKED;
   const watched = useSelector(watchedStore);
-  const mark = useMarkTask();
+  const mark = useReadMark();
   return { watched, markedUnread: (taskId) => marked.has(taskId), mark };
 }
 
@@ -321,14 +326,6 @@ export function useMarkedUnread(taskId: string): boolean {
     [taskId],
   );
   return useQuery({ ...appStateQuery, select }).data === true;
-}
-
-/**
- * The mark a menu sets by hand (`ReadMarks.mark`) and nothing it reads, so
- * a menu that only writes one never draws again as any plan is marked.
- */
-export function useReadMark(): ReadMarks["mark"] {
-  return useMarkTask();
 }
 
 /** An agent with no task marked unread until its page next opens, or read through now, by hand from a menu. */
