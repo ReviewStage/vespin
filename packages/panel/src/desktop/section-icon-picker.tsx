@@ -522,7 +522,8 @@ function colorsIn(
     at,
     strip: (
       <ColorStrip
-        key="colors"
+        // Note that the strip is keyed by its glyph, so another glyph's press draws it afresh, its starting color taking the focus and the tab stop.
+        key={opened.glyph}
         opened={opened}
         onColor={props.onColor}
         onClose={props.onCloseColors}
@@ -787,11 +788,18 @@ const FoundPanel = memo(function FoundPanel(
   );
 });
 
+/** The grid's choices under `root`, in order; a glyph's colors standing among them are no choices of the grid's, so they neither take its tab stop nor count in its rows. */
+function gridChoices(root: Element, selector = "button"): HTMLButtonElement[] {
+  return [...root.querySelectorAll<HTMLButtonElement>(selector)].filter(
+    (choice) => choice.closest(".section-icon-colors") === null,
+  );
+}
+
 /** Moves focus through the choices with the arrows, from whichever holds it, a row's width up and down. */
 function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
   const step = GRID_STEPS.get(event.key);
   if (step === undefined) return;
-  const choices = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
+  const choices = gridChoices(event.currentTarget);
   const from = event.target instanceof HTMLButtonElement ? choices.indexOf(event.target) : -1;
   if (from === -1) return;
   event.preventDefault();
@@ -808,9 +816,7 @@ function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
 function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   const focused = event.target;
   if (!(focused instanceof HTMLButtonElement)) return;
-  for (const stop of event.currentTarget.querySelectorAll<HTMLButtonElement>(
-    'button:not([tabindex="-1"])',
-  )) {
+  for (const stop of gridChoices(event.currentTarget, 'button:not([tabindex="-1"])')) {
     stop.tabIndex = -1;
   }
   focused.tabIndex = 0;
@@ -876,12 +882,14 @@ function SectionIconPicker({
     setOpened(undefined);
   }, []);
   // Enter, shifted or not, presses the first thing found: an emoji is chosen, a glyph's colors open.
-  const chooseFirst = () => grid.current?.querySelector<HTMLButtonElement>("button")?.click();
+  const chooseFirst = () => {
+    if (grid.current !== null) gridChoices(grid.current)[0]?.click();
+  };
   // Note that the search's own keys stop at Enter and Escape, so the arrow down into the grid is heard around it.
   const toGrid = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== "ArrowDown" || !(event.target instanceof HTMLInputElement)) return;
     event.preventDefault();
-    grid.current?.querySelector<HTMLButtonElement>('button:not([tabindex="-1"])')?.focus();
+    if (grid.current !== null) gridChoices(grid.current, 'button:not([tabindex="-1"])')[0]?.focus();
   };
   const searching = query.trim() !== "";
   const props: GridProps = {

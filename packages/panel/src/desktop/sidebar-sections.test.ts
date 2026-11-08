@@ -1364,6 +1364,21 @@ test("the arrows move the grid's one tab stop with the focus", async () => {
   assert.equal(folder.getAttribute("tabindex"), "-1");
 });
 
+test("with a glyph's colors open, the arrows step the glyphs past them, and another glyph pressed takes the keyboard to its own colors", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  act(() => dialogButton("Folder").click());
+  const layers = dialogButton("Layers");
+  act(() => layers.focus());
+  await press(layers, "ArrowRight");
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Heart");
+
+  act(() => dialogButton("Star").click());
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "No color");
+  assert.equal(document.querySelectorAll('fieldset[class*="section-icon-colors"]').length, 1);
+});
+
 test("an emoji typed into the search is offered first, one the grid leaves out included", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
