@@ -22,7 +22,6 @@ import {
   ConfirmDialog,
   CopyField,
   type DialogConfirm,
-  ErrorState,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
@@ -51,7 +50,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { DEVICE_PLATFORM_NAME } from "../device-platform.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
-import { confirmFailure, unreadShown } from "../failure-report.js";
+import { confirmFailure } from "../failure-report.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
 import {
   isThisMac,
@@ -64,6 +63,7 @@ import { DeviceGlyph } from "../tasks/runs-on.js";
 import { showToast, TOAST_HOLD } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
+import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
 /**
@@ -578,14 +578,11 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
           })}
         </>
       ) : read.isError ? (
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.HOSTS_READ)}
-            onRetry={() => retry.mutate()}
-          >
-            {readFailedWords("your hosts")}
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line={readFailedWords("your hosts")}
+          surface={FAILURE_SURFACE.HOSTS_READ}
+          onRetry={() => retry.mutate()}
+        />
       ) : (
         <SettingsRowsSkeleton label={readingWords("your hosts")} rows={HOSTS_SKELETON} />
       )}

@@ -122,7 +122,9 @@ it.effect(
       // Sent before the bridge is ready, so it waits rather than reaching a PTY that would echo it.
       yield* device.push({ text: OPEN });
       yield* settle;
-      const startFrame = JSON.parse("text" in pty.sent[0]! ? pty.sent[0].text : "{}");
+      const [first] = pty.sent;
+      assert.ok(first !== undefined && "text" in first);
+      const startFrame = JSON.parse(first.text);
       assert.equal(startFrame.args.at(-1), "5173");
       assert.deepEqual(lines(pty.sent), []);
 

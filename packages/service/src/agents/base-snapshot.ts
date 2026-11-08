@@ -290,7 +290,7 @@ export const fillBaseSnapshot = Effect.fn("web/fillBaseSnapshot")(function* (
   yield* Effect.annotateCurrentSpan(
     baseSpanAttributes(
       read.state,
-      replaced ? replacing?.reason : read.state === BASE_STATE.WANTED ? read.reason : undefined,
+      replaced ? replacing.reason : read.state === BASE_STATE.WANTED ? read.reason : undefined,
     ),
   );
   const stale = replaced ? found : read.state === BASE_STATE.WANTED ? read.stale : undefined;

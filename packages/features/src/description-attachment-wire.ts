@@ -21,7 +21,7 @@ export const DESCRIPTION_ATTACHMENT_BOUNDS = {
 } as const;
 
 /** The types a description's attachment is served as: a picture's or a video's its text names, or any a comment's file may be. */
-export const DESCRIPTION_ATTACHMENT_TYPE = {
+const DESCRIPTION_ATTACHMENT_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
   WEBM: WEBM_TYPE,
 } as const;

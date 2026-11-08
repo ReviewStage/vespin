@@ -9,8 +9,7 @@
  * deadline of its own, and the hold ends when the store's does, answering
  * the page as it stands. Beside them, the write the same path takes: a
  * message to an agent (`POST /api/agents/{id}/messages`), handed to its
- * session through the one steer path the voice brain's tool shares
- * (`coder-host/steer.ts`).
+ * session through the one steer path (`coder-host/steer.ts`).
  *
  * Every row a read touches is one of a workspace the caller is a member of:
  * an agent or a task of any other workspace answers exactly as one that
@@ -317,7 +316,7 @@ const isTooLong = Schema.is(
 
 /**
  * A message its schema refused because its words run past the bound is
- * refused as too long, as the old group refused it; any other refusal of
+ * refused as too long; any other refusal of
  * its shape stands. Note that this runs before the input is validated, so
  * it sees the refusal and the body as it came.
  */

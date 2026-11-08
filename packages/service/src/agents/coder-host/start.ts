@@ -4,6 +4,7 @@ import { readAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   type AgentPlace,
+  type AgentStarted,
   createAgent,
   discardAgent,
   readAgentByKey,
@@ -285,14 +286,6 @@ export type StartAsk = StartPlace & {
 export interface StartReach {
   readonly repository: string;
   readonly access: GitHubAccess;
-}
-
-/** What a Start came to: the agent, and whether this ask made it or found it under its key. */
-export interface AgentStarted {
-  readonly agent: Agent;
-  readonly created: boolean;
-  /** The transaction the agent's row was written in, where this Start wrote it. */
-  readonly txid?: string;
 }
 
 /** What a Start reaches: the store, the catalog, GitHub through the App on the developer's standing, and the network to the agent's harness. */

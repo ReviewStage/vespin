@@ -62,6 +62,7 @@ import { QUERY_ROOT } from "../query-keys.js";
 import { SkillCard, SkillMark } from "../tasks/skill-ref.js";
 import { useDrawnThroughExit } from "../use-held-through-exit.js";
 import { AddSkillDialog } from "./add-skill-dialog.js";
+import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
 import {
@@ -420,14 +421,11 @@ function ShownSkills({
       </SettingsSection>
       {skills === undefined && held.isError ? (
         <SettingsSection>
-          <SettingsLine>
-            <ErrorState
-              failure={unreadShown(FAILURE_SURFACE.SKILLS_READ)}
-              onRetry={() => retry.mutate({ workspaceId: workspace.id })}
-            >
-              {SKILLS_LINE.READ_FAILED}
-            </ErrorState>
-          </SettingsLine>
+          <ReadFailed
+            line={SKILLS_LINE.READ_FAILED}
+            surface={FAILURE_SURFACE.SKILLS_READ}
+            onRetry={() => retry.mutate({ workspaceId: workspace.id })}
+          />
         </SettingsSection>
       ) : (
         <>
@@ -471,14 +469,11 @@ export function SkillsPage({
   if (workspace === undefined) {
     return control.listFailed ? (
       <SettingsSection>
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.WORKSPACES_READ)}
-            onRetry={control.onRetryList}
-          >
-            Your workspaces could not be read.
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line="Your workspaces could not be read."
+          surface={FAILURE_SURFACE.WORKSPACES_READ}
+          onRetry={control.onRetryList}
+        />
       </SettingsSection>
     ) : (
       <SettingsSectionsSkeleton label={readingWords("your skills")} sections={SKILLS_SKELETON} />

@@ -80,7 +80,7 @@ const COPY_TRANSCRIPT = "Copy transcript";
 const TRANSCRIPT_WAY = { CONCISE: "Concise", FULL: "Full" } as const;
 
 /** A pin as a menu offers it, Pin or Unpin: whether it stands, and the press that sets it or takes it away. */
-export interface PinDoor {
+interface PinDoor {
   pinned: boolean;
   onToggle: () => void;
 }

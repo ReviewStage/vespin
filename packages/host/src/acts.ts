@@ -116,7 +116,7 @@ const MAIL_ADDRESS = /^mailto:/iu;
  * beside the web's alone, because it hands the system no more than a draft
  * to show.
  */
-export const mailAddress = EffectSchema.String.check(
+const mailAddress = EffectSchema.String.check(
   EffectSchema.isMaxLength(2_048),
   EffectSchema.isPattern(MAIL_ADDRESS),
   EffectSchema.makeFilter((address) => URL.canParse(address)),

@@ -60,7 +60,7 @@ const RESEND = {
 } as const;
 
 /** The events the automation listens for, as Resend names them. */
-export const ONBOARDING_EVENT = {
+const ONBOARDING_EVENT = {
   SIGNED_UP: "vespin.signed_up",
   INVITE_ACCEPTED: "vespin.invite_accepted",
 } as const;

@@ -67,7 +67,7 @@ export interface ExperimentsOn {
   readonly memoryOn: boolean;
 }
 
-/** Every workspace experiment on: the words a tool is declared in where nothing narrows it, as eve's tool files and the goldens hold them. */
+/** Every workspace experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
 export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
   pilotOn: true,

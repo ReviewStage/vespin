@@ -21,8 +21,7 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
  *
  * Only a panel draws Settings, so every ask is the panel's alone. A refusal
  * or a defect of the host's is drawn as the integration calls' unanswered
- * failure, or the outside MCP clients' for a revoke, as every one was
- * before it was declared. Where the integrations stand, each server's
+ * failure, or the outside MCP clients' for a revoke. Where the integrations stand, each server's
  * tools, and the outside MCP clients are live follows, each declared once
  * (`live-follow.ts`).
  */

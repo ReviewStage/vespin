@@ -53,7 +53,7 @@ export const RUNNER_SPAN = {
   HANDSHAKE: "runner/handshake",
   FIRST_REQUEST: "runner/firstRequest",
 } as const;
-export type RunnerSpan = (typeof RUNNER_SPAN)[keyof typeof RUNNER_SPAN];
+type RunnerSpan = (typeof RUNNER_SPAN)[keyof typeof RUNNER_SPAN];
 
 /** The attributes this file sets, the only ones a span keeps beside Sentry's own. */
 const ATTRIBUTE = {

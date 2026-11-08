@@ -10,16 +10,16 @@ import {
   type GatewayHost,
   type GatewayMethodTable,
   gatewayHost,
-  NodeRegistry,
+  type NodeRegistry,
   nodeSnapshotToWire,
 } from "@repo/gateway";
 import type { WireValue } from "@repo/wire";
 import { HOST_OPERATOR_CLIENT_ID } from "./node-capabilities.js";
 
 export interface GatewayServiceDependencies {
-  nodes?: NodeRegistry;
+  readonly nodes: NodeRegistry;
   /** The host's methods: the settings, account, integration, and client-fact vocabulary the composers own, already folded. */
-  methods?: GatewayMethodTable;
+  readonly methods: GatewayMethodTable;
 }
 
 export interface GatewayService {
@@ -37,9 +37,9 @@ export interface GatewayService {
  * here so the operator hears which capabilities stand.
  */
 export function createGatewayService(dependencies: GatewayServiceDependencies): GatewayService {
-  const nodes = dependencies.nodes ?? new NodeRegistry();
+  const { nodes } = dependencies;
   const gateway = gatewayHost({
-    methods: dependencies.methods ?? {},
+    methods: dependencies.methods,
     client: { clientId: HOST_OPERATOR_CLIENT_ID, role: GATEWAY_CLIENT_ROLE.OPERATOR },
   });
   nodes.onChange((list) => {

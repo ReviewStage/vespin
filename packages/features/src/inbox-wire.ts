@@ -14,14 +14,10 @@ import {
   hasWordsOrFiles,
 } from "./agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
+import { commitShaSchema } from "./link-grammar.js";
 import { linkLabels } from "./mention-link.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
-import {
-  CODE_PATH_MAX_CHARS,
-  codeLineSchema,
-  commitShaSchema,
-  workspaceIdSchema,
-} from "./task-wire.js";
+import { CODE_PATH_MAX_CHARS, codeLineSchema, workspaceIdSchema } from "./task-wire.js";
 import { boundedText, filledText } from "./text-schema.js";
 import { WEBM_TYPE } from "./video-signature.js";
 
@@ -1200,7 +1196,7 @@ export function inboxThreadMessage(item: Pick<InboxItem, "key" | "title">, text:
 }
 
 /** How a member's thread line opens, by what they did on the thread, as the agent reads it and the transcript heads it. */
-export const THREAD_LINE_LEAD = {
+const THREAD_LINE_LEAD = {
   [THREAD_LINE_EVENT.MESSAGE]: INBOX_MESSAGE_LEAD,
   [THREAD_LINE_EVENT.ANSWER]: INBOX_ANSWER_LEAD,
   [THREAD_LINE_EVENT.CLOSE]: INBOX_CLOSE_LEAD,

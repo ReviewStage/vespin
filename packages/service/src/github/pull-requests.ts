@@ -1077,10 +1077,7 @@ function withRendering(
 const TeamSchema = Schema.Struct({ slug: Schema.String, name: Schema.String });
 
 /** A team as the overview and the pickers hold one. */
-interface GitHubTeam {
-  readonly slug: string;
-  readonly name: string;
-}
+type GitHubTeam = typeof TeamSchema.Type;
 
 /** A pull request read whole for its overview: what its pill says, and its description, branches, times, mergeability, and people. */
 const OverviewPullSchema = Schema.Struct({

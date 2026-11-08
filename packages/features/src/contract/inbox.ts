@@ -38,6 +38,7 @@ import {
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, exactInput, refuses } from "./base.js";
+import { MESSAGE_REFUSALS } from "./messages.js";
 
 /** A nod is a revision and a key, so a few hundred bytes hold it. */
 const NOD_BODY_BYTES = 1_024;
@@ -79,24 +80,7 @@ const REMIND_BODY_BYTES = 1_024;
  * read as its own. A nod on an item holding an ask open, or a message that
  * answers none, is an invalid request.
  */
-const THREAD_REFUSALS = [
-  HOSTED_API_ERROR.NOT_FOUND,
-  HOSTED_API_ERROR.NOT_PERMITTED,
-  HOSTED_API_ERROR.MESSAGE_TOO_LONG,
-  HOSTED_API_ERROR.AGENT_NOT_READY,
-  HOSTED_API_ERROR.AGENT_RETIRED,
-  HOSTED_API_ERROR.DEVICE_REMOVED,
-  HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
-  HOSTED_API_ERROR.GITHUB_UNANSWERED,
-  HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE,
-  HOSTED_API_ERROR.AGENT_PLAN_SIGNED_OUT,
-  HOSTED_API_ERROR.AGENT_PLAN_UNREACHABLE,
-  HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED,
-  HOSTED_API_ERROR.AGENT_PLAN_INELIGIBLE,
-  HOSTED_API_ERROR.AGENT_CREDENTIAL_MISSING,
-  HOSTED_API_ERROR.AGENT_API_KEY_UNREADABLE,
-  HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
-] as const;
+const THREAD_REFUSALS = MESSAGE_REFUSALS;
 
 /** A message on a thread, or a new one. */
 const threadProcedure = declaredProcedure.errors(refuses(...THREAD_REFUSALS));

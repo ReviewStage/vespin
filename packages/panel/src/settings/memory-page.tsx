@@ -25,7 +25,6 @@ import {
   ConfirmDialog,
   CornerDot,
   EmptyState,
-  ErrorState,
   GAP,
   IconButton,
   Inline,
@@ -71,11 +70,12 @@ import { ACTOR_SIZE, ActorMark, ActorRef, commentAuthor } from "../actor-ref.js"
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
-import { confirmFailure, unreadShown } from "../failure-report.js";
+import { confirmFailure } from "../failure-report.js";
 import { memoriesQuery, memoriesRetryMutation } from "../live-reads.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { PEOPLE_FILTER_WORDS } from "../member-rows.js";
+import { ReadFailed } from "./marks.js";
 
 /**
  * memory-page.tsx -- Settings › Memory: the facts and conventions the workspace's coding agents kept, found by search and by whose they are, and forgotten one at a time or several at once.
@@ -747,14 +747,11 @@ export function MemorySection({
   // Note that no workspace is a read not answered yet or one that failed, never a workspace-less account, which holds its own.
   if (workspace === undefined) {
     return workspacesFailed ? (
-      <SettingsLine>
-        <ErrorState
-          failure={unreadShown(FAILURE_SURFACE.WORKSPACES_READ)}
-          onRetry={onRetryWorkspaces}
-        >
-          {PAGE_LINE.WORKSPACES_FAILED}
-        </ErrorState>
-      </SettingsLine>
+      <ReadFailed
+        line={PAGE_LINE.WORKSPACES_FAILED}
+        surface={FAILURE_SURFACE.WORKSPACES_READ}
+        onRetry={onRetryWorkspaces}
+      />
     ) : (
       <MemoriesSkeleton label={READING_LABEL.WORKSPACES} />
     );
@@ -767,14 +764,12 @@ export function MemorySection({
           <MemoryList readerId={readerId} memories={memories.data} workspaceId={workspace.id} />
         </MemberDirectory>
       ) : memories.isError ? (
-        <SettingsLine>
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.MEMORIES_READ, { workspaceId: workspace.id })}
-            onRetry={() => retryMemories.mutate({ workspaceId: workspace.id })}
-          >
-            {PAGE_LINE.FAILED}
-          </ErrorState>
-        </SettingsLine>
+        <ReadFailed
+          line={PAGE_LINE.FAILED}
+          surface={FAILURE_SURFACE.MEMORIES_READ}
+          about={{ workspaceId: workspace.id }}
+          onRetry={() => retryMemories.mutate({ workspaceId: workspace.id })}
+        />
       ) : (
         <MemoriesSkeleton label={READING_LABEL.MEMORY} />
       )}

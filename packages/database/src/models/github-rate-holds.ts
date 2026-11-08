@@ -25,13 +25,10 @@ import { githubRateHold } from "../schemas/github-rate-hold.js";
 
 type HoldEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** One identity's hold as every instance reads it: when it lifts, and how many refusals in a row it follows. */
-export interface GitHubRateHold {
-  readonly heldUntil: Date;
-  readonly strikes: number;
-}
-
 const HoldRowSchema = Schema.Struct({ heldUntil: Schema.Date, strikes: Schema.Number });
+
+/** One identity's hold as every instance reads it: when it lifts, and how many refusals in a row it follows. */
+export type GitHubRateHold = typeof HoldRowSchema.Type;
 
 const HOLD_COLUMNS = { heldUntil: githubRateHold.heldUntil, strikes: githubRateHold.strikes };
 

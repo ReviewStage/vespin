@@ -79,7 +79,7 @@
  */
 
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
-import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
@@ -131,8 +131,7 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { type GitHubRepository, text } from "../core.js";
-import { HostedEnvironment } from "../environment.js";
-import type { StoreFailure } from "../http/store-failure.js";
+import { HostedEnvironment, present } from "../environment.js";
 import {
   installationsOfWorkspace,
   mendInstallationStatus,
@@ -514,7 +513,7 @@ export const REPOSITORY_SET_UNREACHED = {
 } as const;
 
 /** The set's first repository the App's one token does not reach, and why. */
-export type RepositorySetUnreached =
+type RepositorySetUnreached =
   | {
       readonly why: typeof REPOSITORY_SET_UNREACHED.UNREACHED;
       readonly unreached: GitHubRepositoryUnreached;
@@ -527,7 +526,7 @@ export type RepositorySetUnreached =
     };
 
 /** One installation token for several repositories: each as GitHub spells it, in the order named, and the token, good for an hour from its mint. */
-export interface GitHubRepositoriesToken {
+interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
   readonly token: Redacted.Redacted;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };
@@ -1350,16 +1349,6 @@ export function readBody<A>(
         unreadable(response.status),
       ),
     ),
-  );
-}
-
-/** An OK answer's body as text, on the terms of `readBody`. */
-export function readText(
-  response: HttpClientResponse.HttpClientResponse,
-): Effect.Effect<string, GitHubUnavailable> {
-  return HttpClientResponse.filterStatusOk(response).pipe(
-    Effect.mapError(unavailable),
-    Effect.flatMap((ok) => Effect.mapError(ok.text, () => unreadable(response.status))),
   );
 }
 
@@ -2268,11 +2257,6 @@ function githubAppService(
     };
     return service;
   });
-}
-
-/** A value under the same rule as `HostedEnvironment`'s: trimmed, and a blank one is absent. */
-function present(value: Option.Option<string>): string | undefined {
-  return text(Option.getOrUndefined(value));
 }
 
 function presentRedacted(value: Option.Option<Redacted.Redacted>): Redacted.Redacted | undefined {

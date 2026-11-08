@@ -21,6 +21,8 @@
  * (`githubAccountAvatarUrl`).
  */
 
+import { parsedUrl } from "./parsed-url.js";
+
 const GOOGLE_PICTURE_HOST = "googleusercontent.com";
 const GITHUB_PICTURE_HOST = "avatars.githubusercontent.com";
 
@@ -33,13 +35,8 @@ const GITHUB_AVATAR_REVISION = "4";
 /** The address as an https URL, where it reads as one; nothing otherwise. */
 function httpsUrl(value: string | null | undefined): URL | undefined {
   if (value === null || value === undefined || value === "") return undefined;
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return undefined;
-  }
-  return url.protocol === "https:" ? url : undefined;
+  const url = parsedUrl(value);
+  return url?.protocol === "https:" ? url : undefined;
 }
 
 /** The address itself, normalized, where it is an https address on a host a picture may be drawn from; nothing otherwise. */

@@ -656,7 +656,7 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
  * Answers how many went; fails with the refusal that stopped one, or as an
  * outage where none was said.
  */
-export const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(function* (
+const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(function* (
   agentSessions: AgentSessions<TypedTurn>,
   writer: Effect.Effect<StoreWriter>,
   userId: string,

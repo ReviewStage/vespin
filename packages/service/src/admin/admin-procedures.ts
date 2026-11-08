@@ -5,11 +5,10 @@
  * roster, one account, one day, the workspaces, and one workspace); the write is the Users
  * tab's star, PUT to set it and DELETE to take it back. Each answers for its
  * own query and its own refusals (`admin-*.ts`) and is answered as it was
- * built, the bytes the old group wrote.
+ * built.
  *
  * What the resource owns is the gate (`gate.ts`), on its implementer rather
- * than on each procedure, so it runs before oRPC reads the input, as the old
- * group resolved the viewer before it read a query: an auth seam that fails
+ * than on each procedure, so it runs before oRPC reads the input: an auth seam that fails
  * is a 503, an anonymous request a 401 the page answers with a sign-in, and a
  * signed-in non-admin a 403 the page answers with a plain refusal. A method
  * an address does not answer is the handler's 405 before any of them.

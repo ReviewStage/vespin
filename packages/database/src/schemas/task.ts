@@ -32,7 +32,7 @@ import { organization, user } from "./auth.js";
  * task.ts -- a named task and its plan, its one current document.
  *
  * One row per task, keyed by a UUID of the service's own and owned by the
- * account that started it, in the workspace it was started in: its name, where it stands (a pin is each member's own, `plan-pin.ts`), its
+ * account that started it, in the workspace it was started in: its name, where it stands (a pin is each member's own, `task-pin.ts`), its
  * one document, a free Markdown text, and the journal of the saves coding
  * agents made on it. A save replaces the
  * text in one statement, so none is left half-written: a save that failed

@@ -20,7 +20,7 @@ import { cn } from "../cn.js";
  */
 
 /** The ring: a turning arc in the ink around it over a faint track of the same ink, filling its box. */
-export const SPINNER_RING =
+const SPINNER_RING =
   "ui-spinner-ring block box-border size-full rounded-full border-solid border-current/22 border-t-current";
 
 export function ShadcnSpinner({ className, ...props }: React.ComponentProps<"span">) {

@@ -69,7 +69,7 @@ export function unlandedBundles(): SideBundles {
 }
 
 /** The size a terminal tab's screen is laid out at here, in cells. */
-export const FITTED_SIZE = { cols: 80, rows: 24 } as const;
+const FITTED_SIZE = { cols: 80, rows: 24 } as const;
 
 /** The terminal bundle's own screen, said to be fitted at `FITTED_SIZE` the first time it is shown, as a window's layout would fit it. */
 function fittedTerminal(terminal: TerminalModule): TerminalModule {

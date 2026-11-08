@@ -52,7 +52,7 @@ const TOKEN_REPOSITORIES: EntityKind<TokenRepositoriesRow, TokenRepositoriesChan
 };
 
 /** An addition or a removal as it is asked: the repository, whether it is added, and who added it when, which an addition is drawn with. */
-export interface TokenRepositorySet extends TasksWorkspaceTokenRepositorySetParams {
+interface TokenRepositorySet extends TasksWorkspaceTokenRepositorySetParams {
   readonly addedBy: string;
   readonly addedAt: number;
   /** The session it was asked in (`TokenRepositoryWrites.session`), which it is drawn and sent for alone. */
@@ -60,7 +60,7 @@ export interface TokenRepositorySet extends TasksWorkspaceTokenRepositorySetPara
 }
 
 /** What an addition's or a removal's service answered: the caller's answer and the list as it then stands, or the caller's answer for a refusal. */
-export type TokenRepositorySetWritten<Answer> =
+type TokenRepositorySetWritten<Answer> =
   | { readonly answer: Answer; readonly repositories: readonly WorkspaceTokenRepository[] }
   | { readonly refused: Answer };
 

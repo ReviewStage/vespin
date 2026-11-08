@@ -99,30 +99,10 @@ test("a fixture run's folds keep nothing", () => {
   expect(kept("app.sidebarFoldedGroups")).toBeNull();
 });
 
-test("the Inbox's scope is read from a tab, or a button's press, kept before the scopes", () => {
-  keep("app.inboxShow", '"needs-you"');
-  expect(draw(() => useInboxViewChoices()).now().show).toBe("to-do");
-  act(() => root?.unmount());
-  keep("app.inboxShow", '"open"');
-  expect(draw(() => useInboxViewChoices()).now().show).toBe("all");
-  act(() => root?.unmount());
-  window.localStorage.removeItem("app.inboxShow");
-  keep("app.inboxWaitingOnly", "false");
-  expect(draw(() => useInboxViewChoices()).now().show).toBe("all");
-  act(() => root?.unmount());
-  keep("app.inboxWaitingOnly", "true");
-  expect(draw(() => useInboxViewChoices()).now().show).toBe("to-do");
-  act(() => root?.unmount());
-  window.localStorage.clear();
+test("the Inbox opens on Open, addressed to me, where nothing was kept", () => {
   const opening = draw(() => useInboxViewChoices()).now();
   expect(opening.show).toBe("to-do");
   expect(opening.whose).toEqual({ kind: "mine" });
-});
-
-test("an Inbox scope kept as null reads the Needs you press kept beside it, as it did before", () => {
-  keep("app.inboxShow", "null");
-  keep("app.inboxWaitingOnly", "false");
-  expect(draw(() => useInboxViewChoices()).now().show).toBe("all");
 });
 
 test("the Inbox's choices are read as they were kept", () => {

@@ -11,3 +11,4 @@ export {
   wireKeys,
   wireRefusal,
 } from "./json-schema.js";
+export { cappedExponential } from "./schedule.js";

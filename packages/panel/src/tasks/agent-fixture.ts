@@ -95,13 +95,9 @@ import { FIXTURE_IDS, FIXTURE_PAGE } from "@repo/host/fixture-stage";
 import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
-import { MAIN_TAB, type MainTab } from "./use-main-tabs.js";
-import {
-  PULL_REQUEST_VIEW,
-  type PullRequestView,
-  type SidePanelState,
-  type StagedSidePanel,
-} from "./use-side-panel.js";
+import { MAIN_TAB, PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
+import type { MainTab } from "./use-main-tabs.js";
+import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
 
 /** The fixture task's repository (`tasks-fixture.ts`), which the agent works in. */
 const REPOSITORY = "ada/relay";

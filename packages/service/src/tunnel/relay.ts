@@ -63,7 +63,7 @@ import {
 } from "./bridge.js";
 import { MIRROR_BRIDGE_STEP, type MirrorBridgeStep } from "./mirror-bridge.js";
 
-export const TUNNEL_RELAY_BOUNDS = {
+const TUNNEL_RELAY_BOUNDS = {
   /** How long a tunnel stays connected past the last byte that crossed it either way. */
   IDLE: Duration.minutes(10),
   /** How often a connection asks whether it has gone the idle bound without traffic. */
@@ -82,7 +82,7 @@ export interface TunnelAsk {
 }
 
 /** The agent a connection reached: the session its sandbox is tagged with, none before it ran. */
-export interface TunnelAgent {
+interface TunnelAgent {
   readonly sessionId: string | undefined;
 }
 

@@ -53,7 +53,7 @@ export function useInlineRename(subjectId: string | undefined, write: RenameWrit
     begin,
     end,
     refused,
-    asked: refused ? write.asked?.name : undefined,
+    asked: refused ? write.asked.name : undefined,
   };
 }
 

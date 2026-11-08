@@ -172,8 +172,6 @@ export const DEVICE_KIND = {
   HOST: "host",
 } as const;
 
-export type DeviceKind = (typeof DEVICE_KIND)[keyof typeof DEVICE_KIND];
-
 /**
  * Where a device stands in setting itself up to run agents, as it registers
  * while it is not ready to take one: a device fetching the pinned agent CLIs
@@ -288,7 +286,7 @@ export const deviceAgentAnswerSchema = EffectSchema.Struct({
 export type DeviceAgentAnswer = typeof deviceAgentAnswerSchema.Type;
 
 /** The folders under a Mac's home its local agents' things stand in (`deviceAgentLayout`). */
-export const DEVICE_AGENT_FOLDER = {
+const DEVICE_AGENT_FOLDER = {
   /** Every local agent's folder, one per agent under its id. */
   ROOT: ".vespin/agents",
   /** The agent's worktree, which the Mac makes as it takes the launch line. */
@@ -396,8 +394,6 @@ const deviceAgentFileSchema = EffectSchema.Struct({
 export const deviceAgentFilesPayloadSchema = EffectSchema.Struct({
   files: EffectSchema.Array(deviceAgentFileSchema),
 });
-
-export type DeviceAgentFilesPayload = typeof deviceAgentFilesPayloadSchema.Type;
 
 /**
  * A launch's secrets, as the claim of its line hands them over once: the
@@ -591,7 +587,7 @@ const sha256HexSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9a
  * since the host builds each from the version (`hostTarballUrl`), so no
  * answer can send a host to download from elsewhere.
  */
-export const deviceAgentReleaseSchema = EffectSchema.Struct({
+const deviceAgentReleaseSchema = EffectSchema.Struct({
   version: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(32)),
   sha256: EffectSchema.Struct({
     [HOST_TARGET.LINUX_X64]: sha256HexSchema,

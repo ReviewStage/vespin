@@ -34,7 +34,7 @@ const COPPER = {
 // draws it from these where it shows how a commit reads on GitHub.
 const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 
-export const BRAND_PALETTES = {
+const BRAND_PALETTES = {
   COPPER: {
     LIGHT: {
       GROUND: "#fffcfa",

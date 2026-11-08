@@ -136,14 +136,6 @@ export interface AdminWorkspacesQuery {
   readonly search?: string;
 }
 
-/** Any admin read's query. */
-export type AdminQuery =
-  | AdminWindowedQuery
-  | AdminUsersQuery
-  | AdminUserQuery
-  | AdminDayQuery
-  | AdminWorkspacesQuery;
-
 export const ADMIN_METRICS_SCOPE_PARAM = ADMIN_QUERY.SCOPE;
 
 /**
@@ -381,5 +373,3 @@ export const adminFavoriteParamsSchema = EffectSchema.Struct({
   id: EffectSchema.NonEmptyString,
   favorite: EffectSchema.Boolean,
 });
-
-export type AdminFavoriteParams = typeof adminFavoriteParamsSchema.Type;

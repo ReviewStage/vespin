@@ -37,9 +37,6 @@ import type { Tool } from "ai";
 import { Schema } from "effect";
 import { type UnparsedWireValue, wireValidatedTool } from "../core.js";
 
-/** How a remote tool's name is qualified: the connection, two underscores, and the tool. */
-const QUALIFIED_SEPARATOR = "__";
-
 /** Whether a name is one the envelope keeps a remote tool's own name as. */
 const isRemoteToolWord = Schema.is(integrationRemoteCallSchema.fields.remoteTool);
 
@@ -70,11 +67,6 @@ export function connectionToolEntries(): ReadonlyArray<readonly [string, Tool]> 
   ];
 }
 
-/** Whether a name is the retired runtime's qualified name for a remote tool, of whatever connection. */
-export function isRemoteToolName(name: string): boolean {
-  return name.includes(QUALIFIED_SEPARATOR);
-}
-
 /** A remote tool of one integration's account: the integration, the connection and its place among the integration's accounts, and the tool's own name. */
 interface RemoteTool {
   readonly provider: IntegrationProvider;
@@ -89,16 +81,6 @@ function remoteToolIn(connection: string, remoteTool: string): RemoteTool | unde
   const account = integrationConnectionOf(connection);
   if (account === undefined || !isRemoteToolWord(remoteTool)) return undefined;
   return { ...account, connection, remoteTool };
-}
-
-/** The integration and account whose connection the retired runtime qualified a remote tool's name with, and the tool's own name. */
-function remoteToolOf(toolName: string): RemoteTool | undefined {
-  const separator = toolName.indexOf(QUALIFIED_SEPARATOR);
-  if (separator < 0) return undefined;
-  return remoteToolIn(
-    toolName.slice(0, separator),
-    toolName.slice(separator + QUALIFIED_SEPARATOR.length),
-  );
 }
 
 /** A call of a remote tool as the record keeps it: under its integration's fixed name, its envelope naming the call it ran under. */
@@ -117,22 +99,6 @@ function storedAs(
       ...(remote.place > 1 ? { connection: remote.connection } : undefined),
     },
   };
-}
-
-/**
- * A nested call as the record keeps it: an integration's tool's call under
- * that integration's fixed name and its envelope, or nothing for a name that
- * is no integration's tool. Only integrations are connected, so any other
- * connection's call has no name to be stored under and is left out rather
- * than refused.
- */
-export function storedRemoteCall(
-  toolName: string,
-  input: UnparsedWireValue,
-  parentCallId: string,
-): { readonly name: string; readonly input: UnparsedWireValue } | undefined {
-  const remote = remoteToolOf(toolName);
-  return remote === undefined ? undefined : storedAs(remote, input, parentCallId);
 }
 
 /**

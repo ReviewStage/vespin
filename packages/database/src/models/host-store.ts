@@ -41,6 +41,7 @@ import { and, asc, eq, exists, gt, inArray, isNotNull, isNull, ne, or, sql } fro
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { agentTable } from "../schemas/agent.js";
 import { device } from "../schemas/device.js";
 import { hostPairing } from "../schemas/host-pairing.js";
@@ -256,14 +257,14 @@ const findHosts = SqlSchema.findAll({
  */
 const stampRemoved = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, id: Schema.String, now: Schema.Date }),
-  Result: Schema.Struct({ txid: Schema.String }),
+  Result: TxidRowSchema,
   execute: ({ userId, id, now }) =>
     Database.use((db) =>
       db
         .update(device)
         .set({ removedAt: now, secretHash: null })
         .where(and(eq(device.id, id), eq(device.userId, userId), listed(now)))
-        .returning({ txid: sql<string>`pg_current_xact_id()::text` }),
+        .returning(TXID_RETURNING),
     ),
 });
 

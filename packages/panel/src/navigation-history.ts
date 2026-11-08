@@ -240,7 +240,7 @@ export interface StepTitle {
 }
 
 /** What a task's step called the tab its column showed and the one its side panel showed, where each showed one. */
-export interface StepPanes {
+interface StepPanes {
   readonly column?: string | undefined;
   readonly side?: string | undefined;
 }
@@ -1498,7 +1498,7 @@ export function useWindowHistory(input: {
     linked.taskId === boundFor &&
     (openNow !== boundFor || input.link === undefined);
   const taskAddress = useMemo(() => {
-    if (linkedStands) return linked?.address;
+    if (linkedStands) return linked.address;
     if (input.link !== undefined) return addressOf(input.link);
     const task = tasks.tasks.find((each) => each.id === boundFor);
     const home =

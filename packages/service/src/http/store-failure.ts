@@ -10,11 +10,9 @@
  * refused. A route carries the failure onward as the unavailable refusal.
  */
 
-import type { QueryError } from "@repo/database/core/query";
+import type { StoreFailure } from "@repo/database/core/query";
 import { failureDetail, failureKind } from "@repo/runtime/effect";
-import { Effect, Option, type Schema } from "effect";
-
-export type StoreFailure = QueryError | Schema.SchemaError;
+import { Effect, Option } from "effect";
 
 /**
  * The failure as one warning line of kinds alone: a `SqlError` by the kind of

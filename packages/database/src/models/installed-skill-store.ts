@@ -13,6 +13,7 @@ import { and, asc, eq, exists, or, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { member } from "../schemas/auth.js";
 import { installedSkill, installedSkillFile } from "../schemas/installed-skill.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -93,21 +94,11 @@ const INSTALLED_SKILL_COLUMNS = {
   updatedAt: installedSkill.updatedAt,
 };
 
-/**
- * The id of the transaction a write committed in, read in its own
- * `RETURNING`; within a store transaction's savepoint it is still the outer
- * transaction's, which every write of an install shares.
- */
-const TXID = { txid: sql<string>`pg_current_xact_id()::text` };
-
 /** A skill's columns as a write returns them, its transaction beside them. */
-const WRITTEN_SKILL_COLUMNS = { ...INSTALLED_SKILL_COLUMNS, ...TXID };
+const WRITTEN_SKILL_COLUMNS = { ...INSTALLED_SKILL_COLUMNS, ...TXID_RETURNING };
 
 /** One file of an installed skill: its path from the skill's folder, such as `SKILL.md` or `scripts/run.sh`, and its bytes. */
-export interface InstalledSkillFile {
-  readonly path: string;
-  readonly bytes: Uint8Array;
-}
+export type InstalledSkillFile = typeof InstalledSkillFileSchema.Type;
 
 /** One installed skill with its files, in path order. */
 export interface InstalledSkillWithFiles extends InstalledSkill {
@@ -273,10 +264,12 @@ const insertSkill = SqlSchema.findAll({
     ),
 });
 
+const InstalledSkillFileSchema = Schema.Struct({ path: Schema.String, bytes: Schema.Uint8Array });
+
 const insertFiles = SqlSchema.void({
   Request: Schema.Struct({
     skillId: Schema.String,
-    files: Schema.Array(Schema.Struct({ path: Schema.String, bytes: Schema.Uint8Array })),
+    files: Schema.Array(InstalledSkillFileSchema),
   }),
   execute: ({ skillId, files }) =>
     Database.use((db) =>
@@ -363,13 +356,13 @@ const findOfferedWithFiles = SqlSchema.findAll({
 
 const removeSkill = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, id: Schema.String }),
-  Result: Schema.Struct({ txid: Schema.String }),
+  Result: TxidRowSchema,
   execute: ({ userId, id }) =>
     Database.use((db) =>
       db
         .delete(installedSkill)
         .where(allowedTo(userId, INSTALLED_SKILL_ACCESS.MANAGE, id))
-        .returning(TXID),
+        .returning(TXID_RETURNING),
     ),
 });
 

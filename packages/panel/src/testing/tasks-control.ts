@@ -26,6 +26,7 @@ import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
 import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
+import { MAIN_TAB, SIDE_PANEL_WIDTH } from "../tasks/task-tab-model.js";
 import {
   AGENT_RENAME_SHAPE,
   type AgentsControl,
@@ -35,8 +36,7 @@ import {
   MODELS_READ,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
-import { MAIN_TAB } from "../tasks/use-main-tabs.js";
-import { DRAWN_KINDS, SIDE_PANEL_WIDTH } from "../tasks/use-side-panel.js";
+import { DRAWN_KINDS } from "../tasks/use-side-panel.js";
 import {
   type TasksControl,
   taskDeleteMutation,
@@ -67,9 +67,7 @@ export function listedAgent(
 
 /** An open item as main's read of the account carries it into what waits: its id, its agent, what it asks, and when it was posted. */
 /** A page as the host pushes it: caught up where it came back with nothing on it, unless it says otherwise. */
-export function pushedPage(
-  page: AgentMessagesAnswerView | AgentTranscriptPage,
-): AgentTranscriptPage {
+function pushedPage(page: AgentMessagesAnswerView | AgentTranscriptPage): AgentTranscriptPage {
   if ("failure" in page || "caughtUp" in page) return page;
   return { ...page, caughtUp: page.messages.length === 0 };
 }
@@ -510,8 +508,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
       closedTabs: [],
       used: DRAWN_KINDS,
       pins: [],
-      carried: [],
-      onCarried: ignore,
       subagents: [],
       files: [],
       changes: [],

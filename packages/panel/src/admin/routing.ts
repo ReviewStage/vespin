@@ -303,19 +303,19 @@ export function adminLinkFields(view: AdminView): {
   readonly day?: string;
 } {
   switch (view.kind) {
-    case "account":
+    case ADMIN_PAGE.ACCOUNT:
       return { userId: view.id };
-    case "workspace":
+    case ADMIN_PAGE.WORKSPACE:
       return { workspaceId: view.id };
-    case "day":
+    case ADMIN_PAGE.DAY:
       return { day: view.day };
-    case "cost":
+    case ADMIN_TAB.COST:
       return { section: ADMIN_LINK_SECTION.COST };
-    case "reliability":
+    case ADMIN_TAB.RELIABILITY:
       return { section: ADMIN_LINK_SECTION.RELIABILITY };
-    case "workspaces":
+    case ADMIN_TAB.WORKSPACES:
       return { section: ADMIN_LINK_SECTION.WORKSPACES };
-    case "users":
+    case ADMIN_TAB.USERS:
       return { section: ADMIN_LINK_SECTION.USERS };
     default:
       return {};

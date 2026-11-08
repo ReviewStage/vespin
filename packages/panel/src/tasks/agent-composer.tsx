@@ -627,7 +627,7 @@ export function AgentComposer({
               // so a refusal the service worded is sent as its word rather than as an unexpected failure.
               failureShown({
                 surface: FAILURE_SURFACE.AGENT_SEND,
-                cause: sendNote?.cause ?? note,
+                cause: sendNote.cause ?? note,
                 about: { agentId },
               })
             : failureShown({
@@ -711,7 +711,7 @@ export function AgentComposer({
       setFilesRefused(false);
     },
     // Escape with no list open gives up an edit of a queued message, the box keeping the caret.
-    onLeave: editingQueued ? queueing?.onCancel : onLeave,
+    onLeave: editingQueued ? queueing.onCancel : onLeave,
     side: listSide,
   });
   const { dictation, dictating } = pickers;

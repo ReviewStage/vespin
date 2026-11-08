@@ -5,6 +5,7 @@ import {
   liveDigestOn,
   type SealedLiveQueryWire,
 } from "@repo/features/live-wire";
+import { cappedExponential } from "@repo/wire/effect";
 import {
   Cause,
   Clock,
@@ -601,11 +602,7 @@ const SYNC_STALL = Duration.seconds(30);
 export const FOLLOW_RESEAL = { FIRST: Duration.seconds(2), LONGEST: Duration.minutes(1) } as const;
 
 /** `FOLLOW_RESEAL`'s waits, doubling from the first up to the longest. */
-const FOLLOW_DOUBLING = Schedule.exponential(FOLLOW_RESEAL.FIRST).pipe(
-  Schedule.modifyDelay(({ duration }) =>
-    Effect.succeed(Duration.min(duration, FOLLOW_RESEAL.LONGEST)),
-  ),
-);
+const FOLLOW_DOUBLING = cappedExponential(FOLLOW_RESEAL.FIRST, FOLLOW_RESEAL.LONGEST);
 
 export const FOLLOW_BACKOFF = untilRegained(FOLLOW_DOUBLING);
 

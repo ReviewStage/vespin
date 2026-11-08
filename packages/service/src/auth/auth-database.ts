@@ -46,5 +46,5 @@ class LazyPool {
 // type names is never called on it.
 const lazyPool = new LazyPool() as NodePgClient;
 
-/** Exported for the one test that proves the first query, not the import, is where a missing `DATABASE_URL` fails. */
+/** Better Auth's Drizzle handle over the lazy pool, which `auth.ts` hands the adapter. */
 export const authDatabase = drizzle({ client: lazyPool });

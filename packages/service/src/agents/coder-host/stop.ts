@@ -305,7 +305,7 @@ export const everyStopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
  * or a Stop already. A caller stopping several agents as one asks this of
  * every one first, so a refusal cancels nobody's work.
  */
-export const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
+const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
   const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,

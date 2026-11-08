@@ -20,7 +20,7 @@ export const CLI_WORKSPACE_SOURCE = {
   ONLY: "only",
 } as const;
 
-export type CliWorkspaceSource = (typeof CLI_WORKSPACE_SOURCE)[keyof typeof CLI_WORKSPACE_SOURCE];
+type CliWorkspaceSource = (typeof CLI_WORKSPACE_SOURCE)[keyof typeof CLI_WORKSPACE_SOURCE];
 
 /** Why no workspace was settled on: one was named that the member is not in, or none was named and they have several, or none. */
 export const CLI_WORKSPACE_UNSETTLED = {

@@ -59,7 +59,7 @@ import {
  * window draws the end of the transcript after one request. The older pages
  * are the window's to ask for, each laid before the messages held
  * (`withOlderPage`). Once the statements the pages are read from
- * (`transcript-live.ts` on the service) are followed, the follow reads past
+ * (`live/reads/agent-transcript.ts` on the service) are followed, the follow reads past
  * the newest page's cursor, which
  * misses nothing written meanwhile, then the next page at once while the
  * last came back full. A page with fewer than a page's most is caught up.
@@ -436,7 +436,7 @@ function meets(
  * that could not be read beside what was held, and one the account no
  * longer reaches in place of all of it.
  */
-export function toldTranscript(
+function toldTranscript(
   was: AppTranscript | undefined,
   page: AgentTranscriptPage,
   queueRevision: number | undefined,

@@ -22,7 +22,7 @@
  * failing the start.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { accountExperimentOn } from "@repo/database/models/account-store";
 import {
   type InstalledSkillWithFiles,
@@ -35,7 +35,6 @@ import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { GitHubApp, markRefusedToken } from "../../github/github-app.js";
-import type { StoreFailure } from "../../http/store-failure.js";
 import { type RepositorySkill, readRepositorySkills } from "../repository-skills.js";
 
 /** One skill as a session is offered it: its name, the description it routes on, its body, and the files beside it. */

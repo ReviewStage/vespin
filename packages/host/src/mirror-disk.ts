@@ -53,7 +53,7 @@ const hashOf = (bytes: Uint8Array) =>
   );
 
 /** Where a path the bridge names lands in the mirror at `root`, or none where it is refused. */
-export const mirrorTarget = (root: string, file: string) =>
+const mirrorTarget = (root: string, file: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
