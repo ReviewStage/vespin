@@ -471,10 +471,62 @@ const across = <A, E>(work: Effect.Effect<A, E>, step: Duration.Duration, times:
     const fiber = yield* Effect.forkChild(work);
     for (let move = 0; move < times; move += 1) {
       yield* turnsPass;
-      if (fiber.pollUnsafe() !== undefined) break;
       yield* TestClock.adjust(step);
     }
     return yield* Fiber.join(fiber);
+  });
+
+/** Settles once the predicate holds, the event loop turning until it does. */
+const until = (holds: () => boolean) =>
+  Effect.promise(async () => {
+    while (!holds()) await new Promise<void>((settle) => setImmediate(settle));
+  });
+
+/**
+ * A clock over the test's own that counts the waits of `step` begun and ended
+ * on it, for sessions built on it, and the work run to its end on it, the
+ * clock moved on by `step` each time the work waits one out, as a retry spaced
+ * by it does. Note that a move waits on such a wait standing rather than on a
+ * fixed drain, because a slow store would spend a drained move the work never
+ * waited on, and a wait begun after the last move would stand forever.
+ */
+const spacedClock = (step: Duration.Duration) =>
+  Effect.gen(function* () {
+    const clock = yield* Clock.Clock;
+    const waits = { begun: 0, ended: 0 };
+    const watched: Clock.Clock = {
+      currentTimeMillisUnsafe: () => clock.currentTimeMillisUnsafe(),
+      currentTimeMillis: clock.currentTimeMillis,
+      currentTimeNanosUnsafe: () => clock.currentTimeNanosUnsafe(),
+      currentTimeNanos: clock.currentTimeNanos,
+      monotonicTimeNanosUnsafe: () => clock.monotonicTimeNanosUnsafe(),
+      monotonicTimeNanos: clock.monotonicTimeNanos,
+      sleep: (duration) =>
+        Duration.equals(duration, step)
+          ? Effect.suspend(() => {
+              waits.begun += 1;
+              return Effect.ensuring(
+                clock.sleep(duration),
+                Effect.sync(() => {
+                  waits.ended += 1;
+                }),
+              );
+            })
+          : clock.sleep(duration),
+    };
+    const waitedOut = <A, E>(work: Effect.Effect<A, E>) =>
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(work);
+        const done = () => fiber.pollUnsafe() !== undefined;
+        for (;;) {
+          yield* until(() => done() || waits.begun > waits.ended);
+          if (done()) return yield* Fiber.join(fiber);
+          const ended = waits.ended;
+          yield* TestClock.adjust(step);
+          yield* until(() => done() || waits.ended > ended);
+        }
+      });
+    return { clock: watched, waitedOut };
   });
 
 /** The agent's newest turn, as its status reads it, and the word its failure is read as. */
@@ -1665,7 +1717,12 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
-        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        // The resume is tried again a spacing apart while the stop's snapshot is taken.
+        const spaced = yield* spacedClock(CODER.RESUME_WHILE_ENDING.SPACING);
+        const sessions = yield* sessionsFor(userId, sequence).pipe(
+          Effect.provide(services(api)),
+          Effect.provideService(Clock.Clock, spaced.clock),
+        );
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
@@ -1690,11 +1747,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes[0]?.status, "stopped");
         assert.equal(api.commands.length, 1);
-        yield* across(
-          sessions.deliverTurn(opened.sessionId, agent.conversationId),
-          CODER.RESUME_WHILE_ENDING.SPACING,
-          CODER.RESUME_WHILE_ENDING.TRIES,
-        );
+        yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
         assert.equal(api.sandboxes[0]?.status, "running");
         assert.equal(api.commands.length, 2);
         const [config] = (yield* launchLines(api.commands[1])) as [ClaudeCodeConfig];
@@ -1845,11 +1898,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
               db.execute(sql`alter table workspace_experiment_away rename to workspace_experiment`),
             ),
         );
-        yield* across(
-          sessions.deliverTurn(opened.sessionId, agent.conversationId),
-          CODER.RESUME_WHILE_ENDING.SPACING,
-          CODER.RESUME_WHILE_ENDING.TRIES,
-        );
+        yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2);
@@ -1913,7 +1962,12 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         const api = runnerSandboxApi();
         const { userId, agent } = yield* openAgent;
         const sequence = { next: 0 };
-        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        // The resume is tried again a spacing apart while the sandbox stops.
+        const spaced = yield* spacedClock(CODER.RESUME_WHILE_ENDING.SPACING);
+        const sessions = yield* sessionsFor(userId, sequence).pipe(
+          Effect.provide(services(api)),
+          Effect.provideService(Clock.Clock, spaced.clock),
+        );
         const opened = yield* deliveredOpen(
           sessions,
           yield* writtenLine(agent, "Fix the invitations."),
@@ -1937,11 +1991,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
           api.uploads.filter((upload) => [...upload.keys()].some((path) => path.endsWith("r.pdf")))
             .length;
         const uploadedBefore = pdfUploads();
-        yield* across(
-          sessions.deliverTurn(opened.sessionId, agent.conversationId),
-          CODER.RESUME_WHILE_ENDING.SPACING,
-          CODER.RESUME_WHILE_ENDING.TRIES,
-        );
+        yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes[0]?.status, "running");

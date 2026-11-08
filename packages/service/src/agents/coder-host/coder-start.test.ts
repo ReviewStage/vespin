@@ -257,7 +257,11 @@ it.layer(getTestDB())("an agent started in a workspace with no plan", (it) => {
         const opening = (outcome: SessionOpened) =>
           Effect.succeed<AgentSessions>({
             ...fakeAgentSessions().sessions,
-            open: () => Effect.sync(() => (heardAtOpen.push(queued.length), outcome)),
+            open: () =>
+              Effect.sync(() => {
+                heardAtOpen.push(queued.length);
+                return outcome;
+              }),
           });
 
         const started = yield* startAgent(
