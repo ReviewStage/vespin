@@ -20,3 +20,5 @@ appId: dev.vespin.ios
 - openLink: vespin://signed-out
 - assertVisible: "Sign in"
 - takeScreenshot: signed-out
+- tapOn: "Sign in"
+- assertVisible: "Review the invite flow"

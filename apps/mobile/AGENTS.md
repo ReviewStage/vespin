@@ -87,7 +87,8 @@ pull request with UI shows its screenshots to the developer in a thread.
 
 - **Native components only.** The tab bar is expo-router's `NativeTabs`, a
   screen stack is its native `Stack` with the system's headers, search, and
-  toolbars, glass is `expo-glass-effect`, and everything else is `@expo/ui`.
+  toolbars, glass is `expo-glass-effect` (a dependency from the first screen
+  that needs it), and everything else is `@expo/ui`.
   Never a tab bar or header drawn in JavaScript, never a hand-drawn copy of
   glass, and never a DOM component (`'use dom'`).
 - **SwiftUI first.** A screen is drawn by SwiftUI through `@expo/ui` (`Host`,

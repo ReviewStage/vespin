@@ -52,6 +52,11 @@ simulator_udid() {
     printf '%s' "$udid"
 }
 
+# The simulator under test is shut down however the run ends, a failed boot
+# or install included, so no simulator is left running on a shared Mac.
+udid=""
+trap '[[ -n "$udid" ]] && xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true' EXIT
+
 failed=0
 for name in "$@"; do
     slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-')
@@ -71,5 +76,6 @@ for name in "$@"; do
         failed=1
     fi
     xcrun simctl shutdown "$udid"
+    udid=""
 done
 exit "$failed"

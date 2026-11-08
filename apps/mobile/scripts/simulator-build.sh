@@ -27,7 +27,6 @@ beautify=(cat)
 if command -v xcbeautify >/dev/null 2>&1; then
     beautify=(xcbeautify --quiet)
 fi
-set -o pipefail
 xcodebuild \
     -workspace ios/Vespin.xcworkspace \
     -scheme Vespin \
