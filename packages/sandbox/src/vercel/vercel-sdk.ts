@@ -664,6 +664,18 @@ async function idleTimed(sandbox: SdkSandbox, signal: AbortSignal): Promise<SdkS
 }
 
 /**
+ * Closes every public port of a sandbox a resume woke, handed to the SDK as
+ * its `onResume`. Note that Vercel keeps a sandbox's ports in its config and
+ * serves them again at every resume, so without this a port opened in one
+ * run would stay public in every later one.
+ */
+function portsClosedOnResume(signal: AbortSignal) {
+  return async (resumed: SdkSandbox) => {
+    if (resumed.routes.length > 0) await resumed.update({ ports: [] }, { signal });
+  };
+}
+
+/**
  * How much to lengthen a running session so it ends `SANDBOX_IDLE` from now
  * (`TOUCH`); nothing where that is `TOUCH.LEAST` or less.
  */
@@ -859,7 +871,16 @@ function vercelSandbox(
       said(
         Effect.map(
           asked(SANDBOX_CALL.GET, async (signal, under) =>
-            idleTimed(await SdkSandbox.get({ ...under, name, resume: true, signal }), signal),
+            idleTimed(
+              await SdkSandbox.get({
+                ...under,
+                name,
+                resume: true,
+                signal,
+                onResume: portsClosedOnResume(signal),
+              }),
+              signal,
+            ),
           ),
           openedOf,
         ).pipe(Effect.withSpan("web/sandboxResume")),
@@ -887,6 +908,7 @@ function vercelSandbox(
                 name: ask.name,
                 resume: true,
                 signal,
+                onResume: portsClosedOnResume(signal),
               }).catch((failure: unknown) => {
                 if (noneToResume(failure)) return undefined;
                 throw failure;
@@ -907,6 +929,7 @@ function vercelSandbox(
                   resume: true,
                   signal,
                   onCreate: setUp,
+                  onResume: portsClosedOnResume(signal),
                 });
                 stands();
                 return await idleTimed(opened, signal);

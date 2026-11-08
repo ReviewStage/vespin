@@ -208,6 +208,24 @@ it.effect(
     }),
 );
 
+it.effect("a get-or-create that resumes a sandbox closes the ports its last run left open", () =>
+  Effect.gen(function* () {
+    const patched: unknown[] = [];
+    const api = yield* apiOver((_url, init) => {
+      if (init.method === "PATCH") {
+        patched.push(JSON.parse(String(init.body)));
+        return Response.json({ ...sandboxDeleted(RUNNING_SANDBOX), routes: [] });
+      }
+      const route = { port: 3000, subdomain: "fixture-3000", url: "https://fixture-3000.example" };
+      return Response.json({ ...sandboxFound(RUNNING_SANDBOX), routes: [route], resumed: true });
+    });
+
+    yield* api.getOrCreate(CREATE_ASK);
+
+    assert.deepEqual(patched, [{ ports: [] }]);
+  }),
+);
+
 it.effect("a sandbox Vercel no longer holds is none", () =>
   Effect.gen(function* () {
     const api = yield* apiOver(refusedWith(404));
