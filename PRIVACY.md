@@ -50,13 +50,15 @@ as written, not end-to-end encrypted, and our operators can read them.
 
 Through your workspace's GitHub App installation, we access repository
 contents, pull requests, code diffs, review comments, checks, and issues for
-repositories where the App is installed. Each agent works on a checkout of the
-repository in its own Vercel Sandbox, on a drive of its own, and a copy of
-each workspace repository's default branch is kept on a drive its agents start
-from; sections 6 and 7 say how long those checkouts, drives, and snapshots are
-kept. Apart from them, we generally do not keep copies of repository content
-beyond what lands in an agent's transcript, except a pull request's number,
-title, state, and checks, and any chapters you generate for it.
+repositories where the App is installed. A cloud agent works on a checkout of
+the repository in its own Vercel Sandbox, on a drive of its own where it
+started from its repository's default-branch drive and in the sandbox
+otherwise; an agent on your own machine keeps its work there. A workspace
+repository's default branch may be kept on a drive cloud agents start from.
+Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
+Apart from them, we generally do not keep copies of repository content beyond
+what lands in an agent's transcript, except a pull request's number, title,
+state, and checks, and any chapters you generate for it.
 
 ### Credentials you save
 
