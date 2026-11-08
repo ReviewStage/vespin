@@ -440,10 +440,12 @@ function GlyphColors({
       look={POPOVER_PANEL_LOOK.MENU}
       initialFocus={start}
       onDismiss={() => onClose(true)}
-      // Note that the focus going to the glyph's own cell is no leaving, so a press on the glyph, which takes the focus before its click, closes the colors rather than putting them away and opening them again; a press anywhere else puts them away (`onPressAway`).
+      // Note that a press on the glyph's own cell is no leaving, so its click closes the colors rather than their putting themselves away and the click opening them again: the focus goes to the glyph first where the engine focuses a pressed button, and leaves for nowhere where it does not, as Safari's, while the pointer stands over the cell. A press anywhere else puts them away (`onPressAway`).
       onLeave={(left) => {
         const cell = holder.current?.closest(".section-icon-cell");
-        if (!(left instanceof Node && cell?.contains(left))) onClose(false);
+        const toCell =
+          left instanceof Node ? cell?.contains(left) === true : cell?.matches(":hover") === true;
+        if (!toCell) onClose(false);
       }}
     >
       <div
