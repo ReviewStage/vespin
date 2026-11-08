@@ -61,7 +61,7 @@ import {
 } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
+import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { isWireString } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { BotIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ZapIcon } from "lucide-react";
@@ -225,9 +225,11 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * its title, the agent's words and a member's, an answer's picks, ticks,
  * and values, and the lines saying what became of an ask. A press lays
  * them into the box as a quote block, so a reply can answer the thread
- * point by point. Reply stands only while the box takes a quote: never
- * while a send is out, a dictation holds the box, or its editor is still
- * loading (`inbox-answer-box.tsx`).
+ * point by point, and takes the thread to its end, so the box stands whole
+ * over the board's foot, its Send in view, rather than only the line its
+ * caret is on. Reply stands only while the box takes a quote: never while a
+ * send is out, a dictation holds the box, or its editor is still loading
+ * (`inbox-answer-box.tsx`).
  */
 
 /** Where the way back from an item standing alone leads, as its hint names it. */
@@ -1670,6 +1672,9 @@ export function InboxPane({
       setQuoteDoor(lay === undefined ? undefined : { lay }),
     [],
   );
+  // The thread's run of rows, which a quote laid into the box takes to its end, the box being its last row.
+  const run = useRef<VirtualRowsHandle>(null);
+  const onQuoted = useCallback(() => run.current?.scrollToEnd(), []);
   const directory = useMemberDirectory();
   const readerId = directory.readerId ?? agents.me;
   useScrollToOwnMessage(board, item, readerId);
@@ -1747,6 +1752,7 @@ export function InboxPane({
           keywords={answerKeywords(holder, item)}
           replyScope={board}
           onQuoteDoor={onQuoteDoor}
+          onQuoted={onQuoted}
           onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
           newThread={newThread === undefined ? undefined : answerNewThread(newThread, item, by)}
         />
@@ -1864,6 +1870,7 @@ export function InboxPane({
                   listItems
                   className={INBOX_THREAD}
                   aria-label="Messages"
+                  handle={run}
                 >
                   {(at, place) => {
                     const row = rows[at];
