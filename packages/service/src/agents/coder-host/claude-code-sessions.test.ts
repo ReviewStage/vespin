@@ -452,9 +452,12 @@ function gate() {
 }
 
 /**
- * The work run, the clock moved on by `step` a time at a time, `times`
- * times, each after the event loop turned enough for a wait the work armed
- * to stand, and the work joined.
+ * The work run, the clock moved on by `step` a time at a time until the work
+ * is done, at most `times` times, each after the event loop turned enough for
+ * a wait the work armed to stand, and the work joined. Note that the clock
+ * moves on until the work is done rather than a fixed count of times,
+ * because a move made while the work is still reading the store, before it
+ * armed its wait, moves nothing on.
  */
 /** Real turns of the event loop enough for a forked fiber to reach whatever it waits on next. */
 const turnsPass = Effect.promise(async () => {
@@ -468,6 +471,7 @@ const across = <A, E>(work: Effect.Effect<A, E>, step: Duration.Duration, times:
     const fiber = yield* Effect.forkChild(work);
     for (let move = 0; move < times; move += 1) {
       yield* turnsPass;
+      if (fiber.pollUnsafe() !== undefined) break;
       yield* TestClock.adjust(step);
     }
     return yield* Fiber.join(fiber);
@@ -1689,7 +1693,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         yield* across(
           sessions.deliverTurn(opened.sessionId, agent.conversationId),
           CODER.RESUME_WHILE_ENDING.SPACING,
-          4,
+          CODER.RESUME_WHILE_ENDING.TRIES,
         );
         assert.equal(api.sandboxes[0]?.status, "running");
         assert.equal(api.commands.length, 2);
@@ -1844,7 +1848,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         yield* across(
           sessions.deliverTurn(opened.sessionId, agent.conversationId),
           CODER.RESUME_WHILE_ENDING.SPACING,
-          4,
+          CODER.RESUME_WHILE_ENDING.TRIES,
         );
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
@@ -1936,7 +1940,7 @@ it.layer(getTestDB())("a coding agent's sessions on Claude Code", (it) => {
         yield* across(
           sessions.deliverTurn(opened.sessionId, agent.conversationId),
           CODER.RESUME_WHILE_ENDING.SPACING,
-          4,
+          CODER.RESUME_WHILE_ENDING.TRIES,
         );
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
