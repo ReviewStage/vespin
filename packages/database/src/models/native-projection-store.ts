@@ -1,5 +1,5 @@
 import { type WireValue, WireValueSchema } from "@repo/wire";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -104,6 +104,27 @@ const saveProjectionRow = SqlSchema.void({
     ),
 });
 
+const seedProjectionRow = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    projection: WireValueSchema,
+  }),
+  execute: ({ userId, conversationId, projection }) =>
+    Database.use((db) =>
+      db
+        .update(conversations)
+        .set({ nativeProjection: projection })
+        .where(
+          and(
+            eq(conversations.id, conversationId),
+            eq(conversations.userId, userId),
+            isNull(conversations.nativeProjection),
+          ),
+        ),
+    ),
+});
+
 /** What one application of a batch answers: its own result, and the place to keep, where it moved. */
 export interface NativeProjectionApplied<A> {
   readonly result: A;
@@ -162,6 +183,20 @@ export function readNativeProjection(
   return Effect.map(findProjection(target), (row) =>
     Option.flatMap(row, ({ projection }) => Option.fromNullishOr(projection)),
   );
+}
+
+/**
+ * Starts the conversation's projection from the state given, as a
+ * continued or forked agent's Start does with what it goes on from of its
+ * source's; nothing where a projection is already saved, or for a
+ * conversation the account does not hold. Note that the number of the last
+ * event applied is left as it is, since no event of this conversation was.
+ */
+export function seedNativeProjection(
+  target: ConversationTarget,
+  projection: WireValue,
+): Effect.Effect<void, StoreFailure, DatabaseServices> {
+  return seedProjectionRow({ ...target, projection });
 }
 
 const dropProjectionTurn = SqlSchema.void({

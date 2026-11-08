@@ -10,6 +10,10 @@ import {
   readAgentRouting,
 } from "@repo/database/models/agent-store";
 import { copySessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
+import {
+  readNativeProjection,
+  seedNativeProjection,
+} from "@repo/database/models/native-projection-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
@@ -48,6 +52,7 @@ import { ModelCatalog } from "../../providers/model-catalog.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
+import { startingProjection } from "../native-events/native-projection.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
 import { contextWindowOf } from "./context.js";
@@ -877,7 +882,8 @@ const archivedPilot = (userId: string, pilot: Agent, by: Agent | undefined) => {
 
 /**
  * The new agent's `opening` run around what it inherits: the source's CLI
- * transcript made the new agent's own before its first open forks it, then
+ * transcript made the new agent's own before its first open forks it, and
+ * what the cost of its first session counts from (`startingProjection`), then
  * the opening, and once that succeeded the source of a continue stopped,
  * since the work goes on in the new agent, and a pilot it took over archived
  * where the stop held, since one its harness would not stop still runs and stands
@@ -902,11 +908,27 @@ export const openedTakingOver = <E, R>(
 > =>
   Effect.gen(function* () {
     const { from, rules } = inherited;
-    if (from !== undefined && agent.startedFrom?.session !== undefined) {
+    const session = agent.startedFrom?.session;
+    const source =
+      from === undefined || session === undefined
+        ? undefined
+        : { userId: from.source.userId, conversationId: from.source.conversationId };
+    if (source !== undefined) {
+      yield* hostedStoreOrUnavailable(copySessionEntries(source, agent.conversationId));
+    }
+    // The agent's first session counts its cost from what the Start knows of it: nothing, or the session it forks.
+    const starting =
+      source === undefined || session === undefined
+        ? startingProjection(undefined)
+        : startingProjection({
+            source: Option.getOrNull(yield* hostedStoreOrUnavailable(readNativeProjection(source))),
+            session,
+          });
+    if (starting !== undefined) {
       yield* hostedStoreOrUnavailable(
-        copySessionEntries(
-          { userId: from.source.userId, conversationId: from.source.conversationId },
-          agent.conversationId,
+        seedNativeProjection(
+          { userId: agent.userId, conversationId: agent.conversationId },
+          starting,
         ),
       );
     }

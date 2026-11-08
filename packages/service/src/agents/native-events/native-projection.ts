@@ -9,6 +9,7 @@ import {
   RUN_STATUS,
   type RunEvent,
   type RunEventBody,
+  type RunModelUsage,
   type RunStatus,
   type RunUsage,
   sessionKey,
@@ -40,8 +41,10 @@ import {
  * minted from the step. The turn's journal is the record of its work, and
  * the writer closes it with the turn's end, keeping a coding agent's words,
  * so no answer is rebuilt from what the projection held. The usage of each
- * model turn is summed onto the turn and settled with it, on the model the
- * agent ran on. What the projection holds between the runner's batches is
+ * model turn is summed onto the turn and settled with it by the model each
+ * count ran on: the one the harness names where it reports by model (Claude
+ * Code's totals), read back to its catalog id, and the agent's model
+ * otherwise. What the projection holds between the runner's batches is
  * this file's `NativeProjection`, small whatever the run's length: the turn,
  * its step, the step's words so far, and the calls it holds by name.
  *
@@ -120,6 +123,13 @@ const TurnSchema = Schema.Struct({
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
   usage: Schema.optionalKey(UsageSchema),
+  /**
+   * The same counts by the model each ran on, under its catalog id, or the
+   * provider's own id for a model the catalog does not offer, which prices
+   * nothing; absent on a turn whose usage was kept before its shares were,
+   * all of which ran on the agent's model.
+   */
+  usageByModel: Schema.optionalKey(Schema.Record(Schema.String, UsageSchema)),
   /** Why the newest model turn failed, where it did. */
   failure: Schema.optionalKey(Schema.String),
   /** Whether the newest model turn failed as the model refused it. */
@@ -148,6 +158,21 @@ const NativeProjectionSchema = Schema.Struct({
   rateLimitResetsAt: Schema.optionalKey(Schema.Number),
   /** The running total a harness that reports one (Codex) last reported, which the next report is metered against. */
   metered: Schema.optionalKey(UsageSchema),
+  /**
+   * The running totals by model a harness that reports them so (Claude Code)
+   * last reported, under the provider's own ids, and the session they count,
+   * which the next report of the same session is metered against. Totals
+   * with no session are what the agent's Start said its first session counts
+   * from (`startingProjection`): none for a fresh agent, its source's for a
+   * continued or forked one. Absent on a conversation metered by its main
+   * loop alone until now, whose next report is only noted.
+   */
+  modelsMetered: Schema.optionalKey(
+    Schema.Struct({
+      session: Schema.optionalKey(Schema.String),
+      totals: Schema.Record(Schema.String, UsageSchema),
+    }),
+  ),
   /** When a batch last kept the runner's sandbox alive (`../sandbox-keep-alive.ts`), in epoch milliseconds. */
   keptAliveAt: Schema.optionalKey(Schema.Number),
   /** Whether the launch went warm at its turn's IDLE with no turn since, so a failure it ends on is no turn's. */
@@ -162,6 +187,24 @@ const readProjection = Schema.decodeUnknownOption(NativeProjectionSchema);
 /** The projection a conversation kept, or the empty one before its first save or for state no longer read. */
 export function heldProjection(saved: WireValue | null): NativeProjection {
   return Option.getOrElse(readProjection(saved), () => EMPTY_PROJECTION);
+}
+
+/**
+ * What an agent's projection starts from, as its Start knows it: a fresh
+ * agent's first session counts from nothing, and a continued or forked
+ * agent's, which forks its source's session (`fork`), goes on from the
+ * totals by model the source last metered of that session, which the
+ * source's turns already counted. Nothing where the source metered that
+ * session by its main loop alone, so the new agent's first report is only
+ * noted.
+ */
+export function startingProjection(
+  fork: { readonly source: WireValue | null; readonly session: string } | undefined,
+): NativeProjection | undefined {
+  if (fork === undefined) return { modelsMetered: { totals: {} } };
+  const metered = heldProjection(fork.source).modelsMetered;
+  if (metered === undefined || metered.session !== fork.session) return undefined;
+  return { modelsMetered: { totals: metered.totals } };
 }
 
 /** The projection with the servers the turn under way took as it started, where that turn is the one named. */
@@ -243,6 +286,8 @@ export interface NativeProjectionContext {
   /** The conversation's turn queued for a line no runner took yet, which the next turn opened is, rather than one minted; none where none is queued. */
   readonly queuedTurnId: string | undefined;
   readonly model: string | undefined;
+  /** The catalog id a provider's own model id stands for, read back exactly (`catalogModelsOf`); nothing for one the catalog does not offer. */
+  readonly catalogModelOf: (providerModel: string) => string | undefined;
   /** Whether the starter's own API key pays for the agent, so a refusal of it is theirs to replace in Settings. */
   readonly ownKey: boolean;
   /** Whether the stored tool set holds a call of this name; a call of any other is left out, its answer with it. */
@@ -533,16 +578,14 @@ class Fold {
     ]
       .filter((word) => word !== undefined)
       .join("; ");
-    const model = this.#context.model;
+    const usageByModel = sharesOf(turn, this.#context.model);
     this.#tell(turn, {
       kind: RUN_EVENT.TURN_ENDED,
       status,
       ...(failed ? { failure } : undefined),
       ...(failed && detail.length > 0 ? { failureDetail: detail } : undefined),
       ...(turn.usage !== undefined ? { usage: turn.usage } : undefined),
-      ...(turn.usage !== undefined && model !== undefined
-        ? { usageByModel: [{ model, ...turn.usage }] }
-        : undefined),
+      ...(usageByModel.length > 0 ? { usageByModel } : undefined),
       responseIds: [],
       at: this.#context.now,
       attempt: this.#context.attempt,
@@ -566,7 +609,8 @@ class Fold {
 
   #usage(usage: RunUsage): void {
     const turn = this.turn();
-    this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, usage) });
+    const { model } = this.#context;
+    this.#setTurn(withUsage(turn, model, model, usage));
   }
 
   /** A running total metered: the turn under way takes what it grew by; with no turn under way it is only noted, so it is not metered again. */
@@ -575,7 +619,41 @@ class Fold {
     this.state = { ...this.state, metered: total };
     const turn = this.state.turn;
     if (turn === undefined || grown === undefined) return;
-    this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, grown) });
+    const { model } = this.#context;
+    this.#setTurn(withUsage(turn, model, model, grown));
+  }
+
+  /**
+   * Running totals by model metered: the turn takes what each grew by since
+   * the totals last metered, each under the catalog id of the model that ran
+   * it. Note that a report counting nothing is no report, as the zeroed
+   * result a crashed launch writes is, so it leaves the totals standing; and
+   * that a conversation metered by its main loop alone until now has totals
+   * no record counted from, so its model turn is metered as it was and the
+   * totals are only noted, to meter the next report against.
+   */
+  #modelUsageTotals(
+    moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.MODEL_USAGE_TOTALS }>,
+  ): void {
+    const { session, modelTurn } = moment;
+    const totals = Object.fromEntries(
+      moment.totals.map(({ providerModel, usage }) => [providerModel, usage]),
+    );
+    if (!Object.values(totals).some(countsAny)) return;
+    const held = this.state.modelsMetered;
+    this.state = { ...this.state, modelsMetered: { session, totals } };
+    if (held === undefined) {
+      if (modelTurn !== undefined) this.#usage(modelTurn);
+      return;
+    }
+    const continued = held.session === undefined || held.session === session;
+    const grown = modelsGrowth(continued ? held.totals : undefined, totals);
+    let turn = this.turn();
+    for (const [providerModel, usage] of grown) {
+      const model = this.#context.catalogModelOf(providerModel) ?? providerModel;
+      turn = withUsage(turn, this.#context.model, model, usage);
+    }
+    this.#setTurn(turn);
   }
 
   #result(failure: string | undefined): void {
@@ -642,6 +720,9 @@ class Fold {
         return;
       case NATIVE_MOMENT.USAGE_TOTAL:
         this.#usageTotal(moment.total);
+        return;
+      case NATIVE_MOMENT.MODEL_USAGE_TOTALS:
+        this.#modelUsageTotals(moment);
         return;
       case NATIVE_MOMENT.CONTEXT:
         // Note that a call that read nothing, as an error the CLI makes up does, leaves the last one standing.
@@ -732,6 +813,88 @@ function usageGrowth(before: Usage | undefined, total: Usage): RunUsage | undefi
   const counts = Object.values(grown);
   if (counts.some((count) => count < 0)) return total;
   return counts.some((count) => count > 0) ? grown : undefined;
+}
+
+/** Whether a usage counts anything. */
+function countsAny(usage: Usage): boolean {
+  return Object.values(usage).some((count) => count > 0);
+}
+
+/**
+ * What each model's running total grew by since the totals before, where
+ * the report goes on from them: it names every model they did and none
+ * counts less. Otherwise the report counts from nothing, as a fresh
+ * session's does, and every total is grown whole. A model that grew by
+ * nothing is left out.
+ */
+function modelsGrowth(
+  before: Readonly<Record<string, Usage>> | undefined,
+  totals: Readonly<Record<string, Usage>>,
+): ReadonlyMap<string, RunUsage> {
+  const goesOn =
+    before !== undefined &&
+    Object.entries(before).every(([model, held]) => {
+      const total = totals[model];
+      return total !== undefined && !shrank(held, total);
+    });
+  const grown = new Map<string, RunUsage>();
+  for (const [model, total] of Object.entries(totals)) {
+    const held = goesOn ? before?.[model] : undefined;
+    const growth = held === undefined ? total : difference(total, held);
+    if (countsAny(growth)) grown.set(model, growth);
+  }
+  return grown;
+}
+
+/** Whether any count of the total is smaller than the one before. */
+function shrank(before: Usage, total: Usage): boolean {
+  const growth = difference(total, before);
+  return Object.values(growth).some((count) => count < 0);
+}
+
+function difference(total: Usage, before: Usage): RunUsage {
+  return {
+    inputTokens: total.inputTokens - before.inputTokens,
+    outputTokens: total.outputTokens - before.outputTokens,
+    cachedInputTokens: total.cachedInputTokens - before.cachedInputTokens,
+    reasoningTokens: total.reasoningTokens - before.reasoningTokens,
+    cacheWriteTokens: (total.cacheWriteTokens ?? 0) - (before.cacheWriteTokens ?? 0),
+  };
+}
+
+/**
+ * The turn with a usage added, to its whole and to the share of the model
+ * named, where one is. Note that a turn whose usage was kept before its
+ * shares were ran it all on the agent's model, so its first share starts
+ * from that.
+ */
+function withUsage(
+  turn: Turn,
+  agentModel: string | undefined,
+  model: string | undefined,
+  usage: RunUsage,
+): Turn {
+  const whole = addModelUsage(turn.usage, usage);
+  if (model === undefined) return { ...turn, usage: whole };
+  const held = turn.usageByModel ?? sharesKeptBefore(turn, agentModel);
+  const share = addModelUsage(held[model], usage);
+  return { ...turn, usage: whole, usageByModel: { ...held, [model]: share } };
+}
+
+/** The shares of a turn whose usage was kept before its shares were: its whole, at the agent's model. */
+function sharesKeptBefore(
+  turn: Turn,
+  agentModel: string | undefined,
+): Readonly<Record<string, Usage>> {
+  return turn.usage === undefined || agentModel === undefined ? {} : { [agentModel]: turn.usage };
+}
+
+/** The turn's usage by model as its end tells it: its shares, or, for a turn kept before its shares were, its whole at the agent's model. */
+function sharesOf(turn: Turn, model: string | undefined): readonly RunModelUsage[] {
+  if (turn.usageByModel !== undefined) {
+    return Object.entries(turn.usageByModel).map(([share, usage]) => ({ model: share, ...usage }));
+  }
+  return turn.usage === undefined || model === undefined ? [] : [{ model, ...turn.usage }];
 }
 
 /**

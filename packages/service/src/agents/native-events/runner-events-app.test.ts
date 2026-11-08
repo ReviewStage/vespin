@@ -13,6 +13,7 @@ import {
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
+import { seedNativeProjection } from "@repo/database/models/native-projection-store";
 import {
   listProviderKeyRows,
   type ProviderKeyRow,
@@ -33,6 +34,7 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -64,6 +66,7 @@ import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { CURSOR_START, transcriptPast } from "../coder-host/transcript.js";
 import { readNativeTurnHanded, recordNativeTurnHanded } from "../coder-host/turn-message.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
+import { startingProjection } from "./native-projection.js";
 import {
   RUNNER_EVENTS_PATH,
   type RunnerAlive,
@@ -90,6 +93,12 @@ const NONCE = "a1b2c3d4e5f6";
 /** What the route counted, across the file; a test reads its own account's. */
 const ANALYTICS = recordingProductAnalytics();
 
+/** The models the route reads a report's provider ids back through. */
+const CATALOG = [
+  { id: "anthropic/claude-opus-5.5", name: "Claude Opus 5.5" },
+  { id: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5" },
+].map((model) => ({ ...model, provider: MODEL_PROVIDER.ANTHROPIC, efforts: ["high"] }));
+
 /** The route's group over the test's database, as a fetch. */
 const standingWith = (
   options: RunnerEventsOptions,
@@ -103,6 +112,7 @@ const standingWith = (
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       ANALYTICS.layer,
+      modelCatalogOf(CATALOG),
       after,
     );
     const web = HttpRouter.toWebHandler(
@@ -1001,6 +1011,98 @@ it.layer(getTestDB())("the runner events route", (it) => {
         },
       ]);
     }),
+  );
+
+  it.effect(
+    "a turn whose refused model turn another model retried prices each model's tokens as that model",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        // A fresh agent's Start says its first session counts from nothing.
+        yield* seedNativeProjection(agent.target, startingProjection(undefined) ?? {});
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const counts = (input: number, output: number, read: number, written: number) => ({
+          inputTokens: input,
+          outputTokens: output,
+          cacheReadInputTokens: read,
+          cacheCreationInputTokens: written,
+          webSearchRequests: 0,
+          costUSD: 0,
+          contextWindow: 200_000,
+          maxOutputTokens: 64_000,
+        });
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            modelUsage: { "claude-opus-5-5": counts(10, 5, 100, 20) },
+            ...top,
+          },
+          {
+            type: "system",
+            subtype: "model_refusal_fallback",
+            trigger: "refusal",
+            direction: "retry",
+            scope: "session",
+            original_model: "claude-opus-5-5",
+            fallback_model: "claude-sonnet-5-5",
+            request_id: null,
+            content: "Retried on Sonnet.",
+            ...top,
+          },
+          // The totals run on across the launch's model turns, the refused call counted on the model that refused it.
+          {
+            type: "result",
+            subtype: "success",
+            is_error: false,
+            modelUsage: {
+              "claude-opus-5-5": counts(15, 6, 200, 20),
+              "claude-sonnet-5-5": counts(8, 40, 0, 230),
+            },
+            ...top,
+          },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        yield* post(
+          agent.bearer,
+          messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+        );
+        const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
+
+        // Each model's input counts the cache's reads and writes, as the price reads it.
+        const opus = {
+          inputTokens: 235,
+          outputTokens: 6,
+          cachedInputTokens: 200,
+          cacheWriteTokens: 20,
+        };
+        const sonnet = {
+          inputTokens: 238,
+          outputTokens: 40,
+          cachedInputTokens: 0,
+          cacheWriteTokens: 230,
+        };
+        assert.deepEqual(
+          ended.map((turn) => turn.usage),
+          [
+            {
+              inputTokens: 473,
+              outputTokens: 46,
+              cachedInputTokens: 200,
+              reasoningTokens: 0,
+              cacheWriteTokens: 250,
+              byModel: [
+                { model: "anthropic/claude-opus-5.5", reasoningTokens: 0, ...opus },
+                { model: "anthropic/claude-sonnet-5.5", reasoningTokens: 0, ...sonnet },
+              ],
+            },
+          ],
+        );
+      }),
   );
 
   it.effect("a compaction that failed is why its failed turn says it failed", () =>

@@ -596,3 +596,26 @@ export function providerModelOf(catalogId: string): ProviderModel | undefined {
       : name;
   return { provider, modelId, speed: modelSpeedOf(split.name) };
 }
+
+/**
+ * The catalog id each of the provider's own model ids stands for, read back
+ * from the offered models through `providerModelOf` itself, so a harness's
+ * report of the model that ran is priced as that model. Note that the id is
+ * never parsed, because a date or a speed in it makes any guess unsafe: a
+ * provider id no offered model translates to is in no entry. Only the
+ * standard speed is read back, since a fast slug and its base model are
+ * one model at the provider; which of them a step ran at is the agent's
+ * choice, not the report's.
+ */
+export function catalogModelsOf(
+  offered: readonly OfferedModel[],
+  provider: ModelProvider,
+): ReadonlyMap<string, string> {
+  const table = new Map<string, string>();
+  for (const model of offered) {
+    const named = providerModelOf(model.id);
+    if (named?.provider !== provider || named.speed !== MODEL_SPEED.STANDARD) continue;
+    table.set(named.modelId, model.id);
+  }
+  return table;
+}

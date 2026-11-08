@@ -10,6 +10,7 @@ import {
   NATIVE_MOMENT,
   type NativeContextUsage,
   type NativeHeld,
+  type NativeModelUsage,
   type NativeMoment,
   PLAN_STATUS,
 } from "./native-moments.js";
@@ -203,13 +204,23 @@ const readStreamEvent = Schema.decodeUnknownOption(
   }),
 );
 
+/** One model's running total as `ModelUsage` counts it: the input apart from what the prefix cache read and wrote. */
+const ModelUsageSchema = Schema.Struct({
+  inputTokens: Schema.Number,
+  outputTokens: Schema.Number,
+  cacheReadInputTokens: Schema.Number,
+  cacheCreationInputTokens: Schema.Number,
+});
+
 const ResultSchema = Schema.Struct({
   subtype: Schema.String,
+  session_id: Schema.optionalKey(Schema.String),
   is_error: Schema.optionalKey(Schema.Boolean),
   errors: Schema.optionalKey(Schema.Array(Schema.String)),
   api_error_status: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   result: Schema.optionalKey(Schema.String),
   usage: Schema.optionalKey(MessageUsageSchema),
+  modelUsage: Schema.optionalKey(Schema.Record(Schema.String, ModelUsageSchema)),
 });
 
 const readResult = Schema.decodeUnknownOption(ResultSchema);
@@ -522,32 +533,69 @@ function failureOf(result: typeof ResultSchema.Type): string {
   return redactCredentials(failure).slice(0, FAILURE_CHARS);
 }
 
+/** What the record counts of a model call's usage, as the price reads it (`model-catalog.ts`): its input whole, the prefix cache's reads and writes among it. */
+function runUsageOf(
+  input: number,
+  output: number,
+  cacheRead: number,
+  cacheWrite: number,
+): NativeModelUsage["usage"] {
+  return {
+    inputTokens: input + cacheRead + cacheWrite,
+    outputTokens: output,
+    cachedInputTokens: cacheRead,
+    reasoningTokens: 0,
+    cacheWriteTokens: cacheWrite,
+  };
+}
+
 /**
- * The end of one model turn: what its main loop cost, and why it failed
- * where it did. Note that the input the provider counts excludes what the
- * prefix cache read and what was written to it, while the record's input
- * counts both, as the price reads it (`model-catalog.ts`).
+ * What a result says the session has cost: its running totals by the model
+ * each call ran on (`modelUsage`), which count every call the session made,
+ * a subagent's and a model's it fell back to among them; or, from a CLI that
+ * reports none, its main loop's usage for the model turn alone. Note that
+ * the totals are cumulative, so the projection meters what they grew by.
  */
-function resultMoments(message: WireValue): readonly NativeMoment[] {
+function costMoments(result: typeof ResultSchema.Type, held: NativeHeld): readonly NativeMoment[] {
+  const { usage, modelUsage } = result;
+  const modelTurn =
+    usage === undefined
+      ? undefined
+      : runUsageOf(
+          counted(usage.input_tokens),
+          counted(usage.output_tokens),
+          counted(usage.cache_read_input_tokens),
+          counted(usage.cache_creation_input_tokens),
+        );
+  const session = result.session_id ?? held.session;
+  if (modelUsage !== undefined && session !== undefined) {
+    const totals = Object.entries(modelUsage).map(([providerModel, counts]) => ({
+      providerModel,
+      usage: runUsageOf(
+        counts.inputTokens,
+        counts.outputTokens,
+        counts.cacheReadInputTokens,
+        counts.cacheCreationInputTokens,
+      ),
+    }));
+    return [
+      {
+        kind: NATIVE_MOMENT.MODEL_USAGE_TOTALS,
+        session,
+        totals,
+        ...(modelTurn === undefined ? undefined : { modelTurn }),
+      },
+    ];
+  }
+  return modelTurn === undefined ? [] : [{ kind: NATIVE_MOMENT.USAGE, usage: modelTurn }];
+}
+
+/** The end of one model turn: what the session has cost, and why the model turn failed where it did. */
+function resultMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const read = readResult(message);
   if (Option.isNone(read)) return [{ kind: NATIVE_MOMENT.RESULT }];
-  const { is_error, usage } = read.value;
-  const moments: NativeMoment[] = [];
-  if (usage !== undefined) {
-    const cachedInputTokens = counted(usage.cache_read_input_tokens);
-    const cacheWriteTokens = counted(usage.cache_creation_input_tokens);
-    moments.push({
-      kind: NATIVE_MOMENT.USAGE,
-      usage: {
-        inputTokens: counted(usage.input_tokens) + cachedInputTokens + cacheWriteTokens,
-        outputTokens: counted(usage.output_tokens),
-        cachedInputTokens,
-        reasoningTokens: 0,
-        cacheWriteTokens,
-      },
-    });
-  }
-  const failed = is_error === true;
+  const moments: NativeMoment[] = [...costMoments(read.value, held)];
+  const failed = read.value.is_error === true;
   moments.push(
     failed
       ? { kind: NATIVE_MOMENT.RESULT, failure: failureOf(read.value) }
@@ -646,7 +694,7 @@ function noted(said: string): readonly NativeMoment[] {
 
 /**
  * A `system` message that carries a failure no turn holds: a model retried
- * on another (whose usage is still priced as the agent's model), a plugin or
+ * on another (whose usage the result's totals count under the model that ran), a plugin or
  * hook that failed, a warning, or files not persisted. Each is said in the
  * log by its subtype and outcome, never its words; any other is nothing.
  */
@@ -755,7 +803,7 @@ export function claudeCodeMoments(message: WireValue, held: NativeHeld): readonl
     case SDK_MESSAGE.STREAM_EVENT:
       return streamMoments(message);
     case SDK_MESSAGE.RESULT:
-      return resultMoments(message);
+      return resultMoments(message, held);
     case SDK_MESSAGE.RATE_LIMIT:
       return rateLimitMoments(message);
     default:

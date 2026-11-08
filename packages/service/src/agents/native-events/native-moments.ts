@@ -63,6 +63,14 @@ export const NATIVE_MOMENT = {
    * as a resumed thread reports it, meters nothing.
    */
   USAGE_TOTAL: "usage_total",
+  /**
+   * What the harness's session has cost in all by the model each count ran
+   * on, under the provider's own id, for a harness that reports its running
+   * totals that way (Claude Code's `modelUsage`): the turn is metered what
+   * each grew by since last metered in the same session, and a total that
+   * counts from nothing again, as a fresh session's does, is metered whole.
+   */
+  MODEL_USAGE_TOTALS: "model_usage_totals",
   /** A model turn of the harness ended, failed where `failure` says why. */
   RESULT: "result",
   /** The model refused the model turn under way and no other model retried it, which fails that turn whatever its result says. */
@@ -144,6 +152,14 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.USAGE; readonly usage: RunUsage }
   | { readonly kind: typeof NATIVE_MOMENT.CONTEXT; readonly usage: NativeContextUsage }
   | { readonly kind: typeof NATIVE_MOMENT.USAGE_TOTAL; readonly total: RunUsage }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.MODEL_USAGE_TOTALS;
+      /** The harness's session the totals count, which a later report continues. */
+      readonly session: string;
+      readonly totals: readonly NativeModelUsage[];
+      /** What the model turn alone cost in its main loop, which a conversation not yet metered by model is metered by. */
+      readonly modelTurn?: RunUsage;
+    }
   | { readonly kind: typeof NATIVE_MOMENT.RESULT; readonly failure?: string }
   | { readonly kind: typeof NATIVE_MOMENT.REFUSED; readonly detail: string }
   | { readonly kind: typeof NATIVE_MOMENT.COMPACTED }
@@ -172,6 +188,12 @@ export type NativeMoment =
        */
       readonly launchFailed?: boolean;
     };
+
+/** One model's running total, under the id its provider's own API names it by. */
+export interface NativeModelUsage {
+  readonly providerModel: string;
+  readonly usage: RunUsage;
+}
 
 /**
  * What one model call read and wrote: its input whole, the prefix cache's

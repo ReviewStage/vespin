@@ -33,6 +33,7 @@ import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { RUNNER_EVENTS_PATH, runnerEventsApp } from "../agents/native-events/runner-events-app.js";
 import { admitRunnerBearer, runnerTokenDigest } from "../agents/workspace-mcp/bearer.js";
+import { modelCatalogOf } from "../providers/model-catalog.js";
 import { NO_GITHUB } from "../testing/github-app-fake.js";
 import {
   CONNECTOR_ASKED_NOTHING,
@@ -119,6 +120,7 @@ const postEvents = (bearer: string, events: readonly RunnerEvent[]) =>
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
+      modelCatalogOf([]),
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp({}).pipe(HttpRouter.provideRequest(services)),

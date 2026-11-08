@@ -70,7 +70,12 @@ import {
   parseJsonBytes,
   readBodyBytesEffect,
 } from "../../http/http-effect.js";
-import { providerModelOf } from "../../providers/model-catalog.js";
+import {
+  catalogModelsOf,
+  ModelCatalog,
+  type OfferedModel,
+  providerModelOf,
+} from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
@@ -174,6 +179,8 @@ interface Applying {
   readonly target: ConversationTarget;
   readonly agentId: string;
   readonly model: string;
+  /** The catalog id a provider's own model id stands for, which a harness's report by model is priced under. */
+  readonly catalogModelOf: (providerModel: string) => string | undefined;
   readonly reasoningEffort: string;
   readonly writer: StoreWriter;
   readonly read: NativeReader;
@@ -196,6 +203,25 @@ const PLAN_ROW: Partial<
     kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
   },
 };
+
+/** The catalog a batch reads its models' ids back through where the catalog could not be read. */
+const NO_MODELS: readonly OfferedModel[] = [];
+
+/**
+ * The catalog id a provider's own model id stands for, for an agent on the
+ * model named: the agent's own model for its own provider id, so a fast
+ * slug stays priced as fast, and any other read back through the offered
+ * catalog (`catalogModelsOf`), as a model the harness fell back to is.
+ */
+function catalogModelOfAgent(
+  agentModel: string,
+  offered: readonly OfferedModel[],
+): (providerModel: string) => string | undefined {
+  const own = providerModelOf(agentModel);
+  if (own === undefined) return () => undefined;
+  const table = catalogModelsOf(offered, own.provider);
+  return (providerModel) => (providerModel === own.modelId ? agentModel : table.get(providerModel));
+}
 
 /** The API key row of the agent's model's provider, which pays for an agent on its starter's key. */
 function apiKeyRowOf(
@@ -640,6 +666,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         attempt: launch,
         queuedTurnId,
         model: applying.model,
+        catalogModelOf: applying.catalogModelOf,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
         registered,
         report: (said) => reports.push(said),
@@ -733,7 +760,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   HostedRefusal,
-  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | R
+  HttpServerRequest.HttpServerRequest | DatabaseServices | ModelCatalog | Scope.Scope | R
 > {
   const { read, ended, idled, alive, title } = options;
   const incoming = yield* HttpServerRequest.HttpServerRequest;
@@ -776,10 +803,17 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
   const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+  // Note that a catalog it cannot read leaves only the agent's own model read back, so a report of any other is kept unpriced rather than refused.
+  const offered = yield* (yield* ModelCatalog).read.pipe(
+    Effect.catch(() =>
+      Effect.as(Effect.logWarning("runner-events: the model catalog could not be read"), NO_MODELS),
+    ),
+  );
   const applying: Applying = {
     target,
     agentId: agent.value.id,
     model: agent.value.model,
+    catalogModelOf: catalogModelOfAgent(agent.value.model, offered),
     reasoningEffort: agent.value.effort,
     writer,
     read: reader,
@@ -866,7 +900,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 /** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. */
 export function runnerEventsApp<R = never>(
   options: RunnerEventsOptions<R> = {},
-): WebRoutes<DatabaseServices | R> {
+): WebRoutes<DatabaseServices | ModelCatalog | R> {
   const endpoint = runnerEventsEndpoint(options);
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_EVENTS_PATH, hostedRefusing(endpoint)),
