@@ -395,9 +395,11 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
   const found = yield* publishedOnGitHub(userId, agent);
   const at = yield* Clock.currentTimeMillis;
   const read = { at, branch: agent.branch, pushed: found.answer.branch !== null };
-  yield* recordAgentPublished(userId, agent.id, found.stored, read);
+  // Note that the row's own pull request is written last, because an ended agent's read answers from it
+  // once it says merged: a write of the pull requests, or what it leaves to do, that fails reads again.
   if (hasRepository(agent))
     yield* recordRepository(userId, agent, agent.repository, found, delivered);
+  yield* recordAgentPublished(userId, agent.id, found.stored, read);
   return found.answer;
 });
 
@@ -474,6 +476,7 @@ const extrasPublished = (userId: string, agent: Agent, delivered: readonly strin
           const found = yield* extraPublishedOnGitHub(userId, agent, { ...extra, headBranch });
           const at = yield* Clock.currentTimeMillis;
           const read = { at, branch: headBranch, pushed: found.answer.branch !== null };
+          yield* recordRepository(userId, agent, extra.repository, found, delivered);
           yield* recordAgentRepositoryPublished(
             userId,
             agent.id,
@@ -481,7 +484,6 @@ const extrasPublished = (userId: string, agent: Agent, delivered: readonly strin
             found.stored,
             read,
           );
-          yield* recordRepository(userId, agent, extra.repository, found, delivered);
         }).pipe(Effect.catch(extraUnread));
       },
       // Note that an agent's extras are bounded at its Start, so they are read together.
