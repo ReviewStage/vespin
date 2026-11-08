@@ -114,7 +114,7 @@ import type { NewTaskAgent, NewTaskStart, TasksControl } from "./use-tasks-tab.j
  * picks one.
  *
  * While the Pilot experiment is on, a task's card offers Pilot or Agent at
- * the head row's end, set to Pilot: how the task is worked, kept on the task
+ * the head row's end, set to Agent: how the task is worked, kept on the task
  * as it starts (`TASK_MODE`). A pick holds for this card alone, and a refused
  * card opened again holds the one it was pressed with. A bare task takes
  * the mode picked too, so one started as a pilot task stands as one before
@@ -238,14 +238,14 @@ const BARE_WORDS: ComposerWords = {
   chord: BARE_CHORD,
 };
 
-/** New task's ways of working a task, while the Pilot experiment is on: Pilot first, the one the card starts on. */
+/** New task's ways of working a task, while the Pilot experiment is on: Agent first, the one the card starts on. */
 const MODE_CHOICES: readonly ChoiceItem<TaskMode>[] = [
+  { value: TASK_MODE.AGENT, label: "Agent" },
   {
     value: TASK_MODE.PILOT,
     label: "Pilot",
     hint: `One pilot plans the ${TERM.TASK.one}, splits it into child ${TERM.TASK.many}, and runs ${TERM.AGENT.many} on them`,
   },
-  { value: TASK_MODE.AGENT, label: "Agent" },
 ];
 
 /** Why an automation's agent did not start where the brief and the words pass an agent's first message's bound. */
@@ -424,9 +424,9 @@ export function NewTaskComposer({
   };
   const [starting, setStarting] = useState(false);
   const [note, setNote] = useState<Failure | undefined>(refused?.note);
-  // Pilot or Agent stands on a task's card while the workspace it starts in has the Pilot experiment on, set to Pilot.
+  // Pilot or Agent stands on a task's card while the workspace it starts in has the Pilot experiment on, set to Agent.
   const offersPilot = useWorkspaceExperiment(workspaceId, EXPERIMENT.PILOT) && !forAutomation;
-  const [mode, setMode] = useState<TaskMode>(refused?.card.press.ask.mode ?? TASK_MODE.PILOT);
+  const [mode, setMode] = useState<TaskMode>(refused?.card.press.ask.mode ?? TASK_MODE.AGENT);
   const asked = offersPilot ? mode : undefined;
   // The relations the press that opened the card chose, or the refused card's, which the + menu and the rows change.
   const [related, setRelated] = useState<readonly NewTaskRelation[]>(
