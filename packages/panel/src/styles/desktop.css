@@ -706,6 +706,26 @@ body,
   top: 0;
 }
 
+/* The column and the panel beside it are one sheet parted by a hairline, so
+   a bar at the column's top (a run's bar, `automation-agent-run.tsx`) rounds
+   the sheet's left corner alone while the panel is open, and one at the
+   panel's top its right corner alone, as a split's columns do (shell.css). */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task[data-panel-open="true"]:has(> .desktop-task-main)
+  > .desktop-task-main {
+  --sheet-top-right-radius: 0px;
+}
+
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task[data-panel-open="true"]:has(> .desktop-task-main)
+  > .side-panel:not([data-full-screen="true"]) {
+  --sheet-top-left-radius: 0px;
+}
+
 /* The agent's tabs are parted from its conversation by a hairline, which
    its edge is dragged on to resize them. */
 :where(:root):not([data-ui-room="narrow"])
