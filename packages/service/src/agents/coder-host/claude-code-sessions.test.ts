@@ -3510,7 +3510,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "the next agent on the repository boots from the image on its own fork of the base drive, makes its user, fetches only its branch, installs nothing, clones nothing, and launches with its write token standing",
+    "the next agent on the repository boots from the image on its own fork of the base drive, makes its user, fetches only its branch under its write token written once ahead of it, installs nothing, clones nothing, and launches with its write token standing",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3551,6 +3551,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const writeHeader = `Basic ${Buffer.from(`x-access-token:${GITHUB_FIXTURE_INSTALLATION_TOKEN}`).toString("base64")}`;
         const ownPolicies = api.policies.filter((each) => each.session === own?.currentSessionId);
         assert.ok(JSON.stringify(ownPolicies.at(-1)?.policy).includes(writeHeader));
+        // The fetch ran under one write, the agent's own credential on GitHub's API host as well as git's.
+        const beforeFetch = api.policies
+          .slice(0, ownRuns[refresh]?.policiesBefore)
+          .filter((each) => each.session === own?.currentSessionId);
+        assert.equal(beforeFetch.length, 1);
+        const firstWrite = beforeFetch[0]?.policy as
+          | { readonly allow?: Readonly<Record<string, unknown>> }
+          | undefined;
+        assert.ok(
+          JSON.stringify(firstWrite?.allow?.["api.github.com"] ?? null).includes(writeHeader),
+        );
       }),
   );
 
