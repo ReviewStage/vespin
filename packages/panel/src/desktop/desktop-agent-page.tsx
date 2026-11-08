@@ -775,7 +775,7 @@ function DesktopAgentPage({
         terminals={terminalDoors}
         onClose={tasks.agentView.onClose}
         phone={phoneHead}
-        trail={automationTrail(agent, onOpenAutomations) ?? slackTrail(agent)}
+        trail={automationTrail(agent, workspaceId, onOpenAutomations) ?? slackTrail(agent)}
         steps={
           runPlace === undefined ? null : (
             <AutomationRunSteps place={runPlace} onOpenAgent={tasks.agentView.onOpen} />

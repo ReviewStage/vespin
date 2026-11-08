@@ -27,6 +27,8 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { useQuery } from "@tanstack/react-query";
+import { automationsQuery } from "../live-reads.js";
 import type { AutomationsDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
@@ -37,9 +39,9 @@ import { useAutomationRuns } from "./use-automation-runs.js";
  * An agent an automation's run started stands on a page of its own with no
  * task to place it, so its bar leads with where it came from, Automations
  * and then its automation, each a press back to that page (the
- * automation's editor) wearing the automation's glyph, so the two are drawn
- * alike, as the editor's own bar draws its way back, the agent's own name
- * last. Under the bar the run's
+ * automation's editor), each wearing its glyph, the automation the glyph of
+ * what fires it as its row in the Automations list does, so the two are
+ * drawn alike, the agent's own name last. Under the bar the run's
  * own bar, a tab's (`PaneBar`), says what fired its run, as the automation's runs panel says it (the
  * firing's glyph and words), when it fired, and where the agent stands as a
  * badge, whose hint is the run's line as that panel reads it. At the bar's
@@ -63,9 +65,28 @@ const NEWER_RUN = "Newer run";
 /** What the place between the arrows counts, as it says it: "Run 3 of 5". */
 const RUN_NOUN = "Run";
 
+/**
+ * An automation's glyph: what fires it (a clock, GitHub's or Sentry's mark),
+ * as its row in the Automations list wears it, read off the workspace's
+ * automations; the automation's own glyph while they are not read, and for
+ * one deleted since.
+ */
+export function AutomationGlyph({
+  workspaceId,
+  automationId,
+}: {
+  workspaceId: string | undefined;
+  automationId: string | undefined;
+}): React.JSX.Element {
+  const { data } = useQuery(automationsQuery(workspaceId));
+  const trigger = data?.find((automation) => automation.id === automationId)?.trigger;
+  return trigger === undefined ? <GLYPH.AUTOMATION /> : <FiringGlyph of={trigger} />;
+}
+
 /** The trail an agent an automation started leads its bar with; none for any other agent. */
 export function automationTrail(
   agent: Pick<AgentSummary, "automationId" | "automationName">,
+  workspaceId: string | undefined,
   onOpen: AutomationsDoor["open"],
 ): readonly ToolbarPlace[] | undefined {
   // Note that a run from before its origin was kept has no name to lead with, so it draws none.
@@ -83,7 +104,7 @@ export function automationTrail(
     automations,
     {
       label: name,
-      icon: <GLYPH.AUTOMATION />,
+      icon: <AutomationGlyph workspaceId={workspaceId} automationId={automationId} />,
       onPress: () => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     },
   ];

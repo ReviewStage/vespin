@@ -53,7 +53,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
 import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { STRIP_TAB_KIND, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
@@ -83,6 +82,7 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { type RoutedViews, useRoutedViews } from "../workspace-routes.js";
+import { AutomationGlyph } from "./automation-agent-run.js";
 import { type HeldLook, heldLook, LOOK_STRIP } from "./switcher-looks.js";
 import {
   forgotten,
@@ -165,12 +165,18 @@ function tabWordLook(tab: SidePanelTab | MainTab, task: TaskSummary | undefined)
   return tabLook(stripTabLook(tab, { plan }));
 }
 
-/** What an automation's agent's card says under its name: the automation whose run started it, wearing its glyph, as the agent's page leads its bar with it (`automation-agent-run.tsx`); nothing for any other agent. */
-function automationDetail(agent: AgentSummary): Pick<CardLook, "detail" | "detailIcon"> {
+/** What an automation's agent's card says under its name: the automation whose run started it, wearing the glyph of what fires it, as the agent's page leads its bar with it (`automation-agent-run.tsx`); nothing for any other agent. */
+function automationDetail(
+  agent: AgentSummary,
+  workspaceId: string,
+): Pick<CardLook, "detail" | "detailIcon"> {
   const name = automationRun(agent)?.name;
   return name === undefined
     ? { detail: undefined }
-    : { detail: name, detailIcon: <GLYPH.AUTOMATION /> };
+    : {
+        detail: name,
+        detailIcon: <AutomationGlyph workspaceId={workspaceId} automationId={agent.automationId} />,
+      };
 }
 
 /** The task's name, as the window lists it. */
@@ -229,11 +235,11 @@ function cardLook(
       const { standing, archived } = tasks.listedAgents;
       const taskless = [...standing, ...archived].find((each) => each.id === stop.agentId);
       // Note that an agent on a task, an automation's run's among them, has no row of its own in the sidebar, so it is read off every agent the list carries.
+      const live = tasks.liveAgents?.find((each) => each.id === stop.agentId);
       const agent =
-        taskless === undefined
-          ? tasks.liveAgents?.find((each) => each.id === stop.agentId)
-          : tasklessRowSubject(taskless, tasks.agents).agent;
-      if (agent === undefined) {
+        taskless === undefined ? live : tasklessRowSubject(taskless, tasks.agents).agent;
+      const workspaceId = (taskless ?? live)?.workspaceId;
+      if (agent === undefined || workspaceId === undefined) {
         return {
           ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
           labelReplayUnmasked: true,
@@ -242,7 +248,7 @@ function cardLook(
       }
       return {
         ...tabLook({ kind: TAB_KIND.AGENT, name: agentName(agent, tasks.agents.models), agent }),
-        ...automationDetail(agent),
+        ...automationDetail(agent, workspaceId),
         endMark: agentEndMark(agent, false),
       };
     }
