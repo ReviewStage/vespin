@@ -750,7 +750,7 @@ function listenerFor(
 const ROLLOUT_UNREAD = "the thread's rollout could not be read from the service";
 
 /** The resumed thread's rollout not written back from the service's store, which fails the launch before its thread opens. */
-class RolloutUnread extends Data.TaggedError("RolloutUnread")<{}> {}
+class RolloutUnread extends Data.TaggedError("RolloutUnread") {}
 
 /**
  * Starts app-server in a scope of its own and opens the thread on it:
