@@ -31,6 +31,7 @@ import {
   type ActPortDependencies,
   type AgentProceduresDependencies,
   actPortFor,
+  clientSettingSideEffects,
   createActPortHandler,
   type PlatformActProcedures,
   refusedPlatformProcedures,
@@ -79,7 +80,6 @@ import {
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { highlightSnippet } from "@repo/host/task-code";
 import type { AppPlatform } from "@repo/panel/app-platform";
-import { SETTING_SIDE_EFFECT } from "@repo/settings";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { version as appVersion } from "../../package.json";
@@ -340,7 +340,6 @@ function portDependencies(
   tabs: ConnectTabs,
 ): ActPortDependencies {
   const host = operator.host;
-  const nothing = () => undefined;
   return {
     account: {
       host,
@@ -359,11 +358,8 @@ function portDependencies(
       acts: operator.acts,
       reporterOf: (actor) => (actor.sender === window ? reporter : undefined),
       lastSettings: () => operator.settings(),
-      sideEffects: {
-        [SETTING_SIDE_EFFECT.NONE]: nothing,
-        [SETTING_SIDE_EFFECT.LOGIN_ITEM]: nothing,
-        [SETTING_SIDE_EFFECT.USAGE_DATA]: nothing,
-      },
+      // A tab has no login item to open the app at.
+      sideEffects: clientSettingSideEffects({ applyLoginItem: () => {} }),
     },
     tasks: {
       acts: operator.acts,
