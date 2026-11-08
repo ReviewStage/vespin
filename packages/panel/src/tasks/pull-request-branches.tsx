@@ -2,7 +2,9 @@
  * pull-request-branches.tsx -- the branches a pull request merges, in its header: each a chip whose press copies its name, as stage-cli's do.
  *
  * The branch it merges into, then the one it merges from, as GitHub writes
- * them (`main ← topic`), each a compact pill in the code face, a long name
+ * them (`main ← topic`), each an outline chip at a control's height in the
+ * code face, as the stack and the pickers beside it and the title row's
+ * presses stand, a long name
  * cut in its middle so its last words, which tell one branch of a stack
  * from the next, stand whole, and the whole name in its hint. Where the row
  * runs short the head gives way and the base stands whole, since a base is
@@ -17,7 +19,7 @@
  * reaches it and a reader hears it.
  */
 
-import { COPY_LOOK, CopyButton } from "@repo/ui";
+import { COPY_CHIP_LOOK, COPY_LOOK, CopyButton } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { copyThroughShell } from "../copy-feedback.js";
 
@@ -40,6 +42,7 @@ function BranchChip({ name, room }: { name: string; room: ChipRoom }): React.JSX
     <span className={`inline-flex min-w-0 ${room}`}>
       <CopyButton
         look={COPY_LOOK.CHIP}
+        face={COPY_CHIP_LOOK.OUTLINE}
         lead={GLYPH.BRANCH}
         text={name}
         what={`branch ${name}`}
