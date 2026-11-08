@@ -78,8 +78,8 @@ const server = net.createServer((client) => {
   client.on("error", () => app.destroy());
   app.on("error", () => client.destroy());
   client.on("close", () => app.destroy());
-  // Note that the visitor's side closes only once the bytes still queued for it are written, or it stops reading for 10s.
-  app.on("close", () => { client.destroySoon(); client.setTimeout(10000, () => client.destroy()); });
+  // Note that the visitor's side closes only once the bytes still queued for it are written.
+  app.on("close", () => client.destroySoon());
 });
 visited();
 server.on("error", () => process.exit(0));
