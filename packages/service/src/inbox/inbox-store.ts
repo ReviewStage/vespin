@@ -1633,8 +1633,7 @@ const sibling = alias(inboxMessage, "sibling");
  * rather than leaving the reader a moment holding neither. The order is the
  * reader's to keep, since Realtime keeps none.
  *
- * Note that each item's thread, the messages either of a read's threads
- * draws (`messagesOf`'s `LATEST_PLAIN_MESSAGES` and `THREAD_MESSAGES`), and
+ * Note that each item's thread (`messagesOf` over `THREAD_MESSAGES`), and
  * the files its answer and its messages carried are statements of their own,
  * which the reader joins to the items, rather than lists the item's row
  * aggregates, because `jsonb_agg` and `jsonb_build_object` are only stable
@@ -4029,7 +4028,7 @@ export function accountTasklessItems(
   );
 }
 
-/** Where each item `accountWaitingItems` and `accountPlanlessItems` read stands, the same items and none of their words: what a held read of the account compares between looks. */
+/** Where each item `accountWaitingItems` and `accountTasklessItems` read stands, the same items and none of their words: what a held read of the account compares between looks. */
 export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly InboxStamp[]> {
   return Effect.map(findWaitingStamps({ userId }), (rows) =>
     rows.map((row) => ({ ...row, updatedAt: row.updatedAt.getTime() })),

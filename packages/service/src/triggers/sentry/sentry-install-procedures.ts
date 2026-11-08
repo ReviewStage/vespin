@@ -17,7 +17,7 @@
  *   fire nothing; the integration stays installed on Sentry until the
  *   organization uninstalls it there. It answers the transaction it was
  *   marked in beside the installations, which a desktop holding the
- *   workspace's integrations live waits for (`workspaceIntegrationsLive`).
+ *   workspace's integrations live waits for (`WORKSPACE_INTEGRATIONS_READ`).
  *
  * A workspace the account is not in is not found, whatever it asked. The
  * bearer is resolved before the body is read, by the middleware on the

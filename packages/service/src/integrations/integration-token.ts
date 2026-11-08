@@ -8,8 +8,7 @@
  *
  * A connection that cannot be used fails only the call that tried it: the
  * read answers one of the fixed sentences below. No sentence carries a
- * token, a Connect message, or an HTTP status, because the retired runtime
- * read a status in an error's words as a sign-in to start.
+ * token, a Connect message, or an HTTP status.
  *
  * A read is two steps: the grant the token would be read on, from the store
  * alone (`integrationGrant`), and the token on it, asked of Connect only

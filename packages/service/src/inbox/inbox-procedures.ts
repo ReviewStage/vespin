@@ -2,15 +2,13 @@
  * inbox-procedures.ts -- what an agent posted for the developer, read, answered, messaged, and marked read, and a thread a member starts.
  *
  * The inbox resource of the hosted oRPC router (`@repo/features/contract`'s
- * `inbox.ts`), each procedure answering the bytes its old `HttpRouter`
- * endpoint answered. The caller is resolved on the resource's implementer,
+ * `inbox.ts`). The caller is resolved on the resource's implementer,
  * so an unsigned request is refused before its input is read; a procedure
- * that takes a body caps it there too, at the bound the old endpoint read
- * it under, before its shape is checked.
+ * that takes a body caps it at its contract's `bodyCap` before its shape is
+ * checked.
  *
  * The three reads, a task's, an agent's, and the account's, are held while
- * nothing changed since the reader's cursor, by the holds they always had
- * (`agents/coder-host/inbox-page.ts`), and answer as one JSON body when the
+ * nothing changed since the reader's cursor (`agents/coder-host/inbox-page.ts`), and answer as one JSON body when the
  * inbox moves or the hold ends. An item's attachment is bytes, not JSON, and
  * stays on the agents' group (`agents/agents-app.ts`).
  */

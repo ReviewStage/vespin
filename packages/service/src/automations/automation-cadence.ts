@@ -36,8 +36,7 @@ import { AUTOMATION_RUNS } from "./automation-run-bounds.js";
  * of production's, its automations among it, so a Preview that kept their
  * schedules would start production's automations a second time from a
  * copy. Off production the cadence keeps no schedule and publishes
- * nothing: a firing is recorded queued and nothing starts it, as a Preview
- * behaved when the minute sweep ran on production alone.
+ * nothing: a firing is recorded queued and nothing starts it.
  */
 
 /** A firing published for its run: the automation, the firing's dedupe key, what fired it and when, and the body a webhook or an integration hands its agent. */

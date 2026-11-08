@@ -27,7 +27,7 @@
  * connect, a disconnect, and a repository named or forgotten answer the
  * transaction their row was written in beside the bot, which a desktop
  * holding the workspace's integrations live waits for
- * (`workspaceIntegrationsLive`); a write that wrote no row answers none.
+ * (`WORKSPACE_INTEGRATIONS_READ`); a write that wrote no row answers none.
  *
  * A workspace the account is not in is not found, whatever it asked. The
  * bearer is resolved before the body is read, by the middleware on the

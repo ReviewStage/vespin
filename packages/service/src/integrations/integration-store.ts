@@ -45,7 +45,6 @@ export type IntegrationStoreEffect<A> = Effect.Effect<
 
 /** One account's row at one provider, as the group and the agents read it. */
 export interface IntegrationConnectionRow {
-  /** The row's own id. */
   readonly id: string;
   readonly userId: string;
   readonly provider: IntegrationProvider;

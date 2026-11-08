@@ -31,14 +31,14 @@ import {
  *
  * Every procedure resolves the caller (`accountMiddleware`, on the resource
  * so it runs before an input is read) before it touches a row, and the store
- * gates every row on the account owning the automation and still reaching
- * its task (`automation-store.ts`), so an automation of another account, or
- * on a task of a workspace the account left, answers as not found. What is
+ * gates every row on the account being a member of the automation's
+ * workspace (`automation-store.ts`), so an automation of a workspace the
+ * account is not in, or left, answers as not found. What is
  * written is checked as a Start checks it: a schedule must read (five-field
  * cron in a known zone, no more often than every fifteen minutes, which the
  * desktop checks with the same module before it sends), a model choice must
- * be one the catalog offers the account, and the task must name a
- * repository; those checks, and the webhook secret a write mints,
+ * be one the catalog offers the account, and a GitHub trigger must name at
+ * least one repository; those checks, and the webhook secret a write mints,
  * are `automation-writes.ts`'s, which the agents' automation tools write
  * through too.
  *
@@ -54,12 +54,10 @@ export interface AutomationsProcedureSeams {
 }
 
 /**
- * The automations resource: every procedure to a signed-in caller. The
- * caller is resolved, and a body's length bounded, on the resource rather
- * than on each procedure, so both run before an input is read, in the old
- * group's order: an unsigned request is refused as unauthenticated and an
- * oversized one as too large, whatever it sent. A "Run now" carries its key
- * alone, bounded tighter once its key reads.
+ * The automations resource: every procedure to a signed-in caller, resolved
+ * on the resource so an unsigned request is refused before its input is
+ * read. Each body is held to its contract's `bodyCap`, a "Run now"'s
+ * tighter, since it carries its key alone.
  */
 export function automationsProcedures(seams: AutomationsProcedureSeams) {
   const automations = hosted.automations.use(accountMiddleware(seams.resolveUserId));
