@@ -163,15 +163,15 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
         // Another account's write names no agent of theirs, and another account's read names none of this one's.
         yield* recordAgentPublished(userId, theirs.id, PULL_REQUEST);
         assert.deepEqual(yield* listPublishedAgents(userId, [taskId, other.taskId]), [
-          { agent: listedLine(agent), published: PULL_REQUEST },
+          { agent: listedLine(agent), published: PULL_REQUEST, earlier: [] },
         ]);
         assert.deepEqual(yield* listPublishedAgents(other.userId, [other.taskId]), [
-          { agent: listedLine(theirs), published: null },
+          { agent: listedLine(theirs), published: null, earlier: [] },
         ]);
 
         yield* recordAgentPublished(userId, agent.id, null);
         assert.deepEqual(yield* listPublishedAgents(userId, [taskId]), [
-          { agent: listedLine(agent), published: null },
+          { agent: listedLine(agent), published: null, earlier: [] },
         ]);
       }),
   );
@@ -186,7 +186,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
 
       assert.deepEqual(yield* listPublishedAgents(userId, [taskId]), []);
       assert.deepEqual(yield* listPublishedAgents(userId, [taskId], { includeArchived: true }), [
-        { agent: listedLine(archived), published: null },
+        { agent: listedLine(archived), published: null, earlier: [] },
       ]);
     }),
   );
@@ -392,7 +392,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
 
         assert.deepEqual(yield* listAgents(teammate, task.id), [agent]);
         assert.deepEqual(yield* listPublishedAgents(teammate, [task.id]), [
-          { agent: listedLine(agent), published: null },
+          { agent: listedLine(agent), published: null, earlier: [] },
         ]);
         assert.deepEqual(yield* readAgent(teammate, agent.id), Option.some(agent));
         assert.deepEqual(

@@ -672,8 +672,20 @@ it.layer(SUITE)("an agent started in several repositories", (it) => {
         }).pipe(Effect.provide(severalServices));
 
         assert.deepEqual(yield* readAgentRepositories(owner, continued.agent.id), [
-          { repository: RELAY_REPOSITORY, baseBranch: null, headBranch: null, pullRequest: null },
-          { repository: web, baseBranch: null, headBranch: null, pullRequest: null },
+          {
+            repository: RELAY_REPOSITORY,
+            baseBranch: null,
+            headBranch: null,
+            pullRequest: null,
+            earlierPullRequests: [],
+          },
+          {
+            repository: web,
+            baseBranch: null,
+            headBranch: null,
+            pullRequest: null,
+            earlierPullRequests: [],
+          },
         ]);
       }),
   );
