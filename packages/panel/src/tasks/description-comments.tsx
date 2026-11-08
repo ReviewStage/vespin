@@ -1944,6 +1944,8 @@ function blockAt(
   if (unit === null) return undefined;
   // A list is commented on a bullet at a time, its innermost one under the pointer, and the gaps between them offer none.
   if (target.tagName === "UL" || target.tagName === "OL") return undefined;
+  // A divider holds no words for a thread to stand on, so it offers no button.
+  if (target.tagName === "HR") return undefined;
   const item = target.closest<HTMLElement>("li");
   if (item !== null && unit.contains(item)) return { block: item, unit };
   let block: HTMLElement | null = target;

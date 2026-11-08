@@ -9,7 +9,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { useAppCommand, useAppKeymap } from "../app-commands.js";
 import { installEditorLayout } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import type { DescriptionEditorHandle } from "./contract.js";
+import type { DescriptionEditorHandle, EditorFormat, EditorFormatDoors } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
 /**
@@ -50,8 +50,8 @@ function KeyedWindow({ ran }: { ran: string[] }): ReactElement | null {
   return null;
 }
 
-/** The window's keymap answering, with the description editor open on `markdown` and every word of its first line selected. */
-function mount(markdown: string) {
+/** The window's keymap answering, with the description editor open on `markdown`, telling `format` its selection, and every word of its first line selected. */
+function mount(markdown: string, format?: EditorFormatDoors) {
   const ran: string[] = [];
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
@@ -66,13 +66,14 @@ function mount(markdown: string) {
     onDraft: () => undefined,
     onFinish: () => undefined,
     onLeaveUp: () => undefined,
+    format,
   });
   mounted.push(handle);
   const element =
     host.querySelector<TiptapEditorHTMLElement>("[role=textbox]") ?? assert.fail("the editor");
   const editor = element.editor ?? assert.fail("the editor is running");
   editor.commands.setTextSelection({ from: 1, to: editor.state.doc.firstChild?.nodeSize ?? 1 });
-  return { ran, handle, element };
+  return { ran, handle, element, editor };
 }
 
 /** A key on the US layout a chord ends in: what it types alone, the character Shift makes of it, and its place. */
@@ -80,6 +81,7 @@ const KEYS = {
   b: { key: "b", shifted: "B", code: "KeyB", keyCode: 66 },
   c: { key: "c", shifted: "C", code: "KeyC", keyCode: 67 },
   e: { key: "e", shifted: "E", code: "KeyE", keyCode: 69 },
+  k: { key: "k", shifted: "K", code: "KeyK", keyCode: 75 },
   x: { key: "x", shifted: "X", code: "KeyX", keyCode: 88 },
   "2": { key: "2", shifted: "@", code: "Digit2", keyCode: 50 },
   "8": { key: "8", shifted: "*", code: "Digit8", keyCode: 56 },
@@ -117,6 +119,24 @@ test("⌘B in the description bolds its words and leaves the sidebar alone, and 
 
   press(document.body, "b");
   assert.deepEqual(ran, ["toggle sidebar"]);
+});
+
+test("a divider selected whole holds no words, so the toolbar is told none and ⌘K opens no link field", () => {
+  const formats: EditorFormat[] = [];
+  const links = { count: 0 };
+  const { element, editor } = mount("Above the rule.\n\n---\n\nBelow the rule.\n", {
+    onFormat: (format) => formats.push(format),
+    onLink: () => {
+      links.count += 1;
+    },
+  });
+  act(() => {
+    editor.commands.setNodeSelection(editor.state.doc.child(0).nodeSize);
+  });
+  assert.equal(editor.state.selection.$from.nodeAfter?.type.name, "horizontalRule");
+  assert.equal(formats.at(-1)?.empty, true);
+  press(element, "k");
+  assert.equal(links.count, 0);
 });
 
 test("⇧⌘X strikes the description's words", () => {

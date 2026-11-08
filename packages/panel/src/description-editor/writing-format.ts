@@ -87,8 +87,8 @@ function blockAt($at: ResolvedPos): WritingBlock | undefined {
   return own.type.name === "paragraph" ? WRITING_BLOCK.TEXT : undefined;
 }
 
-/** The blocks of every text block the selection touches, the caret's own where it touches none. */
-function selectedBlocks(editor: Editor): ReadonlySet<WritingBlock | undefined> {
+/** The blocks of every text block the selection touches; none where it touches no text block, as a divider selected whole touches none. */
+function touchedBlocks(editor: Editor): ReadonlySet<WritingBlock | undefined> {
   const { doc, selection } = editor.state;
   const blocks = new Set<WritingBlock | undefined>();
   doc.nodesBetween(selection.from, selection.to, (node, pos) => {
@@ -96,20 +96,24 @@ function selectedBlocks(editor: Editor): ReadonlySet<WritingBlock | undefined> {
     blocks.add(blockAt(doc.resolve(pos + 1)));
     return false;
   });
-  if (blocks.size === 0) blocks.add(blockAt(selection.$from));
   return blocks;
 }
 
-/** The selection as a format toolbar reads it now. */
+/**
+ * The selection as a format toolbar reads it now. Note that a selection
+ * touching no text block holds no words, as a divider selected whole holds
+ * none, so no toolbar stands over it and ⌘K goes on to the window.
+ */
 function formatOf(editor: Editor): EditorFormat {
-  const { from, to, empty } = editor.state.selection;
-  const blocks = selectedBlocks(editor);
+  const { from, to, empty, $from } = editor.state.selection;
+  const touched = touchedBlocks(editor);
+  const blocks = touched.size === 0 ? new Set([blockAt($from)]) : touched;
   const linked = editor.isActive(MARK_NAMES[WRITING_MARK.LINK]);
   const href: unknown = editor.getAttributes(MARK_NAMES[WRITING_MARK.LINK]).href;
   return {
     from,
     to,
-    empty,
+    empty: empty || touched.size === 0,
     code: blocks.has(WRITING_BLOCK.CODE_BLOCK),
     cell: selectionTouchesCell(editor.state),
     marks: WRITING_MARKS.filter((mark) => editor.isActive(MARK_NAMES[mark])),
