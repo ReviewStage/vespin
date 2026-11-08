@@ -54,9 +54,9 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
-import { HERE } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { type SentLine, startsOwnAgents } from "../tasks/agent-model.js";
@@ -625,7 +625,7 @@ function DescriptionDocument({
   // thread a call names in the window's Inbox as it stands, where the task's
   // items hold it, posted by the agent whose row it was (`from`), else the
   // window's Inbox narrowed to the task,
-  // another task as a link to it opens (`route.ts`), the rest in the side panel.
+  // another task as a link to it opens (`use-open-link.ts`'s `throughWindow`), the rest in the side panel.
   const openPlace = useOpenPlace();
   const openTarget = (target: ToolTarget, from?: string) => {
     switch (target.kind) {

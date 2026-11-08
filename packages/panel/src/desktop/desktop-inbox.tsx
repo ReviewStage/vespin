@@ -34,8 +34,8 @@ import { besideItem } from "../inbox-item-links.js";
 import { useInboxView } from "../inbox-route.js";
 import { MemberDirectory } from "../member-directory.js";
 import { NOT_FOUND_THING, NotFound } from "../not-found.js";
+import { addressOf, HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { type AutomationsDoor, useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
-import { addressOf, HERE, placeAddress, ROUTE, THING } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -131,7 +131,7 @@ import { taskCardOf } from "./task-card.js";
  * a task's side panel draws opens in that panel beside it instead, standing
  * for the chosen item's task (`use-tasks-tab.ts`): a code block's Open its
  * file, and a link naming a file of the task's repository, one of its
- * pages, or one of its agents' pull requests (`route.ts`). The
+ * pages, or one of its agents' pull requests (`inbox-item-links.ts`). The
  * panel's toggle, its width, and its keys are a task's own, and ⌘F finds in
  * the panel while it holds the keys, as on a task. With nothing listed, it says so under the Inbox's
  * glyph (`@repo/ui`'s `EmptyState`) over New task; with its scope leaving out every item, the list
@@ -323,7 +323,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   // The task's agents this Inbox read, an archived one's among them, whose Pull request tabs the panel beside the item draws.
   const { heldIds } = agents;
   const router = useLinkRouter();
-  // An address pressed on the item or in the panel beside it, or a place a part there names, opens what it names beside the item where the route table says so (`route.ts`), a place in the app matched on the route tree.
+  // An address pressed on the item or in the panel beside it, or a place a part there names, opens what it names beside the item where the item's own choices say so (`inbox-item-links.ts`), a place in the app matched on the route tree.
   const openHere: OpenAddressHere = (address) => {
     const routed = besideItem(address, {
       kind: HERE.INBOX_ITEM,
@@ -866,7 +866,7 @@ function InboxSidePanel({
   const terminals =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
     true;
-  // A row opens what it names as a link to it would beside the item (`route.ts`): an agent of the
+  // A row opens what it names as a link to it would beside the item (`inbox-item-links.ts`): an agent of the
   // item's task reads beside it in the panel, and any other task or agent is gone to.
   const openTarget = (target: ToolTarget) => {
     switch (target.kind) {
@@ -1023,7 +1023,7 @@ export function paneDoors(
   seams: {
     /** The task, or the agent, the panel beside the Inbox stands for. */
     panelFor: string | undefined;
-    /** Opens a place a part of the item names as a link to it would beside the item (`route.ts`), else through the door given. */
+    /** Opens a place a part of the item names as a link to it would beside the item (`inbox-item-links.ts`), else through the door given. */
     openPlace: (place: LinkPlace, elsewhere: () => void) => void;
     /** Where the item's words are read (`answerPlace`), whose repository an agent with no task reads its files through; none until known. */
     place: TasklessPlace | undefined;

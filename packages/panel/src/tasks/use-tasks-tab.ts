@@ -1716,7 +1716,7 @@ export function useTasksTab(input: {
   // and its agents' pull requests, and none of the fixed kinds, which the task's page draws.
   const inboxTask = inboxChosen === undefined ? undefined : choiceTaskOf(inboxChosen);
   const inboxAgent = inboxChosen === undefined ? undefined : choiceAgentOf(inboxChosen);
-  // Note that an item of an agent on no task opens that agent's own pages beside it (`route.ts`), and that the
+  // Note that an item of an agent on no task opens that agent's own pages beside it (`inbox-item-links.ts`), and that the
   // pages are held in the host while drawn and a while after, so choosing another item of the task, or the task again, reads none anew.
   const inboxPages = useQuery(
     pagesQuery(
@@ -3382,7 +3382,7 @@ export function useTasksTab(input: {
   const standingTask = () => (!overPlan && !historyRoute.open ? tasks.activeTaskId : undefined);
   // The task's description shown at the place given: its column's Overview, which
   // holds it, chosen in place on the task standing, and on another task as
-  // the window goes there (`route.ts`), a panel filling the window over the
+  // the window goes there (`places/link-places.ts`'s `onTasksTab`), a panel filling the window over the
   // column giving way.
   const showOverview = (place: OverviewPlace) => {
     if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
@@ -3395,7 +3395,7 @@ export function useTasksTab(input: {
   };
   // A link to a tab of the task standing opens it in the panel, as any link
   // pressed there does; one to another task's goes there and opens
-  // it as a tab of its own (`route.ts`).
+  // it as a tab of its own (`places/link-places.ts`'s `onTasksTab`).
   const linkPanelTab = (place: TaskTabPlace, tab: SidePanelTab) => {
     if (onTasksTab(place, standingTask()) === ON_STANDING_TASK.BESIDE) sidePanel.onOpen(tab);
     else showPanelTab(place.planId, tab);

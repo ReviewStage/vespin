@@ -3,8 +3,8 @@
  *
  * The panel beside an item stands for what holds it, a task or an agent on
  * no task, so a place in the app opens there where that panel draws it, and
- * is otherwise the window's (`route.ts` states the table every surface
- * answers by).
+ * is otherwise the window's (`places/pressed-address.ts` states the choices
+ * every surface answers by).
  */
 
 import { LINK_PLACE, type LinkPlace, taskNumberOf } from "@repo/features/link-grammar";
@@ -14,15 +14,23 @@ import {
   ADDRESS,
   type Address,
   beside,
-  fileBeside,
   go,
-  type InboxItemHere,
+  type HERE,
   NOTHING,
   type PlaceAddress,
-  pullRequestBeside,
   type Route,
   THING,
-} from "./route.js";
+} from "./places/pressed-address.js";
+import { type Holding, ofRepository, pullRequestBeside } from "./places/pull-request-beside.js";
+
+/** An Inbox item a press comes from, and what holds it, which the panel beside it stands for. */
+export type InboxItemHere = {
+  readonly kind: typeof HERE.INBOX_ITEM;
+  /** The task that holds the item; none for an item of an agent on no task. */
+  readonly taskId: string | undefined;
+  /** The agent on no task that holds the item, whose own pages open beside it; none for an item of a task. */
+  readonly agentId: string | undefined;
+} & Holding;
 
 /** What a place of the app pressed on an Inbox item opens, read as its declaration reads it, under the link's workspace. */
 type ItemPlaceBeside = (place: LinkPlace, workspace: string, here: InboxItemHere) => Route;
@@ -110,6 +118,22 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
         });
   },
 };
+
+/** A file pressed on an Inbox item, beside it: one of the item's repository, which the panel reads through what holds the item, and one of another repository, read through the item's workspace; an older link's, naming none, only where the item holds a repository. */
+function fileBeside(
+  address: Extract<Address, { readonly kind: typeof ADDRESS.FILE }>,
+  here: Holding,
+): Route {
+  const { path, lines, repository } = address;
+  if (repository === undefined) {
+    return here.repository !== null && here.repository !== undefined
+      ? beside({ kind: THING.FILE, path, lines })
+      : NOTHING;
+  }
+  return ofRepository(repository, here.repository)
+    ? beside({ kind: THING.FILE, path, lines })
+    : beside({ kind: THING.FILE, path, lines, repository });
+}
 
 /** A place in the app pressed on an Inbox item, by the declaration its route matched; one matching none is the window's. */
 function itemPlace(address: PlaceAddress, here: InboxItemHere): Route {

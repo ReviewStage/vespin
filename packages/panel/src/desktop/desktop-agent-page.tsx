@@ -55,8 +55,8 @@ import { FindScope } from "../find-in-tab.js";
 import { usePageWorkspace } from "../links-at-hand.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { MemberDirectory } from "../member-directory.js";
+import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
-import { HERE } from "../route.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
@@ -549,7 +549,7 @@ function DesktopAgentPage({
     [onOpenAutomations],
   );
   // Note that an inbox call and a page are the rows of a coding agent's own that open a tab, and a task's archive the one
-  // that opens another task, as a link to it opens (`route.ts`), a worker's opening through its delegation.
+  // that opens another task, as a link to it opens (`use-open-link.ts`'s `throughWindow`), a worker's opening through its delegation.
   const openPlace = useOpenPlace();
   const openTarget = useSteadyDoor((target: ToolTarget) => {
     // An inbox call's row opens the window's Inbox on the thread its answer names, as a link to it does, without narrowing it (`openInboxItemOn`); one naming no thread opens the Inbox narrowed to the agent's task where it has one.

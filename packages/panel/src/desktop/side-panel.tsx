@@ -101,7 +101,7 @@ import { panelTabPlace } from "../links-at-hand.js";
 import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
-import { ADDRESS, type Address } from "../route.js";
+import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { centerWithin } from "../scroll-within.js";
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";

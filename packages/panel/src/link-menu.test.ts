@@ -7,7 +7,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { LinkMenu, useEditedLinksHost } from "./link-menu.js";
-import type { Address } from "./route.js";
+import type { Address } from "./places/pressed-address.js";
 import { OpenAddressesHere } from "./tasks/use-open-link.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";

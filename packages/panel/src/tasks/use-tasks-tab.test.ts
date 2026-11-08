@@ -90,6 +90,7 @@ import { useLinkPlaceLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
+import { ADDRESS, addressOf } from "../places/pressed-address.js";
 import {
   type AdminDoor,
   type AutomationsDoor,
@@ -104,7 +105,6 @@ import {
 } from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
-import { ADDRESS, addressOf } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useTaskRoute } from "../task-route.js";
 import {

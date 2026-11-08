@@ -1,46 +1,25 @@
-import {
-  LINK_PLACE,
-  type PullRequestThreadView,
-  pullRequestAddressOf,
-  type ReadLink,
-  readLink,
-} from "@repo/features/link-grammar";
-import {
-  decodeMention,
-  MENTION_KIND,
-  type MentionLines,
-  pageRepositoryOf,
-} from "@repo/features/mention-link";
-import type { PagePlace } from "@repo/features/page-wire";
-import {
-  listedPullRequestOf,
-  type OpenedPullRequest,
-  pullRequestAgentOf,
-  repositoryPullRequestOf,
-} from "@repo/ui/pull-request-link";
-import { type LinkRouter, type RoutedLink, routedPressOf } from "./places/link-places.js";
-
 /**
- * route.ts -- the one table of where an address pressed opens: beside the surface it was pressed on, at a place the window goes to, or in the browser.
+ * pressed-address.ts -- what an address pressed names, the surface it is pressed on, and what the press opens: beside that surface, at a place the window goes to, or in the browser.
  *
  * An address (`addressOf`) is a place in the app as its link names it,
- * matched on the route tree (`places/link-places.ts`'s `routedPressOf`), or
- * a page on the web, which has no route: a pull request's on GitHub, a
- * file's of a repository, or any other. A surface is what the press came
- * from and what that holds: an Inbox item and what holds it, a task's page,
- * an agent's page, the window past every surface, and the window's Tasks tab
- * as it goes to a place. Each surface's choice lives with it, a place in
- * the app answered by the declaration its route matched, keyed by its name
- * (`LinkPlaceName`), and a page on the web by this module's own answers
- * (`pullRequestBeside`, `fileBeside`); this table is where the choices are
- * stated together, and nothing else decides them: a surface asks its own of
- * every link pressed on it first (`use-open-link.ts`'s `OpenHere`), the
- * window asks its own of what no surface took (`useOpenLink`), and the
- * Tasks tab asks its own of a thing of a task as it goes there. What each
- * surface then does with the answer is its own door's: which tab stands for
- * the thing, and how the window goes to a place, kind by kind.
+ * matched on the route tree (`link-places.ts`'s `routedPressOf`), or a page
+ * on the web, which has no route: a pull request's on GitHub, a file's of a
+ * repository, or any other. A surface is what the press came from and what
+ * that holds: an Inbox item and what holds it, a task's page, an agent's
+ * page, the window past every surface, and the window's Tasks tab as it goes
+ * to a place. Each surface's choice lives with it, a place in the app
+ * answered by the declaration its route matched, keyed by its name
+ * (`LinkPlaceName`), and a page on the web by the surface's own answers
+ * (`pull-request-beside.ts`, `inbox-item-links.ts`'s `fileBeside`); the list
+ * below is where the choices are stated together, and nothing else decides
+ * them: a surface asks its own of every link pressed on it first
+ * (`use-open-link.ts`'s `OpenHere`), the window asks its own of what no
+ * surface took (`useOpenLink`), and the Tasks tab asks its own of a thing of
+ * a task as it goes there. What each surface then does with the answer is
+ * its own door's: which tab stands for the thing, and how the window goes to
+ * a place, kind by kind.
  *
- * The table, by surface:
+ * The choices, by surface:
  *
  * - An Inbox item (`inbox-item-links.ts`) opens beside it what the panel
  *   standing for what holds it draws: a file of any repository, read through
@@ -59,16 +38,32 @@ import { type LinkRouter, type RoutedLink, routedPressOf } from "./places/link-p
  *   and any other of their repository by its number in their first agent's;
  *   and a page of any other task or agent on no task, read on its own place,
  *   their own pages being the window's to open as the panel's.
- * - The window (`throughWindow`) goes to every place in
+ * - The window (`use-open-link.ts`'s `throughWindow`) goes to every place in
  *   the app, and to the Pull request tab of a pull request a listed task's
  *   or a listed agent on no task's agent opened; anything else leaves for
  *   the browser, as everything does outside the window.
- * - The Tasks tab (`places/link-places.ts`'s `onTasksTab`) opens beside it a
+ * - The Tasks tab (`link-places.ts`'s `onTasksTab`) opens beside it a
  *   page, an agent's Changes, a worker, or a review thread of the task it
  *   shows with nothing standing over its plan, chooses that task's Overview
  *   for the task itself, one of its description's sections, or one of its
  *   comments, at the section or the comment, and goes to any other.
  */
+
+import {
+  LINK_PLACE,
+  type PullRequestThreadView,
+  pullRequestAddressOf,
+  type ReadLink,
+  readLink,
+} from "@repo/features/link-grammar";
+import {
+  decodeMention,
+  MENTION_KIND,
+  type MentionLines,
+  pageRepositoryOf,
+} from "@repo/features/mention-link";
+import type { PagePlace } from "@repo/features/page-wire";
+import { type LinkRouter, type RoutedLink, routedPressOf } from "./link-places.js";
 
 /** The kinds of address a press names. */
 export const ADDRESS = {
@@ -120,46 +115,6 @@ export const HERE = {
   /** An agent's own page. */
   AGENT: "agent",
 } as const;
-
-/**
- * What a surface holds that a link may name: its repository, `owner/name`,
- * or none before one is chosen; the pull requests its agents opened, by
- * agent; the agents whose tabs it draws, none before they are read; and
- * every agent it holds, an archived one among them, whose Pull request tab
- * stands as a live agent's does.
- */
-interface Holding {
-  readonly repository: string | null | undefined;
-  readonly pullRequests: ReadonlyMap<string, { readonly url: string }>;
-  readonly agentIds: readonly string[] | undefined;
-  readonly heldIds: readonly string[] | undefined;
-}
-
-/** The tasks and the agents on no task the window lists, as their rows name their pull requests. */
-export interface Listed {
-  readonly tasks: Parameters<typeof listedPullRequestOf>[1];
-  readonly agents: Parameters<typeof listedPullRequestOf>[2];
-}
-
-/** The surface a press comes from, and what it holds. */
-type Here =
-  | ({
-      readonly kind: typeof HERE.INBOX_ITEM;
-      /** The task that holds the item; none for an item of an agent on no task. */
-      readonly taskId: string | undefined;
-      /** The agent on no task that holds the item, whose own pages open beside it; none for an item of a task. */
-      readonly agentId: string | undefined;
-    } & Holding)
-  | ({
-      readonly kind: typeof HERE.TASK;
-      /** The task the page shows. */
-      readonly taskId: string;
-    } & Holding)
-  | ({
-      readonly kind: typeof HERE.AGENT;
-      /** The agent the page shows. */
-      readonly agentId: string;
-    } & Holding);
 
 /** The things a press opens beside a surface, in the panel there, or, an Inbox item, in the Inbox the surface stands in. */
 export const THING = {
@@ -242,111 +197,7 @@ export type Route =
   | { readonly kind: typeof ROUTE.EXTERNAL; readonly href: string }
   | { readonly kind: typeof ROUTE.NOTHING };
 
-export type InboxItemHere = Extract<Here, { readonly kind: typeof HERE.INBOX_ITEM }>;
-export type PagesHere = Extract<Here, { readonly kind: typeof HERE.TASK | typeof HERE.AGENT }>;
-
 export const NOTHING: Route = { kind: ROUTE.NOTHING };
-
-export function beside(thing: Thing): Route {
-  return { kind: ROUTE.BESIDE, thing };
-}
-
-export function go(link: ReadLink): Route {
-  return { kind: ROUTE.GO, link };
-}
-
-/** The pull requests a surface's agents opened, by their pages on GitHub, each by the agent that opened it; only those of `owners` where it names them. */
-function openedBy(holding: Holding, owners?: readonly string[]): OpenedPullRequest[] {
-  return [...holding.pullRequests].flatMap(([agentId, { url }]) =>
-    owners === undefined || owners.includes(agentId) ? [{ agentId, url }] : [],
-  );
-}
-
-/** Whether a repository an address names is the one a surface holds, whatever the case its owner and name are spelled in, as GitHub reads them. */
-function ofRepository(named: string, repository: string | null | undefined): boolean {
-  return (
-    repository !== null &&
-    repository !== undefined &&
-    named.toLowerCase() === repository.toLowerCase()
-  );
-}
-
-/**
- * A pull request pressed on a surface: one an agent it holds opened, however
- * its page is spelled, a page under it among them, opens in that agent's
- * Pull request tab, and any other of its repository, such as one an agent
- * opened before moving to another branch, in its first agent's by its
- * number; one of another repository is the window's. An Inbox item, a task's
- * page and an agent's answer it alike, an archived agent's pull request,
- * merged or not, opening its tab too.
- */
-export function pullRequestBeside(
-  address: Extract<Address, { readonly kind: typeof ADDRESS.PULL_REQUEST }>,
-  here: Holding,
-): Route {
-  const opened = openedBy(here, here.heldIds ?? here.agentIds);
-  const agentId = pullRequestAgentOf(address.href, opened);
-  if (agentId !== undefined) return beside({ kind: THING.PULL_REQUEST, agentId });
-  if (!ofRepository(address.repository, here.repository)) return NOTHING;
-  // A page under an agent's own pull request's, its files say, is still that agent's.
-  const owner = opened.find(
-    (each) => repositoryPullRequestOf(each.url, here.repository) === address.number,
-  );
-  if (owner !== undefined) return beside({ kind: THING.PULL_REQUEST, agentId: owner.agentId });
-  const first = here.agentIds?.[0];
-  return first === undefined
-    ? NOTHING
-    : beside({ kind: THING.PULL_REQUEST, agentId: first, number: address.number });
-}
-
-/**
- * An address no surface took: a place in the app goes there, a listed
- * task's or agent's pull request to its Pull request tab, on the place its
- * link matches on the route tree, and anything else, or everything outside
- * the window (`opensPlaces`), leaves for the browser.
- */
-export function throughWindow(
-  address: Address,
-  opensPlaces: boolean,
-  listed: Listed | undefined,
-  router: LinkRouter | undefined,
-): Route {
-  if (!opensPlaces) return external(address);
-  if (address.kind === ADDRESS.PLACE) return go(address.link);
-  const opened =
-    address.kind === ADDRESS.PULL_REQUEST && listed !== undefined
-      ? listedPullRequestOf(address.href, listed.tasks, listed.agents)
-      : undefined;
-  if (opened === undefined) return external(address);
-  const task = opened.taskId === undefined ? undefined : { planId: opened.taskId };
-  const changes: ReadLink = {
-    workspace: "",
-    place: { kind: LINK_PLACE.CHANGES, ...task, agentId: opened.agentId },
-  };
-  // Note that the window goes to the Pull request tab's place as its route reads it, as a link to it would.
-  return go(placeAddress(changes, router).routed?.link ?? changes);
-}
-
-/** A file pressed on an Inbox item, beside it: one of the item's repository, which the panel reads through what holds the item, and one of another repository, read through the item's workspace; an older link's, naming none, only where the item holds a repository. */
-export function fileBeside(
-  address: Extract<Address, { readonly kind: typeof ADDRESS.FILE }>,
-  here: Holding,
-): Route {
-  const { path, lines, repository } = address;
-  if (repository === undefined) {
-    return here.repository !== null && here.repository !== undefined
-      ? beside({ kind: THING.FILE, path, lines })
-      : NOTHING;
-  }
-  return ofRepository(repository, here.repository)
-    ? beside({ kind: THING.FILE, path, lines })
-    : beside({ kind: THING.FILE, path, lines, repository });
-}
-
-/** The address as written, for the browser; nothing for a place handed rather than written. */
-function external(address: Address): Route {
-  return address.href === undefined ? NOTHING : { kind: ROUTE.EXTERNAL, href: address.href };
-}
 
 /** The task or the section an older `luke://plan/` names, as a link naming no workspace; none for any other mention. */
 function mentionedLinkOf(mention: ReturnType<typeof decodeMention>): ReadLink | undefined {
@@ -361,6 +212,14 @@ function mentionedLinkOf(mention: ReturnType<typeof decodeMention>): ReadLink | 
     default:
       return undefined;
   }
+}
+
+export function beside(thing: Thing): Route {
+  return { kind: ROUTE.BESIDE, thing };
+}
+
+export function go(link: ReadLink): Route {
+  return { kind: ROUTE.GO, link };
 }
 
 /** A place in the app as an address, matched on the route tree of `router`, the window's; unmatched where there is none, as outside the window. `href` is the address as written, none for a place handed rather than written. */
