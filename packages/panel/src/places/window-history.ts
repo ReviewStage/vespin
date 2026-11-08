@@ -592,6 +592,8 @@ function useWindowSteps(input: {
     if (write !== undefined) wrote(write);
   }, [record, place, address, wrote]);
 
+  // The step the window is going back to after a move landed where it could go nowhere, which it stands on already.
+  const returning = useRef<number | undefined>(undefined);
   // Moves `delta` steps along the history to the step at `to`, through the leave's one door for it.
   const along = useCallback(
     (delta: number, to: StepEntry) => latest.current.placeLeave.along(delta, pathOf(to.address)),
@@ -620,6 +622,11 @@ function useWindowSteps(input: {
           }
           return;
         }
+        // Note that the window's own return below stands nothing, because the step it returns to may be one it can no
+        // longer reach, which would otherwise send it back where it came from again.
+        const returned = returning.current === landed.number;
+        returning.current = undefined;
+        if (returned) return;
         if (canReach(landed.place)) {
           stand(landed.place);
           return;
@@ -632,8 +639,10 @@ function useWindowSteps(input: {
         const was = record.steps.get(heard.from);
         const { pass } = latest.current.placeLeave;
         if (target !== undefined) pass(() => along(target.number - landed.number, target));
-        else if (was !== undefined) pass(() => along(was.number - landed.number, was));
-        else if (here !== undefined) {
+        else if (was !== undefined) {
+          returning.current = was.number;
+          pass(() => along(was.number - landed.number, was));
+        } else if (here !== undefined) {
           wrote({ kind: STEP_WRITE.PUSH, address: here.address, place: here });
         }
       }),

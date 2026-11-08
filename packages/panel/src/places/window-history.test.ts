@@ -55,7 +55,13 @@ import {
   useWindowHistory,
   type WindowHistory,
 } from "./window-history.js";
-import { MOUSE_BUTTON, type StepTitle, sameHistoryPage, savesStep } from "./window-steps.js";
+import {
+  MOUSE_BUTTON,
+  type StepTitle,
+  sameHistoryPage,
+  savedStepOf,
+  savesStep,
+} from "./window-steps.js";
 
 const TASK_ID = "0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60";
 const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
@@ -1111,6 +1117,24 @@ test("a task opened again before its agents are read keeps the column it was las
     ["column:agent-c", "side:shut", "column:agent-a", "side:shut"],
     "home, then C, then A past B",
   );
+});
+
+test("a browser's Back onto a step it cannot reach, with none behind it and the step it left unreachable too, takes the window back where it stood, once", () => {
+  const shown: string[] = [];
+  const held = windowRouter();
+  const window = mount(onTabs({ column: AGENT_A, shown }), held);
+  press();
+  window.stand(onTabs({ column: AGENT_B, shown }));
+  // Both tabs closed from the strip, as the window last saw it, while B still stands.
+  window.stand(onTabs({ column: AGENT_B, agents: [AGENT_C], shown }));
+  const moves: string[] = [];
+  held.history.subscribe(({ action }) => void moves.push(action.type));
+
+  window.moveHistory(-1);
+
+  assert.deepEqual(moves, ["GO", "GO"], "the browser's move, and one back");
+  assert.deepEqual(shown, [], "neither closed tab is stood");
+  assert.deepEqual(savedStepOf(held.history.location)?.place.task?.column, AGENT_B);
 });
 
 test("Back's and Forward's steps are listed the nearest first, each named as the window called it there, passing over a step it cannot reach, and a step listed is gone to at once", () => {
