@@ -134,6 +134,37 @@ it.layer(getTestDB())("show_image", (it) => {
   );
 
   it.effect(
+    "a set naming the same bytes twice, or bytes an earlier call kept, answers the one row kept for them",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const sandbox = sandboxWith({
+          "/tmp/a.png": pngBytes(10, 10),
+          "/tmp/b.png": pngBytes(20, 20),
+        });
+        const binding = { target, sandbox, checkout: CHECKOUT };
+        const [earlier] = readShown(
+          yield* show(binding, { images: [{ path: "/tmp/b.png", caption: "B" }] }),
+        ).pictures;
+        assert.ok(earlier);
+
+        const answer = readShown(
+          yield* show(binding, {
+            images: [
+              { path: "/tmp/a.png", caption: "A" },
+              { path: "/tmp/b.png", caption: "B" },
+              { path: "/tmp/a.png", caption: "A" },
+            ],
+          }),
+        );
+
+        const [a, b, aAgain] = answer.pictures.map((picture) => picture.id);
+        assert.deepEqual([b, aAgain], [earlier.id, a]);
+        assert.notEqual(a, earlier.id);
+      }),
+  );
+
+  it.effect(
     "a call naming a missing file, a file that is no picture, or one too large shows nothing and names the path",
     () =>
       Effect.gen(function* () {
