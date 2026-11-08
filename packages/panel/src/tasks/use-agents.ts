@@ -1204,17 +1204,17 @@ export function useAgents(input: {
   ): string => {
     const joins = draft?.fork?.agentId === sourceId && draft.fork.messageId === undefined;
     const adds = words.trim() !== "" || attachments.length > 0;
-    const id = joins && !adds && draft !== undefined ? draft.id : mintKey();
+    const id = joins && !adds ? draft.id : mintKey();
     if (startsOn === undefined) return id;
     const source = standing?.find((agent) => agent.id === sourceId);
     const fork = continueFork(sourceId);
     moveWords(startsOn, id, fork, { text: words.trim(), attachments });
     withDraft(startsOn, {
       id,
-      choice: joins ? draft?.choice : undefined,
-      disabledServers: joins ? (draft?.disabledServers ?? []) : (source?.disabledServers ?? []),
+      choice: joins ? draft.choice : undefined,
+      disabledServers: joins ? draft.disabledServers : (source?.disabledServers ?? []),
       fork,
-      ...runsOnOf(joins ? draft?.runsOn : undefined),
+      ...runsOnOf(joins ? draft.runsOn : undefined),
     });
     return id;
   };

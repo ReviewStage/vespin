@@ -544,7 +544,7 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
       deadEnd(chooser.connected === true ? DEAD_END.LAPSED : DEAD_END.NOT_CONNECTED)
     ) : listed === undefined ? (
       <Spinner delay label={readingWords("repositories")} />
-    ) : rows.length === 0 && listed?.installed ? (
+    ) : rows.length === 0 && listed.installed ? (
       // Installed but giving us nothing: the repositories are chosen on GitHub, through the workspace's row.
       deadEnd(DEAD_END.NONE_REACHED)
     ) : undefined;

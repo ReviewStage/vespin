@@ -432,7 +432,7 @@ function firstAnswer<Read extends LiveReadName>(
     stop = client.getQueryCache().subscribe((event) => {
       if (isAppState(event.query)) settle();
     });
-    return Effect.sync(() => stop?.());
+    return Effect.sync(() => stop());
   });
 }
 
