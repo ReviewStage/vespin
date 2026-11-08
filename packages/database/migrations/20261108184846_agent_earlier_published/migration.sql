@@ -2,10 +2,10 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "agent";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "agent";
 --> statement-breakpoint
-ALTER TABLE "agent" ADD COLUMN "earlier_published" jsonb;--> statement-breakpoint
-ALTER TABLE "agent_repository" ADD COLUMN "earlier_published" jsonb;--> statement-breakpoint
-CREATE INDEX "agent_on_earlier_branch" ON "agent" USING gin ("earlier_published" jsonb_path_ops) WHERE "earlier_published" is not null;--> statement-breakpoint
-CREATE INDEX "agent_repository_on_earlier_branch" ON "agent_repository" USING gin ("earlier_published" jsonb_path_ops) WHERE "earlier_published" is not null;
+ALTER TABLE "agent" ADD COLUMN IF NOT EXISTS "earlier_published" jsonb;--> statement-breakpoint
+ALTER TABLE "agent_repository" ADD COLUMN IF NOT EXISTS "earlier_published" jsonb;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_on_earlier_branch" ON "agent" USING gin ("earlier_published" jsonb_path_ops) WHERE "earlier_published" is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "agent_repository_on_earlier_branch" ON "agent_repository" USING gin ("earlier_published" jsonb_path_ops) WHERE "earlier_published" is not null;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_agent"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE
