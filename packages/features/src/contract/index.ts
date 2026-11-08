@@ -30,6 +30,7 @@ import { messagesContract } from "./messages.js";
 import { modelsContract } from "./models.js";
 import { pullRequestChaptersContract } from "./pull-request-chapters.js";
 import { pullRequestsContract } from "./pull-requests.js";
+import { pushDevicesContract } from "./push-devices.js";
 import { repositoryPinsContract } from "./repository-pins.js";
 import { supportAccessContract } from "./support-access.js";
 import { taskFilesContract } from "./task-files.js";
@@ -78,6 +79,7 @@ export const hostedContract = {
   plans: tasksContract,
   pullRequestChapters: pullRequestChaptersContract,
   pullRequests: pullRequestsContract,
+  pushDevices: pushDevicesContract,
   repositoryPins: repositoryPinsContract,
   supportAccess: supportAccessContract,
   taskFiles: taskFilesContract,

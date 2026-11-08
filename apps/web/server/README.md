@@ -913,6 +913,24 @@ sign-up with its first 24 hours as day 0. It runs where the welcome email does,
 under `RESEND_API_KEY` and only where `WELCOME_FROM` is set, so a Preview
 starts no sequence, and a call Resend refuses is logged by its status alone.
 
+## Pushes to a phone
+
+The Vespin iOS app registers its iPhone's APNs device token under the account
+(`POST /api/account/push-devices`, `packages/service/src/push/push-devices-procedures.ts`),
+and the service pushes to it through Apple's Push Notification service
+(`packages/service/src/push/apns.ts`, over one HTTP/2 connection per Apple
+gateway that the instance keeps, `packages/service/src/push/apns-http2.ts`).
+It needs the four `APNS_*` variables: `APNS_KEY_ID` and `APNS_TEAM_ID`, the
+APNs auth key's id and the team that owns it, `APNS_PRIVATE_KEY`, the key's
+`.p8` PEM (newlines flattened to `\n` by a dashboard paste are restored), and
+`APNS_BUNDLE_ID`, the app the pushes are for, which is their topic. Without
+any one of them the build logs it once by the variables' names and the sender
+answers unavailable, sending nothing, which is the intended state until the
+key is made and for a Preview. A phone registered under another app is not
+pushed. A token Apple answers 410, `Unregistered`, or `BadDeviceToken` is
+deleted; any other refusal or failure is logged by its status and Apple's
+reason alone, never a token or a notification's words.
+
 ## Sentry
 
 The functions report to Sentry's `vespin-web` project, set

@@ -1658,6 +1658,39 @@ the member's whose words the memory holds, or an owner's or admin's
 (`src/accounts/workspace-memories.ts`); any other is `NOT_PERMITTED`.
 `src/accounts/memories-procedures.test.ts` answers both over a real dialect.
 
+## Pushes to a phone
+
+`src/push/` is the phone's side of the service: the `pushDevices` resource on
+the hosted oRPC router (`push-devices-procedures.ts`), on the paths
+`@repo/features/contract`'s `push-devices.ts` declares, and the APNs sender
+(`apns.ts`). The iOS app registers the raw device token Apple handed it, never
+a push service's own, so what a notification says goes only to Apple; the
+register is idempotent and moves a token another account held to the caller,
+since the phone is signed in there now, and the unregister on sign-out is done
+whether or not the account still holds the token. The rows are
+`packages/database/src/models/push-device-store.ts`'s effects over the ambient
+`SqlClient`, in the `push_device` table, which is apart from `device`, the Macs
+and Linux hosts that run local agents.
+
+`ApnsSender` is the one door to a phone: a notification names the phone, its
+push type (`alert`, `background`, or `liveactivity`), the JSON Apple delivers,
+composed whole by the caller, and the routing Apple reads off the headers
+(`apns-topic`, `apns-push-type`, `apns-collapse-id`, `apns-priority`,
+`apns-expiration`). The sender signs an ES256 provider token with the
+deployment's `.p8` key, reused for fifty minutes, posts to the gateway the
+token belongs to over `ApnsTransport`, Node's HTTP/2 client in production
+(`apns-http2.ts`, one connection per gateway kept for the instance's life)
+and a recording fake in a test (`src/testing/apns-fake.ts`), and answers one
+of `APNS_DELIVERY`: a token Apple answers 410, `Unregistered`, or
+`BadDeviceToken` is deleted from `push_device`, a 400 or 403 otherwise is
+refused for good, and anything else may be retried. It reads `APNS_KEY_ID`,
+`APNS_TEAM_ID`, `APNS_PRIVATE_KEY`, and `APNS_BUNDLE_ID`, the app the pushes
+are for and their topic; with any unset it answers unavailable and sends
+nothing, as the sweep does without `CRON_SECRET`. The key is revealed into
+the signer alone, the provider token into the authorization header alone, and
+a log line names a status and Apple's reason, never a token, a payload, or a
+key. What decides to push, and what a notification says, is the later tasks'.
+
 ## The chapters group
 
 `src/chapters/chapters-generator.ts` tells a pull request's diff as chapters

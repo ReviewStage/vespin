@@ -40,6 +40,16 @@ export const HOSTED_SERVICE_PATH = {
   /** The workspace's memories a few words find, best first (GET); `memory-wire.ts` declares it. */
   ACCOUNT_MEMORIES_SEARCH: "/api/account/memories/search",
   /**
+   * The phone the iOS app runs on registered for pushes under the account
+   * (POST): its APNs device token, the gateway the token belongs to, and the
+   * app Apple issued it to, in the body. Idempotent, and a token another
+   * account registered moves to this one. `push-device-wire.ts` declares
+   * both bodies.
+   */
+  ACCOUNT_PUSH_DEVICES: "/api/account/push-devices",
+  /** The phone unregistered (POST), by its token and gateway in the body; one the account does not hold is passed over. */
+  ACCOUNT_PUSH_DEVICES_UNREGISTER: "/api/account/push-devices/unregister",
+  /**
    * The outside MCP clients the account allowed: read them (GET), or revoke
    * one by its client id in the query (DELETE). `mcp-client-wire.ts`
    * declares both.

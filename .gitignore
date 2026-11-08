@@ -32,6 +32,8 @@ artifacts/
 .env
 .env.*
 !.env.example
+# An APNs key is pasted into the deployment's environment, never committed.
+*.p8
 
 # Local agent context is not a repository input.
 .context/
