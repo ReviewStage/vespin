@@ -300,7 +300,13 @@ made before default-branch drives expires thirty days after its last use. When y
   deleted anyway and a drive may remain. Their snapshots otherwise expire and
   are removed seven days after they were last used.
 - **Workspaces you own and are the only member of** are deleted at once with
-  everything in them, as a deleted task is. Their GitHub, Slack, and Sentry
+  their tasks, transcripts, and automations, as a deleted task is, and we ask
+  Vercel to delete every one of their agents' sandboxes and the drives holding
+  their checkouts, and to stop their scheduled automations; where that fails or
+  does not finish in time, the workspace is deleted anyway and a drive may
+  remain. The copy of each of their repositories' default branches on a drive
+  their agents start from is not deleted with them, and is kept until we remove
+  it, as said above. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those
   services until you uninstall them there.
 - **Workspaces with other members**, and the memories, comments, and
