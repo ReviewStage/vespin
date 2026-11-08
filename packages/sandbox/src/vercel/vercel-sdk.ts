@@ -103,17 +103,15 @@ const NAME_TAKEN_STATUS = 409;
 const SESSION_STOPPED = { STATUS: 410, CODE: "sandbox_stopped" } as const;
 
 /**
- * Vercel's answer for a resume or a create whose snapshot is gone: expired
- * past the expiration it was kept for, or deleted, its body naming
- * `snapshot_not_found`, as the SDK's own check reads it, or a code of no
- * such meaning with words that name the snapshot, as Vercel has also
- * answered (`bad_request: Snapshot expired or deleted.`). Note that Vercel
- * answers 410 for a call to a stopped sandbox too (`SESSION_STOPPED`), which
- * a resume mends, and that a body that could not be read names no code, so
- * only a 410 that names this code, or names the snapshot in its words, says
- * the snapshot is gone.
+ * Vercel's answer for a resume or a create whose snapshot is gone, expired
+ * past the expiration it was kept for or deleted: a 410 whose body names the
+ * snapshot, as its code (`snapshot_not_found`, which the SDK's own check
+ * reads) or its words (`bad_request: Snapshot expired or deleted.`, which
+ * Vercel also answers). Note that Vercel answers 410 for a call to a stopped
+ * sandbox too (`SESSION_STOPPED`), which a resume mends and whose body names
+ * no snapshot.
  */
-const SNAPSHOT_GONE = { STATUS: 410, CODE: "snapshot_not_found", WORDS: /\bsnapshot\b/iu } as const;
+const SNAPSHOT_GONE = { STATUS: 410, BODY: /snapshot/iu } as const;
 
 /**
  * Vercel's answer for a call to a session that is stopping, or being
@@ -238,7 +236,6 @@ class Refused extends Data.TaggedError("Refused")<{
   readonly status?: number;
   readonly code?: string;
   readonly detail?: string;
-  readonly snapshotGone?: true;
 }> {}
 
 /** What a refusal's line says: Vercel's status where it answered one, and its words or the cause's. */
@@ -257,7 +254,9 @@ function neutralOf(refusal: Refused): SandboxError {
   if (status === NAME_TAKEN_STATUS && code !== DRIVE_CODE.ATTACHED) {
     return new SandboxNameTaken({ call });
   }
-  if (refusal.snapshotGone === true) return new SnapshotGone({ call });
+  if (status === SNAPSHOT_GONE.STATUS && SNAPSHOT_GONE.BODY.test(refusal.detail ?? "")) {
+    return new SnapshotGone({ call });
+  }
   if (status === SESSION_ENDING.STATUS && code !== undefined && SESSION_ENDING.CODES.has(code)) {
     return new SandboxEnding({ call });
   }
@@ -410,23 +409,12 @@ function errorCode(text: string): string | undefined {
   return code !== undefined && ERROR_CODE.test(code) ? code : undefined;
 }
 
-/** Whether an answer says the snapshot a resume or a create opens from is gone (`SNAPSHOT_GONE`). */
-function snapshotGoneAnswer(answered: { readonly status: number; readonly text: string }): boolean {
-  if (answered.status !== SNAPSHOT_GONE.STATUS) return false;
-  const read = readErrorAnswer(unparsedWire(valueFromJsonText(answered.text)));
-  if (Result.isFailure(read)) return false;
-  const { code, message } = read.success.error;
-  if (code === SNAPSHOT_GONE.CODE) return true;
-  return (
-    code !== SESSION_STOPPED.CODE && message !== undefined && SNAPSHOT_GONE.WORDS.test(message)
-  );
-}
-
-/** Whether the SDK's failure is Vercel's answer that the snapshot it opens from is gone. */
+/** Whether the SDK's failure is Vercel's answer that the snapshot it opens from is gone (`SNAPSHOT_GONE`). */
 function snapshotGoneFailure(failure: unknown): boolean {
   return (
     failure instanceof APIError &&
-    snapshotGoneAnswer({ status: failure.response.status, text: failure.text ?? "" })
+    failure.response.status === SNAPSHOT_GONE.STATUS &&
+    SNAPSHOT_GONE.BODY.test(failure.text ?? "")
   );
 }
 
@@ -447,7 +435,6 @@ function refused(
     status: answered.status,
     ...(code === undefined ? undefined : { code }),
     ...(detail === undefined ? undefined : { detail }),
-    ...(snapshotGoneAnswer(answered) ? { snapshotGone: true } : undefined),
   });
 }
 
@@ -638,7 +625,7 @@ function noneToResume(failure: unknown): boolean {
 /**
  * Whether a sandbox stood under the name to be deleted, as one whose
  * snapshot is gone is, so a create may take its name: what the SDK's own
- * `getOrCreate` does only for the one code it reads (`SNAPSHOT_GONE`). Note
+ * `getOrCreate` does only for the code it reads (`SNAPSHOT_GONE`). Note
  * that the sandbox's own drive is left standing, for the create to mount
  * again.
  */
