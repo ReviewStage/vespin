@@ -89,7 +89,9 @@ import type { RunMode } from "./run-mode.js";
  * step, is opened again on `RECONNECT`, backing off to every 30 seconds,
  * for as long as the mirror stands; the next manifest
  * brings the mirror back in step. Every mirror on disk is kept so from the
- * host's start. A mirror is taken away, its worktree removed from the shared
+ * host's start, and so is one for each of the account's own cloud agents
+ * as the task list says its sandbox opened, so its Local tab finds the
+ * worktree made rather than waiting on the clone. A mirror is taken away, its worktree removed from the shared
  * clone and its folder deleted, when the task list shows its agent archived,
  * or when the tunnel closes as gone: the agent archived, or no agent this
  * account reaches, which is how the first try after the host's start finds
@@ -213,6 +215,8 @@ export interface MirrorsDependencies {
   platform: MirrorPlatformSeam;
   /** The agent as the task list holds it now; none where it lists no such agent. */
   agentListed: (agentId: string) => MirroredAgent | undefined;
+  /** The account's own cloud agents whose sandbox the task list says stands open, by id, whose mirrors are kept ready before a Local tab asks. */
+  agentsOpened: () => readonly string[];
   /** The task list as each drawing of it stands, from the caller's listening until its scope closes, which archives are read again on. */
   listings: Effect.Effect<Stream.Stream<unknown>, never, Scope.Scope>;
   recordProductEvent: RecordProductEvent;
@@ -702,6 +706,11 @@ export function composeMirrors(
       ),
     );
 
+    /** A mirror kept for each of the account's own agents whose sandbox opened, so its Local tab finds it ready. */
+    const openedStarted = Effect.suspend(() =>
+      Effect.forEach(dependencies.agentsOpened(), started, { discard: true }),
+    );
+
     const methods: MirrorMethods = {
       [GATEWAY_METHOD.MIRRORS_ENSURE]: (params) =>
         Effect.gen(function* () {
@@ -740,7 +749,9 @@ export function composeMirrors(
         if (Result.isSuccess(readId(unparsedWire(name)))) yield* started(name);
       }
       const listings = yield* dependencies.listings;
-      yield* Effect.forkScoped(Stream.runForEach(listings, () => archivedRemoved));
+      yield* Effect.forkScoped(
+        Stream.runForEach(listings, () => Effect.andThen(archivedRemoved, openedStarted)),
+      );
     });
 
     return { methods, lifetime };
