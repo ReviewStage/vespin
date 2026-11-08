@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckIcon } from "../../face/glyphs.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { TEXT_VARIANT, Text } from "../text/text.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 

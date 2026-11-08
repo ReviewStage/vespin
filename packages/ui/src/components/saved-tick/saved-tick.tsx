@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CheckIcon } from "../../face/glyphs.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { runningMotions } from "../../use-disclosure.js";
 import { ANNOUNCE, announce, type Retire } from "../announcer/announcer.js";
 

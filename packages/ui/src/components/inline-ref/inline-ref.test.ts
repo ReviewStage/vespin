@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, cloneElement, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { DocumentIcon } from "../../face/glyphs.js";
+import { DocumentIcon } from "../../icons/lucide-glyphs.js";
 import { INLINE_REF_LOOK, INLINE_REF_NAME, InlineRef, type InlineRefHint } from "./inline-ref.js";
 
 /**

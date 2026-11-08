@@ -1,6 +1,6 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { CheckIcon } from "../../face/glyphs.js";
 import { ICON_SIZE } from "../../icons/icon-size.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { AuthMark } from "./auth-mark.js";

@@ -1,8 +1,7 @@
 import { type ClipboardEvent, type KeyboardEvent, type Ref, useRef } from "react";
 import { cn } from "../../cn.js";
 import { isComposingKey } from "../../composing-key.js";
-import { CheckIcon } from "../../face/glyphs.js";
-import { AlertIcon } from "../../icons/lucide-glyphs.js";
+import { AlertIcon, CheckIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
 import { INPUT_CONTROL } from "../../shadcn/input.js";
 import { STATUS_TONE } from "../../status-tone.js";

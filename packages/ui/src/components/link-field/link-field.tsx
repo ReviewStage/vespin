@@ -1,6 +1,5 @@
 import { type Ref, useState } from "react";
-import { ExternalIcon } from "../../face/glyphs.js";
-import { UnlinkIcon } from "../../icons/lucide-glyphs.js";
+import { ExternalIcon, UnlinkIcon } from "../../icons/lucide-glyphs.js";
 import { IconButton } from "../button/button.js";
 import { MENU_SURFACE_FLOW, MenuSurface } from "../menu/menu-surface.js";
 import { TEXT_FIELD_TYPE, TextField } from "../text-field/text-field.js";

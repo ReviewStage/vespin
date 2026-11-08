@@ -10,7 +10,8 @@ import {
   useState,
 } from "react";
 import { cn } from "../../cn.js";
-import { ArrowUpRightIcon, CheckIcon } from "../../face/glyphs.js";
+import { ArrowUpRightIcon } from "../../face/glyphs.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_FACE, PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { replayMotion } from "../../replay-motion.js";

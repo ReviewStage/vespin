@@ -3,7 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
-import { SearchIcon } from "../../face/glyphs.js";
+import { SearchIcon } from "../../icons/lucide-glyphs.js";
 import { EmptyState, type EmptyStateAction } from "./empty-state.js";
 
 /**

@@ -1,6 +1,7 @@
 import { LANDING_TONE, type LandingTone } from "@repo/features/landing-outcome";
 import React from "react";
-import { CheckIcon, CloseIcon, McpIcon } from "../../face/glyphs.js";
+import { CloseIcon, McpIcon } from "../../face/glyphs.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { ProductMark } from "../../marks/product-mark.js";
 import { type MarkProvider, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 

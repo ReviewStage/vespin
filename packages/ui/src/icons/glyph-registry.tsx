@@ -48,27 +48,29 @@ import {
 import React from "react";
 
 import {
-  ArchiveIcon,
   BackIcon,
   CloseIcon,
+  EllipsisIcon,
+  McpIcon,
+  MemoryIcon,
+  PlusIcon,
+  StopIcon,
+} from "../face/glyphs.js";
+import {
+  ArchiveIcon,
   CopyIcon,
   DocumentIcon,
-  EllipsisIcon,
   ExternalIcon,
   GearIcon,
   LaptopIcon,
   MarkDoneIcon,
-  McpIcon,
-  MemoryIcon,
   PencilIcon,
-  PlusIcon,
   SearchIcon,
-  StopIcon,
   TerminalIcon,
   TrashIcon,
   UnarchiveIcon,
   UserIcon,
-} from "../face/glyphs.js";
+} from "../icons/lucide-glyphs.js";
 import { MARK_PROVIDER, ProviderMark } from "../marks/provider-mark.js";
 import { lucideGlyph } from "./lucide-glyph.js";
 import {

@@ -1,15 +1,15 @@
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
+import { ArrowLeftIcon, ArrowRightIcon } from "../../face/glyphs.js";
+import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
 import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
   ComposeIcon,
   GearIcon,
   SearchIcon,
-} from "../../face/glyphs.js";
-import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
-import { SidebarIcon, SidePanelIcon } from "../../icons/lucide-glyphs.js";
+  SidebarIcon,
+  SidePanelIcon,
+} from "../../icons/lucide-glyphs.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";

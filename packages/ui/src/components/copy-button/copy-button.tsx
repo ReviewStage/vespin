@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { useEffect, useRef, useState } from "react";
-import { CheckIcon } from "../../face/glyphs.js";
 import { GLYPH } from "../../icons/glyph-registry.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { useWait } from "../../wait.js";
 import { ANNOUNCE, type Announce, announce, type Retire } from "../announcer/announcer.js";
 import { type ButtonSize, IconButton } from "../button/button.js";

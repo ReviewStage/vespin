@@ -9,16 +9,14 @@ import {
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
-  ExitFullScreenIcon,
   FastForwardIcon,
-  FullScreenIcon,
   NextFrameIcon,
   PauseIcon,
   PlayIcon,
   PreviousFrameIcon,
   RewindIcon,
 } from "../../face/glyphs.js";
-import { ExpandIcon } from "../../icons/lucide-glyphs.js";
+import { ExitFullScreenIcon, ExpandIcon, FullScreenIcon } from "../../icons/lucide-glyphs.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";

@@ -1,7 +1,8 @@
 import type { ComponentPropsWithRef, ReactNode, Ref, RefObject } from "react";
 import { useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { cn } from "../../cn.js";
-import { CheckIcon, ChevronRightIcon } from "../../face/glyphs.js";
+import { ChevronRightIcon } from "../../face/glyphs.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {

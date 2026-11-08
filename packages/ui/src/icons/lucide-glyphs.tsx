@@ -1,39 +1,63 @@
 import {
+  Archive,
+  ArchiveRestore,
   AudioLines,
   Bold,
   Bot,
+  Check,
   CircleAlert,
+  CircleArrowUp,
   CircleCheck,
   Code,
+  CodeXml,
+  Copy,
+  Download,
+  ExternalLink,
   Eye,
   EyeOff,
+  FileText,
+  Folder,
   Heading1,
   Heading2,
   Heading3,
+  Image,
   Inbox,
   Italic,
+  Keyboard,
+  Laptop,
   Link,
   List,
   ListChecks,
   ListOrdered,
+  Maximize,
   Maximize2,
   MessageSquare,
   MessageSquarePlus,
+  Mic,
+  Minimize,
   Minimize2,
   Minus,
+  Monitor,
   PanelLeft,
   PanelRight,
+  Pencil,
   Pin,
   PinOff,
   Plug,
   RotateCw,
+  Search,
   SearchX,
+  Settings,
   SquareCode,
+  SquarePen,
+  SquareTerminal,
   Strikethrough,
   Table,
   TextQuote,
+  Trash2,
   Type,
   Unlink,
+  User,
 } from "lucide-react";
 
 import { lucideGlyph } from "./lucide-glyph.js";
@@ -42,7 +66,7 @@ import { lucideGlyph } from "./lucide-glyph.js";
  * lucide-glyphs.tsx -- the glyphs `glyphs.tsx` once drew as copies of
  * Lucide's, now Lucide's own, under the names their call sites already import.
  *
- * Twenty-eight were Lucide's paths redrawn in our stroke and three were
+ * Fifty-three were Lucide's paths redrawn in our stroke and three were
  * Tabler's (the plug and both pins), each beside a Lucide glyph of the same
  * meaning. They are Lucide's drawing now, in our stroke (`lucide-glyph.tsx`),
  * so there is one drawing of each. A name here goes when the last screen that
@@ -166,3 +190,79 @@ export const ShowSecretIcon = lucideGlyph(Eye, "icon-button-glyph");
 
 /** The eye struck through: masks a secret's typed characters again. */
 export const HideSecretIcon = lucideGlyph(EyeOff, "icon-button-glyph");
+
+/*
+ * The everyday controls' glyphs: copy, edit, archive, search, settings, and
+ * the rest a row or a toolbar draws beside the registry's Lucide glyphs.
+ */
+
+/** Sits beside a provider's name to say it is connected, in the state palette. */
+export const CheckIcon = lucideGlyph(Check, "credential-check");
+
+/** A check, drawn as a button's glyph: marks a task done. */
+export const MarkDoneIcon = lucideGlyph(Check, "icon-button-glyph");
+
+export const CopyIcon = lucideGlyph(Copy, "icon-button-glyph");
+
+export const PencilIcon = lucideGlyph(Pencil, "icon-button-glyph");
+
+export const TrashIcon = lucideGlyph(Trash2, "icon-button-glyph");
+
+/** A box under its lid: puts an agent, or a task left archived, away under Archived. */
+export const ArchiveIcon = lucideGlyph(Archive, "icon-button-glyph");
+
+/** A box with an arrow rising out of it: brings an archived task back. */
+export const UnarchiveIcon = lucideGlyph(ArchiveRestore, "icon-button-glyph");
+
+/** The display the app stands on: everything about where and how it is drawn. */
+export const DisplayIcon = lucideGlyph(Monitor, "settings-icon");
+
+export const KeyboardIcon = lucideGlyph(Keyboard, "settings-icon");
+
+/** Heads the Updates section: the arrival a newer release waits as. */
+export const DownloadIcon = lucideGlyph(Download, "settings-icon");
+
+/** An arrow rising in a circle: the sidebar's way into a newer release. */
+export const UpdateIcon = lucideGlyph(CircleArrowUp, "settings-icon");
+
+/** Drawn rather than typed: a ↗ character depends on a font having one. */
+export const ExternalIcon = lucideGlyph(ExternalLink, "link-icon");
+
+/** A person: the account the app is signed in as. */
+export const UserIcon = lucideGlyph(User, "settings-icon");
+
+/** A magnifier: the list read for the rows that say the typed words. */
+export const SearchIcon = lucideGlyph(Search, "search-glyph");
+
+/** Work happening on this Mac: the machine it is happening on. */
+export const LaptopIcon = lucideGlyph(Laptop, "filter-icon");
+
+/** The microphone itself — what macOS's own access ask is about. */
+export const MicrophoneIcon = lucideGlyph(Mic, "settings-icon");
+
+/** A picture, on the control that attaches one. */
+export const ImageIcon = lucideGlyph(Image, "icon-button-glyph");
+
+/** A pencil over an open square: a new piece of work, as every chat app's compose button draws it. */
+export const ComposeIcon = lucideGlyph(SquarePen, "icon-button-glyph");
+
+/** A cog: the account's row that leads to Settings, drawn the way every app draws settings. */
+export const GearIcon = lucideGlyph(Settings, "gear-glyph");
+
+/** A terminal's prompt: the Settings page about the coding agents that run in one. Outline, like the other pages' glyphs. */
+export const TerminalIcon = lucideGlyph(SquareTerminal, "settings-icon");
+
+/** A page with its corner turned down and lines of text on it: the task's own document. */
+export const DocumentIcon = lucideGlyph(FileText, "icon-button-glyph");
+
+/** A folder with its tab: a repository whose owner's picture is not drawn. */
+export const FolderIcon = lucideGlyph(Folder, "icon-button-glyph");
+
+/** Four corners turned out: a video grown to fill the screen. */
+export const FullScreenIcon = lucideGlyph(Maximize, "icon-button-glyph");
+
+/** Four corners turned in: a full-screen video brought back to its place. */
+export const ExitFullScreenIcon = lucideGlyph(Minimize, "icon-button-glyph");
+
+/** A pair of angle brackets with a slash between them: code. */
+export const CodeIcon = lucideGlyph(CodeXml, "icon-button-glyph");

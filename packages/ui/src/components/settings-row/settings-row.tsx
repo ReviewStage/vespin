@@ -1,7 +1,6 @@
 import { type ReactNode, useId } from "react";
 import { cn } from "../../cn.js";
-import { CheckIcon } from "../../face/glyphs.js";
-import { AlertIcon } from "../../icons/lucide-glyphs.js";
+import { AlertIcon, CheckIcon } from "../../icons/lucide-glyphs.js";
 import type { ShownError } from "../../reported-failure.js";
 import {
   Item,

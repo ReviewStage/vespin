@@ -1,6 +1,6 @@
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import { cn } from "../cn.js";
-import { CheckIcon } from "../face/glyphs.js";
+import { CheckIcon } from "../icons/lucide-glyphs.js";
 import { ignoredByReplay } from "../session-replay-marks.js";
 
 /**

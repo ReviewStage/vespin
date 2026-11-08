@@ -39,78 +39,6 @@ function Glyph({
   );
 }
 
-/** Sits beside a provider's name to say it is connected, in the state palette. */
-export function CheckIcon(): React.JSX.Element {
-  return (
-    <Glyph className="credential-check">
-      <path d="M4.8 12.6 9.6 17.3 19.2 6.9" />
-    </Glyph>
-  );
-}
-
-export function CopyIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <rect x="8.6" y="8.6" width="11" height="11" rx="2.4" />
-      <path d="M5.6 15.4H5A2.4 2.4 0 0 1 2.6 13V5A2.4 2.4 0 0 1 5 2.6h8A2.4 2.4 0 0 1 15.4 5v.6" />
-    </Glyph>
-  );
-}
-
-export function PencilIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M16.3 3.8a2.3 2.3 0 0 1 3.9 1.6 2.3 2.3 0 0 1-.7 1.6L8.4 18.1l-4.5 1.1 1.1-4.5z" />
-      <path d="M14.6 5.5l3.9 3.9" />
-    </Glyph>
-  );
-}
-
-export function TrashIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M4.4 6.7h15.2" />
-      <path d="M9.4 6.7V4.6a1.3 1.3 0 0 1 1.3-1.3h2.6a1.3 1.3 0 0 1 1.3 1.3v2.1" />
-      <path d="M6.7 6.7l.9 12.9a1.7 1.7 0 0 0 1.7 1.6h5.4a1.7 1.7 0 0 0 1.7-1.6l.9-12.9" />
-      <path d="M10.4 10.6v6.6" />
-      <path d="M13.6 10.6v6.6" />
-    </Glyph>
-  );
-}
-
-/** A check, drawn as a button's glyph: marks a task done. */
-export function MarkDoneIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M4.8 12.6 9.6 17.3 19.2 6.9" />
-    </Glyph>
-  );
-}
-
-/** A box under its lid: puts an agent, or a task left archived, away under Archived. */
-export function ArchiveIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <rect x="3" y="4" width="18" height="4.4" rx="1.1" />
-      <path d="M4.8 8.4v9.8a1.8 1.8 0 0 0 1.8 1.8h10.8a1.8 1.8 0 0 0 1.8-1.8V8.4" />
-      <path d="M10 12.4h4" />
-    </Glyph>
-  );
-}
-
-/** A box with an arrow rising out of it: brings an archived task back. */
-export function UnarchiveIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <rect x="3" y="4" width="18" height="4.4" rx="1.1" />
-      <path d="M4.8 8.4v9.8a1.8 1.8 0 0 0 1.8 1.8h1.8" />
-      <path d="M19.2 8.4v9.8a1.8 1.8 0 0 1-1.8 1.8h-1.8" />
-      <path d="M12 20v-7.6" />
-      <path d="m9.2 15 2.8-2.8 2.8 2.8" />
-    </Glyph>
-  );
-}
-
 /** Stands down without choosing: the cancel a control becomes mid-action. */
 export function CloseIcon(): React.JSX.Element {
   return (
@@ -190,49 +118,6 @@ export function ArrowDownIcon(): React.JSX.Element {
   );
 }
 
-/** The display the app stands on: everything about where and how it is drawn. */
-export function DisplayIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <rect x="3.2" y="4.4" width="17.6" height="12.2" rx="2" />
-      <path d="M9.4 20.2h5.2" />
-      <path d="M12 16.6v3.6" />
-    </Glyph>
-  );
-}
-
-export function KeyboardIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <rect x="2.4" y="6" width="19.2" height="12" rx="2.4" />
-      <path d="M6.4 10h.01M10 10h.01M13.6 10h.01M17.2 10h.01" />
-      <path d="M7.6 14h8.8" />
-    </Glyph>
-  );
-}
-
-/** Heads the Updates section: the arrival a newer release waits as. */
-export function DownloadIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <path d="M12 4.2v9.6" />
-      <path d="m7.6 10 4.4 4.4L16.4 10" />
-      <path d="M4.8 19.2h14.4" />
-    </Glyph>
-  );
-}
-
-/** An arrow rising in a circle: the sidebar's way into a newer release. */
-export function UpdateIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <circle cx="12" cy="12" r="8.4" />
-      <path d="M12 16.2V7.8" />
-      <path d="m8.4 11.4 3.6-3.6 3.6 3.6" />
-    </Glyph>
-  );
-}
-
 /** An arrow up and to the right, set after a link's words: a press leaves the place for another. */
 export function ArrowUpRightIcon(): React.JSX.Element {
   return (
@@ -240,69 +125,6 @@ export function ArrowUpRightIcon(): React.JSX.Element {
     <Glyph className="ui-text-link-out ms-[0.12em] inline-block size-[0.78em] align-[-0.02em] opacity-55 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-hover/text-link:opacity-100 group-focus-visible/text-link:opacity-100">
       <path d="M7 17 17 7" />
       <path d="M8 7h9v9" />
-    </Glyph>
-  );
-}
-
-/** Drawn rather than typed: a ↗ character depends on a font having one. */
-export function ExternalIcon(): React.JSX.Element {
-  return (
-    <Glyph className="link-icon">
-      <path d="M9.4 4.6H5.2A1.6 1.6 0 0 0 3.6 6.2v12.6a1.6 1.6 0 0 0 1.6 1.6h12.6a1.6 1.6 0 0 0 1.6-1.6v-4.2" />
-      <path d="M14 3.6h6.4V10" />
-      <path d="M10.4 13.6 20.1 3.9" />
-    </Glyph>
-  );
-}
-
-/** A person: the account the app is signed in as. */
-export function UserIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <circle cx="12" cy="8.2" r="3.6" />
-      <path d="M5.4 19.8a6.6 6.6 0 0 1 13.2 0" />
-    </Glyph>
-  );
-}
-
-/** A magnifier: the list read for the rows that say the typed words. */
-export function SearchIcon(): React.JSX.Element {
-  return (
-    <Glyph className="search-glyph">
-      <circle cx="10.6" cy="10.6" r="6.1" />
-      <path d="M15.2 15.2L20.2 20.2" />
-    </Glyph>
-  );
-}
-
-/** Work happening on this Mac: the machine it is happening on. */
-export function LaptopIcon(): React.JSX.Element {
-  return (
-    <Glyph className="filter-icon">
-      <rect x="4.2" y="5.4" width="15.6" height="10.4" rx="1.7" />
-      <path d="M2.4 18.8h19.2" />
-    </Glyph>
-  );
-}
-
-/** The microphone itself — what macOS's own access ask is about. */
-export function MicrophoneIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <rect x="9.2" y="2.6" width="5.6" height="10.6" rx="2.8" />
-      <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0" />
-      <path d="M12 17.8V21" />
-    </Glyph>
-  );
-}
-
-/** A picture, on the control that attaches one. */
-export function ImageIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <rect x="3.4" y="4.6" width="17.2" height="14.8" rx="2.2" />
-      <circle cx="8.6" cy="9.6" r="1.6" />
-      <path d="m3.8 17.4 4.8-4.6 3.4 3.2 3.6-3.6 4.8 4.6" />
     </Glyph>
   );
 }
@@ -354,64 +176,12 @@ export function McpIcon(): React.JSX.Element {
   );
 }
 
-/** A pencil over an open square: a new piece of work, as every chat app's compose button draws it. */
-export function ComposeIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M11.2 4.6H6a2.6 2.6 0 0 0-2.6 2.6v10.6A2.6 2.6 0 0 0 6 20.4h10.6a2.6 2.6 0 0 0 2.6-2.6v-5.2" />
-      <path d="M17.5 3.9a2 2 0 0 1 2.8 2.8l-7.6 7.6-3.6.8.8-3.6z" />
-    </Glyph>
-  );
-}
-
-/** A cog: the account's row that leads to Settings, drawn the way every app draws settings. */
-export function GearIcon(): React.JSX.Element {
-  return (
-    <Glyph className="gear-glyph">
-      <path d="M10.4 5.3L10.8 2.8L13.2 2.8L13.6 5.3A6.9 6.9 0 0 1 15.7 6.1L17.7 4.6L19.4 6.3L17.9 8.3A6.9 6.9 0 0 1 18.7 10.4L21.2 10.8L21.2 13.2L18.7 13.6A6.9 6.9 0 0 1 17.9 15.7L19.4 17.7L17.7 19.4L15.7 17.9A6.9 6.9 0 0 1 13.6 18.7L13.2 21.2L10.8 21.2L10.4 18.7A6.9 6.9 0 0 1 8.3 17.9L6.3 19.4L4.6 17.7L6.1 15.7A6.9 6.9 0 0 1 5.3 13.6L2.8 13.2L2.8 10.8L5.3 10.4A6.9 6.9 0 0 1 6.1 8.3L4.6 6.3L6.3 4.6L8.3 6.1A6.9 6.9 0 0 1 10.4 5.3Z" />
-      <circle cx="12" cy="12" r="3" />
-    </Glyph>
-  );
-}
-
-/** A terminal's prompt: the Settings page about the coding agents that run in one. Outline, like the other pages' glyphs. */
-export function TerminalIcon(): React.JSX.Element {
-  return (
-    <Glyph>
-      <rect x="2.6" y="4.6" width="18.8" height="14.8" rx="2.4" />
-      <path d="m7 9.2 3.2 2.8L7 14.8" />
-      <path d="M12.6 14.8h4.2" />
-    </Glyph>
-  );
-}
-
 /** A lit bulb: what our agents remember for the workspace. */
 export function MemoryIcon(): React.JSX.Element {
   return (
     <Glyph className="icon-button-glyph">
       <path d="M12 3.6a5.4 5.4 0 0 0-3.2 9.8c.7.5 1.1 1.3 1.1 2.1v1.5h4.2v-1.5c0-.8.4-1.6 1.1-2.1A5.4 5.4 0 0 0 12 3.6Z" />
       <path d="M9.9 19.6h4.2" />
-    </Glyph>
-  );
-}
-
-/** A page with its corner turned down and lines of text on it: the task's own document. */
-export function DocumentIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M14.2 3.4H7.2a2 2 0 0 0-2 2v13.2a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2V8Z" />
-      <path d="M14.2 3.4V8h4.6" />
-      <path d="M8.8 12.6h6.4" />
-      <path d="M8.8 16.2h4.4" />
-    </Glyph>
-  );
-}
-
-/** A folder with its tab: a repository whose owner's picture is not drawn. */
-export function FolderIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M3.6 7.2a2 2 0 0 1 2-2h3.7l2 2.2h7.1a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2H5.6a2 2 0 0 1-2-2Z" />
     </Glyph>
   );
 }
@@ -475,30 +245,6 @@ export function FastForwardIcon(): React.JSX.Element {
   );
 }
 
-/** Four corners turned out: a video grown to fill the screen. */
-export function FullScreenIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M4.8 9.4V4.8h4.6" />
-      <path d="M14.6 4.8h4.6v4.6" />
-      <path d="M19.2 14.6v4.6h-4.6" />
-      <path d="M9.4 19.2H4.8v-4.6" />
-    </Glyph>
-  );
-}
-
-/** Four corners turned in: a full-screen video brought back to its place. */
-export function ExitFullScreenIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M9.4 4.8v4.6H4.8" />
-      <path d="M14.6 4.8v4.6h4.6" />
-      <path d="M19.2 14.6h-4.6v4.6" />
-      <path d="M4.8 14.6h4.6v4.6" />
-    </Glyph>
-  );
-}
-
 /** Stops what is playing: the square every transport draws for stop, at the triangle's weight. */
 export function StopIcon(): React.JSX.Element {
   return (
@@ -534,17 +280,6 @@ export function FoldChevronIcon(): React.JSX.Element {
   return (
     <Glyph className="ui-disclosure-chevron">
       <path d="m9.4 5.8 6.2 6.2-6.2 6.2" />
-    </Glyph>
-  );
-}
-
-/** A pair of angle brackets with a slash between them: code. */
-export function CodeIcon(): React.JSX.Element {
-  return (
-    <Glyph className="icon-button-glyph">
-      <path d="M8.2 7.4 3.6 12l4.6 4.6" />
-      <path d="M15.8 7.4 20.4 12l-4.6 4.6" />
-      <path d="M13.6 5 10.4 19" />
     </Glyph>
   );
 }

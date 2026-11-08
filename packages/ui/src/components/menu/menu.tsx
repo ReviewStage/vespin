@@ -14,7 +14,8 @@ import { createPortal } from "react-dom";
 import { cn } from "../../cn.js";
 import { isComposingKey } from "../../composing-key.js";
 import { cssCustomProperties } from "../../css.js";
-import { CheckIcon, ChevronRightIcon } from "../../face/glyphs.js";
+import { ChevronRightIcon } from "../../face/glyphs.js";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import {
