@@ -51,14 +51,13 @@ interface ResetField {
 }
 
 /**
- * A page's reset that landed: the settings it changed, and the
- * page's writes and the window's settings as they stand, which its Undo
- * sends on and reads, since a page's control is gone once its reset lands.
+ * A page's reset that landed: the settings it changed, and the page's
+ * writes, which its Undo sends on, since a page's control is gone once its
+ * reset lands.
  */
 interface SettingsReset {
   readonly changed: readonly ResetField[];
   readonly writes: SettingsWrites;
-  readonly now: () => AppSettingsView | undefined;
 }
 
 /** A reset's or its Undo's answer: kept, or refused, with what refused it and what ⌘Z's toast says. */
@@ -154,8 +153,8 @@ const resetWrite = (
   kind: ACT_KIND.SETTINGS_RESET,
   read: (_settings, reset) => reset,
   // Note that the reset keeps every field of its group but those it takes back, so nothing else moves.
-  act: (send, { changed, now }) => {
-    const due = standing(now(), changed, "before").map(({ field }) => field);
+  act: (send, { changed }, settings) => {
+    const due = standing(settings, changed, "before").map(({ field }) => field);
     const kept = APP_SETTING_FIELDS.filter(
       (field) => APP_SETTING_SCHEMA[field].resetScope === scope && !due.includes(field),
     );
@@ -167,10 +166,10 @@ const resetWrite = (
       (error: unknown): ResetAnswer => ({ kept: false, cause: error, note: REDO_REFUSED_NOTE }),
     );
   },
-  undo: (_send, { changed, writes, now }) =>
+  undo: (_send, { changed, writes }, settings) =>
     writeBack(
       writes,
-      standing(now(), changed, "after").map(({ field, before }): HeldSetting => [field, before]),
+      standing(settings, changed, "after").map(({ field, before }): HeldSetting => [field, before]),
     ).then(
       (taken): ResetAnswer =>
         taken.kept ? RESET_KEPT : { kept: false, cause: taken.cause, note: UNDO_REFUSED_NOTE },
@@ -244,7 +243,7 @@ function ResetPageButton({
       const changed = changedBy(before, appSettingsView(result.settings), asked).filter(
         ({ field }) => !unseen.includes(field),
       );
-      keepWrite(resetWrite(asked), doors, { changed, writes, now });
+      keepWrite(resetWrite(asked), doors, { changed, writes });
       return result;
     });
   };

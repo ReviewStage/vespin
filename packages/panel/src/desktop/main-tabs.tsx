@@ -41,7 +41,7 @@ import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
 import { useCopyLinkItem } from "../copy-link-item.js";
 import { DraftMark, leftMark } from "../draft-mark.js";
-import { agentName, startsOwnAgents } from "../tasks/agent-model.js";
+import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
 import { AgentTab, StartingAgentTab } from "../tasks/agent-tab.js";
 import { AgentTabCard } from "../tasks/agent-tab-card.js";
@@ -399,11 +399,10 @@ export function inboxEntries(
 /**
  * New agent, the one start the "+" and the plan's agents offer alike:
  * a draft opened in the column, unavailable while a Start is out, and left
- * out on an archived task and on a pilot task, whose agents are its pilot's
- * to start (`startsOwnAgents`).
+ * out on an archived task.
  */
 export function newAgentStarts(main: MainTabsControl, agents: AgentsControl): MenuAction[] {
-  if (agents.onUnarchive !== undefined || !startsOwnAgents(agents.mode)) return [];
+  if (agents.onUnarchive !== undefined) return [];
   const reason = agents.start.busy ? NEW_AGENT_STARTING : undefined;
   return [
     {

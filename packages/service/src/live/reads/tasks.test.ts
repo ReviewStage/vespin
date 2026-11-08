@@ -44,7 +44,6 @@ import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_ARCHIVER,
   AGENT_FAILURE,
-  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_OWNER,
   AGENT_STATUS,
@@ -714,44 +713,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "a task's pilot says it is one, as the held read reads it, while a coder does not",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openUser;
-        const workspace = yield* openWorkspace(owner);
-        const coder = yield* openAgent(owner, { workspaceId: workspace }, 60_000);
-
-        const read = yield* liveListOf(owner, NOW);
-
-        assert.deepEqual(read, yield* heldListOf(owner, NOW));
-        const listed = new Map(read.planlessAgents?.map((agent) => [agent.id, agent]));
-        assert.equal(listed.get(coder.id)?.pilot, undefined);
-
-        const plan = yield* startTask(owner, { name: "Teammate invitations" });
-        const { agent: pilot } = Option.getOrThrow(
-          yield* createAgent(owner, {
-            taskId: plan.id,
-            descriptionSnapshot: "# Invitations\n",
-            prompt: null,
-            kind: AGENT_KIND.PILOT,
-            idempotencyKey: randomUUID(),
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            repository: "acme/relay",
-            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-          }),
-        );
-        const taskAgents = taskAgentsOfLiveRows(yield* liveRowsOf(owner), NOW);
-        assert.deepEqual(
-          taskAgents.filter((agent) => agent.planId === plan.id).map(summaryOf),
-          yield* heldTaskAgentsOf(owner, plan.id, NOW),
-        );
-        const listedPilot = taskAgents.find((agent) => agent.id === pilot.id);
-        assert.equal(listedPilot?.pilot, true);
-      }),
-  );
-
-  it.effect(
     "an agent's sandbox reads open once its conversation claims a session, as the held read reads it",
     () =>
       Effect.gen(function* () {
@@ -879,55 +840,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         assert.ok(
           !seen.some((line) => line.id === hidden.id),
           "the teammate's list leaves out the agent they do not see",
-        );
-      }),
-  );
-
-  it.effect(
-    "name the pilot that started an agent, on its task or another, and no other starter",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openUser;
-        const plan = yield* startTask(owner, { name: "Teammate invitations" });
-        const child = yield* startTask(owner, { name: "Invitation emails" });
-        /** An agent of the kind given on the task, started by the agent named, or by the member where none is. */
-        const started = (
-          taskId: string,
-          kind: typeof AGENT_KIND.CODER | typeof AGENT_KIND.PILOT,
-          startedByAgentId?: string,
-        ) =>
-          Effect.map(
-            createAgent(owner, {
-              taskId,
-              descriptionSnapshot: "# Invitations\n",
-              prompt: null,
-              kind,
-              ...(startedByAgentId === undefined ? undefined : { startedByAgentId }),
-              idempotencyKey: randomUUID(),
-              model: "anthropic/claude-opus-5.5",
-              effort: "high",
-              repository: "acme/relay",
-              runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-            }),
-            (made) => Option.getOrThrow(made).agent,
-          );
-        const pilot = yield* started(plan.id, AGENT_KIND.PILOT);
-        yield* renameAgentCommitted(owner, pilot.id, "Invitations pilot");
-        const coder = yield* started(plan.id, AGENT_KIND.CODER, pilot.id);
-        const subPilot = yield* started(child.id, AGENT_KIND.PILOT, pilot.id);
-        const helper = yield* started(plan.id, AGENT_KIND.CODER, coder.id);
-
-        const agents = taskAgentsOfLiveRows(yield* liveRowsOf(owner), NOW);
-        const pilotOf = (id: string) => agents.find((agent) => agent.id === id)?.startedByPilot;
-        const named = {
-          agentId: pilot.id,
-          taskId: plan.id,
-          title: "Invitations pilot",
-          model: "anthropic/claude-opus-5.5",
-        };
-        assert.deepEqual(
-          [pilot, coder, subPilot, helper].map((agent) => pilotOf(agent.id)),
-          [undefined, named, named, undefined],
         );
       }),
   );

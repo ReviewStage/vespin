@@ -2020,14 +2020,20 @@ it.effect(
           { userId: alan, role: "member" },
         ]);
 
-        const byOwner = yield* settingExperiment(plugin, ada, acme, EXPERIMENT.PILOT, true);
+        const byOwner = yield* settingExperiment(plugin, ada, acme, EXPERIMENT.MEMORY, true);
         const byAdmin = readAs(
           yield* settingExperiment(plugin, grace, acme, EXPERIMENT.DESCRIPTIONS, true),
           workspaceAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
         ).workspace;
-        const byMember = yield* settingExperiment(plugin, alan, acme, EXPERIMENT.PILOT, false);
-        const byOutsider = yield* settingExperiment(plugin, mallory, acme, EXPERIMENT.PILOT, false);
+        const byMember = yield* settingExperiment(plugin, alan, acme, EXPERIMENT.MEMORY, false);
+        const byOutsider = yield* settingExperiment(
+          plugin,
+          mallory,
+          acme,
+          EXPERIMENT.MEMORY,
+          false,
+        );
         const accountsOwn = yield* settingExperiment(plugin, ada, acme, EXPERIMENT.SKILLS, true);
         const alansListed = yield* workspacesOf(plugin.seams, NO_GITHUB_TO_READ, alan);
 
@@ -2040,7 +2046,7 @@ it.effect(
           }));
         const expected = [
           { experiment: EXPERIMENT.DESCRIPTIONS, on: true, changedBy: "Grace Hopper" },
-          { experiment: EXPERIMENT.PILOT, on: true, changedBy: "Ada Lovelace" },
+          { experiment: EXPERIMENT.MEMORY, on: true, changedBy: "Ada Lovelace" },
         ];
         assert.deepEqual(chosen(byAdmin), expected);
         assert.deepEqual(chosen(alansListed.find((each) => each.id === acme)), expected);

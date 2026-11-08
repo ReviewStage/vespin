@@ -255,7 +255,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
         yield* connectInstallation(acme.id, 901, GITHUB_INSTALLATION_STATUS.SUSPENDED, now);
         yield* setWorkspaceExperiment({
           organizationId: acme.id,
-          experiment: EXPERIMENT.PILOT,
+          experiment: EXPERIMENT.MEMORY,
           on: true,
           by: owner,
         });
@@ -281,7 +281,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
           })),
           [
             { experiment: EXPERIMENT.DESCRIPTIONS, on: false, changedBy: "Teammate" },
-            { experiment: EXPERIMENT.PILOT, on: true, changedBy: "Owner" },
+            { experiment: EXPERIMENT.MEMORY, on: true, changedBy: "Owner" },
           ],
         );
         assert.deepEqual(yield* workspaceGitHubAccountId(teammate, acme.id), Option.some(902));

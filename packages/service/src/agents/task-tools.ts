@@ -5,18 +5,15 @@ import {
   type TaskIdTaken,
 } from "@repo/database/models/task-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { AGENT_KIND } from "@repo/features/agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   DESCRIPTION_ACTOR,
   TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
-  TASK_MODE,
   TASK_PRIORITY,
   TASK_STATUS,
   type TaskOrigin,
-  taskModeSchema,
   taskPrioritySchema,
   taskStatusSchema,
 } from "@repo/features/task-wire";
@@ -83,10 +80,10 @@ import { workspaceNamingOf, writtenTaskMention } from "./written-mentions.js";
  * the sidebar, through the one make every door shares
  * (`tasks/task-create-relation.ts`): in the caller's workspace, on the
  * repository named, the one the caller works in where none is, or none, and
- * with a description to start from where one is given. Only a pilot may make a task
- * in pilot mode, and only as a child, which is how it gives a part too big
- * for one pull request a pilot of its own. It is made under an id drawn from
- * the call's key (`called-id.ts`), so a call run again answers the
+ * with a description to start from where one is given, always worked by its
+ * agents: a `mode` an agent whose session listed it before Pilot was removed
+ * still sends is ignored, as any key the input does not declare is. It is
+ * made under an id drawn from the call's key (`called-id.ts`), so a call run again answers the
  * task it made and makes no second.
  * Every answer is data the model reads, never a credential.
  */
@@ -208,7 +205,7 @@ export const CREATE_TASK_REFUSAL = {
     `(${Object.values(TASK_PRIORITY).join(", ")}) or none, an assignee as a member's ` +
     `mention link or none, a parent task by the id ${AGENT_TOOL.LIST_TASKS} answered or none, ` +
     `a relation (${Object.values(TASK_CREATE_RELATION_KIND).join(", ")}) to a task by that id ` +
-    `or none, and a mode (${Object.values(TASK_MODE).join(", ")}) or none.`,
+    "or none.",
   NOT_MEMBER:
     "Not made: that assignee is no member of the workspace, or names no person; name a member by " +
     `the mention link ${AGENT_TOOL.LIST_TASKS} hands you, or leave it out for no one.`,
@@ -229,16 +226,10 @@ export const CREATE_TASK_REFUSAL = {
   RELATION_CYCLE:
     "Not made: that relation would close a cycle among the workspace's tasks; read_task names " +
     "how they stand, and relate it another way.",
-  NOT_PILOT:
-    "Not made: only a pilot makes a task in pilot mode; leave mode out to make one its agents " +
-    "work, or tell your pilot the task is too big for one pull request.",
   // Note that the field was `plan` before the task's document was its description, and an agent whose session listed the tool then may still send it, which the schema would otherwise drop and make the task empty.
   RENAMED_DESCRIPTION:
     "Not made: the task's starting text is now named description, not plan; call again with the " +
     "same text as description.",
-  PILOT_NO_PARENT:
-    "Not made: a task in pilot mode is a child task of yours; give it a parentTaskId, your own " +
-    "task's id where it is a part of your work.",
 } as const;
 
 /** `create_task`'s fields before its description, which every workspace offers. */
@@ -264,7 +255,7 @@ const CREATE_TASK_FIELDS_BEFORE = {
   ),
 };
 
-/** `create_task`'s fields between its description and its mode, which every workspace offers. */
+/** `create_task`'s fields after its description, which every workspace offers. */
 const CREATE_TASK_FIELDS_AFTER = {
   status: Schema.optionalKey(
     describeWire(
@@ -316,25 +307,12 @@ const CREATE_TASK_DESCRIPTION_FIELD = {
   ),
 };
 
-/** `create_task`'s mode, offered only where the workspace has Pilot on. */
-const CREATE_TASK_MODE_FIELD = {
-  mode: Schema.optionalKey(
-    describeWire(
-      taskModeSchema,
-      "How it is worked: agent, by the agents started on it, or pilot, by a pilot of its own " +
-        "that breaks it into child tasks, for a child too big for one pull request. Only a " +
-        "pilot may ask for pilot, and only as a child; left out, agent.",
-    ),
-  ),
-};
-
-/** `create_task`'s input in the words of the workspace's experiments: its description where it has Task descriptions on, and its mode where it has Pilot on. */
-function createTaskInputOf(on: Pick<ExperimentsOn, "descriptionsOn" | "pilotOn">) {
+/** `create_task`'s input in the words of the workspace's experiments: its description where it has Task descriptions on. */
+function createTaskInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return Schema.Struct({
     ...CREATE_TASK_FIELDS_BEFORE,
     ...(on.descriptionsOn ? CREATE_TASK_DESCRIPTION_FIELD : {}),
     ...CREATE_TASK_FIELDS_AFTER,
-    ...(on.pilotOn ? CREATE_TASK_MODE_FIELD : {}),
   });
 }
 
@@ -342,7 +320,6 @@ const CREATE_TASK_INPUT = Schema.Struct({
   ...CREATE_TASK_FIELDS_BEFORE,
   ...CREATE_TASK_DESCRIPTION_FIELD,
   ...CREATE_TASK_FIELDS_AFTER,
-  ...CREATE_TASK_MODE_FIELD,
 });
 
 const readCreateAsked = Schema.decodeUnknownResult(CREATE_TASK_INPUT);
@@ -357,7 +334,7 @@ const CREATE_TASK_STARTS_WITH = {
 } as const;
 
 /** `create_task` in the words of the workspace's experiments: its name, its words, and its input schema. */
-export function createTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn" | "pilotOn">) {
+export function createTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
     name: AGENT_TOOL.CREATE_TASK,
     description: createTaskWords(on),
@@ -473,7 +450,7 @@ export function runCreateTask(
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.UNREADABLE));
   }
-  const { name, brief, description, status, priority, assignee, relation, mode } = asked.success;
+  const { name, brief, description, status, priority, assignee, relation } = asked.success;
   if (asked.success.parentTaskId !== undefined && relation !== undefined) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.PARENT_AND_RELATION));
   }
@@ -482,13 +459,6 @@ export function runCreateTask(
     relation?.kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF
       ? relation.taskId
       : asked.success.parentTaskId;
-  // Note that a pilot task is only a pilot's to make, as a child, since its first agent is a pilot of its own.
-  if (mode === TASK_MODE.PILOT && callerAgent(call.caller)?.kind !== AGENT_KIND.PILOT) {
-    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.NOT_PILOT));
-  }
-  if (mode === TASK_MODE.PILOT && parentTaskId === undefined) {
-    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.PILOT_NO_PARENT));
-  }
   const assigneeId =
     assignee === undefined || assignee === null ? undefined : assigneeIdOf(assignee);
   if (assignee !== undefined && assignee !== null && assigneeId === undefined) {
@@ -528,7 +498,6 @@ export function runCreateTask(
               ...(priority === undefined ? undefined : { priority }),
               ...(assignee === undefined ? undefined : { assigneeId: assigneeId ?? null }),
               ...(parentTaskId === undefined ? undefined : { parentTaskId }),
-              ...(mode === undefined ? undefined : { mode }),
               ...originOf(call),
               text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
               writer: revisionWriterOf(call),

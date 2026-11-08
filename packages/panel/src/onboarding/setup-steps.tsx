@@ -14,7 +14,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
-import { welcomed } from "../desktop/desktop-welcome.js";
+import { useWelcomed } from "../desktop/desktop-welcome.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
 import { AgentConnectSection } from "../settings/agent-auth-section.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -86,7 +86,7 @@ export function useSetupGate(
     (accountId !== undefined && finishedOnDevice.includes(accountId));
   // Note that the models are the ones the host holds for the account, so nothing here asks for them.
   const { models, modelsFailed } = tasks.newTask;
-  const fresh = welcomed(tasks);
+  const fresh = useWelcomed(tasks);
   // Note that a read that failed is taken as an agent standing, so a hitch never stands setup before an account that has worked.
   const agent =
     models !== undefined

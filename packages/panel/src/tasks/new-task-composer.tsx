@@ -5,10 +5,8 @@ import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   TASK_CREATE_RELATION_KIND,
-  TASK_MODE,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
-  type TaskMode,
 } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
@@ -16,10 +14,6 @@ import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { SHORTCUT_KEY, type ShortcutChord, shortcutMatches } from "@repo/settings/shortcuts";
 import {
   CHIP_WIDTH,
-  CHOICE_BAR_LOOK,
-  CHOICE_BAR_SIZE,
-  ChoiceBar,
-  type ChoiceItem,
   POPOVER_ALIGN,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -41,7 +35,6 @@ import {
 import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { useOpenSettings } from "../open-settings.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
 import { unrunnableChoice } from "./agent-model.js";
 import { repositorySkillsQueryOptions } from "./agent-reads.js";
@@ -112,13 +105,6 @@ import type { NewTaskAgent, NewTaskStart, TasksControl } from "./use-tasks-tab.j
  * holds the other task's repository as the first, its row checked and
  * disabled saying why, and picks others beside it; a card on a device
  * picks one.
- *
- * While the Pilot experiment is on, a task's card offers Pilot or Agent at
- * the head row's end, set to Agent: how the task is worked, kept on the task
- * as it starts (`TASK_MODE`). A pick holds for this card alone, and a refused
- * card opened again holds the one it was pressed with. A bare task takes
- * the mode picked too, so one started as a pilot task stands as one before
- * any agent is started on it. An automation's card offers none.
  *
  * The words are a coding agent's prompt. Start stands once there are
  * words or files, with a repository or with none, which the chip offers
@@ -238,16 +224,6 @@ const BARE_WORDS: ComposerWords = {
   chord: BARE_CHORD,
 };
 
-/** New task's ways of working a task, while the Pilot experiment is on: Agent first, the one the card starts on. */
-const MODE_CHOICES: readonly ChoiceItem<TaskMode>[] = [
-  { value: TASK_MODE.AGENT, label: "Agent" },
-  {
-    value: TASK_MODE.PILOT,
-    label: "Pilot",
-    hint: `One pilot plans the ${TERM.TASK.one}, splits it into child ${TERM.TASK.many}, and runs ${TERM.AGENT.many} on them`,
-  },
-];
-
 /** Why an automation's agent did not start where the brief and the words pass an agent's first message's bound. */
 const TOO_LONG = "That request is too long.";
 
@@ -278,8 +254,6 @@ interface AgentAsk {
   readonly workspaceId: string | undefined;
   /** The device the task's agents run on, by its id; none for the cloud. */
   readonly deviceId?: string | undefined;
-  /** How the task is worked, where the card offered the choice; none while the Pilot experiment is off. */
-  readonly mode?: TaskMode | undefined;
   /** The relations the task starts in, in the order they were picked. */
   readonly relations: readonly TaskCreateRelation[];
   readonly agent: Omit<NewTaskAgent, "idempotencyKey">;
@@ -291,13 +265,12 @@ export interface NewTaskPress {
   readonly key: string;
 }
 
-/** Whether two presses ask the same: the same task, device, mode, relations in the same order, words, files in the same order, model, servers switched off, and repositories beside the task's in the same order. */
+/** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and repositories beside the task's in the same order. */
 function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
   return (
     a.repository === b.repository &&
     a.workspaceId === b.workspaceId &&
     a.deviceId === b.deviceId &&
-    a.mode === b.mode &&
     a.relations.length === b.relations.length &&
     a.relations.every(
       (relation, index) =>
@@ -424,10 +397,6 @@ export function NewTaskComposer({
   };
   const [starting, setStarting] = useState(false);
   const [note, setNote] = useState<Failure | undefined>(refused?.note);
-  // Pilot or Agent stands on a task's card while the workspace it starts in has the Pilot experiment on, set to Agent.
-  const offersPilot = useWorkspaceExperiment(workspaceId, EXPERIMENT.PILOT) && !forAutomation;
-  const [mode, setMode] = useState<TaskMode>(refused?.card.press.ask.mode ?? TASK_MODE.AGENT);
-  const asked = offersPilot ? mode : undefined;
   // The relations the press that opened the card chose, or the refused card's, which the + menu and the rows change.
   const [related, setRelated] = useState<readonly NewTaskRelation[]>(
     refused?.card.relations ?? (presetRelation === undefined ? [] : [presetRelation]),
@@ -636,7 +605,7 @@ export function NewTaskComposer({
     );
   };
 
-  const begin = (handing: Pick<NewTaskStart, "handed" | "mode" | "card"> = {}) => {
+  const begin = (handing: Pick<NewTaskStart, "handed" | "card"> = {}) => {
     if (starting || devicesUnread) return;
     setStarting(true);
     onStarting?.(true);
@@ -678,7 +647,6 @@ export function NewTaskComposer({
       repository,
       workspaceId,
       deviceId: device?.deviceId,
-      mode: asked,
       relations: relationsAsked(relations),
       agent: {
         prompt,
@@ -694,7 +662,6 @@ export function NewTaskComposer({
     pressed.current = press;
     begin({
       handed: { idempotencyKey: key, ...ask.agent },
-      ...(asked === undefined ? undefined : { mode: asked }),
       card: {
         ...(forAutomation ? { purpose } : undefined),
         relations,
@@ -705,8 +672,8 @@ export function NewTaskComposer({
       },
     });
   };
-  // ⌘Return on a box with nothing in it starts a bare task: no call and no agent, in the mode picked.
-  const bare = () => begin(asked === undefined ? {} : { mode: asked });
+  // ⌘Return on a box with nothing in it starts a bare task: no call and no agent.
+  const bare = () => begin();
   const startsBare = !forAutomation && !filled;
 
   const onKey = (event: KeyboardEvent): boolean => {
@@ -816,19 +783,6 @@ export function NewTaskComposer({
           )}
           {repositoryChip}
         </div>
-        {offersPilot ? (
-          <div className="new-task-mode ml-auto shrink-0">
-            <ChoiceBar<TaskMode>
-              label={`How the ${TERM.TASK.one} is worked`}
-              items={MODE_CHOICES}
-              value={mode}
-              look={CHOICE_BAR_LOOK.SEGMENTED}
-              size={CHOICE_BAR_SIZE.COMPACT}
-              disabled={starting}
-              onChange={setMode}
-            />
-          </div>
-        ) : null}
       </div>
       {relations.length === 0 ? null : (
         <div className={`new-task-relations-dock ${COMPOSER_DOCK_CLASS}`}>

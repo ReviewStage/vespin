@@ -12,13 +12,14 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { draftTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE, type TaskMark } from "@repo/ui/tasks-model";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -27,9 +28,14 @@ import { MemberDirectory } from "../member-directory.js";
 import { OpenPersonProvider } from "../person-door.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
-import { type TasksControl, taskRenameMutation } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { lineWords } from "../testing/actor-line.js";
-import { fakeActPort, fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
+import {
+  fakeActPort,
+  fakeActPortCalls,
+  fakeAppBridge,
+  fakeAppBridgeCalls,
+} from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handMembers, readExperiments, writeExperiments } from "../testing/app-state.js";
 import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
@@ -40,6 +46,7 @@ import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
+import { forgetUndo, UNDO_RAN, undoLast } from "../undo-stack.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { SidebarTask, taskOf } from "./task-actions.js";
 import { taskCardOf } from "./task-card.js";
@@ -110,8 +117,6 @@ afterEach(unmountAll);
 /** The open task's tab, its side panel showing the plan, every per-task press recorded; `PLAN` is open and `OTHER` beside it in the list. */
 function openTab(
   repositories: Readonly<Record<string, string>> = {},
-  deletes: () => Promise<ActionResult> = () =>
-    Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED }),
   renames: () => Promise<boolean> = () => Promise.resolve(true),
 ) {
   const asked: Asked = {
@@ -132,16 +137,20 @@ function openTab(
     activeTaskId: TASK.id,
     region: { kind: DOCUMENT_REGION.READY, task: { ...TASK, ...open } },
     onChangeRepository: (taskId) => asked.changed.push(taskId),
-    onDeleteTask: (taskId) => {
-      asked.deleted.push(taskId);
-      return deletes();
-    },
-    renameTask: taskRenameMutation(({ taskId, name }) => {
-      asked.renamed.push([taskId, name]);
-      return renames();
-    }, undefined),
     onMarkTask: (taskId, mark) => asked.marked.push([taskId, mark]),
     sidePanel: { ...tasksControl().sidePanel, open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
+  });
+  // A delete and a rename leave on the act port, as the window sends them.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_DELETE]: ({ taskId }) => {
+      asked.deleted.push(taskId);
+      return Promise.resolve(true);
+    },
+    [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
+      asked.renamed.push([taskId, name]);
+      return renames();
+    },
   });
   return { tasks, asked };
 }
@@ -1085,7 +1094,7 @@ test("a sidebar task's ⋯, a right-click on it, and the menu key open the same 
 });
 
 test("a sidebar task whose rename was refused reopens its field holding the name typed, with the refusal under it", async () => {
-  const { tasks, asked } = openTab({}, undefined, () => Promise.resolve(false));
+  const { tasks, asked } = openTab({}, () => Promise.resolve(false));
   const press = mountSidebarTask(tasks, OTHER, asked);
   rightClick(press, 40, 60);
   choose("Rename");
@@ -1108,6 +1117,45 @@ test("a sidebar task whose rename was refused reopens its field holding the name
   );
   assert.deepEqual(asked.renamed, [[OTHER.id, "Ship the launch"]]);
   assert.match(document.body.textContent ?? "", /The task could not be renamed\. Try again\./u);
+});
+
+test("⌘Z takes back a sidebar task's rename the service kept, sending its name before", async () => {
+  forgetUndo();
+  const { tasks, asked } = openTab();
+  // Note that main draws the name the service kept, which ⌘Z reads before it sends the old one back.
+  let drawnName = OTHER.name;
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
+      asked.renamed.push([taskId, name]);
+      drawnName = name;
+      return Promise.resolve(true);
+    },
+  });
+  const drawn: TasksControl = {
+    ...tasks,
+    drawnTasks: () => ({ ...IDLE_TASKS_VIEW, tasks: [{ ...OTHER, name: drawnName }] }),
+  };
+  rightClick(mountSidebarTask(drawn, OTHER, asked), 40, 60);
+  choose("Rename");
+  const field = document.querySelector<HTMLInputElement>('input[aria-label="Task name"]');
+  assert.ok(field, "the row's name is its field");
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+      field,
+      "Ship the launch",
+    );
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  await vi.waitFor(() => assert.deepEqual(asked.renamed, [[OTHER.id, "Ship the launch"]]));
+  await act(async () => undefined);
+
+  assert.equal(await undoLast(), UNDO_RAN.APPLIED);
+  assert.deepEqual(asked.renamed, [
+    [OTHER.id, "Ship the launch"],
+    [OTHER.id, OTHER.name],
+  ]);
 });
 
 test("a sidebar task being renamed draws no ⋯ and offers no menu", () => {

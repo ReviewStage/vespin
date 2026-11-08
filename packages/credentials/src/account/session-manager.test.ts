@@ -42,6 +42,8 @@ function manager(options: {
   sessionEmail?: string;
   /** How the service answers a deletion; a deleted account unless given. */
   deleteUser?: AccountClient["deleteUser"];
+  /** How the service answers an identity read; the identity above unless given. */
+  userInfo?: AccountClient["userInfo"];
 }): Effect.Effect<
   {
     instance: AccountSessionManager;
@@ -67,11 +69,13 @@ function manager(options: {
     // SAFETY: Fixture client implements only the AccountClient methods the manager calls.
     const fixtureClient = {
       revoke: options.revoke ?? (() => Effect.void),
-      userInfo: () =>
-        Effect.succeed({
-          ...(options.identity ?? { id: STORED.id, email: STORED.email }),
-          provider: STORED.provider,
-        }),
+      userInfo:
+        options.userInfo ??
+        (() =>
+          Effect.succeed({
+            ...(options.identity ?? { id: STORED.id, email: STORED.email }),
+            provider: STORED.provider,
+          })),
       refresh:
         options.refresh ??
         (() => Effect.succeed({ accessToken: "new-access", refreshToken: "new-refresh" })),
@@ -477,19 +481,39 @@ it.effect(
     }),
 );
 
+/**
+ * The account service as a deletion refused under a session it no longer
+ * takes meets it: the first delete answered 401, as after a deletion whose
+ * answer was lost or a session that lapsed, every later one deleting, and
+ * the identity read answered by `identity`. Each delete's session is kept.
+ */
+function refusingService(identity: () => Response) {
+  const deletedUnder: string[] = [];
+  const client = new AccountClient({
+    baseUrl: "https://accounts.example",
+    clientId: "client",
+    httpClient: fakeHttpClientLayer((url, init) => {
+      if (url.endsWith("/oauth2/userinfo")) return identity();
+      deletedUnder.push(new Headers(init.headers).get("authorization") ?? "");
+      return deletedUnder.length === 1
+        ? jsonResponse({}, HTTP_STATUS.UNAUTHORIZED)
+        : jsonResponse({ success: true });
+    }),
+  });
+  return { client, deletedUnder };
+}
+
 it.effect(
-  "a deletion refused under a session the service no longer takes signs out, and opens no sign-in",
+  "a deletion refused under a session the service no longer takes, for an account the service says is gone, signs out and opens no sign-in",
   () =>
     Effect.gen(function* () {
-      // The service answers as after a deletion that went through but whose answer was lost.
-      const service = new AccountClient({
-        baseUrl: "https://accounts.example",
-        clientId: "client",
-        httpClient: fakeHttpClientLayer(() => jsonResponse({}, HTTP_STATUS.UNAUTHORIZED)),
-      });
+      const service = refusingService(() =>
+        jsonResponse({ error: "invalid_request", error_description: "user not found" }, 400),
+      );
       const subject = yield* manager({
         stored: { ...STORED, sessionToken: "signed-session" },
-        deleteUser: (token) => service.deleteUser(token),
+        deleteUser: (token) => service.client.deleteUser(token),
+        userInfo: (token, provider) => service.client.userInfo(token, provider),
       });
       subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
 
@@ -498,6 +522,51 @@ it.effect(
       assert.equal(account.status, ACCOUNT_STATUS.SIGNED_OUT);
       assert.equal(subject.stored(), undefined);
       assert.deepEqual(subject.opened, []);
+    }),
+);
+
+it.effect(
+  "a deletion refused under a session the service no longer takes, where the account cannot be looked for, is unconfirmed, keeps the account, and opens no sign-in",
+  () =>
+    Effect.gen(function* () {
+      const service = refusingService(() => {
+        throw new TypeError("fetch failed");
+      });
+      const subject = yield* manager({
+        stored: { ...STORED, sessionToken: "signed-session" },
+        deleteUser: (token) => service.client.deleteUser(token),
+        userInfo: (token, provider) => service.client.userInfo(token, provider),
+      });
+      subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
+      const refused = yield* Effect.flip(subject.instance.deleteEverywhere());
+
+      assert.equal(refused._tag, "DeletionUnconfirmed");
+      assert.deepEqual(subject.stored(), { ...STORED, sessionToken: "signed-session" });
+      assert.deepEqual(subject.opened, []);
+    }),
+);
+
+it.effect(
+  "a deletion refused under a session the service no longer takes, for an account that still stands, is asked again under a fresh session",
+  () =>
+    Effect.gen(function* () {
+      const service = refusingService(() =>
+        jsonResponse({ sub: STORED.id ?? "", email: STORED.email }),
+      );
+      const subject = yield* manager({
+        stored: { ...STORED, sessionToken: "lapsed-session" },
+        deleteUser: (token) => service.client.deleteUser(token),
+        userInfo: (token, provider) => service.client.userInfo(token, provider),
+      });
+      subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+      const asked = yield* Effect.forkChild(subject.instance.deleteEverywhere());
+
+      yield* returnCode(yield* Effect.promise(() => openedPage(subject.opened)));
+      const account = yield* Fiber.join(asked);
+
+      assert.equal(account.status, ACCOUNT_STATUS.SIGNED_OUT);
+      assert.deepEqual(service.deletedUnder, ["Bearer lapsed-session", "Bearer signed-session"]);
     }),
 );
 

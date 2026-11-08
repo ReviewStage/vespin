@@ -52,10 +52,9 @@ const ORIGIN_LABEL = {
 
 const ORIGINS_TITLE = "Agents started by origin · this week";
 
-/** The origins' aside: the base every share is of, and the pilots among it. */
+/** The origins' aside: the base every share is of. */
 function originsAside(origins: AdminOverview["agentOrigins"]): string {
-  const pilots = origins.pilots === 1 ? "1 pilot" : `${formatCount(origins.pilots)} pilots`;
-  return `of ${formatCount(origins.agentsStarted)} agents started · ${pilots}`;
+  return `of ${formatCount(origins.agentsStarted)} agents started`;
 }
 
 /** The funnel's heading, which names the window its accounts were created in. */
@@ -245,8 +244,7 @@ export function ReachChartSkeleton(): React.JSX.Element {
 
 /**
  * The week's agents started by how each started, every agent under one origin,
- * so the rows sum to the base; the pilots among them, whatever started them,
- * stand in the aside, since a pilot is what an agent is rather than an origin.
+ * so the rows sum to the base, which the aside names.
  */
 export function AgentOriginsChart({
   origins,

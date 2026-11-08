@@ -32,6 +32,7 @@ import {
   useHolderInboxItems,
 } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
+import { useInboxAgents, useInboxTaskless } from "./use-inbox-slices.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
 import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
@@ -181,8 +182,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     () => listedHoldings(inboxTasks, listedTasks),
     [inboxTasks, listedTasks],
   );
-  const waitingTaskless = tasks.inboxTaskless;
-  const agentsHolding = tasks.inboxAgents;
+  const waitingTaskless = useInboxTaskless();
+  const agentsHolding = useInboxAgents();
   const read = useHolderInboxItems(
     useMemo(
       () => [...taskHoldings(holdings), ...agentHoldings(agentsHolding)],

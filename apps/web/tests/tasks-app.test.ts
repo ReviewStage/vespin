@@ -9,7 +9,6 @@ import { personalWorkspaceOf } from "@repo/database/models/workspace-store";
 import { user } from "@repo/database/schemas/auth";
 import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import {
-  experimentInTestWorkspace,
   fakeWorkspaceSeams,
   getTestDB,
   joinWorkspace,
@@ -31,7 +30,6 @@ import {
   heldTaskListAnswerSchema,
   TASK_BOUNDS,
   TASK_FILE_REFUSAL,
-  TASK_MODE,
   TASK_PRIORITY,
   TASK_STATUS,
   taskAnswerSchema,
@@ -75,7 +73,6 @@ import {
 import { integrationConnectOver } from "@repo/service/testing/integration-connect";
 import { keepAwakeDetached } from "@repo/service/testing/session-sandboxes-fake";
 import { added } from "@repo/service/testing/task-contents";
-import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { eq, sql } from "drizzle-orm";
@@ -470,33 +467,6 @@ it.layer(getTestDB())("the plan routes", (it) => {
         assert.deepEqual(
           overlong,
           refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
-        );
-      }),
-  );
-
-  it.effect(
-    "a pilot task is refused in a workspace without the Pilot experiment, and kept as one in a workspace with it",
-    () =>
-      Effect.gen(function* () {
-        const { owner, ask } = yield* openAccounts();
-        const startPilot = () =>
-          ask(request(TASKS, owner, { method: "POST", body: { ...RELAY, mode: TASK_MODE.PILOT } }));
-
-        const refused = yield* startPilot();
-        yield* experimentInTestWorkspace(owner, EXPERIMENT.PILOT);
-        const started = yield* startPilot();
-
-        assert.deepEqual(
-          refused,
-          refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
-        );
-        const listed = yield* ask(request(TASKS, owner));
-        assert.deepEqual(
-          readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, listed).plans.map((task) => [
-            task.id,
-            task.mode,
-          ]),
-          [[startedId(started), TASK_MODE.PILOT]],
         );
       }),
   );

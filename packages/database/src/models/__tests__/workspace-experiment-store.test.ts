@@ -36,11 +36,11 @@ it.layer(getTestDB())("a workspace's experiments", (it) => {
         const [ada, bob] = [yield* openAccount, yield* openAccount];
         const acme = yield* openWorkspace(ada);
         const beta = yield* openWorkspace(bob);
-        const before = yield* workspaceExperimentOn(acme, EXPERIMENT.PILOT);
+        const before = yield* workspaceExperimentOn(acme, EXPERIMENT.MEMORY);
 
         yield* setWorkspaceExperiment({
           organizationId: acme,
-          experiment: EXPERIMENT.PILOT,
+          experiment: EXPERIMENT.MEMORY,
           on: true,
           by: ada,
         });
@@ -58,21 +58,21 @@ it.layer(getTestDB())("a workspace's experiments", (it) => {
         });
         yield* setWorkspaceExperiment({
           organizationId: acme,
-          experiment: EXPERIMENT.PILOT,
+          experiment: EXPERIMENT.MEMORY,
           on: true,
           by: bob,
         });
         const read = {
-          acmePilot: yield* workspaceExperimentOn(acme, EXPERIMENT.PILOT),
+          acmeMemory: yield* workspaceExperimentOn(acme, EXPERIMENT.MEMORY),
           acmeDescriptions: yield* workspaceExperimentOn(acme, EXPERIMENT.DESCRIPTIONS),
-          betaPilot: yield* workspaceExperimentOn(beta, EXPERIMENT.PILOT),
+          betaMemory: yield* workspaceExperimentOn(beta, EXPERIMENT.MEMORY),
         };
         const betaStandings = yield* workspaceExperimentsOf(beta);
         yield* Database.use((db) => db.delete(user).where(eq(user.id, bob)));
         const standings = yield* workspaceExperimentsOf(acme);
 
         assert.equal(before, false);
-        assert.deepEqual(read, { acmePilot: true, acmeDescriptions: false, betaPilot: false });
+        assert.deepEqual(read, { acmeMemory: true, acmeDescriptions: false, betaMemory: false });
         assert.deepEqual(betaStandings, []);
         assert.deepEqual(
           standings
@@ -80,7 +80,7 @@ it.layer(getTestDB())("a workspace's experiments", (it) => {
             .toSorted((a, b) => a.experiment.localeCompare(b.experiment)),
           [
             { experiment: EXPERIMENT.DESCRIPTIONS, on: false, changedBy: undefined },
-            { experiment: EXPERIMENT.PILOT, on: true, changedBy: ada },
+            { experiment: EXPERIMENT.MEMORY, on: true, changedBy: ada },
           ],
         );
       }),

@@ -1469,11 +1469,15 @@ test("an ask replaced by a message that asks nothing names no newer question, an
   );
 });
 
-test("a member's close of the item keeps an earlier close's line where it stood, and its note stands under the line saying who resolved it", async () => {
+test("a member's close of the item keeps an earlier close's line where it stood, naming who resolved it, and its note stands under that line", async () => {
   const closedTwice = await mountThread(
     threadItem(
       [
-        askingMessage(EXPIRY_ASK, { status: INBOX_ASK_STATUS.WITHDRAWN, withdrawnAt: 2_000 }),
+        askingMessage(EXPIRY_ASK, {
+          status: INBOX_ASK_STATUS.WITHDRAWN,
+          withdrawnAt: 2_000,
+          withdrawnBy: READER.userId,
+        }),
         threadMessage("e1b2c3d4-0000-4000-8000-000000000027", "agent", "Deploy finished.", 3_000),
       ],
       { status: INBOX_STATUS.CLOSED, closedBy: TEAMMATE, settledAt: 4_000 },
@@ -1488,6 +1492,13 @@ test("a member's close of the item keeps an earlier close's line where it stood,
       ["closed", "resolved this without an answer"],
     ],
     "an earlier close of the question keeps its line where a later close of a notice stands",
+  );
+  assert.deepEqual(
+    [...closedTwice.querySelectorAll("[data-inbox-comment='closed'] .ui-comment-name")].map(
+      wordsOf,
+    ),
+    ["You resolved this without an answer", "Charles Pan resolved this without an answer"],
+    "the earlier close names its closer though it no longer stands and carried no note",
   );
 
   act(() => world.root?.unmount());

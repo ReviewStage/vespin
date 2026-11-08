@@ -146,6 +146,7 @@ import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import { useHeldOrder } from "../tasks/use-held-order.js";
+import { useFailedRuns, useInboxTaskless } from "../tasks/use-inbox-slices.js";
 import {
   type AgentPin,
   isAgentPin,
@@ -1858,8 +1859,10 @@ function SidebarColumn({
     tasks.signedIn ? tasks.workspace?.id : undefined,
   );
   const automationsRunning = runningRuns(workspaceRuns);
+  const failedRuns = useFailedRuns();
+  const inboxTaskless = useInboxTaskless();
   const automationFailed = useFailedRunsMark(
-    tasks.failedRuns,
+    failedRuns,
     tasks.workspace?.id,
     inAutomations && automationsPlace.kind === AUTOMATIONS_PAGE.EDIT
       ? automationsPlace.automationId
@@ -2095,7 +2098,7 @@ function SidebarColumn({
     ),
     {
       unseen: context.unseenAgent,
-      inbox: tasks.inboxTaskless,
+      inbox: inboxTaskless,
       me: tasks.me,
       shown: agentShown,
     },

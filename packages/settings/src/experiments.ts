@@ -12,8 +12,6 @@ import { Option, Schema } from "effect";
 export const EXPERIMENT = {
   /** A workspace's memory: its coding agents keep and recall facts with remember and recall, reviewed in Settings › Memory. */
   MEMORY: "memory",
-  /** Pilot: a new task can start with one pilot agent that plans the work, splits it into sub-tasks, and runs a coding agent on each. */
-  PILOT: "pilot",
   /** Skills: the skills a member installs into the app for their agents, managed in Settings › Skills, and the `/` list of skills in a box written to an agent. */
   SKILLS: "skills",
   /** Bring your own host: agents that run on the member's own Macs and Linux machines, This Mac among them, set up in Settings › Hosts, rather than only in our cloud. */
@@ -38,11 +36,7 @@ export type ExperimentScope = (typeof EXPERIMENT_SCOPE)[keyof typeof EXPERIMENT_
  * member's choice cannot stand apart from another's. Every experiment not
  * listed here is each account's own.
  */
-export const WORKSPACE_EXPERIMENT_LIST = [
-  EXPERIMENT.DESCRIPTIONS,
-  EXPERIMENT.PILOT,
-  EXPERIMENT.MEMORY,
-] as const;
+export const WORKSPACE_EXPERIMENT_LIST = [EXPERIMENT.DESCRIPTIONS, EXPERIMENT.MEMORY] as const;
 
 export type WorkspaceExperiment = (typeof WORKSPACE_EXPERIMENT_LIST)[number];
 export type AccountExperiment = Exclude<Experiment, WorkspaceExperiment>;
@@ -103,15 +97,6 @@ export const EXPERIMENTS = [
       "and name one with / in a message to an agent.",
     owner: "Charles",
     since: "2026-10-30",
-  },
-  {
-    key: EXPERIMENT.PILOT,
-    name: "Pilot",
-    detail:
-      "Start a new task with one pilot agent that plans the work, splits it into sub-tasks, " +
-      "and runs an agent on each.",
-    owner: "Charles",
-    since: "2026-10-29",
   },
   {
     key: EXPERIMENT.MEMORY,

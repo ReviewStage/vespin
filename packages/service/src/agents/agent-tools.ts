@@ -165,7 +165,6 @@ import {
 } from "./workspace-agents.js";
 import {
   EVERY_EXPERIMENT_ON,
-  EXPERIMENT_OFF_REFUSAL,
   type ExperimentsOn,
   experimentOnIn,
 } from "./workspace-experiment-on.js";
@@ -442,7 +441,7 @@ export const START_AGENT_REFUSAL = {
     "another direction from one of your own messages, fork yourself at its messageId.",
   STARTER_CONTINUE:
     "Not started: you can't continue an agent that started you, directly or through the agents " +
-    "between you, since the agents it started would report to a pilot you started; tell its " +
+    "between you, since your reports would still go to the agent the continue stops; tell its " +
     "starter, or ask a member to continue it.",
   SOURCE_RUNNING:
     "Not started: that agent is still starting or working, and a continue would take over work " +
@@ -1904,8 +1903,7 @@ const earlierContinuationsOf = (
 
 /**
  * Whether the agent is started, directly or through the agents between,
- * by the ancestor, read on the starter links as stored now, since a pilot's
- * takeover moves them after an agent's session began. The links form a
+ * by the ancestor, read on the starter links as stored now. The links form a
  * chain that ends at an agent with no starter; one already seen ends it.
  */
 const startedThrough = (userId: string, agentId: string, ancestorId: string) =>
@@ -1947,7 +1945,7 @@ const sourceLanding = (
       if (Option.isNone(at)) return Result.fail(START_AGENT_REFUSAL.NO_MESSAGE);
       return Result.succeed({ place, continuedBy: [] });
     }
-    // Note that a continue of an agent that started the caller records the caller as the new agent's starter and, for a pilot, moves the agents it started under it, so the two would name each other.
+    // Note that a continue of an agent that started the caller stops that agent, while the caller's reports still go to it.
     // A member is started by no agent, so no source started them.
     const calling = callerAgent(caller);
     if (
@@ -1977,12 +1975,8 @@ function earlierContinuations(
   return earlier.length === 0 ? {} : { earlierContinuations: earlier.map((each) => ({ ...each })) };
 }
 
-/** A start's refusal in the model's words, said of the source where the start named one: one that is none of the caller's, or a message that is none of the source's; and of the pilot a fresh start would have made. */
+/** A start's refusal in the model's words, said of the source where the start named one: one that is none of the caller's, or a message that is none of the source's. */
 function startFromRefusalWords(refusal: HostedRefusal, from: AgentStartFrom | undefined): string {
-  // Note that a fresh start is refused as not permitted only where it would be a pilot task's pilot.
-  if (from === undefined && refusal.error === HOSTED_API_ERROR.NOT_PERMITTED) {
-    return EXPERIMENT_OFF_REFUSAL;
-  }
   if (from !== undefined && refusal.error === HOSTED_API_ERROR.NOT_FOUND) {
     return START_AGENT_REFUSAL.NO_SOURCE;
   }

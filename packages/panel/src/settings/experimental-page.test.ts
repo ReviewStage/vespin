@@ -25,7 +25,7 @@ import { ExperimentalPage } from "./experimental-page.js";
  * note while signed out.
  */
 
-/** The workspace Settings shows: Task descriptions turned on by Dean, Pilot never chosen. */
+/** The workspace Settings shows: Task descriptions turned on by Dean, Memory never chosen. */
 const ACME: Workspace = {
   id: "workspace-acme",
   name: "Acme",
@@ -136,7 +136,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
   ]);
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
-    ["Task descriptions", "Pilot", "Memory", "Bring your own host", "Skills"],
+    ["Task descriptions", "Memory", "Bring your own host", "Skills"],
   );
 });
 
@@ -168,12 +168,12 @@ test("a workspace switch says who last turned it on and when, and an admin's fli
 
 test("a member who is no admin sees the workspace's switches locked, saying only an admin can change them, and a press asks nothing", async () => {
   const page = draw({ workspace: { ...ACME, role: WORKSPACE_ROLE.MEMBER } });
-  const pilot = switchNamed(page, "Pilot");
+  const memory = switchNamed(page, "Memory");
 
-  await act(async () => pilot.click());
+  await act(async () => memory.click());
 
-  assert.equal(pilot.getAttribute("aria-readonly"), "true");
-  const described = (pilot.getAttribute("aria-describedby") ?? "")
+  assert.equal(memory.getAttribute("aria-readonly"), "true");
+  const described = (memory.getAttribute("aria-describedby") ?? "")
     .split(" ")
     .map((id) => document.getElementById(id)?.textContent)
     .join(" ");
@@ -208,7 +208,6 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
   });
   assert.deepEqual(feedbackAbout, [
     EXPERIMENT.DESCRIPTIONS,
-    EXPERIMENT.PILOT,
     EXPERIMENT.MEMORY,
     EXPERIMENT.BRING_YOUR_OWN_HOST,
     EXPERIMENT.SKILLS,

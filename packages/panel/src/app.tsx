@@ -1,5 +1,4 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import type { AccountFailedRun } from "@repo/features/account-inbox-wire";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { FEEDBACK_KIND, type FeedbackKind } from "@repo/features/feedback";
 import { type AccountLink, LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
@@ -7,10 +6,8 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import {
-  type AppInboxAgentHolding,
   type AppInboxTask,
   type AppInboxTaskHolding,
-  type AppInboxTasklessItem,
   type AppStateSnapshot,
   RUN_PROFILE,
 } from "@repo/host/app-state";
@@ -148,12 +145,6 @@ const NOTHING_MORE = (): void => undefined;
 
 /** No task holds an inbox item, as the document reads before main has answered. */
 const NO_TASKS_HOLDING: readonly AppInboxTaskHolding[] = [];
-/** Nothing waiting from agents with no task, as one value across renders. */
-const NOTHING_TASKLESS: readonly AppInboxTasklessItem[] = [];
-/** No agent with no task holds an inbox item, as one value across renders. */
-const NO_AGENTS_HOLDING: readonly AppInboxAgentHolding[] = [];
-/** No automation's run failed, as one value across renders. */
-const NO_FAILED_RUNS: readonly AccountFailedRun[] = [];
 
 /** No platform capability, as the document reads before main has answered. */
 const NO_CAPABILITIES: readonly HostCapability[] = [];
@@ -499,9 +490,6 @@ function AppWindow(): React.JSX.Element {
     unseenAgents,
     inboxWaiting: inbox?.waiting ?? NOTHING_WAITING,
     inboxTasks: inbox?.tasks ?? NO_TASKS_HOLDING,
-    inboxTaskless: inbox?.taskless ?? NOTHING_TASKLESS,
-    inboxAgents: inbox?.agents ?? NO_AGENTS_HOLDING,
-    failedRuns: inbox?.failedRuns ?? NO_FAILED_RUNS,
     onOpenSettings: openSettings,
     onOpenIntegrations: openIntegrations,
     onOpenApiKeys: openApiKeys,

@@ -49,8 +49,8 @@ import { SwitchRow } from "./switch-row.js";
 /**
  * experimental-page.tsx -- Settings › Experimental: the features not yet finished, in two groups that each say whom a switch reaches and who may flip it, or the empty state between them.
  *
- * The first group is the workspace Settings shows: Task descriptions, Pilot,
- * and Memory, which its owners and admins choose for every member and agent
+ * The first group is the workspace Settings shows: Task descriptions and
+ * Memory, which its owners and admins choose for every member and agent
  * in it (Dean, 2026-11-06). Each row says, under what the experiment
  * brings, who last turned it on or off and when, the person as their chip;
  * the switch says whether it is on, so no word or dot says it again. A
@@ -99,12 +99,6 @@ const FLIP_WORDS = {
       `Shows each task's description, its comments and version history to everyone in ${workspace}, and has agents keep descriptions current as they work.`,
     off: (workspace: string) =>
       `Hides task descriptions, their comments and version history for everyone in ${workspace}, and stops agents from reading or writing them.`,
-  },
-  [EXPERIMENT.PILOT]: {
-    on: (workspace: string) =>
-      `Lets everyone in ${workspace} start a new task with a pilot agent that plans the work, splits it into sub-tasks, and runs an agent on each.`,
-    off: (workspace: string) =>
-      `Stops new tasks in ${workspace} from starting with a pilot agent. Pilots already running finish their work.`,
   },
   [EXPERIMENT.MEMORY]: {
     on: (workspace: string) =>

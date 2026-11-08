@@ -6,7 +6,7 @@
  * the Mutations guide's `scope` runs every mutation of one scope id: a save
  * never overlaps another of the same description, whichever place sent it. The
  * write answers saved, a conflict with the text as it stands now, or why
- * not; how it is sent is its family's (`useTasksTab`'s `descriptionEdit`).
+ * not; how it is sent is its family's (`description-doors.ts`'s `useDescriptionEdit`).
  */
 
 import type { DescriptionEditRequest } from "@repo/features/description-edit";

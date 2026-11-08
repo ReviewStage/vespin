@@ -1,6 +1,8 @@
+import type { AppInboxTasklessItem } from "@repo/host/app-state";
 import { type RefObject, useEffect, useRef } from "react";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { freshAccount } from "../tasks/fresh-account.js";
+import { useInboxTaskless } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
@@ -27,15 +29,20 @@ export function useHomeNewTask(box: RefObject<HTMLElement | null>, asks: number)
   }, [box, asks]);
 }
 
-/** Whether the welcome stands: an account signed in whose task list landed holding nothing of its own. */
-export function welcomed(tasks: TasksControl): boolean {
+/** Whether the welcome stands: an account signed in whose task list landed holding nothing of its own, nor anything of its agents with no task (`taskless`). */
+export function welcomed(tasks: TasksControl, taskless: readonly AppInboxTasklessItem[]): boolean {
   return (
     tasks.signedIn &&
     tasks.listRead &&
     freshAccount({
       tasks: tasks.tasks,
-      taskless: tasks.inboxTaskless,
+      taskless,
       readerId: tasks.me,
     })
   );
+}
+
+/** Whether the welcome stands (`welcomed`), read against what waits from the account's agents with no task as main's read last answered. */
+export function useWelcomed(tasks: TasksControl): boolean {
+  return welcomed(tasks, useInboxTaskless());
 }

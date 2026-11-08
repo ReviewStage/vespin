@@ -94,15 +94,12 @@ export function ContinueAgent({
   agentId,
   control,
   carry,
-  offers = true,
   label = CONTINUE_LABEL,
 }: {
   agentId: string;
   control: Pick<AgentsControl, "continueAgent">;
   /** The closed box's words and files, which the press carries; none for a press that carries nothing. */
   carry?: ContinueCarry | undefined;
-  /** Whether the press may stand here, where no other place offers it. */
-  offers?: boolean;
   /** What the press says: Continue in new agent, or Continue again once another agent continued this one. */
   label?: string;
 }): React.JSX.Element | null {
@@ -142,7 +139,7 @@ export function ContinueAgent({
     );
   };
 
-  if (!offers || continueAgent === undefined) return null;
+  if (continueAgent === undefined) return null;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-control-gap gap-y-tight-gap">
       <Button

@@ -19,9 +19,9 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useSelector } from "@tanstack/react-store";
 import { Schema } from "effect";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { keptLines } from "../composer-drafts.js";
+import { type AccountLines, keptLines } from "../composer-drafts.js";
 import { confirmFailure, failureShown } from "../failure-report.js";
-import { undoToast, useToast } from "../toast.js";
+import { type LocalWrite, pressLocal } from "../undo-stack.js";
 import { REVIEW_PANEL_WORDS, ReviewPress, type ReviewWords } from "./review-panel.js";
 
 /**
@@ -156,6 +156,29 @@ const reviewLines = keptLines<HeldComment, typeof keptHeldSchema.Type>({
   idOf: (kept) => kept.clientKey,
 });
 
+/** A held comment a press removed: its key, where it stood among the rest, and the comment as it stood, its files with it. */
+interface RemovedComment {
+  readonly clientKey: string;
+  readonly at: number;
+  readonly gone: HeldComment;
+}
+
+/**
+ * A held comment's removal, as ⌘Z and its toast's Undo take it back: put
+ * back where it stood among the rest only while it is not back already, and
+ * removed again by ⇧⌘Z only while it stands as Undo put it back, unedited
+ * and unsent.
+ */
+const COMMENT_REMOVAL = {
+  words: PAGE_REVIEW_WORDS.REMOVED,
+  act: (lines, { clientKey }) =>
+    lines.set((now) => now.filter((comment) => comment.clientKey !== clientKey)),
+  undo: (lines, { at, gone }) => lines.set((now) => [...now.slice(0, at), gone, ...now.slice(at)]),
+  holds: (lines, { clientKey }) =>
+    !lines.store.state.some((comment) => comment.clientKey === clientKey),
+  undone: (lines, { gone }) => lines.store.state.includes(gone),
+} satisfies LocalWrite<AccountLines<HeldComment>, RemovedComment>;
+
 /** Whether a held comment is the page's, on the plan named. */
 function heldOn(comment: HeldComment, planId: string | undefined, pageId: string): boolean {
   return comment.planId === planId && comment.pageId === pageId;
@@ -256,7 +279,6 @@ export function usePageReview(
   const planId = control?.planId;
   const all = useSelector(reviewLines.store);
   const setAll = reviewLines.set;
-  const toast = useToast();
   const [sending, setSending] = useState(false);
   const [failed, setFailed] = useState(false);
   // How many edits stand open on each held comment, by its key: a held reply is drawn in its thread and in the panel, and each may edit it.
@@ -320,15 +342,7 @@ export function usePageReview(
     const at = all.findIndex((comment) => comment.clientKey === clientKey);
     const gone = all[at];
     if (gone === undefined || gone.landed === true) return;
-    drop((comment) => comment.clientKey !== clientKey);
-    // Note that Undo puts the comment back where it stood among the rest, its files with it, unless it stands there again already.
-    const undo = () =>
-      setAll((now) =>
-        now.some((comment) => comment.clientKey === clientKey)
-          ? now
-          : [...now.slice(0, at), gone, ...now.slice(at)],
-      );
-    toast({ ...undoToast(PAGE_REVIEW_WORDS.REMOVED, undo), replayUnmasked: true });
+    pressLocal(COMMENT_REMOVAL, () => reviewLines, { clientKey, at, gone });
   };
   return {
     held,

@@ -371,7 +371,6 @@ export function useAgentActions(
     | "mac"
     | "startedBy"
     | "source"
-    | "pilot"
   >,
   agents: AgentsControl,
   input: {

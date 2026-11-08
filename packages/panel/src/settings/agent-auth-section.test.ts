@@ -686,7 +686,7 @@ test("a ChatGPT sign-in OpenAI no longer honors says it signed out of ChatGPT, a
   );
 });
 
-test("Codex's ChatGPT plan connects through Connect Codex's code, closes it once connected, meets the first connection with OpenAI's notice once, and disconnects after asking", async () => {
+test("Codex's ChatGPT plan connects through Connect Codex's code, closes it once connected, and disconnects after asking", async () => {
   waitOpen = Promise.withResolvers();
   const page = await mount();
   const dialog = await open(page, "Codex");
@@ -707,9 +707,6 @@ test("Codex's ChatGPT plan connects through Connect Codex's code, closes it once
   await settle();
   assert.ok(!document.body.contains(connecting), "connecting closes Connect Codex");
   assert.equal(sent.filter((each) => each.kind === ACT_KIND.CHATGPT_DEVICE_CANCEL).length, 0);
-  assert.match(row(dialog, "ChatGPT plan").textContent ?? "", /You're using your ChatGPT plan/u);
-  await press(row(dialog, "ChatGPT plan"), "Got it");
-  assert.doesNotMatch(dialog.textContent ?? "", /You're using your ChatGPT plan/u);
   await vi.waitFor(() => assert.deepEqual(rowState(page, "Codex"), connectedWith("ChatGPT plan")));
   assert.deepEqual(lineOf(row(dialog, "ChatGPT plan")), connectedWith("Connected"));
 
@@ -794,7 +791,7 @@ test("setup connects Claude in place, with no dialog: Connect opens one row at a
   assert.ok(!document.body.innerHTML.includes(TOKEN));
 });
 
-test("setup's Codex row connects through Connect Codex, which closes with the row once connected, and meets the first connection with OpenAI's notice under the closed row", async () => {
+test("setup's Codex row connects through Connect Codex, which closes with the row once connected", async () => {
   const { page } = await mountSetup();
   await press(row(page, "Codex"), "Connect Codex");
   assert.ok(document.activeElement === button(page, "Connect ChatGPT plan"));
@@ -807,9 +804,6 @@ test("setup's Codex row connects through Connect Codex, which closes with the ro
     true,
     "connecting closes it",
   );
-  assert.match(row(page, "Codex").textContent ?? "", /You're using your ChatGPT plan/u);
-  await press(row(page, "Codex"), "Got it");
-  assert.doesNotMatch(page.textContent ?? "", /You're using your ChatGPT plan/u);
 });
 
 test("setup's row in place asks before removing a held key, over the window since no dialog holds it", async () => {

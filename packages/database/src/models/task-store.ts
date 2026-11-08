@@ -245,8 +245,6 @@ export interface NewTask {
   readonly origin?: TaskOrigin;
   /** The task it is a child of, which the caller confirmed it reaches in the same workspace, and whose repository it took; none for a task at the top. */
   readonly parentTaskId?: string;
-  /** How the task is worked, fixed as it starts; by its agents where none is named. */
-  readonly mode?: TaskMode;
   /** Whether `start_agent` made it for the agent it started, its caller on no task; not where none is named. */
   readonly madeByStart?: boolean;
   /** The description's text as it starts; empty where none is named. */
@@ -1239,7 +1237,7 @@ const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =
       parentTaskId: started.parentTaskId ?? null,
       document: started.text ?? "",
       brief: brief.length > 0 ? brief : null,
-      mode: started.mode ?? TASK_MODE.AGENT,
+      mode: TASK_MODE.AGENT,
       status: started.status ?? TASK_STATUS.TODO,
       priority: started.priority ?? TASK_PRIORITY.NONE,
       assigneeId: started.assigneeId ?? null,

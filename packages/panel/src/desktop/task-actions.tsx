@@ -90,6 +90,7 @@ import { EditedBy, type EditPlace, useEditReader } from "../tasks/edit-ref.js";
 import { useTaskSendFailed } from "../tasks/failed-lines.js";
 import { CHOOSE_LABEL } from "../tasks/repository-chip.js";
 import { PlanGlyph } from "../tasks/tab-look.js";
+import { useTaskDelete } from "../tasks/task-delete.js";
 import {
   copyTaskLinkItem,
   markReadItem,
@@ -103,6 +104,7 @@ import {
   type TaskRelationSubject,
   taskRelationMenuPanel,
 } from "../tasks/task-relation-menu.js";
+import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import {
   NO_ASSIGNEE,
   PRIORITY_ROWS,
@@ -112,7 +114,7 @@ import {
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useReadMark, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
-import { TASK_RENAME_SHAPE, type TasksControl } from "../tasks/use-tasks-tab.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
@@ -225,9 +227,7 @@ export interface TaskRowTab
     | "me"
     | "workspaces"
     | "taskSections"
-    | "renameTask"
-    | "onDeleteTask"
-    | "deleteTask"
+    | "drawnTasks"
     | "onSettleTasks"
     | "onMarkTask"
     | "onSetTaskStanding"
@@ -262,9 +262,7 @@ export function taskRowTab(
     me: tasks.me,
     workspaces: tasks.workspaces,
     taskSections: tasks.taskSections,
-    renameTask: tasks.renameTask,
-    onDeleteTask: tasks.onDeleteTask,
-    deleteTask: tasks.deleteTask,
+    drawnTasks: tasks.drawnTasks,
     onSettleTasks: tasks.onSettleTasks,
     onMarkTask: tasks.onMarkTask,
     onSetTaskStanding: tasks.onSetTaskStanding,
@@ -813,7 +811,7 @@ export function useTaskMenuItems(
     surface: FAILURE_SURFACE.TASK_DELETE,
     about: { taskId },
   });
-  const deleting = useMutation(tasks.deleteTask);
+  const deleting = useMutation(useTaskDelete());
   const deletionAct = useConfirmAct(deleting, {
     send: () => deleting.mutateAsync(taskId).then(heard),
     answered: sameAnswer,
@@ -1066,7 +1064,7 @@ export function SidebarTask({
   childCount?: ChildTaskCount | undefined;
   onOpen: () => void;
 }): React.JSX.Element {
-  const renaming = useMutation(tasks.renameTask);
+  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const actions = useTaskMenuItems(taskRowTab(tasks), task.id, task.name, {

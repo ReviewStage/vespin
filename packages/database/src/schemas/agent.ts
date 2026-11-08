@@ -103,9 +103,7 @@ import { task } from "./task.js";
  * one, always an agent of the same account, which is told when this one's
  * run ends without finishing; null for an agent a member, the brain, or an
  * automation started, and once the starter's row is gone. A Continue or a
- * Fork by hand names none, whoever started its source, but for a Continue
- * by hand of an agent a pilot started, which names that pilot, so a
- * continued sub-pilot still reports up to its parent.
+ * Fork by hand names none, whoever started its source.
  * `author` is who the agent's commits are by and its pull request is opened
  * as, the developer or our GitHub App with why (`AGENT_AUTHOR`),
  * settled once as its first session starts and never moved after, so its
@@ -121,8 +119,9 @@ import { task } from "./task.js";
  * GitHub records its base.
  *
  * `kind` is what the agent is (`AGENT_KIND`): a coder, as every agent
- * started on work is and every row from before the column reads, or a
- * task's pilot.
+ * started now is and every row from before the column reads, or a pilot,
+ * as Pilot started before it was removed, which every reader treats as a
+ * coder.
  *
  * `machine` is where the agent's runner and checkout live
  * (`AGENT_MACHINE`): a Vercel Sandbox, as every row from before the
@@ -334,7 +333,7 @@ export const agentTable = pgTable(
      * longer is moves nothing of. 0 before the first.
      */
     runnerLaunch: bigint("runner_launch", { mode: "number" }).notNull().default(0),
-    /** What the agent is (`AGENT_KIND`): a coder, or a task's pilot; a coder for every row from before the column. */
+    /** What the agent is (`AGENT_KIND`): a coder; a pilot from before Pilot was removed, read as a coder; a coder for every row from before the column. */
     kind: text("kind").$type<AgentKind>().notNull().default(AGENT_KIND.CODER),
     /** Where the agent's runner and checkout live; a Vercel Sandbox for every row from before the column. */
     machine: text("machine").$type<AgentMachineKind>().notNull().default(AGENT_MACHINE.VERCEL),

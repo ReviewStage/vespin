@@ -51,7 +51,12 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
-import { listedAgent, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import {
+  handInboxTaskless,
+  listedAgent,
+  tasksControl,
+  waitingOf,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { PersonPage } from "./person-page.js";
 
@@ -622,23 +627,22 @@ test("someone who left whom only the place that opened the page names keeps that
 });
 
 test("the reader's own page lists no question of an agent with no task, whose starter nobody names", async () => {
-  const { page } = mountWith({
-    inboxTaskless: [
-      {
-        id: SWEEP_ITEM.id,
-        agentId: SWEEP_AGENT,
-        title: SWEEP_ITEM.title,
-        postedAt: SWEEP_ITEM.postedAt,
-        updatedAt: SWEEP_ITEM.updatedAt,
-        agentTitle: "Flake sweep",
-        agentModel: "anthropic/claude-opus-5.5",
-        automationId: null,
-        automationName: null,
-        repository: "acme/relay",
-        workspaceId: ACME.id,
-      },
-    ],
-  });
+  handInboxTaskless([
+    {
+      id: SWEEP_ITEM.id,
+      agentId: SWEEP_AGENT,
+      title: SWEEP_ITEM.title,
+      postedAt: SWEEP_ITEM.postedAt,
+      updatedAt: SWEEP_ITEM.updatedAt,
+      agentTitle: "Flake sweep",
+      agentModel: "anthropic/claude-opus-5.5",
+      automationId: null,
+      automationName: null,
+      repository: "acme/relay",
+      workspaceId: ACME.id,
+    },
+  ]);
+  const { page } = mountWith({});
   await settle();
 
   assert.deepEqual(sections(page)["Needs you"], ["Ship the limiter at 10%?"]);

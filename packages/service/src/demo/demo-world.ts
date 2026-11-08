@@ -1,5 +1,4 @@
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { AGENT_KIND, type AgentKind } from "@repo/features/agent-wire";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { INBOX_ASK, INBOX_FIELD, type InboxAsk } from "@repo/features/inbox-wire";
 import {
@@ -17,8 +16,8 @@ import { ACTION_RESULT_STATUS, type WireRecord, type WireValue } from "@repo/wir
  * The world is the changelog screenshots' (`.claude/skills/changelog-screenshots/WORLD.md`):
  * acme builds Relay, and Dean Stratakos owns its workspace beside seven
  * teammates. Its last two weeks are here: Teammate invitations and the
- * Postmark work around it, Usage-based billing broken into sub-tasks by a
- * pilot, webhook secret rotation, and a crash fixed this morning. Nothing
+ * Postmark work around it, Usage-based billing broken into sub-tasks by an
+ * agent, webhook secret rotation, and a crash fixed this morning. Nothing
  * here is read from an account; every name and address is invented. Every
  * id is fixed, so two seeds of two fresh databases write the same rows, and
  * every time is a distance back from the seed's start, so the world always
@@ -516,7 +515,7 @@ const DEMO_INVITATIONS_TASK: DemoTask = {
   ],
 };
 
-/** Dana's task, which Dean's pilot broke into four sub-tasks. */
+/** Dana's task, which Dean's rollout agent broke into four sub-tasks. */
 const DEMO_BILLING_TASK: DemoTask = {
   id: demoId(DEMO_ID_KIND.TASK, 2),
   name: "Usage-based billing",
@@ -637,7 +636,7 @@ const SSO_TASK: DemoTask = {
   comments: [],
 };
 
-/** The pilot's first sub-task of Usage-based billing, finished and merged. */
+/** The rollout agent's first sub-task of Usage-based billing, finished and merged. */
 const USAGE_EVENTS_TASK: DemoTask = {
   id: demoId(DEMO_ID_KIND.TASK, 8),
   name: "Record usage events per workspace",
@@ -867,7 +866,7 @@ const EXPIRE_TASK: DemoTask = {
 
 /**
  * acme's tasks, oldest first, so the list reads newest first as the service
- * orders it. The pilot's four sub-tasks are among them, made as its
+ * orders it. The rollout agent's four sub-tasks are among them, made as its
  * transcript makes them (`DemoCall`'s `creates`).
  */
 export const DEMO_TASKS: readonly DemoTask[] = [
@@ -986,7 +985,7 @@ export interface DemoTurn {
 }
 
 /**
- * One finished coding agent: the task it worked on, its kind, who started
+ * One finished coding agent: the task it worked on, who started
  * it, on what, its turns, oldest first, and the comment threads it started
  * on its task's description. An agent another started with `start_agent` names
  * its starter alone in that agent's steps (`DemoCall`'s `starts`), its
@@ -996,7 +995,6 @@ export interface DemoAgent {
   /** The key its Start is taken under, so a second seed of the same database starts no second agent. */
   readonly key: string;
   readonly task: DemoTask;
-  readonly kind?: AgentKind;
   readonly title: string;
   readonly model: string;
   readonly effort: string;
@@ -1672,7 +1670,7 @@ const DEMO_ONBOARDING_AGENT: DemoAgent = {
   ],
 };
 
-/** The pilot's agent on Record usage events per workspace, started by it, finished and merged. */
+/** The rollout agent's agent on Record usage events per workspace, started by it, finished and merged. */
 const METER_AGENT: DemoAgent = {
   key: "demo-agent-meter",
   task: USAGE_EVENTS_TASK,
@@ -1781,7 +1779,7 @@ const METER_AGENT: DemoAgent = {
   ],
 };
 
-/** The pilot's agent on Daily usage rollup, which asked Jordan where a day ends and Dean how far back to fill. */
+/** The rollout agent's agent on Daily usage rollup, which asked Jordan where a day ends and Dean how far back to fill. */
 const ROLLUP_AGENT: DemoAgent = {
   key: "demo-agent-rollup",
   task: DEMO_ROLLUP_TASK,
@@ -1864,14 +1862,13 @@ const ROLLUP_AGENT: DemoAgent = {
 };
 
 /**
- * Dean's pilot on Dana's Usage-based billing: it broke the task into four
+ * Dean's rollout agent on Dana's Usage-based billing: it broke the task into four
  * sub-tasks, started an agent on each one that was ready, and kept him
  * told. Its sub-tasks and agents are made and started as its steps say.
  */
-const DEMO_PILOT_AGENT: DemoAgent = {
-  key: "demo-agent-billing-pilot",
+const DEMO_ROLLOUT_AGENT: DemoAgent = {
+  key: "demo-agent-billing-rollout",
   task: DEMO_BILLING_TASK,
-  kind: AGENT_KIND.PILOT,
   title: "Roll out usage-based billing",
   model: OPUS,
   effort: "high",
@@ -2216,13 +2213,13 @@ const CHART_CRASH_AGENT: DemoAgent = {
 /**
  * The finished agents, each started on its task in the order given, every
  * one by Dean: they run on his host (`DEMO_HOST`), which runs its owner's
- * agents alone, so he can follow up on any of them, those his pilot
- * started among them. A pilot comes before the agents it starts and the
- * sub-tasks it makes. His teammates stand in the tasks they made and are
+ * agents alone, so he can follow up on any of them, those his rollout
+ * agent started among them. An agent comes before the agents it starts and
+ * the sub-tasks it makes. His teammates stand in the tasks they made and are
  * assigned, the comments, and the threads.
  */
 export const DEMO_AGENTS: readonly DemoAgent[] = [
-  DEMO_PILOT_AGENT,
+  DEMO_ROLLOUT_AGENT,
   METER_AGENT,
   ROTATION_AGENT,
   ROLLUP_AGENT,
@@ -2268,14 +2265,14 @@ export interface DemoThread extends DemoPost {
 export const DEMO_THREADS: readonly DemoThread[] = [
   {
     ...USAGE_BREAKDOWN_POST,
-    agent: DEMO_PILOT_AGENT,
+    agent: DEMO_ROLLOUT_AGENT,
     ago: 3 * DAY + HOUR + 50 * MINUTE,
     replies: [],
     acknowledged: { by: DEMO_DEAN, ago: 3 * DAY + HOUR },
   },
   {
     ...ALLOWANCE_POST,
-    agent: DEMO_PILOT_AGENT,
+    agent: DEMO_ROLLOUT_AGENT,
     ago: 3 * DAY + HOUR + 48 * MINUTE,
     answer: {
       by: DEMO_DEAN,
@@ -2387,13 +2384,13 @@ export const DEMO_THREADS: readonly DemoThread[] = [
   },
   {
     ...STRIPE_KEYS_POST,
-    agent: DEMO_PILOT_AGENT,
+    agent: DEMO_ROLLOUT_AGENT,
     ago: 20 * HOUR + 57 * MINUTE,
     replies: [],
   },
   {
     ...USAGE_PROGRESS_POST,
-    agent: DEMO_PILOT_AGENT,
+    agent: DEMO_ROLLOUT_AGENT,
     ago: 20 * HOUR + 55 * MINUTE,
     replies: [],
   },
@@ -2523,7 +2520,7 @@ export const DEMO_MEMBER_THREADS: readonly DemoMemberThread[] = [
   },
   {
     by: NOOR,
-    agent: DEMO_PILOT_AGENT,
+    agent: DEMO_ROLLOUT_AGENT,
     title: "Keep Stripe writes behind the billing flag",
     text: "Before Report usage to Stripe starts: every Stripe write should check `billing.metered` for its workspace, so we turn it on for the design partners first.",
     ago: 1 * DAY + 6 * HOUR,

@@ -50,6 +50,7 @@ import type {
   AppHostRead,
   AppInboxAgentHolding,
   AppInboxItems,
+  AppInboxSlice,
   AppInboxTask,
   AppInboxTaskHolding,
   AppInboxTasklessItem,
@@ -698,6 +699,16 @@ interface Asked {
   newTasks: number;
 }
 
+/** Main's read of the account's inbox holding nothing. */
+const NO_INBOX: AppInboxSlice = {
+  waiting: [],
+  tasks: [],
+  taskless: [],
+  automations: [],
+  agents: [],
+  failedRuns: [],
+};
+
 /** Main's word of what waits on the reader on each task: the one open question on each. */
 const MAIN_WAITING: readonly AppInboxTask[] = [
   { taskId: BILLING.id, items: [waitingOf(THRESHOLD)] },
@@ -752,9 +763,15 @@ export function mount(
   // Note that the host's inbox holds are answered beside whatever acts the test answers by now.
   fakeActPort({ ...fakeActPortCalls(), ...world.main.procedures });
   // Note that the host's reads are laid over whatever document the test handed the window, its experiments among it.
+  // Note that main's read of the inbox holds the items of agents with no task given, and the agents holding them, as main lists both from one read.
+  const inboxOf = (
+    taskless: readonly AppInboxTasklessItem[],
+    agents: readonly AppInboxAgentHolding[],
+  ): AppInboxSlice => ({ ...NO_INBOX, taskless, agents });
   const reads = handHostReads({
     items: feedNow(),
     holders: world.main.now(),
+    inbox: inboxOf(firstTaskless, firstAgents),
   });
   world.deliverFeed = reads.deliverItems;
   world.deliverHolders = reads.deliverHolders;
@@ -795,11 +812,8 @@ export function mount(
       setHeld(next);
       pushAgain();
     };
-    const [taskless, setWaiting] = useState(firstTaskless);
-    const [agents, setAgents] = useState(firstAgents);
     world.setTaskless = (next, holding = agentHoldingsOf(next)) => {
-      setWaiting(next);
-      setAgents(holding);
+      reads.deliverInbox(inboxOf(next, holding));
       pushAgain();
     };
     world.setTasks = setListed;
@@ -852,8 +866,6 @@ export function mount(
       },
       inbox: waiting,
       inboxTasks: holding,
-      inboxTaskless: taskless,
-      inboxAgents: agents,
       inboxView: {
         onClear: route.onClear,
         pages: undefined,
@@ -1585,12 +1597,14 @@ export function askingMessage(
     status = INBOX_ASK_STATUS.OPEN,
     withdrawnReason,
     withdrawnAt,
+    withdrawnBy,
     createdAt = 1_000,
   }: {
     id?: string;
     status?: InboxReadAsk["status"];
     withdrawnReason?: string;
     withdrawnAt?: number;
+    withdrawnBy?: string;
     createdAt?: number;
   } = {},
 ): InboxMessage {
@@ -1603,6 +1617,7 @@ export function askingMessage(
       status,
       ...(withdrawnReason === undefined ? undefined : { withdrawnReason }),
       ...(withdrawnAt === undefined ? undefined : { withdrawnAt }),
+      ...(withdrawnBy === undefined ? undefined : { withdrawnBy }),
     },
     createdAt,
   };

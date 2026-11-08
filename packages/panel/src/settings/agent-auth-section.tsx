@@ -24,8 +24,6 @@ import { searchAnchorProps } from "@repo/settings/settings-anchors";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
 import {
   ANNOUNCE,
-  BANNER_LOOK,
-  Banner,
   BUTTON_VARIANT,
   Button,
   ButtonLink,
@@ -76,7 +74,6 @@ import {
   TextLink,
   useConfirmDialog,
 } from "@repo/ui";
-import { InfoIcon } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -105,8 +102,8 @@ import { ReadFailed } from "./marks.js";
  * ChatGPT's usage settings, for one at its limit. Every other press
  * opens the harness's dialog: a settings row per credential, the plan's led
  * by its mark where it has one and the key's lined up with its words, each
- * with its state under its name, its presses at its end, and its field or
- * notice opening under it. Which one new agents use is a control of its
+ * with its state under its name, its presses at its end, and its field
+ * opening under it. Which one new agents use is a control of its
  * own, in a section above the rows, standing only while both are saved:
  * it writes the plan's `forAgents`, on for the plan and off for the key,
  * and every agent Start makes on that provider's models runs on it; there
@@ -126,12 +123,9 @@ import { ReadFailed } from "./marks.js";
  *
  * The ChatGPT plan connects through Codex's device-code login, which the
  * service runs, so its Connect stands on the desktop and the web alike and
- * opens Connect Codex over the surface (`connect-codex-dialog.tsx`). The
- * first connection on this machine is met with OpenAI's notice that the app
- * uses the ChatGPT plan
- * (developers.openai.com/siwc/ui-ux-guidelines), drawn under the plan row's
- * name, dismissed with Got it and never shown again here, kept in the
- * renderer's own storage.
+ * opens Connect Codex over the surface (`connect-codex-dialog.tsx`).
+ * Connecting needs nothing acknowledged after it: the row's line already
+ * names the ChatGPT plan its agents run on.
  *
  * What the dialog asks about a credential it holds, disconnecting a plan or
  * removing a key, it asks at its own foot (`FootQuestion`), never in a
@@ -141,8 +135,8 @@ import { ReadFailed } from "./marks.js";
  * (`AgentConnectSection`): each says what it takes until it is connected,
  * and its button opens the row in place, one at a time, on a choice of the
  * plan or the key over that one credential's control, and the open row's
- * end is Cancel, which closes it. Connecting closes it to its state line,
- * OpenAI's notice standing under it. The credential's logic is the
+ * end is Cancel, which closes it. Connecting closes it to its state line.
+ * The credential's logic is the
  * dialog's own (`usePastedSecret`, `useClaudePlan`, `useChatGptPlan`,
  * `useApiKey`); only its drawing differs, and with no dialog to stand at
  * the foot of, a question asks over the window (`ConfirmDialog`).
@@ -150,9 +144,6 @@ import { ReadFailed } from "./marks.js";
 
 /** The class PostHog's recorder leaves out of a recording, element and children alike. */
 const NO_CAPTURE = "ph-no-capture";
-
-/** Where this Mac keeps that the ChatGPT notice was seen, in the renderer's own storage. */
-const NOTICE_SEEN_KEY = "app.chatGptFirstSignInNoticeSeen";
 
 /** Which of a harness's credentials its new agents use. */
 const CREDENTIAL = {
@@ -285,9 +276,6 @@ const WORDS = {
   CHATGPT_INELIGIBLE:
     "OpenAI says this ChatGPT plan isn't eligible for Codex. Connect to use another.",
   REVOCATION_UNCONFIRMED: `${PRODUCT_NAME} signed out of ChatGPT, but OpenAI didn't confirm it ended. To end it there too, remove ${PRODUCT_NAME} in your ChatGPT settings.`,
-  NOTICE_TITLE: "You're using your ChatGPT plan",
-  NOTICE_BODY: `Eligible usage in ${PRODUCT_NAME} uses your ChatGPT plan. Manage usage in your ChatGPT settings.`,
-  GOT_IT: "Got it",
   SAVE_TOKEN_FAILED: "Couldn't save the token. Try again.",
   SAVE_KEY_FAILED: "Couldn't save the key. Try again.",
   REMOVE_KEY_FAILED: "Couldn't remove the key. Try again.",
@@ -516,23 +504,6 @@ function tokenRejectionWords(rejection: ProviderKeyRejection): string {
   return rejection === PROVIDER_KEY_REJECTION.TOO_MANY_TRIES
     ? "Too many tries in the last hour. Try again later."
     : "That isn't a Claude setup-token. Run claude setup-token and paste what it prints.";
-}
-
-/** Whether the first sign-in's notice was seen on this Mac; a storage that refuses reads as seen, so it never nags. */
-function noticeSeen(): boolean {
-  try {
-    return window.localStorage.getItem(NOTICE_SEEN_KEY) !== null;
-  } catch {
-    return true;
-  }
-}
-
-function markNoticeSeen(): void {
-  try {
-    window.localStorage.setItem(NOTICE_SEEN_KEY, "1");
-  } catch {
-    // A storage that refuses the write shows the notice again on a later first sign-in, which is no harm.
-  }
 }
 
 /* ----- Small parts ----- */
@@ -989,33 +960,7 @@ function ClaudePlanInPlace({
   );
 }
 
-/**
- * OpenAI's first-sign-in notice, under the ChatGPT plan's row: what using
- * the plan means, and Got it, which takes focus as the notice lands, as the
- * sign-in's own button has just gone.
- */
-function FirstSignInNotice({ onDismiss }: { onDismiss: () => void }): React.JSX.Element {
-  const gotIt = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    gotIt.current?.focus({ preventScroll: true });
-  }, []);
-  return (
-    <Banner
-      look={BANNER_LOOK.ROW}
-      glyph={<InfoIcon />}
-      actions={
-        <Button ref={gotIt} variant={BUTTON_VARIANT.PRIMARY} onClick={onDismiss}>
-          {WORDS.GOT_IT}
-        </Button>
-      }
-    >
-      <Text variant={TEXT_VARIANT.LABEL}>{WORDS.NOTICE_TITLE}</Text>
-      <Text tone={TEXT_TONE.MUTED}>{WORDS.NOTICE_BODY}</Text>
-    </Banner>
-  );
-}
-
-/** The ChatGPT plan as either surface holds it: Connect Codex's dialog, OpenAI's notice and an unconfirmed sign-out after it, and Disconnect's question. */
+/** The ChatGPT plan as either surface holds it: Connect Codex's dialog, an unconfirmed sign-out after it, and Disconnect's question. */
 interface ChatGptPlan {
   readonly plan: SubscriptionKeySummary | undefined;
   /** Whether the plan stands, kept, answered, or waiting on its limit. */
@@ -1023,20 +968,17 @@ interface ChatGptPlan {
   /** Whether Connect Codex stands over the surface. */
   readonly connecting: boolean;
   readonly unconfirmed: boolean;
-  readonly notice: boolean;
   readonly connect: () => void;
   /** Puts Connect Codex away, which withdraws a login still waiting. */
   readonly closeConnect: () => void;
   /** Connect Codex's login connected the plan. */
   readonly connectedNow: () => void;
-  readonly dismissNotice: () => void;
   readonly removal: DialogConfirm;
 }
 
 /**
- * The ChatGPT plan's connection and disconnect. The first connection on this
- * machine raises OpenAI's notice, once; a disconnect OpenAI did not confirm
- * says so.
+ * The ChatGPT plan's connection and disconnect; a disconnect OpenAI did not
+ * confirm says so.
  */
 function useChatGptPlan(plan: SubscriptionKeySummary | undefined): ChatGptPlan {
   const { mutateAsync: sendProviderKeysRemove, ...keyRemoving } = useMutation(
@@ -1044,17 +986,13 @@ function useChatGptPlan(plan: SubscriptionKeySummary | undefined): ChatGptPlan {
   );
   const [connecting, setConnecting] = useState(false);
   const [unconfirmed, setUnconfirmed] = useState(false);
-  const [notice, setNotice] = useState(false);
 
   const connect = useCallback(() => {
     setUnconfirmed(false);
     setConnecting(true);
   }, []);
   const closeConnect = useCallback(() => setConnecting(false), []);
-  const connectedNow = useCallback(() => {
-    setConnecting(false);
-    if (!noticeSeen()) setNotice(true);
-  }, []);
+  const connectedNow = useCallback(() => setConnecting(false), []);
 
   const disconnect = useCallback(
     (): Promise<ActionResult> =>
@@ -1086,20 +1024,14 @@ function useChatGptPlan(plan: SubscriptionKeySummary | undefined): ChatGptPlan {
     removalAct,
     confirmFailure(FAILURE_SURFACE.AGENT_KEY_REMOVE),
   );
-  const dismissNotice = useCallback(() => {
-    markNoticeSeen();
-    setNotice(false);
-  }, []);
   return {
     plan,
     connected: plan !== undefined && standing(plan),
     connecting,
     unconfirmed,
-    notice,
     connect,
     closeConnect,
     connectedNow,
-    dismissNotice,
     removal,
   };
 }
@@ -1119,17 +1051,12 @@ function ChatGptState({
   );
 }
 
-/** What stands under the ChatGPT plan once it is connected: that a sign-out went unconfirmed, and OpenAI's notice. */
-function ChatGptAfterward({ chatGpt }: { chatGpt: ChatGptPlan }): React.JSX.Element {
+/** What stands under the ChatGPT plan once it is disconnected: that the sign-out went unconfirmed. */
+function ChatGptAfterward(): React.JSX.Element {
   return (
-    <>
-      {chatGpt.unconfirmed ? (
-        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {WORDS.REVOCATION_UNCONFIRMED}
-        </Text>
-      ) : null}
-      {chatGpt.notice ? <FirstSignInNotice onDismiss={chatGpt.dismissNotice} /> : null}
-    </>
+    <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+      {WORDS.REVOCATION_UNCONFIRMED}
+    </Text>
   );
 }
 
@@ -1167,7 +1094,7 @@ function ChatGptConnect({ chatGpt }: { chatGpt: ChatGptPlan }): React.JSX.Elemen
 
 /**
  * The ChatGPT plan: Connect until it stands, its status once held, and
- * Disconnect; OpenAI's notice and an unconfirmed sign-out open under it.
+ * Disconnect; an unconfirmed sign-out opens under it.
  */
 function ChatGptPlanRow({
   plan,
@@ -1191,11 +1118,7 @@ function ChatGptPlanRow({
         description={
           plan === undefined ? undefined : <ChatGptState plan={plan} connected={connected} />
         }
-        below={
-          chatGpt.notice || chatGpt.unconfirmed
-            ? () => <ChatGptAfterward chatGpt={chatGpt} />
-            : undefined
-        }
+        below={chatGpt.unconfirmed ? () => <ChatGptAfterward /> : undefined}
       >
         {() =>
           connected ? (
@@ -1213,7 +1136,7 @@ function ChatGptPlanRow({
 
 /**
  * The ChatGPT plan in place, its connection held by the harness's row so
- * OpenAI's notice and Connect Codex outlive the row closing: Connect until
+ * Connect Codex outlives the row closing: Connect until
  * it stands; once held, its status and Disconnect.
  */
 function ChatGptPlanInPlace({
@@ -1852,7 +1775,7 @@ function ConnectInPlaceRow({
   provider: ProviderKeyProvider;
   answer: ProviderKeysAnswer;
   open: boolean;
-  /** The ChatGPT plan's connection, held by the list so OpenAI's notice and Connect Codex outlive the row closing; Codex's alone. */
+  /** The ChatGPT plan's connection, held by the list so Connect Codex and an unconfirmed sign-out outlive the row closing; Codex's alone. */
   chatGpt: ChatGptPlan | undefined;
   onOpen: () => void;
   onClose: () => void;
@@ -1881,8 +1804,7 @@ function ConnectInPlaceRow({
     handBack.current = true;
     onClose();
   };
-  const afterward =
-    chatGpt !== undefined && (chatGpt.notice || chatGpt.unconfirmed) ? chatGpt : undefined;
+  const unconfirmed = chatGpt?.unconfirmed === true;
   return (
     <HarnessRow
       provider={provider}
@@ -1919,9 +1841,9 @@ function ConnectInPlaceRow({
                 )}
               </Stack>
             )
-          : afterward === undefined
-            ? undefined
-            : () => <ChatGptAfterward chatGpt={afterward} />
+          : unconfirmed
+            ? () => <ChatGptAfterward />
+            : undefined
       }
     >
       {(control) =>

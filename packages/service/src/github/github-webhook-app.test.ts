@@ -957,6 +957,24 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
   it.effect(
+    "a check suite completing on the repository's default branch reads no agent standing on it again, since nothing is published from it",
+    () =>
+      Effect.gen(function* () {
+        const pull = { state: "open", merged: false, conclusion: "success" } as const;
+        const { github, owner, agent } = yield* openAgent({ ...pull });
+        yield* updateAgentBranch(owner, agent.id, "main");
+        const suite = {
+          action: "completed",
+          repository: { ...repository, default_branch: "main" },
+          check_suite: { head_branch: "main", pull_requests: [] },
+        };
+
+        const answered = yield* answer(github, SECRET, delivery("check_suite", suite), {});
+
+        assert.deepEqual(answered, { status: 200, body: { read: 0, queued: 0, told: 0 } });
+      }),
+  );
+  it.effect(
     "a check run completing on an agent's branch reads nothing of its pull request again, since its suite completing will",
     () =>
       Effect.gen(function* () {
