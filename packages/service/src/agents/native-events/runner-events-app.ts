@@ -117,8 +117,8 @@ import { redactKeepingPlanCodes } from "./runner-moments.js";
  * event applied, which a relaunch numbers its events after. A post while a
  * turn runs touches the runner's sandbox (`@repo/sandbox`'s `touch`), at
  * most every `SANDBOX_TOUCH_EVERY`, stamped in the projection under the same
- * lock, unless it ends the launch, whose sandbox is stopped instead; a warm
- * runner with no turn touches nothing, so it cannot keep its own sandbox up.
+ * lock, unless it ends the launch, whose runner uses the sandbox no more; a
+ * warm runner with no turn touches nothing, so it cannot keep its own sandbox up.
  * A batch with no events is the runner's heartbeat (`@repo/agent-runner`'s
  * `RUNNER_HEARTBEAT`), posted every minute whatever its harness says, as it
  * may say nothing for an hour while a background command runs; it applies
@@ -275,13 +275,11 @@ export function sandboxTouched(alive: RunnerAlive): Effect.Effect<void, never, S
 /**
  * A launch's end as the sandbox hears it (`../coder-host/runner-sessions.ts`'s
  * `runnerEnded`), once the ended runner's last post has its answer, so that
- * post never waits on the runner lease or on the sandbox's stop, which holds its
- * call until the sandbox's snapshot is taken: stopped, unless a developer's
- * Terminal holds it or a newer launch replaced this one, or a message the
- * launch never took waits, whose queued turn is then published again for a
- * launch of its own (`../coder-host/turn-delivery.ts`). A stop that fails is
- * said in the log and passed over, because the sandbox then stops at its own
- * timeout, and the events it ended are already kept.
+ * post never waits on the runner lease: where a message the launch never
+ * took waits, its queued turn is published again for a launch of its own
+ * (`../coder-host/turn-delivery.ts`). The sandbox is left to its own idle
+ * stop. A read that fails is said in the log and passed over, since the
+ * events it ended are already kept.
  */
 export function sandboxAtRunnerEnd(
   ended: RunnerEnded,
@@ -301,9 +299,7 @@ export function sandboxAtRunnerEnd(
         left === RUNNER_ENDED.LINES_WAITING ? waitingRepublished(ended) : Effect.void,
       ),
       Effect.catch((failure) =>
-        Effect.logWarning(
-          `runner-events: the sandbox was not stopped at its launch's end: ${failure._tag}`,
-        ),
+        Effect.logWarning(`runner-events: a launch's end was not handed on: ${failure._tag}`),
       ),
     ),
   );
@@ -690,7 +686,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         : undefined;
     // Any post while a turn runs is its sandbox in use, a heartbeat with no events among them, but a
     // warm runner with no turn keeps nothing up, a batch that ends the launch touches nothing, since
-    // its sandbox is stopped once it lands, and a launch that has applied nothing yet has a sandbox
+    // its runner uses the sandbox no more, and a launch that has applied nothing yet has a sandbox
     // that opened moments ago.
     const sequence = last ?? held.sequence;
     const keepsAlive =

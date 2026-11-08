@@ -615,7 +615,6 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           tokenUrl: TOKEN_URL,
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
-          warmForMs: 7 * 60_000,
         });
         assert.ok(first.type === INPUT_LINE.MESSAGE);
         assert.equal(first.uuid, lineId);
@@ -825,8 +824,8 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           sessionId: opened.sessionId,
           sequence: 16,
         }).pipe(Effect.provide(services(api, openai)));
-        assert.equal(ended, RUNNER_ENDED.STOPPED);
-        assert.equal(api.sandboxes[0]?.status, "stopped");
+        assert.equal(ended, RUNNER_ENDED.LEFT);
+        api.idleStop();
         yield* TestClock.adjust("55 minutes");
 
         const sent = yield* sessions.send(

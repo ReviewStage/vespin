@@ -1,15 +1,14 @@
 /**
- * production.ts -- the terminal relay's dependencies as the deployment stands them: the agent read by the one rule, its sandbox through `Sandbox`, the PTY reached by WebSocket (`sandbox-pty.ts`), and the lease in the store.
+ * production.ts -- the terminal relay's dependencies as the deployment stands them: the agent read by the one rule, its sandbox through `Sandbox`, the PTY reached by WebSocket (`sandbox-pty.ts`), and the credential's renewal claim in the store.
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the relay stands, so the relay itself requires none. A
- * store that cannot take a keystroke's renewal is logged, since the next
- * keystroke tries again; one that cannot claim the credential's renewal is
+ * store that cannot claim the credential's renewal is
  * read as not claimed, and one that cannot give a claim back is logged, so
  * the claim lapses on the agent's own rule. One that cannot say when the
  * credential was last renewed is logged and read as never, so the claim
- * decides. A keep-alive of the sandbox
- * the sandbox did not confirm is logged, since the next one tries again.
+ * decides. A touch the sandbox did not confirm is logged, since the next
+ * one tries again.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -18,7 +17,6 @@ import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import {
   claimCredentialRenewal,
   credentialRenewedAt,
-  holdSandbox,
   releaseCredentialRenewal,
 } from "@repo/database/models/sandbox-terminal-lease";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
@@ -79,10 +77,6 @@ export const relayDependencies: Effect.Effect<RelayDependencies, never, RelaySer
         ),
       sandbox,
       connect: (shell) => connectPty(sandboxes, shell),
-      hold: (conversationId, heldUntil) =>
-        run(holdSandbox(conversationId, heldUntil)).pipe(
-          Effect.catch(() => Effect.logWarning("a terminal's lease was not moved on")),
-        ),
       touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
       claimRenewal: (conversationId, sandboxSessionId, now, renewedBefore) =>
         run(claimCredentialRenewal(conversationId, sandboxSessionId, now, renewedBefore)).pipe(

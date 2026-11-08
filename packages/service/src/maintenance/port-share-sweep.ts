@@ -1,18 +1,14 @@
 /**
- * port-share-sweep.ts -- the scheduled sweep's close of a shared port's link no one has visited for its idle bound, and its hold on the sandbox while visits come.
+ * port-share-sweep.ts -- the scheduled sweep's close of a shared port's link no one has visited for its idle bound, and its touch of the sandbox while visits come.
  *
  * A shared sandbox carries the share's tag (`agents/terminal/port-share.ts`),
  * which the sweep lists by, one page a minute. A running one's last visit is
  * read from its helper's folder: past the idle bound, the share is closed as
- * the developer's own close does; within it, the sandbox's lease is held
- * from that visit and the sandbox touched, as a forwarded port's traffic
- * touches it. A stopped one is left until it runs again, when its old visit
+ * the developer's own close does; within it, the sandbox is touched, as a
+ * forwarded port's traffic touches it. A stopped one is left until it runs again, when its old visit
  * closes it. What is logged of a failure is the sandbox's own words.
  */
 
-import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { agentConversation } from "@repo/database/models/agent-store";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import {
   isSandboxError,
   type ListedSandbox,
@@ -21,19 +17,13 @@ import {
   type SandboxService,
   touchSandbox,
 } from "@repo/sandbox";
-import { Duration, Effect, Option, Result } from "effect";
-import { agentTag } from "../agents/machine/sandbox-machine.js";
-import {
-  PORT_SHARE,
-  readSharedPort,
-  shareHeldUntil,
-  unsharePort,
-} from "../agents/terminal/port-share.js";
+import { Duration, Effect, Result } from "effect";
+import { PORT_SHARE, readSharedPort, unsharePort } from "../agents/terminal/port-share.js";
 
 /** How many shared sandboxes are read at once. */
 const CONCURRENCY = 5;
 
-/** One shared sandbox swept: its share closed where it went idle, answering whether it was, or its sandbox held. */
+/** One shared sandbox swept: its share closed where it went idle, answering whether it was, or its sandbox touched. */
 const sweptShare = (api: SandboxService, sandbox: ListedSandbox, now: Date) =>
   Effect.gen(function* () {
     if (sandbox.status !== SANDBOX_STATUS.RUNNING || sandbox.running === undefined) return false;
@@ -43,11 +33,6 @@ const sweptShare = (api: SandboxService, sandbox: ListedSandbox, now: Date) =>
       yield* unsharePort(api, sandbox, running);
       return true;
     }
-    const agentId = agentTag(sandbox.tags);
-    const conversation = agentId === undefined ? Option.none() : yield* agentConversation(agentId);
-    if (Option.isSome(conversation)) {
-      yield* holdSandbox(conversation.value.conversationId, shareHeldUntil(visitedAt));
-    }
     yield* touchSandbox(sandbox.name);
     return false;
   }).pipe(
@@ -56,10 +41,10 @@ const sweptShare = (api: SandboxService, sandbox: ListedSandbox, now: Date) =>
     ),
   );
 
-/** Closes the shared ports' links idle past the bound and holds the rest, answering how many closed. */
+/** Closes the shared ports' links idle past the bound and touches the rest, answering how many closed. */
 export const sweepPortShares = /* @__PURE__ */ Effect.fn("web/sweepPortShares")(function* (
   now: Date,
-): Effect.fn.Return<number, StoreFailure, DatabaseServices | Sandbox> {
+): Effect.fn.Return<number, never, Sandbox> {
   const api = yield* Sandbox;
   const listed = yield* Effect.result(api.listTagged(PORT_SHARE.TAG, PORT_SHARE.TAG_ON));
   if (Result.isFailure(listed)) {

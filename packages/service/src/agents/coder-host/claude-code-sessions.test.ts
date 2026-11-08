@@ -30,7 +30,6 @@ import {
   latestTurnsOfReached,
   readAgentRouting,
   recordAgentNativeSession,
-  recordAgentSeen,
   runnerLaunchOf,
   updateAgentChoice,
 } from "@repo/database/models/agent-store";
@@ -48,7 +47,6 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -122,7 +120,6 @@ import {
   launchLines,
   runnerSandboxApi,
   runnerTook,
-  swappedBearer,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
 import { AGENT_TAG, SANDBOX_NAME, SESSION_TAG } from "../agent-sandbox-open.js";
@@ -824,7 +821,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           allowedDomains: [],
           installedSkills: "/opt/agent/installed-skills",
           warm: true,
-          warmForMs: 7 * 60_000,
         });
         assert.ok(first.type === INPUT_LINE.MESSAGE);
         assert.equal(first.uuid, lineId);
@@ -1589,7 +1585,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a launch's end stops the sandbox; the next message resumes it and relaunches on the CLI's session with the next event number, and cancel then finds no turn once it ends",
+    "a launch's end leaves the sandbox to its idle stop; the next message resumes it and relaunches on the CLI's session with the next event number, and cancel then finds no turn once it ends",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -1614,8 +1610,9 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessionId: opened.sessionId,
           sequence: 41,
         }).pipe(Effect.provide(api.layer));
-        assert.equal(ended, RUNNER_ENDED.STOPPED);
-        assert.equal(api.sandboxes[0]?.status, "stopped");
+        assert.equal(ended, RUNNER_ENDED.LEFT);
+        assert.equal(api.sandboxes[0]?.status, "running");
+        api.idleStop();
         assert.equal(
           (yield* sessions.cancel(opened.sessionId, "turn_0")).outcome,
           SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN,
@@ -1697,6 +1694,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* runnerEnded({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
           Effect.provide(api.layer),
         );
+        api.idleStop();
         assert.equal(api.sandboxes[0]?.status, "stopped");
 
         const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
@@ -1744,6 +1742,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessionId: opened.sessionId,
           sequence: 41,
         }).pipe(Effect.provide(api.layer));
+        api.idleStop();
         // The stop's snapshot is still being taken as the message arrives, past more than one try.
         api.snapshotting.remaining = 3;
 
@@ -1805,6 +1804,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       yield* runnerEnded({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
         Effect.provide(api.layer),
       );
+      api.idleStop();
       yield* setWorkspaceExperiment({
         organizationId: agent.organizationId,
         experiment: EXPERIMENT.DESCRIPTIONS,
@@ -2195,7 +2195,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a warm call on an agent whose sandbox stopped resumes it and launches its runner warm with no message, the next writes that runner a warm line, and a message past its turn's window while it is on screen reaches it as a line",
+    "a warm call on an agent whose sandbox stopped resumes it and launches its runner warm with no message, the next writes that runner a warm line, and a message long past its turn's end reaches it as a line",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -2216,7 +2216,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sequence: 8,
           reason: RUNNER_END.IDLED,
         }).pipe(Effect.provide(Layer.merge(api.layer, Layer.succeed(HostedEnvironment, NO_KEYS))));
-        assert.equal(ended, RUNNER_ENDED.STOPPED);
+        assert.equal(ended, RUNNER_ENDED.LEFT);
+        api.idleStop();
         const first = api.commands[0];
         assert.ok(first !== undefined);
         first.exitCode = 0;
@@ -2231,7 +2232,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(config.warm, true);
         yield* sessions.warm(opened.sessionId, agent.conversationId);
         assert.equal(api.commands.length, 2, "the second warm call launched nothing");
-        // The agent's turn ended past the window, but a client had it on screen since.
+        // The agent's turn ended past a Mac's warm window, which a sandbox's runner has none of.
         yield* (yield* Database).insert(turns).values({
           userId,
           conversationId: agent.conversationId,
@@ -2240,10 +2241,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           queuedAt: new Date(0),
           settledAt: new Date(0),
         });
-        yield* TestClock.adjust(
-          Duration.sum(CODER.RUNNER_WARM[AGENT_MACHINE.VERCEL], Duration.minutes(1)),
-        );
-        assert.equal(yield* recordAgentSeen(userId, agent.id), true);
+        yield* TestClock.adjust(Duration.sum(CODER.RUNNER_WARM, Duration.minutes(1)));
         const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.commands.length, 2, "the message relaunched nothing");
@@ -2263,34 +2261,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           ),
           [[{ type: "text", text: "Now the emails." }]],
         );
-      }),
-  );
-
-  it.effect(
-    "a failed launch's end stops the sandbox with a message untaken, handing nothing on",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent } = yield* openAgent;
-        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
-          Effect.provide(services(api)),
-        );
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(agent, "Fix the invitations."),
-        );
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-
-        const ended = yield* runnerEnded({
-          target: { userId, conversationId: agent.conversationId },
-          sessionId: opened.sessionId,
-          sequence: 3,
-          reason: RUNNER_END.FAILED,
-        }).pipe(Effect.provide(api.layer));
-
-        assert.equal(ended, RUNNER_ENDED.STOPPED);
-        assert.equal(api.sandboxes[0]?.status, "stopped");
       }),
   );
 
@@ -2447,6 +2417,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             sessionId: opened.sessionId,
             sequence: 41,
           }).pipe(Effect.provide(api.layer));
+          api.idleStop();
           const [expired] = api.sandboxes;
           assert.ok(expired !== undefined);
           expired.snapshotExpired = true;
@@ -2504,6 +2475,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessionId: opened.sessionId,
           sequence: 41,
         }).pipe(Effect.provide(api.layer));
+        api.idleStop();
         const [expired] = api.sandboxes;
         assert.ok(expired !== undefined);
         expired.snapshotExpired = true;
@@ -2555,6 +2527,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* runnerEnded({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
           Effect.provide(api.layer),
         );
+        api.idleStop();
         const [expired] = api.sandboxes;
         assert.ok(expired !== undefined);
         expired.snapshotExpired = true;
@@ -2582,14 +2555,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(api.commands.length, 2);
         const [, relaunch] = api.commands;
         assert.ok((yield* launchLines(relaunch)).length >= 3);
-        yield* runnerTook(agent.id);
-        const ended = yield* runnerEnded({
-          target,
-          sessionId: opened.sessionId,
-          sequence: 42,
-        }).pipe(Effect.provide(api.layer));
-        assert.equal(ended, RUNNER_ENDED.STOPPED);
-        assert.equal(fresh.status, "stopped");
       }),
   );
 
@@ -3001,40 +2966,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           ),
         );
         assert.deepEqual([...traces], [asked.traceId]);
-      }),
-  );
-
-  it.effect(
-    "a launch's end leaves the sandbox up while a developer's Terminal holds it, its credentials still on its firewall",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        // A repository agent, whose write token stands at the firewall beside its runner's swaps.
-        const { userId, agent, sessions } = yield* repositoryAgent(api, ownInstallation());
-        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Push a branch."));
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        yield* holdSandbox(agent.conversationId, new Date(Date.UTC(2030, 0, 1)));
-        const [command] = api.commands;
-        const bearer = launchBearer(api, command, SERVICE_HOST);
-        assert.ok(bearer !== undefined);
-
-        yield* runnerTook(agent.id);
-        const ended = yield* runnerEnded({
-          target: { userId, conversationId: agent.conversationId },
-          sessionId: opened.sessionId,
-          sequence: 5,
-        }).pipe(Effect.provide(Layer.merge(api.layer, Layer.succeed(HostedEnvironment, NO_KEYS))));
-
-        assert.equal(ended, RUNNER_ENDED.HELD);
-        assert.equal(api.sandboxes[0]?.status, "running");
-        const standing = api.policies.findLast(
-          (each) => each.session === command?.sandboxSessionId,
-        );
-        assert.equal(
-          swappedBearer(standing?.policy, SERVICE_HOST, command?.env[RUNNER_ENV.BEARER]),
-          bearer,
-        );
       }),
   );
 
@@ -3917,7 +3848,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* runnerLetGo(api, userId, opened.sessionId);
         sequence.next = 10;
         yield* sentAndDelivered(sessions, opened.sessionId, agent, "And the docs.");
-        // The launch ended, and its END stopped the sandbox.
+        // The launch ended, and the sandbox stopped idle.
         sequence.next = 20;
         yield* runnerTook(agent.id);
         yield* runnerEnded({
@@ -3925,6 +3856,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           sessionId: opened.sessionId,
           sequence: 19,
         }).pipe(Effect.provide(api.layer));
+        api.idleStop();
         yield* sentAndDelivered(sessions, opened.sessionId, agent, "And the changelog.");
 
         assert.deepEqual(

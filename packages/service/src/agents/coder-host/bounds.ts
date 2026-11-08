@@ -1,5 +1,4 @@
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
-import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { GITHUB_TOKEN_REFRESH } from "@repo/features/host-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Duration } from "effect";
@@ -134,48 +133,30 @@ export const CODER = {
     POLL: Duration.millis(250),
   },
   /**
-   * How long a native agent's runner stays warm once its turn is over, for
-   * the next message to reach it as a line rather than through a relaunched
-   * CLI, one window per machine: read by the machine the runner's place is on
-   * (`FoundPlace.machine`), never by a flag. A runner is launched warm only
-   * on a machine whose window is not zero (`runner-sessions.ts`'s launch),
-   * and is handed its window, past which it ends itself (`warmForMs`,
-   * `@repo/agent-runner`'s `RUNNER_WARM`), `RUNNER_WARM_SLACK` later.
+   * How long a Mac's runner stays warm once its turn is over, for the next
+   * message to reach it as a line rather than through a relaunched CLI: thirty
+   * minutes, because nothing is billed on a host, and every message within it
+   * goes into the running session rather than through a relaunched CLI, a new
+   * GitHub token, and the last runner's grace. The runner is handed its
+   * window, past which it ends itself (`warmForMs`, `@repo/agent-runner`'s
+   * `RUNNER_WARM`), `RUNNER_WARM_SLACK` later. Past it, a message we send ends
+   * the runner under the lease and relaunches (`sendHolding`), so none is
+   * written to a runner about to end itself; a host waiting to switch release
+   * has its runner retired at its IDLE (`runnerIdled`), and retires its own
+   * warm runners while it waits (`@repo/host`'s `compose-local-agents.ts`).
    *
-   * The sandbox's is five minutes from the later of its turn's end and the
-   * last time a client had the agent on screen (`runner-sessions.ts`'s
-   * `warm`, which runs a warm runner's window again from now with a `warm`
-   * line, or launches one with no message where none is up), so an agent the
-   * developer is looking at takes a message straight into its running
-   * session, and one they left ends its runner five minutes on, its END
-   * stopping the sandbox, as Vercel advises: an idle sandbox bills its
-   * memory. Ten warm minutes after every turn, on screen or not, kept a
-   * 4 vCPU, 8 GB sandbox up for up to 62 sandbox-hours a day over Oct 23–24,
-   * about $5–10 a day, for the 636 of 1,536 finished turns a follow-up
-   * reached within three minutes. A message sent while the runner ends is
-   * queued for it to read, and a runner that ends without reading it leaves
-   * it waiting, which its END hands on (`runner-sessions.ts`'s
-   * `LINES_WAITING`).
-   *
-   * The device's is thirty minutes, because nothing is billed on a host, and
-   * every message within it goes into the running session rather than
-   * through a relaunched CLI, a new GitHub token, and the last runner's
-   * grace. Past it, a message we send ends the runner under the lease and
-   * relaunches (`sendHolding`), so none is written to a runner about to end
-   * itself; a host waiting to switch release has its runner retired at its
-   * IDLE (`runnerIdled`), and retires its own warm runners while it waits
-   * (`@repo/host`'s `compose-local-agents.ts`).
+   * A sandbox's runner has no window of its own: it is launched warm and
+   * lives until its sandbox stops, five idle minutes after its last touch
+   * (`@repo/sandbox`'s `SANDBOX_IDLE`), bounded only by the runner's own cap
+   * (`RUNNER_WARM.IDLE_CAP_MS`).
    */
-  RUNNER_WARM: {
-    [AGENT_MACHINE.VERCEL]: Duration.minutes(5),
-    [AGENT_MACHINE.DEVICE]: Duration.minutes(30),
-  } satisfies Record<AgentMachineKind, Duration.Duration>,
+  RUNNER_WARM: Duration.minutes(30),
   /**
-   * How much longer than its window a warm runner waits before it ends
+   * How much longer than its window a Mac's warm runner waits before it ends
    * itself: the window runs from the turn's settle, which we stamp after
-   * the runner's IDLE, and a message sent just inside it reaches a device's
-   * runner only once its host claims the line, so the runner outlasts both
-   * rather than ending under a message on its way.
+   * the runner's IDLE, and a message sent just inside it reaches the runner
+   * only once its host claims the line, so the runner outlasts both rather
+   * than ending under a message on its way.
    */
   RUNNER_WARM_SLACK: Duration.minutes(2),
   /**

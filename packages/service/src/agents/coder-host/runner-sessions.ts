@@ -59,7 +59,7 @@
  * credential at its firewall again, with the next event number and the
  * harness's session to resume where one may be resumed (`resumedSessionOf`),
  * a fresh one otherwise, handed the agent's steps; a Mac's runner, fed on its stdin, and a message naming files are launched
- * in the request instead. A runner warm past its machine's window
+ * in the request instead. A Mac's runner warm past its window
  * (`CODER.RUNNER_WARM`), or one a Stop was written to since its launch, is
  * ended rather than written to, and the message relaunches it, so no line
  * goes to a runner on its way down.
@@ -70,18 +70,18 @@
  * bearer and throws the place away. Nothing here streams: the runner posts its
  * events to the service itself.
  *
- * `warm`, for an agent a client has on screen, writes a runner that runs a
- * `warm` line, which runs its warm window again from now, or launches the
- * runner with no message where none runs, past its answer, so the next
- * message goes into the running session as a line. The agent stays warm for
- * its machine's window past the later of its turn's end and the last such
- * call (`CODER.RUNNER_WARM`), past which its runner ends itself.
+ * `warm`, for an agent a client has on screen, touches its running sandbox,
+ * writes a runner that runs a `warm` line, which runs its warm window again
+ * from now, or launches the runner with no message where none runs, past its
+ * answer, so the next message goes into the running session as a line. A
+ * sandbox's runner lives until its sandbox stops (`@repo/sandbox`'s
+ * `SANDBOX_IDLE`); a Mac's ends itself past its window (`CODER.RUNNER_WARM`).
  *
  * At a launch's end (`runnerEnded`, which the events route calls on the
- * runner's END event) the place is stopped unless a developer's Terminal
- * holds it; a runner waiting on a background
- * task or a wakeup has posted no END, so its place stays up. An END from a
- * launch a newer one replaced, told by its event number, stops nothing.
+ * runner's END event) the place is left as it stands, for its own idle stop;
+ * where a message waits on a launch that read its lines, the turn's delivery
+ * is published again. An END from a launch a newer one replaced, told by its
+ * event number, does nothing.
  *
  * `open`, `send`, `deliverTurn`, `cancel`, and `retune` each hold the
  * agent's runner lease (`agent-runner-lease.ts`) from before they read where
@@ -133,7 +133,6 @@ import {
   readAgent,
   readAgentOfConversation,
   readAgentRouting,
-  readAgentSeenAt,
   readNativeRunStanding,
   recordAgentNativeSession,
   recordAgentRunnerToken,
@@ -157,7 +156,6 @@ import {
   waitingRunnerFiles,
   withdrawRunnerLine,
 } from "@repo/database/models/runner-line-store";
-import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import { turnAwaitedByLine } from "@repo/database/models/turn-state";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
@@ -180,7 +178,6 @@ import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
 import {
   Clock,
   Context,
-  DateTime,
   Duration,
   Effect,
   Exit,
@@ -607,31 +604,17 @@ function launchFingerprint(
 }
 
 /**
- * Whether the agent's last turn ended, and it was last on screen (`warm`),
- * longer ago than the warm window of the machine given
- * (`CODER.RUNNER_WARM`), so we have closed or are closing it, and the runner
- * may soon end itself (`CODER.RUNNER_WARM_SLACK`). Never where the window
- * is zero, whose runner is launched to end at its turn's end; never while a
- * turn runs; and never before any turn ended, whose runner was launched for
- * the turn that opened. Note that the window counts from the newest turn to
- * end, whatever turn stands queued behind it, since no runner took that
- * turn's line yet, this message's own among them. When it was on screen is
- * read only for a turn that ended past the window.
+ * Whether a Mac's agent's last turn ended longer ago than its warm window
+ * (`CODER.RUNNER_WARM`), so its runner may soon end itself
+ * (`CODER.RUNNER_WARM_SLACK`); a sandbox's runner has no window. Never
+ * while a turn runs; and never before any turn ended, whose
+ * runner was launched for the turn that opened. Note that the window counts
+ * from the newest turn to end, whatever turn stands queued behind it, since
+ * no runner took that turn's line yet, this message's own among them.
  */
-function pastWarmWindow(
-  machine: AgentMachineKind,
-  agentId: string,
-  turnRunning: boolean,
-  lastEndedAt: Date | undefined,
-  now: number,
-) {
-  return Effect.gen(function* () {
-    const window = Duration.toMillis(CODER.RUNNER_WARM[machine]);
-    if (window === 0 || turnRunning || lastEndedAt === undefined) return false;
-    if (now - lastEndedAt.getTime() <= window) return false;
-    const seenAt = yield* readAgentSeenAt(agentId);
-    return seenAt === null || now - seenAt.getTime() > window;
-  });
+function pastWarmWindow(turnRunning: boolean, lastEndedAt: Date | undefined, now: number) {
+  if (turnRunning || lastEndedAt === undefined) return false;
+  return now - lastEndedAt.getTime() > Duration.toMillis(CODER.RUNNER_WARM);
 }
 
 /** The place a runner's handle names, without the runner. */
@@ -1035,11 +1018,12 @@ export const runnerSessions = <
                 const config = yield* harness
                   .config(agent, layout, from.resume, firstSequence, rewindBefore)
                   .pipe(Effect.withSpan("web/runnerConfig"));
-                // Note that a runner stays warm past the agent's turn only on a machine with a warm
-                // window (`CODER.RUNNER_WARM`), ending itself once it passes.
-                const window = CODER.RUNNER_WARM[place.running.machine];
-                const warm = !Duration.isZero(window);
-                const warmForMs = Duration.toMillis(Duration.sum(window, CODER.RUNNER_WARM_SLACK));
+                // Note that a runner stays warm past the agent's turn: a Mac's for its window
+                // (`CODER.RUNNER_WARM`), ending itself once it passes, and a sandbox's until its sandbox stops.
+                const warmForMs =
+                  place.running.machine === AGENT_MACHINE.DEVICE
+                    ? Duration.toMillis(Duration.sum(CODER.RUNNER_WARM, CODER.RUNNER_WARM_SLACK))
+                    : undefined;
                 return {
                   config: {
                     ...config,
@@ -1048,7 +1032,8 @@ export const runnerSessions = <
                       ? { transcriptsUrl: options.transcriptsUrl }
                       : undefined),
                     ...(from.fork === true ? { fork: true } : undefined),
-                    ...(warm ? { warm, warmForMs } : undefined),
+                    warm: true,
+                    ...(warmForMs === undefined ? undefined : { warmForMs }),
                     ...(trace === undefined ? undefined : { trace }),
                   },
                   rewind,
@@ -1666,20 +1651,19 @@ export const runnerSessions = <
         if (standing !== undefined && running !== undefined) {
           const runnerPlace = placeOfHandle(running.handle);
           // A runner that would not take the message as it should is ended, and the message
-          // relaunches it: one warm past its machine's window, which may end itself at its idle cap
+          // relaunches it: a Mac's warm past its window, which may end itself at its idle cap
           // as the line lands; one a Stop was written to since its launch, which ends on it; and a
           // warm one launched with what has changed since. Note that the first two hold whether
           // or not the sweep or the IDLE's retire ran, since a Mac drops a line once its runner
           // has gone, so a line written to a runner on its way down is lost.
           if (
             restart ||
-            (yield* pastWarmWindow(
-              standing.machine,
-              agent.id,
-              turnRunning,
-              (yield* lastSettledTurnsOfReached([conversationId])).get(conversationId),
-              handedAt,
-            )) ||
+            (standing.machine === AGENT_MACHINE.DEVICE &&
+              pastWarmWindow(
+                turnRunning,
+                (yield* lastSettledTurnsOfReached([conversationId])).get(conversationId),
+                handedAt,
+              )) ||
             (yield* stopWritten(machine, running)) ||
             (yield* staleWarm(agent, layout, running.mark, turnRunning))
           ) {
@@ -2545,9 +2529,8 @@ export const retireWarmRunner = Effect.fn("web/retireWarmRunner")(function* (ret
 
 /** How a launch's end left its place. */
 export const RUNNER_ENDED = {
-  STOPPED: "stopped",
-  /** A developer's Terminal holds the place, left up with its credentials, for its timeout to stop. */
-  HELD: "held",
+  /** The place left as it stands, for its own idle stop. */
+  LEFT: "left",
   /** The END is from a launch a newer one replaced, or the place is gone or already down. */
   STALE: "stale",
   /**
@@ -2563,16 +2546,13 @@ export const RUNNER_ENDED = {
 
 /**
  * A launch's end, as its END event tells it, for either harness: the place
- * stopped, its kept launch deleted first, unless a developer's Terminal
- * holds it, which leaves it up with its credentials to its timeout; where a
- * message waits for the launch the turn's delivery starts, the place is left
- * up as it stands, that launch setting its own swaps; and nothing for an END
- * older than the launch its place runs now. Decided and stopped under the
- * agent's runner lease, read again once it is held, so a delivery
+ * left as it stands, for its own idle stop, and where a message waits for the
+ * launch the turn's delivery starts, said so, for the END to hand it on;
+ * nothing for an END older than the launch its place runs now. Decided under
+ * the agent's runner lease, read again once it is held, so a delivery
  * relaunching the runner either finishes first, and its newer launch makes
- * this END stale, or starts after the stop and resumes the place; a message
- * sent meanwhile is queued for the launch that delivery starts. Fails where the machine or the store could not be asked,
- * or the lease stayed held past its wait.
+ * this END stale, or starts after it. Fails where the machine or the store
+ * could not be asked, or the lease stayed held past its wait.
  */
 export const runnerEnded = Effect.fn("web/runnerEnded")(function* (ending: RunnerEnding) {
   const machine = yield* deploymentLifecycle;
@@ -2580,8 +2560,8 @@ export const runnerEnded = Effect.fn("web/runnerEnded")(function* (ending: Runne
   if (Option.isNone(found)) return RUNNER_ENDED.STALE;
   const { agentId } = found.value;
   // A place no agent is recorded for was never launched into, so no runner of it has a lease to wait out.
-  if (agentId === undefined) return yield* stoppedAtEnd(machine, ending);
-  return yield* holdingRunner(agentId, stoppedAtEnd(machine, ending));
+  if (agentId === undefined) return yield* leftAtEnd(machine, ending);
+  return yield* holdingRunner(agentId, leftAtEnd(machine, ending));
 });
 
 /**
@@ -2594,8 +2574,8 @@ export const runnerEnded = Effect.fn("web/runnerEnded")(function* (ending: Runne
  * sent at the turn's end: one a send wrote first is taken by the runner,
  * which still reads its stdin, and one sent after finds the runner no
  * longer told of and relaunches. Nothing for a sandbox's runner, which
- * stays warm for its window while the developer has it on screen and ends
- * itself past it, nor for an IDLE older than the launch its place runs now.
+ * stays warm until its sandbox stops, nor for an IDLE older than the launch
+ * its place runs now.
  * Answers whether the retire line was written.
  */
 export const runnerIdled = Effect.fn("web/runnerIdled")(function* (idle: RunnerEnding) {
@@ -2614,8 +2594,8 @@ export const runnerIdled = Effect.fn("web/runnerIdled")(function* (idle: RunnerE
   });
 });
 
-/** The stop `runnerEnded` decides, on the place as it stands when read here. */
-const stoppedAtEnd = Effect.fn("web/stoppedAtEnd")(function* (
+/** What `runnerEnded` decides, on the place as it stands when read here. */
+const leftAtEnd = Effect.fn("web/leftAtEnd")(function* (
   machine: MachineLifecycle,
   ending: RunnerEnding,
 ) {
@@ -2633,12 +2613,5 @@ const stoppedAtEnd = Effect.fn("web/stoppedAtEnd")(function* (
   ) {
     return RUNNER_ENDED.LINES_WAITING;
   }
-  // Read last, just before the stop, so a developer who opened a Terminal during the turn keeps the
-  // place, its credentials with it, which its timeout then stops once nothing keeps it alive.
-  if (yield* sandboxHeld(ending.target.conversationId, yield* DateTime.nowAsDate)) {
-    return RUNNER_ENDED.HELD;
-  }
-  // Its credentials stay on its firewall until the stop.
-  yield* machine.stop(running);
-  return RUNNER_ENDED.STOPPED;
+  return RUNNER_ENDED.LEFT;
 });

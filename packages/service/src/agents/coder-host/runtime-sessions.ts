@@ -30,13 +30,13 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import {
-  readAgentHeaderOfConversation,
-  readAgentRouting,
-  recordAgentSeen,
-} from "@repo/database/models/agent-store";
+import { readAgentHeaderOfConversation, readAgentRouting } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
-import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  type AgentMachineKind,
+  LOCAL_AGENT_REFUSAL,
+} from "@repo/features/agent-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { Context, Effect, Option } from "effect";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
@@ -390,10 +390,9 @@ export const turnHandedOver = (turn: {
 
 /**
  * A cloud agent a client has on screen kept warm, acting for the agent's
- * starter as every native call does: when it was seen recorded, and, past
- * the answer, its runner launched with no message where none runs, so the
- * next message goes into its running session (`runner-sessions.ts`'s
- * `warm`). A Mac's agent, an archived one, one on no harness, one whose
+ * starter as every native call does: past the answer, its sandbox touched
+ * and its runner launched with no message where none runs, so the next
+ * message goes into its running session (`runner-sessions.ts`'s `warm`). A Mac's agent, an archived one, one on no harness, one whose
  * session never claimed its record, and a function that cannot reach the
  * harness launch nothing. Nothing here fails its caller.
  */
@@ -401,9 +400,11 @@ export const runnerWarmed = (agent: {
   readonly id: string;
   readonly userId: string;
   readonly conversationId: string;
+  readonly machine?: AgentMachineKind;
+  readonly archivedAt: Date | null;
 }): Effect.Effect<void, never, DatabaseServices> =>
   Effect.gen(function* () {
-    if (!(yield* recordAgentSeen(agent.userId, agent.id))) return;
+    if (agent.machine === AGENT_MACHINE.DEVICE || agent.archivedAt !== null) return;
     const routing = yield* readAgentRouting(agent.userId, agent.id);
     const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
     if (runtime === undefined) return;

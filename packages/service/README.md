@@ -1508,9 +1508,9 @@ conversation's lock, so an agent's turns land as `turns` rows naming its model
 and effort and its `messages` rows as `UIMessage`s, and a batch posted again
 writes nothing twice; and it takes the developer's lines from
 `/api/agents/runner-lines` (`runner-lines-app.ts`), a held read woken through
-Sync. The runner is retired when its turn goes idle, and its end takes the
-credential off the firewall and stops the sandbox, unless a Terminal holds
-it, which keeps the credential on until the sandbox stops on its timeout. The instructions (`src/agents/coder-host/instructions.ts`, worded for the
+Sync. The runner stays warm past its turn, and the sandbox, its credential
+on the firewall, stops five minutes after anything last touched it
+(`@repo/sandbox`'s `SANDBOX_IDLE`). The instructions (`src/agents/coder-host/instructions.ts`, worded for the
 harness and handed to it at every launch) tell the agent to read `AGENTS.md`
 and `CLAUDE.md` first, reread the code the description names and say where it no
 longer fits, run the repository's checks, work on an `agent/<slug>` branch and
@@ -2012,8 +2012,7 @@ agents on a task as `taskAgentPins`.
 `POST /api/agents/{id}/stop` is the harness's cancel of the turn under way, a
 stop line the runner hands on as an interrupt, then the row's stamp; a turn
 still running `CODER.STOP_CONFIRM` later has its runner ended and is settled
-canceled, the runner's end stops the sandbox, and anything the agent pushed
-stays.
+canceled, and anything the agent pushed stays.
 `GET /api/agents/{id}/pull-request` answers what the agent published
 (`src/agents/coder-host/published.ts`): the repository, the branch it pushed, and the
 pull request from it with its state (`open`, `draft`, `merged`, `closed`),

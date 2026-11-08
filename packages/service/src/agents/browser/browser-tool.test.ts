@@ -8,17 +8,15 @@ import {
   upsertBrowserTab,
 } from "@repo/database/models/agent-browser-tabs";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_AGENT_ACTION, BROWSER_STEP_STATUS } from "@repo/features/browser-agent-actions";
-import { BROWSER_CURSOR_BEAT } from "@repo/features/browser-agent-cdp";
 import type { PageTarget } from "@repo/features/browser-cdp";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
-import { Clock, Duration, Effect, Fiber, Layer, Option } from "effect";
+import { Clock, Effect, Fiber, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import {
   agentBrowserTestLayer,
@@ -699,59 +697,6 @@ it.layer(getTestDB())("the browser tool", (it) => {
             at: before,
           },
         ]);
-      }),
-  );
-
-  it.effect(
-    "a click waits the cursor's beat only while the agent's sandbox is held for someone watching",
-    () =>
-      Effect.gen(function* () {
-        const { conversationId } = yield* openConversation;
-        const page = { targetId: "tab-kept", url: "https://kept.test/", title: "Kept" };
-        yield* upsertBrowserTab({
-          conversationId,
-          targetId: page.targetId,
-          address: page.url,
-          title: page.title,
-          openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
-        });
-        const { peer, sent } = yield* browser([page]);
-        const layer = yield* runningBrowser(peer);
-        const click = {
-          actions: [{ action: BROWSER_AGENT_ACTION.CLICK, tab: page.targetId, x: 4, y: 5 }],
-        };
-        const presses = () =>
-          sent.filter(
-            (command) =>
-              command.method === "Input.dispatchMouseEvent" &&
-              command.params.type === "mousePressed",
-          ).length;
-        const pointed = Effect.map(
-          listAgentBrowserTabs(conversationId),
-          (rows) => rows[0]?.cursorX === 7,
-        );
-
-        // No one watches: the call runs through without the clock moving at all.
-        ran(yield* call(conversationId, click, layer));
-        const pressedUnwatched = presses();
-
-        const now = yield* Clock.currentTimeMillis;
-        yield* holdSandbox(conversationId, new Date(now + 60_000));
-        const watchedClick = {
-          actions: [{ action: BROWSER_AGENT_ACTION.CLICK, tab: page.targetId, x: 7, y: 5 }],
-        };
-        const pending = yield* Effect.forkChild(call(conversationId, watchedClick, layer));
-        while (!(yield* pointed)) yield* Effect.yieldNow;
-        let waited = 0;
-        while (presses() === pressedUnwatched) {
-          yield* TestClock.adjust("10 millis");
-          waited += 10;
-          for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
-        }
-        ran(yield* Fiber.join(pending));
-
-        assert.equal(pressedUnwatched, 1);
-        assert.ok(waited >= Duration.toMillis(BROWSER_CURSOR_BEAT), `pressed after ${waited} ms`);
       }),
   );
 

@@ -32,8 +32,8 @@ export type TunnelBridge =
 export const TUNNEL_BRIDGE_WORD = { KEY: "bridge", READY: "ready", FAILED: "failed" } as const;
 
 /**
- * Whether a kind's traffic holds the agent's sandbox, keeping it alive and
- * moving its lease on: a forwarded port's does, since someone is using the
+ * Whether a kind's connection holds the agent's sandbox, touching it while
+ * it stands: a forwarded port's does, since someone is using the
  * app it serves; the mirror's does not, since it only follows the agent's
  * work, and pauses when the sandbox stops after a turn.
  */

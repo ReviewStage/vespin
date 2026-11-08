@@ -1,5 +1,5 @@
 /**
- * relay.ts -- one attached shell: a panel's socket, the desktop's or the web app's, piped to the shell's PTY in the agent's sandbox, holding the sandbox for as long as the socket stands.
+ * relay.ts -- one attached shell: a panel's socket, the desktop's or the web app's, piped to the shell's PTY in the agent's sandbox, touching the sandbox for as long as the socket stands.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, then attaches only to a sandbox that is running: a stopped one is
@@ -11,19 +11,15 @@
  * the shell printed comes back as it came; neither is read, kept, logged, or
  * counted, here or anywhere the relay writes.
  *
- * The connection holds the agent's sandbox through the lease every terminal
- * of it shares (`sandbox-terminal-lease.ts`) for as long as it stands, typed
- * in or not, as an open terminal holds its machine: the attach writes the
- * lease, and it is written again every minute, each write reaching two, so
- * a slow write never lets it lapse under an open tab and a closed one stops
- * holding it within two minutes. Nothing here closes a connection for want
- * of typing; the host ends it when the tab goes, or once the terminal has
- * gone ten minutes unused (`@repo/host`'s `compose-terminals.ts`). While a terminal is connected
- * it also touches the sandbox (`@repo/sandbox`'s `touch`) every
- * `SANDBOX_TOUCH_EVERY`, so a developer typing after the agent's turn ended
- * is never cut off by its idle stop. While a terminal is connected, the GitHub token at the sandbox's firewall
+ * The connection touches the sandbox (`@repo/sandbox`'s `touch`) from its
+ * attach and every `SANDBOX_TOUCH_EVERY` for as long as it stands, typed in
+ * or not, as an open terminal holds its machine, so a developer typing after
+ * the agent's turn ended is never cut off by its idle stop. Nothing here
+ * closes a connection for want of typing; the host ends it when the tab
+ * goes, or once the terminal has gone ten minutes unused (`@repo/host`'s
+ * `compose-terminals.ts`). While a terminal is connected, the GitHub token at the sandbox's firewall
  * is kept fresh on the rule the agent's own steps keep it by, claimed
- * through the lease so two windows mint one token between them: the
+ * in the store (`sandbox-terminal-lease.ts`) so two windows mint one token between them: the
  * connection reads when the token was last set on its sandbox session,
  * sleeps until that renewal is due, and reads again then, since another
  * window may have renewed it meanwhile, renewing only what is still due. A
@@ -72,10 +68,6 @@ import { jsonOf } from "../http/http-effect.js";
 import { frameBytes } from "../http/socket.js";
 
 const TERMINAL_RELAY_BOUNDS = {
-  /** How often a connection moves the lease on while it stands. */
-  LEASE_WRITE_EVERY: Duration.minutes(1),
-  /** How far past each write the lease reaches: two writes, so one slow write never lets it lapse. */
-  LEASE_REACH: Duration.minutes(2),
   /** How long a connection waits to try a credential again whose renewal or set it could not finish, or whose claim another window holds. */
   CREDENTIAL_RETRY_AFTER: Duration.minutes(5),
   /** The most the desktop may send while its shell waits on its first token, a paste's largest piece; past it the shell attaches without waiting longer, so what was sent reaches it rather than piling up. */
@@ -103,7 +95,7 @@ export interface RelayAsk {
   readonly rows: number;
 }
 
-/** The agent a connection reached: whose agent it is, its conversation, whose lease it holds, and the session its sandbox is tagged with, none before it ran. */
+/** The agent a connection reached: whose agent it is, its conversation, under which its credential's renewal is claimed, and the session its sandbox is tagged with, none before it ran. */
 export interface RelayAgent {
   /** The account whose agent it is, under which the launch at its sandbox's firewall is kept. */
   readonly userId: string;
@@ -127,10 +119,9 @@ export interface RelayDependencies {
   readonly connect: (
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
-  readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
   /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
   readonly touch: (sessionId: string) => Effect.Effect<void>;
-  /** Claims the token's renewal on the running sandbox session, once per lease per session within the refresh rule. */
+  /** Claims the token's renewal on the running sandbox session, once per conversation per session within the refresh rule. */
   readonly claimRenewal: (
     conversationId: string,
     sandboxSessionId: string,
@@ -167,21 +158,6 @@ const PtyExitSchema = Schema.Struct({ type: Schema.Literal("exit"), code: Schema
 
 const readResize = readEither(terminalRelayResizeSchema);
 const readPtyExit = readEither(PtyExitSchema);
-
-/** The lease moved on now, before the shell attaches, and again every write interval for as long as the connection's scope stands. */
-function holdWhileConnected(
-  deps: RelayDependencies,
-  agent: RelayAgent,
-): Effect.Effect<void, never, Scope.Scope> {
-  const hold = Effect.flatMap(DateTime.nowAsDate, (at) =>
-    deps.hold(
-      agent.conversationId,
-      new Date(at.getTime() + Duration.toMillis(TERMINAL_RELAY_BOUNDS.LEASE_REACH)),
-    ),
-  );
-  const renewed = Effect.schedule(hold, Schedule.spaced(TERMINAL_RELAY_BOUNDS.LEASE_WRITE_EVERY));
-  return Effect.andThen(hold, Effect.asVoid(Effect.forkScoped(renewed)));
-}
 
 /** The credential set at the firewall. */
 function setCredential(
@@ -375,8 +351,7 @@ export function relayTerminal(
           : TERMINAL_RELAY_CLOSE.STARTING,
       );
     }
-    // An attached terminal is the developer using the sandbox: it is held and touched from the attach for as long as the connection stands.
-    yield* holdWhileConnected(deps, agent);
+    // An attached terminal is the developer using the sandbox: it is touched from the attach for as long as the connection stands.
     const { sessionId } = agent;
     yield* Effect.forkScoped(
       Effect.repeat(deps.touch(sessionId), {

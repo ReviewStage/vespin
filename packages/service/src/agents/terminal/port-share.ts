@@ -47,9 +47,6 @@ export const PORT_SHARE = {
   FOLDER: `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}/share`,
 } as const;
 
-/** How often the sweep reads a share's last visit, which the lease must outlast. */
-const SWEEP_EVERY = Duration.minutes(1);
-
 /** The files in the folder: the port shared, and the last visit in epoch milliseconds. */
 const SHARE_FILE = { PORT: "port", VISIT: "visit" } as const;
 
@@ -131,11 +128,6 @@ function tagsOf(sandbox: ListedSandbox, shared: boolean): Record<string, string>
     ...(agent === undefined ? {} : { [AGENT_TAG]: agent }),
     ...(shared ? { [PORT_SHARE.TAG]: PORT_SHARE.TAG_ON } : {}),
   };
-}
-
-/** The instant a share last visited at the instant given holds its sandbox's lease to: the idle bound, and the minute the sweep may wait to move it on. */
-export function shareHeldUntil(visitedAt: number): Date {
-  return new Date(visitedAt + Duration.toMillis(Duration.sum(PORT_SHARE.IDLE, SWEEP_EVERY)));
 }
 
 /** The share as the folder holds it: the port shared and its last visit; none where it holds no port. */

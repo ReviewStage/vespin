@@ -222,6 +222,17 @@ export function runnerSandboxApi() {
     command.exitCode = command.exitCode ?? code;
     exits.emit(command.id);
   };
+  /** Vercel's own idle stop, `SANDBOX_IDLE` past the last touch: every running sandbox stopped, and its commands ended. */
+  const idleStop = () => {
+    for (const sandbox of sandboxes.filter((each) => each.status === "running")) {
+      sandbox.status = "stopped";
+      for (const command of commands.filter(
+        (each) => each.sandboxSessionId === sandbox.currentSessionId,
+      )) {
+        command.exitCode = command.exitCode ?? 143;
+      }
+    }
+  };
   /**
    * The call to a session at which its sandbox begins to stop, as a launch's
    * end or the sweep stops it a moment before a send reaches it, by the
@@ -549,6 +560,7 @@ export function runnerSandboxApi() {
     holdPolicy,
     waits,
     exit,
+    idleStop,
     stopsAt,
     snapshotting,
     hooks,
@@ -634,7 +646,7 @@ type SentPolicy =
  * presents the placeholder as its bearer, as the firewall would set it on
  * the way out; none where the policy carries no such swap.
  */
-export function swappedBearer(
+function swappedBearer(
   policy: unknown,
   host: string,
   placeholder: string | undefined,

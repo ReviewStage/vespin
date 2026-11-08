@@ -1,16 +1,14 @@
 /**
- * production.ts -- the tunnel's dependencies as the deployment stands them: the agent read by the one rule, its sandbox's PTY minted through `Sandbox` and reached by WebSocket (`sandbox-pty.ts`), the keep-alive, and the lease in the store.
+ * production.ts -- the tunnel's dependencies as the deployment stands them: the agent read by the one rule, its sandbox's PTY minted through `Sandbox` and reached by WebSocket (`sandbox-pty.ts`), and the touch.
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the service stands, so the relay itself requires none.
- * A store that cannot take a lease's move is logged, since the next bytes
- * try again, as is a keep-alive the sandbox did not confirm.
+ * A touch the sandbox did not confirm is logged, since the next tries again.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { hasRepository, readVisibleAgent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { Sandbox, touchSandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
@@ -49,18 +47,11 @@ export const tunnelDependencies: Effect.Effect<TunnelDependencies, never, Tunnel
             // An agent with no repository opens no sandbox for a tunnel to reach.
             if (!hasRepository(agent)) return Option.none();
             const [session] = yield* standingSessionsOf(agent.userId, [agent.conversationId]);
-            return Option.some({
-              conversationId: agent.conversationId,
-              sessionId: session?.sessionId,
-            });
+            return Option.some({ sessionId: session?.sessionId });
           }),
         ),
       open: (sessionId) => sandbox.open(sessionId),
       connect: (shell) => connectPty(sandboxes, shell),
-      hold: (conversationId, heldUntil) =>
-        run(holdSandbox(conversationId, heldUntil)).pipe(
-          Effect.catch(() => Effect.logWarning("a tunnel's lease was not moved on")),
-        ),
       touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
     };
   });

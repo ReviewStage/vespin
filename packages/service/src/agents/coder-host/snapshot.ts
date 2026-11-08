@@ -21,14 +21,8 @@
  * own session and the Terminal tab set it, beside the swaps of the launch
  * running there (`../sandbox-firewall.ts`), so no token
  * enters the sandbox's files or a command's words; the credential stays
- * there until the sandbox stops or the next write replaces it. A sandbox this step woke is stopped
- * again, its kept launch deleted first as ahead of every stop, once it is
- * done, however it ended, unless a developer's terminal
- * holds it, a turn of the source began meanwhile, or another Start's copy
- * still holds it past this one's own hold; one already up stays as it was.
- * That stop's calls run on a fiber of its own, so the Start never
- * waits on them, and one they never confirmed stops `SANDBOX_IDLE` after
- * its last touch (`@repo/sandbox`), as every idle sandbox does. A copy that fails logs the tail of what
+ * there until the sandbox stops or the next write replaces it. A sandbox this step woke stops
+ * `SANDBOX_IDLE` after its last touch (`@repo/sandbox`), as every idle sandbox does. A copy that fails logs the tail of what
  * it printed on stderr, credential-shaped runs redacted.
  * Files named the way credentials are kept are never copied. No copy is
  * made where the task moved to another repository since the source
@@ -40,9 +34,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, hasRepository, readAgentByKey } from "@repo/database/models/agent-store";
-import { latestTurnsOfReached } from "@repo/database/models/message-reads";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
-import { holdSandbox, sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import {
   type ListedSandbox,
@@ -50,10 +42,8 @@ import {
   SANDBOX_STATUS,
   Sandbox,
   type SandboxRunning,
-  UP_STATUSES,
 } from "@repo/sandbox";
-import { TURN_STATUS } from "@repo/wire";
-import { Clock, Duration, Effect, Option } from "effect";
+import { Duration, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import type { GitHubApp } from "../../github/github-app.js";
 import { SESSION_TAG } from "../agent-sandbox-open.js";
@@ -65,8 +55,6 @@ import { agentRepositoryToken } from "./checkout.js";
 export const SNAPSHOT = {
   /** The most a Start waits on the copy, the source's sandbox woken and the push included. */
   TIMEOUT: Duration.seconds(30),
-  /** The most the background stop of a woken sandbox runs, once the copy is done or given up. */
-  STOP_TIMEOUT: Duration.seconds(10),
   /** How many characters of a failed copy's stderr are logged, from its end. */
   STDERR_TAIL: 600,
 } as const;
@@ -92,7 +80,7 @@ export type SnapshotOutcome =
     }
   | { readonly copied: false; readonly miss: SnapshotMiss };
 
-/** What a copy is asked: whose sandbox, the branch and the commit's message, the credential the push goes through, and whether the sandbox is in use and must be left up. */
+/** What a copy is asked: whose sandbox, the branch and the commit's message, and the credential the push goes through. */
 export interface SnapshotAsk<R> {
   /** The account whose agent the source is, under which its sandbox's firewall launch is kept. */
   readonly userId: string;
@@ -102,8 +90,6 @@ export interface SnapshotAsk<R> {
   readonly message: string;
   /** The repository's write credential, minted once the sandbox stands up. */
   readonly credential: Effect.Effect<RepositoryCredential, unknown, R>;
-  /** Whether the sandbox is in use and stays up as it stands: a developer's terminal holds it, or a turn of the source began. */
-  readonly keepUp: Effect.Effect<boolean, unknown, R>;
 }
 
 /**
@@ -178,40 +164,7 @@ function stderrTail(stderr: string): string {
   return line.slice(-SNAPSHOT.STDERR_TAIL);
 }
 
-/** A woken sandbox's stop failing, logged and let go, since the copy's outcome stands whatever the stop came to. */
-const stopMissed = (why: string) =>
-  Effect.logWarning(`a woken source sandbox was not stopped again: ${why}`);
-
-/**
- * Every sandbox of the session that is up, stopped, within the stop's bound.
- * It lists the sandbox again rather than trusting a run it was handed,
- * so a wake interrupted before it answered is stopped too, and asks again
- * whether it must stay up once listed, so a terminal, a turn, or another
- * Start's copy that took it up since the first ask keeps it.
- */
-const stopUp = <R>(ask: SnapshotAsk<R>) =>
-  Effect.gen(function* () {
-    const sandboxes = yield* Sandbox;
-    const listed = yield* sandboxes.listTagged(SESSION_TAG, ask.sessionId);
-    if (yield* ask.keepUp) return;
-    for (const sandbox of listed) {
-      if (sandbox.running === undefined || !UP_STATUSES.has(sandbox.status)) continue;
-      yield* sandboxes.stop({ name: sandbox.name, running: sandbox.running });
-    }
-  }).pipe(
-    Effect.timeout(SNAPSHOT.STOP_TIMEOUT),
-    Effect.catch((failure) => stopMissed(String(failure))),
-  );
-
-/**
- * The sandbox this step woke stopped again, unless it must stay up. The
- * stop, which asks whether it must stay up and is bounded by itself, is
- * forked detached, so it outlives the Start's own fiber and the Start never
- * waits on it; one it never confirms stops idle once nothing touches it.
- */
-const stopWoken = <R>(ask: SnapshotAsk<R>) => Effect.asVoid(Effect.forkDetach(stopUp(ask)));
-
-/** The copy inside the scope a woken sandbox's stop is registered on. */
+/** The copy in the source's sandbox, woken where it stopped. */
 const copyIn = <R>(ask: SnapshotAsk<R>) =>
   Effect.gen(function* () {
     const sandboxes = yield* Sandbox;
@@ -219,9 +172,6 @@ const copyIn = <R>(ask: SnapshotAsk<R>) =>
     if (sandbox === undefined) {
       return { copied: false, miss: SNAPSHOT_MISS.NO_SANDBOX } as const;
     }
-    const up = UP_STATUSES.has(sandbox.status);
-    // Note that the stop is registered ahead of the wake, so a wake cut short by the bound is stopped too.
-    if (!up) yield* Effect.addFinalizer(() => stopWoken(ask));
     const running = runningOf(sandbox) ?? (yield* resumedRunning(sandbox.name));
     const owner = { userId: ask.userId, name: sandbox.name, sandboxSessionId: running.running };
     const credential = yield* ask.credential;
@@ -254,7 +204,7 @@ const copyIn = <R>(ask: SnapshotAsk<R>) =>
 export const snapshotSource = /* @__PURE__ */ Effect.fn("web/snapshotSource")(function* <R>(
   ask: SnapshotAsk<R>,
 ): Effect.fn.Return<SnapshotOutcome, never, R | DatabaseServices | Sandbox> {
-  const outcome = yield* Effect.scoped(copyIn(ask)).pipe(
+  const outcome = yield* copyIn(ask).pipe(
     Effect.timeoutOption(SNAPSHOT.TIMEOUT),
     Effect.catch((failure) =>
       Effect.as(
@@ -270,15 +220,6 @@ export const snapshotSource = /* @__PURE__ */ Effect.fn("web/snapshotSource")(fu
 
 /** How the new agent takes the source's work up, which its branch and the snapshot's commit say. */
 const TAKEN_UP = { CONTINUED: "continued", FORKED: "forked" } as const;
-
-/** The turn states a source's sandbox is in use under, which a woken sandbox is left up for. */
-const TURN_UNDER_WAY: ReadonlySet<string> = new Set([TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]);
-
-/** Whether a turn of the agent whose conversation is named is under way: queued, or running. */
-const agentTurnUnderWay = (conversationId: string) =>
-  Effect.map(latestTurnsOfReached([conversationId]), (turns) =>
-    TURN_UNDER_WAY.has(turns.get(conversationId)?.status ?? ""),
-  );
 
 /**
  * The branch the copy is pushed to: the source's own, or one named for the
@@ -326,25 +267,12 @@ export const copySourceWork = /* @__PURE__ */ Effect.fn("web/copySourceWork")(fu
     const [session] = yield* standingSessionsOf(source.userId, [source.conversationId]);
     if (session === undefined) return missed(SNAPSHOT_MISS.NO_SANDBOX);
     const target = { userId, conversationId: source.conversationId };
-    // The copy holds the sandbox as a terminal does for as long as it may take, so a copy beside it
-    // for another Start reads it held past its own hold and leaves it up, and a sandbox no copy
-    // stopped stops idle once nothing touches it.
-    const heldUntil = new Date(
-      (yield* Clock.currentTimeMillis) +
-        Duration.toMillis(Duration.sum(SNAPSHOT.TIMEOUT, SNAPSHOT.STOP_TIMEOUT)),
-    );
-    yield* holdSandbox(source.conversationId, heldUntil);
-    const keepUp = Effect.gen(function* () {
-      if (yield* sandboxHeld(source.conversationId, heldUntil)) return true;
-      return yield* agentTurnUnderWay(source.conversationId);
-    });
     return yield* snapshotSource({
       userId: source.userId,
       sessionId: session.sessionId,
       branch: snapshotBranch(source, forked, idempotencyKey),
       message: `Snapshot of ${source.title ?? source.model} for ${forked ? TAKEN_UP.FORKED : TAKEN_UP.CONTINUED} agent`,
       credential: agentRepositoryToken(target, source),
-      keepUp,
     });
   }).pipe(
     Effect.catch((failure) =>

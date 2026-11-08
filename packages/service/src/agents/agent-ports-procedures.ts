@@ -13,22 +13,19 @@
  * no sandbox, and answers the same.
  *
  * One port may be shared by a public link (`terminal/port-share.ts`), only
- * from a running sandbox: a share is refused as stopped otherwise, and holds
- * the sandbox's lease (`sandbox-terminal-lease.ts`) as a visit does, which
- * the sweep moves on while visits come (`maintenance/port-share-sweep.ts`).
+ * from a running sandbox: a share is refused as stopped otherwise, and the
+ * sweep touches the sandbox while visits come (`maintenance/port-share-sweep.ts`).
  * The share is read back from the sandbox itself, never the store.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import type { Sandbox, SandboxError } from "@repo/sandbox";
-import { Clock, Effect, type Layer } from "effect";
+import { Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
-import { shareHeldUntil } from "./terminal/port-share.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
 export interface AgentPortsProcedureSeams {
@@ -47,7 +44,6 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
   /** The session of the agent's cloud sandbox the caller reaches; none for an agent on a Mac or one that has not run. */
   const cloudSession = (userId: string, id: string) =>
     Effect.map(reachedAgentSession(userId, id), (reached) => ({
-      conversationId: reached.conversationId,
       sessionId: reached.machine === AGENT_MACHINE.DEVICE ? undefined : reached.sessionId,
     }));
   /** One call on the agent's sandbox, a failure of the sandbox's refused as upstream. */
@@ -65,16 +61,12 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
       if (sessionId === undefined) return { running: false, ports: [] };
       return yield* onSandbox((sandbox) => sandbox.listeningPorts(sessionId));
     }),
-    /** The port shared by a public link, holding the sandbox as a visit does; a sandbox not running is refused as stopped. */
+    /** The port shared by a public link; a sandbox not running is refused as stopped. */
     share: signedIn.share.effect(function* ({ input, context }) {
-      const { conversationId, sessionId } = yield* cloudSession(context.userId, input.params.id);
+      const { sessionId } = yield* cloudSession(context.userId, input.params.id);
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
       const url = yield* onSandbox((sandbox) => sandbox.share(sessionId, input.body.port));
       if (url === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
-      const now = yield* Clock.currentTimeMillis;
-      yield* holdSandbox(conversationId, shareHeldUntil(now)).pipe(
-        Effect.catch(() => Effect.logWarning("a shared port's lease was not moved on")),
-      );
       return { url };
     }),
     /** The shared port's link closed. */

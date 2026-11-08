@@ -1,10 +1,5 @@
 /**
- * bounds.ts -- the live view's bounds: how long a socket stands, how often it moves the agent's sandbox lease on, and how fast its frames go.
- *
- * Note that they stand apart from the relay (`relay.ts`), which imports
- * the tabs' procedures for a takeover's hold, so a procedure that holds a
- * sandbox on the live view's terms (`agent-browser-tabs-procedures.ts`'s
- * open) reads them without importing the relay back.
+ * bounds.ts -- the live view's bounds: how long a socket stands, and how fast its frames go.
  */
 
 import { Duration } from "effect";
@@ -21,8 +16,6 @@ export const BROWSER_LIVE_BOUNDS = {
    * again opens a new view, resuming the sandbox, for one who was.
    */
   INPUT_IDLE: Duration.minutes(15),
-  /** How often the panel's messages move the lease on, so a mouse move is not a write. */
-  LEASE_WRITE_EVERY: Duration.minutes(1),
   /** How often a socket asks whether the panel has gone the idle bound silent. */
   IDLE_CHECK_EVERY: Duration.seconds(30),
   /** How often the tab is read again, for its driver and whether it still stands, where Sync cannot wake the read: no listener stands, or the tab is on no task. */

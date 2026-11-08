@@ -25,13 +25,9 @@
  * While it runs, the agent's pointer is written to the tab it points at
  * (`pointBrowserTab`), one write just before each click, type, or wheel
  * turn reaches the page, so a member's window draws it gliding there
- * (`@repo/features/browser-agent-cdp`'s `BrowserCursor`). Where someone is
- * watching, each such input then waits the cursor's beat, so the glide lands
- * with the action. Someone is watching while the agent's sandbox lease
- * stands (`sandbox-terminal-lease.ts`), which the live view moves on while a
- * panel has one of its tabs open; a Terminal tab in use holds it too, and
- * counts as watching. An agent no one watches is never slowed. The point
- * and its kind are no page content and are never logged.
+ * (`@repo/features/browser-agent-cdp`'s `BrowserCursor`), at one pace
+ * whoever watches. The point and its kind are no page content and are never
+ * logged.
  *
  * A browser that cannot be reached answers `not-run` and why, never a throw.
  * A screenshot is taken twice over: the model's copy, small
@@ -56,7 +52,6 @@ import {
   upsertBrowserTab,
 } from "@repo/database/models/agent-browser-tabs";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
-import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
@@ -447,22 +442,14 @@ function withSettledTitles(
 
 /**
  * The agent's pointer as the tab store keeps it: each move written to its
- * tab's row, and held for the beat while the sandbox's lease says someone
- * watches. Note that a write the store refuses is logged by its kind alone
+ * tab's row. Note that a write the store refuses is logged by its kind alone
  * and lets the action go on, since a pointer not drawn breaks nothing.
  */
-function storedCursor(conversationId: string, now: Date) {
-  return Effect.gen(function* () {
-    const watched = yield* sandboxHeld(conversationId, now).pipe(
-      Effect.tapError(logStoreFailure),
-      Effect.orElseSucceed(() => false),
-    );
-    return {
-      watched,
-      report: (move) =>
-        pointBrowserTab(conversationId, move).pipe(Effect.tapError(logStoreFailure), Effect.ignore),
-    } satisfies BrowserCursor<DatabaseServices>;
-  });
+function storedCursor(conversationId: string): BrowserCursor<DatabaseServices> {
+  return {
+    report: (move) =>
+      pointBrowserTab(conversationId, move).pipe(Effect.tapError(logStoreFailure), Effect.ignore),
+  };
 }
 
 /** Why a recording did not start or stop, in words the model can act on. */
@@ -545,14 +532,9 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
 }
 
 /** Runs the actions on the browser, the store kept in step after; a failure to keep it is logged and leaves the run as it ran. */
-function runOn(
-  cdp: CdpSession,
-  call: BrowserCall,
-  actions: readonly BrowserAgentAction[],
-  now: Date,
-) {
+function runOn(cdp: CdpSession, call: BrowserCall, actions: readonly BrowserAgentAction[]) {
   return Effect.gen(function* () {
-    const cursor = yield* storedCursor(call.conversationId, now);
+    const cursor = storedCursor(call.conversationId);
     const recorder = sandboxRecorder(call);
     const run = yield* runBrowserActions(cdp, actions, { cursor, keepScreenshots: true, recorder });
     yield* settleTitles(cdp, run.steps);
@@ -666,7 +648,7 @@ export function runBrowserTool(
           const outcome =
             runnable.length === 0
               ? { run: { steps: [], skipped: 0 }, tabs: [] }
-              : yield* runOn(withoutStartPage(cdp, kept), call, runnable, now);
+              : yield* runOn(withoutStartPage(cdp, kept), call, runnable);
           return { ...outcome, tabs: withOpeners(outcome.tabs, rows), refused, runnable };
         }),
       ),

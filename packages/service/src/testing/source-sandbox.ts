@@ -25,7 +25,6 @@ import {
   sandboxStopRefusal,
   sessionAnswered,
 } from "@repo/sandbox/vercel/testing";
-import { Deferred, Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 
 export const SOURCE_SANDBOX = {
@@ -99,8 +98,6 @@ export interface SourceSandbox {
   readonly state: { status: string | undefined; session: string | undefined };
   /** The sessions it stopped, in order; a stop it refused is none of them. */
   readonly stops: string[];
-  /** Settles once a stop is first asked of it, whether it stopped or refused it. */
-  readonly stopAsked: Deferred.Deferred<void>;
   readonly policies: { readonly session: string; readonly hosts: readonly string[] }[];
   /** The session each command ran in, in order. */
   readonly ran: string[];
@@ -120,7 +117,6 @@ export function sourceSandbox(
     session: status === "running" ? SOURCE_SANDBOX.RUNNING : undefined,
   };
   const stops: string[] = [];
-  const stopAsked = Deferred.makeUnsafe<void>();
   const policies: SourceSandbox["policies"] = [];
   const ran: string[] = [];
   const answer = ({ url, method, headers, body }: SentToSandbox): Response | undefined => {
@@ -148,8 +144,6 @@ export function sourceSandbox(
         stops.push(session);
         state.status = "stopped";
       }
-      // Settled once the stop is recorded, since a fiber awaiting it may resume before this returns.
-      Deferred.doneUnsafe(stopAsked, Effect.void);
       return refused ?? Response.json(sessionAnswered({ id: session, status: "stopped" }));
     }
     if (parsed.pathname.endsWith("/network-policy")) {
@@ -179,5 +173,5 @@ export function sourceSandbox(
       Response.json(sandboxesListed(state.status === undefined ? [] : [listed]))
     );
   };
-  return { state, stops, stopAsked, policies, ran, answer };
+  return { state, stops, policies, ran, answer };
 }

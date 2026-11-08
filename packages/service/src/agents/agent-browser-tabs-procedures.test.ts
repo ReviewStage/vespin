@@ -12,7 +12,6 @@ import { createAgent } from "@repo/database/models/agent-store";
 import { recordRepositoryReads } from "@repo/database/models/github-repository-reads";
 import { saveGitHubToken } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
-import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { task } from "@repo/database/schemas/task";
@@ -535,12 +534,11 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
           heldUntil: now + BROWSER_TAKEOVER_HOLD_MS,
         });
         // The page stands in the agent's browser beside its kept tab, reopened as the connection
-        // restores it, and the agent's sandbox is held for the sign-in.
+        // restores it.
         assert.deepEqual(yield* openedAddresses(peer), [
           "http://localhost:3000/",
           "https://accounts.test/sign-in",
         ]);
-        assert.equal(yield* sandboxHeld(coder.conversationId, new Date(now)), true);
         // A teammate lists it, driven by the member who opened it.
         const listed = tabsOf(yield* ask(request(teammate, tabsPath(taskId))));
         assert.deepEqual(

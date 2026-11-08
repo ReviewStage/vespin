@@ -86,7 +86,6 @@ function agents() {
       }),
     sandbox,
     connect: unused,
-    hold: unused,
     touch: unused,
     claimRenewal: unused,
     renewedAt: unused,

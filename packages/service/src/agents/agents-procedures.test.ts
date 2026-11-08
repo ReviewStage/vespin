@@ -6,7 +6,6 @@ import { archiveAgent, createAgent, readAgent } from "@repo/database/models/agen
 import { recordRepositoryReads } from "@repo/database/models/github-repository-reads";
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
-import { sandboxHeld } from "@repo/database/models/sandbox-terminal-lease";
 import { createTask } from "@repo/database/models/task-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
@@ -328,22 +327,6 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
         assert.deepEqual(resumed.body, { sandbox: SANDBOX_STATE.RUNNING });
         assert.deepEqual(sandbox.asked.at(-1), { what: "resume", sessionId });
       }),
-  );
-
-  it.effect("a resume holds the sandbox it wakes", () =>
-    Effect.gen(function* () {
-      const { userId, agent } = yield* openAgent;
-      const sandbox = scriptedSandbox(SANDBOX_STATE.STOPPED);
-      const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox.layer);
-      const at = new Date(yield* Clock.currentTimeMillis);
-      const heldBefore = yield* sandboxHeld(agent.conversationId, at);
-
-      const resumed = yield* call(resumeOf(agent.id), "Bearer owner", { method: "POST" });
-
-      assert.equal(resumed.status, 200);
-      assert.equal(heldBefore, false);
-      assert.equal(yield* sandboxHeld(agent.conversationId, at), true);
-    }),
   );
 
   it.effect(

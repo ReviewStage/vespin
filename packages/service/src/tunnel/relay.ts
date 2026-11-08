@@ -1,5 +1,5 @@
 /**
- * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, holding the sandbox while bytes cross it and closing when none have for ten minutes.
+ * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, touching the sandbox while it stands and closing when no bytes have crossed it for ten minutes.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, as a Terminal's does, then opens a PTY only on a sandbox that is
@@ -15,10 +15,7 @@
  *
  * Where the bridge's kind holds the sandbox (`TUNNEL_HOLDS_SANDBOX`), the
  * connection touches the sandbox (`@repo/sandbox`'s `touch`) every
- * `SANDBOX_TOUCH_EVERY` for as long as it stands, and
- * writes the lease every terminal shares (`sandbox-terminal-lease.ts`) as
- * the sign the turn-end stop reads that someone is using the sandbox: at
- * the open, and as bytes cross, at most once a minute. A connection closes
+ * `SANDBOX_TOUCH_EVERY` for as long as it stands. A connection closes
  * as idle once no byte has crossed it either way for the idle bound, which
  * ends its touches, so the sandbox's idle stop takes it from there.
  *
@@ -69,8 +66,6 @@ import { MIRROR_BRIDGE_STEP, type MirrorBridgeStep } from "./mirror-bridge.js";
 export const TUNNEL_RELAY_BOUNDS = {
   /** How long a tunnel stays connected past the last byte that crossed it either way. */
   IDLE: Duration.minutes(10),
-  /** How often traffic moves the lease on, so a byte is not a write. */
-  LEASE_WRITE_EVERY: Duration.minutes(1),
   /** How often a connection asks whether it has gone the idle bound without traffic. */
   IDLE_CHECK_EVERY: Duration.seconds(30),
   /** How long the bridge may take to say it is ready once its PTY is open. */
@@ -86,9 +81,8 @@ export interface TunnelAsk {
   readonly bridge: TunnelBridge;
 }
 
-/** The agent a connection reached: its conversation, whose lease it holds, and the session its sandbox is tagged with, none before it ran. */
+/** The agent a connection reached: the session its sandbox is tagged with, none before it ran. */
 export interface TunnelAgent {
-  readonly conversationId: string;
   readonly sessionId: string | undefined;
 }
 
@@ -105,7 +99,6 @@ export interface TunnelDependencies {
   readonly connect: (
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
-  readonly hold: (conversationId: string, heldUntil: Date) => Effect.Effect<void>;
   /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
   readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
@@ -203,29 +196,9 @@ function closeFor(
   });
 }
 
-/** The instant the lease reaches to from a write at the instant given: the idle bound, and the minute traffic after this write may wait for the next. */
-function heldFrom(instant: Date): Date {
-  const reach = Duration.sum(TUNNEL_RELAY_BOUNDS.IDLE, TUNNEL_RELAY_BOUNDS.LEASE_WRITE_EVERY);
-  return new Date(instant.getTime() + Duration.toMillis(reach));
-}
-
-/** Notes a byte crossing at the instant now, moving the lease on at most once a minute where the bridge's kind holds the sandbox. */
-function crossed(
-  deps: TunnelDependencies,
-  agent: TunnelAgent,
-  holds: boolean,
-  lastCrossed: Ref.Ref<number>,
-  lastHeld: Ref.Ref<number>,
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    const at = yield* DateTime.nowAsDate;
-    yield* Ref.set(lastCrossed, at.getTime());
-    if (!holds) return;
-    const since = at.getTime() - (yield* Ref.get(lastHeld));
-    if (since < Duration.toMillis(TUNNEL_RELAY_BOUNDS.LEASE_WRITE_EVERY)) return;
-    yield* Ref.set(lastHeld, at.getTime());
-    yield* deps.hold(agent.conversationId, heldFrom(at));
-  });
+/** Notes a byte crossing at the instant now. */
+function crossed(lastCrossed: Ref.Ref<number>): Effect.Effect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (at) => Ref.set(lastCrossed, at.getTime()));
 }
 
 /** The desktop's frames to the bridge, one line each, a frame of no tunnel shape dropped. */
@@ -314,13 +287,10 @@ export function relayTunnel(
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NOT_RUNNING);
     }
-    // An open is the developer using the sandbox: where the kind holds it, it is held and touched from here.
-    const holds = TUNNEL_HOLDS_SANDBOX[ask.bridge.kind];
+    // An open is the developer using the sandbox: where the kind holds it, it is touched from here.
     const openedAt = yield* DateTime.nowAsDate;
     const lastCrossed = yield* Ref.make(openedAt.getTime());
-    const lastHeld = yield* Ref.make(openedAt.getTime());
-    if (holds) {
-      yield* deps.hold(agent.conversationId, heldFrom(openedAt));
+    if (TUNNEL_HOLDS_SANDBOX[ask.bridge.kind]) {
       yield* Effect.forkScoped(
         Effect.repeat(deps.touch(sessionId), {
           schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
@@ -345,7 +315,7 @@ export function relayTunnel(
         rows: TUNNEL_RELAY_BOUNDS.PTY.ROWS,
       }),
     });
-    const noteCrossed = crossed(deps, agent, holds, lastCrossed, lastHeld);
+    const noteCrossed = crossed(lastCrossed);
     // Note that the bridge's lines are read from its start, so its ready word is caught by the reader that then carries its frames.
     const ready = yield* Deferred.make<void>();
     const failedStep = yield* Ref.make<MirrorBridgeStep | undefined>(undefined);

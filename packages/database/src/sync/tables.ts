@@ -121,7 +121,7 @@ export const agentSync = defineSyncTable(agentTable, {
     { kind: TOPIC.TASK, column: agentTable.taskId },
     { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
   ],
-  ignore: [agentTable.lastStep, agentTable.publishedRead, agentTable.seenAt],
+  ignore: [agentTable.lastStep, agentTable.publishedRead],
   log: LOG.EVERY,
 });
 

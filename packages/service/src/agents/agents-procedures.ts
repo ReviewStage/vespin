@@ -50,7 +50,6 @@ import {
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
-import { holdSandbox } from "@repo/database/models/sandbox-terminal-lease";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -65,7 +64,7 @@ import {
 import { AGENT_START_STATUS } from "@repo/features/contract";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { Sandbox } from "@repo/sandbox";
-import { Clock, Duration, Effect, type Layer, Option, type Redacted, Result } from "effect";
+import { Clock, Effect, type Layer, Option, type Redacted, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
@@ -147,14 +146,6 @@ export interface AgentsProcedureSeams extends PublishedReach, SandboxStopReach {
   /** The model a Start from another agent summarizes the steps it cannot keep on; the deployment's own (`coder-host/replay-summary.ts`) where none is named. */
   summaryModel?: SummaryModelOf;
 }
-
-/**
- * How long a developer's resume holds the sandbox it wakes: five minutes,
- * since a resume is a Terminal about to attach, whose own lease takes over
- * within seconds; one that never attaches is stopped by the lease sweep once
- * this lapses past its grace, rather than at Vercel's timeout.
- */
-const RESUME_HOLD = Duration.minutes(5);
 
 /** A choice the catalog refused is an invalid request, on the wire. */
 const choiceOrInvalid = <A, E, R>(
@@ -626,13 +617,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     }),
     /** The agent's sandbox resumed from its snapshot, the developer's click and nothing else, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {
-      const { conversationId, sessionId } = yield* reachedAgentSession(context.userId, input.id);
+      const sessionId = yield* reachedSession(context.userId, input.id);
       if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING };
-      // The resume is held before it is asked, so a sandbox woken for a Terminal that never attaches is stopped by the lease sweep.
-      const now = yield* Clock.currentTimeMillis;
-      yield* hostedStoreOrUnavailable(
-        holdSandbox(conversationId, new Date(now + Duration.toMillis(RESUME_HOLD))),
-      );
       return yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;

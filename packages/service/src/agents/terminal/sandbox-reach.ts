@@ -19,17 +19,15 @@ import {
 } from "../../http/http-effect.js";
 import { controlsAgent, reachedAgentById } from "../agent-reach.js";
 
-/** The agent a sandbox route reaches: its conversation, the session its sandbox is tagged with, and the machine it runs on. */
+/** The agent a sandbox route reaches: the session its sandbox is tagged with, and the machine it runs on. */
 interface ReachedAgentSession {
-  readonly conversationId: string;
   readonly sessionId: string | undefined;
   readonly machine: Agent["machine"];
 }
 
 /**
- * The agent the path names, still standing: its conversation, which a
- * sandbox's lease is held on, and the session its sandbox is tagged
- * with, or none where the agent has not run yet. An archived agent
+ * The agent the path names, still standing: the session its sandbox is
+ * tagged with, or none where the agent has not run yet, and its machine. An archived agent
  * is gone, as its tab is, and one on its starter's own GitHub token gives its
  * sandbox to its starter alone.
  */
@@ -44,7 +42,6 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     standingSessionsOf(agent.userId, [agent.conversationId]),
   );
   return {
-    conversationId: agent.conversationId,
     sessionId: session?.sessionId,
     machine: agent.machine,
   };
