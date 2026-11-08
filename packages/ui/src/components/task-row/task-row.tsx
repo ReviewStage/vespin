@@ -182,7 +182,7 @@ const QUIET_TRAILING: readonly TaskRowCell[] = [
   TASK_ROW_CELL.AGENTS,
 ];
 
-/** The trailing run's column, which stands where a row draws any cell after its name but its owner's end. */
+/** The trailing run's column, which every list stands but one ending in its owner's end alone, as a composer's dock does, whose rows carry no flag. */
 const TRAIL = "trail" as const;
 
 /** A column after the name: the trailing run, the time, or the owner's end. */
@@ -383,10 +383,18 @@ function inOrder(cells: readonly TaskRowCell[]): readonly TaskRowCell[] {
   return TASK_ROW_CELL_ORDER.filter((cell) => cells.includes(cell));
 }
 
-/** The columns after the name a list of `cells` stands: the trailing run where it draws any cell after the name but its end, then the time and the end where it draws them. */
+/**
+ * The columns after the name a list of `cells` stands: the trailing run,
+ * then the time and the end where it draws them. Note that the run stands
+ * where the list draws no cell of it, because a row's flag leads it, and a
+ * list whose width folds every one of them away still says a task is
+ * blocked; only a list ending in its owner's end alone leaves it out.
+ */
 function afterColumns(cells: readonly TaskRowCell[]): readonly AfterColumn[] {
   const drawn = inOrder(cells);
-  const trails = drawn.some((cell) => !leads(cell) && cell !== TASK_ROW_CELL.END);
+  const trails =
+    !drawn.includes(TASK_ROW_CELL.END) ||
+    drawn.some((cell) => !leads(cell) && cell !== TASK_ROW_CELL.END);
   const columns: AfterColumn[] = trails ? [TRAIL] : [];
   if (drawn.includes(TASK_ROW_CELL.UPDATED)) columns.push(TASK_ROW_CELL.UPDATED);
   if (drawn.includes(TASK_ROW_CELL.END)) columns.push(TASK_ROW_CELL.END);

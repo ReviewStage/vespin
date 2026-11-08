@@ -134,3 +134,28 @@ test("a ⌘-click chooses a row without opening it, and a plain press opens it",
   act(() => pressOf(container, "Write the notes").click());
   expect(opened).toEqual(["child"]);
 });
+
+test("a row's flag stands in a list that draws no cell after the name", () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const cells = [TASK_ROW_CELL.STATUS];
+  act(() =>
+    root.render(
+      createElement(TaskRows, {
+        label: "Tasks",
+        cells,
+        children: createElement(TaskRow, {
+          taskId: "blocked",
+          name: "Ship the release",
+          cells,
+          content: {},
+          flag: createElement("span", { "data-flag": "" }, "Blocked"),
+          onOpen: () => undefined,
+        }),
+      }),
+    ),
+  );
+  expect(container.querySelector("[data-flag]")?.textContent).toBe("Blocked");
+});
