@@ -614,11 +614,13 @@ body,
 /* So the side panel's toggle and its full-screen button stand on one row, a
    task's page stands them at the end of the agents' tabs' row rather than
    the title bar's: its tabs stand flush under the topbar, which is two
-   title-bar middles tall. Where the task's details stand in that row's
-   place, the toggle keeps to the title bar. */
+   title-bar middles tall. They rest on the frame as the tabs beside them do,
+   with no ground of their own, the panel open or not. Where the task's
+   details stand in that row's place, the toggle keeps to the title bar. */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell:has(> .desktop-main .desktop-task > .task-tabs)
   > .title-bar-controls[data-edge="end"] {
+  --title-bar-ground: transparent;
   top: calc(2 * var(--title-bar-middle));
 }
 
