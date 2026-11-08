@@ -5,6 +5,7 @@ import {
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
   INTEGRATION_STATUS,
+  type IntegrationAccount,
   type IntegrationProvider,
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
@@ -29,6 +30,8 @@ import { ToastHost } from "./toast.js";
 
 /** Where each offered provider stands at the service; every other is not offered. */
 let standing: Partial<Record<IntegrationProvider, IntegrationStatus>> = {};
+/** The accounts the host's read names, past a provider's own word. */
+let accounts: IntegrationAccount[] = [];
 /** Whether the next Connect is refused, as a service that does not answer refuses it. */
 let refuseConnect = false;
 /** Every provider a Connect was asked for, in order. */
@@ -44,6 +47,7 @@ const UNAVAILABLE = Object.fromEntries(
 beforeEach(() => {
   fakeAppPlatform(QUIET_PANEL);
   connects = [];
+  accounts = [];
   refuseConnect = false;
   // A Connect stands its provider pending at the service, answering once the host's read carries it.
   fakeActPort({
@@ -57,7 +61,10 @@ beforeEach(() => {
   });
   fakeAppBridge({});
   integrations = holdIntegrations(() => ({
-    rows: { integrations: { ...UNAVAILABLE, ...standing } },
+    rows: {
+      integrations: { ...UNAVAILABLE, ...standing },
+      ...(accounts.length > 0 ? { accounts } : undefined),
+    },
   }));
 });
 
@@ -113,12 +120,20 @@ async function press(words: string, label: string): Promise<void> {
   await settle();
 }
 
-test("each expired server stands in a toast of its own until its Reconnect has it connected again", async () => {
+test("each expired server stands in a toast of its own, named by its provider alone, until its Reconnect has it connected again", async () => {
   standing = {
     [INTEGRATION_PROVIDER.SLACK]: INTEGRATION_STATUS.EXPIRED,
     [INTEGRATION_PROVIDER.LINEAR]: INTEGRATION_STATUS.EXPIRED,
     [INTEGRATION_PROVIDER.NOTION]: INTEGRATION_STATUS.CONNECTED,
   };
+  accounts = [
+    {
+      provider: INTEGRATION_PROVIDER.LINEAR,
+      connection: "linear",
+      label: "Acme",
+      status: INTEGRATION_STATUS.EXPIRED,
+    },
+  ];
   await mount();
   await vi.waitFor(() =>
     assert.deepEqual(said().toSorted(), ["Linear's sign-in expired", "Slack's sign-in expired"]),

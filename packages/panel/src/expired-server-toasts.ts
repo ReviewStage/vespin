@@ -2,7 +2,8 @@
  * expired-server-toasts.ts -- one toast for each MCP server whose sign-in expired, standing until it is reconnected, with Reconnect on each.
  *
  * Every server the signed-in account holds whose provider's grant stopped
- * working is said in a toast of its own, led by the provider's mark, that
+ * working is said in a toast of its own, led by the provider's mark and
+ * named by the provider alone, never the account's name, that
  * persists until the server is connected again or the developer dismisses
  * it, so each is reconnected with one press wherever the window is.
  * Reconnect begins the same sign-in Settings' row and the servers popover
@@ -15,7 +16,7 @@
  */
 
 import { SIGN_IN } from "@repo/features/integration-sign-in";
-import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
+import { INTEGRATION_NAME, INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { type NamedServer, namedServers } from "@repo/ui/agent-servers-model";
@@ -102,8 +103,8 @@ export function useExpiredServerToasts(): void {
           latest.current.toast({
             words:
               outcome === GRANT_OUTCOME.NOT_OPENED
-                ? `Your browser could not be opened to reconnect ${server.name}.`
-                : `${server.name} could not be reconnected.`,
+                ? `Your browser could not be opened to reconnect ${INTEGRATION_NAME[server.provider]}.`
+                : `${INTEGRATION_NAME[server.provider]} could not be reconnected.`,
             tone: STATUS_TONE.DANGER,
             mark: server.provider,
             subject,
@@ -134,7 +135,7 @@ export function useExpiredServerToasts(): void {
       }
       say(server, SAYS.EXPIRED, (subject) =>
         latest.current.toast({
-          words: `${server.name}'s sign-in expired`,
+          words: `${INTEGRATION_NAME[server.provider]}'s sign-in expired`,
           tone: STATUS_TONE.ATTENTION,
           mark: server.provider,
           subject,
@@ -167,7 +168,7 @@ export function useExpiredServerToasts(): void {
       } else if (stands === STANDS.RECONNECTING && entry.says !== SAYS.RECONNECTING) {
         say(entry.server, SAYS.RECONNECTING, (subject) =>
           latest.current.toast({
-            words: `Reconnecting ${entry.server.name}…`,
+            words: `Reconnecting ${INTEGRATION_NAME[entry.server.provider]}…`,
             tone: STATUS_TONE.WORKING,
             subject,
           }),
