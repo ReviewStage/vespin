@@ -30,6 +30,7 @@ import {
   accessTokenNeedsRefresh,
   accountFailureAction,
   deletionNeedsNewSession,
+  deletionSessionGone,
   type StoredAccount,
   withIssuedAccountTokens,
 } from "./client.js";
@@ -291,10 +292,12 @@ export class AccountSessionManager {
           new NoStoredAccount({ message: "No stored account credential to delete with" }),
         );
       }
-      // Note that Better Auth deletes the account under the Mac's own session, so one is asked for where none is held, and a fresh one where the service refuses the one held, a sign-in through the browser's hand-off page each.
+      // Note that Better Auth deletes the account under the Mac's own session, so one is asked for where none is held, and a fresh one where the service finds the one held too old, a sign-in through the browser's hand-off page each.
       const held = stored.sessionToken ?? (yield* this.#freshSession());
       const deleted = yield* Effect.result(this.#deleteHosted(held));
       if (Result.isFailure(deleted)) {
+        // A session the service no longer takes, as after a deletion whose answer was lost, signs out rather than in, where a sign-in could make a new account.
+        if (deletionSessionGone(deleted.failure)) return yield* this.signOut();
         if (!deletionNeedsNewSession(deleted.failure)) return yield* Effect.fail(deleted.failure);
         yield* this.#deleteHosted(yield* this.#freshSession());
       }

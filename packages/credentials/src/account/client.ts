@@ -72,6 +72,8 @@ class AccountClientError extends Data.TaggedError("AccountClientError")<{
   readonly message: string;
   readonly status?: number | undefined;
   readonly oauthError?: string | undefined;
+  /** The code Better Auth named its refusal by, where it named one. */
+  readonly code?: string | undefined;
 }> {}
 
 /**
@@ -329,10 +331,11 @@ export class AccountClient {
    * Asks Better Auth to delete the signed-in account at its own
    * `/delete-user`, under the Mac's session, as `authClient.deleteUser()`
    * does. The session is the whole request, so nothing here can name a
-   * different account. A session Better Auth does not take, and one signed in
-   * longer ago than it deletes an account for (`SESSION_EXPIRED`), are both
-   * answered by a new session, so both carry the 401
-   * (`deletionNeedsNewSession`).
+   * different account. A refusal carries its status and Better Auth's code:
+   * a session signed in longer ago than it deletes an account for
+   * (`SESSION_EXPIRED`) is answered by a new session
+   * (`deletionNeedsNewSession`), and one it does not take at all by signing
+   * out (`deletionSessionGone`).
    */
   deleteUser(sessionToken: string): Effect.Effect<void, AccountClientFailure> {
     return Effect.gen({ self: this }, function* () {
@@ -346,12 +349,12 @@ export class AccountClient {
       );
       if (response.ok) return;
       const body = record(yield* Effect.promise(() => response.json().catch(() => undefined)));
-      const needsSession =
-        response.status === HTTP_STATUS.UNAUTHORIZED || text(body?.code) === SESSION_EXPIRED;
+      const code = text(body?.code);
       return yield* Effect.fail(
         new AccountClientError({
-          message: `Account service refused the deletion: ${text(body?.code) ?? response.status}`,
-          status: needsSession ? HTTP_STATUS.UNAUTHORIZED : response.status,
+          message: `Account service refused the deletion: ${code ?? response.status}`,
+          status: response.status,
+          code,
         }),
       );
     });
@@ -444,9 +447,27 @@ export function accountGateOpen(
   return !runMode.requiresAccount || signedIn;
 }
 
-/** Whether a deletion's refusal is answered by a new session of the Mac's own and the deletion asked once more. */
+/**
+ * Whether a deletion's refusal is answered by a new session of the Mac's own
+ * and the deletion asked once more: only a session signed in too long ago,
+ * since the account it names still stands.
+ */
 export function deletionNeedsNewSession(error: AccountClientFailure): boolean {
-  return error._tag === "AccountClientError" && error.status === HTTP_STATUS.UNAUTHORIZED;
+  return error._tag === "AccountClientError" && error.code === SESSION_EXPIRED;
+}
+
+/**
+ * Whether a deletion's refusal says the session it was asked under is gone,
+ * which ends the Mac signed out rather than signed in again: a deletion that
+ * went through but whose answer was lost leaves the session it ended, and a
+ * new sign-in there would make a new account rather than find the old one.
+ */
+export function deletionSessionGone(error: AccountClientFailure): boolean {
+  return (
+    error._tag === "AccountClientError" &&
+    error.status === HTTP_STATUS.UNAUTHORIZED &&
+    error.code !== SESSION_EXPIRED
+  );
 }
 
 /**
