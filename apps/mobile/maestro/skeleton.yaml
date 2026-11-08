@@ -18,6 +18,12 @@ appId: dev.vespin.ios
 - assertVisible: "Describe the task, and an agent starts on it."
 - takeScreenshot: new-task
 - openLink: vespin://signed-out
+# The link comes from outside the app, so iOS asks before opening it there;
+# the prompt is the system's, and a simulator that has already allowed it
+# shows none.
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Sign in"
 - takeScreenshot: signed-out
 - tapOn: "Sign in"

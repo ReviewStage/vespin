@@ -6,10 +6,18 @@ import {
   Label,
   List,
   NavigationSplitView,
+  type NavigationSplitViewVisibility,
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
-import { font, listStyle, navigationTitle, padding, tag } from "@expo/ui/swift-ui/modifiers";
+import {
+  font,
+  listStyle,
+  navigationSplitViewStyle,
+  navigationTitle,
+  padding,
+  tag,
+} from "@expo/ui/swift-ui/modifiers";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import type { PlaceholderCollection, PlaceholderItem } from "../placeholders.js";
@@ -75,15 +83,23 @@ function CollectionStackList({ collection }: { collection: PlaceholderCollection
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: SwiftUI's
 // own split view, the list as its sidebar and the selected row's detail
 // beside it. The Stack's header steps aside, since the split view draws each
-// column's navigation bar itself.
+// column's navigation bar itself. Note that the columns start out all shown
+// and balanced, because SwiftUI's automatic style hides the sidebar of a
+// portrait iPad until it is asked for, and the list is what the window is
+// wide enough to keep beside the detail.
 function CollectionSplitScreen({ collection }: { collection: PlaceholderCollection }) {
   const [selected, setSelected] = useState<string | undefined>(undefined);
+  const [columns, setColumns] = useState<NavigationSplitViewVisibility>("all");
   const item = collection.items.find((candidate) => candidate.id === selected);
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <Host style={FILL}>
-        <NavigationSplitView>
+        <NavigationSplitView
+          columnVisibility={columns}
+          onColumnVisibilityChange={setColumns}
+          modifiers={[navigationSplitViewStyle("balanced")]}
+        >
           <NavigationSplitView.Sidebar>
             <List
               selection={selected === undefined ? [] : [selected]}
