@@ -10,7 +10,7 @@ import { editorBundleLanded, installEditorLayout, typeInComposer } from "../test
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
@@ -60,7 +60,7 @@ async function mount(purpose: NewTaskPurpose = NEW_TASK_PURPOSE.TASK): Promise<H
           newTask: {
             ...control.newTask,
             workspaceId: "workspace-acme",
-            repositoriesIn: () => ({ ...control.repositories, recent: ["acme/web"] }),
+            repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
           },
           workspaceId: "workspace-acme",
           onLeave: () => undefined,

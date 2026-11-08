@@ -41,6 +41,7 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useRef } from "react";
 import { renameWrite } from "../rename-write.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
@@ -201,6 +202,7 @@ export function TaskListRow({
   place?: VirtualRowPlace | undefined;
 }): React.JSX.Element {
   const marked = useMarkedUnread(task.id);
+  const pictures = useRepositoryPictures();
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
@@ -298,7 +300,7 @@ export function TaskListRow({
                   <RepositoryName
                     repository={task.repository}
                     label={repository}
-                    pictures={tasks.pictures}
+                    pictures={pictures}
                   />
                 </ReplayWords>
               ) : null,

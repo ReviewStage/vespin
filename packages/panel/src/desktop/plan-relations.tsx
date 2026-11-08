@@ -31,6 +31,10 @@ import {
   TaskRelationIcon,
   TaskRelationMenu,
 } from "../tasks/task-relation-menu.js";
+import {
+  type TaskRelationWrites,
+  useTaskRelationWrites,
+} from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { MenuEntry } from "./action-menu.js";
 import { type RelatedTaskRow, RelatedTasks } from "./related-tasks.js";
@@ -113,26 +117,26 @@ interface RelationDoors {
  * a sub-task taken out from under the task, each offering Undo.
  */
 function relationDoors(
-  tasks: TasksControl,
+  writes: TaskRelationWrites,
   task: Task,
   other: TaskSummary,
   kind: TaskRelationKind,
 ): RelationDoors {
   return {
     onChange: (to) => {
-      if (to !== kind) tasks.onChangeTaskRelation(task.id, { taskId: other.id, from: kind, to });
+      if (to !== kind) writes.onChangeTaskRelation(task.id, { taskId: other.id, from: kind, to });
     },
     onRemove: () => {
       switch (kind) {
         case TASK_RELATION_KIND.BLOCKED_BY:
         case TASK_RELATION_KIND.BLOCKS:
-          tasks.onRemoveTaskBlock(task.id, kind, other.id);
+          writes.onRemoveTaskBlock(task.id, kind, other.id);
           return;
         case TASK_RELATION_KIND.SUB_TASK:
-          tasks.onRemoveTaskParent(other.id);
+          writes.onRemoveTaskParent(other.id);
           return;
         case TASK_RELATION_KIND.PARENT:
-          tasks.onRemoveTaskParent(task.id);
+          writes.onRemoveTaskParent(task.id);
           return;
       }
     },
@@ -315,8 +319,9 @@ export function PlanRelations({
       if (!next.delete(taskId)) next.add(taskId);
       return next;
     });
+  const writes = useTaskRelationWrites();
   const doorsOf = (other: TaskSummary, kind: TaskRelationKind) =>
-    relationDoors(tasks, task, other, kind);
+    relationDoors(writes, task, other, kind);
   const subTasks = subTaskRows(tasks.tasks, task, opened, fold, (subTask) =>
     relationMenu(TASK_RELATION_KIND.SUB_TASK, doorsOf(subTask, TASK_RELATION_KIND.SUB_TASK)),
   );

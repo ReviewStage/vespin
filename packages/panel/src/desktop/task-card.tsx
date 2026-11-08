@@ -610,10 +610,7 @@ function sharedWorkspace(
  * Inbox's crumb. An agent's line opens the task on that agent's tab.
  */
 export function taskCardOf(
-  tasks: Pick<
-    TasksControl,
-    "repositories" | "onShowAgent" | "onSelect" | "me" | "workspaces" | "tasks"
-  > & {
+  tasks: Pick<TasksControl, "onShowAgent" | "onSelect" | "me" | "workspaces" | "tasks"> & {
     readonly agents: Pick<TasksControl["agents"], "models">;
   },
   task: TaskSummary,

@@ -88,6 +88,7 @@ import {
 import { taskLinkPlace, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
@@ -100,6 +101,7 @@ import { usePins } from "../tasks/use-pin-writes.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TaskLooks } from "../tasks/use-task-looks.js";
+import { useTaskRelationWrites } from "../tasks/use-task-relation-writes.js";
 import type { StartingTask, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -828,18 +830,20 @@ function DescriptionDocument({
   // (`onAsked`), so a crumb drawn again later does not open on an ask already
   // answered, and the description is shown first where the panel hides it, since
   // the crumb stands in the description.
+  const relationWrites = useTaskRelationWrites();
   const chooseRepository = useSteadyDoor((repository: string) => {
     if (opened === undefined) return;
     const { id: taskId } = opened;
     setRefusal(undefined);
-    tasks.onSetRepository(taskId, repository).then(
+    relationWrites.onSetRepository(taskId, repository).then(
       (note) => setRefusal(note === undefined ? undefined : { taskId, note }),
       () => undefined,
     );
   });
   const repositoryNote =
     refusal !== undefined && refusal.taskId === openedId ? refusal.note : undefined;
-  const { repositories, repositoryMenu } = tasks;
+  const repositories = useRepositoryChooser(opened?.workspaceId ?? tasks.workspace?.id);
+  const { repositoryMenu } = tasks;
   const [answeredRequest, setAnsweredRequest] = useState(0);
   const menuRequest =
     repositoryMenu !== undefined &&
@@ -869,14 +873,8 @@ function DescriptionDocument({
   const workspaceName = home?.name ?? "";
   // The task's path and its add menu name and offer the tasks of its own workspace, and a press on the parent's crumb opens it as a list's row would.
   const openedWorkspace = opened?.workspaceId;
-  const {
-    tasks: everyTask,
-    onSelect: selectTask,
-    onSetTaskBlock,
-    onSetTaskParent,
-    onNewRelatedTask,
-    relationMenu,
-  } = tasks;
+  const { tasks: everyTask, onSelect: selectTask, onNewRelatedTask, relationMenu } = tasks;
+  const { onSetTaskBlock, onSetTaskParent } = relationWrites;
   const blockTasks = useMemo(
     () => everyTask.filter((each) => each.workspaceId === openedWorkspace),
     [everyTask, openedWorkspace],

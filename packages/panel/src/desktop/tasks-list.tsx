@@ -123,6 +123,7 @@ import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useBoardDoor } from "../places/routed-doors.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { pullRequestNumberLabel } from "../tasks/agent-model.js";
@@ -424,6 +425,8 @@ function groupHead(
   /** Every repository a group or a row stands for, which a repository's name tells its own apart from. */
   repositories: readonly { readonly repository: string | null }[],
   people: GroupPeople,
+  /** Whether a repository is drawn by its owner's picture (`useRepositoryPictures`). */
+  pictures: boolean,
 ): GroupHead {
   switch (head.kind) {
     case TASKS_GROUP.PINNED:
@@ -460,7 +463,7 @@ function groupHead(
             icon: (
               <RepositoryPicture
                 repository={head.repository}
-                pictures={tasks.repositories.pictures}
+                pictures={pictures}
                 size={AVATAR_SIZE.GLYPH}
               />
             ),
@@ -964,6 +967,7 @@ export function TasksList({
   // The tab with the pins and sections beside it, which the List's groups and drops read; its rows read the tab alone.
   const pins = usePins(tasks.drawnTasks);
   const listTasks: ListTasks = { ...tasks, ...pins };
+  const pictures = useRepositoryPictures();
   useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
   const { filter, display } = frame;
   const directory = useMemberDirectory();
@@ -1179,7 +1183,7 @@ export function TasksList({
               key={display.grouping}
               groups={groups}
               group={(group) => {
-                const named = groupHead(group.head, listTasks, repositories, people);
+                const named = groupHead(group.head, listTasks, repositories, people, pictures);
                 return (
                   <TasksListGroup
                     key={groupKey(group.head)}

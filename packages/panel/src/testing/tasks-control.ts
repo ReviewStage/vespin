@@ -25,6 +25,7 @@ import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
+import type { RepositoryChooser } from "../tasks/repository-chip.js";
 import { MAIN_TAB, SIDE_PANEL_WIDTH } from "../tasks/task-tab-model.js";
 import {
   AGENT_RENAME_SHAPE,
@@ -251,12 +252,12 @@ function versionHistoryControl(
 }
 
 /** A repository chip's chooser for no workspace in particular, whose list the host holds (`LIVE_READ.REPOSITORY_LISTS`). */
-const NO_REPOSITORIES = {
+export const NO_REPOSITORIES = {
   recent: [],
   openGitHub: ignore,
   pictures: true,
   manages: true,
-} as const satisfies TasksControl["repositories"];
+} as const satisfies RepositoryChooser;
 
 /** A task with no agents and no repository, every press ignored. */
 export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsControl {
@@ -478,7 +479,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     workspace: undefined,
     onChooseWorkspace: ignore,
     onLeftWorkspace: ignore,
-    onOpenWorkspaceGitHub: ignore,
     onMoveTask,
     // A question's move and delete are the same move and delete, as the test answers them.
     moveTask: taskMoveMutation(({ taskId, workspaceId, quiet }) =>
@@ -607,18 +607,11 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onOpenPinnedTab: ignore,
     onReopenClosedTab: undefined,
     chosenPin: undefined,
-    repositories: NO_REPOSITORIES,
     repositoryMenu: undefined,
     onChangeRepository: ignore,
     relationMenu: undefined,
     onAddRelation: ignore,
-    onSetRepository: () => Promise.resolve(undefined),
     onSetTaskStanding: () => Promise.resolve(KEPT),
-    onSetTaskBlock: () => undefined,
-    onSetTaskParent: () => undefined,
-    onRemoveTaskParent: () => undefined,
-    onRemoveTaskBlock: () => undefined,
-    onChangeTaskRelation: () => undefined,
     onRetryList: ignore,
     onNewTask: ignore,
     onNewTaskIn: ignore,

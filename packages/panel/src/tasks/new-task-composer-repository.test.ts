@@ -20,7 +20,7 @@ import {
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
@@ -119,7 +119,7 @@ async function mount(
                     ...(relation === undefined ? undefined : { relation }),
                   },
                 }),
-            repositoriesIn: () => ({ ...control.repositories, recent, scope: scope.id }),
+            repositoriesIn: () => ({ ...NO_REPOSITORIES, recent, scope: scope.id }),
             start: (_name: string, repository: string | null, _workspace, from) => {
               starts.push(repository);
               also.push(from?.handed?.alsoRepositories);

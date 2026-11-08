@@ -92,6 +92,7 @@ import { useSteadyDoor } from "./steady-door.js";
 import { useTaskRoute } from "./task-route.js";
 import { MessageRevealProvider } from "./tasks/message-links.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./tasks/repository-remedy.js";
+import { openRepositoryOnGitHub } from "./tasks/task-repository-menus.js";
 import { loadedTasksFixture, useTasksFixtureLanded } from "./tasks/tasks-fixture-loader.js";
 import { ThreadRevealProvider } from "./tasks/thread-reveal.js";
 import {
@@ -99,6 +100,7 @@ import {
   useDescriptionWordsUnsaved,
 } from "./tasks/use-description-editing.js";
 import { ListedPullRequests, OpenLinkProvider } from "./tasks/use-open-link.js";
+import { useOpenWorkspaceGitHub } from "./tasks/use-task-relation-writes.js";
 import { useTasksTab } from "./tasks/use-tasks-tab.js";
 import { useTerminalsOwner } from "./tasks/use-terminal-session.js";
 import { WindowAccountContext, windowAccountOf } from "./tasks/window-account.js";
@@ -775,20 +777,16 @@ function AppWindow(): React.JSX.Element {
     [shownView, chooseSettingsView, signOut, requestMicrophone, workspace],
   );
 
+  const openWorkspaceGitHub = useOpenWorkspaceGitHub(openSettings);
   // A remedy under a refused start or message mends the task's repository through the Tasks tab's doors.
   const repositoryRemedies = useMemo<RepositoryRemedyDoors>(
     () => ({
-      openWorkspaceGitHub: tasks.onOpenWorkspaceGitHub,
-      openGitHub: tasks.repositories.openGitHub,
+      openWorkspaceGitHub,
+      openGitHub: openRepositoryOnGitHub,
       chooseRepository: tasks.onChangeRepository,
       moveTask: tasks.onMoveTask,
     }),
-    [
-      tasks.onOpenWorkspaceGitHub,
-      tasks.repositories.openGitHub,
-      tasks.onChangeRepository,
-      tasks.onMoveTask,
-    ],
+    [openWorkspaceGitHub, tasks.onChangeRepository, tasks.onMoveTask],
   );
   const gitHubConnect = useAccountGitHub();
   const messageReveal = useMemo(

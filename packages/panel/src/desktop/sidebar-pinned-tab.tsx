@@ -37,6 +37,7 @@ import { useCallback, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { agentPlace, useCopyLinkItem } from "../copy-link-item.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { agentName, RENAME_FAILED } from "../tasks/agent-model.js";
 import { agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
@@ -45,6 +46,7 @@ import type { PullRequestMarked } from "../tasks/pull-request-mark.js";
 import { pullRequestOfTab } from "../tasks/pull-request-number.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { PlanGlyph, TAB_KIND, type TabSubject, tabLook } from "../tasks/tab-look.js";
+import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
 import type { HeldPeople } from "../tasks/use-agents.js";
 import { isAgentPin, type SidebarPin } from "../tasks/use-side-panel.js";
@@ -342,7 +344,7 @@ function PinnedTabCard({
 }): React.JSX.Element {
   const agentId = pinAgentId(pin);
   const repository = "task" in on ? on.task.repository : on.agent.repository;
-  const { openGitHub, pictures } = tasks.repositories;
+  const pictures = useRepositoryPictures();
   const holder = pinnedOnLook(on, tasks.agents.models);
   return (
     <HoverCard data-pinned-tab-card="">
@@ -357,7 +359,11 @@ function PinnedTabCard({
         onPress={onOpenHolder}
       />
       {repository === null ? null : (
-        <RepositoryDetail repository={repository} pictures={pictures} onOpenGitHub={openGitHub} />
+        <RepositoryDetail
+          repository={repository}
+          pictures={pictures}
+          onOpenGitHub={openRepositoryOnGitHub}
+        />
       )}
       {gone ? <HoverCardNote>{GONE_NOTE}</HoverCardNote> : null}
       {agentId === undefined ? null : <PinPullRequest agentId={agentId} />}

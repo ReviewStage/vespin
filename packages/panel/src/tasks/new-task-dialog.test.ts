@@ -59,7 +59,7 @@ import {
 } from "../testing/composer.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { NewTaskDialog } from "./new-task-dialog.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import type { RepositoryChooser } from "./repository-chip.js";
@@ -161,7 +161,7 @@ async function mount(
   const startedIn: (string | undefined)[] = [];
   const control = tasksControl();
   let repositories: RepositoryChooser = {
-    ...control.repositories,
+    ...NO_REPOSITORIES,
     recent: ["acme/web", "acme/api"],
     ...chose,
   };
@@ -522,7 +522,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
               ...control.newTask,
               open: true,
               workspaceId: "workspace-acme",
-              repositoriesIn: () => ({ ...control.repositories, recent }),
+              repositoriesIn: () => ({ ...NO_REPOSITORIES, recent }),
               start: (...asked) => {
                 started.push(asked[3]?.handed);
                 return Promise.resolve(undefined);
@@ -608,7 +608,7 @@ test("a skill chosen from the / list is its chip, which opens its SKILL.md in th
             ...control.newTask,
             open: true,
             workspaceId: "workspace-acme",
-            repositoriesIn: () => ({ ...control.repositories, recent: ["acme/web"] }),
+            repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: ["acme/web"] }),
           },
         }),
       ),
