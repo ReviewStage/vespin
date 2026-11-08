@@ -6,6 +6,7 @@ import {
   TASK_SECTION_ICON_COLOR,
   TASK_SECTION_ICON_KIND,
   taskSectionIconSchema,
+  taskSectionSchema,
 } from "./task-section-wire.js";
 
 /**
@@ -42,5 +43,19 @@ describe("taskSectionIconSchema", () => {
 
   it("refuses a color off the palette", () => {
     assert.equal(isIcon(glyph("rocket", "#ff0000")), false);
+  });
+});
+
+describe("taskSectionSchema", () => {
+  it("reads a glyph's color a newer service added as none, rather than failing the section", () => {
+    const section = {
+      id: "0b9e8c1e-4a35-4d8e-9a59-0f6d8e2b7c11",
+      workspaceId: "workspace-1",
+      title: "Later",
+      icon: glyph("rocket", "gray"),
+      createdAt: 1_700_000_000_000,
+    };
+    const read = EffectSchema.decodeUnknownSync(taskSectionSchema)(section);
+    assert.deepEqual(read.icon, glyph("rocket"));
   });
 });

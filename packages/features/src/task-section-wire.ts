@@ -1,4 +1,4 @@
-import { Schema as EffectSchema } from "effect";
+import { Schema as EffectSchema, SchemaTransformation } from "effect";
 import { pinPositionSchema } from "./pin-order.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
@@ -10,7 +10,7 @@ import { workspaceIdSchema } from "./task-wire.js";
  * account's, in one workspace, so a teammate's sidebar never wears it. It
  * has a title and, optionally, an icon, one emoji or one Lucide glyph by
  * its kebab-case name, the glyph in one of the colors named here or in
- * the text's own, and a place among the account's sections once dragged there
+ * the text's own, which a color this build does not know reads as, and a place among the account's sections once dragged there
  * (`pin-order.ts`'s keys; with none, it stands by when it was made). A task
  * stands in at most one of the account's sections, an entry with a place
  * of its own among the section's tasks, and so does a coding agent with no
@@ -113,20 +113,49 @@ const glyphSchema = EffectSchema.String.check(
   EffectSchema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
 );
 
+/** A glyph's color, one of `TASK_SECTION_ICON_COLOR`. */
+const iconColorSchema = EffectSchema.Literals(Object.values(TASK_SECTION_ICON_COLOR));
+
+const isIconColor = EffectSchema.is(iconColorSchema);
+
+const emojiIconSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(TASK_SECTION_ICON_KIND.EMOJI),
+  emoji: taskSectionEmojiSchema,
+});
+
+const glyphIconSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(TASK_SECTION_ICON_KIND.GLYPH),
+  glyph: glyphSchema,
+  color: EffectSchema.optionalKey(iconColorSchema),
+});
+
 /** A section's icon: one emoji, or one Lucide glyph by name, in a color of `TASK_SECTION_ICON_COLOR` or none. */
-export const taskSectionIconSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    kind: EffectSchema.Literal(TASK_SECTION_ICON_KIND.EMOJI),
-    emoji: taskSectionEmojiSchema,
-  }),
-  EffectSchema.Struct({
-    kind: EffectSchema.Literal(TASK_SECTION_ICON_KIND.GLYPH),
-    glyph: glyphSchema,
-    color: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(TASK_SECTION_ICON_COLOR))),
-  }),
-]);
+export const taskSectionIconSchema = EffectSchema.Union([emojiIconSchema, glyphIconSchema]);
 
 export type TaskSectionIcon = typeof taskSectionIconSchema.Type;
+
+/**
+ * A section's icon as an answer reads it. Note that a glyph's color is read
+ * as text and one off the palette reads as none, so the glyph wears the
+ * text's own, because a color a newer service added would otherwise fail
+ * the section and the whole read it stands in. A write still takes only
+ * `taskSectionIconSchema`.
+ */
+const taskSectionIconReadSchema = EffectSchema.Union([
+  emojiIconSchema,
+  EffectSchema.Struct({
+    ...glyphIconSchema.fields,
+    color: EffectSchema.optionalKey(EffectSchema.String),
+  }).pipe(
+    EffectSchema.decodeTo(
+      glyphIconSchema,
+      SchemaTransformation.transform({
+        decode: ({ color, ...icon }) => (isIconColor(color) ? { ...icon, color } : icon),
+        encode: (icon) => icon,
+      }),
+    ),
+  ),
+]);
 
 /** A section's title: its ends trimmed, never blank, and bounded. */
 export const taskSectionTitleSchema = EffectSchema.Trim.check(
@@ -139,7 +168,7 @@ export const taskSectionSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   workspaceId: workspaceIdSchema,
   title: taskSectionTitleSchema,
-  icon: EffectSchema.optionalKey(taskSectionIconSchema),
+  icon: EffectSchema.optionalKey(taskSectionIconReadSchema),
   /** Where it stands among the account's sections once dragged there; absent while it stands by `createdAt`. */
   position: EffectSchema.optionalKey(pinPositionSchema),
   /** Epoch milliseconds it was made. */
