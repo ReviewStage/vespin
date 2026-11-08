@@ -43,7 +43,7 @@ import type { StoreFailure } from "../http/store-failure.js";
 import { launchStoppedDetail } from "./coder-host/status.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 
-export const DEVICE_AGENT_SERVICE = {
+const DEVICE_AGENT_SERVICE = {
   /** How long the Mac's read is held while nothing waits for it. */
   HOLD: Duration.seconds(20),
   /** How often a held read looks again where the sync hub cannot wake it. */

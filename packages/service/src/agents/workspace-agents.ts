@@ -139,13 +139,13 @@ export interface WorkspaceAgents {
 }
 
 /** The ways a list names whose agents it keeps. */
-export const AGENT_LIST_STARTER = {
+const AGENT_LIST_STARTER = {
   MINE: "mine",
   MEMBER: "member",
 } as const;
 
 /** Whose agents a list keeps: the caller's developer's own, one member's by their account's id, or every member's. */
-export type AgentListStarter =
+type AgentListStarter =
   | { readonly kind: typeof AGENT_LIST_STARTER.MINE }
   | { readonly kind: typeof AGENT_LIST_STARTER.MEMBER; readonly userId: string }
   | undefined;

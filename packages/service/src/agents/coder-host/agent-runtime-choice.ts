@@ -339,7 +339,7 @@ const SETUP_REFUSAL = {
 } as const satisfies Record<DeviceSetup, LocalAgentRefusal>;
 
 /** The offer of the account's device `deviceId` names where it beat within `THIS_MAC.FRESH`; none for another account's, one never registered, or one away. */
-export const freshOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
+const freshOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   deviceId: string | null | undefined,
 ): Effect.fn.Return<MacOffer | undefined, StoreFailure, DatabaseServices> {

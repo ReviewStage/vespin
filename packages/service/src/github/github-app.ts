@@ -514,7 +514,7 @@ export const REPOSITORY_SET_UNREACHED = {
 } as const;
 
 /** The set's first repository the App's one token does not reach, and why. */
-export type RepositorySetUnreached =
+type RepositorySetUnreached =
   | {
       readonly why: typeof REPOSITORY_SET_UNREACHED.UNREACHED;
       readonly unreached: GitHubRepositoryUnreached;
@@ -527,7 +527,7 @@ export type RepositorySetUnreached =
     };
 
 /** One installation token for several repositories: each as GitHub spells it, in the order named, and the token, good for an hour from its mint. */
-export interface GitHubRepositoriesToken {
+interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
   readonly token: Redacted.Redacted;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };

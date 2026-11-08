@@ -159,7 +159,7 @@ export const DEMO_HOST = {
 /* ----- The tasks ----- */
 
 /** A comment of a description's thread after its first: who wrote it, and what. */
-export interface DemoCommentReply {
+interface DemoCommentReply {
   readonly by: DemoPerson;
   readonly words: string;
 }
@@ -179,7 +179,7 @@ export interface DemoCommentWords {
 }
 
 /** A comment thread a member started on a description. */
-export interface DemoComment extends DemoCommentWords {
+interface DemoComment extends DemoCommentWords {
   readonly by: DemoPerson;
 }
 
@@ -481,7 +481,7 @@ const EXPIRE_DESCRIPTION = descriptionText({
 });
 
 /** The task everything is about, whose agent finished minutes ago and whose asks wait in Dean's Inbox. */
-export const DEMO_INVITATIONS_TASK: DemoTask = {
+const DEMO_INVITATIONS_TASK: DemoTask = {
   id: demoId(DEMO_ID_KIND.TASK, 1),
   name: "Teammate invitations",
   creator: DEMO_DEAN,
@@ -517,7 +517,7 @@ export const DEMO_INVITATIONS_TASK: DemoTask = {
 };
 
 /** Dana's task, which Dean's pilot broke into four sub-tasks. */
-export const DEMO_BILLING_TASK: DemoTask = {
+const DEMO_BILLING_TASK: DemoTask = {
   id: demoId(DEMO_ID_KIND.TASK, 2),
   name: "Usage-based billing",
   creator: DANA,
@@ -546,7 +546,7 @@ export const DEMO_BILLING_TASK: DemoTask = {
   ],
 };
 
-export const DEMO_WEBHOOKS_TASK: DemoTask = {
+const DEMO_WEBHOOKS_TASK: DemoTask = {
   id: demoId(DEMO_ID_KIND.TASK, 3),
   name: "Webhook retries",
   creator: DANA,
@@ -576,7 +576,7 @@ export const DEMO_WEBHOOKS_TASK: DemoTask = {
   ],
 };
 
-export const DEMO_ONBOARDING_TASK: DemoTask = {
+const DEMO_ONBOARDING_TASK: DemoTask = {
   id: demoId(DEMO_ID_KIND.TASK, 4),
   name: "Onboarding checklist",
   creator: DANA,
@@ -943,7 +943,7 @@ export interface DemoPage {
 }
 
 /** What one thread's first post says: its key, title, words, ask, and the member it is addressed to, if any. */
-export interface DemoPost {
+interface DemoPost {
   readonly key: string;
   readonly title: string;
   readonly body: string;
@@ -965,7 +965,7 @@ export type DemoCall =
   | { readonly posts: DemoPost };
 
 /** One step of a turn: what the agent said, if anything, then the call it made, if any. */
-export interface DemoStep {
+interface DemoStep {
   readonly text: string;
   readonly call?: DemoCall;
 }
@@ -1415,7 +1415,7 @@ const HOTFIX_POST: DemoPost = {
 /* ----- The agents' transcripts ----- */
 
 /** Dean's agent on Teammate invitations, which built the invites and asked him what the description left open. */
-export const DEMO_INVITATIONS_AGENT: DemoAgent = {
+const DEMO_INVITATIONS_AGENT: DemoAgent = {
   key: "demo-agent-invitations",
   task: DEMO_INVITATIONS_TASK,
   title: "Add teammate invitations",
@@ -1544,7 +1544,7 @@ export const DEMO_INVITATIONS_AGENT: DemoAgent = {
 };
 
 /** Dean's agent on Dana's Webhook retries, finished and merged. */
-export const DEMO_WEBHOOKS_AGENT: DemoAgent = {
+const DEMO_WEBHOOKS_AGENT: DemoAgent = {
   key: "demo-agent-webhooks",
   task: DEMO_WEBHOOKS_TASK,
   title: "Retry failed webhook deliveries",
@@ -1624,7 +1624,7 @@ export const DEMO_WEBHOOKS_AGENT: DemoAgent = {
 };
 
 /** Dean's agent on Jordan's Onboarding checklist, which asked Jordan where the checklist should sit. */
-export const DEMO_ONBOARDING_AGENT: DemoAgent = {
+const DEMO_ONBOARDING_AGENT: DemoAgent = {
   key: "demo-agent-onboarding",
   task: DEMO_ONBOARDING_TASK,
   title: "Build the onboarding checklist",
@@ -2235,7 +2235,7 @@ export const DEMO_AGENTS: readonly DemoAgent[] = [
 /* ----- The threads ----- */
 
 /** One answer a member gave an ask: the options picked, or nothing for a reply in words alone. */
-export interface DemoAnswer {
+interface DemoAnswer {
   readonly by: DemoPerson;
   readonly choices: readonly string[];
   readonly text: string;

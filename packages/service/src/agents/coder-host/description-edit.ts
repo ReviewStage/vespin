@@ -192,16 +192,6 @@ export const TASK_PICTURE_FILE_REFUSAL = {
   TOO_LARGE: `Not saved: a picture names an image larger than ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, or a video larger than ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB; take it smaller, or at one screen scale, or record a shorter flow:`,
   UNREADABLE: "Not saved: a picture's file could not be read from your sandbox:",
 } as const;
-/** How many notes a turn has taken: the turn and its count. */
-export interface NotesTaken {
-  readonly turnId?: string;
-  readonly count: number;
-}
-
-/** How many notes the turn given has taken; a record of another turn counts for nothing. */
-export function takenInTurn(taken: NotesTaken, turnId: string): number {
-  return taken.turnId === turnId ? taken.count : 0;
-}
 
 /** The task a call names, or nothing where it names none that reads, which refuses it whole. */
 export function editedTaskOf(input: UnparsedWireValue): string | undefined {

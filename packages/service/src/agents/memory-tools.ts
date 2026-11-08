@@ -82,7 +82,7 @@ const readRemember = Schema.decodeUnknownResult(REMEMBER_INPUT);
 const readRecall = Schema.decodeUnknownResult(RECALL_INPUT);
 
 /** Why a memory call did nothing, in words the model can act on. */
-export const MEMORY_REFUSAL = {
+const MEMORY_REFUSAL = {
   UNREADABLE_REMEMBER: `Not remembered: give the memory as text of at most ${MEMORY_BOUNDS.MAX_CHARS} characters.`,
   UNREADABLE_RECALL: `Not recalled: give the query as text of at most ${MEMORY_BOUNDS.MAX_QUERY_CHARS} characters.`,
   CREDENTIAL:
