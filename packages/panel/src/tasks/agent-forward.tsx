@@ -167,9 +167,9 @@ function sharedItems(
 
 /**
  * One row of the chip's menu per port, its actions in a submenu beside it:
- * Open, and Share, or, for the shared port, its link, Copy link, and Stop
- * sharing; a busy port that is not shared is a dimmed row, and the line
- * saying none listens yet stands where none does.
+ * Open, and Share while no port is, or, for the shared port, its link,
+ * Copy link, and Stop sharing; a busy port that is not shared is a dimmed
+ * row, and the line saying none listens yet stands where none does.
  */
 function portRows(
   agentId: string,
@@ -209,14 +209,17 @@ function portRows(
       items:
         shared !== undefined && isShared
           ? [...open, ...sharedItems(agentId, shared.url, copy)]
-          : [
-              ...open,
-              {
-                label: WORDS.SHARE,
-                icon: <LinkIcon aria-hidden="true" />,
-                onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
-              },
-            ],
+          : shared !== undefined
+            ? // Note that one port is shared at a time, so another offers Share only once the shared one stops, rather than moving the live link.
+              open
+            : [
+                ...open,
+                {
+                  label: WORDS.SHARE,
+                  icon: <LinkIcon aria-hidden="true" />,
+                  onSelect: () => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
+                },
+              ],
     };
   });
   // Note that a shared port the sandbox no longer lists keeps a row, so its link can still be stopped.
