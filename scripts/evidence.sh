@@ -60,18 +60,15 @@ capture_evidence() {
         "$@"
 }
 
-# The window opens on Plans: the fixture's synthetic plan list, with no plan
+# The window opens on Tasks: the fixture's synthetic task list, with no task
 # open.
 capture_evidence expanded --capture-evidence "$APP_EXPANDED_EVIDENCE_PATH"
-# The panel's Plans tab over the fixture's synthetic plan: the open plan's
-# saved document with its assumption checklist, scrolled inside the panel's
-# own ceiling, and the idle microphone row under it.
+# The panel's Tasks tab over the fixture's synthetic task: its drafted
+# description with its version history.
 capture_evidence tasks --profile tasks --capture-evidence "$APP_TASKS_EVIDENCE_PATH"
-# The same plan mid-call on its transcript: the earlier call from the record,
-# and the call standing now growing under it.
+# The same task under the transcript and work profiles, which the fixture
+# draws as it draws the tasks profile (`fixtureTasksView`).
 capture_evidence tasks-transcript --profile tasks-transcript --capture-evidence "$APP_TASKS_TRANSCRIPT_EVIDENCE_PATH"
-# The same plan mid-call on its work: an earlier turn folded to its answer,
-# and the turn standing now with the worker running beside its reads.
 capture_evidence tasks-work --profile tasks-work --capture-evidence "$APP_TASKS_WORK_EVIDENCE_PATH"
 
 validate_evidence() {
