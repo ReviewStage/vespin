@@ -718,10 +718,9 @@ function groupedBy(
  * own order, then the rest under the grouping chosen. Every group holds only
  * the tasks that stand (`standingTasks`), and a task stands in one group
  * alone: a pin before its section, a section before its grouping's group.
- * Pinned left with no task is not drawn, nor a section whose every task the
- * view leaves out, though a section holding no task at all is, so a row may
- * be dragged into it; that section, and a status's or a priority's group,
- * is where the display shows empty groups.
+ * Pinned left with no task is not drawn, though every section is, so a row
+ * may be dragged into it; a status's or a priority's group is where the
+ * display shows empty groups.
  */
 export function tasksListGroups(
   tasks: readonly TaskSummary[],
@@ -763,12 +762,9 @@ export function tasksListGroups(
       });
     const pins = take(pinned);
     if (pins.length > 0) groups.push(group({ kind: TASKS_GROUP.PINNED }, pins));
-    // Note that a section holding no task at all still stands, empty, so a row can be dragged into it, as the sidebar draws one; one whose tasks are only filtered out stands where empty groups do.
+    // Note that every section stands, empty ones too, so a row can be dragged into it, as the sidebar draws one.
     for (const { sectionId, taskIds } of sections) {
-      const held = take(taskIds);
-      if (held.length > 0 || taskIds.length === 0 || display.emptyGroups) {
-        groups.push(group({ kind: TASKS_GROUP.SECTION, sectionId }, held));
-      }
+      groups.push(group({ kind: TASKS_GROUP.SECTION, sectionId }, take(taskIds)));
     }
   }
   const rest = standing.filter((task) => !placed.has(task.id));

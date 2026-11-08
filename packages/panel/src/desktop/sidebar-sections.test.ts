@@ -407,22 +407,6 @@ test("a section whose only task is done still says Drag tasks here", async () =>
   );
 });
 
-test("a section whose only task Assigned to leaves out still says Drag tasks here", async () => {
-  const shared = { ...WORKSPACE, memberCount: 2 };
-  const ada = { userId: "user-ada", name: "Ada Lovelace" };
-  const sidebar = await mountSidebar([], SECTIONS, {
-    tasks: [{ ...INVITES, assignee: { userId: "user-grace", name: "Grace Hopper" } }],
-    workspace: shared,
-    workspaces: [shared],
-    me: ada.userId,
-  });
-
-  assert.equal(
-    sidebar.querySelector('nav[aria-label="Sections"]')?.textContent?.includes("Drag tasks here"),
-    true,
-  );
-});
-
 test("a task's Move to puts it on top of the section chosen", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);

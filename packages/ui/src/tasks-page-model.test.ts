@@ -289,7 +289,7 @@ test("each order runs a group's tasks its own way, a tie falling to the latest a
   expect(run(TASKS_ORDER.NAME)).toEqual(["Alpha", "Beta", "Gamma"]);
 });
 
-test("the List leads with the pins, then each section, one holding no task among them, a task in one group alone, and every group holds only the tasks that stand", () => {
+test("the List leads with the pins, then each section, one the view leaves empty among them, a task in one group alone, and every group holds only the tasks that stand", () => {
   const tasks = [
     task("Pinned", { status: TASK_STATUS.TODO }),
     task("Pinned and shipped", { status: TASK_STATUS.DONE }),
@@ -304,7 +304,7 @@ test("the List leads with the pins, then each section, one holding no task among
         pinned: ["Pinned and shipped", "Pinned"],
         sections: [
           { sectionId: "launch", taskIds: ["Pinned", "Sectioned"] },
-          { sectionId: "empty", taskIds: [] },
+          { sectionId: "empty", taskIds: ["Pinned and shipped"] },
         ],
         readerId: DEAN,
         personName: () => "",
@@ -325,25 +325,6 @@ test("the List leads with the pins, then each section, one holding no task among
       ["Pinned", "Sectioned", "Loose"],
     ],
   ]);
-});
-
-test("the List stands a section whose every task the view leaves out only where the display shows empty groups", () => {
-  const sections = (emptyGroups: boolean) =>
-    drawn(
-      tasksListGroups([task("Shipped", { status: TASK_STATUS.DONE })], {
-        filter: NO_TASKS_FILTER,
-        display: { ...DEFAULT_LIST_DISPLAY, emptyGroups },
-        pinned: [],
-        sections: [{ sectionId: "errors", taskIds: ["Shipped"] }],
-        readerId: DEAN,
-        personName: () => "",
-        members: [],
-        now: NOW,
-      }),
-    ).filter(([head]) => head?.[0] === TASKS_GROUP.SECTION);
-
-  expect(sections(false)).toEqual([]);
-  expect(sections(true)).toEqual([[["section", "errors"], []]]);
 });
 
 test("the Board stands a column for every status at first, empty ones too, the settled finished in the past week, and by priority where asked; a grouping it cannot drop into is read as status", () => {
