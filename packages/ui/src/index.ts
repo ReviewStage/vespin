@@ -21,6 +21,7 @@ export * from "./components/bar-item/bar-item.js";
 export * from "./components/block-list/block-list.js";
 export * from "./components/block-menu/block-menu.js";
 export * from "./components/breadcrumbs/breadcrumbs.js";
+export * from "./components/breadcrumbs/crumb.js";
 export * from "./components/button/button.js";
 export * from "./components/calendar/calendar.js";
 export * from "./components/card/card.js";

@@ -5,13 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { FolderIcon } from "../../face/glyphs.js";
 import type { FoldingButtonHint } from "../folding-button/folding-button.js";
-import {
-  BREADCRUMB_POPUP,
-  BREADCRUMBS_VARIANT,
-  type BreadcrumbHint,
-  Breadcrumbs,
-  type Crumb,
-} from "./breadcrumbs.js";
+import { BREADCRUMBS_VARIANT, type BreadcrumbHint, Breadcrumbs } from "./breadcrumbs.js";
+import { BREADCRUMB_POPUP, type Crumb } from "./crumb.js";
 
 /**
  * breadcrumbs.test.ts -- a path is one landmark under its name holding its
