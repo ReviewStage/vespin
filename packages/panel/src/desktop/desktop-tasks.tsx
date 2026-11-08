@@ -54,6 +54,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
 import { HERE } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -485,7 +486,7 @@ function DescriptionDocument({
   const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   // The clock the plan's tab's card counts its update back from.
   const now = useMinute();
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],

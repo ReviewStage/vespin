@@ -104,7 +104,6 @@ export type StepTitleTasks = Pick<
   | "sidePanel"
   | "inboxView"
   | "agentView"
-  | "automationsView"
   | "history"
 >;
 

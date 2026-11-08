@@ -33,6 +33,7 @@ import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { besideItem } from "../inbox-item-links.js";
 import { MemberDirectory } from "../member-directory.js";
 import { NOT_FOUND_THING, NotFound } from "../not-found.js";
+import { type AutomationsDoor, useAutomationsDoor } from "../places/routed-doors.js";
 import { addressOf, HERE, placeAddress, ROUTE, THING } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
@@ -209,6 +210,7 @@ export const DesktopInbox = memo(function DesktopInbox({
 }): React.JSX.Element {
   // New task is the way on from an Inbox with nothing in it, wherever an account can start one.
   const newTask = tasks.signedIn ? tasks.onNewTask : undefined;
+  const automations = useAutomationsDoor(tasks);
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
   const narrowedTask = tasks.inboxView.narrowed;
   const narrowedTaskRow = tasks.tasks.find((task) => task.id === narrowedTask);
@@ -547,6 +549,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                   panelFor,
                   place,
                   openPlace: openPlaceHere,
+                  openAutomations: automations.open,
                 }),
                 onMark: markItem,
                 onClose: resolveItems,
@@ -1025,6 +1028,8 @@ export function paneDoors(
     openPlace: (place: LinkPlace, elsewhere: () => void) => void;
     /** Where the item's words are read (`answerPlace`), whose repository an agent with no task reads its files through; none until known. */
     place: TasklessPlace | undefined;
+    /** Opens an Automations page (`places/routed-doors.ts`). */
+    openAutomations: AutomationsDoor["open"];
   },
 ): InboxPaneDoors {
   if (holder.kind === INBOX_HOLDER.TASK) {
@@ -1062,7 +1067,7 @@ export function paneDoors(
   return {
     onOpenHolder:
       automationId !== null
-        ? () => tasks.automationsView.onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId })
+        ? () => seams.openAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId })
         : undefined,
     taskCard: undefined,
     onOpenAgent: (agentId) =>

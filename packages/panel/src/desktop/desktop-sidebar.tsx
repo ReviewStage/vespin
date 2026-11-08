@@ -118,6 +118,7 @@ import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows
 import { useQuery } from "@tanstack/react-query";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
+import { useAutomationsPlace } from "../automations-route.js";
 import { useNewTaskDrafted } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -138,7 +139,7 @@ import {
   PANEL_SPAN_ATTRIBUTE,
 } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
-import { useBoardDoor } from "../places/routed-doors.js";
+import { useAdminDoor, useAutomationsDoor, useBoardDoor } from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
@@ -1852,13 +1853,16 @@ function SidebarColumn({
   // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
   const { place } = useWindowPlace();
   const board = useBoardDoor(tasks);
-  const inAdmin = tasks.adminView.open;
+  const admin = useAdminDoor(tasks);
+  const automations = useAutomationsDoor(tasks);
+  const automationsStanding = useAutomationsPlace();
+  const inAdmin = place === ROUTED_PLACE.ADMIN;
   const inInbox = onTasks && !inAdmin && tasks.inboxView.open;
-  const inAutomations = onTasks && tasks.automationsView.open;
+  const inAutomations = onTasks && automationsStanding.open;
   const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
   const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
   // Opening an automation sees its failed run, which the Automations row is marked for until then.
-  const { place: automationsPlace } = tasks.automationsView;
+  const { place: automationsPlace } = automationsStanding;
   // The workspace's runs, followed while the sidebar stands, as the Runs tab follows them, for the row to count the ones still at work.
   const { read: workspaceRuns } = useWorkspaceRuns(
     tasks.signedIn ? tasks.workspace?.id : undefined,
@@ -1903,8 +1907,8 @@ function SidebarColumn({
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
   const openInbox = () => tasks.inboxView.onOpen();
   const openBoard = () => board.open();
-  const openAutomations = () => tasks.automationsView.onOpen();
-  const openAdmin = () => tasks.adminView.onOpen();
+  const openAutomations = () => automations.open();
+  const openAdmin = () => admin.open();
   const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
   // composer is on it, so its row draws no Draft pencil for the words shown there.
@@ -2264,11 +2268,7 @@ function SidebarColumn({
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
         />
-        <SidebarAdminRow
-          current={inAdmin}
-          onOpen={chosen(openAdmin)}
-          onPreload={tasks.adminView.onPreload}
-        />
+        <SidebarAdminRow current={inAdmin} onOpen={chosen(openAdmin)} onPreload={admin.preload} />
       </SidebarPlaces>
       <SidebarRule />
     </>

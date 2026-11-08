@@ -3,12 +3,14 @@ import { BarAction, BarItem, BarItems, MENU_KEEPS_CLEAR, PlusIcon, SearchIcon } 
 import { raiseKeyboard } from "@repo/ui/command";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { InboxIcon, ListTodoIcon } from "lucide-react";
-import { adminSection } from "../admin/routing.js";
+import { useAdminView } from "../admin/admin-route.js";
+import { type AdminView, adminSection } from "../admin/routing.js";
 import { runAppCommand } from "../app-commands.js";
+import { useAutomationsPlace } from "../automations-route.js";
 import { useBoardDoor } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { automationsTab } from "../tasks/automations-place.js";
+import { type AutomationsPlace, automationsTab } from "../tasks/automations-place.js";
 import { NEEDS_YOU } from "../tasks/inbox-model.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useInboxWaiting } from "./places-waiting.js";
@@ -43,22 +45,43 @@ import { groupCount } from "./sidebar-fold.js";
  * sidebar's words.
  */
 
-/** Whether the bar stands: a narrow room, signed in, on one of the places' lists, `place` the routed place the window stands on (`useWindowPlace`). */
+/** The routed place the window stands on (`useWindowPlace`), with the Automations page and Admin's view, which the bar stands over or not by. */
+export interface BarStanding {
+  readonly place: RoutedPlace | undefined;
+  /** The Automations page standing, none while none does. */
+  readonly automations: AutomationsPlace | undefined;
+  /** Admin's view, the Overview while it does not stand. */
+  readonly admin: AdminView;
+}
+
+/** Where the window stands, as the bar reads it. */
+export function useBarStanding(): BarStanding {
+  const { place } = useWindowPlace();
+  const automations = useAutomationsPlace();
+  return {
+    place,
+    automations: automations.open ? automations.place : undefined,
+    admin: useAdminView(),
+  };
+}
+
+/** Whether the bar stands: a narrow room, signed in, on one of the places' lists, by where the window stands (`standing`). */
 export function mobileBarShown(
   room: ShellRoom,
   tasks: TasksControl,
-  place: RoutedPlace | undefined,
+  standing: BarStanding,
 ): boolean {
   // Note that the open task's side panel is not asked: it is held behind every place, so it says nothing of the one on screen.
   if (room !== SHELL_ROOM.NARROW || !tasks.signedIn) return false;
-  const { inboxView, automationsView, adminView, agentView } = tasks;
+  const { inboxView, agentView } = tasks;
+  const { place, automations } = standing;
   if (inboxView.open) return inboxView.chosen === undefined;
   if (agentView.agentId !== undefined || place === ROUTED_PLACE.PERSON) return false;
   if (place === ROUTED_PLACE.BOARD) return true;
   // Note that an automation's editor and its runs keep the whole screen, as an item does; only the list and the Runs tab stand over the bar.
-  if (automationsView.open) return automationsTab(automationsView.place);
+  if (automations !== undefined) return automationsTab(automations);
   // So does Admin: a section stands over the bar, an account's or a day's page under one keeps the whole screen.
-  if (adminView.open) return adminSection(adminView.view);
+  if (place === ROUTED_PLACE.ADMIN) return adminSection(standing.admin);
   return tasks.atHome;
 }
 

@@ -11,7 +11,7 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { useAdminRoute } from "./admin/admin-route.js";
+import { type AdminRoute, useAdminRoute } from "./admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "./admin/routing.js";
 import { runAppCommand } from "./app-commands.js";
 import { type AutomationsRoute, useAutomationsRoute } from "./automations-route.js";
@@ -39,7 +39,7 @@ import { useTaskRoute } from "./task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 import { isOverviewTab } from "./tasks/use-main-tabs.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
-import type { AdminViewControl, TasksControl } from "./tasks/use-tasks-tab.js";
+import type { TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads } from "./testing/app-state.js";
@@ -93,13 +93,14 @@ function mount(
   let history: WindowHistoryLists | undefined;
   let shown: TasksControl | undefined;
   let restand: ((tasks: TasksControl) => void) | undefined;
-  let admin: AdminViewControl | undefined;
+  let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
   let person: PersonRoute | undefined;
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
   let placeLeave: PlaceLeave | undefined;
+  let openAutomationsAt: (to?: AutomationsPlace) => void = () => undefined;
   function Probe() {
     const [standing, setTasks] = useState(initial);
     // The window's leave guard, which a test stands a page's ask through.
@@ -165,16 +166,11 @@ function mount(
         onWiden: inbox.onWiden,
       },
       onShowInbox: ({ taskId }) => openInbox(taskId),
-      automationsView: {
-        open: automations.open,
-        place: automations.place,
-        runs: automations.runs,
-        onOpen: (to = { kind: AUTOMATIONS_PAGE.LIST }) => {
-          if (listedStep !== undefined) automations?.onOpen(to, listedStep);
-        },
-        onRuns: automations.onRuns,
-        onClose: automations.onClose,
-      },
+      onAutomationRuns: automations.onRuns,
+    };
+    // The Automations pages open under the workspace listed, as their own doors do.
+    openAutomationsAt = (to = { kind: AUTOMATIONS_PAGE.LIST }) => {
+      if (listedStep !== undefined) automations?.onOpen(to, listedStep);
     };
     // Admin stands where the router does, as the window's root reads it.
     admin = useAdminRoute({
@@ -272,11 +268,11 @@ function mount(
     openPerson: (userId: string, name: string | undefined, workspace: string) =>
       act(() => person?.onOpen(userId, name, workspace)),
     /** Opens an Automations page by the router, as its own doors do. */
-    openAutomations: (to?: AutomationsPlace) => act(() => shown?.automationsView.onOpen(to)),
+    openAutomations: (to?: AutomationsPlace) => act(() => openAutomationsAt(to)),
     /** Opens the version history of the task named `task` under `workspace` by the router, as its doors do. */
     openVersions: (workspace: string, task: string) => act(() => versions?.onOpen(workspace, task)),
     /** Stands the automation's runs alone, or its setup again, as its Runs and its way back do. */
-    automationRuns: (runs: boolean) => act(() => shown?.automationsView.onRuns(runs)),
+    automationRuns: (runs: boolean) => act(() => shown?.onAutomationRuns(runs)),
     /** The name the person's page standing was opened with. */
     personName: () => person?.name,
     /** Leaves the routed place standing for `tasks`, the place a door into the window's state opens, in one move as the door makes it. */

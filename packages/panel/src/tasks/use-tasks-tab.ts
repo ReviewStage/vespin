@@ -134,7 +134,7 @@ import {
 } from "../act.js";
 import { actMutation, pressMutation, sendMutation } from "../act-mutations.js";
 import { useAdminRoute } from "../admin/admin-route.js";
-import { type AdminView, adminViewOfLink } from "../admin/routing.js";
+import { adminViewOfLink } from "../admin/routing.js";
 import type { AgentRoute } from "../agent-route.js";
 import { appPlatform } from "../app-platform.js";
 import { useAutomationsRoute } from "../automations-route.js";
@@ -409,39 +409,9 @@ type TaskTabPlace =
     > & { readonly planId: string })
   | Extract<LinkPlace, { readonly kind: typeof LINK_PLACE.PAGE; readonly planId: string }>;
 
-/** The window's Admin place: whether it takes the window, the view it stands on, and the presses that open and leave it. */
-export interface AdminViewControl {
-  readonly open: boolean;
-  /** The view standing, or the Overview while the place does not stand. */
-  readonly view: AdminView;
-  /** Opens the place on `view`; where none is named, on the Overview. */
-  readonly onOpen: (view?: AdminView) => void;
-  readonly onClose: () => void;
-  /** Reads the place ahead of a press the pointer says is coming, its chunk, charts and all. */
-  readonly onPreload: () => void;
-}
-
 /** The step a workspace's address names it by: its slug, or its id where an older service answered none, as `linkOf` writes it. */
 function stepOf(workspace: Pick<Workspace, "id" | "slug">): string {
   return workspace.slug ?? workspace.id;
-}
-
-/** The window's Automations pages: whether one stands in the task's place, which, and the presses that open, move between, and leave them. */
-interface AutomationsViewControl {
-  readonly open: boolean;
-  /** The page standing, the list while none does. */
-  readonly place: AutomationsPlace;
-  /**
-   * Whether an automation's page stands its runs alone rather than its
-   * setup, which only a narrow room draws apart: a page opened on a run's
-   * link does, and any other does not until its Runs is chosen.
-   */
-  readonly runs: boolean;
-  /** Opens the page asked for, the list where none is, under the listed workspace; nothing while none is listed. */
-  readonly onOpen: (place?: AutomationsPlace) => void;
-  /** Stands the page's runs alone, or its setup again; it leaves no page, so it asks nothing. */
-  readonly onRuns: (shown: boolean) => void;
-  readonly onClose: () => void;
 }
 
 /**
@@ -728,10 +698,12 @@ export interface TasksControl {
    * else. Its page stands, is left, and is read ahead through its route (`places/routed-doors.ts`).
    */
   onOpenPerson: (userId: string, name?: string, workspaceId?: string) => void;
-  /** The window's Admin place, an admin's alone: whether it takes the window, its view, and its presses (`desktop-admin.tsx`). */
-  adminView: AdminViewControl;
-  /** The window's Automations page: whether it stands in the task's place, and its presses (`automations-page.tsx`). */
-  automationsView: AutomationsViewControl;
+  /**
+   * Stands an automation's page's runs alone, or its setup again; it leaves no page, so it asks nothing. Its pages stand,
+   * open, and are left through their route (`places/routed-doors.ts`); this is the tab's so the window's history can take
+   * the way back from the runs (`navigation-history.ts`'s `throughHistory`).
+   */
+  onAutomationRuns: (shown: boolean) => void;
   /** Whether Home stands, the page of no task bound, which only its own route draws (`ROUTED_PLACE.HOME`), with no task still bound there. */
   atHome: boolean;
   /** Whether the task's own place stands, with neither Home nor any routed place, the not-found page among them, standing in its place. */
@@ -3063,9 +3035,6 @@ export function useTasksTab(input: {
   // (`navigation-history.ts`'s `onLeaveRouted`) past the router's blocker, so it asks up front while a page holds unsaved
   // work, and closes once Leave is pressed.
   const closeFirst = (close: () => void) => () => placeLeave.arrive(NOTHING, close);
-  // A door whose move is all it does, as opening a routed place, goes through `arrive` all the same, so a move to the
-  // place already standing, which navigates nowhere, still asks while a page holds unsaved work, as a move away would.
-  const moveFirst = (move: () => void) => placeLeave.arrive(move, NOTHING);
   // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
   // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
@@ -4382,23 +4351,7 @@ export function useTasksTab(input: {
           : viewed.workspaces.find((each) => each.id === workspaceId),
       );
     },
-    // The Admin place is the router's, which draws it in the task's place (`admin-route.ts`); opening it is only the
-    // router's move, which asks as it goes while a page holds unsaved work.
-    adminView: {
-      ...routedAdmin,
-      onOpen: (view?: AdminView) => moveFirst(() => routedAdmin.onOpen(view)),
-    },
-    // The Automations pages are the router's, which draw them in the plan's place (`automations-route.ts`); a version history there gives way.
-    automationsView: {
-      open: routedAutomations.open,
-      place: routedAutomations.place,
-      runs: routedAutomations.runs,
-      // Note that opening a page is only the router's move, which asks as it goes while a page holds unsaved work.
-      onOpen: (place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
-        moveFirst(() => openAutomations(place)),
-      onRuns: routedAutomations.onRuns,
-      onClose: closeFirst(routedAutomations.onClose),
-    },
+    onAutomationRuns: routedAutomations.onRuns,
     onShowFile: showFile,
     // A version's Open lands where its writer wrote it: an agent's tab.
     onShowSource: (taskId, source) => arriveAt(taskId, () => showSource(taskId, source)),

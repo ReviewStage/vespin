@@ -13,7 +13,6 @@ import { ADMIN_LINK_SECTION, type AdminLinkSection } from "@repo/features/link-g
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
-import type { AdminViewControl } from "../tasks/use-tasks-tab.js";
 import {
   ADMIN_TAB,
   type AdminView,
@@ -30,22 +29,42 @@ function sectionOf(segment: string | undefined): AdminLinkSection | undefined {
   return Object.values(ADMIN_LINK_SECTION).find((section) => section === segment);
 }
 
+/** Admin as the router stands it: whether it takes the window, the view it stands on, and the navigation that opens and leaves it. */
+export interface AdminRoute {
+  readonly open: boolean;
+  /** The view standing, or the Overview while the place does not stand. */
+  readonly view: AdminView;
+  /** Opens the place on `view`; where none is named, on the Overview. */
+  readonly onOpen: (view?: AdminView) => void;
+  readonly onClose: () => void;
+  /** Reads the place ahead of a press the pointer says is coming, its chunk, charts and all. */
+  readonly onPreload: () => void;
+}
+
+/** The view Admin stands on as the router stands it, the Overview while it does not stand. */
+export function useAdminView(): AdminView {
+  const here = useWindowPlace();
+  if (here.place !== ROUTED_PLACE.ADMIN) return ADMIN_OVERVIEW;
+  const { params } = here;
+  return (
+    adminViewOfLink({
+      section: sectionOf(params.section),
+      userId: params.userId,
+      workspaceId: params.workspaceId,
+      day: params.day,
+    }) ?? ADMIN_OVERVIEW
+  );
+}
+
 /** Admin as the router stands it, opened under the workspace `listedSlug` names as it is pressed, and left by the window's routed exit (`places/routed-exits.ts`). */
-export function useAdminRoute(input: { listedSlug: () => string | undefined }): AdminViewControl {
+export function useAdminRoute(input: { listedSlug: () => string | undefined }): AdminRoute {
   const exits = useRoutedExits();
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
+  const view = useAdminView();
   const open = here.place === ROUTED_PLACE.ADMIN;
   const { params } = here;
-  const view = open
-    ? (adminViewOfLink({
-        section: sectionOf(params.section),
-        userId: params.userId,
-        workspaceId: params.workspaceId,
-        day: params.day,
-      }) ?? ADMIN_OVERVIEW)
-    : ADMIN_OVERVIEW;
   const onOpen = (to: AdminView = ADMIN_OVERVIEW) => {
     const workspace = (open ? params.workspace : undefined) ?? input.listedSlug();
     if (workspace === undefined) return;

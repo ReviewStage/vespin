@@ -91,22 +91,18 @@ export interface ShellRouter {
 interface StandingProps {
   readonly tab?: unknown;
   readonly tasks?: {
-    readonly adminView?: { readonly open?: boolean };
     readonly agentView?: { readonly agentId?: string | undefined };
-    readonly automationsView?: { readonly open?: boolean };
     readonly history?: { readonly open?: boolean };
     readonly inboxView?: { readonly open?: boolean };
     readonly page?: string;
   };
 }
 
-/** Where a shell stands by its props: Settings where its tab is, Admin, the Automations pages, a version history, the Inbox, an agent's page where one stands, a task's place where one is open, else Home; the Board and a person's page stand only where a test names them, as they are their routes' alone. */
+/** Where a shell stands by its props: Settings where its tab is, a version history, the Inbox, an agent's page where one stands, a task's place where one is open, else Home; the Board, a person's page, Admin, and the Automations pages stand only where a test names them, as they are their routes' alone. */
 function standingOf(shell: ReactElement): string {
   const props: StandingProps =
     typeof shell.props === "object" && shell.props !== null ? shell.props : {};
   if (props.tab === PANEL_TAB.SETTINGS) return SHELL_AT.SETTINGS;
-  if (props.tasks?.adminView?.open === true) return SHELL_AT.ADMIN;
-  if (props.tasks?.automationsView?.open === true) return SHELL_AT.AUTOMATIONS;
   if (props.tasks?.history?.open === true) return SHELL_AT.VERSION_HISTORY;
   if (props.tasks?.inboxView?.open === true) return SHELL_AT.INBOX;
   const agent = props.tasks?.agentView?.agentId;
@@ -159,6 +155,13 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
     getParentRoute: () => automationPages,
     path: "automation/$automationId",
   });
+  // Note that the pages' leaves are the window's tree's, by which the page standing is read (`automations-route.ts`).
+  const automationsLeaves = ["/", "runs", "new"].map((path) =>
+    createRoute({ getParentRoute: () => automations, path }),
+  );
+  const automationLeaves = ["/", "runs", "run/$runId"].map((path) =>
+    createRoute({ getParentRoute: () => automation, path }),
+  );
   const inbox = createRoute({
     getParentRoute: () => workspace,
     path: "inbox",
@@ -212,7 +215,10 @@ function shellRouter(at: string = SHELL_AT.PLACES): ShellRouter {
         board,
         person,
         workspace.addChildren([
-          automationPages.addChildren([automations, automation]),
+          automationPages.addChildren([
+            automations.addChildren(automationsLeaves),
+            automation.addChildren(automationLeaves),
+          ]),
           inbox.addChildren([inboxItem]),
           task,
           agent.addChildren([agentPage]),

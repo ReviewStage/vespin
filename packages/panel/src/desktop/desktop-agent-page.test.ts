@@ -60,6 +60,7 @@ import { act, createContext, createElement, Fragment, type ReactElement, useCont
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
+import { RoutedExitsProvider } from "../places/routed-exits.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
@@ -444,7 +445,7 @@ function onAgentRoute(page: ReactElement): ReactElement {
   return createElement(
     RoutedPage.Provider,
     { value: page },
-    createElement(RouterProvider, { router }),
+    createElement(RoutedExitsProvider, null, createElement(RouterProvider, { router })),
   );
 }
 
@@ -1471,12 +1472,7 @@ test("an automation's agent opens on the automation's prompt alone, sent by the 
   holdAutomations(handHostReads({}).deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: [SWEEP] }),
   });
-  const opened: unknown[] = [];
-  const tasks = tasksControl({ workspaces: [ACME] });
-  const page = mount({
-    ...tasks,
-    automationsView: { ...tasks.automationsView, onOpen: (place) => opened.push(place) },
-  });
+  const page = mount(tasksControl({ workspaces: [ACME], workspace: ACME }));
   await settle();
 
   const { card, sender } = origin(page);
@@ -1486,7 +1482,8 @@ test("an automation's agent opens on the automation's prompt alone, sent by the 
   assert.doesNotMatch(card.textContent ?? "", /Vespin started this run/u);
   act(() => automation?.click());
 
-  assert.deepEqual(opened, [{ kind: "edit", automationId: SWEEP.id }]);
+  const router = agentRouter ?? assert.fail("the agent's route stands");
+  assert.equal(router.history.location.pathname, `/${ACME.id}/automation/${SWEEP.id}`);
 });
 
 test("a deleted automation's agent still names it, plainly, with nothing to open", async () => {

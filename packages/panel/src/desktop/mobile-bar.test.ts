@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import { ADMIN_TAB } from "../admin/routing.js";
 import { ROUTED_PLACE } from "../places/routed-places.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import { tasksControl } from "../testing/tasks-control.js";
@@ -22,5 +23,12 @@ test.each([
   { on: "the list", chosen: undefined, shown: true },
   { on: "an item", chosen: CHOSEN, shown: false },
 ])("the bar on $on stands: $shown", ({ chosen, shown }) => {
-  assert.equal(mobileBarShown(SHELL_ROOM.NARROW, onInbox(chosen), ROUTED_PLACE.INBOX), shown);
+  assert.equal(
+    mobileBarShown(SHELL_ROOM.NARROW, onInbox(chosen), {
+      place: ROUTED_PLACE.INBOX,
+      automations: undefined,
+      admin: { kind: ADMIN_TAB.DASHBOARD },
+    }),
+    shown,
+  );
 });

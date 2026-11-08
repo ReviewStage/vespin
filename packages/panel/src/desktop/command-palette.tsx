@@ -178,6 +178,7 @@ import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-re
 import { memberRows } from "../member-rows.js";
 import { PANEL_SPAN, useKeystrokeSpans } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import { Highlighted } from "../search-field.js";
 import { settingsPageOf } from "../settings/pages.js";
 import { settingsPageShown } from "../settings/settings-rows.js";
@@ -2047,6 +2048,7 @@ export function CommandPalette({
     chosen.current = run;
     setOpen(false);
   }, []);
+  const automationsDoor = useAutomationsDoor(tasks);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
   const onTasks = useCallback(
@@ -2276,9 +2278,7 @@ export function CommandPalette({
           : [],
         tasks.workspace?.name,
         (automationId) =>
-          onTasks(() =>
-            tasks.automationsView.onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
-          ),
+          onTasks(() => automationsDoor.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId })),
       ),
     ],
     // Note that a command is found by its letters in order too, as a path is, since a command's name is typed by its first letters.

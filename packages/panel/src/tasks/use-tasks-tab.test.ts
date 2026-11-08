@@ -67,7 +67,8 @@ import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { KEPT, type Kept } from "../act.js";
-import { ADMIN_PAGE, ADMIN_TAB } from "../admin/routing.js";
+import { useAdminView } from "../admin/admin-route.js";
+import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
 import { type InboxRoute, useInboxRoute } from "../inbox-route.js";
@@ -89,13 +90,17 @@ import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
 import {
+  type AdminDoor,
+  type AutomationsDoor,
   type BoardDoor,
   type PersonDoor,
+  useAdminDoor,
+  useAutomationsDoor,
   useBoardDoor,
   usePersonDoor,
 } from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
-import { useWindowPlace } from "../places/routed-places.js";
+import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import { ADDRESS, addressOf } from "../route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useTaskRoute } from "../task-route.js";
@@ -281,8 +286,14 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
 let boardDoor: BoardDoor | undefined;
 /** A person's page's doors in the window last mounted, as a surface holds them. */
 let personDoor: PersonDoor | undefined;
-/** The Board and a person's page as the router of the window last mounted stands them. */
+/** Admin's doors in the window last mounted, as a surface holds them. */
+let adminDoor: AdminDoor | undefined;
+/** The Automations pages' doors in the window last mounted, as a surface holds them. */
+let automationsDoor: AutomationsDoor | undefined;
+/** The Board, a person's page, and the Automations pages as the router of the window last mounted stands them. */
 let views: RoutedViews | undefined;
+/** Admin's view as the router of the window last mounted stands it, none while it does not stand. */
+let adminStanding: AdminView | undefined;
 
 function mount(
   initial: Partial<Standing> = {},
@@ -433,10 +444,14 @@ function mount(
       // A link's step is written by the window's history beside the tab, where one stands, else the task's place opens by its own door.
       visitTask: (at, step) => windowHistory?.onVisitTask(at, step) ?? false,
     });
-    // The Board's and a person's page's doors, and how they stand, as the window's surfaces hold them.
+    // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);
     personDoor = usePersonDoor(control);
+    adminDoor = useAdminDoor(control);
+    automationsDoor = useAutomationsDoor(control);
     views = useRoutedViews();
+    const adminView = useAdminView();
+    adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
     // A link place the router lands on is read by its route and opened as its link is, as the window's root has it.
     useLinkPlaceLandings(openLanded);
     // The place standing and the task bound follow each other, as the window's root keeps them; with no history beside
@@ -1805,8 +1820,8 @@ async function placeOpenedBy(href: string) {
     inbox: control.inboxView.open
       ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
       : undefined,
-    automations: control.automationsView.open ? control.automationsView.place : undefined,
-    admin: control.adminView.open ? control.adminView.view : undefined,
+    automations: views?.automations,
+    admin: adminStanding,
   };
 }
 
@@ -2008,7 +2023,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
     panel: undefined,
   });
   assert.equal(tab.control().inboxView.open, false);
-  assert.deepEqual(tab.control().automationsView.place, {
+  assert.deepEqual(views?.automations, {
     kind: AUTOMATIONS_PAGE.EDIT,
     automationId,
   });
@@ -2236,17 +2251,17 @@ test("a Vespin link whose slug names no workspace of the account's leaves the li
   );
 
   assert.equal(tab.control().workspace?.id, listed);
-  assert.equal(tab.control().automationsView.open, true);
+  assert.equal(views?.automations !== undefined, true);
 });
 
 test("an agent's page opened from the Automations pages leaves them for the page, as every door into a place of the window's state leaves a routed place", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
-  act(() => tab.control().automationsView.onOpen());
-  assert.equal(tab.control().automationsView.open, true);
+  act(() => automationsDoor?.open());
+  assert.equal(views?.automations !== undefined, true);
 
   act(() => tab.control().agentView.onOpen("agent-run-1"));
 
-  assert.equal(tab.control().automationsView.open, false, "the Automations pages give way");
+  assert.equal(views?.automations, undefined, "the Automations pages give way");
   assert.equal(tab.control().agentView.agentId, "agent-run-1");
 });
 
@@ -3546,10 +3561,10 @@ function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
       ? { chosen: control.inboxView.chosen, narrowed: control.inboxView.narrowed }
       : undefined,
     agentPage: control.agentView.agentId,
-    automations: control.automationsView.open,
+    automations: views?.automations !== undefined,
     board: views?.board,
     person: views?.person.userId,
-    admin: control.adminView.open,
+    admin: adminStanding !== undefined,
     history: control.history.open,
     listed: control.workspace?.id,
     tab: control.mainTabs.tab,
@@ -3596,14 +3611,14 @@ const ROUTED_DOORS: [
   (control: TasksControl) => void,
   ((control: TasksControl) => void)?,
 ][] = [
-  ["Admin", (control) => control.adminView.onOpen()],
+  ["Admin", () => adminDoor?.open()],
   ["the Board", () => boardDoor?.open()],
   ["a person's page", (control) => control.onOpenPerson("user-ada", "Ada")],
   [
     "a person's page in another workspace, which it lists",
     (control) => control.onOpenPerson("user-ada", "Ada", ACME.id),
   ],
-  ["Automations", (control) => control.automationsView.onOpen()],
+  ["Automations", () => automationsDoor?.open()],
   ["the Inbox", (control) => control.inboxView.onOpen(), FROM_BOARD],
   [
     "an Inbox item",
@@ -3634,11 +3649,7 @@ const ROUTED_DOORS: [
     (control) => control.agentView.onClose(),
     (control) => control.agentView.onOpen(AGENT_ID),
   ],
-  [
-    "Automations' close",
-    (control) => control.automationsView.onClose(),
-    (control) => control.automationsView.onOpen(),
-  ],
+  ["Automations' close", () => automationsDoor?.close(), () => automationsDoor?.open()],
   ["the Inbox's close", (control) => control.inboxView.onClose()],
 ];
 
@@ -3648,11 +3659,11 @@ test.each(ROUTED_DOORS)(
 );
 
 test("Automations pressed over its own page holding unsaved work asks still, and Leave keeps the page standing", async () => {
-  const tab = await onInbox((control) => control.automationsView.onOpen());
+  const tab = await onInbox(() => automationsDoor?.open());
   const asks: (() => void)[] = [];
   act(() => void tab.control().placeLeave.stand((leave) => asks.push(leave)));
   const stood = windowOf(tab);
-  act(() => tab.control().automationsView.onOpen());
+  act(() => automationsDoor?.open());
   await settle();
   act(() => asks[0]?.());
   await settle();
@@ -3706,7 +3717,7 @@ test.each<[string, (control: TasksControl) => void]>([
 
 test.each(TAB_DOORS)(
   "%s over an automation holding unsaved work, which the task opens under, asks, Cancel leaves the window as it stood, and Leave arrives as the press does with no ask",
-  async (_door, press) => askedOver(press, (control) => control.automationsView.onOpen()),
+  async (_door, press) => askedOver(press, () => automationsDoor?.open()),
 );
 
 test("a section's mention over a page holding unsaved work asks the section into view on its task once Leave is pressed", async () => {
@@ -4309,7 +4320,7 @@ test("what the developer opened while New task's agent start was out, a page and
       },
     });
   });
-  act(() => tab.control().automationsView.onOpen());
+  act(() => automationsDoor?.open());
   act(() => tab.control().onNewTask());
 
   await act(async () => {
@@ -4317,7 +4328,7 @@ test("what the developer opened while New task's agent start was out, a page and
     answers[0]?.({ planId: OTHER_TASK_ID, agentStart: { agent: started } });
     await note;
   });
-  assert.equal(tab.control().automationsView.open, true, "the page stands");
+  assert.equal(views?.automations !== undefined, true, "the page stands");
   assert.equal(tab.control().newTask.open, true, "New task stands");
   assert.equal(tab.control().starting, undefined);
 });
@@ -4381,11 +4392,11 @@ test("Create with an agent opens New task's card for an automation's agent over 
     { shown: true, tasks: { ...OPEN, workspaces: [ACME] } },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
-  act(() => tab.control().automationsView.onOpen());
+  act(() => automationsDoor?.open());
   act(() => tab.control().onNewAutomationAgent());
   assert.equal(tab.control().newTask.open, true);
   assert.deepEqual(tab.control().newTask.preset, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
-  assert.equal(tab.control().automationsView.open, true, "the page stands behind the card");
+  assert.equal(views?.automations !== undefined, true, "the page stands behind the card");
 
   const handed = {
     idempotencyKey: AGENT_KEY,
@@ -4421,7 +4432,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
     NEW_TASK_PURPOSE.AUTOMATION,
     "for an automation's agent",
   );
-  assert.equal(tab.control().automationsView.open, true, "the page stands behind it again");
+  assert.equal(views?.automations !== undefined, true, "the page stands behind it again");
 });
 
 test("an agent refused as New task's Agent mode started its task opens the task on a draft holding the words, model, and why, whose Retry starts the agent on that task under the start's key", async () => {

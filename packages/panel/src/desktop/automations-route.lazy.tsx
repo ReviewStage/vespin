@@ -3,6 +3,7 @@
  */
 
 import { createLazyRoute } from "@tanstack/react-router";
+import { useAutomationsPlace } from "../automations-route.js";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { AutomationsPage } from "./automations-page.js";
@@ -16,12 +17,9 @@ function automationsPlaceKey(place: AutomationsPlace): string {
 /** The Automations pages in the task's place beside the sidebar. */
 function AutomationsRoutePlace(): React.JSX.Element {
   const { tasks, room } = useShellPlaces();
+  const { place } = useAutomationsPlace();
   return (
-    <PageFind
-      page={FIND_PAGE.AUTOMATIONS}
-      at={automationsPlaceKey(tasks.automationsView.place)}
-      active={tasks.shown}
-    >
+    <PageFind page={FIND_PAGE.AUTOMATIONS} at={automationsPlaceKey(place)} active={tasks.shown}>
       <AutomationsPage tasks={tasks} room={room} />
     </PageFind>
   );

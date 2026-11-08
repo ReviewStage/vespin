@@ -98,10 +98,10 @@ interface PlaceShown {
   readonly columnKnown: boolean;
 }
 
-/** What a declaration reads to offer its links: the Tasks tab, the Board and a person's page as their routes stand them, where the window stands, the workspace listed's address step, and the links of the place the window's state says under it. */
+/** What a declaration reads to offer its links: the Tasks tab, the Board, a person's page, and the Automations pages as their routes stand them, where the window stands, the workspace listed's address step, and the links of the place the window's state says under it. */
 interface PlaceLinks {
   readonly tasks: TasksControl;
-  /** The Board and a person's page as their routes stand them. */
+  /** The Board, a person's page, and the Automations pages as their routes stand them. */
   readonly views: RoutedViews;
   readonly at: WindowAt;
   readonly listed: string;
@@ -353,12 +353,13 @@ export const ROUTED_PLACE = {
     overThePlan: true,
     inTaskPlace: false,
     listedOnly: true,
-    title: (tasks, under) => (tasks.automationsView.open ? { label: "Automations" } : under()),
+    title: (_tasks, under, views) =>
+      views.automations === undefined ? under() : { label: "Automations" },
     named: () => undefined,
-    links: ({ tasks, listed, under }) => {
-      if (!tasks.automationsView.open) return under();
+    links: ({ views, listed, under }) => {
+      const place = views.automations;
+      if (place === undefined) return under();
       const list: LinkPlace = { kind: LINK_PLACE.AUTOMATIONS };
-      const { place } = tasks.automationsView;
       if (place.kind === AUTOMATIONS_PAGE.EDIT) {
         const automation: LinkPlace = {
           kind: LINK_PLACE.AUTOMATION,

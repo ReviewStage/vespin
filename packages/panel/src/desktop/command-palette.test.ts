@@ -55,7 +55,6 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
-import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { fileLook } from "../tasks/file-ref.js";
 import { SIDE_PANEL_TAB, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { NO_LOOKS, useTaskLooks } from "../tasks/use-task-looks.js";
@@ -960,7 +959,7 @@ test("an agent's card in ⌘K names the automation that started it, the listed w
       root.render(
         withExperiments(
           experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          createElement(ListedAutomations, { tasks, children: palette }),
+          windowRouter().provide(createElement(ListedAutomations, { tasks, children: palette })),
         ),
       ),
     );
@@ -1742,7 +1741,13 @@ test("a task's command wears the same chord in ⌘K as in the open task's Plan t
   roots.push(root);
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
-  act(() => root.render(withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks }))));
+  act(() =>
+    root.render(
+      withQueryClient(
+        windowRouter().provide(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
+      ),
+    ),
+  );
   // The document arrives a few microtasks after the window first draws.
   await settle();
   openPalette(tasks, undefined, undefined, DESKTOP_CAPABILITIES, PANEL_TAB.TASKS);
@@ -1784,7 +1789,7 @@ test("an agent tab's right-click words and keys Close and Show terminal as ⌘K 
     root.render(
       withExperiments(
         experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+        windowRouter().provide(createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
       ),
     ),
   );
@@ -1882,8 +1887,8 @@ test("⇧⌘C copies the link of what is open, the most specific first: the Inbo
   const automationId = "6e2f3a4b-5c6d-4e7f-8a91-92a3b4c5d6e7";
   const itemId = "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
   const listed = { workspaces: ON_AGENT_TAB.workspaces, workspace: ON_AGENT_TAB.workspaces[0] };
-  for (const [tasks, place] of [
-    [ON_AGENT_TAB, undefined],
+  for (const [tasks, place, at] of [
+    [ON_AGENT_TAB, undefined, undefined],
     [
       tasksControl({
         ...listed,
@@ -1894,20 +1899,11 @@ test("⇧⌘C copies the link of what is open, the most specific first: the Inbo
         },
       }),
       ROUTED_PLACE.INBOX,
+      undefined,
     ],
-    [
-      tasksControl({
-        ...listed,
-        automationsView: {
-          ...tasksControl().automationsView,
-          open: true,
-          place: { kind: AUTOMATIONS_PAGE.EDIT, automationId },
-        },
-      }),
-      ROUTED_PLACE.AUTOMATIONS,
-    ],
+    [tasksControl(listed), ROUTED_PLACE.AUTOMATIONS, `/acme/automation/${automationId}`],
   ] as const) {
-    openPalette(tasks, undefined, undefined, undefined, undefined, place);
+    openPalette(tasks, undefined, undefined, undefined, undefined, place, at);
     act(() => {
       runAppCommand(APP_COMMAND.COMMAND_PALETTE);
       runAppCommand(APP_COMMAND.COPY_LINK);
@@ -2559,31 +2555,34 @@ test("with a task open, ⌘K offers Pin task, which pins it under Pinned and tur
   assert.deepEqual(pinRows(), ["Pin task"]);
 });
 
-/** The palette over the task given, on the test's Query client holding the window's state as handed. */
-async function paletteUnderState(tasks: TasksControl): Promise<void> {
+/** The palette over the task given, on the test's Query client holding the window's state as handed, under a window's router standing at `/app`, whose path it answers. */
+async function paletteUnderState(tasks: TasksControl): Promise<() => string> {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
+  const router = windowRouter();
   act(() =>
     root.render(
       withExperiments(
         experimentsOn(EXPERIMENT.DESCRIPTIONS),
-        createElement(WindowPalette, {
-          available: true,
-          tab: PANEL_TAB.TASKS,
-          onTabChange: () => undefined,
-          tasks,
-          settings: {
-            rows: {
-              settings: settingsView(),
-              accountDrawn: true,
+        router.provide(
+          createElement(LinkedPalette, {
+            available: true,
+            tab: PANEL_TAB.TASKS,
+            onTabChange: () => undefined,
+            tasks,
+            settings: {
+              rows: {
+                settings: settingsView(),
+                accountDrawn: true,
+                capabilities: DESKTOP_CAPABILITIES,
+              },
               capabilities: DESKTOP_CAPABILITIES,
+              onViewChange: () => undefined,
             },
-            capabilities: DESKTOP_CAPABILITIES,
-            onViewChange: () => undefined,
-          },
-        }),
+          }),
+        ),
       ),
     ),
   );
@@ -2593,6 +2592,7 @@ async function paletteUnderState(tasks: TasksControl): Promise<void> {
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
   });
+  return () => router.history.location.pathname;
 }
 
 test('with a task open, ⌘K\'s "This task" lists its pages and a terminal for each agent, as the side panel\'s "+" offers them, and each opens as the "+" opens it', async () => {
@@ -2762,12 +2762,14 @@ function paletteBesideTask(room: ShellRoom): HTMLElement {
           ShellRoomContext.Provider,
           { value: room },
           createElement(Looker, { looked: DOCUMENT_TASK }),
-          createElement(DesktopTasks, {
-            looks: NO_LOOKS,
-            room,
-            away: { label: "Tasks", onPress: () => undefined },
-            tasks,
-          }),
+          windowRouter().provide(
+            createElement(DesktopTasks, {
+              looks: NO_LOOKS,
+              room,
+              away: { label: "Tasks", onPress: () => undefined },
+              tasks,
+            }),
+          ),
           createElement(WindowPalette, {
             available: true,
             tab: PANEL_TAB.TASKS,
@@ -2935,14 +2937,7 @@ test("⌘K's Automations lists the workspace's automations by name and what fire
   } as const;
   fakeActPort({});
   handState({}, { [LIVE_READ.AUTOMATIONS]: { [ACME.id]: { rows: [automation] } } });
-  const opened: (AutomationsPlace | undefined)[] = [];
-  const base = tasksControl({ workspace: ACME });
-  await paletteUnderState(
-    tasksControl({
-      workspace: ACME,
-      automationsView: { ...base.automationsView, onOpen: (place) => opened.push(place) },
-    }),
-  );
+  const windowPath = await paletteUnderState(tasksControl({ workspace: ACME }));
   await settle();
   chooseFilter("Automations");
   await settle();
@@ -2952,7 +2947,7 @@ test("⌘K's Automations lists the workspace's automations by name and what fire
   await settle();
   press("Deploy notes · When its webhook is called · Billing usage alerts");
   await settle();
-  assert.deepEqual(opened, [{ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id }]);
+  assert.equal(windowPath(), `/${ACME.id}/automation/${automation.id}`);
 });
 
 /** The agent asking the Inbox's questions below, as its task's list sums it up. */

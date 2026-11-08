@@ -25,7 +25,7 @@ import { UPDATE_STATUS } from "@repo/settings/update";
 import { draftTab, fileTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
-import { act, createElement, type ReactElement, useState } from "react";
+import { act, createElement, Fragment, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
@@ -34,7 +34,6 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { type PlaceLeave, usePlaceLeave } from "../places/place-leave.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
 import { MAIN_TAB } from "../tasks/use-main-tabs.js";
 import { SIDE_PANEL_TAB } from "../tasks/use-side-panel.js";
@@ -55,6 +54,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 
@@ -176,6 +176,8 @@ function shellProps(
 /** The tasks' state a shell under test is handed, and the routed place it stands at where that is the router's alone, the Board or a person's page. */
 interface ShellOverrides extends Partial<TasksControl> {
   readonly at?: string;
+  /** Hears a routed place left, as the window's history leaves it. */
+  readonly leave?: () => void;
 }
 
 /**
@@ -185,7 +187,7 @@ interface ShellOverrides extends Partial<TasksControl> {
  */
 function mount(
   inboxOpen: boolean,
-  { at: routedTo, ...overrides }: ShellOverrides = {},
+  { at: routedTo, leave, ...overrides }: ShellOverrides = {},
   tab: PanelTab = PANEL_TAB.TASKS,
   onTabChange: (tab: PanelTab) => void = ignore,
   sidebarPatch: Partial<SidebarCollapse> = {},
@@ -224,25 +226,23 @@ function mount(
     !inboxOpen &&
     (overrides.page ?? TASKS_PAGE.HOME) === TASKS_PAGE.HOME &&
     overrides.inboxView?.open !== true &&
-    overrides.adminView?.open !== true &&
     routedTo === undefined &&
-    overrides.automationsView?.open !== true &&
     overrides.history?.open !== true &&
     overrides.agentView?.agentId === undefined;
   const at =
     routedTo ??
     (tab === PANEL_TAB.SETTINGS
       ? SHELL_AT.SETTINGS
-      : overrides.adminView?.open === true
-        ? SHELL_AT.ADMIN
-        : overrides.automationsView?.open === true
-          ? SHELL_AT.AUTOMATIONS
-          : overrides.history?.open === true
-            ? SHELL_AT.VERSION_HISTORY
-            : (overrides.inboxView?.open ?? inboxOpen)
-              ? SHELL_AT.INBOX
-              : undefined);
-  act(() => root?.render(withQueryClient(underRouter(createElement(Shell), at))));
+      : overrides.history?.open === true
+        ? SHELL_AT.VERSION_HISTORY
+        : (overrides.inboxView?.open ?? inboxOpen)
+          ? SHELL_AT.INBOX
+          : undefined);
+  const shell =
+    leave === undefined
+      ? createElement(Shell)
+      : createElement(Fragment, null, leavingBy(leave), createElement(Shell));
+  act(() => root?.render(withQueryClient(underRouter(shell, at))));
   return container;
 }
 
@@ -397,6 +397,7 @@ function drawLoadingNarrow(
   tab: PanelTab,
   overrides: Partial<TasksControl>,
   listed: boolean,
+  at?: string,
 ): { page: HTMLElement; went: string[] } {
   const went: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
@@ -423,6 +424,7 @@ function drawLoadingNarrow(
               },
             },
           }),
+          at,
         ),
       ),
     ),
@@ -434,8 +436,9 @@ async function mountLoadingNarrow(
   tab: PanelTab,
   overrides: Partial<TasksControl>,
   listed: boolean,
+  at?: string,
 ): Promise<{ page: HTMLElement; went: string[] }> {
-  const drawn = drawLoadingNarrow(tab, overrides, listed);
+  const drawn = drawLoadingNarrow(tab, overrides, listed, at);
   // The router goes to the place, whose frame stands while its chunk is read.
   await act(async () => {
     await Promise.resolve();
@@ -462,8 +465,7 @@ test("on a phone, while Settings is still loading, its list and its page stand h
 
 test("on a phone, while the account's access is read, Admin stands headed as it will be, its name centered over the bar of its sections", async () => {
   handState({}, { access: { admin: false, pending: true } });
-  const adminView = { ...tasksControl().adminView, open: true };
-  const { page } = await mountLoadingNarrow(PANEL_TAB.TASKS, { adminView }, true);
+  const { page } = await mountLoadingNarrow(PANEL_TAB.TASKS, {}, true, SHELL_AT.ADMIN);
   assert.equal(readPhoneHead(page, "admin").title, "Admin");
   assert.ok(page.querySelector('[role="radiogroup"][aria-label="Admin sections"]'));
 });
@@ -660,7 +662,7 @@ test("the window is called by what stands in it: the plan on screen in its own w
   mount(false, {
     workspaces: [ACME],
     workspace: ACME,
-    automationsView: { ...tasksControl().automationsView, open: true },
+    at: SHELL_AT.AUTOMATIONS,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
   });
   assert.equal(document.title, "Automations — Acme");
@@ -1060,13 +1062,7 @@ test("the places bar stands only on a phone's lists: an open task, an Inbox item
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const editor = await mountNarrow({
-    automationsView: {
-      ...tasksControl().automationsView,
-      open: true,
-      place: { kind: AUTOMATIONS_PAGE.NEW },
-    },
-  });
+  const editor = await mountNarrow({ at: `${SHELL_AT.AUTOMATIONS}/new` });
   assert.deepEqual(barItems(editor), [], "an automation's editor keeps the screen");
   act(() => root?.unmount());
   document.body.innerHTML = "";
@@ -1106,21 +1102,9 @@ test("⇧⌘B opens the Tasks page, bringing the Tasks tab forward from Settings
 
 test("while the Automations pages are still loading their frame stands the list as quiet rows, and Escape closes Automations as the list does once it stands", async () => {
   const closed: string[] = [];
-  const automationsView = {
-    ...tasksControl().automationsView,
-    open: false,
-    place: { kind: AUTOMATIONS_PAGE.LIST } as const,
-    onOpen: ignore,
-    onClose: () => closed.push("closed"),
-  };
+  const leave = () => closed.push("closed");
   handState({});
-  mount(
-    false,
-    { workspaces: [ACME], workspace: ACME, automationsView },
-    PANEL_TAB.TASKS,
-    ignore,
-    {},
-  );
+  mount(false, { workspaces: [ACME], workspace: ACME, leave }, PANEL_TAB.TASKS, ignore, {});
   await settle();
   act(() => root?.unmount());
   document.body.innerHTML = "";
@@ -1128,7 +1112,7 @@ test("while the Automations pages are still loading their frame stands the list 
   // Note that the window's state has landed in the test's Query client, so Automations opens within one render, before their chunk can.
   const page = mount(
     false,
-    { workspaces: [ACME], workspace: ACME, automationsView: { ...automationsView, open: true } },
+    { workspaces: [ACME], workspace: ACME, at: SHELL_AT.AUTOMATIONS, leave },
     PANEL_TAB.TASKS,
     ignore,
     {},
@@ -1198,17 +1182,11 @@ test("while a version history's chunk is still loading, its Back row and Escape 
 
 test("the Automations page stands in the plan's place, titled for the listed workspace", async () => {
   const closed: string[] = [];
-  const automationsView = {
-    ...tasksControl().automationsView,
-    open: true,
-    place: { kind: AUTOMATIONS_PAGE.LIST } as const,
-    onOpen: ignore,
-    onClose: () => closed.push("closed"),
-  };
   const overrides = {
     workspaces: [ACME],
     workspace: ACME,
-    automationsView,
+    at: SHELL_AT.AUTOMATIONS,
+    leave: () => closed.push("closed"),
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
   };
 
@@ -1252,7 +1230,7 @@ function placed(place: Place) {
     [PLACE.INBOX]: { inboxView: { ...control.inboxView, open: true } },
     [PLACE.AGENT_PAGE]: { agentView: { ...control.agentView, agentId: "agent-page-1" } },
     [PLACE.PERSON_PAGE]: {},
-    [PLACE.AUTOMATIONS]: { automationsView: { ...control.automationsView, open: true } },
+    [PLACE.AUTOMATIONS]: {},
     // Note that the panel fills the window over an agent's tab, since the task's details take its room.
     [PLACE.SIDE_PANEL_FULL_SCREEN]: {
       ...onTask,
@@ -1378,6 +1356,7 @@ function routedAt(place: Place): string | undefined {
   if (place === PLACE.OTHER_TASK || place === PLACE.SIDE_PANEL_FULL_SCREEN) return SHELL_AT.TASK;
   if (place === PLACE.AGENT_PAGE) return agentAt("agent-page-1");
   if (place === PLACE.PERSON_PAGE) return personAt("user-charles");
+  if (place === PLACE.AUTOMATIONS) return SHELL_AT.AUTOMATIONS;
   return place === PLACE.VERSION_HISTORY ? SHELL_AT.VERSION_HISTORY : undefined;
 }
 
@@ -1509,12 +1488,11 @@ test("a plan's chip in a description's version history hangs the plan's card, as
 });
 
 test("⌘K's Admin opens the Admin place for an admin alone, and is offered nothing for anyone else", async () => {
-  let opened = 0;
-  const adminView = { ...tasksControl().adminView, onOpen: () => (opened += 1) };
+  const listed = { workspaces: [ACME], workspace: ACME };
   handState({}, { access: { admin: false } });
   // Note that a command is asked once, so the document it is offered by is in the client from the first frame.
   await writeHandedAppState();
-  mount(false, { adminView });
+  mount(false, listed);
   await settle();
   assert.equal(runAppCommand(APP_COMMAND.ADMIN), false);
   act(() => root?.unmount());
@@ -1522,10 +1500,10 @@ test("⌘K's Admin opens the Admin place for an admin alone, and is offered noth
 
   handState({}, { access: { admin: true } });
   await writeHandedAppState();
-  mount(false, { adminView });
+  mount(false, listed);
   await settle();
   assert.equal(runAppCommand(APP_COMMAND.ADMIN), true);
-  assert.equal(opened, 1);
+  assert.equal(routed().router.history.location.pathname, SHELL_AT.ADMIN);
 });
 
 test("Admin stands in the plan's place beside the sidebar, its row marked and no other, with no way back of its own, and the Inbox's row opens the Inbox by the router from it", async () => {
@@ -1535,7 +1513,7 @@ test("Admin stands in the plan's place beside the sidebar, its row marked and no
   const page = mount(
     false,
     {
-      adminView: { ...tasksControl().adminView, open: true },
+      at: SHELL_AT.ADMIN,
       inboxView: { ...tasksControl().inboxView, onOpen: () => opened.push("inbox") },
     },
     PANEL_TAB.TASKS,
@@ -1769,9 +1747,7 @@ test("on a phone no page draws the title bar's controls over its own head, an ag
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const automations = await mountNarrow({
-    automationsView: { ...tasksControl().automationsView, open: true },
-  });
+  const automations = await mountNarrow({ at: SHELL_AT.AUTOMATIONS });
   assert.equal(
     automations.querySelector(".desktop-shell > .title-bar-controls") === null,
     true,
@@ -1795,15 +1771,11 @@ test("a find on the Tasks page stands as it was after a visit to Admin over it",
   await import("./tasks-page.js");
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  let setAdmin: (open: boolean) => void = ignore;
   function Shell() {
-    const [admin, setAdminOpen] = useState(false);
-    setAdmin = setAdminOpen;
     const tasks = tasksControl({
       page: TASKS_PAGE.HOME,
       workspaces: [ACME],
       workspace: ACME,
-      adminView: { ...tasksControl().adminView, open: admin },
     });
     return createElement(DesktopShell, shellProps(tasks, PANEL_TAB.TASKS, ignore, {}));
   }
@@ -1824,16 +1796,10 @@ test("a find on the Tasks page stands as it was after a visit to Admin over it",
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-  act(() => {
-    setAdmin(true);
-    routed().go(SHELL_AT.ADMIN);
-  });
+  act(() => routed().go(SHELL_AT.ADMIN));
   await act(() => routed().settled());
   assert.ok(container.querySelector("section[aria-label=Admin]"), "Admin stands over the page");
-  act(() => {
-    setAdmin(false);
-    routed().go(SHELL_AT.BOARD);
-  });
+  act(() => routed().go(SHELL_AT.BOARD));
   await act(() => routed().settled());
 
   assert.equal(field()?.value, "auth", "the find stands as it was");

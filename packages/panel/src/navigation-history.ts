@@ -741,10 +741,7 @@ export function throughHistory(tasks: TasksControl, lists: ListBacks): TasksCont
     },
     history: { ...tasks.history, onList: lists.versions },
     inboxView: { ...tasks.inboxView, onClear: lists.inbox },
-    automationsView: {
-      ...tasks.automationsView,
-      onRuns: (shown) => (shown ? tasks.automationsView.onRuns(true) : lists.runs()),
-    },
+    onAutomationRuns: (shown) => (shown ? tasks.onAutomationRuns(true) : lists.runs()),
   };
 }
 
@@ -1410,7 +1407,7 @@ export function useWindowHistory(input: {
     | "inboxView"
     | "agentView"
     | "workspace"
-    | "automationsView"
+    | "onAutomationRuns"
     | "placeLeave"
     | "sidePanel"
     | "mainTabs"
@@ -1782,7 +1779,7 @@ export function useWindowHistory(input: {
     runs: () => {
       const setup =
         automations.setupAddress === undefined ? undefined : routedPlace(automations.setupAddress);
-      if (!narrow || setup === undefined || !backTo(setup)) tasks.automationsView.onRuns(false);
+      if (!narrow || setup === undefined || !backTo(setup)) tasks.onAutomationRuns(false);
     },
     // Note that an Inbox item is a step after the list it was chosen in, in every room, as its address is its own.
     inbox: () => {

@@ -13,7 +13,7 @@ import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { useAdminRoute } from "./admin/admin-route.js";
+import { type AdminRoute, useAdminRoute } from "./admin/admin-route.js";
 import { type AgentRoute, useAgentRoute } from "./agent-route.js";
 import { runAppCommand } from "./app-commands.js";
 import { type AutomationsRoute, useAutomationsRoute } from "./automations-route.js";
@@ -32,7 +32,7 @@ import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { SHELL_ROOM, type ShellRoom } from "./shell-room.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 import { SIDE_PANEL_TAB, type SidePanelTab } from "./tasks/use-side-panel.js";
-import type { AdminViewControl, InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeAppBridge, fakeAppBridgeCalls } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { deliveryOf, handState, stateWith, withExperiments } from "./testing/app-state.js";
@@ -214,7 +214,7 @@ function mount(
   let standing = start;
   let restand: ((move: (held: Standing) => Standing) => void) | undefined;
   let settings: SettingsRoute | undefined;
-  let admin: AdminViewControl | undefined;
+  let admin: AdminRoute | undefined;
   let automations: AutomationsRoute | undefined;
   let versions: VersionHistoryRoute | undefined;
   let inbox: InboxRoute | undefined;
@@ -256,16 +256,7 @@ function mount(
       ...tab,
       placeLeave,
       atHome: home.open,
-      adminView: admin,
-      // As the real one does, opening a page is only the router's move, which its guard's blocker asks about.
-      automationsView: {
-        open: automations.open,
-        place: automations.place,
-        runs: automations.runs,
-        onOpen: (to = { kind: AUTOMATIONS_PAGE.LIST }) => automations?.onOpen(to, ACME.slug),
-        onRuns: automations.onRuns,
-        onClose: automations.onClose,
-      },
+      onAutomationRuns: automations.onRuns,
     };
     const routed = useRoutedStanding();
     const copyLink = useCopyLink(
@@ -811,12 +802,12 @@ test("on a narrow stage an automation's runs chosen from its setup are a step, w
   window.openAutomation(AUTOMATION_PAGE);
   await settle();
   window.move(UNSAVED);
-  window.press(() => window.shown().automationsView.onRuns(true));
+  window.press(() => window.shown().onAutomationRuns(true));
   await settle();
   assert.equal(window.automations().runs, true);
   assert.equal(window.addresses().length, 3);
 
-  window.press(() => window.shown().automationsView.onRuns(false));
+  window.press(() => window.shown().onAutomationRuns(false));
   await settle();
   assert.equal(window.automations().runs, false);
   assert.equal(window.addresses().length, 3, "the way back added no step");
@@ -830,7 +821,7 @@ test("on a narrow stage an automation opened on its runs, as a run's link opens 
   assert.equal(window.automations().runs, true);
   assert.equal(window.addresses().length, 2);
 
-  window.press(() => window.shown().automationsView.onRuns(false));
+  window.press(() => window.shown().onAutomationRuns(false));
   await settle();
   assert.equal(window.automations().runs, false);
   assert.deepEqual(window.addresses(), [

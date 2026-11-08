@@ -241,7 +241,7 @@ test("a place under Admin is no screen standing, so ⌃Tab from Admin does not p
   await window.draw(onTask(NOTES, told, { inboxView: inboxOpen() }));
   press();
   const underAdmin = onTask(NOTES, told, { inboxView: inboxOpen() });
-  await window.draw({ ...underAdmin, adminView: { ...underAdmin.adminView, open: true } });
+  await window.draw(underAdmin, ROUTED_PLACE.ADMIN, "/acme/admin");
 
   tab();
   letGo();

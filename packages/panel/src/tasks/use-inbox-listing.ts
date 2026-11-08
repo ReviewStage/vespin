@@ -6,6 +6,7 @@ import { searchTokens } from "@repo/ui/search-tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import {
@@ -166,7 +167,7 @@ function useChoiceFirst(
 export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const view = tasks.inboxView;
   const choices = useInboxViewChoices();
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
   // Note that the Inbox reads the automations whenever it stands, because the items of agents with no task it lists are every one an automation's.
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),

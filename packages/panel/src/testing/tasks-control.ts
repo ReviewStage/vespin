@@ -25,7 +25,6 @@ import { KEPT } from "../act.js";
 import type { AgentRoute } from "../agent-route.js";
 import type { PlaceLeave } from "../places/place-leave.js";
 import type { TaskRoute } from "../task-route.js";
-import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { descriptionEditMutation } from "../tasks/description-edit-mutation.js";
 import {
   AGENT_RENAME_SHAPE,
@@ -39,7 +38,6 @@ import { HISTORY_READ } from "../tasks/use-description-history.js";
 import { MAIN_TAB } from "../tasks/use-main-tabs.js";
 import { DRAWN_KINDS, SIDE_PANEL_WIDTH } from "../tasks/use-side-panel.js";
 import {
-  type AdminViewControl,
   type TasksControl,
   taskDeleteMutation,
   taskMoveMutation,
@@ -387,22 +385,14 @@ export const NO_LEAVE_ASK: PlaceLeave = {
   transitionalLeaveFirst: (leave) => leave,
 };
 
-/** Admin as a window not standing on it holds it, every door ignored. */
-const ADMIN_AWAY: AdminViewControl = {
-  open: false,
-  view: { kind: "dashboard" },
-  onOpen: ignore,
-  onClose: ignore,
-  onPreload: ignore,
-};
-
-/** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */
-/** The Board and a person's page standing nowhere, as a step's name and Copy link read them. */
+/** The Board, a person's page, and the Automations pages standing nowhere, as a step's name and Copy link read them. */
 export const VIEWS_AWAY: RoutedViews = {
   board: false,
   person: { userId: undefined, name: undefined, workspace: undefined },
+  automations: undefined,
 };
 
+/** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */
 export const AGENT_AWAY: AgentRoute = {
   agentId: undefined,
   workspace: undefined,
@@ -613,17 +603,9 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     onOpenPerson: ignore,
     inboxTaskless: [],
     failedRuns: [],
-    adminView: ADMIN_AWAY,
     atHome: false,
     taskPlaceStands: true,
-    automationsView: {
-      open: false,
-      place: { kind: AUTOMATIONS_PAGE.LIST },
-      runs: false,
-      onOpen: ignore,
-      onRuns: ignore,
-      onClose: ignore,
-    },
+    onAutomationRuns: ignore,
     onShowFile: ignore,
     onOpenPinnedTab: ignore,
     onReopenClosedTab: undefined,

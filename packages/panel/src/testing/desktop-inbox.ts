@@ -59,6 +59,7 @@ import { AGENT_INBOX_ACT_KIND, type PortActResult } from "@repo/host/contract";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import type { TaskMark } from "@repo/ui/tasks-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, assert, beforeEach, vi } from "vitest";
@@ -70,7 +71,6 @@ import { DesktopInbox } from "../desktop/desktop-inbox.js";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { DRAFT_WORD } from "../draft-mark.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { ToastHost } from "../toast.js";
@@ -99,11 +99,14 @@ import { sidebarProps } from "./desktop-sidebar.js";
 import { holdFrames, settleFrames } from "./frames.js";
 import { heardWords } from "./heard-words.js";
 import { restOn } from "./hint-rest.js";
-import { underWindowRouter } from "./link-router.js";
 import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
 import { agentHoldingsOf, listedAgent, tasksControl, waitingOf } from "./tasks-control.js";
+import { windowRouter } from "./window-router.js";
+
+/** Where the window's router stands as the Inbox is drawn: Acme's Inbox. */
+const INBOX_AT = "/acme/inbox";
 
 const TASK_ID = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 
@@ -683,8 +686,6 @@ interface Asked {
   readonly shownAgents: [string, string][];
   /** The agents whose transcripts it was asked to show beside the item, in the panel. */
   readonly previewedAgents: string[];
-  /** The automations whose pages it was asked to open. */
-  readonly shownAutomations: string[];
   /** How many times it was asked to close. */
   closed: number;
   /** Each task it was asked to mark, by the mark, in order. */
@@ -770,7 +771,6 @@ export function mount(
     shownTasks: [],
     shownAgents: [],
     previewedAgents: [],
-    shownAutomations: [],
     closed: 0,
     marks: [],
     newTasks: 0,
@@ -870,14 +870,6 @@ export function mount(
         asked.newTasks += 1;
       },
       onShowAgent: (taskId, agentId) => asked.shownAgents.push([taskId, agentId]),
-      automationsView: {
-        ...tasksControl().automationsView,
-        onOpen: (place) => {
-          if (place?.kind === AUTOMATIONS_PAGE.EDIT)
-            asked.shownAutomations.push(place.automationId);
-        },
-        onClose: () => undefined,
-      },
     });
     const inbox =
       drawnWhileOpen && !inboxOpen
@@ -909,8 +901,9 @@ export function mount(
       : createElement(Paneled, { at: room });
   const shown = toasts ? createElement(Fragment, null, inbox, createElement(ToastHost)) : inbox;
   const page = bundles === undefined ? shown : onSideBundles(bundles, shown);
-  act(() => world.root?.render(withQueryClient(underWindowRouter(page))));
-  return { page: container, asked };
+  const router = windowRouter(createMemoryHistory({ initialEntries: [INBOX_AT] }));
+  act(() => world.root?.render(withQueryClient(router.provide(page))));
+  return { page: container, asked, windowPath: () => router.history.location.pathname };
 }
 
 /**

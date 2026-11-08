@@ -84,7 +84,7 @@ import { useLinkPlaceLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
-import { usePersonDoor } from "./places/routed-doors.js";
+import { useAutomationsDoor, usePersonDoor } from "./places/routed-doors.js";
 import { RoutedExitsProvider, useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE } from "./places/routed-places.js";
 import { forgetAccountReads } from "./query-keys.js";
@@ -538,7 +538,7 @@ function AppWindow(): React.JSX.Element {
   // A fixture run's profile opens the window on its place once, as a link to it would; an Automations page once its workspace is listed, whose address it stands under.
   const launchedOnce = useRef(false);
   const listedForLaunch = tasks.workspace !== undefined;
-  const openAutomations = tasks.automationsView.onOpen;
+  const openAutomations = useAutomationsDoor(tasks).open;
   useEffect(() => {
     if (launchedOnce.current || launched === undefined) return;
     if ("automations" in launched && !listedForLaunch) return;

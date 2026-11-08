@@ -7,6 +7,7 @@ import { test } from "vitest";
 import { stepTitle } from "../history-titles.js";
 import { createPanelRouter } from "../panel-router.js";
 import type { RouteAccess } from "../route-gates.js";
+import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { tasksControl, VIEWS_AWAY } from "../testing/tasks-control.js";
 import type { RoutedViews } from "../workspace-routes.js";
@@ -154,7 +155,7 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     label: "Tasks",
   });
   assert.deepEqual(
-    titled({ automationsView: { ...base.automationsView, open: true } }, "AUTOMATIONS"),
+    titled({}, "AUTOMATIONS", { ...VIEWS_AWAY, automations: { kind: AUTOMATIONS_PAGE.LIST } }),
     { label: "Automations" },
   );
   assert.deepEqual(

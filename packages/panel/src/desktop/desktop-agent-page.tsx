@@ -55,6 +55,7 @@ import { FindScope } from "../find-in-tab.js";
 import { usePageWorkspace } from "../links-at-hand.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { MemberDirectory } from "../member-directory.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import { HERE } from "../route.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
@@ -541,7 +542,7 @@ export function DesktopAgentPage({
     () => (draftShownHere === undefined ? tab : draftTab(draftShownHere)),
     [draftShownHere, tab],
   );
-  const { onOpen: onOpenAutomations } = tasks.automationsView;
+  const { open: onOpenAutomations } = useAutomationsDoor(tasks);
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
@@ -773,7 +774,7 @@ export function DesktopAgentPage({
         terminals={terminalDoors}
         onClose={tasks.agentView.onClose}
         phone={phoneHead}
-        trail={automationTrail(agent, tasks) ?? slackTrail(agent)}
+        trail={automationTrail(agent, onOpenAutomations) ?? slackTrail(agent)}
         steps={
           runPlace === undefined ? null : (
             <AutomationRunSteps place={runPlace} onOpenAgent={tasks.agentView.onOpen} />

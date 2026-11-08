@@ -44,6 +44,7 @@ import {
   useState,
 } from "react";
 import { ACTOR_SIZE, actorMarkWidth } from "../actor-ref.js";
+import { useAdminView } from "../admin/admin-route.js";
 import { AdminCollectionPage, AdminPlaceFrameProvider } from "../admin/chrome/page-header.js";
 import type { AdminView } from "../admin/routing.js";
 import { useAppCommand } from "../app-commands.js";
@@ -54,8 +55,13 @@ import { NewWorkspaceSteps } from "../onboarding/new-workspace-steps.js";
 import { SETUP_GATE } from "../onboarding/setup-model.js";
 import { SetupSteps, useSetupGate } from "../onboarding/setup-steps.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
-import { useBoardDoor, usePersonDoor } from "../places/routed-doors.js";
-import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed-places.js";
+import {
+  useAdminDoor,
+  useAutomationsDoor,
+  useBoardDoor,
+  usePersonDoor,
+} from "../places/routed-doors.js";
+import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { type HiddenColumns, hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SignInGate } from "../sign-in-gate.js";
@@ -85,7 +91,7 @@ import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
 import { useFloatDismiss } from "./hover-pane.js";
-import { MobileBar, mobileBarShown } from "./mobile-bar.js";
+import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
@@ -516,6 +522,8 @@ function usePlaceCommands(
   history: NavigationHistory,
 ): void {
   const board = useBoardDoor(tasks);
+  const admin = useAdminDoor(tasks);
+  const automations = useAutomationsDoor(tasks);
   useAppCommand(APP_COMMAND.BACK, pastGate && history.canGoBack ? history.onBack : undefined);
   useAppCommand(
     APP_COMMAND.FORWARD,
@@ -563,12 +571,12 @@ function usePlaceCommands(
   const adminOn = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
   useAppCommand(
     APP_COMMAND.ADMIN,
-    pastGate && tasks.signedIn && adminOn ? () => tasks.adminView.onOpen() : undefined,
+    pastGate && tasks.signedIn && adminOn ? () => admin.open() : undefined,
   );
   // Note that the Automations pages are the router's place, which its navigation stands from wherever the window stands.
   useAppCommand(
     APP_COMMAND.AUTOMATIONS,
-    pastGate && tasks.signedIn ? () => tasks.automationsView.onOpen() : undefined,
+    pastGate && tasks.signedIn ? () => automations.open() : undefined,
   );
   const { onReopenClosedTab } = tasks;
   useAppCommand(
@@ -604,6 +612,7 @@ function titleSubject(
   tasks: TasksControl,
   shownTask: Task | undefined,
   place: RoutedPlace | undefined,
+  inAutomations: boolean,
 ): Parameters<typeof useWindowTitle>[0] {
   const { signedIn } = tasks;
   if (tab === PANEL_TAB.SETTINGS) return { signedIn, subject: "Settings", workspace: undefined };
@@ -617,8 +626,8 @@ function titleSubject(
     return { signedIn, subject: "Profile", workspace: tasks.workspace };
   }
   // The Admin place reads every workspace's accounts, so it is no one workspace's.
-  if (tasks.adminView.open) return { signedIn, subject: "Admin", workspace: undefined };
-  if (tasks.automationsView.open) {
+  if (place === ROUTED_PLACE.ADMIN) return { signedIn, subject: "Admin", workspace: undefined };
+  if (inAutomations) {
     return { signedIn, subject: "Automations", workspace: tasks.workspace };
   }
   if (place === ROUTED_PLACE.BOARD) {
@@ -791,12 +800,14 @@ export function DesktopShell({
   const focusHolder = useSettingsFocusHolder(tab === PANEL_TAB.SETTINGS);
   const keepOverlay = useFloatDismiss({ state: sidebar.overlay, onState: sidebar.onOverlay });
   // The routed place the window stands on: the Board, a person's page, or a workspace the router finds not there for the reader (`panel-router.tsx`) among them.
-  const { place } = useWindowPlace();
+  const bar = useBarStanding();
+  const { place } = bar;
+  const inAutomations = bar.automations !== undefined;
   // A phone's drawer follows a finger swiping in from the screen's left edge, or back out, as a phone's own drawers do.
   const coarse = useCoarsePointer();
   useDrawerSwipe({
     // Note that a place over the bar takes no swipe, since the bar's Tasks is the tree's way in there.
-    enabled: room === SHELL_ROOM.NARROW && coarse && !mobileBarShown(room, tasks, place),
+    enabled: room === SHELL_ROOM.NARROW && coarse && !mobileBarShown(room, tasks, bar),
     open: sidebar.overlay === SIDEBAR_OVERLAY.OPEN,
     stage: shell,
     drawer: () => shell.current?.querySelector<HTMLElement>(":scope > .desktop-sidebar") ?? null,
@@ -827,15 +838,15 @@ export function DesktopShell({
     tasks.inboxView.open ||
     tasks.agentView.agentId !== undefined ||
     place === ROUTED_PLACE.PERSON ||
-    tasks.automationsView.open ||
+    inAutomations ||
     place === ROUTED_PLACE.BOARD ||
-    tasks.adminView.open ||
+    place === ROUTED_PLACE.ADMIN ||
     place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
   const shownTask =
     tab === PANEL_TAB.TASKS && !standingIn && region.kind === DOCUMENT_REGION.READY
       ? region.task
       : undefined;
-  useWindowTitle(titleSubject(tab, tasks, shownTask, place));
+  useWindowTitle(titleSubject(tab, tasks, shownTask, place, inAutomations));
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
   // from the mark and the agents' activity its row in the list carries.
   const looks = useTaskLooks(
@@ -1024,8 +1035,8 @@ export function ShellPlaces(): React.JSX.Element {
   useFocusHandedBack(focusHolder);
   const inboxOpen = tasks.inboxView.open;
   const pageAgent = tasks.agentView.agentId;
-  const { place } = useWindowPlace();
-  const boardOpen = place === ROUTED_PLACE.BOARD;
+  const bar = useBarStanding();
+  const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = tasks.inboxView.chosen !== undefined;
   // A phone's task is headed by a row of its own, whose ⋯ stands for the panel's toggle (`task-pane-switcher.tsx`).
   const panelToggle =
@@ -1038,7 +1049,7 @@ export function ShellPlaces(): React.JSX.Element {
   // away. Its toggle stays, the way to close it.
   const drawerOver = room === SHELL_ROOM.NARROW && sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED;
   // A phone goes between its places by a bar at the screen's foot, standing on their lists alone (`mobile-bar.tsx`).
-  const barShown = mobileBarShown(room, tasks, place);
+  const barShown = mobileBarShown(room, tasks, bar);
   // A phone's Tasks page is the sidebar's tree, pinned in the work's place rather than floating in as a drawer (`mobile-bar.tsx`).
   const phoneTasks = barShown && boardOpen;
   const placed = phoneTasks
@@ -1235,16 +1246,17 @@ export function HomePlace(): React.JSX.Element {
 /** The Board's frame while its chunk loads; nothing on a phone, whose Tasks page is the sidebar's tree pinned in the work's place (`mobile-bar.tsx`). */
 export function BoardRouteLoading(): React.JSX.Element | null {
   const { tasks, room } = useShellPlaces();
-  const { place } = useWindowPlace();
+  const bar = useBarStanding();
   const board = useBoardDoor(tasks);
-  if (mobileBarShown(room, tasks, place)) return null;
+  if (mobileBarShown(room, tasks, bar)) return null;
   return <TasksLoading onExit={board.close} />;
 }
 
 /** The Automations pages' frame while their chunk loads. */
 export function AutomationsRouteLoading(): React.JSX.Element {
   const { tasks, room } = useShellPlaces();
-  return <AutomationsLoading onExit={tasks.automationsView.onClose} room={room} />;
+  const automations = useAutomationsDoor(tasks);
+  return <AutomationsLoading onExit={automations.close} room={room} />;
 }
 
 /** A person's page's frame while its chunk loads. */
@@ -1258,14 +1270,9 @@ export function PersonRouteLoading(): React.JSX.Element {
 /** Admin's frame, which stands while its chunk loads and while the account's access is still read. */
 export function AdminRouteLoading(): React.JSX.Element {
   const { tasks, room } = useShellPlaces();
-  return (
-    <AdminLoading
-      room={room}
-      view={tasks.adminView.view}
-      onOpen={tasks.adminView.onOpen}
-      onExit={tasks.adminView.onClose}
-    />
-  );
+  const admin = useAdminDoor(tasks);
+  const view = useAdminView();
+  return <AdminLoading room={room} view={view} onOpen={admin.open} onExit={admin.close} />;
 }
 
 /**

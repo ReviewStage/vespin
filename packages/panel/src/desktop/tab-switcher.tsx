@@ -60,7 +60,12 @@ import { liveStepTitle, memberName, NAMED_STEP, stepTitle } from "../history-tit
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
 import type { StepTitle } from "../navigation-history.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
-import { type BoardDoor, useBoardDoor } from "../places/routed-doors.js";
+import {
+  type AutomationsDoor,
+  type BoardDoor,
+  useAutomationsDoor,
+  useBoardDoor,
+} from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
@@ -286,7 +291,7 @@ function standingOf(
   const { userId, name, workspace } = views.person;
   const column = mainTabs.tab;
   return shownStop({
-    over: tab === PANEL_TAB.SETTINGS || tasks.adminView.open || tasks.history.open,
+    over: tab === PANEL_TAB.SETTINGS || place === ROUTED_PLACE.ADMIN || tasks.history.open,
     inbox: tasks.inboxView.open,
     agentId: tasks.agentView.agentId,
     person:
@@ -301,7 +306,7 @@ function standingOf(
                 : workspaceOfSlug(tasks.workspaces, workspace)?.id,
           },
     board: views.board,
-    automations: tasks.automationsView.open,
+    automations: views.automations !== undefined,
     home: place === ROUTED_PLACE.HOME,
     boundFor: tasks.boundFor,
     openTaskId: tasks.activeTaskId,
@@ -374,10 +379,10 @@ export function TabSwitcher({
   const pressesMoved = useRef(0);
   // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
   const listed = useRef(new Set<string>());
-  const board = useBoardDoor(tasks);
+  const places = { board: useBoardDoor(tasks), automations: useAutomationsDoor(tasks) };
   const views = useRoutedViews();
-  const doors = useRef({ tab, tasks, onTabChange, board });
-  doors.current = { tab, tasks, onTabChange, board };
+  const doors = useRef({ tab, tasks, onTabChange, places });
+  doors.current = { tab, tasks, onTabChange, places };
   // The switcher's waits are called off as it leaves, since what they would do is draw it.
   useEffect(
     () => () => {
@@ -473,7 +478,7 @@ export function TabSwitcher({
 
   // Goes to a stop through the window's own doors, as any move there would, all of it past one ask of the leave guard, so a leave canceled moves nothing, the stops' order included.
   const go = (stop: Stop) => {
-    const { tasks: control, onTabChange: changeTab, board: boardDoor } = doors.current;
+    const { tasks: control, onTabChange: changeTab, places: placeDoors } = doors.current;
     control.placeLeave.transitionalLeaveFirst(() => {
       // A routed place standing, Settings or Admin, is left for the stop.
       changeTab(PANEL_TAB.TASKS);
@@ -488,7 +493,7 @@ export function TabSwitcher({
           control.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
           break;
         case STOP_KIND.PLACE:
-          openPlace(control, boardDoor, stop.place);
+          openPlace(control, placeDoors, stop.place);
           break;
       }
       // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
@@ -679,7 +684,11 @@ function showTask(tasks: TasksControl, stop: Extract<Stop, { kind: typeof STOP_K
 }
 
 /** Opens a place through its own door. */
-function openPlace(tasks: TasksControl, board: BoardDoor, place: SwitcherPlace): void {
+function openPlace(
+  tasks: TasksControl,
+  doors: { readonly board: BoardDoor; readonly automations: AutomationsDoor },
+  place: SwitcherPlace,
+): void {
   switch (place) {
     case SWITCHER_PLACE.HOME:
       tasks.onGoHome();
@@ -688,10 +697,10 @@ function openPlace(tasks: TasksControl, board: BoardDoor, place: SwitcherPlace):
       tasks.inboxView.onOpen();
       return;
     case SWITCHER_PLACE.BOARD:
-      board.open();
+      doors.board.open();
       return;
     case SWITCHER_PLACE.AUTOMATIONS:
-      tasks.automationsView.onOpen();
+      doors.automations.open();
       return;
   }
 }
