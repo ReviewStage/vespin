@@ -415,16 +415,18 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
  * settles itself, an act that never answered among it, so it never rejects.
  */
 export interface UndoWrite<Rows, Asked, Change, Kind extends PortActKind, Answer> {
-  /** What its toast says once the act is kept, and what ⌘Z's toast calls it. */
-  readonly words: string;
+  /** What its toast says once the act is kept, and what ⌘Z's toast calls it: the same for every press, or of what the press changed. */
+  readonly words: string | ((change: Change) => string);
+  /** Whether its toast's words are all the app's own, for session replay to show; they are where it names none. */
+  readonly unmasked?: (change: Change) => boolean;
   /** The act its write and its inverse are sent on, whose mutation a caller's doors send it on. */
   readonly kind: Kind;
   /** What `asked` changes as `rows` show it, read as the press is made; none where there is nothing to change. */
   readonly read: (rows: Rows, asked: Asked) => Change | undefined;
-  /** Sends the write. */
-  readonly act: (send: RowSend<Kind>, change: Change) => Promise<Answer>;
-  /** Sends its inverse. */
-  readonly undo: (send: RowSend<Kind>, change: Change) => Promise<Answer>;
+  /** Sends the write, against `rows` as they stand as it is sent. */
+  readonly act: (send: RowSend<Kind>, change: Change, rows: Rows) => Promise<Answer>;
+  /** Sends its inverse, against `rows` as they stand as it is sent. */
+  readonly undo: (send: RowSend<Kind>, change: Change, rows: Rows) => Promise<Answer>;
   /** Whether `rows` still hold what the act set, so ⌘Z may take it back. */
   readonly holds: (rows: Rows, change: Change) => boolean;
   /** Whether `rows` still hold what the inverse set, so ⇧⌘Z may put it back. */
@@ -476,31 +478,33 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
   if (change === undefined) return Promise.resolve(false);
   const run = (
     due: (rows: Rows, change: Change) => boolean,
-    send: (send: RowSend<Kind>, change: Change) => Promise<Answer>,
+    send: (send: RowSend<Kind>, change: Change, rows: Rows) => Promise<Answer>,
   ) =>
     dueRun(
       [change],
       (each) => due(doors.rows(), each),
-      (each) => send(doors.send, each).then((answer) => answeredRun(write, each, answer)),
+      (each) =>
+        send(doors.send, each, doors.rows()).then((answer) => answeredRun(write, each, answer)),
     );
-  return write.act(doors.send, change).then((answer) => {
-    const words = write.refused(answer);
-    if (words !== undefined) {
+  return write.act(doors.send, change, doors.rows()).then((answer) => {
+    const refusal = write.refused(answer);
+    if (refusal !== undefined) {
       showToast({
         replayUnmasked: true,
-        words,
+        words: refusal,
         tone: STATUS_TONE.DANGER,
         hold: TOAST_HOLD.FAILED,
         failure: writeFailure(write, change, answer),
       });
       return false;
     }
+    const words = typeof write.words === "string" ? write.words : write.words(change);
     const undo = undoable({
-      words: write.words,
+      words,
       undo: () => run(write.holds, write.undo),
       redo: () => run(write.undone, write.act),
     });
-    showToast({ ...undoToast(write.words, undo), replayUnmasked: true });
+    showToast({ ...undoToast(words, undo), replayUnmasked: write.unmasked?.(change) ?? true });
     return true;
   });
 }
