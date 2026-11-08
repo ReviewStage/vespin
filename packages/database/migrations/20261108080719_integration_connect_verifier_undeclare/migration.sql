@@ -1,0 +1,7 @@
+-- Expand step of dropping the integration connection's "connect_verifier": the module no longer declares it,
+-- and nothing this deployment runs reads or writes it, as nothing has since we stopped asking Connect's
+-- undocumented result endpoint. Note that the column stays one deployment longer, because a build migrates
+-- while the deployment before it still serves and Drizzle names every declared column in an insert; a later
+-- release's migration drops it (apps/web/server/README.md, "Dropping a column ... takes two deployments"). It is
+-- nullable, so this deployment's inserts, which name it no longer, still succeed while it stands, and the
+-- table's capture renders as it did, since its update trigger never named an ignored column.
