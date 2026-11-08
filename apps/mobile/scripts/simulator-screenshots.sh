@@ -47,7 +47,11 @@ simulator_udid() {
         ' "$1")
     if [[ -z "$udid" ]]; then
         echo "creating a \"$1\" simulator" >&2
-        udid=$(xcrun simctl create "$1" "$1")
+        udid=$(xcrun simctl create "$1" "$1") || udid=""
+    fi
+    if [[ -z "$udid" ]]; then
+        echo "error: no \"$1\" simulator exists and none could be created; an installed iOS runtime must support that device type" >&2
+        return 1
     fi
     printf '%s' "$udid"
 }
@@ -68,8 +72,11 @@ for name in "$@"; do
     xcrun simctl install "$udid" "$app"
     # The flows read a clean app, so a state another run left is cleared first.
     xcrun simctl terminate "$udid" "$bundle_id" 2>/dev/null || true
+    # Maestro's own debug output, the screenshot it takes when a step fails
+    # among it, lands beside the flow's screenshots, so a failure can be read.
     if ! maestro --udid "$udid" test \
         --test-output-dir "$device_output" \
+        --debug-output "$device_output/debug" \
         --flatten-debug-output \
         "$APP_DIRECTORY/maestro"; then
         echo "error: the flows failed on $name; its output is under $device_output" >&2
