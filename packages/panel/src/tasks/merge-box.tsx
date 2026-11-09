@@ -453,12 +453,19 @@ function bypassQuestion(
   };
 }
 
+/** What a bypass's question was asked about: the head it merges, and the base it names and merges into. */
+interface BypassAsked {
+  readonly head: string;
+  readonly base: string;
+}
+
 /**
  * Bypass rules and merge: a press by the method chosen, as a merge's is,
  * which asks first and then merges at the head it asked about, so GitHub
  * refuses a head pushed since. The question goes once a read finds another
- * head, so it never merges one the member was not asked about, and goes
- * with its panel; one already answered finishes.
+ * head or another base, so it never merges a head, or into a base, the
+ * member was not asked about, and goes with its panel; one already answered
+ * finishes.
  */
 function BypassPress({
   pullRequest,
@@ -480,15 +487,20 @@ function BypassPress({
   onChoose: (method: MergeMethod) => void;
 }): React.JSX.Element {
   const headSha = pullRequest.merging?.headSha ?? "";
-  // The head the question was asked about; none while it asks nothing.
-  const [askedAt, setAskedAt] = useState<string | undefined>(undefined);
-  const standing = askedAt !== undefined && askedAt === headSha;
+  const { base } = pullRequest;
+  // What the question was asked about; none while it asks nothing.
+  const [asked, setAsked] = useState<BypassAsked | undefined>(undefined);
+  const standing = asked !== undefined && asked.head === headSha && asked.base === base;
   const confirm = useConfirmDialog(
     { subject: standing, surfaceOpen: shown },
-    writes.confirmAct({ action: PULL_REQUEST_ACTION.MERGE, method, headSha: askedAt ?? headSha }),
+    writes.confirmAct({
+      action: PULL_REQUEST_ACTION.MERGE,
+      method,
+      headSha: asked?.head ?? headSha,
+    }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_WRITE),
   );
-  if ((!shown || !standing) && askedAt !== undefined && !confirm.busy) setAskedAt(undefined);
+  if ((!shown || !standing) && asked !== undefined && !confirm.busy) setAsked(undefined);
   return (
     <>
       <MethodPress
@@ -500,7 +512,7 @@ function BypassPress({
         busyLabel={busyLabel}
         onChoose={onChoose}
         onPress={() => {
-          setAskedAt(headSha);
+          setAsked({ head: headSha, base });
           confirm.ask();
         }}
       />

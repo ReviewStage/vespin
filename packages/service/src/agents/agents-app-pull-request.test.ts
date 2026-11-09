@@ -1586,13 +1586,11 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           if (call.authorization === "Bearer ghu_broken") {
             return Response.json({ message: "Server Error" }, { status: 502 });
           }
-          const theirs = call.authorization === "Bearer ghu_teammate";
+          // Note that each right answers for a different member, so a right read off the other's field is caught.
+          const viewerCanUpdate = call.authorization === "Bearer ghu_teammate";
+          const viewerCanMergeAsAdmin = call.authorization === "Bearer ghu_standing";
           return Response.json({
-            data: {
-              repository: {
-                pullRequest: { viewerCanUpdate: theirs, viewerCanMergeAsAdmin: theirs },
-              },
-            },
+            data: { repository: { pullRequest: { viewerCanUpdate, viewerCanMergeAsAdmin } } },
           });
         };
         const header = (
@@ -1611,20 +1609,18 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const broken = yield* published({ otherToken: "ghu_broken", answer: canUpdate });
 
         const teammate = yield* header(two, two.other, two.agent.id);
-        assert.deepEqual(
-          [teammate?.canEditDescription, teammate?.canBypassRules, teammate?.body],
-          [true, true, "Invitations expire."],
-        );
-        const owner = yield* header(two, two.owner, two.agent.id);
-        assert.deepEqual([owner?.canEditDescription, owner?.canBypassRules], [false, false]);
-        assert.equal(
-          (yield* header(unsigned, unsigned.other, unsigned.agent.id))?.canEditDescription,
+        const rights = (read: typeof teammate) => [read?.canEditDescription, read?.canBypassRules];
+        assert.deepEqual(rights(teammate), [true, false]);
+        assert.equal(teammate?.body, "Invitations expire.");
+        assert.deepEqual(rights(yield* header(two, two.owner, two.agent.id)), [false, true]);
+        assert.deepEqual(rights(yield* header(unsigned, unsigned.other, unsigned.agent.id)), [
           false,
-        );
-        assert.equal(
-          (yield* header(broken, broken.other, broken.agent.id))?.canEditDescription,
           false,
-        );
+        ]);
+        assert.deepEqual(rights(yield* header(broken, broken.other, broken.agent.id)), [
+          false,
+          false,
+        ]);
         assert.deepEqual(
           two.calls
             .filter((call) => call.query.includes("ViewerRights"))
