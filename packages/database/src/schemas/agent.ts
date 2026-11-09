@@ -61,8 +61,7 @@ import { task } from "./task.js";
  * what it read that no provider counts apart (`StoredAgentStep`), and
  * `compacted_at` when its harness last compacted that conversation; both are null
  * until it happens, and both are what the tab's context ring reads.
- * `published` is no longer read or written, its pull requests kept one row
- * each in `agent_pull_request`, and is dropped once no deployment reads it.
+ * Its pull requests are `agent_pull_request`'s rows, one each.
  * `published_read` is when GitHub was last read of the agent's pull request
  * (`coder-host/published.ts`, `StoredPublishedRead`), which lets
  * a tab's read answer from the row rather than GitHub; null before one, for
@@ -300,8 +299,6 @@ export const agentTable = pgTable(
     lastStep: jsonb("last_step").$type<StoredAgentStep>(),
     /** When the harness last compacted the agent's own conversation; null where it never has. */
     compactedAt: timestamptz("compacted_at"),
-    /** No longer read or written: its pull requests are `agent_pull_request`'s rows. Dropped once no deployment reads it. */
-    published: jsonb("published").$type<StoredPullRequest>(),
     /** When GitHub was last read of the agent's pull request, and of which branch; null before one, and once a change lets it go. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
     /** When the developer archived the agent; null while it is not. */

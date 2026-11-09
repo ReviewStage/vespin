@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
-import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "./agent.js";
+import { index, integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { agentTable } from "./agent.js";
 
 /**
  * agent-repository.ts -- a repository an agent works in beside its primary one, which its own row keeps.
@@ -15,9 +15,7 @@ import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "./
  * cloned at and its pull request opens against by default, null for the
  * repository's default branch; the head branch is its pull request's, null
  * until one opens; its pull requests are `agent_pull_request`'s rows, as
- * the agent's own are. `published` and `published_read` are no longer read
- * or written, and are dropped once no deployment reads them. Each row
- * leaves with its agent.
+ * the agent's own are. Each row leaves with its agent.
  */
 export const agentRepository = pgTable(
   "agent_repository",
@@ -33,20 +31,12 @@ export const agentRepository = pgTable(
     baseBranch: text("base_branch"),
     /** Its pull request's head branch; null until one opens. */
     headBranch: text("head_branch"),
-    /** No longer read or written: its pull requests are `agent_pull_request`'s rows. */
-    published: jsonb("published").$type<StoredPullRequest>(),
-    /** No longer read or written. */
-    publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
   },
   (table) => [
     primaryKey({ columns: [table.agentId, table.position] }),
-    // GitHub's deliveries find the agents on a branch or a pull request of a repository, of any
-    // account, by the repository as GitHub matches one, its case aside, as the agent row's own
-    // lookup does (`agent-store.ts`'s `listAgentsOnBranches` and `listAgentsOnPullRequest`).
+    // GitHub's deliveries find the agents on a branch of a repository, of any account, by the
+    // repository as GitHub matches one, its case aside, as the agent row's own lookup does
+    // (`agent-store.ts`'s `listAgentsOnBranches`).
     index("agent_repository_on_head").on(sql`lower(${table.repository})`, table.headBranch),
-    index("agent_repository_on_pull_request").on(
-      sql`lower(${table.repository})`,
-      sql`((${table.published}->>'number')::int)`,
-    ),
   ],
 );
