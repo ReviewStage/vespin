@@ -1397,6 +1397,24 @@ it.effect.each([
 );
 
 it.effect(
+  "hands the CLI a message resent to a session that holds it under a uuid of its own, which the CLI answers",
+  () =>
+    Effect.gen(function* () {
+      const line = "20000000-0000-4000-8000-000000000001";
+      const service = fakeService();
+      const { cli, write, run } = yield* launch(SHORT_TURN, service, ENV, [line]);
+      yield* write(CONFIG);
+      yield* write({ ...FIRST_MESSAGE, uuid: line, resent: true });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const accepted = service.applied.flatMap(({ message }) =>
+        "type" in message && message.type === RUNNER_EVENT.ACCEPTED ? [message.uuid] : [],
+      );
+      assert.deepEqual([accepted, cli.prompts.length], [[line], 1]);
+    }),
+);
+
+it.effect(
   "fails a launch whose session to cut the service's store does not answer, rather than resume it whole",
   () =>
     Effect.gen(function* () {

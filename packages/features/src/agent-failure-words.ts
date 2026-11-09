@@ -44,6 +44,7 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.NO_PROGRESS]: "the agent stopped responding",
   [AGENT_FAILURE.LINE_UNTAKEN]: "no machine picked the turn up in time",
   [AGENT_FAILURE.PLAN_LIMIT]: "the plan hit its usage limit and the turn could not go on",
+  [AGENT_FAILURE.REFUSAL]: "the model declined to continue this conversation",
   [AGENT_FAILURE.OTHER]: undefined,
 } as const satisfies Record<AgentFailure, string | undefined>;
 

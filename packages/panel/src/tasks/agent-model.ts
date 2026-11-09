@@ -153,7 +153,7 @@ import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
  * than in the transcript, what its working line says it is doing, when a
  * line the developer sent has been read back, what a Start or a message
  * that did not land says, and what its
- * branch chip and the pull request's row say and open, and how what an agent or a turn cost is told.
+ * pull request's row says and opens, and how what an agent or a turn cost is told.
  * Nothing here asks anything.
  */
 
@@ -715,13 +715,32 @@ export function endLineOffersContinue(input: {
 /**
  * The failures a message sent again would only meet again, since what mends
  * them is a choice the line's words name: a teammate's key, which only they
- * replace, or Fast, which a model chosen with it off mends.
+ * replace, Fast, which a model chosen with it off mends, or the model's
+ * refusal, which a continue on another model mends (`endLineOffersOtherModel`).
  */
 const MENDED_BY_CHOICE: ReadonlySet<AgentFailure> = new Set([
   AGENT_FAILURE.PROVIDER_KEY,
   AGENT_FAILURE.FAST_ON_OWN_KEY,
   AGENT_FAILURE.FAST_NOT_ENABLED,
+  AGENT_FAILURE.REFUSAL,
 ]);
+
+/**
+ * Whether the failed end line's row ends on the offer to continue on another
+ * model (`RefusalContinue`): where the model refused the turn, so a message
+ * only meets the refusal again, and until another agent continued it, when
+ * Continue again stands in its place (`endLineOffersContinue`).
+ */
+export function endLineOffersOtherModel(input: {
+  readonly status: AgentStatus;
+  readonly endReason: FailureReason;
+  readonly failure: AgentFailure | undefined;
+  readonly continued: boolean;
+  readonly boxClosed: boolean;
+}): boolean {
+  if (!endLineContinues(input.status, input.endReason)) return false;
+  return !input.continued && !input.boxClosed && input.failure === AGENT_FAILURE.REFUSAL;
+}
 
 /**
  * Whether the failed end line's row ends on Try again, which sends the
@@ -2999,18 +3018,6 @@ function shellWord(word: string): string {
 export function checkoutCommand(branch: string): string {
   const name = shellWord(branch);
   return `git fetch origin ${name} && git switch ${name}`;
-}
-
-/** A branch or a file's path as a GitHub address spells it: every character encoded but the slashes GitHub reads as the name's own. */
-function githubPath(name: string): string {
-  return encodeURIComponent(name).replaceAll("%2F", "/");
-}
-
-/** Where the chip opens on GitHub: the pull request, or the branch compared against the repository's default where there is no pull request yet. */
-export function publishedUrl(published: AgentPullRequestAnswer): string | undefined {
-  if (published.pullRequest !== null) return published.pullRequest.url;
-  if (published.branch === null || published.repository === null) return undefined;
-  return `https://github.com/${published.repository}/compare/${githubPath(published.branch)}?expand=1`;
 }
 
 /** What the agent's dock draws of a pull request: the parts its row reads, and its page. */

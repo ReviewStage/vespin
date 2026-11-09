@@ -151,6 +151,7 @@ import {
   dockedPullRequests,
   type EndLineParts,
   endLineOffersContinue,
+  endLineOffersOtherModel,
   endLineOffersTryAgain,
   endLineParts,
   endLineReason,
@@ -213,7 +214,12 @@ import {
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "./agent-todos.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
-import { ContinueAgent, ContinuedComposerNote, ContinuedTrail } from "./continue-agent.js";
+import {
+  ContinueAgent,
+  ContinuedComposerNote,
+  ContinuedTrail,
+  RefusalContinue,
+} from "./continue-agent.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
@@ -352,8 +358,7 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * the agent stands is its tab's glyph and the transcript's own lines, what
  * it runs on is the model chip at the box's foot, and what it published
  * is the pull request's row pinned over the box, under the docked to-do
- * list, or the branch's chip at the box's foot before a pull request
- * stands (`agent-published.tsx`). A line the developer sends joins the transcript at
+ * list, once a pull request stands (`agent-published.tsx`). A line the developer sends joins the transcript at
  * once as theirs and is read back from the service's own row, and the
  * Stop is the composer's, the one the tab has. A worker's tab draws the
  * worker's transcript the same way, under the agent and the call that
@@ -2803,7 +2808,7 @@ function AgentTabView({
       sameEntries(a.revertTakes, b.revertTakes) &&
       sameEntries(a.editTakes, b.editTakes),
   );
-  const editorNow = { agentId: agent.id, doors, keywords, skills };
+  const editorNow = { agentId: agent.id, keywords, skills };
   const editorProps = useRef(editorNow);
   editorProps.current = editorNow;
   const editor = useCallback(() => editorProps.current, []);
@@ -3087,8 +3092,6 @@ function AgentTabView({
             servers={servers}
             context={transcript.context}
             brief={agent.brief}
-            published={published}
-            doors={doors}
             tools={(narrow) => (
               <>
                 <AgentPlace agent={agent} readerId={readerId} narrow={narrow} />
@@ -3406,6 +3409,8 @@ function AgentTabBody({
     boxClosed: composer.closed !== undefined,
   };
   const pressed = endLineOffersContinue(ending);
+  // Where the model refused the turn, the row offers a continue on another model, the box's words going with it.
+  const otherModel = endLineOffersOtherModel(ending);
   // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
   const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
@@ -3475,6 +3480,8 @@ function AgentTabBody({
               carry={continued.length > 0 ? carry : undefined}
               label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
             />
+          ) : otherModel ? (
+            <RefusalContinue agent={agent} control={control} carry={carry} />
           ) : triesAgain ? (
             <TryAgainPress onPress={() => control.onRetry(agent.id, RETRY_LINE)} />
           ) : undefined

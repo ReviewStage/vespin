@@ -14,8 +14,8 @@ import { appStateQuery } from "../use-app-state.js";
  * agent's own `open_pull_request` among it and GitHub's webhook, and the
  * task list carries it (`useListedPullRequests`), so the tab draws a pull request the agent
  * opened mid-run without a read of its own. What the row leaves out is the
- * branch the agent pushed and its repository, which the dock's copies and
- * the branch's chip name: the host holds them while the tab shows
+ * branch the agent pushed and its repository, which the dock's copies
+ * name: the host holds them while the tab shows
  * (`pullRequestPublishedQuery`), asked again as a window comes
  * forward, as the agent's status moves, its end among it, and as the list
  * first names the pull request it opened or its line moves. A read the

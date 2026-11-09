@@ -78,7 +78,7 @@ interface RewindDoors {
     words: string,
     attachments: readonly AgentAttachment[],
   ) => void;
-  /** What the line's box is drawn with beside the tab's own box, read as it opens, so the doors stand as they were while the tab's props change. */
+  /** What the line's box is drawn with beside the tab's own box, read as it opens, so what it reads stands as it was while the tab's props change. */
   readonly editor: () => Omit<EditComposerDoors, "cuts" | "onCancel" | "onSend">;
   /** Takes the agent back to just before the line named, sending nothing. */
   readonly onRevert: (lineId: string) => void;
