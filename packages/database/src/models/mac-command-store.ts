@@ -8,7 +8,9 @@ import {
   type MacCommand,
   type MacCommandKind,
   type MacCommandResult,
+  macCommandOfStored,
   macCommandResultSchema,
+  storedMacCommandText,
 } from "@repo/features/mac-command-wire";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import {
@@ -496,7 +498,7 @@ export function queueMacCommand(userId: string, queued: MacCommand): TaskStoreEf
       id: queued.id,
       userId,
       kind: queued.kind,
-      command: queued.command,
+      command: storedMacCommandText(queued),
       timeoutSeconds: queued.timeoutSeconds,
       now,
     }),
@@ -525,7 +527,12 @@ export function claimMacCommands(
   kinds: readonly MacCommandKind[],
 ): TaskStoreEffect<readonly MacCommand[]> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    claimWaiting({ userId, queuedSince, kinds, now }),
+    Effect.map(claimWaiting({ userId, queuedSince, kinds, now }), (rows) =>
+      rows.flatMap((row) => {
+        const command = macCommandOfStored(row);
+        return command === undefined ? [] : [command];
+      }),
+    ),
   );
 }
 
@@ -542,7 +549,10 @@ export function claimMacCommand(
   kinds: readonly MacCommandKind[],
 ): TaskStoreEffect<Option.Option<MacCommand>> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    claimOne({ userId, id, queuedSince, kinds, now }),
+    Effect.map(
+      claimOne({ userId, id, queuedSince, kinds, now }),
+      Option.flatMap((row) => Option.fromUndefinedOr(macCommandOfStored(row))),
+    ),
   );
 }
 

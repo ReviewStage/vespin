@@ -16,6 +16,8 @@ import UniformTypeIdentifiers
 /// - `permissions`, `request_permissions`: whether it may capture windows and
 ///   post input, the second raising macOS's own prompts first.
 /// - `list_apps`: the running apps a person uses, each with its icon.
+/// - `describe_app {app}`: one app, running or installed, as `list_apps`
+///   names each, launching nothing, so the developer can be asked about it.
 /// - `get_app_state {app, shots}`: an app's frontmost window as a numbered
 ///   Accessibility tree and as screenshots, one per requested edge and
 ///   quality. Its numbers stand until the next `get_app_state` of that app.
@@ -198,13 +200,16 @@ private func installedURL(_ name: String) -> URL? {
         .first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
-/// The running app `name` names by bundle id or by name, with or without its `.app`, or nothing where none runs.
-private func runningApp(_ name: String) throws -> NSRunningApplication? {
+/// Whether `name` names the app, by its bundle id or by its name, with or without its `.app`.
+private func namesApp(_ app: NSRunningApplication, _ name: String) -> Bool {
     let lowered = name.lowercased()
     let bare = lowered.hasSuffix(".app") ? String(lowered.dropLast(4)) : lowered
-    let running = runningApps().first {
-        $0.bundleIdentifier?.lowercased() == lowered || $0.localizedName?.lowercased() == bare
-    }
+    return app.bundleIdentifier?.lowercased() == lowered || app.localizedName?.lowercased() == bare
+}
+
+/// The running app `name` names, or nothing where none runs.
+private func runningApp(_ name: String) throws -> NSRunningApplication? {
+    let running = runningApps().first { namesApp($0, name) }
     guard let running else { return nil }
     guard !isRefused(running.bundleIdentifier) else {
         throw HelperError(kind: ERROR_KIND.refused, message: "\(name) is never offered to agents.")
@@ -240,6 +245,23 @@ private func resolveApp(_ name: String) async throws -> NSRunningApplication {
         try await Task.sleep(nanoseconds: 200_000_000)
     }
     return launched
+}
+
+/// One app named, running or installed, as `list_apps` names each, without launching it.
+private func describeApp(_ request: [String: Any]) throws -> [String: Any] {
+    let name = try string(request, "app")
+    if let running = runningApps().first(where: { namesApp($0, name) }) { return ["app": describe(running)] }
+    guard let url = installedURL(name) else {
+        throw HelperError(kind: ERROR_KIND.notFound, message: "No app named \(name) is running or installed.")
+    }
+    let bundle = Bundle(url: url)
+    var described: [String: Any] = [
+        "name": FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: ""),
+        "refused": isRefused(bundle?.bundleIdentifier),
+    ]
+    if let bundleId = bundle?.bundleIdentifier { described["bundle_id"] = bundleId }
+    if let png = pngBase64(NSWorkspace.shared.icon(forFile: url.path), edge: ICON_EDGE) { described["icon_png"] = png }
+    return ["app": described]
 }
 
 // MARK: - Accessibility tree
@@ -717,6 +739,7 @@ private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] 
     "permissions": { _ in permissions() },
     "request_permissions": { _ in requestPermissions() },
     "list_apps": { _ in listApps() },
+    "describe_app": describeApp,
     "get_app_state": getAppState,
     "click": click,
     "type_text": typeText,

@@ -19,6 +19,14 @@ export {
 } from "./commit-author.js";
 
 export {
+  COMPUTER_USE_DETAIL,
+  COMPUTER_USE_LABEL,
+  computerUseAppsOf,
+  computerUseAppsWith,
+  computerUseAppsWithout,
+  isComputerUseAppsJson,
+} from "./computer-use.js";
+export {
   EXPERIMENT_COUNTED_AS,
   EXPERIMENT_SCOPE_COUNTED_AS,
   SETTINGS_VIEW_COUNTED_AS,
