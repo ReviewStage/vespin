@@ -175,6 +175,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
     });
+    const agentPortsClient = new HostedAgentPortsClient({
+      serviceBaseUrl: kernel.hostedServiceBaseUrl,
+      credential: account.credential,
+    });
     /** The account signed in now, by its id, which every live read names. */
     const accountId = () => {
       const signedIn = account.session.snapshot();
@@ -324,6 +328,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             : undefined;
         },
         client: agentClient,
+        ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
         pool,
@@ -463,10 +468,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           composePortForwards({
             kernel,
             account,
-            client: new HostedAgentPortsClient({
-              serviceBaseUrl: kernel.hostedServiceBaseUrl,
-              credential: account.credential,
-            }),
+            client: agentPortsClient,
             openSocket: yield* TerminalSocket,
             listen: yield* LoopbackListener,
           }),

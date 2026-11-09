@@ -1124,6 +1124,13 @@ export function subject(
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),
       focus,
       client: service.client,
+      // Note that no test here asks an agent's ports, so their service is a sandbox that is not running.
+      ports: {
+        list: () => Effect.succeed({ running: false, ports: [] }),
+        shared: () => Effect.succeed({ shared: null }),
+        share: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+        unshare: () => Effect.succeed({ shared: null }),
+      },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
