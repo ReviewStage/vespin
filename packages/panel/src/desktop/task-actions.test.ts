@@ -908,6 +908,7 @@ test("a sidebar row's Change repository searches the workspace's repositories be
             updatedAt: 1,
             access: GITHUB_ACCESS.APP,
           })),
+          installationUrl: "https://github.com/apps/vespin/installations/new",
         },
       },
     }),

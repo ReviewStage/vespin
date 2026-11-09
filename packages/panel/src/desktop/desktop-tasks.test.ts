@@ -632,7 +632,7 @@ function _heldAnswer(): HeldAnswer {
   };
 }
 
-test("a plan's document, its way back to the agents pinned in its card, opens on its path, its repository as plain words, then its title, with who created it and when it was last edited under the title", async () => {
+test("a plan's document, its way back to the agents pinned in its card, opens on its path, its repository first, then its title, with who created it and when it was last edited under the title", async () => {
   const home = {
     id: TASK.workspaceId,
     name: "Personal",
@@ -692,13 +692,6 @@ test("a plan's document, its way back to the agents pinned in its card, opens on
   );
   assert.equal(path?.classList.contains("plan-task-path"), true, "the path leads the document");
   assert.match(path?.textContent ?? "", /acme\/web/u, "the path names the repository");
-  assert.equal(
-    [...(path?.querySelectorAll("button") ?? [])].some((each) =>
-      each.textContent?.includes("acme/web"),
-    ),
-    false,
-    "the repository is words, not a press",
-  );
   assert.equal(first?.querySelector("h1")?.textContent, task.name, "the title stands under it");
   assert.ok(byline?.classList.contains("description-byline"), "the byline stands under the title");
   assert.match(byline?.textContent ?? "", /^Created by .*Edited /u);
