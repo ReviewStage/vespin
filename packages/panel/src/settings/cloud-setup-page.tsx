@@ -1,4 +1,3 @@
-import { githubRepositoryFullNameSchema } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -40,7 +39,6 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Schema } from "effect";
 import { useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { useTypedCodeColoring } from "../code-coloring.js";
@@ -48,7 +46,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
-import { CHIP_PLACE, RepositoryChip } from "../tasks/repository-chip.js";
+import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -90,16 +88,15 @@ const EMPTY_SCRIPT_LINES = 3;
 /** The language main colors a script in. */
 const SCRIPT_LANGUAGE = "bash";
 
-/** What a setup script being added is called until its repository is picked. */
-const NEW_SETUP = "New setup script";
-
-/** Whether a repository is one the service takes, so Save waits for one it would not refuse by shape. */
-const isRepository = Schema.is(githubRepositoryFullNameSchema);
-
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 function rejected(error: unknown): ActionResult {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(error) };
+}
+
+/** Whether two names are one repository, as GitHub's names ignore case. */
+function sameRepository(one: string, other: string): boolean {
+  return one.toLowerCase() === other.toLowerCase();
 }
 
 /** Whether a script may be saved as typed: words, within the bound. */
@@ -165,6 +162,7 @@ function ScriptEditor({
   install,
   editable,
   busy,
+  autoFocus,
 }: {
   label: string;
   value: string;
@@ -175,6 +173,8 @@ function ScriptEditor({
   editable: boolean;
   /** Whether a save of it is out, which holds it still. */
   busy: boolean;
+  /** Whether the caret lands in it as it is drawn, as in a setup script just added. */
+  autoFocus?: boolean;
 }): React.JSX.Element {
   const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, value);
   return (
@@ -187,6 +187,7 @@ function ScriptEditor({
         placeholder={install ? PLACEHOLDER.INSTALL : PLACEHOLDER.SETUP}
         rows={value === "" ? EMPTY_SCRIPT_LINES : 1}
         readOnly={!editable || busy}
+        autoFocus={autoFocus}
       />
     </ReplayMask>
   );
@@ -234,9 +235,16 @@ function EditActions({
  * admin edits in place, Discard and Save standing at the row's end once it
  * differs from what is saved, and a ⋯ with Remove once one is saved. The
  * install script's row stands with an empty script where none is saved, so
- * the first is typed in place as any edit is. Note that the edit is held
- * apart from what is saved, so a save from elsewhere is drawn while nothing
- * is being typed.
+ * the first is typed in place as any edit is; a setup script just added
+ * stands the same way, the caret in it and Cancel at its end until it is
+ * saved, when it goes on as the repository's saved row. Note that the edit
+ * is held apart from what is saved, so a save from elsewhere is drawn while
+ * nothing is being typed, and that it is let go once what is saved agrees
+ * with it rather than when its save answers, as the Optimistic Updates
+ * guide's "via the UI" draws a mutation's variables until the read catches
+ * up (`row-write.ts`): the read's observers hear the answer a tick after the
+ * save's own callback runs, so letting go then would draw the old script for
+ * a frame between.
  */
 function ScriptRow({
   workspaceId,
@@ -245,19 +253,24 @@ function ScriptRow({
   script,
   manages,
   pictures,
+  added,
 }: {
   workspaceId: string;
   name: string;
   repository?: string;
-  /** The script as saved; empty for an install script not yet saved. */
+  /** The script as saved; empty for an install script or a setup script not yet saved. */
   script: string;
   manages: boolean;
   /** Whether a repository is drawn with its owner's picture (`RepositoryPicture`). */
   pictures: boolean;
+  /** A setup script just added and not yet saved: what Cancel does to let it go. */
+  added?: { readonly onCancel: () => void } | undefined;
 }): React.JSX.Element {
   const [edited, setEdited] = useState<string | undefined>(undefined);
   const saving = useSaveScript(workspaceId);
   const target: ScriptTarget = repository === undefined ? {} : { repository };
+  // An edit the saved script now agrees with, its own save's or another's, is let go.
+  if (edited !== undefined && edited === script && !saving.isPending) setEdited(undefined);
   const shown = edited ?? script;
   const changed = edited !== undefined && edited !== script;
   const removeAct = useConfirmAct(saving, {
@@ -274,8 +287,7 @@ function ScriptRow({
     saving.reset();
     setEdited(undefined);
   };
-  const save = () =>
-    saving.mutate({ target, script: shown }, { onSuccess: () => setEdited(undefined) });
+  const save = () => saving.mutate({ target, script: shown });
   const actions =
     manages && script !== ""
       ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
@@ -303,15 +315,16 @@ function ScriptRow({
               </Inline>
             ),
           error: saveRefusal(saving.error),
-          control: changed ? (
-            <EditActions
-              leave="Discard"
-              saving={saving.isPending}
-              canSave={savable(shown)}
-              onLeave={discard}
-              onSave={save}
-            />
-          ) : undefined,
+          control:
+            changed || added !== undefined ? (
+              <EditActions
+                leave={added === undefined ? "Discard" : "Cancel"}
+                saving={saving.isPending}
+                canSave={savable(shown)}
+                onLeave={added === undefined ? discard : added.onCancel}
+                onSave={save}
+              />
+            ) : undefined,
           below: (
             <ScriptEditor
               label={name}
@@ -320,6 +333,7 @@ function ScriptRow({
               install={repository === undefined}
               editable={manages}
               busy={saving.isPending}
+              autoFocus={added !== undefined}
             />
           ),
         }}
@@ -343,70 +357,45 @@ function ScriptRow({
 }
 
 /**
- * A setup script being added: the repository's chip, its menu opened at
- * once on the repositories the workspace's GitHub reaches that have no setup
- * script yet, and the script under it; Cancel lets it go, and Save stands
- * once a repository is picked and the script holds words. Its save's answer
- * draws the repository's own row, so it goes once that lands.
+ * The Setup scripts section's Add script, which drops the repository menu a
+ * task's repository is picked in (`useRepositoryMenu`): the repositories the
+ * workspace's GitHub reaches, less those `taken`. A pick adds that
+ * repository's row, and the press stands for the next one.
  */
-function NewSetupRow({
+function AddSetupButton({
   workspaceId,
   taken,
-  onDone,
+  onPick,
 }: {
   workspaceId: string;
-  /** The repositories that have a setup script already, which the menu leaves out. */
+  /** The repositories with a setup script saved or being added, which the menu leaves out. */
   taken: readonly string[];
-  onDone: () => void;
+  onPick: (repository: string) => void;
 }): React.JSX.Element {
-  const [repository, setRepository] = useState<string | null>(null);
-  const [script, setScript] = useState("");
-  const saving = useSaveScript(workspaceId);
   const chooser = useRepositoriesIn()(workspaceId);
-  const ready = repository !== null && isRepository(repository) && savable(script);
-  const save = () => {
-    if (repository !== null)
-      saving.mutate({ target: { repository }, script }, { onSuccess: onDone });
-  };
+  const menu = useRepositoryMenu({
+    value: null,
+    chooser,
+    onChoose: onPick,
+    omit: taken,
+    align: POPOVER_ALIGN.END,
+  });
+  // Note that the menu's press only opens or shuts it, starting no act, so it is named for that.
+  const toggleMenu = menu.press;
   return (
-    <MenuRow
-      thing={NEW_SETUP}
-      actions={[]}
-      row={{
-        label: (
-          <RepositoryChip
-            place={CHIP_PLACE.FIELD}
-            value={repository}
-            chooser={chooser}
-            onChoose={setRepository}
-            omit={taken}
-            openRequest={1}
-            align={POPOVER_ALIGN.START}
-            held={saving.isPending ? "Saving" : undefined}
-          />
-        ),
-        error: saveRefusal(saving.error),
-        control: (
-          <EditActions
-            leave="Cancel"
-            saving={saving.isPending}
-            canSave={ready}
-            onLeave={onDone}
-            onSave={save}
-          />
-        ),
-        below: (
-          <ScriptEditor
-            label={repository ?? NEW_SETUP}
-            value={script}
-            onChange={setScript}
-            install={false}
-            editable
-            busy={saving.isPending}
-          />
-        ),
-      }}
-    />
+    <div className="relative inline-flex min-w-0" ref={menu.room}>
+      <Button
+        variant={BUTTON_VARIANT.OUTLINE}
+        icon={<PlusIcon />}
+        aria-haspopup="dialog"
+        aria-expanded={menu.open}
+        aria-controls={menu.open ? menu.menuId : undefined}
+        onClick={(event) => toggleMenu(event.currentTarget)}
+      >
+        Add script
+      </Button>
+      {menu.menu}
+    </div>
   );
 }
 
@@ -415,7 +404,7 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
   const manages = managesWorkspace(workspace);
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
-  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState<readonly string[]>([]);
   const answer = setup.data;
   const read = setup.isError ? (
     <ReadFailed
@@ -427,6 +416,23 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
     <SettingsRowsSkeleton label={readingWords("the cloud setup")} rows={[SCRIPT_ROW_SKELETON]} />
   ) : undefined;
   const setups = answer?.setups ?? [];
+  // A repository added and since saved is the saved list's now, so it is let go of here.
+  const unsaved = added.filter(
+    (repository) => !setups.some((each) => sameRepository(each.repository, repository)),
+  );
+  if (unsaved.length !== added.length) setAdded(unsaved);
+  // Note that the saved and the added stand in one list keyed by repository, so a row just saved goes on as the same row, its caret where it was.
+  const rows = [
+    ...setups,
+    ...(manages ? unsaved.map((repository) => ({ repository, script: "", added: true })) : []),
+  ];
+  const taken = rows.map((each) => each.repository);
+  const add = (repository: string) =>
+    setAdded((now) =>
+      now.some((each) => sameRepository(each, repository)) ? now : [...now, repository],
+    );
+  const letGo = (repository: string) =>
+    setAdded((now) => now.filter((each) => !sameRepository(each, repository)));
   return (
     <>
       <SettingsSection
@@ -450,23 +456,15 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
         title="Setup scripts"
         caption="Run once in each new agent sandbox of their repository, after its checkout, with the workspace's environment variables."
         action={
-          manages && !adding ? (
-            <Button
-              variant={BUTTON_VARIANT.OUTLINE}
-              icon={<PlusIcon />}
-              onClick={() => setAdding(true)}
-            >
-              Add script
-            </Button>
+          manages ? (
+            <AddSetupButton workspaceId={workspace.id} taken={taken} onPick={add} />
           ) : undefined
         }
       >
         {read ?? (
           <>
-            {setups.length === 0 && !adding ? (
-              <SettingsLine>No setup scripts yet.</SettingsLine>
-            ) : null}
-            {setups.map((each) => (
+            {rows.length === 0 ? <SettingsLine>No setup scripts yet.</SettingsLine> : null}
+            {rows.map((each) => (
               <ScriptRow
                 key={each.repository.toLowerCase()}
                 workspaceId={workspace.id}
@@ -475,15 +473,9 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
                 script={each.script}
                 manages={manages}
                 pictures={pictures}
+                added={"added" in each ? { onCancel: () => letGo(each.repository) } : undefined}
               />
             ))}
-            {manages && adding ? (
-              <NewSetupRow
-                workspaceId={workspace.id}
-                taken={setups.map((each) => each.repository)}
-                onDone={() => setAdding(false)}
-              />
-            ) : null}
           </>
         )}
       </SettingsSection>

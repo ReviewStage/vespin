@@ -1,5 +1,5 @@
 import type { CodeLines } from "@repo/features/tasks-view";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, useLayoutEffect, useRef } from "react";
 import { lineRuns } from "./code-card.js";
 
 /**
@@ -62,6 +62,7 @@ export function CodeEditor({
   rows = 1,
   disabled,
   readOnly,
+  autoFocus,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -78,7 +79,15 @@ export function CodeEditor({
   rows?: number;
   disabled?: boolean | undefined;
   readOnly?: boolean | undefined;
+  /** Whether the caret lands in it as it is drawn, as in a script just added. */
+  autoFocus?: boolean | undefined;
 }): React.JSX.Element {
+  const field = useRef<HTMLTextAreaElement | null>(null);
+  // Note that it is read once, so the caret lands as the field is drawn and never again on a later draw.
+  const focusFirst = useRef(autoFocus === true);
+  useLayoutEffect(() => {
+    if (focusFirst.current) field.current?.focus();
+  }, []);
   return (
     <div className={WELL}>
       <pre className={SHOWN} aria-hidden>
@@ -87,6 +96,7 @@ export function CodeEditor({
         {"\n"}
       </pre>
       <textarea
+        ref={field}
         className={TYPED}
         rows={rows}
         aria-label={label}
