@@ -42,7 +42,9 @@ import { INLINE_REF_FIT, type InlineRefFit, useInlineRefFit } from "./inline-ref
  * handed to the token or to every token under a surface at once
  * (`InlineRefFitScope`), since the same chip stands in an agent's words and
  * in a one-line row of them. In running words it wraps across lines as they do, its fill and corners
- * carried onto each line it stands on, and is read whole: no cap and no
+ * carried onto each line it stands on, breaking only inside its name, so
+ * its glyph keeps to the name's first word and its standing to its last, and
+ * a one-word name with them never parts, and it is read whole: no cap and no
  * ellipsis, since a name cut short in a sentence says less than the
  * sentence does. In a slot one line tall, a row's, a byline's, or a head's,
  * it keeps to one line and its name gives way before anything else, fading
@@ -150,10 +152,13 @@ const ROOT = "ui-inline-ref p-0 border-0 text-left [font:inherit] no-underline";
 /**
  * How a token takes its line: wrapping as words do, each line's piece drawn
  * as if it were the whole, so a fill and its corners stand on every line; or
- * one row that never outgrows its column.
+ * one row that never outgrows its column. Note that a token that wraps does
+ * not wrap between its own parts, only inside its name (`labelClass`),
+ * because a browser may always break beside a glyph's box, which would leave
+ * the glyph alone at a line's end and `#42 Open` on the next.
  */
 const FIT_ROOT = {
-  [INLINE_REF_FIT.FLOW]: "inline whitespace-normal wrap-break-word box-decoration-clone",
+  [INLINE_REF_FIT.FLOW]: "inline whitespace-nowrap wrap-break-word box-decoration-clone",
   [INLINE_REF_FIT.LINE]:
     "inline-flex min-w-0 max-w-full items-center align-baseline whitespace-nowrap",
 } as const satisfies Record<InlineRefFit, string>;
@@ -228,7 +233,7 @@ function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
   return parts.join(" ");
 }
 
-/** A token's name, alone on the words' baseline where it is one line: struck through where gone, a link's name underlined under the pointer, a wash's at least a mark tall, and a path broken anywhere where it wraps, since it holds no spaces to break at. */
+/** A token's name, alone on the words' baseline where it is one line: struck through where gone, a link's name underlined under the pointer, a wash's at least a mark tall, and where it wraps, the one part of the token that breaks, a path anywhere, since it holds no spaces to break at. */
 function labelClass({
   look,
   fit,
@@ -244,7 +249,10 @@ function labelClass({
 }): string {
   const parts = ["ui-inline-ref-label"];
   if (fit === INLINE_REF_FIT.LINE) parts.push("self-baseline");
-  else if (name === INLINE_REF_NAME.PATH) parts.push("wrap-anywhere");
+  else {
+    parts.push("whitespace-normal");
+    if (name === INLINE_REF_NAME.PATH) parts.push("wrap-anywhere");
+  }
   if (gone) parts.push("line-through");
   if (look === INLINE_REF_LOOK.LINK && pressable) {
     parts.push("group-hover/inline-ref:underline group-hover/inline-ref:underline-offset-2");
@@ -380,8 +388,12 @@ function InlineRefRoot({
           truncate={fit === INLINE_REF_FIT.LINE ? TEXT_TRUNCATE.START : false}
           className={labelClassName}
         >
-          {/* Note that a path is isolated, so the ellipsis at its start never reorders it. */}
-          {name === INLINE_REF_NAME.PATH ? <bdi>{label}</bdi> : label}
+          {/* Note that a path cut at its start is isolated, so the ellipsis never reorders it, and one that wraps is not, because a browser breaks at an isolate's edge, which would part it from its glyph. */}
+          {name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.LINE ? (
+            <bdi>{label}</bdi>
+          ) : (
+            label
+          )}
         </Text>
       )}
       {!stated ? null : <span className={stateClass(look, fit)}>{state}</span>}
