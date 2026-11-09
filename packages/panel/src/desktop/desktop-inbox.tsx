@@ -17,7 +17,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeRef } from "@repo/features/task-wire";
 import { backToWords, readFailedWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { ERROR_STATE_PLACEMENT, ErrorState, Toolbar } from "@repo/ui";
 import {
   agentTab,
@@ -41,6 +41,7 @@ import { NOT_FOUND_THING, NotFound } from "../not-found.js";
 import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { type AutomationsDoor, useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName, messageFailureWords } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { InboxCodeDoors } from "../tasks/inbox-code-card.js";
@@ -479,6 +480,14 @@ export const DesktopInbox = memo(function DesktopInbox({
       : () => tasks.agentView.onOpen(item.agentId);
   };
   useAppCommand(APP_COMMAND.OPEN_IN_TASK, openInTask());
+  // ⌘O acts on the item's task, or its agent where no task holds it, while the item shown takes it, so their menus print it.
+  const opensInTask =
+    !tasks.shown || (panelAgent !== undefined && taskId !== undefined) || opened === undefined
+      ? undefined
+      : opened.holder.kind === INBOX_HOLDER.TASK
+        ? shortcutSubject(SHORTCUT_SUBJECT.TASK, opened.holder.task.id)
+        : shortcutSubject(SHORTCUT_SUBJECT.AGENT, opened.item.agentId);
+  useShortcutTarget(opensInTask, OPEN_IN_TASK_KEYS);
   // The panel stands for the item asked for, by its task, or its agent where it has none (`use-tasks-tab.ts`).
   const panelFor = taskId ?? chosenAgentId;
   const { pages } = view;
@@ -539,6 +548,8 @@ export const DesktopInbox = memo(function DesktopInbox({
                 onMark: markItem,
                 onClose: resolveItems,
                 onRemind: marks.onRemind,
+                // The thread hands its crumbs the keys only while it is the item shown and the panel beside it does not hold them.
+                keys: opened?.item.id === listed.item.id && !sideFocused,
               }}
             />
           </TaskMentions>
@@ -705,6 +716,9 @@ export const DesktopInbox = memo(function DesktopInbox({
     </LinkWorkspaceProvider>
   );
 });
+
+/** The key the Inbox offers on the item shown's task or agent, which opens it in its full place. */
+const OPEN_IN_TASK_KEYS: readonly KeyedCommand[] = [APP_COMMAND.OPEN_IN_TASK];
 
 /**
  * The chosen item's thread (`InboxPane`), its box's drafts read here,

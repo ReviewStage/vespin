@@ -44,6 +44,7 @@ import {
   UserCheckIcon,
 } from "@repo/ui/icons";
 import type { MenuAction } from "./desktop/action-menu.js";
+import type { ShortcutSubject } from "./shortcut-target.js";
 
 /** Where a command is offered: a menu on a row that names its thing, or ⌘K, whose row names nothing. */
 export const COMMAND_PLACE = {
@@ -187,14 +188,18 @@ export function commandHead(item: PanelCommand): { label: string; icon: React.JS
 
 /**
  * The command as an action menu draws it, on a row that names its thing:
- * its verb and glyph, and its chord where `keyed` says the chord acts on
- * what the menu does, as on the open task's menu and on no other task's.
+ * its verb and glyph, and its chord where the chord acts on `subject`, what
+ * the menu acts on, as on the open task's menu and on no other task's
+ * (`shortcut-target.ts`), read as the menu draws; none where the menu acts
+ * on nothing a key reaches.
  */
 export function commandAction(
   item: PanelCommand,
   onSelect: () => void,
-  keyed: boolean,
+  subject: ShortcutSubject | undefined,
 ): MenuAction {
   const action: MenuAction = { ...commandHead(item), onSelect };
-  return keyed && item.command !== undefined ? { ...action, command: item.command } : action;
+  return subject === undefined || item.command === undefined
+    ? action
+    : { ...action, command: item.command, subject };
 }

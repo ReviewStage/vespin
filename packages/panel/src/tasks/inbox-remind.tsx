@@ -8,6 +8,7 @@ import { type RefObject, useCallback } from "react";
 import type { Kept } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
+import type { ShortcutSubject } from "../shortcut-target.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import {
   DATE_PICKER_CLOSE,
@@ -150,11 +151,15 @@ function clearReminderActions(item: InboxItem, onRemind: InboxReminder): MenuAct
 /**
  * An item's menu's reminder entry: Remind me, a submenu of the times and,
  * where the menu's surface holds a picker, a time of the reader's own,
- * printing H where `keyed`, on any item, open or settled, as H sets a
- * reminder on any; and at its foot Clear reminder, on an item with a
+ * printing H where H sets `subject`'s, on any item, open or settled, as H
+ * sets a reminder on any; and at its foot Clear reminder, on an item with a
  * reminder already, whose time its row says (`InboxItemMarks`).
  */
-export function remindEntries(item: InboxItem, doors: RemindDoors, keyed: boolean): MenuEntry[] {
+export function remindEntries(
+  item: InboxItem,
+  doors: RemindDoors,
+  subject: ShortcutSubject,
+): MenuEntry[] {
   const { onPick, onRemind } = doors;
   const pick: MenuAction[] =
     onPick === undefined
@@ -168,7 +173,8 @@ export function remindEntries(item: InboxItem, doors: RemindDoors, keyed: boolea
       ...pick,
       ...clearReminderActions(item, onRemind),
     ],
-    ...(keyed ? { command: APP_COMMAND.REMIND_ME } : undefined),
+    command: APP_COMMAND.REMIND_ME,
+    subject,
   };
   return [remind];
 }

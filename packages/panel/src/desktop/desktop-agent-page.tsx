@@ -54,6 +54,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { MemberDirectory } from "../member-directory.js";
 import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
+import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
@@ -89,6 +90,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 import {
+  AGENT_KEYS,
   type AgentMenuDoors,
   type AgentTerminalDoors,
   agentMenuGroups,
@@ -325,8 +327,10 @@ function AgentPageBar({
   const menu = useMenu(shown);
   const { read, agentPin, section, dialog: sectionDialog } = useAgentOwnDoors(tasks, agent, shown);
   // Note that the page's own head already leads with the Slack crumb an agent started from Slack opens, so its menu offers no Open in Slack beside it.
+  // The page's agent is what its keys act on while it stands, wherever a menu of it is drawn.
+  useShortcutTarget(shown ? actions.subject : undefined, AGENT_KEYS);
   const groups = agentMenuGroups({
-    chosen: true,
+    subject: actions.subject,
     ...actions.doors,
     onOpenInSlack: undefined,
     read,

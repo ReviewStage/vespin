@@ -254,7 +254,7 @@ test("while the default and the keys are read, placeholder rows stand in each gr
   act(() => root.render(withQueryClient(createElement(AgentsPage, { signedIn: true }))));
 
   assert.deepEqual(placeholders(page), [
-    ["Reading your keys", 4],
+    ["Reading your keys", 2],
     ["Reading your default", 3],
   ]);
   await settle();

@@ -556,7 +556,7 @@ export function paneToggleAction(
 /** Open on GitHub as an item of a phone's ⋯, dimmed with no page to open yet, as the bar's button is. */
 function gitHubAction(onGitHub: (() => void) | undefined, detail?: string): MenuAction {
   return {
-    ...commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => onGitHub?.(), false),
+    ...commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => onGitHub?.(), undefined),
     detail,
     disabled: onGitHub === undefined,
   };

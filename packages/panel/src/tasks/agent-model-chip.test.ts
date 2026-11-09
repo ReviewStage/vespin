@@ -271,14 +271,14 @@ test("on a Claude Code agent the menu offers Claude models alone with Fast and n
   assert.match(retired.foot, /Fast/u);
 });
 
-test("a Codex agent's menu ends on \"Using ChatGPT plan\" and Manage usage, before its first turn settles too, the link opening ChatGPT's usage settings, while a Claude Code agent's says its Claude plan and the menu of an agent on the retired runtime names no payer", () => {
+test("a Codex agent's menu ends on \"Using Codex plan\" and Manage usage, before its first turn settles too, the link opening ChatGPT's usage settings, while a Claude Code agent's says its Claude plan and the menu of an agent on the retired runtime names no payer", () => {
   const opened: string[] = [];
   fakeAppPlatform({ assetBase: () => "https://app.test/", openWeb: (href) => opened.push(href) });
   const codex = openMenuOn(AGENT_RUNTIME.CODEX, {
     model: "openai/gpt-6.1-sol",
     effort: "low",
   });
-  assert.equal(codex.line, "Using ChatGPT planManage usage");
+  assert.equal(codex.line, "Using Codex planManage usage");
   const link = [...codex.menu.querySelectorAll("a")].find((a) => a.textContent === "Manage usage");
   assert.ok(link, "Manage usage is a link");
   act(() => link.click());

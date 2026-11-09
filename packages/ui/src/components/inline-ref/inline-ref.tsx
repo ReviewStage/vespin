@@ -91,7 +91,14 @@ export const INLINE_REF_NAME = {
   NAME: "name",
   /** A path, in the code face and cut at its start, so its last part stays in sight. */
   PATH: "path",
-  /** A short name kept whole with its glyph and its standing, never wrapped: a date, a pull request's key. */
+  /**
+   * A short name kept whole with its glyph and its standing, never wrapped: a
+   * date, a pull request's key. Note that in running words it stands as a
+   * token one line tall does, one box that moves to the next line whole and
+   * is never wider than its column, its name fading where a column too narrow
+   * for it cuts it, because a name that never breaks would otherwise run past
+   * the column's edge.
+   */
   WHOLE: "whole",
 } as const;
 
@@ -240,8 +247,7 @@ function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
 const FLOW_NAME_WRAP = {
   [INLINE_REF_NAME.NAME]: "whitespace-normal wrap-break-word",
   [INLINE_REF_NAME.PATH]: "whitespace-normal wrap-anywhere",
-  [INLINE_REF_NAME.WHOLE]: "wrap-normal",
-} as const satisfies Record<InlineRefName, string>;
+} as const satisfies Record<Exclude<InlineRefName, typeof INLINE_REF_NAME.WHOLE>, string>;
 
 /**
  * A token's name, alone on the words' baseline where it is one line: struck
@@ -267,7 +273,7 @@ function labelClass({
 }): string {
   const parts = ["ui-inline-ref-label"];
   if (fit === INLINE_REF_FIT.LINE) parts.push("self-baseline");
-  else parts.push(FLOW_NAME_WRAP[name]);
+  else if (name !== INLINE_REF_NAME.WHOLE) parts.push(FLOW_NAME_WRAP[name]);
   if (gone) parts.push("line-through");
   if (look === INLINE_REF_LOOK.LINK && pressable) {
     parts.push("group-hover/inline-ref:underline group-hover/inline-ref:underline-offset-2");
@@ -373,7 +379,8 @@ function InlineRefRoot({
     carded: boolean;
   }): React.JSX.Element {
   const linkAddress = useLinkAddress(linkHref);
-  const fit = useInlineRefFit(ownFit);
+  const scoped = useInlineRefFit(ownFit);
+  const fit = name === INLINE_REF_NAME.WHOLE ? INLINE_REF_FIT.LINE : scoped;
   const keys = useButtonKeys(rest.onBlur);
   const pressable = onPress !== undefined;
   const leaving = pressable && leaves && linkHref !== undefined;

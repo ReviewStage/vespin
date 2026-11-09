@@ -45,6 +45,7 @@ import {
 } from "@repo/database/models/provider-key-seal";
 import {
   removeProviderKey,
+  reorderSubscriptions,
   saveProviderKey,
   setPlanStatus,
 } from "@repo/database/models/provider-key-store";
@@ -69,6 +70,7 @@ import {
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -148,6 +150,7 @@ import {
 } from "../sessions/agent-sessions.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
+import { turnPayerOf } from "./agent-runtime-choice.js";
 import { CODER } from "./bounds.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { reconcileAgent } from "./reconcile.js";
@@ -1381,6 +1384,29 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           AGENT_PAYER.CLAUDE_SUBSCRIPTION,
           false,
         ]);
+
+        // A key saved now joins the bottom of the one order, and pays first once it is moved to its top, since a key always has room.
+        const keyOwner = { ...owner, kind: PROVIDER_KEY_KIND.API_KEY };
+        const key = yield* saveProviderKey(
+          userId,
+          keyOwner.provider,
+          keyOwner.kind,
+          sealProviderKey(ring.success, keyOwner, Redacted.make("sk-ant-api03-fixture-order-key")),
+          "sk-ant-api03…-key",
+          null,
+          now,
+        );
+        const bottom = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
+        yield* reorderSubscriptions(userId, owner.provider, [key]);
+        const top = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
+        assert.deepEqual(
+          [bottom.payer, bottom.subscriptionId === second, top],
+          [
+            AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+            false,
+            { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined },
+          ],
+        );
       }),
   );
 

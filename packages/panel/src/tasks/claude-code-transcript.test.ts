@@ -368,6 +368,30 @@ test("an agent paid for by a plan says the plan where an agent on a key names th
   );
   assert.equal(
     agentPayerLine(AGENT_PAYER.CHATGPT_SUBSCRIPTION, MODEL_PROVIDER.OPENAI, 2.41),
-    "Using ChatGPT plan",
+    "Using Codex plan",
   );
+});
+
+test("a usage-limit notice stays visible between the work before a pause and the answer after it", () => {
+  const { container } = drawn([
+    storedPart("Read", { file_path: "/workspace/repository/README.md" }, "Read the guide."),
+    { type: "data-usage-limit", data: { agent: "Claude", resetsAt: Date.UTC(2026, 10, 9, 23) } },
+    storedPart("Bash", { command: "pnpm test" }, "Tests passed."),
+    { type: "text", text: "The work is complete." },
+  ]);
+  assert.ok(container.textContent?.includes("Claude usage limit reached"));
+  assert.ok(container.textContent?.includes("Resumes at"));
+  assert.ok(
+    (container.textContent ?? "").indexOf("Claude usage limit reached") <
+      (container.textContent ?? "").indexOf("The work is complete."),
+  );
+});
+
+test("a usage limit with no known reset tells the reader to send a message", () => {
+  const { container } = drawn({
+    type: "data-usage-limit",
+    data: { agent: "Codex", resetsAt: null },
+  });
+  assert.ok(container.textContent?.includes("Codex usage limit reached"));
+  assert.ok(container.textContent?.includes("Send a message to continue"));
 });

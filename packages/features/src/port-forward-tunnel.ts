@@ -3,8 +3,9 @@
  *
  * The port is listened on at `127.0.0.1` (the `ListenOnLoopback` seam the
  * platform hands over `node:net`), on the same port where it is free and on
- * the next free one where it is not; the scope it is forwarded in holds the
- * listener, and its close lets the port go, its connections with it.
+ * the next free one where it is not, or on the one local port the caller
+ * names and none other; the scope it is forwarded in holds the listener, and
+ * its close lets the port go, its connections with it.
  *
  * Its tunnel is one relay socket (`sandbox-tunnel-wire.ts`) opened under the
  * account's credential (`relay-credential.ts`) when the first connection is
@@ -52,6 +53,13 @@ export interface PortForwardTunnelDependencies {
   readonly listen: ListenOnLoopback;
 }
 
+/** The sandbox port to forward, and the one local port to listen on where the caller names it rather than taking the next free. */
+export interface ForwardTarget {
+  readonly agentId: string;
+  readonly port: number;
+  readonly localPort?: number;
+}
+
 /** One port forwarded: the local port it is listened on, if any, and whether its tunnel stands open now. */
 export interface ForwardedPort {
   readonly port: number;
@@ -97,11 +105,15 @@ function heard(tunnel: Tunnel, text: string): Effect.Effect<void> {
   return connection.close;
 }
 
-/** The first local port from the sandbox's own up that listens, and what it accepts; nothing where none of them is free. */
-function listened(listen: ListenOnLoopback, port: number) {
+/** The local port named, or else the first from the sandbox's own up, that listens, and what it accepts; nothing where none tried is free. */
+function listened(listen: ListenOnLoopback, target: ForwardTarget) {
   return Effect.gen(function* () {
-    const last = Math.min(port + LOCAL_PORT_TRIES - 1, FORWARD_PORT.MAX);
-    for (let localPort = port; localPort <= last; localPort++) {
+    const first = target.localPort ?? target.port;
+    const last =
+      target.localPort === undefined
+        ? Math.min(first + LOCAL_PORT_TRIES - 1, FORWARD_PORT.MAX)
+        : first;
+    for (let localPort = first; localPort <= last; localPort++) {
       const accepted = yield* listen(localPort);
       if (accepted !== undefined) return { localPort, accepted };
     }
@@ -117,7 +129,7 @@ function listened(listen: ListenOnLoopback, port: number) {
  */
 export function forwardPort(
   dependencies: PortForwardTunnelDependencies,
-  target: { readonly agentId: string; readonly port: number },
+  target: ForwardTarget,
   moved: Effect.Effect<void>,
 ): Effect.Effect<ForwardedPort, never, Scope.Scope> {
   const { socketOrigin, credential, openSocket, listen } = dependencies;
@@ -190,7 +202,7 @@ export function forwardPort(
 
   return Effect.gen(function* () {
     const scope = yield* Effect.scope;
-    const bound = yield* listened(listen, target.port);
+    const bound = yield* listened(listen, target);
     const forward: Forward = {
       agentId: target.agentId,
       port: target.port,

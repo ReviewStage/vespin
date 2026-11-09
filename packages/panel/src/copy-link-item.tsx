@@ -1,10 +1,16 @@
 import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
-import { createStore, useSelector } from "@tanstack/react-store";
-import { createContext, useContext, useEffect } from "react";
+import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
+import { createContext, useContext } from "react";
 import { appPlatform, opensTabs } from "./app-platform.js";
 import { commandAction, PANEL_COMMAND } from "./command-items.js";
 import { LINK_COPY, useCopyToast } from "./copy-feedback.js";
 import type { MenuAction } from "./desktop/action-menu.js";
+import {
+  SHORTCUT_SUBJECT,
+  shortcutSubject,
+  useShortcutTarget,
+  useShortcutTargetsOf,
+} from "./shortcut-target.js";
 import { useNumberedPlace } from "./tasks/use-link-standing.js";
 
 /**
@@ -28,8 +34,8 @@ import { useNumberedPlace } from "./tasks/use-link-standing.js";
  * neither.
  */
 
-/** The links ⇧⌘C would copy now, as the keyboard stands outside the side panel and in it, which the window's Copy link holds (`useHoldChordLinks`). */
-const chordLinksStore = createStore<readonly string[]>([]);
+/** The key a link's Copy link prints where it is the one the chord copies now. */
+const COPY_LINK_KEYS: readonly KeyedCommand[] = [APP_COMMAND.COPY_LINK];
 
 const LinkWorkspaceContext = createContext<string | undefined>(undefined);
 
@@ -41,18 +47,16 @@ export function useLinkWorkspace(): string | undefined {
   return useContext(LinkWorkspaceContext);
 }
 
-/** Holds the links ⇧⌘C copies now, the first at hand outside the side panel and in it, for as long as the window's Copy link stands. */
+/** Holds the links ⇧⌘C copies now, the first at hand outside the side panel and in it, as the keys' targets (`shortcut-target.ts`), for as long as the window's Copy link stands. */
 export function useHoldChordLinks(outside: string | undefined, inPanel: string | undefined): void {
-  useEffect(() => {
-    const held = [outside, inPanel].filter((link) => link !== undefined);
-    chordLinksStore.setState(() => held);
-    return () => chordLinksStore.setState((standing) => (standing === held ? [] : standing));
-  }, [outside, inPanel]);
-}
-
-/** The links ⇧⌘C would copy now, which a Copy link item prints the chord beside. */
-export function useChordLinks(): readonly string[] {
-  return useSelector(chordLinksStore);
+  useShortcutTarget(
+    outside === undefined ? undefined : shortcutSubject(SHORTCUT_SUBJECT.LINK, outside),
+    COPY_LINK_KEYS,
+  );
+  useShortcutTarget(
+    inPanel === undefined ? undefined : shortcutSubject(SHORTCUT_SUBJECT.LINK, inPanel),
+    COPY_LINK_KEYS,
+  );
 }
 
 /** Opens `link`, an app link, in a tab of its own, which a middle-click on a row going to it takes; none where the window opens no tabs. */
@@ -62,8 +66,8 @@ export function openInTabOf(link: string): (() => void) | undefined {
 
 /**
  * Copy link, copying `link`, an app link, through `copy`, the window's menu
- * copy (`useCopyToast`), printing ⇧⌘C where the chord copies the same link,
- * one of `chord` (`useChordLinks`); and under it Open in new tab, opening
+ * copy (`useCopyToast`), printing ⇧⌘C where the chord copies the same link
+ * (`useHoldChordLinks`); and under it Open in new tab, opening
  * the link in a tab of its own, where the window opens tabs: the items every
  * menu offering a thing's link draws, so no menu offers one without the
  * other. Note that a GitHub address is no app link and is offered as Copy
@@ -73,17 +77,17 @@ export function openInTabOf(link: string): (() => void) | undefined {
 export function linkItems(
   copy: (words: string, label: string) => void,
   link: string,
-  chord: readonly string[],
 ): MenuAction[] {
+  const subject = shortcutSubject(SHORTCUT_SUBJECT.LINK, link);
   const copied = commandAction(
     PANEL_COMMAND.COPY_LINK,
     () => copy(link, LINK_COPY.COPIED),
-    chord.includes(link),
+    subject,
   );
   const open = openInTabOf(link);
   return open === undefined
     ? [copied]
-    : [copied, commandAction(PANEL_COMMAND.OPEN_IN_NEW_TAB, open, false)];
+    : [copied, commandAction(PANEL_COMMAND.OPEN_IN_NEW_TAB, open, subject)];
 }
 
 /** The copy of a place's link under the workspace the surface hands down, saying Link copied; none where it hands down none. */
@@ -108,10 +112,11 @@ function usePlaceLink(): (place: LinkPlace) => string | undefined {
 export function useLinkItems(): (place: LinkPlace) => MenuAction[] {
   const linkOfPlace = usePlaceLink();
   const copy = useCopyToast();
-  const chord = useChordLinks();
+  // Note that Copy link prints ⇧⌘C as the chord's link changes, so whoever draws it is drawn again as it does.
+  useShortcutTargetsOf(APP_COMMAND.COPY_LINK);
   return (place) => {
     const link = linkOfPlace(place);
-    return link === undefined ? [] : linkItems(copy, link, chord);
+    return link === undefined ? [] : linkItems(copy, link);
   };
 }
 

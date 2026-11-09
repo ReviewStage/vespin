@@ -319,7 +319,7 @@ it.effect(
     }),
 );
 
-it.effect("turning forwarding off closes the agent's public link", () =>
+it.effect("turning forwarding off keeps the agent's public link", () =>
   Effect.gen(function* () {
     const { set, share, serve, shared } = yield* subject();
     serve(AGENT_ID, [3000]);
@@ -329,6 +329,6 @@ it.effect("turning forwarding off closes the agent's public link", () =>
 
     yield* set({ agentId: AGENT_ID, on: false });
 
-    assert.equal(shared(AGENT_ID), undefined);
+    assert.deepEqual(shared(AGENT_ID), { port: 3000, url: "https://sb-3000.share.test" });
   }),
 );

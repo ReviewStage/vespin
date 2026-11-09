@@ -74,18 +74,13 @@ import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from
 import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useCopyToast } from "../copy-feedback.js";
-import {
-  LinkWorkspaceProvider,
-  linkItems,
-  useChordLinks,
-  useLinkItems,
-  useOpenInTab,
-} from "../copy-link-item.js";
+import { LinkWorkspaceProvider, linkItems, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
+import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -378,7 +373,8 @@ function PersonActions({
   const openSettings = useOpenSettings();
   const standing = usePersonRoute().workspace;
   const copy = useCopyToast();
-  const chord = useChordLinks();
+  // Note that a row's Copy link prints ⇧⌘C as the chord's link changes, so the row is drawn again as it does.
+  useShortcutTargetsOf(APP_COMMAND.COPY_LINK);
   const menu = useMenu(tasks.shown);
   const member = person.kind === ACTOR_KIND.PERSON ? person : undefined;
   const you = member?.you === true;
@@ -393,7 +389,7 @@ function PersonActions({
   const link = slug === undefined ? undefined : linkOf({ kind: LINK_PLACE.PERSON, userId }, slug);
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
   const copies = [
-    ...(link === undefined ? [] : linkItems(copy, link, chord)),
+    ...(link === undefined ? [] : linkItems(copy, link)),
     ...(email === undefined
       ? []
       : [{ label: "Copy email", icon: <MailIcon />, onSelect: () => copy(email, "Email copied") }]),

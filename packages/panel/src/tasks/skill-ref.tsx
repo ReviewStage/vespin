@@ -9,6 +9,7 @@ import {
   HoverCardRow,
   HoverCardSkeleton,
   INLINE_REF_LOOK,
+  INLINE_REF_NAME,
   InlineRef,
 } from "@repo/ui";
 import { type SkillOption, skillWord } from "@repo/ui/skill-mention";
@@ -105,10 +106,11 @@ export function skillOption(skill: SkillOption): ComboboxOption {
 }
 
 /**
- * A skill named in place: the book and its `/name` as a mention's pill, which
- * hangs its card and, handed `onOpen`, is one button that opens its file. Note
- * that a skill not yet read (`skill` none) still stands as its name and hangs
- * the card's placeholder, which the read fills in.
+ * A skill named in place: the book and its `/name` as a mention's pill, kept
+ * whole in words as one thing, which hangs its card and, handed `onOpen`, is
+ * one button that opens its file. Note that a skill not yet read (`skill`
+ * none) still stands as its name and hangs the card's placeholder, which the
+ * read fills in.
  */
 export function SkillRef({
   name,
@@ -126,6 +128,7 @@ export function SkillRef({
       glyph={<SkillMark />}
       kind={THING_WORD[THING_KIND.SKILL]}
       label={skillWord(name)}
+      name={INLINE_REF_NAME.WHOLE}
       onPress={onOpen === undefined ? undefined : () => onOpen()}
       hintLabel={skill?.path}
       card={

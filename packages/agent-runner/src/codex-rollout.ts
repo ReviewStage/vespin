@@ -62,8 +62,11 @@ export const restoreRollouts = Effect.fn("agent-runner/codex/restoreRollouts")(f
     const text = entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
     yield* Effect.tryPromise(async () => {
       await mkdir(dirname(path), { recursive: true });
-      // Note that the file is made only where none stands, never through a link left in its place.
-      await writeFile(path, text, { flag: "wx" });
+      // Note that the file is made only where none stands, never through a link left in its place, and
+      // one made since the check above stands as written back.
+      await writeFile(path, text, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "EEXIST") throw error;
+      });
     });
   }
 });

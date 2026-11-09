@@ -1671,7 +1671,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             // An interrupted subagent did not do its work: its call settles as an error.
             "output-error",
           ],
+          ["data-usage-limit"],
         ]);
+        const limitNotice = rows.at(-1)?.parts.at(-1);
+        assert.ok(limitNotice?.type === "data-usage-limit");
+        assert.deepEqual(limitNotice.data, { agent: "Codex", resetsAt: null });
         assert.ok(!JSON.stringify(rows).includes("iVBORw0K"));
         assert.deepEqual(
           ended.map((turn) => [turn.status, turn.failureDetail]),
@@ -2078,10 +2082,12 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             row.id === second,
             row.status,
             row.limitResetsAt?.toISOString() ?? null,
+            row.usagePercent,
+            row.usageWindowMins,
           ]),
           [
-            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null],
-            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString()],
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null, null],
+            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString(), 100, 300],
           ],
         );
       }),
@@ -2321,12 +2327,31 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     messagesOfLaunch.map((message, index) => ({ sequence: from + index, message }) as RunnerEvent);
 
   /** One launch whose one turn Claude Code ended in error, with what it said first. */
-  const failedClaudeLaunch = (lineId: string, said: readonly WireValue[]): readonly unknown[] => {
+  const failedClaudeLaunch = (
+    lineId: string,
+    said: readonly WireValue[],
+    limitReply = false,
+  ): readonly unknown[] => {
     const top = { parent_tool_use_id: null, session_id: SESSION };
     return [
       { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
       { type: "system", subtype: "init", ...top },
       ...said,
+      ...(limitReply
+        ? [
+            {
+              type: "assistant",
+              error: "rate_limit",
+              message: {
+                id: "msg_limit",
+                content: [
+                  { type: "text", text: "You've hit your session limit · resets 11pm (UTC)" },
+                ],
+              },
+              ...top,
+            },
+          ]
+        : []),
       { type: "result", subtype: "success", is_error: true, ...top },
       { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
     ];
@@ -2370,6 +2395,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
                 status: "rejected",
                 rateLimitType: "five_hour",
                 resetsAt: resetsAt / 1000,
+                utilization: 1,
               },
               uuid: randomUUID(),
               ...top,
@@ -2405,6 +2431,15 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+        // The usage the limit reported stays the plan's latest, in percent of its five hours, through the turns after it.
+        const [row] = yield* listProviderKeyRows(
+          agent.userId,
+          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+        );
+        assert.deepEqual(
+          [row?.usagePercent, row?.usageWindowMins, row?.usageResetsAt?.toISOString()],
+          [100, 300, new Date(resetsAt).toISOString()],
+        );
       }),
   );
 
@@ -2420,18 +2455,22 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const top = { parent_tool_use_id: null, session_id: SESSION };
         const limited = numberedFrom(
           0,
-          failedClaudeLaunch(agent.lineId, [
-            {
-              type: "rate_limit_event",
-              rate_limit_info: {
-                status: "rejected",
-                rateLimitType: "five_hour",
-                resetsAt: resetsAt / 1000,
+          failedClaudeLaunch(
+            agent.lineId,
+            [
+              {
+                type: "rate_limit_event",
+                rate_limit_info: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: resetsAt / 1000,
+                },
+                uuid: randomUUID(),
+                ...top,
               },
-              uuid: randomUUID(),
-              ...top,
-            },
-          ]),
+            ],
+            true,
+          ),
         );
         yield* post(agent.bearer, limited);
         const waiting = (yield* latestTurnsOfReached([agent.target.conversationId])).get(
@@ -2449,6 +2488,13 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         yield* post(bearer, numberedFrom(limited.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
 
+        assert.deepEqual(
+          finished.rows.flatMap((row) =>
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
+          ),
+          [{ agent: "Claude", resetsAt }],
+        );
+        assert.ok(!JSON.stringify(finished.rows).includes("You've hit your session limit"));
         assert.equal(waiting?.status, TURN_STATUS.RUNNING);
         assert.equal(waiting?.waitsUntil?.getTime(), resetsAt);
         assert.ok((waiting?.leaseUntil?.getTime() ?? 0) > resetsAt);
@@ -2497,21 +2543,30 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const top = { parent_tool_use_id: null, session_id: SESSION };
         const limited = numberedFrom(
           0,
-          failedClaudeLaunch(agent.lineId, [
-            {
-              type: "rate_limit_event",
-              rate_limit_info: {
-                status: "rejected",
-                rateLimitType: "five_hour",
-                resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+          failedClaudeLaunch(
+            agent.lineId,
+            [
+              {
+                type: "rate_limit_event",
+                rate_limit_info: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+                },
+                uuid: randomUUID(),
+                ...top,
               },
-              uuid: randomUUID(),
-              ...top,
-            },
-          ]),
+            ],
+            true,
+          ),
         );
         yield* post(agent.bearer, limited);
         const cut = yield* transcriptOf(agent.target.conversationId);
+        assert.ok(!JSON.stringify(cut.rows).includes("You've hit your session limit"));
+        assert.deepEqual(
+          cut.rows.flatMap((row) => row.parts.filter((part) => part.type === "data-usage-limit")),
+          [],
+        );
 
         // The launch on the next subscription, handed the turn's own line again.
         const bearer = randomBytes(32).toString("base64url");

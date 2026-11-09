@@ -59,7 +59,7 @@ import { SKILL_ROOT } from "../repository-skills.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
 import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
-import { turnPayerOf } from "./agent-runtime-choice.js";
+import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import {
   type HarnessLaunch,
@@ -260,15 +260,23 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
 
   // The agent's model, effort, and fast mode as they stand go ahead of every message, which a change since the launch takes effect from.
   // Note that the subscription the runner launched on is asked first, so a message to a live runner on a refused or limited plan is
-  // refused as a launch would be; a runner idle on another credential than a launch would now choose is launched again before it
-  // gets here (`staleWarm`); an agent on its API key has no plan to ask, and its runner holds the key it launched with.
+  // refused as a launch would be, unless another payer has room (`roomAfterLimit`), as the turn's relaunch on that payer would
+  // choose it, which the message then reaches; a runner idle on another credential than a launch would now choose is launched
+  // again before it gets here (`staleWarm`); an agent on its API key has no plan to ask, and its runner holds the key it launched with.
   const ahead = (agent: Agent) => {
     const effort = effortOf(agent.effort);
     const model = providerModelOf(agent.model);
     const asked = Effect.gen(function* () {
       const recorded = yield* recordedPayer(agent);
       if (recorded.payer === AGENT_PAYER.API_KEY) return;
-      yield* standingPlan(recorded.subscriptionId);
+      yield* standingPlan(recorded.subscriptionId).pipe(
+        Effect.catchTag("LaunchRefused", (refused) =>
+          Effect.flatMap(
+            roomAfterLimit(userId, MODEL_PROVIDER.ANTHROPIC, recorded.subscriptionId),
+            (room) => (room ? Effect.void : Effect.fail(refused)),
+          ),
+        ),
+      );
     });
     return Effect.as(asked, {
       lines: [

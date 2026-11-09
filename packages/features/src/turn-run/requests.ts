@@ -60,6 +60,8 @@ export const TURN_FAILURE = {
   NO_PROGRESS: "no_progress",
   /** The turn's runner ended, or was replaced by a newer launch, before the turn did. */
   RUNNER_LOST: "runner_lost",
+  /** The plan's usage limit cut the turn short, and no launch on the next payer, or past the limit's reset, took it up before its deadline. */
+  PLAN_LIMIT: "plan_limit",
   /** The model refused to answer the turn's newest model turn, and no other model retried it. */
   REFUSAL: "refusal",
 } as const;

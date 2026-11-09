@@ -30,6 +30,7 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction, rowMenu } from "../desktop/action-menu.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import {
   checkoutCommand,
   type DockedPullRequest,
@@ -120,7 +121,7 @@ function branchActions(
           commandAction(
             PANEL_COMMAND.COPY_GITHUB_LINK,
             () => doors.copy(pullRequestUrl, LINK_COPY.COPIED),
-            false,
+            undefined,
           ),
         ]),
     ...(branch === null
@@ -158,8 +159,15 @@ function pullRequestPlaces(
   const openGitHub = () => doors.openGitHub(url);
   if (inApp === undefined) return { press: openGitHub, other: undefined };
   return onGitHub
-    ? { press: openGitHub, other: commandAction(PANEL_COMMAND.OPEN_IN_APP, inApp, false) }
-    : { press: inApp, other: commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, openGitHub, false) };
+    ? { press: openGitHub, other: commandAction(PANEL_COMMAND.OPEN_IN_APP, inApp, undefined) }
+    : {
+        press: inApp,
+        other: commandAction(
+          PANEL_COMMAND.OPEN_ON_GITHUB,
+          openGitHub,
+          shortcutSubject(SHORTCUT_SUBJECT.GITHUB_PAGE, url),
+        ),
+      };
 }
 
 /** What the box's foot wears while a branch stands with no pull request: the branch's chip, which opens it compared on GitHub, and its ⋯, which its right-click drops too, offering the copies; nothing otherwise, the pull request's row standing over the box instead. */
