@@ -135,7 +135,7 @@ export const mintPreviewSession = (sandbox: PageSandbox, member: PreviewMember, 
 export const readPreviewSession = (sandbox: PageSandbox, token: string, now: number) =>
   readToken(sandbox, PREVIEW_TOKEN_PURPOSE.SESSION, token, now);
 
-/** A path a preview may be returned to after sign-in: one of its own, never another site's. */
+/** A path a preview may be returned to after sign-in: one of its own, never another site's; a tab or line break, which a URL parser drops, is refused too. */
 export function previewReturnPath(asked: string | null): string {
-  return asked !== null && /^\/(?![/\\])/u.test(asked) ? asked : "/";
+  return asked !== null && /^\/(?![/\\])/u.test(asked) && !/[\t\n\r]/u.test(asked) ? asked : "/";
 }

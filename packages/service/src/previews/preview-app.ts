@@ -210,20 +210,25 @@ const passedOn = (request: Request, upstream: string, origin: string, asked: str
       redirect: "manual",
       ...(hasBody ? { body: request.body, duplex: "half" } : {}),
     };
-    const answered = yield* Effect.tryPromise(() => fetch(new URL(asked, upstream), init)).pipe(
+    const routeOrigin = new URL(upstream).origin;
+    // Note that the path is joined to the route's origin rather than resolved against it, so a path like `//other.host/` stays on the route.
+    const target = new URL(`${routeOrigin}${asked}`);
+    if (target.origin !== routeOrigin) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+    const answered = yield* Effect.tryPromise(() => fetch(target, init)).pipe(
       Effect.tapError((failure) =>
         Effect.logWarning("a preview's sandbox did not answer", failure),
       ),
       Effect.mapError(() => HOSTED_REFUSAL.UPSTREAM_ERROR),
     );
-    const back = new Headers(NEVER_KEPT);
+    const back = new Headers();
     for (const [name, value] of answered.headers) {
       if (name === "set-cookie" || DROPPED_RESPONSE_HEADERS.has(name)) continue;
       back.set(name, value);
     }
     for (const cookie of answered.headers.getSetCookie()) back.append("set-cookie", cookie);
+    // Our own cache rule goes on last, so nothing the sandbox answers lets the CDN keep a preview for another visitor.
+    for (const [name, value] of Object.entries(NEVER_KEPT)) back.set(name, value);
     const location = answered.headers.get("location") ?? "";
-    const routeOrigin = new URL(upstream).origin;
     if (location.startsWith(routeOrigin)) {
       back.set("location", `${origin}${location.slice(routeOrigin.length)}`);
     }

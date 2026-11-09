@@ -53,7 +53,13 @@ describe("preview links", () => {
 
   it("returns only to a path of the preview's own", () => {
     assert.equal(previewReturnPath("/docs?x=1"), "/docs?x=1");
-    for (const offSite of ["//evil.test", "/\\evil.test", "https://evil.test", null]) {
+    for (const offSite of [
+      "//evil.test",
+      "/\\evil.test",
+      "/\t/evil.test",
+      "https://evil.test",
+      null,
+    ]) {
       assert.equal(previewReturnPath(offSite), "/", String(offSite));
     }
   });
