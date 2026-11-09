@@ -29,11 +29,12 @@ import { SqlSchema } from "effect/sql";
  *
  * The plugin keeps no row for a membership that ended, so who left is read
  * off the workspace's own work: an account that created one of its tasks,
- * started one of its agents, saved a version of one of its tasks, or
- * answered one of its Inbox items, and is no longer a member. Each is named
- * by the name and picture their account holds now, which the window draws
- * grayed wherever their work names them; nobody the workspace's work does
- * not name is ever listed, and an account that is gone is not named at all.
+ * is still assigned to one, started one of its agents, saved a version of
+ * one of its tasks, or answered one of its Inbox items, and is no longer a
+ * member. Each is named by the name and picture their account holds now,
+ * which the window draws grayed wherever their work names them; nobody the
+ * workspace's work does not name is ever listed, and an account that is
+ * gone is not named at all.
  */
 
 /** The order roles are listed in: owners, then admins, then members. */
@@ -72,8 +73,9 @@ const findMembers = SqlSchema.findAll({
 /**
  * The condition that the account a statement reads is named by the
  * workspace's work and is no longer a member of it: it created one of its
- * tasks, started one of its agents, made one of its workspace automations,
- * saved a version of one of its tasks, or answered one of its Inbox items.
+ * tasks, is still assigned to one, started one of its agents, made one of
+ * its workspace automations, saved a version of one of its tasks, or
+ * answered one of its Inbox items.
  */
 export function formerOf(organizationId: string): SQL | undefined {
   const tasks = queryBuilder
@@ -88,6 +90,13 @@ export function formerOf(organizationId: string): SQL | undefined {
           .select({ id: task.userId })
           .from(task)
           .where(eq(task.organizationId, organizationId)),
+      ),
+      inArray(
+        user.id,
+        queryBuilder
+          .select({ id: task.assigneeId })
+          .from(task)
+          .where(and(eq(task.organizationId, organizationId), isNotNull(task.assigneeId))),
       ),
       inArray(
         user.id,

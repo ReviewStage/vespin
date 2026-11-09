@@ -17,7 +17,13 @@ import { inboxItem } from "@repo/database/schemas/inbox";
 import { inboxItemRead } from "@repo/database/schemas/inbox-item-read";
 import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openWorkspace,
+  startTask,
+} from "@repo/database/testing";
 import {
   ACCOUNT_INBOX_REPOSITORYLESS,
   type AccountInboxTask,
@@ -1941,7 +1947,7 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
     });
 
   it.effect(
-    "an item on a task waits on the task's assignee, else on its agent's starter, and moves with the assignee, alike in a plan's read, the account's, its To do count, its cursor, and the live reads",
+    "an item on a task waits on the task's assignee while a member, else on its agent's starter, and moves with the assignee, alike in a plan's read, the account's, its To do count, its cursor, and the live reads",
     () =>
       Effect.gen(function* () {
         const { agent, workspaceId } = yield* openAgentIn;
@@ -2014,11 +2020,19 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
           (yield* accountWaitingStamps(teammate)).map((stamp) => stamp.waitsOn),
           [owner],
         );
+        yield* updateTask(owner, taskId, { assigneeId: teammate });
+        yield* leaveWorkspace(workspaceId, teammate);
+        const owners = yield* accountInboxPast(owner, INBOX_CURSOR_START);
+        const left = {
+          waitsOn: owners.items.find((each) => each.id === itemId)?.waitsOn,
+          toDo: owners.plans.find((each) => each.planId === taskId)?.toDo,
+        };
+        assert.deepEqual(left, { waitsOn: owner, toDo: 1 }, "an assignee who left hands it back");
       }),
   );
 
   it.effect(
-    "a settled item still unread is counted in the account's read of whoever its task is assigned to, else of its agent's starter",
+    "a settled item still unread is counted in the account's read of whoever its task is assigned to, else of its agent's starter, as it is once the assignee left",
     () =>
       Effect.gen(function* () {
         const { agent, workspaceId } = yield* openAgentIn;
@@ -2041,8 +2055,16 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
         const assigned = yield* counted(teammate);
         yield* updateTask(owner, taskId, { assigneeId: owner });
         const reassigned = yield* counted(teammate);
+        // Written on again by its agent, so it is unread for the owner too.
+        yield* TestClock.adjust(Duration.seconds(1));
+        assert.ok(Option.isSome(yield* replyInboxItem(agent, "settled", "One more thing.")));
+        yield* updateTask(owner, taskId, { assigneeId: teammate });
+        const notTheOwners = yield* counted(owner);
+        yield* leaveWorkspace(workspaceId, teammate);
+        const leftToTheOwner = yield* counted(owner);
 
         assert.deepEqual([unassigned, assigned, reassigned], [false, true, false]);
+        assert.deepEqual([notTheOwners, leftToTheOwner], [false, true]);
       }),
   );
 

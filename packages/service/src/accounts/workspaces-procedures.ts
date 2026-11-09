@@ -18,9 +18,9 @@
  * answers the members as they then stand. Nobody removes or changes
  * themselves, whose way out is leaving, or the owner.
  * `POST /api/workspaces/leave` lets anyone but an owner leave. A member
- * removed, or one who leaves, lets go of every task of the workspace assigned
- * to them, in the plugin's own delete (the `task_assignee_leaves_with_member`
- * trigger).
+ * removed, or one who leaves, stays assigned to the workspace's tasks they
+ * were on, read as a former member (`workspace-members.ts`), until someone
+ * clears or changes it.
  * `POST /api/workspaces/delete` lets the owner alone delete a workspace,
  * though never the account's own first workspace, which goes only with the
  * account, and, where it is asked `ifAlone`, never one anyone else is a

@@ -26,7 +26,6 @@ import { taskPin } from "../../schemas/task-pin.js";
 import {
   getTestDB,
   joinWorkspace,
-  leaveWorkspace,
   openInboxItem,
   openTaskAgent,
   openWorkspace,
@@ -902,22 +901,6 @@ it.layer(getTestDB())("a task's assignee", (it) => {
         updateTask(dean, staying.id, { organizationId: initech, assigneeId: charles }),
       );
       assert.ok(Result.isFailure(refused) && refused.failure instanceof TaskAssigneeNotMember);
-    }),
-  );
-
-  it.effect("lets a former member's tasks of that workspace go, and no other workspace's", () =>
-    Effect.gen(function* () {
-      const { dean, charles, taskId, workspace } = yield* openSharedTask;
-      const elsewhere = yield* openWorkspace(dean);
-      yield* joinWorkspace(elsewhere, charles);
-      const other = yield* createTask(dean, { organizationId: elsewhere, assigneeId: charles });
-      yield* updateTask(dean, taskId, { assigneeId: charles });
-
-      // The member's row is deleted as the plugin deletes it, whichever write takes them out.
-      yield* leaveWorkspace(workspace, charles);
-
-      assert.equal(yield* assigneeReadBy(dean, taskId), undefined);
-      assert.equal(yield* assigneeReadBy(dean, other.id), charles);
     }),
   );
 

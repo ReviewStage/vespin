@@ -1923,7 +1923,9 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
           });
         }
         const landsIn = moved ? changes.organizationId : locked.value.organizationId;
-        yield* assigneeAdmitted(changes.assigneeId, landsIn);
+        // The assignee the task already names in its own workspace passes, a member who left among them.
+        const kept = !moved && changes.assigneeId === locked.value.assigneeId;
+        if (!kept) yield* assigneeAdmitted(changes.assigneeId, landsIn);
         // A task moved where its assignee is no member goes unassigned rather than assigned to someone who cannot read it.
         const unassigned =
           moved &&

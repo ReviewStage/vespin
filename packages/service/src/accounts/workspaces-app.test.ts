@@ -9,7 +9,7 @@ import {
 import { agentQueueNow, queueAgentMessage } from "@repo/database/models/agent-queue-store";
 import { createAgent } from "@repo/database/models/agent-store";
 import { createAutomation } from "@repo/database/models/automation-store";
-import { createTask, readTask } from "@repo/database/models/task-store";
+import { createTask, readTask, updateTask } from "@repo/database/models/task-store";
 import {
   type MemberSeams,
   OrganizationRefused,
@@ -1795,11 +1795,11 @@ it.effect(
 );
 
 it.effect(
-  "a member removed, or one who leaves, lets go of the workspace's tasks assigned to them, and keeps those of every other workspace",
+  "a member removed, or one who leaves, stays assigned to the workspace's tasks, is assigned to no other, and the members read names them as former",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
-      const { api, database } = plugin;
+      const { api, seams, database } = plugin;
       yield* Effect.gen(function* () {
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
@@ -1808,12 +1808,10 @@ it.effect(
           { userId: grace, role: "member" },
           { userId: alan, role: "member" },
         ]);
-        const initech = yield* openTeam(api, grace, [{ userId: ada, role: "member" }]);
-        const assigned = (organizationId: string, assigneeId: string) =>
-          createTask(ada, { organizationId, name: "Invites", assigneeId });
-        const gracesHere = yield* assigned(acme, grace);
-        const gracesThere = yield* assigned(initech, grace);
-        const alansHere = yield* assigned(acme, alan);
+        const assigned = (assigneeId: string) =>
+          createTask(ada, { organizationId: acme, name: "Invites", assigneeId });
+        const graces = yield* assigned(grace);
+        const alans = yield* assigned(alan);
         const assigneeOf = (taskId: string) =>
           Effect.map(
             readTask(ada, taskId),
@@ -1823,9 +1821,25 @@ it.effect(
         yield* removing(plugin, ada, acme, grace);
         yield* leaving(plugin, alan, acme);
 
-        assert.equal(yield* assigneeOf(gracesHere.id), undefined);
-        assert.equal(yield* assigneeOf(alansHere.id), undefined);
-        assert.equal(yield* assigneeOf(gracesThere.id), grace);
+        assert.equal(yield* assigneeOf(graces.id), grace);
+        assert.equal(yield* assigneeOf(alans.id), alan);
+        // A change naming the assignee a task already has stands; naming a former member anew is refused.
+        assert.ok(Option.isSome(yield* updateTask(ada, graces.id, { assigneeId: grace })));
+        const anew = yield* Effect.flip(updateTask(ada, alans.id, { assigneeId: grace }));
+        assert.equal(anew._tag, "TaskAssigneeNotMember");
+        const answered = yield* readMembers(seams, ada, membersAt(acme));
+        assert.deepEqual(answered, {
+          status: HOSTED_HTTP_STATUS.OK,
+          body: {
+            members: [
+              { userId: ada, name: "Ada Lovelace", email: `${ada}@app.test`, role: "owner" },
+            ],
+            former: [
+              { userId: alan, name: "Alan Turing" },
+              { userId: grace, name: "Grace Hopper" },
+            ],
+          },
+        });
       }).pipe(Effect.provide(database));
     }),
 );

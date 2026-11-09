@@ -74,7 +74,7 @@ export interface TaskChangeConfirmed {
  * owner's alone, into a workspace they are a member of; a repository is
  * reached in the workspace the task ends up in, a teammate's on the App
  * alone, since a task on a token is its owner's, and held to the task's
- * tree; an assignee is a member. Both are held again under the row's lock.
+ * tree; a new assignee is a member. Both are held again under the row's lock.
  * An archive an older caller asks for stops every agent of the task but
  * `caller`, the calling agent, which never stops itself, then settles the
  * task, or puts it back to work for an unarchive (`archive-settle.ts`); an
@@ -114,7 +114,8 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
             (each) => ({ repository: each.repository.fullName, githubAccess: each.access }),
           );
   const { assigneeId } = asked;
-  if (assigneeId !== undefined && assigneeId !== null) {
+  // Note that the assignee the task already names passes, since a member who left stays assigned until someone changes it.
+  if (assigneeId !== undefined && assigneeId !== null && assigneeId !== header.value.assigneeId) {
     const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(assigneeId, workspaceId));
     if (!member) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }

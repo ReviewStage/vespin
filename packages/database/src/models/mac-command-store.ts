@@ -32,6 +32,7 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
+import { member } from "../schemas/auth.js";
 import { automationRun } from "../schemas/automation.js";
 import { macCommand, macCommandListener } from "../schemas/mac-command.js";
 import { conversations, messages, standingLine } from "../schemas/storage.js";
@@ -424,7 +425,7 @@ const findMacOwner = SqlSchema.findOneOption({
   execute: ({ userId, conversationId }) =>
     Database.use((db) =>
       db
-        .select({ userId: sql<string>`coalesce(${task.assigneeId}, ${ownAgent.userId})` })
+        .select({ userId: sql<string>`coalesce(${member.userId}, ${ownAgent.userId})` })
         .from(conversations)
         .leftJoin(parent, eq(parent.id, conversations.parentConversationId))
         .innerJoin(
@@ -432,6 +433,11 @@ const findMacOwner = SqlSchema.findOneOption({
           eq(ownAgent.conversationId, sql`coalesce(${parent.id}, ${conversations.id})`),
         )
         .leftJoin(task, eq(task.id, ownAgent.taskId))
+        // Note that an assignee who left the task's workspace hands it no Mac, so their machine never runs its agents' commands.
+        .leftJoin(
+          member,
+          and(eq(member.organizationId, task.organizationId), eq(member.userId, task.assigneeId)),
+        )
         .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1),
     ),
@@ -471,9 +477,10 @@ export function heardFromAnotherAccount(target: ConversationTarget): TaskStoreEf
 
 /**
  * The account whose Mac the conversation's `run_on_mac` runs on: the
- * assignee of its agent's task, whoever started the agent and whoever has
- * written to it since, or the conversation's own account where the agent
- * works on no task, its task is assigned to no one, or it is no agent's.
+ * assignee of its agent's task, while a member of its workspace, whoever
+ * started the agent and whoever has written to it since, or the
+ * conversation's own account where the agent works on no task, its task is
+ * assigned to no one or to a member who left, or it is no agent's.
  */
 export function macOwnerOf(target: ConversationTarget): TaskStoreEffect<string> {
   return Effect.map(

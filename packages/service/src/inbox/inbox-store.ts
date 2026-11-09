@@ -20,7 +20,7 @@ import {
 } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
-import { organization, user } from "@repo/database/schemas/auth";
+import { member, organization, user } from "@repo/database/schemas/auth";
 import { automation } from "@repo/database/schemas/automation";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { inboxItemRead } from "@repo/database/schemas/inbox-item-read";
@@ -391,13 +391,14 @@ function liveReminderFor(readerId: string): { remindAt: SQL; snoozedUntil: SQL }
 
 /**
  * The member an item waits on: the member its agent addressed it to, or,
- * where it names none, its task's assignee, or the member who started its
- * agent where the task has nobody assigned or the agent works on no task. A
+ * where it names none, its task's assignee while a member of its workspace,
+ * or the member who started its agent where the task has nobody assigned,
+ * is assigned to a member who left, or the agent works on no task. A
  * scalar read rather than a join, because `returning` projects it too and
  * joins nothing, and every name is qualified, because it is nested in reads
  * that join the task themselves.
  */
-const WAITS_ON = sql<string>`coalesce(${qualified(inboxItem, inboxItem.addresseeId)}, (select ${qualified(task, task.assigneeId)} from ${task} where ${qualified(task, task.id)} = ${qualified(inboxItem, inboxItem.taskId)}), ${qualified(inboxItem, inboxItem.userId)})`;
+const WAITS_ON = sql<string>`coalesce(${qualified(inboxItem, inboxItem.addresseeId)}, (select ${qualified(task, task.assigneeId)} from ${task} inner join ${member} on ${qualified(member, member.organizationId)} = ${qualified(task, task.organizationId)} and ${qualified(member, member.userId)} = ${qualified(task, task.assigneeId)} where ${qualified(task, task.id)} = ${qualified(inboxItem, inboxItem.taskId)}), ${qualified(inboxItem, inboxItem.userId)})`;
 
 /** Whether the item's agent addressed it to a member, who `WAITS_ON` then names; qualified as `WAITS_ON` is. */
 const ADDRESSED = sql<boolean>`(${qualified(inboxItem, inboxItem.addresseeId)} is not null)`;
@@ -1197,11 +1198,20 @@ function toDoCount(userId: string): SQL<number> {
  * reader's own index (`inbox_item_user_status_updated`) and the assignee's
  * by the task's, where a `coalesce` would read every settled item of their
  * workspaces on each look; an item addressed to someone waits on them
- * alone, and one with no task, which joins no assignee, on its starter.
+ * alone, one whose task's assignee left on its starter, as `WAITS_ON` reads
+ * it, and one with no task, which joins no assignee, on its starter.
  */
 function accountUnreadSettled(userId: string) {
+  const assigneeLeft = notExists(
+    queryBuilder
+      .select({ one: member.id })
+      .from(member)
+      .where(
+        and(eq(member.organizationId, task.organizationId), eq(member.userId, task.assigneeId)),
+      ),
+  );
   const derived = or(
-    and(eq(inboxItem.userId, userId), isNull(task.assigneeId)),
+    and(eq(inboxItem.userId, userId), or(isNull(task.assigneeId), assigneeLeft)),
     eq(task.assigneeId, userId),
   );
   return and(

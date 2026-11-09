@@ -31,7 +31,7 @@ import { user } from "../../schemas/auth.js";
 import { macCommand } from "../../schemas/mac-command.js";
 import { conversations, messages } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, type MessageSender } from "../../storage-vocabulary.js";
-import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import { getTestDB, joinWorkspace, leaveWorkspace, openWorkspace } from "../../testing/index.js";
 import {
   claimAutomationRun,
   createAutomation,
@@ -321,7 +321,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
   );
 
   it.effect(
-    "an agent's commands go to its task's assignee's Mac, whoever has written to it, and to its starter's where no one is assigned",
+    "an agent's commands go to its task's assignee's Mac, whoever has written to it, and to its starter's where no one is assigned or the assignee left",
     () =>
       Effect.gen(function* () {
         const { starter, teammate, workspace } = yield* people;
@@ -346,6 +346,8 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
           teammate,
           "its worker's too",
         );
+        yield* leaveWorkspace(workspace, teammate);
+        assert.equal(yield* macOwnerOf(target), starter, "an assignee who left hands it back");
       }),
   );
 
