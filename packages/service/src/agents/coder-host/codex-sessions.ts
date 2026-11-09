@@ -92,7 +92,7 @@ import {
   type PlanRefusal,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
-import { turnPayerOf } from "./agent-runtime-choice.js";
+import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import {
   type HarnessLaunch,
@@ -342,11 +342,19 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
       ...(model === undefined ? undefined : { model, ...speedKeysOf(agent) }),
       ...(effort === undefined ? undefined : { effort }),
     };
-    // Note that an agent on its API key has no plan to ask, and its runner holds what it launched with.
+    // Note that an agent on its API key has no plan to ask, and its runner holds what it launched with; a plan that refuses
+    // stands aside where another payer has room (`roomAfterLimit`), as the turn's relaunch on that payer chooses it.
     const asked = Effect.gen(function* () {
       const recorded = yield* recordedPayer(agent);
       if (recorded.payer === AGENT_PAYER.API_KEY) return;
-      yield* standingPlan(recorded.subscriptionId);
+      yield* standingPlan(recorded.subscriptionId).pipe(
+        Effect.catchTag("LaunchRefused", (refused) =>
+          Effect.flatMap(
+            roomAfterLimit(userId, MODEL_PROVIDER.OPENAI, recorded.subscriptionId),
+            (room) => (room ? Effect.void : Effect.fail(refused)),
+          ),
+        ),
+      );
     });
     return Effect.as(asked, { lines: [choice] });
   };
