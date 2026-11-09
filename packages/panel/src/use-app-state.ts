@@ -104,12 +104,14 @@ export const appStateQuery = queryOptions({
 
 /**
  * The bridge's reads of `app:state`; none where the bridge cannot be heard,
- * as a test's fake answering other calls alone cannot, which leaves the
- * client on the document seeded into it.
+ * as a test's fake answering other calls alone cannot (`testing/app-bridge.ts`
+ * leaves a call it does not answer undefined), which leaves the client on
+ * the document seeded into it.
  */
 function heard(): AppStateBridgeReads | undefined {
   try {
     const bridge = appBridge();
+    if (typeof bridge.onAppState !== "function") return undefined;
     return { requestAppState: () => bridge.requestAppState(), onAppState: bridge.onAppState };
   } catch {
     return undefined;
