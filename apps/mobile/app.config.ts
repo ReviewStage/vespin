@@ -1,6 +1,6 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
@@ -19,30 +19,33 @@ const ASSOCIATED_DOMAIN = "vespin.dev";
 
 const ACCENT_COLOR_NAME = "AccentColor";
 
-// The Keel mark the sign-in screen draws, by the name `@repo/ui-native`'s
-// `BrandMark` reads it under (`BRAND_MARK_ASSET`), from the splash's own
-// copper PNGs, one per appearance.
-const BRAND_MARK = {
-  NAME: "BrandMark",
-  LIGHT_IMAGE: "../../packages/brand/assets/mark/mark-color-light-1024.png",
-  DARK_IMAGE: "../../packages/brand/assets/mark/mark-color-dark-1024.png",
-} as const;
-
-// The marks the sign-in's ways in carry, by the names `@repo/ui-native`'s
-// `ProviderButton` reads them under (`PROVIDER_MARK_ASSET`), drawn as vectors
-// from the brand's own paths, the web's sign-in buttons' marks: GitHub's in
-// whatever ink its button's words take, Google's in its own four colors.
-const PROVIDER_MARKS = [
+// The images the screens draw by name from the asset catalog, as vectors:
+// the Keel mark `@repo/ui-native`'s `BrandMark` reads (`BRAND_MARK_ASSET`),
+// the brand's own copper SVG in each appearance, and the marks its
+// `ProviderButton` reads (`PROVIDER_MARK_ASSET`), the web's sign-in buttons'
+// marks from the brand's paths: GitHub's a template SwiftUI draws in the ink
+// of the words beside it, Google's in its own four colors.
+const IMAGE_SETS = [
+  {
+    NAME: "BrandMark",
+    LIGHT: { FILE: "../../packages/brand/assets/mark/mark-color-light.svg" },
+    DARK: { FILE: "../../packages/brand/assets/mark/mark-color-dark.svg" },
+    TEMPLATE: false,
+  },
   {
     NAME: "GitHubMark",
-    SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="#000" d="${GITHUB_PATH}"/></svg>`,
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="#000" d="${GITHUB_PATH}"/></svg>`,
+    },
     TEMPLATE: true,
   },
   {
     NAME: "GoogleMark",
-    SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">${GOOGLE_MARK_LAYERS.map(
-      ({ fill, path }) => `<path fill="${fill}" d="${path}"/>`,
-    ).join("")}</svg>`,
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">${GOOGLE_MARK_LAYERS.map(
+        ({ fill, path }) => `<path fill="${fill}" d="${path}"/>`,
+      ).join("")}</svg>`,
+    },
     TEMPLATE: false,
   },
 ] as const;
@@ -108,60 +111,40 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
   });
 };
 
-// The Keel mark as an image set of the asset catalog, light and dark, so
-// SwiftUI draws the appearance's own mark by name and nothing redraws it.
-const withBrandMark = (config: ExpoConfig): ExpoConfig =>
+/** One appearance's SVG: a file of the brand's, or drawn here. */
+type ImageSource = { readonly FILE: string } | { readonly SVG: string };
+
+// Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
+// appearance beside its light one where it has one.
+const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
-      const imageSet = join(
-        IOSConfig.Paths.getSourceRoot(projectRoot),
-        "Images.xcassets",
-        `${BRAND_MARK.NAME}.imageset`,
-      );
-      mkdirSync(imageSet, { recursive: true });
-      const lightFile = "mark-light.png";
-      const darkFile = "mark-dark.png";
-      copyFileSync(join(projectRoot, BRAND_MARK.LIGHT_IMAGE), join(imageSet, lightFile));
-      copyFileSync(join(projectRoot, BRAND_MARK.DARK_IMAGE), join(imageSet, darkFile));
-      const contents = {
-        images: [
-          { filename: lightFile, idiom: "universal" },
-          {
-            appearances: [{ appearance: "luminosity", value: "dark" }],
-            filename: darkFile,
-            idiom: "universal",
-          },
-        ],
-        info: { author: "xcode", version: 1 },
-      };
-      writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
-      return modConfig;
-    },
-  ]);
-
-// The provider marks as vector image sets of the asset catalog, GitHub's a
-// template SwiftUI tints as it tints the words beside it.
-const withProviderMarks = (config: ExpoConfig): ExpoConfig =>
-  withDangerousMod(config, [
-    "ios",
-    (modConfig) => {
-      const catalog = join(
-        IOSConfig.Paths.getSourceRoot(modConfig.modRequest.projectRoot),
-        "Images.xcassets",
-      );
-      for (const mark of PROVIDER_MARKS) {
-        const imageSet = join(catalog, `${mark.NAME}.imageset`);
+      const catalog = join(IOSConfig.Paths.getSourceRoot(projectRoot), "Images.xcassets");
+      const svgOf = (source: ImageSource) =>
+        "FILE" in source ? readFileSync(join(projectRoot, source.FILE), "utf8") : source.SVG;
+      for (const set of IMAGE_SETS) {
+        const imageSet = join(catalog, `${set.NAME}.imageset`);
         mkdirSync(imageSet, { recursive: true });
-        const file = `${mark.NAME}.svg`;
-        writeFileSync(join(imageSet, file), mark.SVG);
+        const appearances = [
+          { file: `${set.NAME}.svg`, source: set.LIGHT, dark: false },
+          ...("DARK" in set
+            ? [{ file: `${set.NAME}-dark.svg`, source: set.DARK, dark: true }]
+            : []),
+        ];
+        for (const { file, source } of appearances)
+          writeFileSync(join(imageSet, file), svgOf(source));
         const contents = {
-          images: [{ filename: file, idiom: "universal" }],
+          images: appearances.map(({ file, dark }) => ({
+            ...(dark ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+            filename: file,
+            idiom: "universal",
+          })),
           info: { author: "xcode", version: 1 },
           properties: {
             "preserves-vector-representation": true,
-            "template-rendering-intent": mark.TEMPLATE ? "template" : "original",
+            "template-rendering-intent": set.TEMPLATE ? "template" : "original",
           },
         };
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
@@ -175,52 +158,48 @@ const withProviderMarks = (config: ExpoConfig): ExpoConfig =>
 // Glass, so what 27 adds is used behind a version check. Expo generates the
 // UIScene lifecycle and the New Architecture on its own; neither is named
 // here because neither can be set another way.
-const config = (_context?: ConfigContext): ExpoConfig =>
-  withProviderMarks(
-    withBrandMark(
-      withAccentColor({
-        name: "Vespin",
-        slug: "vespin",
-        version: "0.1.0",
-        scheme: URL_SCHEME,
-        orientation: "default",
-        userInterfaceStyle: "automatic",
-        platforms: ["ios"],
-        ios: {
-          bundleIdentifier: BUNDLE_IDENTIFIER,
-          buildNumber: BUILD_NUMBER,
-          deploymentTarget: "26.0",
-          supportsTablet: true,
-          icon: "../../packages/brand/assets/ios/Vespin.icon",
-          // The app's universal links, and the sign-in's HTTPS callback, which
-          // `ASWebAuthenticationSession` catches only on a host the app shares
-          // web credentials with.
-          associatedDomains: [
-            `applinks:${ASSOCIATED_DOMAIN}`,
-            `webcredentials:${ASSOCIATED_DOMAIN}`,
-          ],
-          // The TestFlight build takes its pushes from production APNs, which
-          // the distribution profile release-ios.yml exports it with allows; a
-          // simulator build is unsigned and carries no entitlement at all.
-          entitlements: { "aps-environment": "production" },
+const baseConfig = (_context?: ConfigContext): ExpoConfig =>
+  withAccentColor({
+    name: "Vespin",
+    slug: "vespin",
+    version: "0.1.0",
+    scheme: URL_SCHEME,
+    orientation: "default",
+    userInterfaceStyle: "automatic",
+    platforms: ["ios"],
+    ios: {
+      bundleIdentifier: BUNDLE_IDENTIFIER,
+      buildNumber: BUILD_NUMBER,
+      deploymentTarget: "26.0",
+      supportsTablet: true,
+      icon: "../../packages/brand/assets/ios/Vespin.icon",
+      // The app's universal links, and the sign-in's HTTPS callback, which
+      // `ASWebAuthenticationSession` catches only on a host the app shares
+      // web credentials with.
+      associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`, `webcredentials:${ASSOCIATED_DOMAIN}`],
+      // The TestFlight build takes its pushes from production APNs, which
+      // the distribution profile release-ios.yml exports it with allows; a
+      // simulator build is unsigned and carries no entitlement at all.
+      entitlements: { "aps-environment": "production" },
+    },
+    plugins: [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          backgroundColor: BRAND_PALETTE.LIGHT.GROUND,
+          image: SPLASH.LIGHT_IMAGE,
+          imageWidth: SPLASH.IMAGE_WIDTH,
+          dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
         },
-        plugins: [
-          "expo-router",
-          [
-            "expo-splash-screen",
-            {
-              backgroundColor: BRAND_PALETTE.LIGHT.GROUND,
-              image: SPLASH.LIGHT_IMAGE,
-              imageWidth: SPLASH.IMAGE_WIDTH,
-              dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
-            },
-          ],
-        ],
-        // Builds come from GitHub's macOS runners and TestFlight, never an
-        // over-the-air update, so Expo's update client is left out of the app.
-        updates: { enabled: false },
-      }),
-    ),
-  );
+      ],
+    ],
+    // Builds come from GitHub's macOS runners and TestFlight, never an
+    // over-the-air update, so Expo's update client is left out of the app.
+    updates: { enabled: false },
+  });
+
+// The images the screens draw, written into the asset catalog over the rest.
+const config = (context?: ConfigContext): ExpoConfig => withImageSets(baseConfig(context));
 
 export default config;

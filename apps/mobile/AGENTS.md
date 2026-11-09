@@ -103,7 +103,7 @@ authentication session (`src/host/auth-session.ts`, under
 `@repo/credentials`' `authSessionConsent`), which catches the sign-in's
 HTTPS callback on `vespin.dev` through the `webcredentials:` associated
 domain, and its tokens are sealed in the settings file under a key the
-Keychain keeps (`src/host/keychain-cipher.ts`), deleted at sign-out. The
+Keychain keeps (`src/host/keychain-cipher.ts`). The
 root layout stands the tabs and Settings behind the account and the
 sign-in screen in front of them otherwise. A `vespin.dev` link the app
 draws is routed by `src/app/+native-intent.tsx` through

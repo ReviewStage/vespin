@@ -13,8 +13,9 @@
  * notification's action in the background can read the tokens and call the
  * service, and stays on this device: a backup restored on another phone
  * brings the settings file but not the key, so its tokens never open there
- * and the app starts signed out. A sign-out deletes the key
- * (`forgetKeychainKey`), so nothing sealed before it opens again.
+ * and the app starts signed out. A sign-out needs nothing of the key: the
+ * host deletes what it sealed, the tokens and the kept lists, as it signs
+ * out.
  */
 
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -72,8 +73,3 @@ export const keychainCipher: SecretCipher = {
     return bytesToUtf8(sealer(key).decrypt(cipherText));
   },
 };
-
-/** Deletes the key, so nothing sealed under it opens again; the next sealing makes a new one. */
-export async function forgetKeychainKey(): Promise<void> {
-  await SecureStore.deleteItemAsync(KEY_ITEM, KEYCHAIN_OPTIONS);
-}

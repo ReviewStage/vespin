@@ -7,7 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
-import { useSignOutCleanup } from "../host/sign-out-cleanup.js";
 
 /**
  * The screens, each behind the account's standing: the tabs and Settings
@@ -21,7 +20,6 @@ function GuardedScreens() {
     ...appStateQuery,
     select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
   });
-  useSignOutCleanup(signedIn);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={signedIn}>
