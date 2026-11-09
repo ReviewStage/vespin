@@ -120,24 +120,29 @@ function setupDrawn(
   return container;
 }
 
-/** Setup standing at its last step for the account alone, after Paperstar was made and left, which Grace Hopper joined. */
-function finishingWithGraceJoined(deleted: unknown[]): { count: number } {
+/** Dana, the account, as Paperstar's owner. */
+const DANA_OWNS = {
+  userId: ACCOUNT,
+  name: "Dana",
+  email: "dana@app.test",
+  role: WORKSPACE_ROLE.OWNER,
+};
+
+/** Grace Hopper, joined as a member. */
+const GRACE_JOINED = {
+  userId: "account-grace",
+  name: "Grace Hopper",
+  email: "grace@app.test",
+  role: WORKSPACE_ROLE.MEMBER,
+};
+
+/** Setup standing at its last step for the account alone, after Paperstar was made and left, with `joined` in it beside Dana. */
+function finishingWith(
+  deleted: unknown[],
+  joined: readonly (typeof GRACE_JOINED)[],
+): { count: number } {
   const place = JSON.stringify({ audience: "me", at: 4, team: PAPERSTAR.id });
-  const members = {
-    [PAPERSTAR.id]: {
-      rows: {
-        members: [
-          { userId: ACCOUNT, name: "Dana", email: "dana@app.test", role: WORKSPACE_ROLE.OWNER },
-          {
-            userId: "account-grace",
-            name: "Grace Hopper",
-            email: "grace@app.test",
-            role: WORKSPACE_ROLE.MEMBER,
-          },
-        ],
-      },
-    },
-  };
+  const members = { [PAPERSTAR.id]: { rows: { members: [DANA_OWNS, ...joined] } } };
   writeAppState(
     stateWith(
       {},
@@ -170,23 +175,40 @@ test("Just me after a team's workspace was made lists the account's own workspac
   assert.deepEqual(deleted, []);
 });
 
-test("setup finished as Just me deletes the team's workspace it made while nobody joined it", async () => {
-  // Setup stands at its last step, for the account alone, after a team's workspace was made and left.
+test("setup finished as Just me deletes the team's workspace it made while nobody joined it, once its members are read", async () => {
+  // Setup stands at its last step, for the account alone, after a team's workspace was made and left, its members not yet read.
   const place = JSON.stringify({ audience: "me", at: 4, team: PAPERSTAR.id });
   writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
   const deleted: unknown[] = [];
   answeringDeletes(place, deleted);
-  const container = setupDrawn();
+  const finished = { count: 0 };
+  const container = setupDrawn([], finished);
 
+  // Note that Finish waits on the members, since one pressed before they are read would skip asking where someone joined.
+  act(() => buttonStarting(container, "Finish").click());
+  await act(() => Promise.resolve());
+  assert.deepEqual([deleted, finished.count], [[], 0]);
+  const members = { [PAPERSTAR.id]: { rows: { members: [DANA_OWNS] } } };
+  writeAppState(
+    stateWith(
+      {},
+      {
+        settings: appSettingsWire(settingsView({ setupPlace: place })),
+        [LIVE_READ.WORKSPACE_MEMBERS]: members,
+      },
+    ),
+  );
+  await vi.waitFor(() => assert.equal(buttonStarting(container, "Finish").disabled, false));
   act(() => buttonStarting(container, "Finish").click());
 
   // The service refuses the delete once anyone else is a member, so a workspace someone joined stays.
   await vi.waitFor(() => assert.deepEqual(deleted, [{ workspaceId: PAPERSTAR.id, ifAlone: true }]));
+  assert.equal(finished.count, 1);
 });
 
 test("Finish as Just me asks before deleting a team's workspace someone joined, and Delete and finish deletes it for them too", async () => {
   const deleted: unknown[] = [];
-  const finished = finishingWithGraceJoined(deleted);
+  const finished = finishingWith(deleted, [GRACE_JOINED]);
   // Note that the members arrive a tick after setup draws, as a live read's first answer does.
   await act(() => Promise.resolve());
 
@@ -201,7 +223,7 @@ test("Finish as Just me asks before deleting a team's workspace someone joined, 
 
 test("Keep it and finish finishes setup and leaves the team's workspace someone joined", async () => {
   const deleted: unknown[] = [];
-  const finished = finishingWithGraceJoined(deleted);
+  const finished = finishingWith(deleted, [GRACE_JOINED]);
   await act(() => Promise.resolve());
 
   act(() => buttonStarting(document.body, "Finish").click());

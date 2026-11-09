@@ -232,10 +232,13 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const last = at === steps.length - 1;
   // The team's workspace setup made and then left for Just me, which Finish deletes or asks about; none otherwise.
   const leftTeam = audience === SETUP_AUDIENCE.ME ? team : undefined;
-  const leftMembers = useQuery({
+  const leftRead = useQuery({
     ...workspaceMembersQuery(leftTeam),
     enabled: leftTeam !== undefined && last,
-  }).data;
+  });
+  const leftMembers = leftRead.data;
+  // Note that Finish waits on the members, because a read still under way would skip the question; a read that failed lets it go on to the delete the service refuses where anyone else is in it, so setup is never stood still.
+  const leftUnread = leftTeam !== undefined && leftMembers === undefined && !leftRead.isError;
   // Note that whoever left it is named too, because their agents and tasks may still stand in it.
   const joined =
     leftMembers === undefined
@@ -424,7 +427,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         title="Connect your tools"
         description={TOOLS_PURPOSE}
-        foot={foot(true, "Finish")}
+        foot={foot(!leftUnread, "Finish")}
         exit={exit}
       >
         <ToolRows />
