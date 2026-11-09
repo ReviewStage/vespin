@@ -315,17 +315,24 @@ export function composePortForwards(
           );
       });
 
-    /** Forwarding turned off, and its public link with it, since nothing closes one once forwarding is off. */
-    const turnOff = Effect.suspend(() => {
-      const ending = forwarding;
-      forwarding = undefined;
-      return ending === undefined
-        ? Effect.void
-        : unshared(ending).pipe(
-            Effect.andThen(Scope.close(ending.scope, Exit.void)),
-            Effect.andThen(tell),
-          );
-    });
+    /**
+     * Forwarding turned off, its public link closed with it only where
+     * `closeLink` asks: forwarding turned off keeps the link, which the
+     * plug's menu still lists and can stop, while a sign-out closes it,
+     * since nothing on this Mac could stop it after.
+     */
+    const letGo = (closeLink: boolean) =>
+      Effect.suspend(() => {
+        const ending = forwarding;
+        forwarding = undefined;
+        return ending === undefined
+          ? Effect.void
+          : (closeLink ? unshared(ending) : Effect.void).pipe(
+              Effect.andThen(Scope.close(ending.scope, Exit.void)),
+              Effect.andThen(tell),
+            );
+      });
+    const turnOff = letGo(false);
 
     /** Forwarding let go for the agent it was on, unless another agent has taken it since. */
     const released = (current: Forwarding) =>
@@ -408,6 +415,6 @@ export function composePortForwards(
         }),
     };
 
-    return { methods, acts, lifetime: Effect.void, reset: turnOff };
+    return { methods, acts, lifetime: Effect.void, reset: letGo(true) };
   });
 }
