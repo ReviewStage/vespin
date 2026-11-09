@@ -126,7 +126,7 @@ export type NoticeSubject =
   | { readonly kind: typeof NOTICE_KIND.ITEM_ASKED; readonly itemId: string };
 
 /** When a sound plays as news is heard, and which one, as the account's preferences hold them now. */
-export interface SoundChoice {
+interface SoundChoice {
   readonly when: SoundWhen;
   readonly sound: CompletionSound;
 }

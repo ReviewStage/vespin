@@ -34,15 +34,11 @@ const savedScriptSchema = EffectSchema.Struct({
   updatedAt: countedNumber,
 });
 
-export type SavedSandboxScript = typeof savedScriptSchema.Type;
-
 const repositorySetupSchema = EffectSchema.Struct({
   ...savedScriptSchema.fields,
   /** `owner/name` as its latest save spelled it. */
   repository: EffectSchema.String,
 });
-
-export type RepositorySetupScript = typeof repositorySetupSchema.Type;
 
 /** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, and each repository's setup script in the order of their names. */
 export const workspaceSandboxSetupAnswerSchema = EffectSchema.Struct({

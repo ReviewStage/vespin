@@ -30,11 +30,10 @@ import {
  * context `ActPortContext` names.
  */
 
-export type { AccountProceduresDependencies } from "./account-procedures.js";
 export type { AgentProceduresDependencies } from "./agents-procedures.js";
 export { type ActPortContext, type ActSender, actPortFor } from "./base.js";
 export { browserLiveProcedures } from "./browser-live-procedures.js";
-export { declaredActProcedures, declaredAnswer } from "./declared-acts.js";
+export { declaredActProcedures } from "./declared-acts.js";
 export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
 export { pushProcedures, WindowPushes } from "./push-procedures.js";
 export {

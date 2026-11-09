@@ -29,7 +29,7 @@ import { STORE_WRITE_EFFECT, type StoreWriter } from "./writer.js";
  * end that lands later finds the row terminal and is repeated, not written.
  */
 
-export const LOST_TURNS = {
+const LOST_TURNS = {
   /** The most turns one read of an ended session takes; reads go on until none is left. */
   LIMIT: 50,
 } as const;

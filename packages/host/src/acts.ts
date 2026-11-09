@@ -117,7 +117,7 @@ const WEB_ADDRESS = /^https?:\/\//iu;
  * `javascript:`, or another app's scheme would hand the address to
  * something else.
  */
-export const webAddress = EffectSchema.String.check(
+const webAddress = EffectSchema.String.check(
   EffectSchema.isMaxLength(2_048),
   EffectSchema.isPattern(WEB_ADDRESS),
   EffectSchema.makeFilter((address) => URL.canParse(address)),

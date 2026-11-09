@@ -69,7 +69,7 @@ type SectionsChange = (sections: TaskSections) => TaskSections;
  * sections as they stand leaves the row alone, so a reader holds the very
  * row.
  */
-export const SECTIONS: EntityKind<SectionsRow, SectionsChange> = {
+const SECTIONS: EntityKind<SectionsRow, SectionsChange> = {
   key: (row) => row.ownerId,
   drawn: (change, row) => {
     if (row === undefined) return undefined;
@@ -79,7 +79,7 @@ export const SECTIONS: EntityKind<SectionsRow, SectionsChange> = {
 };
 
 /** A pinned repository as the pool holds it, by its full name. */
-export const REPOSITORY_PIN = fieldKind((pin: RepositoryPin) => pin.repository);
+const REPOSITORY_PIN = fieldKind((pin: RepositoryPin) => pin.repository);
 
 /** The sections as `writes` leave them, made at `at`, each drawn over the one before. */
 function sectionsAfter(writes: readonly TaskSectionWrite[], at: number): SectionsChange {

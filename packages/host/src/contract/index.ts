@@ -93,7 +93,6 @@ export {
   type AnyLiveFollow,
   type AnyLiveFollowDeclaration,
   type FollowKey,
-  HOLD,
   isLiveFollow,
 } from "./live-follow.js";
 export { MAC_COMMAND_ACTS } from "./mac-commands.js";

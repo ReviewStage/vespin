@@ -65,15 +65,6 @@ export function rowsOf<Row extends object>(collection: {
   return collection.toArray.map((stored) => rowOf<WithoutVirtualProps<Row>>(stored));
 }
 
-/** The row a collection shows under `key` now, what a standing write drew among them; none where it shows none. */
-export function rowAt<Row extends object, Key extends string>(
-  collection: RowCollection<Row, Key>,
-  key: Key,
-): WithoutVirtualProps<Row> | undefined {
-  const stored = collection.get(key);
-  return stored === undefined ? undefined : rowOf<WithoutVirtualProps<Row>>(stored);
-}
-
 /**
  * `draw`, at the host's own instant, as the returned effect asks, and again
  * at the instant each draw answers the clock alone next moves what it drew,

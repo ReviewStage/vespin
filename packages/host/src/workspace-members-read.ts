@@ -82,7 +82,7 @@ export type MemberWritten<Answer> =
   | { readonly refused: Answer };
 
 /** One kind of member write, as its client declares it: the workspace it writes, what it makes of the members, and how it is sent. */
-export interface MemberWrite<Input, Answer> {
+interface MemberWrite<Input, Answer> {
   readonly workspaceId: (input: Input) => string;
   readonly moves: (input: Input) => readonly MemberMoved[];
   readonly send: (input: Input) => Effect.Effect<MemberWritten<Answer>>;

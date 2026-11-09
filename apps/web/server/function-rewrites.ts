@@ -41,7 +41,7 @@ const RewriteSchema = Schema.Struct({
 export type Rewrite = typeof RewriteSchema.Type;
 
 /** A change Vercel makes to a request it passes on: here only a request header taken off it. */
-export type Transform = typeof TransformSchema.Type;
+type Transform = typeof TransformSchema.Type;
 
 /**
  * The routes that stay off the hosted oRPC router whose public paths carry a
