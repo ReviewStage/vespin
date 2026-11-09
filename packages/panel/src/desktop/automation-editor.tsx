@@ -2755,7 +2755,10 @@ export function AutomationEditor({
     setDraft((was) => ({ ...was, ...patch }));
     setRefusal(undefined);
   };
+  // Note that a write out is held here as well as in state, so a second ⌘Enter pressed before the page draws again sends no second write.
+  const writing = useRef(false);
   const landed = (answer: AutomationWriteAnswer) => {
+    writing.current = false;
     setSaving(false);
     if ("failure" in answer) {
       setRefusal(SAVE_REFUSAL_WORDS[answer.failure]);
@@ -2770,6 +2773,7 @@ export function AutomationEditor({
     if (automation === undefined) placeLeave.pass(() => onCreated(answer.automation.id));
   };
   const save = () => {
+    if (writing.current) return;
     if (sentryWithheld(sentry, automation, draft)) {
       setRefusal(SENTRY_WITHHELD);
       return;
@@ -2779,6 +2783,7 @@ export function AutomationEditor({
       return;
     }
     if (workspace === undefined || (automation !== undefined && change === undefined)) return;
+    writing.current = true;
     setSaving(true);
     setRefusal(undefined);
     const saved =

@@ -3891,3 +3891,25 @@ test("the prompt offers what an @ may mention, a pick created into the prompt as
   assert.equal(created, 0, "Enter wrote a line rather than creating");
   assert.equal(creates[0]?.action.prompt, "Ask [@Linear](mention://mcp/linear) \nThen triage.");
 });
+
+test("⌘Enter in the prompt pressed again while its save is out sends no second save, and saves again once the first lands", async () => {
+  heldChanges = [];
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+  const prompt = page.querySelector(".automation-prompt") ?? assert.fail("no prompt");
+  writePrompt(page, "Fix the two flakiest tests.");
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+  // The words move while the save is out, so a second ⌘Enter has a change of its own to send.
+  writePrompt(page, "Fix the three flakiest tests.");
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+  const whileOut = changes.length;
+  heldChanges[0]?.();
+  await settle();
+  pressInComposer(prompt, "Enter", { metaKey: true });
+  await settle();
+
+  assert.equal(whileOut, 1, "one save while the first is out");
+  assert.equal(changes.length, 2, "a save once the first has landed");
+});
