@@ -90,6 +90,7 @@ import { DESCRIPTION_EDIT_REFUSAL } from "../coder-host/description-edit.js";
 import { postToInbox } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
+import { runComputerTool } from "../computer-tool.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import {
@@ -452,6 +453,7 @@ const SERVED_TOOLS = [
   "reply_to_comment",
   "update_comment",
   "run_on_mac",
+  "computer",
   "browser",
   "list_ports",
   "share_port",
@@ -500,6 +502,7 @@ const DOOR_OF: Readonly<
   read_comments: commentTool("read_comments"),
   reply_to_comment: commentTool("reply_to_comment"),
   update_comment: commentTool("update_comment"),
+  computer: (admitted, input) => runComputerTool(admitted.target, input),
 };
 
 /** The tools a harness has its own of, as the retired runtime named them, which the server never serves. */
