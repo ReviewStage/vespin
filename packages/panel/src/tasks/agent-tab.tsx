@@ -858,7 +858,9 @@ function PublishedDock({
       ),
     [published, listed, taskId, agentId],
   );
-  if (docked.length === 0) return null;
+  // Note that one pull request is drawn only as the row of the branch the agent stands on, so the dock stands only where that row or the split bar draws.
+  const drawn = docked.length > 1 || (published !== undefined && published.pullRequest !== null);
+  if (!drawn) return null;
   return (
     <div className={`agent-published-dock ${COMPOSER_DOCK_CLASS}`}>
       <PublishedBar published={published} docked={docked} doors={doors} />
