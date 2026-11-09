@@ -1,10 +1,8 @@
 # markdown.yaml -- a message holding every piece of Markdown the app draws, shot from its top and scrolled to its end.
 #
-# Tagged `appearance`, so `scripts/simulator-screenshots.sh` runs it a second
-# time with the simulator in dark mode, its screenshots under `dark/`.
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
-tags:
-  - appearance
 ---
 - launchApp:
     clearState: true

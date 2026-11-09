@@ -5,9 +5,7 @@
 #
 # Each simulator is booted, handed the app, driven through every flow under
 # maestro/, and shut down again, so the Mac holds no booted simulator once
-# the run ends. A device's screenshots land under <output>/<device slug>/,
-# and those of the flows tagged `appearance`, shot again in dark mode, under
-# <output>/<device slug>/dark/.
+# the run ends. A device's screenshots land under <output>/<device slug>/.
 # The simulator is named as `xcrun simctl list devices` names it, such as
 # "iPhone 18 Pro" or "iPhone Duo"; the first available device of that name
 # is used, and where none exists one is created from the device type of that
@@ -84,17 +82,6 @@ for name in "$@"; do
         echo "error: the flows failed on $name; its output is under $device_output" >&2
         failed=1
     fi
-    # A flow tagged `appearance` is shot again in dark mode, under dark/.
-    xcrun simctl ui "$udid" appearance dark
-    if ! maestro --udid "$udid" test \
-        --include-tags appearance \
-        --test-output-dir "$device_output/dark" \
-        --flatten-debug-output \
-        "$APP_DIRECTORY/maestro"; then
-        echo "error: the dark flows failed on $name; its output is under $device_output/dark" >&2
-        failed=1
-    fi
-    xcrun simctl ui "$udid" appearance light
     xcrun simctl shutdown "$udid"
     udid=""
 done
