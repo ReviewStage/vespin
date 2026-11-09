@@ -379,10 +379,10 @@ body,
 }
 
 /* A repository's plans under a `GroupHeader`, a group a section's gap
-   below the one before it. */
+   below the one before it, as every sidebar group's head stands. */
 .sidebar-repository + .sidebar-repository,
 .sidebar-tasks + .sidebar-repository {
-  margin-top: var(--ui-control-gap);
+  margin-top: var(--ui-section-gap);
 }
 
 /* A group leaving is laid over the place it held as it slides out
@@ -394,7 +394,7 @@ body,
 }
 
 .sidebar-group > .sidebar-repository:not([data-leaving]) ~ .sidebar-repository:not([data-leaving]) {
-  margin-top: var(--ui-control-gap);
+  margin-top: var(--ui-section-gap);
 }
 
 /* The account's own sections, between Pinned and Tasks (sidebar-sections.tsx).

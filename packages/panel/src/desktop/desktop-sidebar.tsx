@@ -35,7 +35,6 @@ import {
   MoreButton,
   motionKey,
   motionRows,
-  NAV_COUNT_SHOWN,
   NAV_CURRENT,
   NavItem,
   NOTE_LINE_LOOK,
@@ -43,7 +42,6 @@ import {
   NoteLine,
   opensMenu,
   PanePin,
-  PinIcon,
   PLAIN_PRESS,
   ProviderMark,
   RESIZE_EDGE_SIDE,
@@ -67,7 +65,6 @@ import {
   TEXT_VARIANT,
   Text,
   Tooltip,
-  UnpinIcon,
   useLeaving,
   useMenu,
   useMinute,
@@ -75,7 +72,16 @@ import {
   useRovingKeys,
   VisuallyHidden,
 } from "@repo/ui";
-import { FolderPlusIcon, HouseIcon, ListTodoIcon, ShieldUserIcon, ZapIcon } from "@repo/ui/icons";
+import {
+  ArrowDownFromLineIcon,
+  ArrowUpToLineIcon,
+  FolderPlusIcon,
+  HouseIcon,
+  ListTodoIcon,
+  MailOpenIcon,
+  ShieldUserIcon,
+  ZapIcon,
+} from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import {
@@ -158,7 +164,7 @@ import {
   type SidebarPin,
   samePin,
 } from "../tasks/use-side-panel.js";
-import { useUnreadTasks } from "../tasks/use-task-looks.js";
+import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
@@ -185,7 +191,7 @@ import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
 import { SidebarAgent } from "./sidebar-agent.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
-import { type CountNoun, foldedCount, sidebarFold, TASK_NOUN } from "./sidebar-fold.js";
+import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarFoot } from "./sidebar-foot.js";
 import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
@@ -907,6 +913,7 @@ function PinnedRows({
               open={context.current(child.task.id)}
               unread={context.unread(child.task)}
               now={context.now}
+              at={taskRowTime(child)}
               depth={held.depth}
               nest={nest}
               place={place}
@@ -967,6 +974,7 @@ function PinnedRows({
                 open={context.current(task.id)}
                 unread={context.unread(task)}
                 now={context.now}
+                at={taskRowTime(taskRow(task))}
                 nest={nest}
                 place={place}
                 fold={held === undefined ? undefined : childTasksFold(held, context.onFoldTask)}
@@ -1009,7 +1017,11 @@ function PinnedRows({
  * names what letting go there does and the row in hand is what it does it
  * to. A row's hover Pin and its ⋯ menu still make the first pin. A pinned
  * plan's child tasks stand under it, folded until it opens them, as in any
- * list, and are not counted as pins.
+ * list, and are not counted as pins. Its head is headed as every sidebar
+ * group's is (`sidebarHead`), with no glyph of its own, and offers, from its
+ * ⋯ and a right-click alike, Mark all as read while a pinned task is unread;
+ * it offers no menu while none is, and no Move up or down, since Pinned is
+ * the one of its kind.
  */
 function PinnedSection({
   rows,
@@ -1045,6 +1057,10 @@ function PinnedSection({
     context.every,
   );
   const empty = rows.length === 0;
+  const menu = useMenu(context.tasks.shown && context.inSight);
+  const ellipsis = useRef<HTMLButtonElement | null>(null);
+  const markRead = useReadMark();
+  const actionGroups = pinnedActionGroups(rows, context, markRead);
   return (
     <nav
       className="sidebar-group"
@@ -1053,11 +1069,28 @@ function PinnedSection({
       {...motionKey(PINNED_KEY)}
     >
       <GroupHeader
-        heading={GROUP_HEADING.NONE}
+        {...sidebarHead(
+          empty
+            ? undefined
+            : {
+                folded,
+                onToggle: folds.togglePinned,
+                count: rows.length,
+                noun: PIN_NOUN,
+              },
+        )}
         label="Pinned"
-        fold={empty ? undefined : sidebarFold(folded, folds.togglePinned)}
-        count={
-          empty ? undefined : foldedCount(folded, rows.length, PIN_NOUN, NAV_COUNT_SHOWN.ALWAYS)
+        menuOpen={menu.open !== undefined}
+        contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
+        actions={
+          actionGroups.length === 0 ? null : (
+            <MoreButton
+              ref={ellipsis}
+              thing="Pinned"
+              size={BUTTON_SIZE.COMPACT}
+              {...menu.trigger()}
+            />
+          )
         }
         standing={
           standing.length === 0 ? undefined : (
@@ -1085,36 +1118,88 @@ function PinnedSection({
           />
         )}
       </GroupHeader>
+      {menu.drawn === undefined ? null : (
+        <ActionMenu
+          label="Pinned actions"
+          replayUnmasked
+          menu={menu.drawn}
+          groups={actionGroups}
+          onClose={menu.close}
+        />
+      )}
     </nav>
   );
 }
 
+/** Mark all as read over a group's unread tasks, in one group of its own; none where every task in it is read. */
+function markAllReadGroups(
+  tasks: readonly TaskSummary[],
+  context: RowContext,
+  markRead: (task: TaskSummary, unread: boolean) => void,
+): MenuEntry[][] {
+  const unread = tasks.filter(context.unread);
+  if (unread.length === 0) return [];
+  const read: MenuAction = {
+    label: "Mark all as read",
+    icon: <MailOpenIcon />,
+    onSelect: () => {
+      for (const task of unread) markRead(task, false);
+    },
+  };
+  return [[read]];
+}
+
+/** Pinned's actions, offered alike from its ⋯ and a right-click on its head: Mark all as read over the pinned tasks, a pinned tab's task aside, since its row is the tab's. */
+function pinnedActionGroups(
+  rows: readonly PinnedRow[],
+  context: RowContext,
+  markRead: (task: TaskSummary, unread: boolean) => void,
+): MenuEntry[][] {
+  const tasks = rows.flatMap((row) =>
+    row.kind === TASK_ROW.TASK && row.pin === undefined ? [row.task] : [],
+  );
+  return markAllReadGroups(tasks, context, markRead);
+}
+
 /**
  * A repository's actions, offered alike from its header's ⋯ and from a
- * right-click on the header, in one group: Pin holds the group above the
- * rest on the account, and Open on GitHub opens the repository's page, under
- * GitHub's mark rather than the owner's picture, since it is about GitHub.
- * Note that a status for every task under the header at once is the
- * selection bar's, not the header's. The tasks with no repository have no
- * pin, since they always stand last, and no page to open, so they offer no
- * menu.
+ * right-click on the header: Keep at top holds the group above the rest on
+ * the account, drawn as an arrow to the top rather than a pin so it never
+ * reads as Pinned, and Open on GitHub opens the repository's page, under
+ * GitHub's mark rather than the owner's picture, since it is about GitHub;
+ * then Mark all as read while a task under it is unread. Note that a status
+ * for every task under the header at once is the selection bar's, not the
+ * header's. The tasks with no repository are never kept at top, since they
+ * always stand last, and have no page to open, so they offer Mark all as
+ * read alone.
  */
-function repositoryActionGroups(group: RepositoryGroup, tasks: SidebarTasks): MenuEntry[][] {
+function repositoryActionGroups(
+  group: RepositoryGroup,
+  context: RowContext,
+  markRead: (task: TaskSummary, unread: boolean) => void,
+): MenuEntry[][] {
   const { repository } = group;
-  if (repository === null) return [];
-  const pin: MenuAction = tasks.pinnedRepositories.includes(repository)
+  const { tasks } = context;
+  const held = group.rows.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task] : []));
+  const read = markAllReadGroups(held, context, markRead);
+  if (repository === null) return read;
+  const top: MenuAction = tasks.pinnedRepositories.includes(repository)
     ? {
-        label: "Unpin",
-        icon: <UnpinIcon />,
+        label: "Stop keeping at top",
+        icon: <ArrowDownFromLineIcon />,
         onSelect: () => tasks.onPinRepository(repository, false),
       }
-    : { label: "Pin", icon: <PinIcon />, onSelect: () => tasks.onPinRepository(repository, true) };
+    : {
+        label: "Keep at top",
+        icon: <ArrowUpToLineIcon />,
+        onSelect: () => tasks.onPinRepository(repository, true),
+      };
   const github: MenuAction = {
     label: "Open on GitHub",
     icon: <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />,
     onSelect: () => openRepositoryOnGitHub(repositoryPageUrl(repository)),
   };
-  return [[pin, github]];
+  return [[top, github], ...read];
 }
 
 /** Pinned holds tabs as well as tasks, so its count is read as pins. */
@@ -1128,20 +1213,19 @@ const PINNED_LISTED: readonly string[] = [PINNED_KEY];
 const NOTHING_LISTED: readonly string[] = [];
 
 /**
- * One repository's tasks under a header in the headings' voice, which folds
- * and unfolds them, the fold kept across launches. The header is a row like
- * a task's, with its hover, led by the owner's picture, which gives way to
- * the fold's chevron while the header is hovered or reached from the
- * keyboard, pointing down while the group is open and right while it is
- * folded, the way Codex and Cursor draw a project. Its actions stand at its end while it is hovered or holds
+ * One repository's tasks under a header headed as every sidebar group's is
+ * (`sidebarHead`), which folds and unfolds them, the fold kept across
+ * launches. The header is led by the owner's picture, which gives way to the
+ * fold's chevron while the header is hovered or reached from the keyboard,
+ * pointing down while the group is open and right while it is folded, the
+ * way Codex and Cursor draw a project. Its actions stand at its end while it is hovered or holds
  * focus: a ⋯ that drops the repository's menu, which a right-click anywhere
  * on the header opens too, and a + that starts a new task with the
  * repository already chosen. Both stand beside the fold rather than inside
  * it, so pressing either folds nothing. Folded, the header counts its tasks
- * at its end while hovered or reached from the keyboard, and the open task
- * still stands under it, so the task being worked on never leaves the list.
- * The tasks with no repository stand under "No repository", with nothing to
- * preset and no page to open.
+ * at its end at rest, and the open task still stands under it, so the task
+ * being worked on never leaves the list. The tasks with no repository stand
+ * under "No repository", with nothing to preset and no page to open.
  */
 function RepositorySection({
   group,
@@ -1166,11 +1250,17 @@ function RepositorySection({
   // closes with the sidebar folding away as well as with the tab hiding.
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
-  const actionGroups = repositoryActionGroups(group, context.tasks);
+  const markRead = useReadMark();
+  const actionGroups = repositoryActionGroups(group, context, markRead);
   return (
     <div className="sidebar-repository" {...motionKey(repositoryGroupKey(group))}>
       <GroupHeader
-        heading={GROUP_HEADING.NONE}
+        {...sidebarHead({
+          folded,
+          onToggle: () => folds.toggle(repository),
+          count: group.rows.length,
+          noun: TASK_NOUN,
+        })}
         glyph={
           repository === null ? (
             <NoRepositoryGlyph />
@@ -1183,13 +1273,11 @@ function RepositorySection({
           )
         }
         label={repository === null ? named : <ReplayMask>{named}</ReplayMask>}
-        fold={sidebarFold(folded, () => folds.toggle(repository))}
-        count={foldedCount(folded, group.rows.length, TASK_NOUN)}
         mark={
           repository !== null && context.tasks.pinnedRepositories.includes(repository) ? (
             <span className="sidebar-repository-pinned inline-flex flex-none text-muted-foreground [&_svg]:size-ui-12">
-              <PinIcon />
-              <VisuallyHidden>(pinned)</VisuallyHidden>
+              <ArrowUpToLineIcon />
+              <VisuallyHidden>(kept at top)</VisuallyHidden>
             </span>
           ) : null
         }
@@ -2403,6 +2491,7 @@ function SidebarColumn({
                               current={context.marked(row.task.id, undefined)}
                               open={current(row.task.id)}
                               unread={unread(row.task)}
+                              at={taskRowTime(row)}
                               now={now}
                               faces={context.faces}
                               depth={held.depth}

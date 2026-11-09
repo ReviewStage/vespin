@@ -47,6 +47,14 @@ import { Tooltip } from "../tooltip/hint.js";
  * says it folds. A fold its holder keeps, as the sidebar keeps which groups
  * are folded, is handed `open` and hears `onOpenChange`.
  *
+ * A head reads as a row among the rows (`look`), or, in the sidebar, as a
+ * heading set apart over them: a step shorter than the rows, so it no longer
+ * passes for a nav row or a task, and with its chevron brought only by the
+ * pointer or the keyboard, in the glyph's place or in an empty glyph cell
+ * where the group has no glyph of its own, which keeps its label over the
+ * rows' names. Its caller counts a folded group at rest, so a fold still
+ * reads as folded while no chevron stands.
+ *
  * Note that the head is a heading holding a button, beside the group's
  * actions, rather than a `details` summary holding them, because a summary
  * is read as one button and would swallow the heading and the actions in it.
@@ -105,6 +113,13 @@ export const GROUP_HEADING = {
   NONE: "div",
 } as const;
 export type GroupHeading = (typeof GROUP_HEADING)[keyof typeof GROUP_HEADING];
+
+/** How a head reads: as a row among the rows, or as a heading set apart over them, the sidebar's, its chevron only brought. */
+export const GROUP_LOOK = {
+  ROW: "row",
+  HEADING: "heading",
+} as const;
+export type GroupLook = (typeof GROUP_LOOK)[keyof typeof GROUP_LOOK];
 
 /** Whether a group's actions wait for the pointer or the keyboard, or stand at rest. */
 export const GROUP_ACTIONS = {
@@ -166,7 +181,7 @@ const FADE = "transition-[opacity] duration-(--ui-duration-hover) ease-plain";
  */
 const PART = {
   HEADING: "ui-group-header-heading m-0 flex min-w-0 flex-auto [font:inherit]",
-  LEAD: "ui-group-header-lead group/lead m-0 flex h-control min-w-0 flex-auto items-center gap-icon-gap rounded-control border-0 bg-transparent px-row-inset py-0 text-left font-ui text-muted-foreground",
+  LEAD: "ui-group-header-lead group/lead m-0 flex min-w-0 flex-auto items-center gap-icon-gap rounded-control border-0 bg-transparent px-row-inset py-0 text-left font-ui text-muted-foreground",
   GLYPH:
     "ui-group-header-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center *:[grid-area:1/1]",
   ICON: `ui-group-header-icon grid place-items-center [&>svg]:size-control-icon ${FADE}`,
@@ -176,6 +191,12 @@ const PART = {
   /* Each action waits for the pointer or the keyboard on its own (`group-header.css`), a row's acts' gap apart, so a head's acts stand over the rows' acts beneath it. */
   ACTIONS: "ui-group-header-actions flex flex-none items-center gap-ui-4",
 } as const;
+
+/** A lead's height in each look: a row's, or a step under it for a heading set apart over the rows. */
+const LEAD_HEIGHT = {
+  [GROUP_LOOK.ROW]: "h-control",
+  [GROUP_LOOK.HEADING]: "h-control-compact",
+} as const satisfies Record<GroupLook, string>;
 
 /** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
 const EDITOR = {
@@ -244,27 +265,32 @@ function Count({ count }: { count: NavCount }): React.JSX.Element {
 function Lead({
   glyph,
   folds,
+  look,
   label,
   mark,
   count,
 }: {
   glyph: ReactNode;
   folds: boolean;
+  look: GroupLook;
   label: ReactNode;
   mark: ReactNode;
   count: NavCount | undefined;
 }): React.JSX.Element {
-  // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds.
+  const heading = look === GROUP_LOOK.HEADING;
+  // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds, except over a heading's, whose chevron is only ever brought.
   const swaps = said(glyph) && folds;
+  const brought = swaps || (heading && folds);
+  // Note that a heading keeps its glyph's cell even empty, so its label stands over the rows' names whether or not it folds.
   return (
     <>
-      {said(glyph) || folds ? (
+      {said(glyph) || folds || heading ? (
         <span className={PART.GLYPH} aria-hidden="true">
           {said(glyph) ? (
             <span className={`${PART.ICON} ${swaps ? GIVES_WAY : ""}`}>{glyph}</span>
           ) : null}
           {folds ? (
-            <span className={`${PART.CHEVRON} ${swaps ? BROUGHT : ""}`}>
+            <span className={`${PART.CHEVRON} ${brought ? BROUGHT : ""}`}>
               <DisclosureChevron />
             </span>
           ) : null}
@@ -419,6 +445,7 @@ export function GroupHeader({
   actions,
   actionsShown = GROUP_ACTIONS.ON_HOVER,
   fold,
+  look = GROUP_LOOK.ROW,
   standing,
   tooltip,
   card,
@@ -445,6 +472,8 @@ export function GroupHeader({
   actionsShown?: GroupActions;
   /** How the group folds; left out, the head folds nothing and the rows always stand. */
   fold?: GroupFold | undefined;
+  /** How the head reads: as a row, or as a heading set apart over the rows, the sidebar's; a row unless it says so. */
+  look?: GroupLook;
   /** What a folded group leaves drawn under its head once its rows have faded; nothing is drawn while the group stands open. */
   standing?: ReactNode;
   /** The head's hover hint, where the label alone does not say the whole of it. */
@@ -488,13 +517,15 @@ export function GroupHeader({
               ? NAV_COUNT_SHOWN.ON_HOVER
               : NAV_COUNT_SHOWN.ALWAYS),
         };
-  const lead = <Lead glyph={glyph} folds={folds} label={label} mark={mark} count={counted} />;
+  const lead = (
+    <Lead glyph={glyph} folds={folds} look={look} label={label} mark={mark} count={counted} />
+  );
   const hint = tooltip ?? (card === undefined || typeof label !== "string" ? undefined : label);
   // Note that only a head with a hint or a card is wrapped, because the tooltip hands its control a click handler of its own, which a head that folds nothing must not hear.
   const control = folds ? (
     <button
       type="button"
-      className={`${PART.LEAD} ${PRESSED_AS_ROW.LEAD}`}
+      className={`${PART.LEAD} ${LEAD_HEIGHT[look]} ${PRESSED_AS_ROW.LEAD}`}
       aria-expanded={state.open}
       aria-controls={rows ? rowsId : undefined}
       onClick={state.toggle}
@@ -502,7 +533,7 @@ export function GroupHeader({
       {lead}
     </button>
   ) : (
-    <span className={PART.LEAD}>{lead}</span>
+    <span className={`${PART.LEAD} ${LEAD_HEIGHT[look]}`}>{lead}</span>
   );
   const subgrid = rowsStand === GROUP_ROWS.SUBGRID;
   const named = (
@@ -521,6 +552,7 @@ export function GroupHeader({
       <div
         className={`ui-group-header min-w-0 ${subgrid ? SUBGRID.ROOT : ""}`}
         data-folds={folds ? "true" : undefined}
+        data-look={look === GROUP_LOOK.HEADING ? look : undefined}
         data-head={head === GROUP_HEAD.STICKS ? head : undefined}
         data-rows={subgrid ? rowsStand : undefined}
         data-disclosure={folds ? details["data-disclosure"] : undefined}
