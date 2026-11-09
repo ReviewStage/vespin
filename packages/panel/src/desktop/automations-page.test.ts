@@ -3868,7 +3868,7 @@ test("a search of the Agent picker that failed says it failed rather than that n
   assert.equal(dialog.querySelector("[role=alert]") === null, true);
 });
 
-test("the prompt offers what an @ may mention, a pick created into the prompt as its link, and a bare Enter writes a new line rather than creating", async () => {
+test("the prompt offers what an @ may mention, a pick created into the prompt as its link, and a bare Enter writes a new line where ⌘Enter creates", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
   type(page.querySelector("input[aria-label='Automation name']"), "Morning triage");
@@ -3884,7 +3884,7 @@ test("the prompt offers what an @ may mention, a pick created into the prompt as
   typeInComposer(prompt, "Then triage.");
   await settle();
   const created = creates.length;
-  act(() => button("Create automation").click());
+  pressInComposer(prompt, "Enter", { metaKey: true });
   await settle();
 
   assert.deepEqual(offered[0], "Linear");

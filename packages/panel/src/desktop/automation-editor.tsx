@@ -2257,6 +2257,7 @@ function EditorForm({
   slackBot,
   onDraft,
   onUnreadableTime,
+  onSave,
 }: {
   draft: AutomationDraft;
   automation: AutomationSummary | undefined;
@@ -2277,6 +2278,8 @@ function EditorForm({
   onDraft: (patch: Partial<AutomationDraft>) => void;
   /** Hears whether the schedule's time field holds words that are no time, which a save is refused over. */
   onUnreadableTime: (unreadable: boolean) => void;
+  /** Saves the automation as the toolbar's Save does, which ⌘ or Ctrl with Enter in the prompt asks for. */
+  onSave: () => void;
 }): React.JSX.Element {
   // Note that Sentry stays listed where the deployment holds no integration, unpickable and saying why, so it can be found.
   const triggers =
@@ -2392,6 +2395,7 @@ function EditorForm({
             value={draft.prompt}
             invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
             onChange={(text) => onDraft({ prompt: text })}
+            onSave={onSave}
           />
           {/* What stops a save, said under the prompt once a save was pressed. */}
           {problems[DRAFT_FIELD.PROMPT] === undefined ? null : (
@@ -2936,6 +2940,7 @@ export function AutomationEditor({
             slackBot={slackBot}
             onDraft={editDraft}
             onUnreadableTime={setUnreadableTime}
+            onSave={save}
           />
         </AutomationSetup>
       }

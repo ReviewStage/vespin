@@ -36,7 +36,8 @@ import { appStateQuery, selectExperiment, selectListedTasks } from "../use-app-s
  * as any message's, and a server the prompt names is handed to every run
  * whatever the automation switched off (`automation-runs.ts`). Note that
  * the prompt is kept rather than sent, so a bare Enter writes a new line,
- * as the text area it replaced did, and Escape lets go of the caret and
+ * as the text area it replaced did, ⌘ or Ctrl with Enter saves the
+ * automation, as it finishes a document's text, and Escape lets go of the caret and
  * reaches the window marked taken, as every field's on the page does.
  */
 
@@ -61,6 +62,7 @@ function PromptField({
   skills,
   disabledServers,
   onChange,
+  onSave,
 }: {
   value: string;
   label: string;
@@ -69,6 +71,7 @@ function PromptField({
   skills: SkillSource | undefined;
   disabledServers: readonly string[];
   onChange: (text: string) => void;
+  onSave: () => void;
 }): React.JSX.Element {
   const editor = useRef<ComposerEditorHandle | undefined>(undefined);
   const room = useRef<HTMLDivElement>(null);
@@ -122,7 +125,7 @@ function PromptField({
         onKey={onKey}
         aria={{ ...pickers.field.aria, "aria-invalid": invalid ? "true" : undefined }}
         enterWrites
-        onEnter={() => undefined}
+        onEnter={onSave}
         onPasteFiles={() => false}
       />
     </ComposerFrame>
@@ -139,6 +142,7 @@ export function AutomationPrompt({
   rows,
   invalid,
   onChange,
+  onSave,
 }: {
   workspace: Workspace | undefined;
   repository: string | null;
@@ -151,6 +155,8 @@ export function AutomationPrompt({
   /** Whether the prompt is what stops a save. */
   invalid: boolean;
   onChange: (text: string) => void;
+  /** Saves the automation, which ⌘ or Ctrl with Enter asks for, as it finishes a document's text. */
+  onSave: () => void;
 }): React.JSX.Element {
   const workspaceId = workspace?.id;
   const slug = workspace?.slug;
@@ -204,6 +210,7 @@ export function AutomationPrompt({
           skills={skills}
           disabledServers={disabledServers}
           onChange={onChange}
+          onSave={onSave}
         />
       </SkillFiles>
     </TaskMentions>
