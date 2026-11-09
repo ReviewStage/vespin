@@ -23,8 +23,9 @@
  * stdout is full. Nothing a shell printed is kept here.
  */
 
-import { terminalRelayAddress, webSocketOrigin } from "@repo/features";
+import { HOSTED_API_ERROR, terminalRelayAddress, webSocketOrigin } from "@repo/features";
 import { CLI_EXIT } from "@repo/features/cli-exit";
+import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { openTerminalSocketOverWs } from "@repo/features/node";
 import { openedUnderCredential } from "@repo/features/relay-credential";
 import type { TerminalSocket } from "@repo/features/relay-socket";
@@ -45,6 +46,7 @@ import {
   Schedule,
   Schema,
   type Scope,
+  Semaphore,
   Stream,
 } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
@@ -103,12 +105,13 @@ type SocketEnding =
 /** The socket dropped, or never opened, before the shell attached. */
 class RelayDropped extends Data.TaggedError("RelayDropped") {}
 
+/** What to do about a stopped sandbox, whether starting a shell or the relay said so. */
+const SANDBOX_STOPPED_WORDS =
+  "The agent's sandbox is stopped; resume it from the agent's Terminal tab, then run this again.";
+
 /** Why the relay ended a shell's socket for good, by its close code, in words for a person. */
 const ENDED_BY_CLOSE: ReadonlyMap<number, string> = new Map([
-  [
-    TERMINAL_RELAY_CLOSE.STOPPED,
-    "The agent's sandbox is stopped; resume it from the agent's Terminal tab, then run this again.",
-  ],
+  [TERMINAL_RELAY_CLOSE.STOPPED, SANDBOX_STOPPED_WORDS],
   [TERMINAL_RELAY_CLOSE.STARTING, "The agent hasn't opened its sandbox yet."],
   [TERMINAL_RELAY_CLOSE.GONE, "The shell is gone: the agent was archived, or the shell ended."],
 ]);
@@ -203,18 +206,24 @@ function attached(agentId: string, terminalId: string) {
       const current = yield* Ref.make<TerminalSocket | undefined>(undefined);
       const held = yield* Ref.make<readonly Uint8Array[]>([]);
       const detached = yield* Deferred.make<void>();
+      // Note that typing and an attach's flush of what was held take turns, so new typing never overtakes held typing.
+      const inOrder = (yield* Semaphore.make(1)).withPermits(1);
 
       /** Typing sent to the shell, or held while the socket reopens. */
       const send = (bytes: Uint8Array) =>
-        Effect.gen(function* () {
-          if (bytes.length === 0) return;
-          const socket = yield* Ref.get(current);
-          if (socket !== undefined) return yield* socket.send({ bytes });
-          yield* Ref.update(held, (before) => {
-            const size = before.reduce((sum, each) => sum + each.length, 0);
-            return size + bytes.length <= TYPED_WHILE_AWAY_MAX_BYTES ? [...before, bytes] : before;
-          });
-        });
+        inOrder(
+          Effect.gen(function* () {
+            if (bytes.length === 0) return;
+            const socket = yield* Ref.get(current);
+            if (socket !== undefined) return yield* socket.send({ bytes });
+            yield* Ref.update(held, (before) => {
+              const size = before.reduce((sum, each) => sum + each.length, 0);
+              return size + bytes.length <= TYPED_WHILE_AWAY_MAX_BYTES
+                ? [...before, bytes]
+                : before;
+            });
+          }),
+        );
 
       /** One socket's life: opened, read until it closes, and its close read as how the session stands. */
       const attempt = Effect.scoped(
@@ -261,19 +270,21 @@ function attached(agentId: string, terminalId: string) {
             if (frame?.type === TERMINAL_RELAY_FRAME.EXITED) exitCode = frame.code;
             if (frame?.type !== TERMINAL_RELAY_FRAME.ATTACHED) return Effect.void;
             attachedOnce = true;
-            return Effect.gen(function* () {
-              yield* Ref.set(current, socket);
-              // A resize while the socket opened reached no socket, so the size is set right now.
-              const now = terminalSize();
-              if (now.cols !== size.cols || now.rows !== size.rows) {
-                yield* socket.send({ text: resizeFrame(now) });
-              }
-              // What was typed while the socket was away reaches the shell first, in the order it was typed.
-              const typedWhileAway = yield* Ref.getAndSet(held, []);
-              yield* Effect.forEach(typedWhileAway, (bytes) => socket.send({ bytes }), {
-                discard: true,
-              });
-            });
+            return inOrder(
+              Effect.gen(function* () {
+                yield* Ref.set(current, socket);
+                // A resize while the socket opened reached no socket, so the size is set right now.
+                const now = terminalSize();
+                if (now.cols !== size.cols || now.rows !== size.rows) {
+                  yield* socket.send({ text: resizeFrame(now) });
+                }
+                // What was typed while the socket was away reaches the shell first, in the order it was typed.
+                const typedWhileAway = yield* Ref.getAndSet(held, []);
+                yield* Effect.forEach(typedWhileAway, (bytes) => socket.send({ bytes }), {
+                  discard: true,
+                });
+              }),
+            );
           });
           if (closeCode === TERMINAL_RELAY_CLOSE.EXITED) {
             return { ending: SOCKET_ENDING.EXITED, code: exitCode } satisfies SocketEnding;
@@ -375,10 +386,15 @@ export const shellCommand = Command.make(
       }
       const terminalId = Option.isSome(shell)
         ? shell.value
-        : (yield* askService((yield* session).hosted.agents.openTerminal, {
-            params: { id: agentId },
-            body: Option.isSome(title) ? { title: title.value } : {},
-          })).terminal.id;
+        : (yield* askService(
+            (yield* session).hosted.agents.openTerminal,
+            {
+              params: { id: agentId },
+              body: Option.isSome(title) ? { title: title.value } : {},
+            },
+            HOSTED_DEADLINE.USUAL,
+            { [HOSTED_API_ERROR.SANDBOX_STOPPED]: SANDBOX_STOPPED_WORDS },
+          )).terminal.id;
       yield* note(`Attaching to shell ${terminalId}. Ctrl-] detaches and leaves it running.`);
       const ended = yield* attached(agentId, terminalId);
       if (ended.ending === SHELL_ENDING.DETACHED) {
