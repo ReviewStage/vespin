@@ -325,11 +325,25 @@ test("a reader at the end of a run anchored to its end is kept there as a row gr
   scroller.height = 50_200;
   drawLog();
   resize();
-  scroller.top = 49_600;
+  assert.equal(scroller.top, 49_600);
   scroller.height = 50_500;
   // Note that only the run's own block is heard growing, as a row growing inside it resizes it and not the scroller.
   resize((observed) => observed.classList.contains("ui-virtual-rows"));
   assert.equal(scroller.top, 49_900);
+});
+
+test("a reader scrolled up from the end of a run anchored to its end is left where they are as a row grows", () => {
+  const { scroller, resize } = standScroller();
+  scroller.shown = true;
+  scroller.height = 50_200;
+  drawLog();
+  resize();
+  // Note that the reader scrolls the scroller itself, which says so as a scroll.
+  const box = document.getElementById("scroller") ?? assert.fail("the scroller stands");
+  box.scrollTop = 49_000;
+  scroller.height = 50_500;
+  resize((observed) => observed.classList.contains("ui-virtual-rows"));
+  assert.equal(scroller.top, 49_000);
 });
 
 test("a list's runs answer every row's key, those left undrawn among them, in the order the runs stand", () => {
