@@ -2,16 +2,16 @@
  * base.ts -- the implementer every hosted procedure is built from, and the ways a caller is resolved.
  *
  * A request reaches a procedure with the web runtime's services as
- * `effect/context`, read once per function instance by the web route, and
- * the request itself, which the caller middlewares below read. Each of them
- * wraps a resolver the old route groups were handed, and refuses as those
- * groups did: a `HostedRefusal` in the failure channel, which the
- * `effect/wrap` in `errors.ts` turns into the declared error.
+ * `effect/context`, read once per function instance by the web route, and the
+ * request itself, which the caller middlewares below read. Each of them wraps
+ * a hosted caller resolver and refuses with a `HostedRefusal` in the failure
+ * channel, which the `effect/wrap` in `errors.ts` turns into the declared
+ * error.
  *
  * An output is written in its wire encoding, and the convention that keeps it
  * so is the contract's: every procedure's `.output` is its wire schema
  * flipped (`Schema.flip(answerSchema)`), and its handler returns the answer's
- * decoded `Type`, the value the old groups handed `hostedJsonResponse`. oRPC
+ * decoded `Type`, the value `hostedJsonResponse` is handed. oRPC
  * reads an output schema as a transform from what the handler returns (the
  * schema's input) to what the wire carries (its output), and checks every
  * answer through it; flipped, that check is the wire schema's encode, so
