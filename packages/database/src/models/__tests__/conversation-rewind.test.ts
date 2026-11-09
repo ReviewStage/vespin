@@ -9,6 +9,7 @@ import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
+import { runnerLine } from "../../schemas/runner-line.js";
 import { conversations, messages, turns } from "../../schemas/storage.js";
 import {
   CONVERSATION_KIND,
@@ -144,7 +145,8 @@ const standing = (target: Target) =>
 /**
  * A Start's first line, written as its send writes it, with the turn it
  * awaits, and queued for whichever launch of the agent's runner reads first;
- * answers the line's row and what the runner's first launch reads.
+ * answers the line's row, what the runner's first launch reads, and how many
+ * of the agent's runner lines stand.
  */
 const firstLineQueued = (target: Target) =>
   Effect.gen(function* () {
@@ -172,7 +174,11 @@ const firstLineQueued = (target: Target) =>
       runnerLinesPast(target.userId, agentId, { launch: 1, after: 0, limit: 10 }),
       (lines) => lines.length,
     );
-    return { lineId, read };
+    const queued = Effect.map(
+      db.select({ id: runnerLine.id }).from(runnerLine).where(eq(runnerLine.agentId, agentId)),
+      (rows) => rows.length,
+    );
+    return { lineId, read, queued };
   });
 
 it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
@@ -314,13 +320,13 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
-        const { lineId, read } = yield* firstLineQueued(target);
+        const { lineId, queued } = yield* firstLineQueued(target);
 
         const rewound = yield* rewindUnheard(target, lineId);
 
         assert.ok(Result.isSuccess(rewound));
         assert.deepEqual((yield* standing(target)).seqs, []);
-        assert.equal(yield* read, 0);
+        assert.equal(yield* queued, 0);
       }),
   );
 
