@@ -993,11 +993,7 @@ export const runnerSessions = <
           // bearer, and the launch is refused rather than start a runner nothing could reach or retire.
           if (Option.isNone(recordedLaunch))
             return yield* new LaunchRefused({ reason: "no agent" });
-          const named = (url: string) =>
-            Option.match(recordedLaunch, {
-              onNone: () => url,
-              onSome: (number) => launchUrl(url, number),
-            });
+          const named = (url: string) => launchUrl(url, recordedLaunch.value);
           // A rewind's cut is handed to the launch that resumes the harness's session, and let go
           // once the runner has it; a fresh session never heard the line it names.
           const read = Effect.gen(function* () {
