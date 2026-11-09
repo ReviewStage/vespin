@@ -5,7 +5,7 @@
  * here, because its synthetic tasks must never ship in the bundle every
  * launch parses. A fixture run's window is drawn once it has landed
  * (`App`), so the tasks tab reads it synchronously, as it once read a static
- * import. The Inbox's synthetic items (`inbox-fixture.ts`) land with it,
+ * import. The Inbox's synthetic items (`@repo/host/fixture-inbox`) land with it,
  * laid over its tasks, its answers, and main's document under the profiles
  * that stage them, and the agents and pull requests its task list follows
  * are laid on main's document too, as the host lays them.
@@ -17,7 +17,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 type TasksModule = typeof import("./tasks-fixture.js");
-type InboxModule = typeof import("./inbox-fixture.js");
+type InboxModule = typeof import("@repo/host/fixture-inbox");
 
 /** The fixture a run draws: the tasks fixture's doors, the Inbox's laid over the three it stages, and the reader it signs in as. */
 type TasksFixture = {
@@ -88,7 +88,7 @@ function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
 
 /** Imports the fixture once; a chunk that fails to load settles the same, leaving the run to draw no fixture. */
 export function loadTasksFixture(): Promise<void> {
-  loading ??= Promise.all([import("./tasks-fixture.js"), import("./inbox-fixture.js")]).then(
+  loading ??= Promise.all([import("./tasks-fixture.js"), import("@repo/host/fixture-inbox")]).then(
     ([tasks, inbox]) => {
       landed = laidOver(tasks, inbox);
     },

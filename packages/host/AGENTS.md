@@ -103,5 +103,12 @@ beside them.
 
 The web app (`apps/web/src/app/web-host.ts`) runs the host itself in the tab,
 so it also loads the barrel, `@repo/host/effect`, `@repo/host/client`,
-`@repo/host/service-layer`, and `@repo/host/agent-notices`. Every door named
-here, and everything it imports, stays free of Node.
+`@repo/host/service-layer`, and `@repo/host/agent-notices`. The Expo app
+(`apps/mobile/src/host/compose-mobile.ts`) runs the same host on Hermes
+through the same doors, and beside them `@repo/host/app-state-reads`, what a
+window reads of the document (the selects and the follow the panel's
+`use-app-state.ts` re-exports), `@repo/host/fixture-inbox`, the Inbox
+fixture both the panel's fixture run and the app's lay over the document,
+and `@repo/host/task-code-remote`, for a block drawn plain. Every door named
+here, and everything it imports, stays free of Node, which
+`scripts/repository-checks.sh` walks.

@@ -5,87 +5,11 @@
  * the `Origin` the browser names (`@repo/service`'s `http/relay-upgrade.ts`),
  * so the page opens the socket itself, as a plain same-origin `WebSocket`,
  * and sets no header: a page can set none on a socket, and the tab's
- * account is the cookie, which asks for none (`relay-credential.ts`). The
- * socket is the scope's, so the scope's close closes it whether it opened or
- * not, and one that opened or closed before the host listened is read as it
- * stands. What arrives is queued whole, binary frames as bytes and text
- * frames as text, and the close last. A browser hides why an upgrade was
- * refused, so a refusal reads as a socket that never opened, which the host
- * waits out and opens again (`compose-terminals.ts`). A page's socket cannot
- * stop reading the network, so a pause holds what arrives in the page until
- * the resume; the screen goes on drawing and acking while its tab is hidden,
- * so a pause lasts only as long as the screen takes to catch up.
+ * account is the cookie, which asks for none (`relay-credential.ts`). What
+ * follows the open is the host's own (`@repo/host/effect`'s
+ * `openTerminalSocketOver`), which the Expo app's socket shares.
  */
 
-import type {
-  OpenTerminalSocket,
-  TerminalSocketArrival,
-  TerminalSocketOpening,
-} from "@repo/host/effect";
-import { type Cause, Effect, Latch, Queue, Stream } from "effect";
+import { openTerminalSocketOver } from "@repo/host/effect";
 
-/** How the page ends a socket it no longer wants: normally, the shell going on in tmux. */
-const NORMAL_CLOSE = 1000;
-
-/** An open socket, as the host holds one. */
-type PageSocket = Extract<TerminalSocketOpening, { readonly socket: unknown }>["socket"];
-
-/** A message's frame: text as the relay sent it, or a binary frame's bytes, which a socket whose binary type is an array buffer hands as one. */
-function arrivalOf(event: MessageEvent<string | ArrayBuffer>): TerminalSocketArrival {
-  const { data } = event;
-  return typeof data === "string" ? { text: data } : { bytes: new Uint8Array(data) };
-}
-
-export const openTerminalSocketFromPage: OpenTerminalSocket = (url) =>
-  Effect.gen(function* () {
-    const arrivals = yield* Queue.unbounded<TerminalSocketArrival, Cause.Done>();
-    const flowing = yield* Latch.make(true);
-    const socket = yield* Effect.acquireRelease(
-      Effect.sync(() => {
-        const opened = new WebSocket(url);
-        opened.binaryType = "arraybuffer";
-        opened.addEventListener("message", (event) => {
-          Queue.offerUnsafe(arrivals, arrivalOf(event));
-        });
-        opened.addEventListener("close", (event) => {
-          Queue.offerUnsafe(arrivals, { close: event.code });
-          Queue.endUnsafe(arrivals);
-        });
-        return opened;
-      }),
-      (opened) => Effect.sync(() => opened.close(NORMAL_CLOSE)),
-    );
-    const open: PageSocket = {
-      arrivals: Stream.mapEffect(Stream.fromQueue(arrivals), (arrival) =>
-        Effect.as(flowing.await, arrival),
-      ),
-      send: (frame) =>
-        Effect.sync(() => {
-          if (socket.readyState !== WebSocket.OPEN) return;
-          // Note that the bytes are copied, because a socket sends only a view of a buffer of its own, never a shared one.
-          socket.send("bytes" in frame ? new Uint8Array(frame.bytes) : frame.text);
-        }),
-      pause: Effect.asVoid(flowing.close),
-      resume: Effect.asVoid(flowing.open),
-    };
-    return yield* Effect.callback<TerminalSocketOpening>((resume) => {
-      // Note that a socket that opened or closed before this listened is read as it stands, because its event will not come again.
-      if (socket.readyState === WebSocket.OPEN) {
-        resume(Effect.succeed({ socket: open }));
-        return;
-      }
-      if (socket.readyState === WebSocket.CLOSED) {
-        resume(Effect.succeed({ unreachable: true }));
-        return;
-      }
-      let settled = false;
-      const settle = (opening: TerminalSocketOpening) => {
-        if (settled) return;
-        settled = true;
-        resume(Effect.succeed(opening));
-      };
-      socket.addEventListener("open", () => settle({ socket: open }), { once: true });
-      // An error is followed by the close, and a socket that closes before it opened never stood.
-      socket.addEventListener("close", () => settle({ unreachable: true }), { once: true });
-    });
-  });
+export const openTerminalSocketFromPage = openTerminalSocketOver((url) => new WebSocket(url));

@@ -1,5 +1,5 @@
 /**
- * inbox-fixture.ts -- the synthetic Inbox a fixture run's Inbox and person profiles draw, and the answers its items and agents are read by in place of the service's.
+ * fixture-inbox.ts -- the synthetic Inbox a fixture run's Inbox and person profiles draw, and the answers its items and agents are read by in place of the service's.
  *
  * A fixture run signs in to nothing and holds no inbox, so the window's
  * Inbox says only that nothing needs you, an item never opens, and a
@@ -13,7 +13,9 @@
  * approval, steps to do, an answer in words, and a form), a notice whose
  * message carries code, a long thread, one answered, and one closed. Every
  * name, address, and repository here is invented; nothing is read from an
- * account.
+ * account. The panel's fixture loader lays it over the window's document
+ * (`@repo/panel`'s `tasks-fixture-loader.ts`), and the Expo app's fixture
+ * host lays it into the host's own (`apps/mobile/src/host/fixture-host.ts`).
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
@@ -34,16 +36,16 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { TASK_PRIORITY, TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
-import { ACT_KIND } from "@repo/host/acts";
+import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
   RUN_PROFILE,
-} from "@repo/host/app-state";
-import type { PortActKind, PortActPayload, PortActResult } from "@repo/host/contract";
-import { FIXTURE_IDS } from "@repo/host/fixture-stage";
+} from "./app-state.js";
+import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
+import { FIXTURE_IDS } from "./fixture-stage.js";
 
 /**
  * When the fixture landed, from which every instant here is counted back.

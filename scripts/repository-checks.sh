@@ -43,9 +43,11 @@ fi
 #
 # `@repo/host` and every door of it a browser loads are walked the same way:
 # `/effect`, `/client`, `/act-port`, `/service-layer`, `/agent-notices` and
-# `/task-code`, which the web app runs the host in a tab through, and
-# `/acts`, `/app-state`, `/bridge` and `/contract`, which the panel reads
-# (`packages/host/AGENTS.md`). Their graphs name no `node:` module, no `ws`, no
+# `/task-code`, which the web app runs the host in a tab through, `/acts`,
+# `/app-state`, `/bridge` and `/contract`, which the panel reads, and
+# `/app-state-reads`, `/fixture-stage`, `/fixture-inbox` and
+# `/task-code-remote`, which the Expo app runs the host on Hermes through
+# beside them (`packages/host/AGENTS.md`). Their graphs name no `node:` module, no `ws`, no
 # `electron`, no `@repo/host/node`, and no `Buffer` or `process` global, and
 # what needs one sits behind
 # `@repo/host/node`. The walk crosses into `@repo/credentials` through the
@@ -79,6 +81,10 @@ node --input-type=module -e '
         "bridge.ts",
         "contract/index.ts",
         "task-code.ts",
+        "app-state-reads.ts",
+        "fixture-stage.ts",
+        "fixture-inbox.ts",
+        "task-code-remote.ts",
       ],
       forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/host\/node)/,
       globals: /\b(Buffer|process)\.\w+/,
