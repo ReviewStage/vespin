@@ -6,10 +6,9 @@
  * as the answer (`@repo/host/contract`'s `cli.ts`).
  */
 
-import type { ActSender } from "@repo/host/act-port";
-import { actPortFor, type PlatformActProcedures } from "@repo/host/act-port";
+import { actPortFor, type PlatformActProcedures, refuseUnlessPanel } from "@repo/host/act-port";
 import { CLI_ACT_KIND, type CliInstallAnswer } from "@repo/host/contract";
-import { Effect } from "effect";
+import type { Effect } from "effect";
 import type { WebContents } from "electron";
 
 type CliActKind = (typeof CLI_ACT_KIND)[keyof typeof CLI_ACT_KIND];
@@ -20,11 +19,6 @@ export interface CliActsDependencies {
 }
 
 const cliPort = actPortFor<WebContents>();
-
-/** The refusal a window that is not a panel hears, in its kind's own words, or nothing for a panel. */
-function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
-  return actor.panel ? Effect.void : Effect.fail(refused());
-}
 
 export function cliProcedures(
   dependencies: CliActsDependencies,

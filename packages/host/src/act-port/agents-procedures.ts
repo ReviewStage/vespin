@@ -18,7 +18,7 @@ import { Effect } from "effect";
 import type { AgentNotices } from "../agent-notices.js";
 import { AGENT_ACT_KIND, AGENT_ACTS } from "../contract/index.js";
 import type { HostActTable } from "../host-acts.js";
-import { type ActSender, actPort } from "./base.js";
+import { actPort, refuseUnlessPanel } from "./base.js";
 import { declaredAnswer } from "./declared-acts.js";
 
 /** What the agent procedures reach: the acts whose answer they note, and the notices. */
@@ -47,11 +47,6 @@ type NotedAgentAct =
   | "AGENTS_ARCHIVE"
   | "AGENTS_PIN"
   | "AGENTS_MARK_READ";
-
-/** The refusal a window that draws no Tasks tab hears, or nothing for a panel. */
-function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
-  return actor.panel ? Effect.void : Effect.fail(refused());
-}
 
 /** The answer as it stands, noted on its way to the panel. */
 function noted<Answer, E>(

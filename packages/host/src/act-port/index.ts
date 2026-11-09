@@ -31,7 +31,7 @@ import {
  */
 
 export type { AgentProceduresDependencies } from "./agents-procedures.js";
-export { type ActPortContext, type ActSender, actPortFor } from "./base.js";
+export { type ActPortContext, type ActSender, actPortFor, refuseUnlessPanel } from "./base.js";
 export { browserLiveProcedures } from "./browser-live-procedures.js";
 export { declaredActProcedures } from "./declared-acts.js";
 export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
