@@ -790,12 +790,11 @@ function useKeyRemoval(
   provider: ProviderKeyProvider,
   key: ProviderKeySummary | undefined,
   plan: SubscriptionKeySummary | undefined,
+  /** Turns the plan back on for new agents, as the radio does, saying under the list where it was refused. */
+  turnPlanOn: () => void,
 ): DialogConfirm {
   const { mutateAsync: sendProviderKeysRemove, ...keyRemoving } = useMutation(
     actMutation(ACT_KIND.PROVIDER_KEYS_REMOVE),
-  );
-  const { mutate: sendProviderKeysForAgents } = useMutation(
-    actMutation(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS),
   );
   const setAside = plan !== undefined && plan.forAgents === false;
   const remove = useCallback(
@@ -804,12 +803,10 @@ function useKeyRemoval(
         .catch(() => undefined)
         .then((answer): ActionResult => {
           if (answer === undefined || "failure" in answer) return KEY_REMOVE_REFUSED;
-          if (setAside) {
-            sendProviderKeysForAgents({ provider, kind: HARNESS[provider].plan, forAgents: true });
-          }
+          if (setAside) turnPlanOn();
           return ACCEPTED_KEY;
         }),
-    [sendProviderKeysRemove, sendProviderKeysForAgents, provider, setAside],
+    [sendProviderKeysRemove, turnPlanOn, provider, setAside],
   );
   const removalAct = useConfirmAct(keyRemoving, {
     send: remove,
@@ -951,7 +948,9 @@ function HarnessCredentials({
   const chosen = defaultOf(plan, key);
   const forAgents = useForAgents(provider);
   const planRemoval = usePlanRemoval(provider, plan);
-  const keyRemoval = useKeyRemoval(provider, key, plan);
+  const keyRemoval = useKeyRemoval(provider, key, plan, () =>
+    forAgents.choose(CREDENTIAL.SUBSCRIPTION),
+  );
   const planPress = useRef<HTMLButtonElement | null>(null);
   const keyPress = useRef<HTMLButtonElement | null>(null);
   const handBack = useRef<Credential | undefined>(undefined);
