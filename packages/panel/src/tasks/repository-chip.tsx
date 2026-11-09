@@ -3,7 +3,7 @@ import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
-import { countWords, orList, readingWords } from "@repo/features/words";
+import { countWords, orList, orListParts, readingWords } from "@repo/features/words";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { EVERY_WORKSPACE } from "@repo/host/app-state";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
@@ -15,6 +15,8 @@ import {
   ChipName,
   type ChipWidth,
   ErrorState,
+  INLINE_REF_FIT,
+  InlineRefFitScope,
   MARK_PROVIDER,
   MenuNoteRow,
   type MenuRow,
@@ -30,6 +32,7 @@ import {
   Spinner,
   Tooltip,
 } from "@repo/ui";
+import { memberActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { NO_REPOSITORY, repositoryParts } from "@repo/ui/task-list-model";
@@ -37,6 +40,7 @@ import { repositoryFailureNote } from "@repo/ui/tasks-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
+import { ActorRef } from "../actor-ref.js";
 import { failureShown } from "../failure-report.js";
 import {
   repositoryListsQuery,
@@ -194,10 +198,10 @@ type DeadEnd = (typeof DEAD_END)[keyof typeof DEAD_END];
 const NAMED_OWNERS = 3;
 
 /** Who a member asks when none of the workspace's owners and admins is named. */
-export const ANY_OWNER = "an owner or admin";
+const ANY_OWNER = "an owner or admin";
 
 /** The words counting the owners and admins past those named: "2 others". */
-export function otherOwnersWords(rest: number): string {
+function otherOwnersWords(rest: number): string {
   return countWords(rest, { one: "other", many: "others" });
 }
 
@@ -207,7 +211,7 @@ export function otherOwnersWords(rest: number): string {
  * named until the read answers, or if it never does, since a name is only
  * ever a help.
  */
-export function useOwnersToAsk(workspaceId: string | undefined): {
+function useOwnersToAsk(workspaceId: string | undefined): {
   readonly named: readonly WorkspaceMember[];
   readonly rest: number;
 } {
@@ -217,6 +221,32 @@ export function useOwnersToAsk(workspaceId: string | undefined): {
   );
   const named = owners.slice(0, NAMED_OWNERS);
   return { named, rest: owners.length - named.length };
+}
+
+/**
+ * Whom a member asks, in a sentence: each owner or admin `useOwnersToAsk`
+ * names by their person chip (`ActorRef`), joined as a choice and the rest
+ * counted, or an owner or admin until the workspace's people are read. Note
+ * that a person is the reader's teammate, so the chips stay masked.
+ */
+export function OwnersToAsk({
+  workspaceId,
+}: {
+  workspaceId: string | undefined;
+}): React.JSX.Element {
+  const { named, rest } = useOwnersToAsk(workspaceId);
+  // Each item the choice joins: an owner's or an admin's chip, then the rest counted.
+  const items: readonly React.ReactNode[] = [
+    ...named.map((member) => (
+      <ActorRef key={member.userId} actor={memberActor(member, undefined)} sentence />
+    )),
+    ...(rest > 0 ? [otherOwnersWords(rest)] : []),
+  ];
+  const whom =
+    items.length === 0
+      ? ANY_OWNER
+      : orListParts(items.length).map((part) => ("words" in part ? part.words : items[part.item]));
+  return <ReplayMask>{whom}</ReplayMask>;
 }
 
 /** Whom a member asks, as words: the owners and admins named by `useOwnersToAsk`, or any of them while none is. */
@@ -553,8 +583,6 @@ function useRepositoryListing(
       : chooser.reading === true || props.pending === true
         ? READING_LABEL
         : CHOOSE_LABEL);
-  // Note that a member is told whom to ask, so only a member reads the workspace's people.
-  const whom = useWhomToAsk(chooser.manages ? undefined : chooser.scope);
   const configure = () => choose(() => openSettings(workspaceGitHub));
   // A list with nothing to pick is mended at the workspace's GitHub, by an owner or an admin, whom a member is told to ask.
   const deadEnd = (way: DeadEnd) =>
@@ -641,7 +669,15 @@ function useRepositoryListing(
       ],
       // A member, who cannot configure them, is told whom to ask instead.
       lastLine:
-        configurable && !chooser.manages ? { words: `Ask ${whom} to ${SETTINGS_ASK}` } : undefined,
+        configurable && !chooser.manages
+          ? {
+              words: (
+                <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
+                  Ask <OwnersToAsk workspaceId={chooser.scope} /> to {SETTINGS_ASK}
+                </InlineRefFitScope>
+              ),
+            }
+          : undefined,
     },
   };
 }

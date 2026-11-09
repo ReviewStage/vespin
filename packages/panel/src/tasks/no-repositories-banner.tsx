@@ -1,5 +1,4 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { orListParts } from "@repo/features/words";
 import { EVERY_WORKSPACE } from "@repo/host/app-state";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import {
@@ -15,19 +14,11 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import { memberActor } from "@repo/ui/actor-model";
-import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
-import { ActorRef } from "../actor-ref.js";
 import { githubTokenQuery, repositoryListsQuery } from "../live-reads.js";
 import { useOpenSettings } from "../open-settings.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
-import {
-  ANY_OWNER,
-  otherOwnersWords,
-  type RepositoryChooser,
-  useOwnersToAsk,
-} from "./repository-chip.js";
+import { OwnersToAsk, type RepositoryChooser } from "./repository-chip.js";
 
 /**
  * no-repositories-banner.tsx -- the card over Home's composer while the workspace reaches no repository: that it has none yet, and the press that adds one.
@@ -102,22 +93,9 @@ function MemberDetail({
   workspaceId: string;
   ask: GitHubState["ask"];
 }): React.JSX.Element {
-  const { named, rest } = useOwnersToAsk(workspaceId);
-  // Each item the choice joins: an owner's or an admin's chip, then the rest counted.
-  const items: readonly React.ReactNode[] = [
-    ...named.map((member) => (
-      <ActorRef key={member.userId} actor={memberActor(member, undefined)} sentence />
-    )),
-    ...(rest > 0 ? [otherOwnersWords(rest)] : []),
-  ];
-  const whom =
-    items.length === 0
-      ? ANY_OWNER
-      : orListParts(items.length).map((part) => ("words" in part ? part.words : items[part.item]));
-  // Note that a person is the reader's teammate, so the chips stay masked while the rest is the app's own, and that the chips stand in a sentence, so they wrap as its words do.
   return (
     <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
-      Ask <ReplayMask>{whom}</ReplayMask> to {ask}, or add one with your own GitHub token.
+      Ask <OwnersToAsk workspaceId={workspaceId} /> to {ask}, or add one with your own GitHub token.
     </InlineRefFitScope>
   );
 }

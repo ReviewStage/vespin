@@ -988,7 +988,7 @@ test("an owner's repository list ends in Configure repositories in Settings, ope
   assert.deepEqual(dialog.links, [WORKSPACE_GITHUB]);
 });
 
-test("a member's repository list ends in whom to ask to configure repositories, with nothing to press", async () => {
+test("a member's repository list ends in whom to ask to configure repositories, each owner and admin by their person chip, and offers no Settings row", async () => {
   fakeActPort({});
   handMembers(() => ({ rows: { members: PEOPLE } }));
   await mount(undefined, undefined, {
@@ -999,12 +999,14 @@ test("a member's repository list ends in whom to ask to configure repositories, 
 
   await openChip();
 
+  const line = () => document.querySelector(".ui-searchable-menu-last-line");
   await vi.waitFor(() =>
-    assert.equal(
-      document.querySelector(".ui-searchable-menu-last-line")?.textContent,
-      "Ask Dean or Charles to configure repositories",
+    assert.deepEqual(
+      [...(line()?.querySelectorAll(".ui-inline-ref-label") ?? [])].map((each) => each.textContent),
+      ["Dean", "Charles"],
     ),
   );
+  assert.match(line()?.textContent ?? "", /^Ask .+ or .+ to configure repositories$/);
   assert.equal(document.body.textContent?.includes("Configure repositories in Settings"), false);
 });
 

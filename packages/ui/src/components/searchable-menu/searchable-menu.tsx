@@ -231,7 +231,8 @@ export interface MenuHead {
 
 /** The menu's last line, pressed by nothing: who pays for the agent, and the link that manages it where its provider asks for one. */
 export interface MenuLastLine {
-  words: string;
+  /** The line's words, which may name people by their chips: whom a member asks. */
+  words: React.ReactNode;
   /** A link at the line's end, set apart from the words: Manage usage. */
   end?: React.ReactNode;
 }
