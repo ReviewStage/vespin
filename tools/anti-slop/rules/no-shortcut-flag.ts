@@ -31,7 +31,9 @@ function namesNothing(node: Node): boolean {
  * Whether `node`, where a builder takes the menu's subject, is a flag: a
  * literal `true` or `false`, a negation, a comparison, `&&` or `||`, or a
  * condition choosing between the subject and nothing, as `keyed ? subject :
- * undefined` decides by hand whether the menu prints its keys.
+ * undefined` decides by hand whether the menu prints its keys. Note that a
+ * condition choosing between two subjects is no flag, because it says what
+ * the menu acts on, and the target still says whether its keys reach it.
  */
 function isFlag(node: Node): boolean {
   switch (node.type) {

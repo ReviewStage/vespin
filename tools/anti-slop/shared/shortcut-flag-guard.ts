@@ -21,5 +21,7 @@ export const SUBJECT_ARGUMENT: ReadonlyMap<string, number> = new Map([
 
 /** Whether `text`, a file's source, calls one of the builders: the only file that has anything to silence. */
 export function callsSubjectBuilder(text: string): boolean {
-  return [...SUBJECT_ARGUMENT.keys()].some((name) => text.includes(`${name}(`));
+  return [...SUBJECT_ARGUMENT.keys()].some((name) =>
+    new RegExp(`\\b${name}\\s*\\(`, "u").test(text),
+  );
 }

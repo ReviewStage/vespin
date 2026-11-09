@@ -313,7 +313,11 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.DELETE), "⌘⌫ is offered");
   });
-  assert.ok(document.querySelector('[role="alertdialog"]'), "⌘⌫ asks first");
+  assert.match(
+    document.querySelector('[role="alertdialog"]')?.textContent ?? "",
+    new RegExp(BILLING.name, "u"),
+    "⌘⌫ asks first, about the thread's task",
+  );
 });
 
 /** What an intersection observer reports of the heading it watches: in the thread's view, or scrolled up past its top. */
