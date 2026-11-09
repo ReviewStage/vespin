@@ -70,7 +70,7 @@ const ONBOARDING_EVENT = {
 } as const;
 
 /** The contact's properties the automation's conditions read, as Resend names them. */
-export const ONBOARDING_PROPERTY = {
+const ONBOARDING_PROPERTY = {
   HAS_TASK: "has_task",
   TASK_DAYS: "task_days",
   LAST_TASK_DAY: "last_task_day",

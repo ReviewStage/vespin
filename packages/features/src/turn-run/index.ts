@@ -14,8 +14,6 @@ export {
   type RunEvent,
   type RunEventBody,
   type RunTurnOrigin,
-  replySentences,
-  SLOW_STEP_KIND,
   TOOL_CALL_SETTLEMENT,
   type ToolCallSettlement,
   toolCallSettlementOf,

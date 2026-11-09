@@ -54,7 +54,7 @@ export interface WorkspaceDeleteApi {
 }
 
 /** A workspace deleted under the session the headers carry. */
-export interface WorkspaceDeleting {
+interface WorkspaceDeleting {
   readonly headers: Headers;
   readonly organizationId: string;
 }
