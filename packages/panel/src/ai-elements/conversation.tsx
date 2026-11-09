@@ -48,7 +48,9 @@ import {
  * that the virtualizer follows a row appended only where the last row's key
  * changes, so the foot is keyed by the lines before it: a line landing
  * anywhere above it, before a last line that stays as one not yet sent
- * does, changes it.
+ * does, changes it. The foot keeps its element as its key changes
+ * (`steadyLast`), so a reply being written in it keeps its words, its
+ * focus, and the files it is reading.
  *
  * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
  * the caller asks, and holds its lines in one block of its own inside it
@@ -274,6 +276,7 @@ export function ConversationRows({
       aria-label={label}
       handle={run}
       onAtEnd={atBottom}
+      steadyLast={footed}
     >
       {(index, place) =>
         foot !== undefined && index === keys.length ? foot(place) : children(index, place)

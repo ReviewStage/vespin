@@ -158,6 +158,9 @@ export interface VirtualRowsBlock {
   readonly [data: `data-${string}`]: string | undefined;
 }
 
+/** What the last row of a run whose last row is steady (`steadyLast`) is to React, whatever its key. */
+const STEADY_LAST = "steady-last";
+
 /** Where a row stands in its block, as the docs place one: absolutely, across the block, its top the virtualizer's to write. */
 const ROW_STYLE: CSSProperties = { position: "absolute", insetInline: 0 };
 
@@ -305,6 +308,7 @@ export function VirtualRows({
   options = false,
   moves = false,
   holdsFocus = false,
+  steadyLast = false,
   shiftedBy,
   onAtEnd,
   className,
@@ -337,6 +341,8 @@ export function VirtualRows({
   moves?: boolean;
   /** Whether a row holding the keyboard stays drawn wherever the run is scrolled, as a list the keyboard walks keeps it. */
   holdsFocus?: boolean;
+  /** Whether the last row keeps its element as its key changes, as a log's foot does, whose key follows the lines before it; it is measured anew under each key. */
+  steadyLast?: boolean;
   /** A box whose resizing moves where the run stands in its scroller, as the list holding it among other runs. */
   shiftedBy?: RefObject<HTMLElement | null> | undefined;
   /** Hears whether the scroller stands at its end (`isAtEnd()`) each time the virtualizer's state changes, a scroll's start and end among it. */
@@ -514,7 +520,11 @@ export function VirtualRows({
       return held;
     }
     const place: VirtualRowPlace = {
-      ref: virtualizer.measureElement,
+      // Note that a steady last row is one element under each key it takes, so its ref changes with its key, which has the virtualizer measure it under the new one.
+      ref:
+        steadyLast && item.index === keys.length - 1
+          ? (element) => virtualizer.measureElement(element)
+          : virtualizer.measureElement,
       style: ROW_STYLE,
       "data-index": item.index,
       [VIRTUAL_ROW_KEY_ATTRIBUTE]: String(item.key),
@@ -530,6 +540,9 @@ export function VirtualRows({
     for (const key of places.current.keys()) if (!listed.has(key)) places.current.delete(key);
     for (const key of heights.current.keys()) if (!listed.has(key)) heights.current.delete(key);
   }, [keys]);
+  // Each row is React's by its key, but a steady last row, which keeps its element, and what it holds, as its key changes.
+  const reactKeyOf = (item: VirtualItem): VirtualItem["key"] =>
+    steadyLast && item.index === keys.length - 1 ? STEADY_LAST : item.key;
   const items: VirtualItem[] = virtualizer.getVirtualItems();
   const own = listItems || options ? "ui-virtual-rows ui-virtual-items" : "ui-virtual-rows";
   const run = {
@@ -560,7 +573,7 @@ export function VirtualRows({
       // biome-ignore lint/a11y/noRedundantRoles: Safari's VoiceOver stops reading a list drawn without its markers as a list unless it says so, as `Stack`'s lists say.
       <ul {...run} role="list">
         {items.map((item) => (
-          <Fragment key={item.key}>{children(item.index, placeOf(item))}</Fragment>
+          <Fragment key={reactKeyOf(item)}>{children(item.index, placeOf(item))}</Fragment>
         ))}
       </ul>
     );
@@ -569,7 +582,7 @@ export function VirtualRows({
     return (
       <div {...run}>
         {items.map((item) => (
-          <Fragment key={item.key}>{children(item.index, placeOf(item))}</Fragment>
+          <Fragment key={reactKeyOf(item)}>{children(item.index, placeOf(item))}</Fragment>
         ))}
       </div>
     );
@@ -582,7 +595,7 @@ export function VirtualRows({
         return (
           // biome-ignore lint/a11y/useSemanticElements: see the block above.
           <div
-            key={item.key}
+            key={reactKeyOf(item)}
             ref={place.ref}
             style={place.style}
             data-index={item.index}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import {
@@ -14,8 +14,9 @@ import {
 /**
  * conversation.test.ts -- a log opens on its newest line, offers the way
  * back to it once the reader scrolls away, and asks for older lines as the
- * reader nears its top. jsdom lays nothing out, so the log's heights are
- * stood in for.
+ * reader nears its top; its foot keeps what it holds, as a reply being
+ * written does, as lines land above it. jsdom lays nothing out, so the
+ * log's heights are stood in for.
  */
 
 declare global {
@@ -133,4 +134,40 @@ test("a log asks for its older lines as the reader scrolls up near its top", () 
   assert.deepEqual(asked, [], "a scroll up far from the top asks for nothing");
   scroll(box, 400);
   assert.deepEqual(asked, ["older"], "a scroll up within a screen of the top asks for older lines");
+});
+
+test("a log's foot keeps what it holds as lines land above it, as a reply being written does", () => {
+  logsLaidOut();
+  // Note that the foot holds what it was first drawn with, as a draft holds its words and the files it reads.
+  let drafts = 0;
+  function Draft(): ReactNode {
+    const [draft] = useState(() => `draft ${++drafts}`);
+    return createElement("p", { "data-draft": "" }, draft);
+  }
+  let keys = Array.from({ length: 10 }, (_, index) => `line-${index}`);
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  const draw = () =>
+    root.render(
+      createElement(
+        Conversation,
+        null,
+        createElement(
+          ConversationContent,
+          null,
+          createElement(ConversationRows, {
+            keys,
+            estimate: 160,
+            gap: 12,
+            overscan: keys.length,
+            foot: () => createElement(Draft),
+            children: (index: number) => createElement("p", null, keys[index]),
+          }),
+        ),
+      ),
+    );
+  act(draw);
+  keys = [...keys, "reply"];
+  act(draw);
+  assert.equal(document.querySelector("[data-draft]")?.textContent, "draft 1");
 });
