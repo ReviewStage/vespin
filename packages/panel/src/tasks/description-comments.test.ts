@@ -1947,6 +1947,61 @@ test("an edit's words outlast Cancel and Esc, come back as Edit opens it again, 
   );
 });
 
+test("an edit takes a comment's file off by its \u00d7 and adds one picked by its +, saving the files kept by their ids and the file added", async () => {
+  fakeActs({
+    act: (request: AnyAct): Promise<FakeActAnswer> =>
+      Promise.resolve(
+        request.kind === ACT_KIND.TASKS_PICTURE_READ
+          ? { status: FAKE_ANSWER.DONE, value: { contentType: "text/plain", base64: "" } }
+          : { status: FAKE_ANSWER.UNKNOWN_ACT },
+      ),
+  });
+  const kept = "5e6f7a8b-9c0d-4e1f-8a2b-4c5d6e7f8091";
+  const dated = datedThread({ userId: "u-dean", name: "Dean" });
+  const withFiles: DescriptionCommentThread = {
+    ...dated,
+    entries: dated.entries.map((entry) => ({
+      ...entry,
+      files: [
+        {
+          attachmentId: "6f7a8b9c-0d1e-4f2a-9b3c-5d6e7f8091a2",
+          name: "old.txt",
+          mediaType: "text/plain",
+        },
+        { attachmentId: kept, name: "kept.txt", mediaType: "text/plain" },
+      ],
+    })),
+  };
+  const { container, asked } = drawn("list", [withFiles]);
+  act(() =>
+    container.querySelector<HTMLButtonElement>('button[aria-label="Comment actions"]')?.click(),
+  );
+  act(() =>
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+      .find((each) => each.textContent === "Edit")
+      ?.click(),
+  );
+  const field = container.querySelector(".comment-editing") ?? assert.fail("no edit field");
+
+  act(() => field.querySelector<HTMLButtonElement>('button[aria-label="Remove old.txt"]')?.click());
+  await pickFiles(field, [new File(["new\n"], "new.txt", { type: "text/plain" })]);
+  assert.deepEqual(
+    [...field.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
+    ["kept.txt", "new.txt"],
+  );
+  await act(async () =>
+    field.querySelector<HTMLButtonElement>('button[aria-label="Save"]')?.click(),
+  );
+
+  const [edit] = asked;
+  assert.ok(edit?.action.action === DESCRIPTION_COMMENT_ACTION.EDIT);
+  assert.deepEqual(edit.action.keep, [kept]);
+  assert.deepEqual(
+    edit.action.attachments?.map((file) => [file.name, file.data]),
+    [["new.txt", Buffer.from("new\n").toString("base64")]],
+  );
+});
+
 test("an edit's field closes on Save, before the service answers", () => {
   const { edit, field, press, asked } = ownComment(() => Promise.withResolvers<boolean>().promise);
 

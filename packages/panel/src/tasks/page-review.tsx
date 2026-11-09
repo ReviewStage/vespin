@@ -257,8 +257,12 @@ export interface PageReviewControl {
   readonly failed: boolean;
   /** Holds a comment in the review, starting it where none was held. */
   readonly hold: (comment: Omit<HeldComment, "planId" | "pageId">) => void;
-  /** Writes a held comment's words anew. */
-  readonly edit: (clientKey: string, words: string) => void;
+  /** Writes a held comment's words and files anew. */
+  readonly edit: (
+    clientKey: string,
+    words: string,
+    attachments: readonly AgentAttachment[],
+  ) => void;
   /** Takes a held comment out of the review at once, saying so with Undo, which puts it back where it stood. */
   readonly remove: (clientKey: string) => void;
   /** Lets every held comment go; offered only while none is posted. */
@@ -353,11 +357,11 @@ export function usePageReview(
     hold: (comment) => {
       if (planId !== undefined) setAll((now) => [...now, { ...comment, planId, pageId }]);
     },
-    edit: (clientKey, words) =>
+    edit: (clientKey, words, attachments) =>
       setAll((now) =>
         now.map((comment) =>
           comment.clientKey === clientKey && comment.landed !== true
-            ? { ...comment, words }
+            ? { ...comment, words, attachments }
             : comment,
         ),
       ),

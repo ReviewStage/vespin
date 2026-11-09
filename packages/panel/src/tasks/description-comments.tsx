@@ -8,6 +8,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
+  type DescriptionCommentFile,
   type DescriptionCommentStart,
   type DescriptionCommentThread,
   type DescriptionCommentWriter,
@@ -170,7 +171,7 @@ import { AttachFilesButton } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { CommentMenu } from "./comment-menu.js";
 import { ComposerField } from "./composer-field.js";
-import { CommentFiles } from "./description-comment-files.js";
+import { CommentFiles, EditedCommentFiles } from "./description-comment-files.js";
 import { EDITOR_ROOM_CLASS } from "./description-document-editor.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
 import type { EditAgents } from "./edit-ref.js";
@@ -786,7 +787,7 @@ function CommentEntry({
       text: words.trim() === "" || words === shown ? "" : words,
     }));
   };
-  const save = () => {
+  const save = (files: EditedFiles) => {
     const words = editing?.trim() ?? "";
     // Note that a comment is never saved empty, so an edit emptied asks to delete it, as its menu's Delete does.
     if (words === "") {
@@ -800,6 +801,7 @@ function CommentEntry({
       action: DESCRIPTION_COMMENT_ACTION.EDIT,
       entry: entry.id,
       words,
+      ...filesChanged(entry.files ?? [], files),
     });
   };
   return (
@@ -853,6 +855,8 @@ function CommentEntry({
           </>
         ) : (
           <CommentEditField
+            planId={doors.control.planId}
+            files={entry.files ?? NO_FILES}
             value={editing}
             onChange={write}
             onSave={save}
@@ -868,20 +872,51 @@ function CommentEntry({
  * The field a comment's words are edited in, in their place, as the field a
  * thread's first comment is written in: the words stay where they were read,
  * bare on the card with no box around them, and the composer's foot stands
- * under them, its microphone and Cancel beside the round send, which saves.
- * It takes no files, since an edit changes a comment's words alone.
+ * under them, its + and microphone and Cancel beside the round send, which
+ * saves. The comment's files stand over the words as they do when read,
+ * each with its × to take it off, and files added by the +, a paste, or a
+ * drop stand after them, held together to the bounds of one message's.
  */
 function CommentEditField({
+  planId,
+  files,
+  attached = NO_ATTACHMENTS,
   value,
   onChange,
   onSave,
   onCancel,
 }: {
+  planId: string;
+  /** The files the service keeps for the comment as the edit opens. */
+  files: readonly DescriptionCommentFile[];
+  /** The files the window holds for it as the edit opens, a held comment's not yet sent; none for a posted one's. */
+  attached?: readonly AgentAttachment[];
   value: string;
   onChange: (words: string) => void;
-  onSave: () => void;
+  /** Saves the words, with the files the field holds. */
+  onSave: (files: EditedFiles) => void;
   onCancel: () => void;
 }): React.JSX.Element {
+  // The comment's own files the edit keeps, which their × takes off.
+  const [kept, setKept] = useState(files);
+  // Why the last files handed to the field did not all come; nothing once they did.
+  const [refusal, setRefusal] = useState<string | undefined>(undefined);
+  // The files added after them, which a held comment's edit opens holding, so they are held to a message's bounds together.
+  const [held, setHeld] = useState(attached);
+  const added = useAttachedFiles({
+    onRefusal: setRefusal,
+    most: AGENT_BOUNDS.MAX_ATTACHMENTS - kept.length,
+    holder: { attachments: held, update: setHeld },
+  });
+  const remove = (index: number) => {
+    setRefusal(undefined);
+    if (index < kept.length) setKept((was) => was.filter((_, at) => at !== index));
+    else added.remove(index - kept.length);
+  };
+  const save = () => {
+    if (added.reading) return;
+    onSave({ kept, added: added.attachments });
+  };
   const editor = useRef<ComposerEditorHandle | undefined>(undefined);
   const [heard, setHeard] = useState<string | undefined>(undefined);
   const dictation = useDictation({ editor, keywords: NO_KEYWORDS, onNote: setHeard });
@@ -895,30 +930,49 @@ function CommentEditField({
     onChange(words);
   };
   // Note that a dictation's note is said before the cut paste's, as a reply's field says them.
-  const note =
+  const said =
     heard ?? (cut ? pasteCutWords(DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS) : undefined);
+  // Note that a file refused is said over a dictation's note or a cut paste, as a reply's field says it.
+  const note = refusal ?? said;
   return (
     <ComposerFrame
       look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
       data-variant={REPLY_VARIANT.EDIT}
-      data-held={dictating}
+      data-held={added.attachments.length > 0 || added.reading || dictating}
+      dropping={added.drop.dropping}
+      {...added.drop.target}
     >
-      <CommentText
-        value={value}
-        label={COMMENT_WORDS.EDIT}
-        onChange={write}
-        onSubmit={onSave}
-        onCancel={onCancel}
-        autoFocus
-        editor={editor}
-        dictation={dictation}
-        onPasteCut={() => {
-          setHeard(undefined);
-          setCut(true);
-        }}
-      />
+      <ComposerBody
+        files={
+          kept.length + added.attachments.length === 0 ? null : (
+            <EditedCommentFiles
+              planId={planId}
+              kept={kept}
+              added={added.attachments}
+              onRemove={remove}
+            />
+          )
+        }
+      >
+        <CommentText
+          value={value}
+          label={COMMENT_WORDS.EDIT}
+          onChange={write}
+          onSubmit={save}
+          onCancel={onCancel}
+          autoFocus
+          editor={editor}
+          dictation={dictation}
+          onPasteFiles={added.paste}
+          onPasteCut={() => {
+            setHeard(undefined);
+            setCut(true);
+          }}
+        />
+      </ComposerBody>
       <ComposerFoot
+        tools={<AttachFilesButton onFiles={added.attach} />}
         counter={
           dictates
             ? { length: value.length, limit: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS }
@@ -934,14 +988,19 @@ function CommentEditField({
         }
         strip={dictating ? <DictationStrip dictation={dictation} /> : undefined}
         // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, that a dictation's words land before it saves, and that an edit is drawn on the press, which closes the field, so it is never busy.
-        send={{ label: COMMENT_WORDS.SAVE, empty: false, held: dictating, onSend: onSave }}
+        send={{
+          label: COMMENT_WORDS.SAVE,
+          empty: false,
+          held: dictating || added.reading,
+          onSend: save,
+        }}
         note={
           note === undefined
             ? undefined
             : {
                 words: note,
                 failure:
-                  note === heard
+                  note === heard && note !== refusal
                     ? failureShown({
                         surface: FAILURE_SURFACE.DICTATION,
                         cause: FAILURE_CONDITION.REFUSED,
@@ -953,6 +1012,30 @@ function CommentEditField({
       />
     </ComposerFrame>
   );
+}
+
+/** The files an edit's field holds as it saves: the comment's own it kept, in order, and those added after them. */
+interface EditedFiles {
+  readonly kept: readonly DescriptionCommentFile[];
+  readonly added: readonly AgentAttachment[];
+}
+
+/** A comment that carries no files. */
+const NO_FILES: readonly DescriptionCommentFile[] = [];
+
+/** An edit that opens holding no files of the window's. */
+const NO_ATTACHMENTS: readonly AgentAttachment[] = [];
+
+/** What an edit says of its comment's files: nothing where it leaves them as they stand, else the files it keeps by their ids, in order, and those it adds. */
+function filesChanged(
+  carried: readonly DescriptionCommentFile[],
+  { kept, added }: EditedFiles,
+): { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] } {
+  const keep = kept.map((file) => file.attachmentId);
+  const same =
+    keep.length === carried.length && keep.every((id, at) => carried[at]?.attachmentId === id);
+  if (same && added.length === 0) return {};
+  return { keep, ...(added.length === 0 ? undefined : { attachments: added }) };
 }
 
 /**
@@ -3622,11 +3705,11 @@ export function PendingPageComment({
           ],
         ];
   // Note that an edit emptied deletes the comment, as a posted one's does, here at once with Undo.
-  const save = () => {
+  const save = ({ added }: EditedFiles) => {
     const next = editing?.trim() ?? "";
     setEditing(undefined);
     if (next === "") review.remove(clientKey);
-    else review.edit(clientKey, next);
+    else review.edit(clientKey, next, added);
   };
   return (
     <div className="comment-entry relative py-tight-gap" data-pending={clientKey}>
@@ -3662,6 +3745,9 @@ export function PendingPageComment({
           </>
         ) : (
           <CommentEditField
+            planId={comment.planId}
+            files={NO_FILES}
+            attached={comment.attachments}
             value={editing}
             onChange={setEditing}
             onSave={save}

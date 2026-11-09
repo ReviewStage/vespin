@@ -2891,6 +2891,13 @@ svg.lucide {
   padding-bottom: 0;
 }
 
+/* Its files stand where the comment's own stood over its words
+   (`.comment-files`), with room at the row's end for the × each chip
+   carries past its corner. */
+.comment-field[data-variant="edit"] .ui-composer-files {
+  padding: var(--ui-tight-gap) var(--ui-item-gap) var(--ui-item-gap) 0;
+}
+
 /* One of an agent's log's rows (`agent-tab.tsx`, drawn only near the view
    by `ConversationRows`): a message with what stands with it, a call's
    divider, the lines said ahead of it, a replay's card, a step apart as the

@@ -17,7 +17,7 @@
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { MAXIMUM_ATTACHMENTS_BODY_BYTES } from "../agent-wire.js";
+import { AGENT_BOUNDS, MAXIMUM_ATTACHMENTS_BODY_BYTES } from "../agent-wire.js";
 import {
   DESCRIPTION_COMMENT_BOUNDS,
   descriptionCommentActionRequestSchema,
@@ -40,9 +40,12 @@ const START_BODY_BYTES =
   MAXIMUM_ATTACHMENTS_BODY_BYTES +
   1_024;
 
-/** An action is a comment at its bound and an id or a key, every character escaped, and a reply's files. */
+/** An action is a comment at its bound and an id or a key, every character escaped, a reply's or an edit's files, and the ids of the files an edit keeps. */
 const ACTION_BODY_BYTES =
-  DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS * 6 + MAXIMUM_ATTACHMENTS_BODY_BYTES + 1_024;
+  DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS * 6 +
+  MAXIMUM_ATTACHMENTS_BODY_BYTES +
+  AGENT_BOUNDS.MAX_ATTACHMENTS * 40 +
+  1_024;
 
 const COMMENTS_PATH = `${HOSTED_SERVICE_PATH.TASKS}/{id}/comments` as const;
 
