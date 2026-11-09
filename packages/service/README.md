@@ -1554,10 +1554,11 @@ and the erasure call itself runs over the ambient
 `HttpClient` rather than an injected transport, so nothing in `AccountProcedureSeams`
 carries one — a test provides its own fake `HttpClient` layer instead.
 
-The preferences snapshot carries thirteen parts. `preferences` is the settings
+The preferences snapshot carries fourteen parts. `preferences` is the settings
 snapshot the desktop syncs, replaced whole by a write that names it.
 `linkOpen`, where the account's app links open (null reads as the browser),
-`agentEnter`, what Enter does in an agent's box while it works (`steer`
+`pullRequestOpen`, where its pull requests open (`app` or `github`, null
+reads as the app), `agentEnter`, what Enter does in an agent's box while it works (`steer`
 or `queue`, null reads as steer), `commitAuthor`, who authors an agent's
 commits, `setupFinished`, whether the account
 finished setup after sign-in (null reads as not yet), `setupPlace`, where
@@ -1567,7 +1568,7 @@ reads as off), `completionSound`, which sound (null reads as `chime`),
 `turnNotifications`, whether a notification is posted then (null reads as
 off), and `onboardingSurvey`, what the account answered in setup's survey as
 its JSON (null until it answers), are synced settings kept as parts of their
-own (`link_open`, `agent_enter`, `commit_author`, `setup_finished`,
+own (`link_open`, `pull_request_open`, `agent_enter`, `commit_author`, `setup_finished`,
 `setup_place`, `sound_when`, `completion_sound`, `turn_notifications`,
 `onboarding_survey`), so a build that predates them neither
 refuses the snapshot nor clears them by writing `preferences` back whole.

@@ -59,12 +59,14 @@ export function ofRepository(named: string, repository: string | null | undefine
  * moving to another branch, in its first agent's by its number; one of
  * another repository is the window's. An Inbox item, a task's page and an
  * agent's answer it alike, an archived agent's pull request, merged or not,
- * opening its tab too.
+ * opening its tab too. None opens beside a surface where the account opens
+ * pull requests on GitHub.
  */
 export function pullRequestBeside(
   address: Extract<Address, { readonly kind: typeof ADDRESS.PULL_REQUEST }>,
   here: Holding,
 ): Route {
+  if (address.onGitHub === true) return NOTHING;
   const opened = openedBy(here, here.heldIds ?? here.agentIds);
   const agentId = pullRequestAgentOf(address.href, opened);
   if (agentId !== undefined) return beside({ kind: THING.PULL_REQUEST, agentId });
