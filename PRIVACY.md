@@ -66,8 +66,9 @@ state, and checks, and any chapters you generate for it.
 If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
 sign in with your ChatGPT plan, we store it encrypted with AES-256-GCM under a
 per-credential key that is itself encrypted with a server-only secret held
-outside the database. We keep a short hint (such as `sk-ant-…abcd`) and
-whether the provider accepts it. We never send a saved credential back to your
+outside the database. We keep a short hint (such as `sk-ant-…abcd`), the
+email of the ChatGPT account a plan signed in as, the name you give a plan,
+and whether the provider accepts it. We never send a saved credential back to your
 device, log it, or include it in analytics, error reports, or screen
 recordings.
 

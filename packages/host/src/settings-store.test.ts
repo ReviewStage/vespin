@@ -20,6 +20,7 @@ import {
   EXPERIMENT,
   type ExperimentChoices,
   MAC_COMMAND_MODE,
+  PULL_REQUEST_OPEN,
   SETTINGS_RESET_SCOPE,
   SOUND_WHEN,
   snapshotAccountPreferences,
@@ -221,6 +222,8 @@ const SAMPLE_VALUE = {
   diffLigatures: true,
   diffMinimizeComments: true,
   linkOpen: LINK_OPEN.MAC_APP,
+  // The tab is the default, so GitHub is the choice that has to survive a reopen.
+  pullRequestOpen: PULL_REQUEST_OPEN.GITHUB,
   openNewTask: false,
   // A packaged build shares usage data unless told not to, so Off is the choice.
   usageData: false,

@@ -53,6 +53,9 @@ export const AGENT_TOOL = {
   RUN_ON_MAC: "run_on_mac",
   // A real browser in the agent's own sandbox, which the developer can watch and take over, every role's.
   BROWSER: "browser",
+  // The ports a server listens on in a coding agent's own cloud sandbox, and the one it shares by link.
+  LIST_PORTS: "list_ports",
+  SHARE_PORT: "share_port",
   // The retired runtime's shell and file tools and the code extension's, started in a coding agent's checkout.
   BASH: "bash",
   READ_FILE: "read_file",

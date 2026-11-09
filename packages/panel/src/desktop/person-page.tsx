@@ -1,4 +1,4 @@
-import { AGENT_BOUNDS, type AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest } from "@repo/features/agent-wire";
 import {
   automationOwner,
   automationRunStanding,
@@ -19,7 +19,6 @@ import {
   ErrorState,
   Fill,
   GAP,
-  InlineEdit,
   LIST_INSET,
   List,
   ListRow,
@@ -70,7 +69,7 @@ import { ASSIGNED_TO } from "@repo/ui/task-list-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQueryClient } from "@tanstack/react-query";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -87,7 +86,6 @@ import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
 import { stateEndMark } from "../state-glyph.js";
-import { RENAME_FAILED } from "../tasks/agent-model.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
@@ -98,10 +96,8 @@ import { readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems } from "../tasks/use-waiting-items.js";
-import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
-import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
 import { automationNextText } from "./automation-words.js";
@@ -202,27 +198,16 @@ function PersonSection({
 /** What the section of what waits says where some of it could not be read. */
 const ITEMS_NOT_READ = "Some inbox items could not be read.";
 
-/** What an agent's row is, naming its ⋯ and menu "Agent actions". */
-const AGENT_THING = "Agent";
-
 /** What an automation's row is, naming its ⋯ and menu "Automation actions". */
 const AUTOMATION_THING = "Automation";
 
 /**
  * One of their agents as a row, the row the task's own agents stand in at
- * the head of its description (`agent-list-row.tsx`), in a task's row's
- * anatomy: its glyph wearing where it stands in the status column and its
- * name where a task's stands, then its trailing run, its pull request's
- * chip, which opens its Pull request tab on that task, where it runs, and
- * its failed mark once its turn failed, and last when it last moved,
- * lining up with their tasks' rows above; its card hangs beside it; a press
- * opens its tab, and its ⋯, right-click, long press and menu key offer the
- * agent's one menu over the doors a row has (`agent-actions.tsx`), as a
- * task's summary offers it: Copy link, Rename, which turns the row's name
- * into its field, Archive, asking first while a teammate's agent still
- * works, read again by its own id wherever it stands, and Permanently
- * delete, asked first. A finger's row draws no ⋯, as a phone's Inbox row
- * draws none, so its name keeps the room.
+ * the head of its description (`agent-list-row.tsx`), lining up with their
+ * tasks' rows above, its menu the agent's own there too: a press opens its
+ * tab, and its pull request's chip opens its Pull request tab on that task.
+ * Note that the agent is read again by its own id before a teammate's is
+ * archived, because the agents control reads only the open task's.
  */
 function AgentRow({
   each,
@@ -241,61 +226,28 @@ function AgentRow({
   place: VirtualRowPlace;
 }): React.JSX.Element {
   const { task, agent, at } = each;
-  const { models, macs } = tasks.agents;
+  const { models } = tasks.agents;
   const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
   const queryClient = useQueryClient();
-  // Note that the agent is read again by its own id before a teammate's is archived, because the agents control reads only the open task's.
   const control = {
     ...tasks.agents,
     readAgent: (agentId: string) => readAgentById(queryClient, agentId),
   };
-  const actions = useAgentActions(agent, control, {
-    label: subject.name,
-    shown: tasks.shown,
-    terminals: { onOpenTerminal: undefined },
-  });
-  const press = useRef<HTMLButtonElement | null>(null);
-  const { rename } = actions;
-  const editing = rename?.editing === true;
-  const endedByKey = useRefocusAfterEdit(editing, press);
   return (
     <AgentListRow
       agent={agent}
+      agents={control}
+      shown={tasks.shown}
       subject={subject}
       at={at}
-      editor={
-        editing ? (
-          <InlineEdit
-            value={rename.asked ?? subject.name}
-            label="Agent name"
-            maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-            editing
-            onEnd={(edit) => {
-              endedByKey(edit.byKey);
-              rename.end(edit.value);
-            }}
-          />
-        ) : undefined
-      }
       card={<AgentCard subject={subject} models={models} />}
-      models={models}
-      devices={macs}
       pullRequest={pullRequests.get(agent.id)}
-      note={rename?.refused === true ? RENAME_FAILED : undefined}
       edges={TASK_ROW_EDGES.UNCHOSEN}
       place={place}
-      pressRef={press}
-      menu={
-        editing
-          ? undefined
-          : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), tasks.shown, true)
-      }
       more={more}
       onPress={() => tasks.onShowAgent(task.id, agent.id)}
       onOpenPullRequest={() => tasks.onShowPanelTab(task.id, changesTab(agent.id))}
-    >
-      {actions.dialog}
-    </AgentListRow>
+    />
   );
 }
 

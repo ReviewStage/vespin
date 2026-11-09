@@ -37,6 +37,7 @@
  * `isError`, which the agent reads as it reads any tool's answer.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
 import { RENAMED_TOOL, WORKSPACE_MCP_SERVER } from "@repo/features/agent-tools";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { MAC_COMMAND_BOUNDS } from "@repo/features/mac-command-wire";
@@ -73,6 +74,7 @@ import type { McpToolSchema } from "../../integrations/mcp-tools.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import type { AgentBrowser } from "../browser/agent-browser.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
+import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import {
   callTool,
   isServedTool,
@@ -268,10 +270,18 @@ type WorkspaceMcpSandboxDoor = (admitted: AdmittedConversation) => AgentSandboxD
 /** The agent's browser as the edge composes it (`../browser/agent-browser.ts`'s `agentBrowserServices`), over the runtime's HTTP client. */
 export type WorkspaceMcpBrowser = Layer.Layer<AgentBrowser, never, HttpClient.HttpClient | Sandbox>;
 
-/** What the server is composed over: the doors to the agent's sandbox, and its browser. */
+/** The agent's sandbox as the edge composes it (`../terminal/agent-sandbox.ts`'s `agentSandboxLayer`), which its ports are listed and shared on. */
+export type WorkspaceMcpAgentSandbox = Layer.Layer<
+  AgentSandbox,
+  never,
+  HttpClient.HttpClient | DatabaseServices | Sandbox
+>;
+
+/** What the server is composed over: the doors to the agent's sandbox, its browser, and its sandbox's ports. */
 export interface WorkspaceMcpDoors {
   readonly sandbox: WorkspaceMcpSandboxDoor;
   readonly browser: WorkspaceMcpBrowser;
+  readonly agentSandbox: WorkspaceMcpAgentSandbox;
 }
 
 /**
@@ -321,7 +331,7 @@ function callWorkspaceTool(
     };
     return callTool(admitted, name, input, context);
   }).pipe(
-    Effect.provide(doors.browser),
+    Effect.provide(Layer.merge(doors.browser, doors.agentSandbox)),
     Effect.map(({ content, isError }) => Result.succeed({ content, isError })),
     Effect.catchCause((cause) =>
       Effect.as(

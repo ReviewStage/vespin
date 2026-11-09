@@ -139,8 +139,8 @@ import type { SidebarCollapse } from "./sidebar-collapse.js";
  * chosen in it, so Back returns to wherever it was opened from, the task as
  * it was left, side panel and all; a restore that lands leaves for the task
  * it restored, where the window's toast offers its Undo. Every row and the version beside them name what
- * the description held, so both are left out of the screen recording
- * (`ph-no-capture`) as a second line behind the recording's text masking.
+ * the description held, which the screen recording masks as it masks every
+ * word.
  *
  * What the history is of is handed in as its subject: the open task's
  * (`taskVersionSubject`).
@@ -882,11 +882,7 @@ export function DesktopVersionHistory({
       className={`desktop-version-history ${PLACE_SPLIT}`}
       data-single={String(split.single)}
     >
-      <nav
-        className={`version-log ph-no-capture ${PLACE_LIST}`}
-        aria-label="Versions"
-        hidden={hidden.list}
-      >
+      <nav className={`version-log ${PLACE_LIST}`} aria-label="Versions" hidden={hidden.list}>
         {narrow ? (
           // A phone's header: the way out, or from a revision's sections back to every version, and the title.
           <PhoneHead
@@ -1056,11 +1052,7 @@ export function DesktopVersionHistory({
         {/* Last, so the drag strip above the way back does not take the edge's top from it. */}
         {split.single ? null : <ResizeEdge edge={edge} />}
       </nav>
-      <section
-        className={`version-page ph-no-capture ${PLACE_PAGE}`}
-        aria-label="Version"
-        hidden={hidden.item}
-      >
+      <section className={`version-page ${PLACE_PAGE}`} aria-label="Version" hidden={hidden.item}>
         <PageFind page={FIND_PAGE.VERSION_HISTORY} at={String(versions.selected)} active>
           <VersionPage
             subject={subject}

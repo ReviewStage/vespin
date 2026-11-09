@@ -57,7 +57,7 @@ export function ChangesStrip({
   peek: StripPeek;
 }): React.JSX.Element {
   return (
-    <div className="file-tree-strip ph-no-capture hidden">
+    <div className="file-tree-strip hidden">
       <MarkStrip
         look={MARK_STRIP_LOOK.BARS}
         marks={files.map((file) => ({

@@ -6,9 +6,12 @@ import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/p
 import { Database } from "@repo/database/core/query";
 import {
   createAgent,
+  latestTurnsOfReached,
   readAgent,
   readAgentContext,
   readAgentRouting,
+  recordAgentPayer,
+  recordAgentRunnerLaunch,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
@@ -18,7 +21,7 @@ import {
   saveProviderKey,
 } from "@repo/database/models/provider-key-store";
 import { readTask, updateTask } from "@repo/database/models/task-store";
-import { lapsedTurnsOf } from "@repo/database/models/turn-state";
+import { lapsedTurnsOf, releaseWaitedTurns } from "@repo/database/models/turn-state";
 import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -898,7 +901,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a compaction stamps the agent, and a launch the plan's limit refused fails its turn saying so",
+    "a compaction stamps the agent, and a launch the plan's limit refused with no reset named fails its turn saying so",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -914,11 +917,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           },
           {
             type: "rate_limit_event",
-            rate_limit_info: {
-              status: "rejected",
-              rateLimitType: "five_hour",
-              resetsAt: 1_800_000_000,
-            },
+            rate_limit_info: { status: "rejected", rateLimitType: "five_hour" },
             ...top,
           },
           { type: "result", subtype: "error_during_execution", is_error: true, ...top },
@@ -947,10 +946,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const context = yield* readAgentContext(agent.userId, agent.agentId);
 
         assert.deepEqual(ended.map((turn) => [turn.status, turn.failureDetail]).sort(), [
-          [
-            TURN_STATUS.FAILED,
-            "error_during_execution; rate_limit_rejected five_hour resets 2027-01-15T08:00:00.000Z",
-          ],
+          [TURN_STATUS.FAILED, "error_during_execution; rate_limit_rejected five_hour"],
           [TURN_STATUS.FAILED, "input_closed"],
         ]);
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
@@ -1987,6 +1983,78 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
+    "a limit a Codex turn reaches is written to the subscription its agent runs on, and the account's first stands",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
+        yield* signedIn(agent.userId);
+        const second = yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-sign-in" },
+          "ChatGPT",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+          second,
+        );
+
+        const resetsAt = Date.UTC(2026, 9, 22, 9);
+        yield* post(
+          agent.bearer,
+          refusedLaunch(
+            agent.lineId,
+            0,
+            {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+            [
+              {
+                method: "account/rateLimits/updated",
+                params: {
+                  rateLimits: {
+                    limitId: null,
+                    limitName: null,
+                    primary: {
+                      usedPercent: 100,
+                      windowDurationMins: 300,
+                      resetsAt: resetsAt / 1000,
+                    },
+                    secondary: null,
+                    rateLimitReachedType: "rate_limit_reached",
+                  },
+                },
+              },
+            ],
+          ),
+        );
+        const rows = yield* listProviderKeyRows(agent.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+
+        assert.deepEqual(
+          rows.map((row) => [
+            row.id === second,
+            row.status,
+            row.limitResetsAt?.toISOString() ?? null,
+          ]),
+          [
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null],
+            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString()],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "an account OpenAI says is not eligible, or whose plan does not include Codex, is marked so; a failure that says nothing of the plan, or an agent a key pays for, leaves the row as it stood",
     () =>
       Effect.gen(function* () {
@@ -2304,6 +2372,128 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+      }),
+  );
+
+  it.effect(
+    "a turn the plan's limit cuts short, with no other payer but a reset named, stays open until the reset, which the sweep releases it at for the next launch to finish",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const only = yield* pasted(agent.userId);
+        yield* recordAgentPayer(agent.userId, agent.agentId, AGENT_PAYER.CLAUDE_SUBSCRIPTION, only);
+        const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const limited = numberedFrom(
+          0,
+          failedClaudeLaunch(agent.lineId, [
+            {
+              type: "rate_limit_event",
+              rate_limit_info: {
+                status: "rejected",
+                rateLimitType: "five_hour",
+                resetsAt: resetsAt / 1000,
+              },
+              uuid: randomUUID(),
+              ...top,
+            },
+          ]),
+        );
+        yield* post(agent.bearer, limited);
+        const waiting = (yield* latestTurnsOfReached([agent.target.conversationId])).get(
+          agent.target.conversationId,
+        );
+        const early = yield* releaseWaitedTurns(new Date(resetsAt - 1), 1000);
+        const released = yield* releaseWaitedTurns(new Date(resetsAt), 1000);
+
+        // The launch the sweep hands it on to, past the reset, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.equal(waiting?.status, TURN_STATUS.RUNNING);
+        assert.equal(waiting?.waitsUntil?.getTime(), resetsAt);
+        assert.ok((waiting?.leaseUntil?.getTime() ?? 0) > resetsAt);
+        assert.deepEqual(
+          early.filter((turn) => turn.conversationId === agent.target.conversationId),
+          [],
+        );
+        assert.deepEqual(
+          released
+            .filter((turn) => turn.conversationId === agent.target.conversationId)
+            .map((turn) => turn.turnId),
+          [waiting?.id],
+        );
+        assert.deepEqual(
+          finished.turns.map((turn) => turn.status),
+          [TURN_STATUS.SETTLED],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
+      }),
+  );
+
+  it.effect(
+    "a turn the plan's limit cuts short, with another subscription standing, stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const first = yield* pasted(agent.userId);
+        yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.ANTHROPIC,
+          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-token" },
+          "sk-ant-oat01…second",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          first,
+        );
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const limited = numberedFrom(
+          0,
+          failedClaudeLaunch(agent.lineId, [
+            {
+              type: "rate_limit_event",
+              rate_limit_info: {
+                status: "rejected",
+                rateLimitType: "five_hour",
+                resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+              },
+              uuid: randomUUID(),
+              ...top,
+            },
+          ]),
+        );
+        yield* post(agent.bearer, limited);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+
+        // The launch on the next subscription, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
       }),
   );
 

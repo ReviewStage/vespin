@@ -182,6 +182,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   queuedAt: EffectSchema.NullOr(countedNumber),
   startedAt: EffectSchema.NullOr(countedNumber),
   settledAt: EffectSchema.NullOr(countedNumber),
+  /** When the usage limit the newest turn is held open for resets; null where it waits on none, and absent from a statement before it was carried. */
+  waitsUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   // Note that the four columns below are read by the status rule of a desktop released before
   // the turn record, and by nothing of this build: carried until the next desktop release is the
   // oldest in use, then dropped with the service's statement. `awaitingLineAt` is always null.
@@ -290,6 +292,7 @@ function agentTurnOf(row: AgentLiveRow): AgentTurn | undefined {
     status: turnStatusOfWord(row.turnStatus),
     ...(row.cancelRequested === true ? { stopAsked: true } : undefined),
     ...(failure === undefined ? undefined : { failure }),
+    ...(row.waitsUntil == null ? undefined : { waitsUntil: row.waitsUntil }),
   };
 }
 

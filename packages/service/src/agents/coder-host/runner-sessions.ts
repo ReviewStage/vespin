@@ -1719,6 +1719,8 @@ export const runnerSessions = <
       layout: MachineLayout,
       sent: RunnerMessage,
       handsOn: boolean,
+      /** Whether a runner up is ended and launched again whatever it holds, as a retry on the next payer asks (`retry`). */
+      relaunch = false,
     ) =>
       Effect.gen(function* () {
         // The agent is read beside the place, and its read answers only for a place found or opening.
@@ -1802,6 +1804,7 @@ export const runnerSessions = <
           // has gone, so a line written to a runner on its way down is lost.
           if (
             restart ||
+            relaunch ||
             (standing.machine === AGENT_MACHINE.DEVICE &&
               pastWarmWindow(
                 turnRunning,
@@ -2397,6 +2400,34 @@ export const runnerSessions = <
             );
           }).pipe(
             Effect.catch(failed("send")),
+            Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
+            Effect.provideContext(
+              Option.isSome(after) ? Context.add(context, AfterResponse, after.value) : context,
+            ),
+          );
+        }),
+
+      // A turn its plan's limit cut short goes on with its own line in a launch on the next payer:
+      // the runner, wherever it runs and whatever it holds, ended and launched again here under the
+      // lease, as a message to a Mac's is, its payer chosen afresh as every launch's is
+      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`).
+      retry: (sessionId, message) =>
+        Effect.gen(function* () {
+          const after = yield* Effect.serviceOption(AfterResponse);
+          return yield* Effect.gen(function* () {
+            const agent = yield* agentOf(message.conversationId);
+            const layout = yield* machine.layout(agent);
+            const sent = messageLine(message, layout);
+            return yield* holdingRunner(
+              agent.id,
+              sendHolding(sessionId, message, layout, sent, false, true),
+              CODER.RUNNER_LEASE.SEND_WAIT,
+            ).pipe(
+              Effect.catch(failed("retry")),
+              Effect.annotateLogs(agentLogIds(agent, sessionId)),
+            );
+          }).pipe(
+            Effect.catch(failed("retry")),
             Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
             Effect.provideContext(
               Option.isSome(after) ? Context.add(context, AfterResponse, after.value) : context,

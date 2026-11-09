@@ -2094,6 +2094,7 @@ it.layer(getTestDB())("the coding-agent store's routing of an agent", (it) => {
           nativeSession: null,
           runnerTokenHash: null,
           payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          subscriptionId: null,
         });
         assert.deepEqual([recordedSession, recordedToken], [true, true]);
         assert.deepEqual(recorded, {
@@ -2101,6 +2102,7 @@ it.layer(getTestDB())("the coding-agent store's routing of an agent", (it) => {
           nativeSession: "session-1",
           runnerTokenHash: "digest-1",
           payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          subscriptionId: null,
         });
         assert.equal(retired.runnerTokenHash, null);
         assert.equal(retired.nativeSession, "session-1");
@@ -2167,6 +2169,7 @@ it.layer(getTestDB())("the coding-agent store's routing of an agent", (it) => {
           nativeSession: null,
           runnerTokenHash: null,
           payer: null,
+          subscriptionId: null,
         };
         assert.deepEqual(Option.getOrThrow(yield* readAgentRouting(starter, unnamed.id)), expected);
         assert.deepEqual(Option.getOrThrow(yield* readAgentRouting(starter, older)), expected);
@@ -2338,6 +2341,7 @@ it.layer(getTestDB())("the coding-agent store's routing of an agent", (it) => {
           nativeSession: "thread-1",
           runnerTokenHash: "digest-1",
           payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+          subscriptionId: null,
         });
       }),
   );

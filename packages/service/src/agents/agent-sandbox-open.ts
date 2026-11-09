@@ -65,8 +65,18 @@ export function agentTag(tags: Readonly<Record<string, string>> | undefined): st
   return tags?.[AGENT_TAG] ?? tags?.[AGENT_TAG_BEFORE_RENAME];
 }
 
-/** The variables the sandbox opens with. */
-export const SANDBOX_ENV = { NO_COLOR: "1", GH_STACK_NO_UPDATE_NOTIFIER: "1" } as const;
+/**
+ * The variables the sandbox opens with, and every runner starts with. Note
+ * that Vite's dev server refuses a request whose host it was not told of,
+ * and a shared port's preview reaches the server at the sandbox's own route
+ * on Vercel's sandbox domain (`previews/preview-app.ts`), so every Vite the
+ * agent starts is told that domain's hosts beside its own.
+ */
+export const SANDBOX_ENV = {
+  NO_COLOR: "1",
+  GH_STACK_NO_UPDATE_NOTIFIER: "1",
+  __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: ".vercel.run",
+} as const;
 
 /** Why a sandbox could not be opened where its build named no agents' image (`coder-host/agent-image.ts`). */
 const IMAGE_MISSING = "the agents' image could not be read";

@@ -224,6 +224,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         startedAt: latest.startedAt,
         settledAt: latest.settledAt,
         leaseUntil: latest.leaseUntil,
+        waitsUntil: latest.waitsUntil,
         // Note that a desktop released before the turn record reads a line awaiting its turn by this; null
         // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
         awaitingLineAt: sql<Date | null>`null::timestamptz`,

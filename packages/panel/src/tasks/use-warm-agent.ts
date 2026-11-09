@@ -9,7 +9,7 @@ import { usePageVisible } from "../use-page-visible.js";
 /**
  * use-warm-agent.ts -- keeps a cloud agent warm while it is on screen, so a message goes straight into its running session.
  *
- * The service keeps a cloud agent's sandbox and runner warm for five minutes
+ * The service keeps a cloud agent's sandbox and runner warm for three minutes
  * past its last warm call (`agentWarmAnswerSchema`), so the window calls at
  * once and then every `WARM_EVERY` while the agent stays on screen and the
  * page is visible. Each call also asks this Mac for the agent's mirror,

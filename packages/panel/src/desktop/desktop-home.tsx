@@ -234,7 +234,7 @@ function HomeComposer({
   const refusal = tasks.newTask.homeRefused;
   if (!tasks.signedIn) return null;
   return (
-    <div className="home-composer ph-no-capture mb-page-section-gap" ref={box}>
+    <div className="home-composer mb-page-section-gap" ref={box}>
       <NewTaskComposer
         // Note that each refusal mounts the composer afresh, as the card opens on what it pressed only as it mounts.
         key={refusal?.opening}

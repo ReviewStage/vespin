@@ -312,6 +312,9 @@ const TurnsPageSchema = Schema.Struct({
   nextCursor: Schema.NullOr(Schema.String),
 });
 const decodeThreadAnswer = Schema.decodeUnknownOption(ThreadAnswerSchema);
+
+/** App-server's word for a thread resumed on another model provider than it was written on, in its refusal's message or data. */
+const PROVIDER_MISMATCH = /model\s*provider\s*mismatch/i;
 const decodeTurnsPage = Schema.decodeUnknownOption(TurnsPageSchema);
 const decodeTurnAnswer = Schema.decodeUnknownOption(TurnAnswerSchema);
 const decodeLine = Schema.decodeUnknownOption(Schema.fromJsonString(InputLineSchema));
@@ -628,6 +631,17 @@ function steerWaits(error: AppServerError): boolean {
   );
 }
 
+/**
+ * Whether app-server refused to resume a thread for its model provider: the
+ * thread was written on another provider than this launch's
+ * (`modelProviderMismatch`), as a plan's thread is once the agent's API key
+ * pays, or the other way round. Such a thread is forked on this launch's
+ * provider instead, which goes on with its history.
+ */
+function providerMismatch(error: AppServerError): boolean {
+  return PROVIDER_MISMATCH.test(`${error.detail} ${JSON.stringify(error.data ?? null)}`);
+}
+
 /** A message line's blocks as Codex's `UserInput`: text as text, a base64 image as a data URL. */
 function userInput(content: readonly ContentBlock[]): UserInput[] {
   return content.map((block) =>
@@ -841,11 +855,13 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
         ? yield* server.request(METHOD.THREAD_START, thread)
         : fork
           ? yield* server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true })
-          : yield* server.request(METHOD.THREAD_RESUME, {
-              ...thread,
-              threadId,
-              excludeTurns: true,
-            });
+          : yield* server
+              .request(METHOD.THREAD_RESUME, { ...thread, threadId, excludeTurns: true })
+              .pipe(
+                Effect.catchIf(providerMismatch, () =>
+                  server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true }),
+                ),
+              );
     const opened = decodeThreadAnswer(answer);
     if (Option.isNone(opened)) {
       return yield* new AppServerError({

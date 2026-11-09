@@ -35,7 +35,8 @@
  * To add a tool, name it in `MEMBER_MCP_TOOL`, declare it with
  * `memberMcpTool`, and list it in `MEMBER_MCP_TOOLS`; its golden is settled
  * by `app.test.ts`, and `coverage.ts` refuses to build until it names the
- * hosted procedures that do what the tool does.
+ * hosted procedures that do what the tool does, and the CLI's
+ * `mcp-parity.ts` until it names the `vespin` command that does it.
  */
 
 import { randomUUID } from "node:crypto";
@@ -55,7 +56,7 @@ import { listTaskSections } from "@repo/database/models/task-section-store";
 import { readTask, readTaskWorkspace } from "@repo/database/models/task-store";
 import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { AGENT_TOOL, RETIRED_TOOL } from "@repo/features/agent-tools";
+import { RETIRED_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -85,6 +86,7 @@ import {
   INBOX_STATUS,
   inboxAnswersSchema,
 } from "@repo/features/inbox-wire";
+import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -108,11 +110,7 @@ import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@re
 import { Effect, Option, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
-import {
-  READ_AGENT_CHANGES,
-  READ_AGENT_CHANGES_INPUT,
-  runReadAgentChanges,
-} from "../agents/agent-changes-tool.js";
+import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
   ADDED_REPOSITORY_INPUT,
@@ -229,13 +227,7 @@ import {
 } from "../tasks/description-comments-procedures.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
-import {
-  answerAskAsMember,
-  closeThreadAsMember,
-  MEMBER_INBOX_TOOL,
-  readMemberInbox,
-  replyAsMember,
-} from "./inbox.js";
+import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
 /** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, and the member the call acts for. */
 export type MemberMcpServices =
@@ -278,45 +270,7 @@ interface MemberMcpToolWords {
   readonly input: MemberMcpToolInput;
 }
 
-/** The tools by name, each the name a model calls it by. */
-export const MEMBER_MCP_TOOL = {
-  LIST_WORKSPACES: "list_workspaces",
-  LIST_TASKS: AGENT_TOOL.LIST_TASKS,
-  READ_TASK: AGENT_TOOL.READ_TASK,
-  LIST_AGENTS: AGENT_TOOL.LIST_AGENTS,
-  READ_AGENT: AGENT_TOOL.READ_AGENT,
-  READ_AGENT_CHANGES,
-  LIST_MODELS: AGENT_TOOL.LIST_MODELS,
-  READ_PAGE: AGENT_TOOL.READ_PAGE,
-  CREATE_TASK: AGENT_TOOL.CREATE_TASK,
-  UPDATE_TASK: AGENT_TOOL.UPDATE_TASK,
-  EDIT_DESCRIPTION: AGENT_TOOL.EDIT_DESCRIPTION,
-  CREATE_SECTION: AGENT_TOOL.CREATE_SECTION,
-  DELETE_SECTION: AGENT_TOOL.DELETE_SECTION,
-  START_AGENT: AGENT_TOOL.START_AGENT,
-  MESSAGE_AGENT: AGENT_TOOL.MESSAGE_AGENT,
-  STOP_AGENT: AGENT_TOOL.STOP_AGENT,
-  UPDATE_AGENT: AGENT_TOOL.UPDATE_AGENT,
-  READ_INBOX: MEMBER_INBOX_TOOL.READ,
-  ANSWER_ASK: MEMBER_INBOX_TOOL.ANSWER,
-  REPLY_TO_THREAD: MEMBER_INBOX_TOOL.REPLY,
-  CLOSE_THREAD: MEMBER_INBOX_TOOL.CLOSE,
-  AGENT_PULL_REQUEST_ACTION: "agent_pull_request_action",
-  READ_COMMENTS: AGENT_TOOL.READ_COMMENTS,
-  COMMENT_ON_DESCRIPTION: "comment_on_description",
-  REPLY_TO_COMMENT: AGENT_TOOL.REPLY_TO_COMMENT,
-  UPDATE_COMMENT: AGENT_TOOL.UPDATE_COMMENT,
-  SEARCH_MEMORY: AGENT_TOOL.SEARCH_MEMORY,
-  SAVE_MEMORY: AGENT_TOOL.SAVE_MEMORY,
-  FORGET_MEMORY: "forget_memory",
-  LIST_AUTOMATIONS: AGENT_TOOL.LIST_AUTOMATIONS,
-  CREATE_AUTOMATION: AGENT_TOOL.CREATE_AUTOMATION,
-  UPDATE_AUTOMATION: AGENT_TOOL.UPDATE_AUTOMATION,
-  RUN_AUTOMATION: AGENT_TOOL.RUN_AUTOMATION,
-  DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
-} as const;
-
-export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];
+export { MEMBER_MCP_TOOL, type MemberMcpToolName };
 
 /**
  * The member tools since renamed, each with the tool in its place, which

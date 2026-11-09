@@ -254,7 +254,7 @@ test("while the default and the keys are read, placeholder rows stand in each gr
   act(() => root.render(withQueryClient(createElement(AgentsPage, { signedIn: true }))));
 
   assert.deepEqual(placeholders(page), [
-    ["Reading your keys", 2],
+    ["Reading your keys", 4],
     ["Reading your default", 3],
   ]);
   await settle();
@@ -490,19 +490,21 @@ test("replacing the account's own Anthropic key moves the models the host holds,
   const page = await mount();
   assert.equal(fastSwitch(page).disabled, true);
 
-  const row =
-    [...page.querySelectorAll<HTMLButtonElement>("button")].find(
-      (each) =>
-        each.textContent === "Manage" &&
-        each.closest(".ui-settings-row")?.textContent?.startsWith("Claude"),
-    ) ?? assert.fail("no Claude row button");
-  act(() => row.click());
   act(() =>
     (
-      document.querySelector<HTMLButtonElement>('[aria-label="Replace Anthropic API key"]') ??
-      assert.fail("no Replace")
+      page.querySelector<HTMLButtonElement>('[aria-label="Anthropic API key actions"]') ??
+      assert.fail("no key's ⋯")
     ).click(),
   );
+  await settle();
+  act(() =>
+    (
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        (each) => each.textContent === "Replace key",
+      ) ?? assert.fail("no Replace key")
+    ).click(),
+  );
+  await settle();
   const label =
     [...document.querySelectorAll("label")].find((each) => each.textContent === "Paste the key") ??
     assert.fail("no key field");

@@ -111,7 +111,7 @@ import { useWindowAccount, windowAccountOf } from "./window-account.js";
  * window's, though off a Mac every Ctrl chord is the page's
  * (`surfaceKeepsPress`), and one the page edits text with
  * is sent as Control, since the page runs on Linux. What the page shows is
- * the agent's and its members', so the pane is left out of the screen
+ * the agent's and its members', so the live view is left out of the screen
  * recording (`ph-no-capture`), whose canvas recording is off in any case,
  * and no frame, address, or title is kept past the drawn tab. The agent's
  * pointer is drawn over the canvas, never in its frame, while the agent has
@@ -695,7 +695,7 @@ export function CloudBrowserPane({
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
-      className="browser-view cloud-browser-view file-view ph-no-capture"
+      className="browser-view cloud-browser-view file-view"
       aria-label="Browser"
     >
       <CloudBrowserBar
@@ -731,7 +731,10 @@ export function CloudBrowserPane({
         )}
       </div>
       <Fill clip ref={body} className={BODY_CLASS}>
-        <div className="relative flex-none" style={{ width: size.width, height: size.height }}>
+        <div
+          className="ph-no-capture relative flex-none"
+          style={{ width: size.width, height: size.height }}
+        >
           <RemoteSurface
             ref={canvas}
             label="The page"
@@ -829,7 +832,7 @@ export function CloudBrowserDraftPane({
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
-      className="browser-view cloud-browser-view file-view ph-no-capture"
+      className="browser-view cloud-browser-view file-view"
       aria-label="Browser"
     >
       <CloudBrowserBar

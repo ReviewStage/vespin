@@ -387,6 +387,8 @@
   --spacing-popover-room: var(--ui-popover-room, none);
   --spacing-hover-card-glyph: var(--ui-hover-card-glyph);
   --spacing-hover-card-list: var(--ui-hover-card-list-height);
+  /* A repository list stands six of its lines and half a seventh, so a list that scrolls shows it does. */
+  --spacing-repository-lines: calc(6.5 * var(--ui-space-24));
   --container-dialog-confirm: min(var(--ui-dialog-confirm-width), 100%);
   --container-dialog-wide: min(var(--ui-dialog-wide-width), 100%);
   --container-dialog-composer: min(var(--ui-dialog-composer-width), 100%);

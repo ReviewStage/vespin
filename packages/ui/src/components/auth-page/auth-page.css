@@ -39,7 +39,7 @@
     display: block;
   }
 
-  /* The footnote can hold a press (a wait's Cancel), and the way on, a
+  /* The footnote can hold a press (a link to the Mac app), and the way on, a
      step's foot, and the way out are presses, which are no part of a window
      drag: the way out stands in the title bar, after the window's drag strip
      in DOM order, so its no-drag wins there. */

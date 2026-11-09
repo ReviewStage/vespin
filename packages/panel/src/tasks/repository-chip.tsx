@@ -74,7 +74,10 @@ import { useOpenSettings } from "../open-settings.js";
  * drawn (`MenuNoteRow`): an owner or an admin is offered Connect, Reconnect,
  * or Choose repositories at its end, each opening the workspace's GitHub
  * repositories in Settings, the one place they are set, and a member is
- * told there which owners and admins, by name, to ask. The list is held by the host while the chip stands, drawn at once from its
+ * told there which owners and admins, by name, to ask. Every other list
+ * ends the same way: an owner or an admin is offered Configure repositories
+ * in Settings pinned last under it, and a member is told on its last line
+ * whom to ask to configure them. The list is held by the host while the chip stands, drawn at once from its
  * last answer, and asked again whenever a window comes forward, so a
  * developer back from connecting GitHub in the browser sees the change on
  * the next opening; nothing polls. Where the opener picks several, as New
@@ -123,14 +126,17 @@ export const CHIP_PLACE = {
   COMPOSER: "composer",
   /** A form row's value, or the plan's chip row, as a Settings picker's chip is drawn. */
   FIELD: "field",
+  /** A press among a row's outlined buttons, its words the press's own, as setup's Add repositories. */
+  ACTION: "action",
 } as const;
 
 type ChipPlace = (typeof CHIP_PLACE)[keyof typeof CHIP_PLACE];
 
-/** The chip's look in each place: the composer's pill, or a form row's field. */
+/** The chip's look in each place: the composer's pill, a form row's field, or an outlined button's. */
 const PLACE_LOOK = {
   [CHIP_PLACE.COMPOSER]: CHIP_LOOK.PILL,
   [CHIP_PLACE.FIELD]: CHIP_LOOK.FIELD,
+  [CHIP_PLACE.ACTION]: CHIP_LOOK.OUTLINE,
 } as const satisfies Record<ChipPlace, ChipLook>;
 
 /** The chip's words while it waits on a pick. */
@@ -158,6 +164,15 @@ const EXTRA_REFUSED = {
 
 /** The id of the row pinned under the list that chooses no repository. */
 const NONE_ROW = "none";
+
+/** The id of the row pinned last under the list that opens the workspace's GitHub repositories in Settings. */
+const SETTINGS_ROW = "settings";
+
+/** What that row says, to an owner or an admin. */
+const SETTINGS_LABEL = "Configure repositories in Settings";
+
+/** What a member asks the owners and admins to do in its place, finishing "Ask … to". */
+const SETTINGS_ASK = "configure repositories";
 
 /** What the menu says where the search matches no repository. */
 const NO_MATCH = "No repositories match";
@@ -207,7 +222,14 @@ export function useOwnersToAsk(workspaceId: string | undefined): {
   return { named, rest: owners.length - named.length };
 }
 
-/** A member's way out of a dead end: the GitHub row, ending in whom to ask (`useOwnersToAsk`), who alone can mend it. */
+/** Whom a member asks, as words: the owners and admins named by `useOwnersToAsk`, or any of them while none is. */
+function useWhomToAsk(workspaceId: string | undefined): string {
+  const { named, rest } = useOwnersToAsk(workspaceId);
+  const others = rest > 0 ? [otherOwnersWords(rest)] : [];
+  return named.length === 0 ? ANY_OWNER : orList([...named.map((each) => each.name), ...others]);
+}
+
+/** A member's way out of a dead end: the GitHub row, ending in whom to ask (`useWhomToAsk`), who alone can mend it. */
 function AskOwnersRow({
   workspaceId,
   ask,
@@ -215,10 +237,7 @@ function AskOwnersRow({
   workspaceId: string | undefined;
   ask: DeadEnd["ask"];
 }): React.JSX.Element {
-  const { named, rest } = useOwnersToAsk(workspaceId);
-  const others = rest > 0 ? [otherOwnersWords(rest)] : [];
-  const whom =
-    named.length === 0 ? ANY_OWNER : orList([...named.map((each) => each.name), ...others]);
+  const whom = useWhomToAsk(workspaceId);
   return (
     <MenuNoteRow
       glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
@@ -357,7 +376,7 @@ type SearchableMenuProps = React.ComponentProps<typeof SearchableMenu>;
 /** What a repository's menu lists and what a pick does, whichever layer it stands in. */
 type ListedMenu = Pick<
   SearchableMenuProps,
-  "rows" | "value" | "checked" | "note" | "onPick" | "foot"
+  "rows" | "value" | "checked" | "note" | "onPick" | "foot" | "lastLine"
 >;
 
 /** The searched menu's props over the rows it lists. Note that every row names a repository and its owner, so each stays masked, and the note, which can name the workspace, is left unmarked. */
@@ -537,17 +556,32 @@ function useRepositoryListing(
       : chooser.reading === true || props.pending === true
         ? READING_LABEL
         : CHOOSE_LABEL);
+  // Note that a member is told whom to ask, so only a member reads the workspace's people.
+  const whom = useWhomToAsk(chooser.manages ? undefined : chooser.scope);
+  const configure = () => choose(() => openSettings(workspaceGitHub));
   // A list with nothing to pick is mended at the workspace's GitHub, by an owner or an admin, whom a member is told to ask.
   const deadEnd = (way: DeadEnd) =>
     chooser.manages ? (
       <MenuNoteRow
         glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
         label={GITHUB_LABEL}
-        end={{ action: way.action, onClick: () => choose(() => openSettings(workspaceGitHub)) }}
+        end={{ action: way.action, onClick: configure }}
       />
     ) : (
       <AskOwnersRow workspaceId={chooser.scope} ask={way.ask} />
     );
+  // Note that a workspace whose row says GitHub is connected, yet whose read finds none installed, had it removed or suspended on GitHub;
+  // one installed but giving us nothing has its repositories chosen on GitHub, through the workspace's row.
+  const stuck =
+    failure !== undefined || listed === undefined
+      ? undefined
+      : !listed.installed && listed.repositories.length === 0
+        ? chooser.connected === true
+          ? DEAD_END.LAPSED
+          : DEAD_END.NOT_CONNECTED
+        : rows.length === 0 && listed.installed
+          ? DEAD_END.NONE_REACHED
+          : undefined;
   const note =
     failure !== undefined ? (
       <ErrorState
@@ -556,15 +590,13 @@ function useRepositoryListing(
       >
         {repositoryFailureNote(failure)}
       </ErrorState>
-    ) : listed !== undefined && !listed.installed && listed.repositories.length === 0 ? (
-      // Note that a workspace whose row says GitHub is connected, yet whose read finds none installed, had it removed or suspended on GitHub.
-      deadEnd(chooser.connected === true ? DEAD_END.LAPSED : DEAD_END.NOT_CONNECTED)
+    ) : stuck !== undefined ? (
+      deadEnd(stuck)
     ) : listed === undefined ? (
       <Spinner delay label={readingWords("repositories")} />
-    ) : rows.length === 0 && listed.installed ? (
-      // Installed but giving us nothing: the repositories are chosen on GitHub, through the workspace's row.
-      deadEnd(DEAD_END.NONE_REACHED)
     ) : undefined;
+  // Note that the way to the repositories' Settings ends every list but a dead end's, whose own row already leads there.
+  const configurable = stuck === undefined;
 
   return {
     label,
@@ -588,9 +620,9 @@ function useRepositoryListing(
         several === undefined
           ? choose(() => props.onChoose(repository))
           : several.onToggle(repository),
-      foot:
-        onClear === undefined
-          ? undefined
+      foot: [
+        ...(onClear === undefined
+          ? []
           : [
               {
                 id: NONE_ROW,
@@ -598,7 +630,21 @@ function useRepositoryListing(
                 icon: <NoRepositoryGlyph />,
                 onPress: () => choose(onClear),
               },
-            ],
+            ]),
+        ...(configurable && chooser.manages
+          ? [
+              {
+                id: SETTINGS_ROW,
+                label: SETTINGS_LABEL,
+                icon: <GLYPH.SETTINGS />,
+                onPress: configure,
+              },
+            ]
+          : []),
+      ],
+      // A member, who cannot configure them, is told whom to ask instead.
+      lastLine:
+        configurable && !chooser.manages ? { words: `Ask ${whom} to ${SETTINGS_ASK}` } : undefined,
     },
   };
 }
@@ -680,23 +726,26 @@ export function RepositoryChip(props: RepositoryMenuProps & ChipStanding): React
   return <MenuChip {...props} menu={useRepositoryMenu(props)} named={props.value !== null} />;
 }
 
-/** A form row's repository chip over rows its caller lists, as setup's token card does, each pick checked and the menu standing open between presses. */
+/**
+ * A press named `label` among a row's outlined buttons, over rows its caller
+ * lists, as setup's Add repositories is: each pick checked, the menu standing
+ * open between presses, and the press keeping its words, since what is
+ * picked is listed beside it.
+ */
 export function CheckedRepositoryChip(props: {
   rows: readonly MenuRow[];
   picked: readonly string[];
-  pictures: boolean;
-  empty: string;
+  label: string;
   note: React.ReactNode;
   onToggle: (repository: string) => void;
   onOpen: () => void;
 }): React.JSX.Element {
   const place = useMenuPlace();
-  const first = props.picked[0];
   const menu: RepositoryMenu = {
     ...place,
-    label: first === undefined ? props.empty : pickedRepositoriesWords(props.picked),
-    hint: first === undefined ? undefined : props.picked.join(", "),
-    glyph: first === undefined ? <GLYPH.ADD /> : firstPicture(first, props.pictures),
+    label: props.label,
+    hint: undefined,
+    glyph: <GLYPH.ADD />,
     card: undefined,
     press: (from) => {
       if (!place.open) props.onOpen();
@@ -711,7 +760,7 @@ export function CheckedRepositoryChip(props: {
       onPick: props.onToggle,
     }),
   };
-  return <MenuChip place={CHIP_PLACE.FIELD} menu={menu} named={first !== undefined} />;
+  return <MenuChip place={CHIP_PLACE.ACTION} menu={menu} named={false} />;
 }
 
 /**

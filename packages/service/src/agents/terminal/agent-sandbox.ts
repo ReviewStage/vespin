@@ -18,8 +18,9 @@
  *
  * The ports a server listens on are read the same way, from the kernel's
  * socket tables in the running session (`listening-ports.ts`), and never
- * from a sandbox that is not running. One of them may be shared by a public
- * link, the sandbox's own route straight to that port, opened only on a
+ * from a sandbox that is not running. One of them may be shared, the
+ * sandbox's own route to a relay in front of that port
+ * (`preview-relay.ts`), opened only on a
  * running sandbox and living only while it runs; sharing never keeps the
  * sandbox up. Closing the share closes its route whatever the sandbox
  * stands, and the share is read back from the sandbox's routes alone.
@@ -60,6 +61,7 @@ import {
   sandboxFirewall,
 } from "../sandbox-firewall.js";
 import { listeningPortsOf, readSocketTables } from "./listening-ports.js";
+import { relayable, relayPortOf, STOP_RELAY, sharedPortOf, startRelay } from "./preview-relay.js";
 import {
   holdsTerminal,
   killTerminal,
@@ -230,8 +232,12 @@ function agentSandboxOver(
       Effect.gen(function* () {
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return undefined;
-        const route = (yield* api.updatePorts(sandbox.name, [port])).find(
-          (each) => each.port === port,
+        // The route serves the port's relay, which hands the port each request as if from its own loopback.
+        const served = relayable(port) ? relayPortOf(port) : port;
+        yield* api.run(running, STOP_RELAY);
+        if (served !== port) yield* api.start(running, startRelay(port));
+        const route = (yield* api.updatePorts(sandbox.name, [served])).find(
+          (each) => each.port === served,
         );
         if (route === undefined) {
           return yield* new SandboxUnavailable({ call: SANDBOX_CALL.PORTS, detail: "no route" });
@@ -240,7 +246,8 @@ function agentSandboxOver(
       }),
     unshare: (sessionId) =>
       Effect.gen(function* () {
-        const { sandbox } = yield* standing(sessionId);
+        const { sandbox, running } = yield* standing(sessionId);
+        if (running !== undefined) yield* api.run(running, STOP_RELAY);
         if (sandbox !== undefined) yield* api.updatePorts(sandbox.name, []);
       }),
     shared: (sessionId) =>
@@ -248,7 +255,7 @@ function agentSandboxOver(
         const { sandbox, running } = yield* standing(sessionId);
         if (sandbox === undefined || running === undefined) return null;
         const route = (yield* api.get(sandbox.name))?.routes?.[0];
-        return route === undefined ? null : { port: route.port, url: route.url };
+        return route === undefined ? null : { port: sharedPortOf(route.port), url: route.url };
       }),
     start: (sessionId, terminalId, title) =>
       inRunning(sessionId, (running) =>

@@ -70,6 +70,11 @@
     }
   }
 
+  /* A rows list's options are a settings card's rows, each ruled from the one above. */
+  .ui-choice-list[data-look="rows"] > .ui-choice-card + .ui-choice-card {
+    border-top: 1px solid var(--ui-color-border);
+  }
+
   .ui-choice-detail {
     color: var(--ui-color-text-muted);
   }

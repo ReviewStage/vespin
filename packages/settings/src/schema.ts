@@ -47,6 +47,12 @@ import {
 } from "./mac-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
+  isPullRequestOpen,
+  PULL_REQUEST_OPEN_DEFAULT,
+  PULL_REQUEST_OPEN_LABEL,
+  PULL_REQUEST_OPEN_LIST,
+} from "./pull-request-open.js";
+import {
   accountHiddenSetting,
   accountToggleSetting,
   buildToggleSetting,
@@ -225,6 +231,28 @@ export const APP_SETTING_SCHEMA = {
     section: SETTING_SECTION.LINKS,
     order: 300,
     // Nothing to run per write: a web page reads the choice as it loads.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
+  /*
+   * Where a press on a pull request opens: its agent's Pull request tab, as
+   * it always did, or its page on GitHub (`pull-request-open.ts`). An
+   * account preference riding a part of the snapshot of its own, as the
+   * link choice beside it does, so every Mac and the web open alike.
+   */
+  pullRequestOpen: choiceSetting({
+    field: "pullRequestOpen",
+    id: APP_SETTING_ID.PULL_REQUEST_OPEN,
+    label: "Open pull requests in",
+    values: PULL_REQUEST_OPEN_LIST,
+    token: (choice) => choice,
+    optionLabel: (choice) => PULL_REQUEST_OPEN_LABEL[choice],
+    guard: (value: UnparsedWireValue) => optional(value, isPullRequestOpen),
+    default: PULL_REQUEST_OPEN_DEFAULT,
+    page: SETTINGS_PAGE.ACCOUNT,
+    section: SETTING_SECTION.LINKS,
+    order: 302,
+    // Nothing to run per write: a press reads the choice as it lands.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
   }),

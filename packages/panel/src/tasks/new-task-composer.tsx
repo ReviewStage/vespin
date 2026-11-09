@@ -33,6 +33,7 @@ import {
   useDraftWriter,
 } from "../composer-drafts.js";
 import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
+import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
@@ -41,6 +42,7 @@ import { repositorySkillsQueryOptions } from "./agent-reads.js";
 import type { AgentServersControl } from "./agent-servers.js";
 import { ConnectAgentBanner, NOTICE_LOOK, type NoticeLook } from "./connect-agent-banner.js";
 import type { MentionMenuSide } from "./mention-picker.js";
+import { useMentionedReader } from "./mentioned-place.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 import {
   type NewTaskRelation,
@@ -148,8 +150,10 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * hands the servers to the draft agent's tab it opens on. Nothing typed here reaches the model as conversation.
  *
  * An `@` offers what it offers on the page of an agent no task holds
- * (`task-mentions.tsx`'s `tasklessMentions`): the servers and the
- * workspace's coding agents, and, once a repository is chosen, its files,
+ * (`task-mentions.tsx`'s `tasklessMentions`): the servers, the
+ * workspace's coding agents and people, the card standing among that
+ * workspace's members as a task's page does, so a person picked or pasted
+ * is named and drawn as there, and, once a repository is chosen, its files,
  * folders, and skills; a `/` offers its skills too, whose chip opens the
  * skill's `SKILL.md` on GitHub. Note that the box takes mentions with or
  * without a repository, because its editor reads that as it mounts, and a
@@ -568,6 +572,7 @@ export function NewTaskComposer({
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
   const readMentionAgents = useMentionAgentsReader(workspaceId, newTask.tasks, newTask.models);
+  const reader = useMentionedReader();
   const slug = workspace?.slug;
   const { onShowMention } = newTask;
   const mentions = useMemo(
@@ -834,10 +839,12 @@ export function NewTaskComposer({
   );
   // Note that the card stands under the providers with or without a repository, so one chosen or let go keeps the card mounted.
   return (
-    <TaskMentions value={mentions}>
-      <SkillFiles source={skills} onOpen={openSkill}>
-        {card}
-      </SkillFiles>
-    </TaskMentions>
+    <MemberDirectory workspace={workspace} readerId={reader}>
+      <TaskMentions value={mentions}>
+        <SkillFiles source={skills} onOpen={openSkill}>
+          {card}
+        </SkillFiles>
+      </TaskMentions>
+    </MemberDirectory>
   );
 }

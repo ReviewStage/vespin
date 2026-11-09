@@ -6,7 +6,6 @@ import {
   moreLabel,
   opensMenu,
   SettingsFoldRow,
-  type SettingsFoldRun,
   SettingsRow,
   type SettingsRowControl,
   type SettingsRowControls,
@@ -68,8 +67,8 @@ interface MenuRowWords {
   controls?: SettingsRowControls;
   /** Whether the row stands inset under the row above, one of its things, as GitHub's accounts stand under GitHub's. */
   indent?: SettingsRowIndent;
-  /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), its lines, or many drawn only near the view (`run`) with its foot as `lines`, the chevron's name, and whether it starts open. */
-  fold?: { lines?: ReactNode; run?: SettingsFoldRun; label: string; defaultOpen: boolean };
+  /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), the chevron's name, and whether it starts open. */
+  fold?: { body: ReactNode; label: string; defaultOpen: boolean };
   /** What stands last in the row's end, after its ⋯: the chevron of the rows it folds (`SettingsRowsFold`), or the room of a ⋯ or a chevron it lacks, so its column lines up with the rows around it. */
   end?: ReactNode;
 }
@@ -167,9 +166,8 @@ export function MenuRow({
             foldLabel={row.fold.label}
             defaultOpen={row.fold.defaultOpen}
             actions={() => more}
-            run={row.fold.run}
           >
-            {row.fold.lines}
+            {row.fold.body}
           </SettingsFoldRow>
         ) : (
           <SettingsRow

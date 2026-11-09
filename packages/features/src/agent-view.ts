@@ -50,10 +50,14 @@ import { memoryIdSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
+  chatGptDeviceStartRequestSchema,
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeySaveRequestSchema,
+  subscriptionIdSchema,
+  subscriptionLabelRequestSchema,
+  subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
@@ -103,6 +107,8 @@ const AGENT_ACCOUNT_CALLS = {
     providerKeys: accountContract.providerKeys,
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
+    renameSubscription: accountContract.renameSubscription,
+    reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
     memories: accountContract.memories,
     forgetMemory: accountContract.forgetMemory,
@@ -437,10 +443,11 @@ export const providerKeySaveParamsSchema = providerKeySaveRequestSchema;
 
 export type ProviderKeySaveParams = typeof providerKeySaveParamsSchema.Type;
 
-/** Removing a key, as the window asks it: the provider, and the kind where it is no API key. */
+/** Removing a key, as the window asks it: the provider, the kind where it is no API key, and the subscription where it is not the first of its kind. */
 export const providerKeyRemoveParamsSchema = EffectSchema.Struct({
   provider: EffectSchema.Literals(Object.values(PROVIDER_KEY_PROVIDER)),
   kind: EffectSchema.optionalKey(providerKeyKindSchema),
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
 });
 
 export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
@@ -449,6 +456,23 @@ export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
 export const providerKeyForAgentsParamsSchema = providerKeyForAgentsRequestSchema;
 
 export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema.Type;
+
+/** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
+export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;
+
+export type SubscriptionLabelParams = typeof subscriptionLabelParamsSchema.Type;
+
+/** Reordering a kind's subscriptions, as the window asks it: their ids, the first paying first. */
+export const subscriptionOrderParamsSchema = subscriptionOrderRequestSchema;
+
+export type SubscriptionOrderParams = typeof subscriptionOrderParamsSchema.Type;
+
+/** Codex's device-code login begun, as the window asks it: whether it adds a plan rather than replacing the first; nothing where it replaces. */
+export const chatGptDeviceStartParamsSchema = EffectSchema.UndefinedOr(
+  chatGptDeviceStartRequestSchema,
+);
+
+export type ChatGptDeviceStartParams = typeof chatGptDeviceStartParamsSchema.Type;
 
 /** The member's own GitHub token, as the window hears it read, saved, or removed: what it is, or why there is no answer. */
 export const githubTokenAnswerViewSchema = answerView(githubTokenContract.read);
