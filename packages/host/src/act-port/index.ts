@@ -2,16 +2,17 @@ import { type ContractedRouter, onError, type Router } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/message-port";
 import { SentSendTrace, sendTraceOf } from "@repo/features/sentry-tracing";
 import { Context } from "effect";
-import {
-  type actContract,
-  HOST_ACTS,
-  PLATFORM_PORT_ACT_KIND,
-  type PlatformPortActKind,
-} from "../contract/index.js";
+import { type actContract, HOST_ACTS, PLATFORM_PORT_ACT_KIND } from "../contract/index.js";
 import type { HostActTable } from "../host-acts.js";
 import { type AccountProceduresDependencies, accountProcedures } from "./account-procedures.js";
 import { type AgentProceduresDependencies, agentProcedures } from "./agents-procedures.js";
-import { type ActPortContext, actPortFor, isRefusal, refusedBy } from "./base.js";
+import {
+  type ActPortContext,
+  actPortFor,
+  isRefusal,
+  type PlatformActProcedures,
+  refusedBy,
+} from "./base.js";
 import { declaredActProcedures } from "./declared-acts.js";
 import { liveFollowProcedures } from "./live-follows.js";
 import { pushProcedures, type WindowPushes } from "./push-procedures.js";
@@ -31,7 +32,13 @@ import {
  */
 
 export type { AgentProceduresDependencies } from "./agents-procedures.js";
-export { type ActPortContext, type ActSender, actPortFor, refuseUnlessPanel } from "./base.js";
+export {
+  type ActPortContext,
+  type ActSender,
+  actPortFor,
+  type PlatformActProcedures,
+  refuseUnlessPanel,
+} from "./base.js";
 export { browserLiveProcedures } from "./browser-live-procedures.js";
 export { declaredActProcedures } from "./declared-acts.js";
 export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
@@ -48,16 +55,6 @@ export {
 
 /** The act port's server, which the bridge upgrades each window's port with. */
 export type ActPortHandler<Sender = unknown> = RPCHandler<ActPortContext<Sender>>;
-
-/**
- * The procedures a platform answers itself, built from `actPortFor`: every
- * port kind that reaches its windows, ports, or system, and none of the
- * host's, so each kind has its procedure on exactly one side.
- */
-export type PlatformActProcedures<Sender> = ContractedRouter<
-  Pick<typeof actContract, PlatformPortActKind>,
-  ActPortContext<Sender>
->;
 
 /**
  * Every platform kind refused in its own sentence, as a platform that can

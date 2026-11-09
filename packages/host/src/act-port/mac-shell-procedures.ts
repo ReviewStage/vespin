@@ -26,8 +26,7 @@ import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
 import { MAC_SHELL_ACT_KIND, type MacShellActKind } from "../contract/index.js";
-import { actPortFor, refuseUnlessPanel } from "./base.js";
-import type { PlatformActProcedures } from "./index.js";
+import { actPortFor, type PlatformActProcedures, refuseUnlessPanel } from "./base.js";
 import type { HostTerminalPort, TerminalPortSeam } from "./terminal-procedures.js";
 
 /** One running shell, as the platform holds it. */

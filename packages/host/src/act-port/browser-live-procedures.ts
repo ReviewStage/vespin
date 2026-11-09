@@ -26,8 +26,7 @@ import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
 import { BROWSER_LIVE_ACT_KIND } from "../contract/index.js";
 import type { HostOperator } from "../host-operator.js";
-import { type ActSender, actPortFor } from "./base.js";
-import type { PlatformActProcedures } from "./index.js";
+import { type ActSender, actPortFor, type PlatformActProcedures } from "./base.js";
 
 type BrowserLiveActKind = (typeof BROWSER_LIVE_ACT_KIND)[keyof typeof BROWSER_LIVE_ACT_KIND];
 
