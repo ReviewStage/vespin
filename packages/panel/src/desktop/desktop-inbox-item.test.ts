@@ -34,6 +34,7 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { DocumentIcon } from "@repo/ui";
 import { Effect } from "effect";
@@ -41,6 +42,7 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { runAppCommand } from "../app-commands.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -246,7 +248,7 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
-test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field", async () => {
+test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, printing the keys the thread hands its task but U and P, which stay the thread's, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field; ⌘⌫ asks to delete the thread's task", async () => {
   const { page } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumb = (at: number) =>
@@ -260,11 +262,24 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
       );
     });
   const offered = () => menuItems().map((item) => item.label);
+  const chords = () =>
+    [...document.querySelectorAll('[role="menu"]:not([data-leaving]) .ui-menu-item')].flatMap(
+      (item) => {
+        const keys = item.querySelector(".ui-shortcut")?.textContent;
+        return keys === undefined
+          ? []
+          : [[item.querySelector(".ui-menu-item-label")?.textContent, keys]];
+      },
+    );
 
   rightClick(crumb(0));
   for (const item of ["Copy link", "Rename", "Change repository", "Permanently delete"]) {
     assert.ok(offered().includes(item), `the task's crumb offers ${item}`);
   }
+  assert.deepEqual(chords(), [
+    ["Version history", "⌥⇧⌘H"],
+    ["Permanently delete", "⌘⌫"],
+  ]);
   chooseMenuItem("Rename");
   await settle();
   assert.ok(
@@ -288,6 +303,17 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
     page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Agent name"]'),
     "the agent's crumb stands as its name field",
   );
+  act(() =>
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  await settle();
+
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.DELETE), "⌘⌫ is offered");
+  });
+  assert.ok(document.querySelector('[role="alertdialog"]'), "⌘⌫ asks first");
 });
 
 /** What an intersection observer reports of the heading it watches: in the thread's view, or scrolled up past its top. */
