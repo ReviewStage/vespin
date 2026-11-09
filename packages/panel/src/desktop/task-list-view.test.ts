@@ -301,8 +301,6 @@ function taskRows(
   assert.ok(tasks, "the Tasks section stands");
   return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => ({
     name: row.querySelector(".ui-list-row-title")?.firstChild?.textContent ?? "",
-    repository: row.querySelector(".sidebar-task-repository")?.textContent ?? undefined,
-    face: row.querySelector(".actor-mark") !== null,
   }));
 }
 
@@ -352,10 +350,10 @@ test("a shared workspace opens on your own tasks, those you are on and those no 
   const sidebar = await mountRead(ACME, MINE_UNASSIGNED);
 
   assert.deepEqual(groupNames(sidebar), ["relay", "console"]);
-  assert.deepEqual(taskRows(sidebar), [
-    { name: "Fix flaky deploy", repository: undefined, face: false },
-    { name: "Audit logs", repository: undefined, face: true },
-  ]);
+  assert.deepEqual(
+    taskRows(sidebar).map((row) => row.name),
+    ["Fix flaky deploy", "Audit logs"],
+  );
   const options = sidebar.querySelector('button[aria-label="View options"]');
   assert.equal(options?.getAttribute("aria-description"), null);
 });
@@ -406,16 +404,15 @@ test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › A
   assert.equal(options?.getAttribute("aria-description"), "Filtered");
 });
 
-test("grouped by none, the tasks run in one list, each row naming its repository and wearing who is on it", () => {
+test("grouped by none, the tasks run in one list", () => {
   keepAnyone();
   const sidebar = mountSidebar(ACME, ASSIGNED);
   listUngrouped(sidebar);
   assert.deepEqual(groupNames(sidebar), []);
-  assert.deepEqual(taskRows(sidebar), [
-    { name: "Billing empty states", repository: "console", face: true },
-    { name: "Retry webhooks", repository: "relay", face: true },
-    { name: "Fix flaky deploy", repository: "relay", face: false },
-  ]);
+  assert.deepEqual(
+    taskRows(sidebar).map((row) => row.name),
+    ["Billing empty states", "Retry webhooks", "Fix flaky deploy"],
+  );
 });
 
 test("the pins stand in a section of their own above Tasks, whatever the view lists", () => {
@@ -492,17 +489,6 @@ test("a workspace whose list names no member count still filters by person once 
   );
   await choose(sidebar, "Assigned to", "Anyone");
   assert.equal(taskRows(sidebar).length, 3);
-});
-
-test("in one run, a task with no repository says so on its row", async () => {
-  const notes = task("t-6", "Hiring loop notes", null, DEAN, { createdAt: 1, updatedAt: 700 });
-  const sidebar = await mountRead(ACME, [...TASKS, notes]);
-  listUngrouped(sidebar);
-  assert.deepEqual(taskRows(sidebar)[0], {
-    name: "Hiring loop notes",
-    repository: "No repository",
-    face: true,
-  });
 });
 
 test("an empty workspace says only that it holds no tasks", async () => {
@@ -595,7 +581,7 @@ test("a workspace nobody shares offers ⌘K no filtering by person", async () =>
 const TRIAGE = oneOff("a-1", "Triage overnight issues", "acme/relay", DEAN, 550);
 const SWEEP = oneOff("a-2", "Sweep flaky tests", "acme/console", CHARLES, 100);
 
-test("a one-off agent stands among its repository's tasks by its last activity, led by its harness mark and ending with its automation's clock, and a press opens its page", () => {
+test("a one-off agent stands among its repository's tasks by its last activity, led by its harness mark, and a press opens its page", () => {
   keepAnyone();
   const sidebar = mountSidebar(ACME, TASKS, [TRIAGE, SWEEP]);
   assert.deepEqual(groupNames(sidebar), ["console", "relay"]);
@@ -616,7 +602,6 @@ test("a one-off agent stands among its repository's tasks by its last activity, 
   ].find((each) => each.textContent?.includes("Triage overnight issues") === true);
   assert.ok(row, "the agent's row stands");
   assert.ok(row.querySelector(".sidebar-agent-glyph svg"), "it leads with its harness mark");
-  assert.ok(row.querySelector(".sidebar-task-time .actor-mark"), "it ends with its starter");
 
   act(() => row.click());
   assert.deepEqual(openedAgents, ["a-1"]);
@@ -842,29 +827,6 @@ test("the list holds the tasks to do and in progress, each led by its status's m
 test("a task from a service before statuses stands among them", () => {
   const sidebar = mountSidebar(ACME, [...BY_STATUS, task("t-0", "No status", null, DEAN)]);
   assert.ok(taskRows(sidebar).some((row) => row.name === "No status"));
-});
-
-/** What a reader of the screen hears each row of the Tasks section say of whose face it wears, by the row's name. */
-function heardFaces(sidebar: HTMLElement): [string, string | undefined][] {
-  const tasks = sidebar.querySelector(TASK_LIST);
-  assert.ok(tasks, "the Tasks section stands");
-  return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => [
-    row.querySelector(".ui-list-row-title")?.firstChild?.textContent ?? "",
-    row.querySelector(".ui-list-row-title .ui-visually-hidden:last-child")?.textContent ??
-      undefined,
-  ]);
-}
-
-test("a row wears its assignee's face where someone else is on it, none where you are, and the unassigned mark, never its creator's, where no one is", async () => {
-  keepAnyone();
-  const sidebar = await mountRead(ACME, ASSIGNED);
-  listUngrouped(sidebar);
-
-  assert.deepEqual(heardFaces(sidebar), [
-    ["Billing empty states", "(unassigned)"],
-    ["Retry webhooks", "(assigned to Charles Pan)"],
-    ["Fix flaky deploy", undefined],
-  ]);
 });
 
 test("Assigned to a teammate, with nothing of theirs, says so, and Show all lists everyone's again", async () => {

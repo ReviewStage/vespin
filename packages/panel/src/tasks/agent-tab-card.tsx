@@ -3,20 +3,25 @@ import type {
   AgentStatus,
   AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import type { DescriptionEditor } from "@repo/features/task-wire";
 import {
+  AVATAR_SIZE,
   HOVER_CARD_ROW_LOOK,
   HoverCard,
   HoverCardHead,
   HoverCardNote,
   HoverCardRow,
+  ProviderMark,
+  RepositoryPicture,
   Time,
   useMinute,
   VisuallyHidden,
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import {
   ACTOR_SIZE,
   ActorMark,
@@ -27,6 +32,7 @@ import {
 } from "../actor-ref.js";
 import { useAutomation } from "../automation-directory.js";
 import { usePerson } from "../member-directory.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { GLYPH_STATE, glyphStateWords } from "../state-glyph.js";
 import {
   type ArchivedByReading,
@@ -67,7 +73,9 @@ import { WorkingTime } from "./working-time.js";
  * rows (`ProvenanceRow`) who started it and when: the automation whose run
  * started it, by its tile and name, where the window knows it, or else, for
  * a teammate's agent, the teammate's face and name; either hangs its own
- * card over this one. Then its pull request where the place holds one, by
+ * card over this one. An agent with no task's card says too that it was
+ * started from Slack, where it was, and the repository it works in, which
+ * its sidebar row leaves to it. Then its pull request where the place holds one, by
  * its mark, number, and title. An archived agent's says who archived it, the app or another agent on a
  * member's behalf among them, and the reason given. The card has no way to the tab of its own: wherever it hangs, the
  * name it hangs from is what a press opens, so the card only says.
@@ -130,6 +138,10 @@ export interface CardReading {
     | undefined;
   /** Who archived the agent and why, on an archived agent's card where the service said. */
   readonly archivedBy?: ArchivedByReading | undefined;
+  /** The repository the agent works in, as `owner/name`, said where its row does not name it: an agent with no task's. */
+  readonly repository?: string | undefined;
+  /** Whether a member started the agent from Slack, said where its row does not mark it: an agent with no task's. */
+  readonly fromSlack?: boolean | undefined;
 }
 
 function Corner({ corner }: { corner: CardCorner }): React.JSX.Element | null {
@@ -188,6 +200,23 @@ function StartedBy({
       onOpen={known.onOpen}
       at={at}
       now={now}
+    />
+  );
+}
+
+/** What the line of an agent started from Slack says. */
+const FROM_SLACK_WORDS = "Started from Slack";
+
+/** The repository the agent works in, its owner's picture before it. */
+function RepositoryLine({ repository }: { repository: string }): React.JSX.Element {
+  const pictures = useRepositoryPictures();
+  return (
+    <HoverCardRow
+      look={HOVER_CARD_ROW_LOOK.DETAIL}
+      glyph={
+        <RepositoryPicture repository={repository} pictures={pictures} size={AVATAR_SIZE.MARK} />
+      }
+      label={<ReplayMask>{repository}</ReplayMask>}
     />
   );
 }
@@ -341,6 +370,8 @@ export function AgentTabCard({
     tile,
     pullRequest,
     archivedBy,
+    repository,
+    fromSlack,
   } = read();
   const head = (
     <HoverCardHead
@@ -359,6 +390,14 @@ export function AgentTabCard({
         <VisuallyHidden>{glyphStateWords(GLYPH_STATE.WORKING, false)}</VisuallyHidden>
       ) : null}
       <StartedBy by={startedBy} automationId={automationId} at={startedAt} />
+      {fromSlack === true ? (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<ProviderMark provider={INTEGRATION_PROVIDER.SLACK} />}
+          label={FROM_SLACK_WORDS}
+        />
+      ) : null}
+      {repository === undefined ? null : <RepositoryLine repository={repository} />}
       {pullRequest === undefined ? null : <PullRequestRow pullRequest={pullRequest} />}
       {archivedBy === undefined ? null : <ArchivedByNote archivedBy={archivedBy} />}
       {transcript === undefined ? null : <ActivityLine transcript={transcript} />}

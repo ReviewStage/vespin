@@ -1,5 +1,6 @@
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { taskAgentsStatus } from "@repo/features/task-agents-model";
 import type { TaskPullRequestLine, TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
@@ -17,6 +18,7 @@ import {
   linesCount,
   ProgressCount,
   RepositoryPicture,
+  RowEndMark,
   TASK_AGENTS_MARK_SIZE,
   TaskAgentsMark,
   type TaskAgentsMarkSize,
@@ -48,6 +50,7 @@ import { useTaskMaker } from "../tasks/use-task-origin.js";
 import { useTaskPullRequests, useTaskWork } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { strandedHome } from "./move-task-dialog.js";
+import { useTaskNeedsYou } from "./places-waiting.js";
 import { priorityOf, statusOf } from "./task-row-parts.js";
 import { WorkspaceRef } from "./workspace-ref.js";
 
@@ -56,8 +59,10 @@ import { WorkspaceRef } from "./workspace-ref.js";
  *
  * The icon is how the task's agents stand, most pressing first: a failure,
  * an agent at work, or the pull request they left, in `@repo/ui`'s
- * `TaskAgentsMark` (`task-agents-model.ts`). How many of its threads wait on
- * the reader is no part of it, nor of the row. The card leads, as the
+ * `TaskAgentsMark` (`task-agents-model.ts`), which a sidebar row wears after
+ * a thread waiting on the reader, a failure, or a draft (`TaskRowEndMark`),
+ * leaving who is on it, its repository, its sub-tasks, and that it is
+ * blocked to the card. The card leads, as the
  * task board's card does, with its status's mark and its name, its key, its
  * repository, and how long ago it was updated under the name, and its
  * priority's mark and its assignee's face in the corner, icons alone, each
@@ -86,27 +91,17 @@ import { WorkspaceRef } from "./workspace-ref.js";
  */
 
 /**
- * A sidebar row's end: its repository where its group does not say it, its
- * face, its draft's pencil, how many of its sub-tasks are finished, how many
- * of its threads wait on the reader, its one icon, and its time, in the caption's muted figures, the time ending on
- * its last letter in a slot as wide as its longest count ("59m"), so the
- * icon before it, a pull request's say, stands at the same place on every
- * row whatever the time says and whatever stands before it;
- * each mark at the glyph's size a step before the next, and the sub-tasks'
- * figures a glyph's gap before what follows them, so they never run into
- * it, so they step out with the time while the row is hovered. The end
- * keeps no room at rest for the acts that come in on hover, so the row's
- * name runs to its marks and fades only where they begin, and is cut anew
- * before the acts as they come (`list-row.css`). A long repository is cut
- * short, so the row's own name keeps its room at the sidebar's least width;
- * the row's card names it whole.
+ * A sidebar row's end: its one mark (`RowEndMark`) and its time, in the
+ * caption's muted figures, the time ending on its last letter in a slot as
+ * wide as its longest count ("59m"), so the mark before it stands at the
+ * same place on every row whatever the time says; the mark at the glyph's
+ * size a step before the time. The end keeps no room at rest for the acts
+ * that come in on hover, so the row's name runs to its mark and fades only
+ * where it begins, and is cut anew before the acts as they come
+ * (`list-row.css`).
  */
 export const SIDEBAR_ROW_TIME =
-  "sidebar-task-time flex flex-none items-center justify-end text-right text-caption-inline text-muted-foreground tabular-nums [&>.actor-mark]:mr-tight-gap [&_.task-agents-mark]:mr-tight-gap [&_.draft-mark]:mr-tight-gap [&_.draft-mark]:size-ui-12 [&_.blocked-mark]:mr-tight-gap [&_.blocked-mark]:size-ui-12 [&>.failed-mark]:mr-tight-gap [&>.failed-mark]:size-ui-12 [&_.ui-progress-count]:mr-icon-gap [&_.ui-row-count]:mr-tight-gap [&>.ui-time]:min-w-sidebar-row-age";
-
-/** The repository a sidebar row names before its marks (`SIDEBAR_ROW_TIME`). */
-export const SIDEBAR_ROW_REPOSITORY =
-  "sidebar-task-repository mr-item-gap inline-flex min-w-0 max-w-sidebar-row-repository overflow-hidden whitespace-nowrap text-muted-foreground";
+  "sidebar-task-time flex flex-none items-center justify-end text-right text-caption-inline text-muted-foreground tabular-nums [&_.task-agents-mark]:mr-tight-gap [&>.ui-time]:min-w-sidebar-row-age";
 
 /** A pull request's mark on a card's row, at the glyph's size in the row's muted ink, its state's color where it has one (`pull-request-mark.tsx`). */
 const TASK_MARK_GLYPH = "task-mark-glyph inline-block size-ui-12 flex-none text-muted-foreground";
@@ -128,6 +123,36 @@ export function TaskRowStatus({
 }): React.JSX.Element | null {
   const pullRequests = useTaskPullRequests(task.id);
   return <TaskAgentsMark agents={task.agents} pullRequests={pullRequests} size={size} />;
+}
+
+/**
+ * The one mark a sidebar task's row wears before its time (`RowEndMark`):
+ * a thread of its waiting on the reader, as the Inbox counts it
+ * (`useTaskNeedsYou`), then a message not delivered or a failed agent, then
+ * a draft, then how its agents stand.
+ */
+export function TaskRowEndMark({
+  tasks,
+  task,
+  notDelivered,
+  drafted,
+}: {
+  tasks: Pick<TasksControl, "signedIn">;
+  task: TaskSummary;
+  /** Whether a message sent to one of its agents was not delivered, while it is not the plan open. */
+  notDelivered: boolean;
+  /** Whether a draft waits in one of its boxes, while it is not the plan open. */
+  drafted: boolean;
+}): React.JSX.Element | null {
+  const pullRequests = useTaskPullRequests(task.id);
+  return (
+    <RowEndMark
+      needsYou={useTaskNeedsYou(tasks, task.id)}
+      notDelivered={notDelivered}
+      drafted={drafted}
+      status={taskAgentsStatus(task.agents, pullRequests)}
+    />
+  );
 }
 
 /** A repository's line under a card's name, its owner's picture before it, which opens it on GitHub. */

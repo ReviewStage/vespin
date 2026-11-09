@@ -21,6 +21,7 @@ import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import {
   cn,
+  DraftMark,
   HOVER_CARD_ROW_LOOK,
   HoverCard,
   HoverCardHead,
@@ -44,7 +45,6 @@ import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor-ref.js";
 import { useAutomation } from "../automation-directory.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
-import { DraftMark } from "../draft-mark.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";

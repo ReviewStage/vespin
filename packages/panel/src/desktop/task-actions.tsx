@@ -13,7 +13,6 @@ import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
   BLOCKED_WORDS,
-  BlockedMark,
   BUTTON_SIZE,
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -30,7 +29,6 @@ import {
   type MenuRow,
   nextRowOrHead,
   OneLine,
-  ProgressCount,
   RowHint,
   RowHintOptions,
   TIME_LOOK,
@@ -40,11 +38,11 @@ import {
   useMinute,
   VisuallyHidden,
 } from "@repo/ui";
-import { type AssigneeFace, accountActor, assigneeFace, creatorActor } from "@repo/ui/actor-model";
+import { accountActor, creatorActor } from "@repo/ui/actor-model";
 import { confirmAsked } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/ui/task-list-model";
+import { repositoryLabel, taskFinished } from "@repo/ui/task-list-model";
 import {
   DOCUMENT_REGION,
   RENAME_FAILED_NOTE,
@@ -66,7 +64,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActorRef, AssigneeFaceHeard, AssigneeFaceMark } from "../actor-ref.js";
+import { ActorRef } from "../actor-ref.js";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import {
@@ -80,9 +78,7 @@ import { useDescriptionDrafted } from "../composer-drafts.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useChordLinks } from "../copy-link-item.js";
-import { leftMark } from "../draft-mark.js";
 import { confirmFailure } from "../failure-report.js";
-import { useMemberDirectory } from "../member-directory.js";
 import { renameWrite } from "../rename-write.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { lastEditOf } from "../tasks/description-body.js";
@@ -131,12 +127,7 @@ import { useMoveTaskDialog } from "./move-task-dialog.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
 import { moveToSectionEntry, useSectionDialogs } from "./sidebar-sections.js";
 import { chipSubmenu, keyedStatusSubmenu, STANDING_WORDS } from "./standing-submenus.js";
-import {
-  SIDEBAR_ROW_REPOSITORY,
-  SIDEBAR_ROW_TIME,
-  TaskRowStatus,
-  taskCardOf,
-} from "./task-card.js";
+import { SIDEBAR_ROW_TIME, TaskRowEndMark, taskCardOf } from "./task-card.js";
 import { taskSubject, useStandingDoor } from "./task-row-parts.js";
 import { ChosenTasksContext, chosenRowMenu } from "./tasks-selection.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
@@ -965,29 +956,6 @@ export function TaskActions({
 }
 
 /**
- * Which faces a row may wear: its creator's, which a list holding one
- * creator's tasks or grouped by creator already says, and only an agent's
- * row with no task wears; and its assignee's, which a list holding the
- * tasks assigned to one member or grouped by assignee already says.
- */
-export interface RowFaces {
-  readonly creator: boolean;
-  readonly assignee: boolean;
-}
-
-/** Every face a row may wear, as a list naming nobody draws it. */
-const EVERY_FACE: RowFaces = { creator: true, assignee: true };
-
-/** The face a task's row wears (`assigneeFace`), nothing where `faces` keeps the assignee off the row, the list saying it already. */
-function rowFaceOf(
-  task: TaskSummary,
-  reader: ReturnType<typeof useMemberDirectory>,
-  faces: RowFaces,
-): AssigneeFace | undefined {
-  return faces.assignee ? assigneeFace(task, reader) : undefined;
-}
-
-/**
  * A task's card as its sidebar row hangs it (`taskCardOf`). Note that it is
  * a component of its own, so what the card reads is worked out only once
  * the card is drawn, never on a render of the row.
@@ -1009,20 +977,14 @@ function SidebarTaskCard({
  * (`PlanGlyph`), its status's mark or the document where its service gives
  * it none, whose status the press says after the name, as a List row's does,
  * since the mark is decoration to a screen reader; its name, in the
- * body's weight unless the task is unread, and at the row's end how long ago
- * it was last updated, led by one mark for a repository that belongs to
- * another workspace, an agent at work, or a pull request (`task-card.tsx`),
- * the first named in the row's card; before that a stop
- * sign while a task it waits on is still open (`BlockedMark`), which the press says after
- * the status, before that a pencil while a draft
- * waits in one of its boxes and it is not the plan open, whose boxes show
- * their own words, or the failed mark in its place while a message sent to
- * one of its agents was not delivered (`draft-mark.tsx`), and before that the face of who
- * is on it (`rowFaceOf`, drawn as `AssigneeFaceMark`): its assignee's,
- * where someone other than the reader is assigned, read against the members of the directory around the
- * list, or the dashed unassigned mark where no one is; a task assigned to
- * the reader wears none. Its repository, its owner's picture and its name, muted, where the list hands one (in one run),
- * and no face where its group is its creator's. Its time is the one the
+ * body's weight unless the task is unread, and at the row's end one mark
+ * and how long ago it was last updated (`TaskRowEndMark`): the first that
+ * holds of a thread waiting on the reader, a failure, a draft waiting in
+ * one of its boxes while it is not the plan open, whose boxes show their
+ * own words, an agent at work, and its pull request. That it is blocked
+ * the press says after the status. Who is on it, its repository, that it
+ * is blocked, and its sub-tasks stand on its card alone, so its name keeps
+ * the room. Its time is the one the
  * list's order chooses. Pin
  * and Mark done stand in place of all of it while the row is hovered or
  * reached from the keyboard. A finished sub-task nested under its parent,
@@ -1049,13 +1011,10 @@ export function SidebarTask({
   unread,
   now,
   at = task.updatedAt,
-  repository,
-  faces = EVERY_FACE,
   depth,
   nest,
   place,
   fold,
-  childCount,
   onOpen,
 }: {
   tasks: TasksControl;
@@ -1070,10 +1029,6 @@ export function SidebarTask({
   now: number;
   /** The time the row shows, which the list's order chooses: its last update unless said. */
   at?: number;
-  /** The repository the row names, its owner's picture and its name, muted before its time, where the list hands one. */
-  repository?: React.ReactNode;
-  /** Which faces the row may wear (`rowFaceOf`): a group by assignee, or a filter by assignee, says the one it names instead. */
-  faces?: RowFaces;
   /** How deep the row stands nested under its parent tasks: at the top unless said. */
   depth?: number | undefined;
   /** Where the row stands among its siblings, in a list that nests rows, which a reader hears with its level; none in a list that nests none. */
@@ -1082,8 +1037,6 @@ export function SidebarTask({
   place?: VirtualRowPlace | undefined;
   /** The child tasks nested under the row, which it folds; none where the list holds none. */
   fold?: ListRowFold | undefined;
-  /** How many of the task's child tasks are finished, of all of them, said before its time; none where it has none. */
-  childCount?: ChildTaskCount | undefined;
   onOpen: () => void;
 }): React.JSX.Element {
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
@@ -1099,7 +1052,6 @@ export function SidebarTask({
   });
   const reads = useReadMarks();
   const coarse = useCoarsePointer();
-  const worn = rowFaceOf(task, useMemberDirectory(), faces);
   const chosen = useContext(ChosenTasksContext)(task.id);
   const drafted = useDescriptionDrafted(task.id) && !open;
   const sendFailed = useTaskSendFailed(task.id) && !open;
@@ -1158,11 +1110,6 @@ export function SidebarTask({
                 )}
                 {task.blocked === true ? <VisuallyHidden>, {BLOCKED_WORDS}</VisuallyHidden> : null}
                 {unread ? <VisuallyHidden>(unread)</VisuallyHidden> : null}
-                {worn === undefined ? null : (
-                  <ReplayMask>
-                    <AssigneeFaceHeard face={worn} />
-                  </ReplayMask>
-                )}
               </>
             )
           }
@@ -1170,22 +1117,12 @@ export function SidebarTask({
           meta={
             rename.editing ? null : (
               <span className={SIDEBAR_ROW_TIME}>
-                {repository === undefined ? null : (
-                  <span className={SIDEBAR_ROW_REPOSITORY}>
-                    <ReplayMask>{repository}</ReplayMask>
-                  </span>
-                )}
-                {worn === undefined ? null : <AssigneeFaceMark face={worn} heard={false} />}
-                {leftMark(sendFailed, drafted)}
-                {task.blocked === true ? <BlockedMark aria-hidden="true" /> : null}
-                {childCount === undefined ? null : (
-                  <ProgressCount
-                    done={childCount.finished}
-                    total={childCount.total}
-                    label={`${childCount.finished} of ${childCount.total} sub-tasks finished`}
-                  />
-                )}
-                <TaskRowStatus task={task} />
+                <TaskRowEndMark
+                  tasks={tasks}
+                  task={task}
+                  notDelivered={sendFailed}
+                  drafted={drafted}
+                />
                 <Time at={at} now={now} hint={false} />
               </span>
             )

@@ -440,104 +440,12 @@ test("the plan's ⋯ menu ends with who created the plan and who last edited it,
   assert.deepEqual(menuFooter(), ["Created by someone", "Last edited"]);
 });
 
-test("a sidebar task wears its assignee's face where someone else is on it, the dashed unassigned mark where no one is, and nothing where the reader is, never its creator's", () => {
-  /** Each mark the row wears, by its kind and its letter, and what the row says of it, read as Dean sees them. */
-  const faces = (task: TaskSummary) => {
-    const { tasks, asked } = openTab();
-    const container = mount(
-      withQueryClient(
-        createElement(MemberDirectory, {
-          workspace: undefined,
-          readerId: DEAN.userId,
-          children: sidebarTask(tasks, task, asked),
-        }),
-      ),
-    );
-    const marks = container.querySelectorAll(".sidebar-task-time > .actor-mark");
-    // What the row says while it holds the keyboard, its time stepped out for Pin and Archive.
-    const line = container.querySelector(".ui-list-row-title");
-    const said = [...(line?.childNodes ?? [])]
-      .map(heard)
-      .join("")
-      .match(/\((?:created by|assigned to|unassigned)[^)]*\)/u)?.[0];
-    unmountAll();
-    return [[...marks].map((mark) => [mark.getAttribute("data-kind"), mark.textContent]), said];
-  };
-
-  // Charles created it and no one is on it: the dashed mark, not his face.
-  assert.deepEqual(faces(SHARED_TASK), [[["unassigned", ""]], "(unassigned)"]);
-  assert.deepEqual(faces({ ...SHARED_TASK, assignee: CHARLES }), [
-    [["person", "C"]],
-    "(assigned to Charles Pan)",
-  ]);
-  assert.deepEqual(faces({ ...SHARED_TASK, assignee: DEAN }), [[], undefined]);
-  assert.deepEqual(faces(OTHER), [[["unassigned", ""]], "(unassigned)"]);
-});
-
-test("a sidebar task no one is on wears no face in a workspace of the reader alone, by its count or else by its members read, and the dashed mark where others share it or nobody counted them", async () => {
-  const { memberCount: _uncounted, ...uncounted } = PERSONAL;
-  /** Each mark the row wears, by its kind, and what the row says of who is on it, read as Dean sees them. */
-  const faces = async (
-    workspace: Workspace,
-    members: readonly { userId: string; name: string }[] | undefined,
-  ) => {
-    installMembers(members);
-    const { tasks, asked } = openTab();
-    const task = { ...OTHER, workspaceId: workspace.id };
-    const container = mountReading(
-      withPeopleRead({ workspace, readerId: DEAN.userId }, sidebarTask(tasks, task, asked)),
-    );
-    await act(async () => {
-      for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
-    });
-    await peopleRead();
-    const marks = container.querySelectorAll(".sidebar-task-time > .actor-mark");
-    const line = container.querySelector(".ui-list-row-title");
-    const said = [...(line?.childNodes ?? [])]
-      .map(heard)
-      .join("")
-      .match(/\((?:assigned to|unassigned)[^)]*\)/u)?.[0];
-    unmountAll();
-    return [[...marks].map((mark) => mark.getAttribute("data-kind")), said];
-  };
-
-  assert.deepEqual(await faces(PERSONAL, [DEAN]), [[], undefined]);
-  assert.deepEqual(await faces(PERSONAL, undefined), [[], undefined]);
-  assert.deepEqual(await faces(STAGE, [DEAN, CHARLES]), [["unassigned"], "(unassigned)"]);
-  // A service that counts no members leaves it to the members read, and keeps the mark while nobody counted them.
-  assert.deepEqual(await faces(uncounted, [DEAN]), [[], undefined]);
-  assert.deepEqual(await faces(uncounted, [DEAN, CHARLES]), [["unassigned"], "(unassigned)"]);
-  assert.deepEqual(await faces(uncounted, undefined), [["unassigned"], "(unassigned)"]);
-});
-
-test("a sidebar task Vespin or a coding agent made wears who is on it rather than their square, and its ⋯ says who made it for whom", () => {
-  /** Each mark the row wears, by its kind. */
-  const marks = (task: TaskSummary) => {
-    const { tasks, asked } = openTab();
-    const container = mount(
-      withQueryClient(
-        createElement(MemberDirectory, {
-          workspace: undefined,
-          readerId: DEAN.userId,
-          children: sidebarTask(tasks, task, asked),
-        }),
-      ),
-    );
-    const worn = [...container.querySelectorAll(".sidebar-task-time > .actor-mark")].map((mark) =>
-      mark.getAttribute("data-kind"),
-    );
-    unmountAll();
-    return worn;
-  };
+test("a sidebar task Vespin or a coding agent made says in its ⋯ who made it for whom", () => {
   const deans = { ...SHARED_TASK, ownerId: DEAN.userId, createdBy: DEAN };
   const byAgent = {
     ...deans,
     origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" },
   } as const;
-  const byApp = { ...deans, origin: { actor: DESCRIPTION_ACTOR.NOTETAKER } } as const;
-  assert.deepEqual(marks(byAgent), ["unassigned"]);
-  assert.deepEqual(marks({ ...byApp, assignee: DEAN }), []);
-  assert.deepEqual(marks({ ...byApp, assignee: CHARLES }), ["person"]);
 
   const { asked } = openTab();
   const listed = tasksControl({ me: DEAN.userId, tasks: [byAgent] });

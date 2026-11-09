@@ -1,8 +1,9 @@
-import type {
-  AgentStatus,
-  AgentSummary,
-  ListedAgent,
-  TasklessAgent,
+import {
+  AGENT_SOURCE,
+  type AgentStatus,
+  type AgentSummary,
+  type ListedAgent,
+  type TasklessAgent,
 } from "@repo/features/agent-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -214,6 +215,8 @@ export function tasklessRowSubject(
       }),
       // Note that a read of what it published since, held by the control, is newer than the list's.
       pullRequest: reading.pullRequest ?? pullRequest,
+      repository: agent.repository ?? undefined,
+      fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
     };
   };
   return { name, tile, agent: summary, read };

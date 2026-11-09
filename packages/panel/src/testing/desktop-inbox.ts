@@ -57,6 +57,7 @@ import type {
 } from "@repo/host/app-state";
 import { NO_HOLDER_INBOXES, UNREAD } from "@repo/host/app-state";
 import { AGENT_INBOX_ACT_KIND, type PortActResult } from "@repo/host/contract";
+import { DRAFT_WORD } from "@repo/ui";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
@@ -69,7 +70,6 @@ import type { SideBundles } from "../bundle-loader.js";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { DesktopInbox } from "../desktop/desktop-inbox.js";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
-import { DRAFT_WORD } from "../draft-mark.js";
 import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";

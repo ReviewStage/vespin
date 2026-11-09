@@ -17,8 +17,9 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /**
  * places-waiting.ts -- how many wait on the developer in the Inbox, the one
  * reading the places that count them draw from: the sidebar's rows
- * (`desktop-sidebar.tsx`), a phone's places bar (`mobile-bar.tsx`), and
- * each task's badge on the Tasks page's List and Board. The Inbox's row
+ * (`desktop-sidebar.tsx`), a phone's places bar (`mobile-bar.tsx`),
+ * each task's badge on the Tasks page's List and Board, and the needs-you
+ * dot a sidebar row of a task or an agent with no task wears. The Inbox's row
  * counts the open threads that wait on the developer, a question or an
  * update not yet opened, as the Inbox's own marks do (`inbox-model.ts`'s
  * `needsYou`), and a task's badge counts the same threads of that task, as
@@ -26,6 +27,11 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  */
 
 const NO_COUNTS: ReadonlyMap<string, number> = new Map();
+
+/** Whether an item waits now: it holds no reminder the developer set for after `now`. */
+function dueBy(item: Pick<AppInboxWaitingItem, "remindAt">, now: number): boolean {
+  return item.remindAt === undefined || item.remindAt <= now;
+}
 
 /**
  * How many threads wait on the developer on each task main lists, every
@@ -79,9 +85,7 @@ function waitingThreads(
   const taskless = inboxTaskless.filter(
     (each) => waitsOnReader(each, tasks.me) && listedIn(each, tasks.workspace?.id),
   );
-  return [...ofTasks, ...taskless].filter(
-    (item) => item.remindAt === undefined || item.remindAt <= now,
-  );
+  return [...ofTasks, ...taskless].filter((item) => dueBy(item, now));
 }
 
 /** How many threads wait on the developer on each task, by task, as main counts them, less those reminded for later; a task where none waits is left out, and every one while signed out. */
@@ -104,4 +108,23 @@ export function useInboxWaiting(tasks: TasksControl): number {
   const waiting = useInboxWaitingTasks();
   const taskless = useInboxTaskless();
   return tasks.signedIn ? waitingThreads(tasks, waiting, taskless, now).length : 0;
+}
+
+/** Whether a thread of the task waits on the developer now, a thread the Inbox's row counts (`waitingThreads`); never while signed out. */
+export function useTaskNeedsYou(tasks: Pick<TasksControl, "signedIn">, taskId: string): boolean {
+  const now = useMinute();
+  const waiting = useInboxWaitingTasks();
+  return (
+    tasks.signedIn &&
+    (waiting.find((task) => task.taskId === taskId)?.items.some((item) => dueBy(item, now)) ??
+      false)
+  );
+}
+
+/** Whether a thread of the agent with no task waits on `readerId` now, a thread the Inbox's row counts (`waitingThreads`). */
+export function useAgentNeedsYou(agentId: string, readerId: string | undefined): boolean {
+  const now = useMinute();
+  return useInboxTaskless().some(
+    (item) => item.agentId === agentId && waitsOnReader(item, readerId) && dueBy(item, now),
+  );
 }

@@ -1,4 +1,5 @@
 import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import {
   TASK_PRIORITY,
   TASK_STATUS,
@@ -10,6 +11,7 @@ import {
   FailedMark,
   GAP,
   Inline,
+  RowEndMark,
   TASK_AGENTS_MARK_SIZE,
   TaskAgentsMark,
   type TaskAgentsMarkSize,
@@ -24,7 +26,8 @@ import { CatalogSection } from "../section";
 /**
  * task-marks.tsx -- a task's status as its mark, each of the five, its
  * priority as its mark, each of the five, and the one icon of how its agents
- * stand, each of the seven it can wear, every one beside the word it stands for.
+ * stand, each of the seven it can wear, every one beside the word it stands for;
+ * and the one mark a sidebar row ends with, each it can wear, most pressing first.
  */
 
 /** A task's agents at rest, counted with `counts`, and a pull request standing in `state` where one is given, in the merge queue where `queued`. */
@@ -78,6 +81,38 @@ function TaskAgentsMarks({ size }: { size: TaskAgentsMarkSize }): React.JSX.Elem
   );
 }
 
+/** A sidebar row's agents at work, every row end below holding them under what outranks them. */
+const WORKING: TaskAgentsStatus = { kind: TASK_AGENTS_STATUS.WORKING };
+
+/** Each mark a sidebar row ends with, most pressing first, each beside its word. */
+const ROW_ENDS = [
+  ["needs you", { needsYou: true, notDelivered: false, drafted: false, status: WORKING }],
+  ["not delivered", { needsYou: false, notDelivered: true, drafted: false, status: WORKING }],
+  [
+    "failed",
+    {
+      needsYou: false,
+      notDelivered: false,
+      drafted: true,
+      status: { kind: TASK_AGENTS_STATUS.FAILED },
+    },
+  ],
+  ["draft", { needsYou: false, notDelivered: false, drafted: true, status: WORKING }],
+  ["working", { needsYou: false, notDelivered: false, drafted: false, status: WORKING }],
+  [
+    "pull request",
+    {
+      needsYou: false,
+      notDelivered: false,
+      drafted: false,
+      status: {
+        kind: TASK_AGENTS_STATUS.PULL_REQUEST,
+        pullRequest: { state: PULL_REQUEST_STATE.OPEN },
+      },
+    },
+  ],
+] as const satisfies readonly (readonly [string, React.ComponentProps<typeof RowEndMark>])[];
+
 function TaskMarks(): React.JSX.Element {
   return (
     <>
@@ -115,6 +150,16 @@ function TaskMarks(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="task-agents-mark" title="How a task's agents stand, in a sidebar row">
         <TaskAgentsMarks size={TASK_AGENTS_MARK_SIZE.SMALL} />
+      </CatalogSection>
+      <CatalogSection id="row-end-mark" title="A sidebar row's one mark">
+        <Inline gap={GAP.SECTION}>
+          {ROW_ENDS.map(([words, props]) => (
+            <Inline key={words} gap={GAP.CONTROL}>
+              <RowEndMark {...props} />
+              <Text variant={TEXT_VARIANT.CAPTION}>{words}</Text>
+            </Inline>
+          ))}
+        </Inline>
       </CatalogSection>
       <CatalogSection
         id="task-agents-mark-medium"

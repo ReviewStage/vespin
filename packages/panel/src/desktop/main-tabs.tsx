@@ -9,6 +9,7 @@ import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
+  DraftMark,
   FILL_ELEMENT,
   Fill,
   IconButton,
@@ -40,7 +41,7 @@ import { memo, useEffect, useRef } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
 import { useCopyLinkItem } from "../copy-link-item.js";
-import { DraftMark, leftMark } from "../draft-mark.js";
+import { leftMark } from "../draft-mark.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
 import { AgentTab, StartingAgentTab } from "../tasks/agent-tab.js";

@@ -1,5 +1,5 @@
 import type { ComponentPropsWithRef, ReactNode } from "react";
-import { GLYPH, OctagonMinusIcon } from "../../icons/icons.js";
+import { GLYPH, OctagonMinusIcon, PencilLineIcon } from "../../icons/icons.js";
 
 /**
  * row-mark.tsx -- a small mark a row or a tab wears beside its glyph and words to say one thing about it: that its work failed, that a draft waits in its box, or that it waits on another task's work.
@@ -47,6 +47,12 @@ const FAILED_WORDS = "Failed";
 /** What a blocked mark is called. */
 export const BLOCKED_WORDS = "Blocked";
 
+/** What a draft's mark is called. */
+export const DRAFT_WORD = "Draft";
+
+/** What the mark of a message that was not delivered is called. */
+const NOT_DELIVERED_WORDS = "Not delivered";
+
 /** What a mark hands on to whatever hangs from it, a hint's handlers among them. */
 type MarkAnchor = Omit<
   ComponentPropsWithRef<"span">,
@@ -85,6 +91,30 @@ export function FailedMark(anchor: MarkAnchor): React.JSX.Element {
       {...anchor}
       kind={ROW_MARK.FAILED}
       label={FAILED_WORDS}
+      glyph={<GLYPH.FAILED aria-hidden="true" />}
+    />
+  );
+}
+
+/** The mark of a draft waiting in a box: Slack's pencil in the muted ink, named Draft. */
+export function DraftMark(anchor: MarkAnchor): React.JSX.Element {
+  return (
+    <RowMark
+      {...anchor}
+      kind={ROW_MARK.DRAFT}
+      label={DRAFT_WORD}
+      glyph={<PencilLineIcon aria-hidden="true" />}
+    />
+  );
+}
+
+/** The mark of a message sent and not delivered: the failure's mark, named Not delivered. */
+export function NotDeliveredMark(anchor: MarkAnchor): React.JSX.Element {
+  return (
+    <RowMark
+      {...anchor}
+      kind={ROW_MARK.FAILED}
+      label={NOT_DELIVERED_WORDS}
       glyph={<GLYPH.FAILED aria-hidden="true" />}
     />
   );

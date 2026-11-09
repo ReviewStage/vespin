@@ -2,17 +2,19 @@
 
 import assert from "node:assert/strict";
 import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import type { TaskAgentsSummary, TaskPullRequestLine } from "@repo/features/task-wire";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { it } from "vitest";
-import { TaskAgentsMark } from "./task-agents-mark.js";
+import { RowEndMark, TaskAgentsMark } from "./task-agents-mark.js";
 
 /**
  * task-agents-mark.test.ts -- a task's row wears the one icon that matters
  * most about its agents, named for a reader: a failure, then an agent at
  * work, then its pull request, an open or draft one before a merged one and
- * a merged one before a closed one.
+ * a merged one before a closed one. A sidebar row's one mark puts a thread
+ * waiting on the reader before all of it, then a failure, then a draft.
  */
 
 /** A pull request numbered `number`, standing in `state`. */
@@ -91,4 +93,43 @@ it.each([
   ["a task with no agents shows nothing", undefined, undefined],
 ])("%s", (_case, summary, words) => {
   assert.equal(heard(summary), words);
+});
+
+/** What a reader hears of a sidebar row's one mark; nothing where none is drawn. */
+function heardAtEnd(props: React.ComponentProps<typeof RowEndMark>): string | undefined {
+  const box = document.createElement("div");
+  box.innerHTML = renderToStaticMarkup(createElement(RowEndMark, props));
+  return box.querySelector("[role='img']")?.getAttribute("aria-label") ?? undefined;
+}
+
+const WORKING: TaskAgentsStatus = { kind: TASK_AGENTS_STATUS.WORKING };
+const FAILED: TaskAgentsStatus = { kind: TASK_AGENTS_STATUS.FAILED };
+const OPEN: TaskAgentsStatus = {
+  kind: TASK_AGENTS_STATUS.PULL_REQUEST,
+  pullRequest: { state: PULL_REQUEST_STATE.OPEN },
+};
+const AT_REST = { needsYou: false, notDelivered: false, drafted: false, status: OPEN };
+
+it.each([
+  [
+    "a thread waiting on the reader outranks everything",
+    { needsYou: true, notDelivered: true, drafted: true, status: FAILED },
+    "Needs you",
+  ],
+  [
+    "a message not delivered outranks a failed agent",
+    { ...AT_REST, notDelivered: true, status: FAILED },
+    "Not delivered",
+  ],
+  ["a failed agent outranks a draft", { ...AT_REST, drafted: true, status: FAILED }, "Failed"],
+  ["a draft outranks an agent at work", { ...AT_REST, drafted: true, status: WORKING }, "Draft"],
+  ["an agent at work outranks nothing else", { ...AT_REST, status: WORKING }, "Working"],
+  ["with nothing else, the pull request shows", AT_REST, "Pull request open"],
+  [
+    "a row with none of them shows nothing",
+    { ...AT_REST, status: { kind: TASK_AGENTS_STATUS.NONE } },
+    undefined,
+  ],
+])("a sidebar row: %s", (_case, props, words) => {
+  assert.equal(heardAtEnd(props), words);
 });

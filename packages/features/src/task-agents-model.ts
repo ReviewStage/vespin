@@ -3,6 +3,7 @@ import {
   type AgentStatus,
   type ListedAgent,
   PULL_REQUEST_STATE,
+  type TasklessAgent,
 } from "./agent-wire.js";
 import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from "./task-wire.js";
 
@@ -24,10 +25,10 @@ import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from ".
  * An agent's failure stops being the task's once another agent is started
  * on it after the failure, as a newer CI run decides a commit's check.
  *
- * Note that a thread waiting on the reader is no status here, because a
- * task's row says how many wait in a count of its own, standing before this
- * status: the sidebar's task row and the Tasks page's row and card alike
- * (`@repo/panel`'s `WaitingCount`).
+ * Note that a thread waiting on the reader is no status here, because the
+ * Tasks page's row and card say how many wait in a count of its own,
+ * standing before this status (`@repo/panel`'s `WaitingCount`), and a
+ * sidebar row's one mark puts it first (`@repo/ui`'s `RowEndMark`).
  */
 
 /** Where a task's agents stand, most pressing first. */
@@ -43,7 +44,7 @@ export type TaskAgentsStatus =
   | { readonly kind: typeof TASK_AGENTS_STATUS.WORKING }
   | {
       readonly kind: typeof TASK_AGENTS_STATUS.PULL_REQUEST;
-      readonly pullRequest: TaskPullRequestLine;
+      readonly pullRequest: Pick<TaskPullRequestLine, "state" | "queued">;
     }
   | { readonly kind: typeof TASK_AGENTS_STATUS.NONE };
 
@@ -144,4 +145,18 @@ export function taskAgentsStatus(
   return pullRequest === undefined
     ? NO_STATUS
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest };
+}
+
+/**
+ * The one status an agent with no task wears at its row's end: its failure,
+ * else the pull request it opened. Note that it never says the agent works,
+ * because its row's leading glyph gives way to the working mark instead.
+ */
+export function tasklessAgentStatus(
+  agent: Pick<TasklessAgent, "status" | "pullRequest">,
+): TaskAgentsStatus {
+  if (agent.status === AGENT_STATUS.FAILED) return { kind: TASK_AGENTS_STATUS.FAILED };
+  return agent.pullRequest === undefined
+    ? NO_STATUS
+    : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest: agent.pullRequest };
 }

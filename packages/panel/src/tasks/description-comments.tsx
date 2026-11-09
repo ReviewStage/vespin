@@ -52,6 +52,7 @@ import {
   ConfirmDialog,
   cssCustomProperties,
   type DialogQuestion,
+  DRAFT_WORD,
   EmptyState,
   ERROR_STATE_PLACEMENT,
   ErrorState,
@@ -156,7 +157,6 @@ import {
   type EditorSpan,
 } from "../description-editor/contract.js";
 import type { MenuAction } from "../desktop/action-menu.js";
-import { DRAFT_WORD } from "../draft-mark.js";
 import { enterSubmitKey } from "../enter-sends.js";
 import { confirmFailure, failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
