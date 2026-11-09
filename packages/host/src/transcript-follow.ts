@@ -19,11 +19,7 @@ import {
   applyMessagesPage,
 } from "@repo/features/agent-wire";
 import { FAILURE_FACT, type FailureFacts } from "@repo/features/failure-facts";
-import {
-  LIVE_SIGNED_OUT,
-  type SealedLiveQueryWire,
-  type TranscriptNowAnswer,
-} from "@repo/features/live-wire";
+import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { joinedWindowRows, windowMessagesOf } from "@repo/features/transcript-window";
 import { MESSAGE_ROLE } from "@repo/wire";
 import {
@@ -257,12 +253,8 @@ function cursorParts(cursor: string): { readonly seq: number; readonly revision:
  */
 function followedRead(sealed: AgentTranscriptLiveAnswer): SealedRead<string> {
   const { messages: _messages, ...queries } = sealed.queries;
-  // Note that a part an older service does not answer, the queue's, is left out rather than followed as nothing.
-  const answered: Record<string, SealedLiveQueryWire> = {};
-  for (const [part, query] of Object.entries(queries)) {
-    if (query !== undefined) answered[part] = query;
-  }
-  return { url: sealed.url, queries: answered };
+  // Note that a part an older service does not answer, the queue's, is absent from its answer, so it is not followed.
+  return { url: sealed.url, queries };
 }
 
 /** A read's answer as the host follows it: the read without the count of its messages, or the failure as answered. */
