@@ -33,22 +33,23 @@ import { showToast, TOAST_HOLD, useToast } from "../toast.js";
 import { appStateQuery, selectCapability, selectPortForwarding } from "../use-app-state.js";
 
 /**
- * agent-forward.tsx -- an agent's cloud ports at a plug at its box's foot: on the desktop, forwarded to this Mac's localhost, turned on or off there, with a toast saying so once; on every host, one of them shared by a public link.
+ * agent-forward.tsx -- an agent's cloud ports at a plug at its box's foot: on every host, one of them shared by a public link; on the desktop, forwarded to this Mac's localhost too, turned on or off there, with a toast saying so once.
  *
  * Only an agent in a cloud sandbox has ports, so the plug stands nowhere
  * else. Both menus are drawn by one view model (`PlugPorts`, `portRows`);
  * only where its ports come from differs:
  *
  * - Where the host listens on the Mac's loopback
- *   (`HOST_CAPABILITY.PORT_FORWARDS`), the desktop's, it forwards one agent
- *   at a time and follows its sandbox's ports and shared link itself, which
+ *   (`HOST_CAPABILITY.PORT_FORWARDS`), the desktop's, and the agent's
+ *   forwarding is on, the host forwards one agent at a time and follows its sandbox's ports and shared link itself, which
  *   it keeps in app state (`portForwarding`), so the plug only reads them
  *   and asks the host to turn forwarding on or off and to share a port
  *   (`PORT_SHARE_SET`). Nothing is forwarded on its own: the developer turns
  *   an agent's forwarding on from its plug, and it stands until they turn it
  *   off or its sandbox stops. As the first port reaches the Mac, a toast
  *   says its address once, with Open.
- * - Everywhere else, a browser tab's host among them, the plug asks the
+ * - Everywhere else, a browser tab's host and a desktop agent forwarding
+ *   is off for among them, the plug asks the
  *   service for the ports and the shared link through the host
  *   (`AGENTS_PORTS`, `AGENTS_PORT_SHARED`), every few seconds while its menu
  *   stands open and the link once as it is drawn, never waking a stopped
@@ -57,11 +58,12 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
  *
  * The box's foot wears a plug after the Cloud chip, its glyph alone, as
  * Cursor's cloud agents wear one: while the agent is forwarded, or on a
- * host that forwards none while a port is shared, it wears a dot in the
+ * agent not forwarded while a port is shared, it wears a dot in the
  * complete tone, and its hint says the address, "Forwarding to
- * localhost:3000" or "Sharing :3000". On the desktop its menu holds the
- * Forward to localhost switch and, while on, the ports; elsewhere, the
- * ports alone. One row per port, "localhost:3000" where it reached this Mac
+ * localhost:3000" or "Sharing :3000". Its menu holds the ports, so one can
+ * be shared whether or not it is forwarded, and on the desktop the Forward
+ * to localhost switch under them, beside the plug the menu rises from.
+ * One row per port, "localhost:3000" where it reached this Mac
  * and ":3000" where it did not, has a submenu beside it holding Open, which
  * opens a forwarded port in the default browser (saying where it came from,
  * "from :3000", where the Mac's port differs), and Share, which shares it by
@@ -264,7 +266,7 @@ async function shareAsked(
   else shareFailed(ACT_KIND.AGENTS_PORT_SHARE, agentId, answer, WORDS.NOT_SHARED);
 }
 
-/** The ports as the service answers them on a host that forwards none, and a share asked of it; nothing is read where `asked` is false. */
+/** The ports as the service answers them where this Mac forwards none of the agent's, and a share asked of it; nothing is read where `asked` is false. */
 function useHostedPorts(agentId: string, asked: boolean, open: boolean): PlugPorts {
   const queryClient = useQueryClient();
   const listed = useQuery(agentPortsQuery(agentId, asked && open)).data;
@@ -387,9 +389,9 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
 
 /**
  * The plug at the foot of a cloud agent's box: a dot in the complete tone
- * while this Mac forwards its ports, or, on a host that forwards none, while
- * one is shared, the address in its hint; its menu the switch where this
- * Mac forwards, and the ports.
+ * while this Mac forwards its ports, or, where it forwards none, while one
+ * is shared, the address in its hint; its menu the ports, and the switch
+ * under them where this Mac can forward.
  */
 export function ForwardChip({
   agent,
@@ -399,35 +401,39 @@ export function ForwardChip({
   const { cloud, offered, answer } = useForwarding(agent);
   const menu = useMenu(true);
   const copy = useCopyToast();
-  const hosted = useHostedPorts(agent.id, cloud && !offered, menu.drawn !== undefined);
+  // Note that while this Mac forwards none of the agent's ports the service lists them, so one can be shared without forwarding, and none offers Open.
+  const forwarded = offered && answer.on;
+  const hosted = useHostedPorts(agent.id, cloud && !forwarded, menu.drawn !== undefined);
   if (!cloud) return null;
-  const view = offered ? forwardedPorts(agent.id, answer) : hosted;
+  const view = forwarded ? forwardedPorts(agent.id, answer) : hosted;
   const first = reached(answer)[0];
-  const lit = offered ? answer.on : view.shared !== undefined;
-  const words = offered
-    ? !answer.on
-      ? WORDS.OFF
-      : first === undefined
-        ? WORDS.FORWARDING
-        : `${WORDS.FORWARDING_TO} ${localAddress(first)}`
-    : view.shared === undefined
-      ? WORDS.PORTS
-      : `${WORDS.SHARING} :${view.shared.port}`;
-  const groups: MenuEntry[][] = offered
-    ? [
-        [
-          {
-            label: WORDS.SWITCH,
-            icon: <PlugIcon aria-hidden="true" />,
-            checked: answer.on,
-            mark: MENU_ITEM_MARK.SWITCH,
-            stays: true,
-            onSelect: () => setForwarding(agent.id, !answer.on),
-          },
-        ],
-        ...(answer.on ? [portRows(view, copy)] : []),
-      ]
-    : [portRows(view, copy)];
+  const lit = forwarded || view.shared !== undefined;
+  const words = forwarded
+    ? first === undefined
+      ? WORDS.FORWARDING
+      : `${WORDS.FORWARDING_TO} ${localAddress(first)}`
+    : view.shared !== undefined
+      ? `${WORDS.SHARING} :${view.shared.port}`
+      : offered
+        ? WORDS.OFF
+        : WORDS.PORTS;
+  const groups: MenuEntry[][] = [
+    portRows(view, copy),
+    ...(offered
+      ? [
+          [
+            {
+              label: WORDS.SWITCH,
+              icon: <PlugIcon aria-hidden="true" />,
+              checked: answer.on,
+              mark: MENU_ITEM_MARK.SWITCH,
+              stays: true,
+              onSelect: () => setForwarding(agent.id, !answer.on),
+            },
+          ],
+        ]
+      : []),
+  ];
   const chip = (
     <Chip
       look={CHIP_LOOK.TOOLBAR}
