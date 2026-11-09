@@ -32,6 +32,7 @@ import {
   type InboxReply,
   type InboxReplyKind,
   type InboxResponse,
+  inboxAgentsTurn,
   inboxAnswersRefusal,
   inboxReplyRefusal,
   inboxWaitsOn,
@@ -1502,9 +1503,9 @@ export function holdsAsk(item: Pick<AppInboxWaitingItem, "asking">): boolean {
   return item.asking !== false;
 }
 
-/** Whether an item needs the reader: open, and theirs (`readersItem`); a teammate's open item waits on the teammate. */
+/** Whether an item needs the reader: open, theirs (`readersItem`), and not its agent's turn (`inboxAgentsTurn`); a teammate's open item waits on the teammate. */
 function needsReader(item: InboxItem, readerId: string | undefined): boolean {
-  return item.status === INBOX_STATUS.OPEN && readersItem(item, readerId);
+  return item.status === INBOX_STATUS.OPEN && readersItem(item, readerId) && !inboxAgentsTurn(item);
 }
 
 /**

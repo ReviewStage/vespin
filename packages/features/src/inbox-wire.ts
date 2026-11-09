@@ -941,11 +941,28 @@ function inboxAsksOpen(item: InboxItem): boolean {
 }
 
 /**
- * Whether a thread needs the reader: its ask stands open and waits on them.
- * The one reading of it, which Needs you and the tint draw from.
+ * Whether the thread is its agent's turn: its ask stands open and a
+ * member wrote last, a follow-up asked before answering, which the agent
+ * hears and answers on the thread. The ask still stands, so it may be
+ * answered at once all the same; the turn comes back with the agent's
+ * next post.
+ */
+export function inboxAgentsTurn(item: InboxItem): boolean {
+  return inboxAsksOpen(item) && item.thread?.at(-1)?.author === INBOX_MESSAGE_AUTHOR.MEMBER;
+}
+
+/**
+ * Whether a thread needs the reader: its ask stands open and waits on them,
+ * and it is not its agent's turn (`inboxAgentsTurn`). The one reading of it,
+ * which Needs you and the tint draw from.
  */
 export function threadNeedsReader(item: InboxItem, readerId: string | undefined): boolean {
-  return readerId !== undefined && inboxAsksOpen(item) && inboxWaitsOn(item)?.userId === readerId;
+  return (
+    readerId !== undefined &&
+    inboxAsksOpen(item) &&
+    !inboxAgentsTurn(item) &&
+    inboxWaitsOn(item)?.userId === readerId
+  );
 }
 
 /** Where a reader of an inbox starts: before anything. */

@@ -68,6 +68,7 @@ import {
   taskHolder,
   waitingByAgent,
   waitsOnReader,
+  waitsOnReaderNow,
   withChoice,
   withDoPress,
   withStep,
@@ -615,13 +616,26 @@ test("an item waits on whoever the service says, its task's assignee, rather tha
   assert.deepEqual(whose({ kind: INBOX_WHOSE.PERSON, ...KAI }), ["older-service"]);
 });
 
-test("Needs you lists and counts only the questions whose ask waits on the reader, whomever Addressed to names: never a notice of theirs, which asks nothing, a question of theirs they set a reminder on, or a question that waits on a teammate", () => {
+test("Needs you lists and counts only the questions whose ask waits on the reader, whomever Addressed to names: never a notice of theirs, which asks nothing, a question of theirs they set a reminder on, a question that waits on a teammate, or one the reader followed up on before answering until its agent posts again", () => {
   const question = [asking({ type: INBOX_ASK.ANSWER })];
+  const followUp = message({
+    text: "Before I pick: what about owners?",
+    createdAt: 2_000,
+    member: ME,
+  });
+  const reply = message({
+    text: "Owners count as admins.",
+    createdAt: 3_000,
+    author: INBOX_MESSAGE_AUTHOR.AGENT,
+  });
+  const followedUp = [...question, followUp];
   const groups = [
     {
       holder: taskHolder(BILLING),
       items: [
         item({ id: "asks-me", startedBy: DANA, waitsOn: ME, thread: question, updatedAt: 30 }),
+        item({ id: "followed-up", waitsOn: ME, thread: followedUp, updatedAt: 26 }),
+        item({ id: "replied", waitsOn: ME, thread: [...followedUp, reply], updatedAt: 25 }),
         item({ id: "tells-me", startedBy: ME, updatedAt: 20 }),
         item({ id: "reminded", waitsOn: ME, thread: question, remindAt: 5_000, updatedAt: 15 }),
         item({ id: "asks-dana", startedBy: ME, waitsOn: DANA, thread: question, updatedAt: 10 }),
@@ -638,9 +652,19 @@ test("Needs you lists and counts only the questions whose ask waits on the reade
         whose,
       }),
     );
-  assert.deepEqual(needsMe(MINE), ["asks-me"]);
-  assert.deepEqual(needsMe(dana), ["asks-me"], "Addressed to a teammate narrows it no further");
-  assert.equal(inboxCounts(groups, ME.userId, dana)[INBOX_SHOW.NEEDS_ME], 1);
+  assert.deepEqual(needsMe(MINE), ["asks-me", "replied"]);
+  assert.deepEqual(
+    needsMe(dana),
+    ["asks-me", "replied"],
+    "Addressed to a teammate narrows it no further",
+  );
+  assert.equal(inboxCounts(groups, ME.userId, dana)[INBOX_SHOW.NEEDS_ME], 2);
+  const [, followed, replied] = groups[0]?.items ?? [];
+  assert.deepEqual(
+    [followed, replied].map((each) => each !== undefined && waitsOnReaderNow(each, ME.userId, 0)),
+    [false, true],
+    "the sidebar's count leaves out a thread the reader followed up on until its agent posts again",
+  );
 });
 
 test("a task done or canceled hides none of its items: Open lists and counts its open ones and its unread answered ones as any task's, and leaves out the asks its settle withdrew, which All keeps", () => {
