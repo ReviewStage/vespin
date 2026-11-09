@@ -15,7 +15,8 @@ import {
   denyOAuthClientPrivileges,
   JWT_KEY_STORAGE,
 } from "./auth-policy.js";
-import { oauthUserInfoFromAuthAnswer, requestUserId, type UserInfoEndpoint } from "./bearer.js";
+import { oauthUserInfoFromAuthAnswer, requestUserId } from "./bearer.js";
+import type { UserInfoEndpoint } from "./bearer-callers.js";
 import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
 
 /**

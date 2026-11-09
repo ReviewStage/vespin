@@ -24,7 +24,8 @@ import {
 } from "../testing/member-mcp-auth.js";
 import { AUTH_SERVER_METADATA_PATHS } from "./auth-app.js";
 import { AUTH_BASE_PATH } from "./auth-policy.js";
-import { oauthUserInfoFromAuthAnswer, requestUserId, type UserInfoEndpoint } from "./bearer.js";
+import { oauthUserInfoFromAuthAnswer, requestUserId } from "./bearer.js";
+import type { UserInfoEndpoint } from "./bearer-callers.js";
 import { DESKTOP_OAUTH_CLIENT } from "./oauth-clients.js";
 
 /**
