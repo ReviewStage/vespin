@@ -1,6 +1,7 @@
 import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { createContext, useContext, useEffect } from "react";
+import { appPlatform, opensTabs } from "./app-platform.js";
 import { commandAction, PANEL_COMMAND } from "./command-items.js";
 import { LINK_COPY, useCopyToast } from "./copy-feedback.js";
 import type { MenuAction } from "./desktop/action-menu.js";
@@ -19,6 +20,11 @@ import { useNumberedPlace } from "./tasks/use-link-standing.js";
  * (`useNumberedPlace`), as the address bar writes it. The item prints
  * ⇧⌘C only where its link is the one the chord would copy now, the open or
  * focused thing's (`links-at-hand.ts`); every other row's prints nothing.
+ *
+ * In a browser, whose tabs the window can open (`opensTabs`), the same link
+ * opens in a tab of its own: on a middle-click on a row that goes to it, as
+ * on a link, and from Open in new tab under Copy link. The Mac app has no
+ * tabs, so it offers neither.
  */
 
 /** The links ⇧⌘C would copy now, as the keyboard stands outside the side panel and in it, which the window's Copy link holds (`useHoldChordLinks`). */
@@ -66,6 +72,17 @@ export function copyLinkItem(
     () => copy(link, LINK_COPY.COPIED),
     chord.includes(link),
   );
+}
+
+/** Opens `link`, an app link, in a tab of its own, which a middle-click on a row going to it takes; none where the window opens no tabs. */
+export function openInTabOf(link: string): (() => void) | undefined {
+  return opensTabs() ? () => appPlatform().openInTab?.(link) : undefined;
+}
+
+/** Open in new tab, opening `link`, an app link, in a tab of its own; none where the window opens no tabs. */
+export function openInTabItem(link: string): MenuAction | undefined {
+  const open = openInTabOf(link);
+  return open === undefined ? undefined : commandAction(PANEL_COMMAND.OPEN_IN_NEW_TAB, open, false);
 }
 
 /** The copy of a place's link under the workspace the surface hands down, saying Link copied; none where it hands down none. */
