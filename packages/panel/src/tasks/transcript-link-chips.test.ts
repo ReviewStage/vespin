@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { MENTION_KIND, type Mention, type MentionLines } from "@repo/features/mention-link";
+import { MENTION_KIND, type Mention } from "@repo/features/mention-link";
 import { CALL_KIND, type CallKind } from "@repo/features/turn-rows";
 import { ACT_KIND } from "@repo/host/acts";
 import { Effect } from "effect";
@@ -19,6 +19,7 @@ import {
 import { DESKTOP_LINKS, fakeAppPlatform } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
+import type { OpenFileLines } from "./mention-chip.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
 
@@ -28,7 +29,7 @@ import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
  * names wherever a transcript's words are drawn: an agent's reply, a
  * subagent's, and an Inbox item's Markdown, which all draw
  * through `TranscriptWords`. A link that names nothing stays a link, and
- * code stays code. A call's row names the file it read or edited by the
+ * code stays code, never a chip, a whole address in it opening as a link. A call's row names the file it read or edited by the
  * same chip, and the page it fetched by its website chip. Synthetic task
  * and repository.
  */
@@ -66,7 +67,7 @@ afterEach(() => {
 /** What a task's page hands its places, each task and file a chip opened kept. */
 function taskPage(
   opened: Mention[],
-  files: { path: string; lines: MentionLines | undefined }[],
+  files: { path: string; lines: OpenFileLines | undefined }[],
 ): TaskMentionsValue {
   return {
     holder: { taskId: TASK_ID },
@@ -123,7 +124,7 @@ function carriesTarget(container: HTMLElement): boolean {
 
 test("on a plan's page a plan's link, a file's lines, and a Linear page are chips, the section called by its heading now, any other link a link, and code is code", () => {
   const opened: Mention[] = [];
-  const files: { path: string; lines: MentionLines | undefined }[] = [];
+  const files: { path: string; lines: OpenFileLines | undefined }[] = [];
   const container = drawn(taskPage(opened, files));
 
   assert.deepEqual(chips(container), [
@@ -133,7 +134,7 @@ test("on a plan's page a plan's link, a file's lines, and a Linear page are chip
   ]);
   assert.deepEqual(
     [...container.querySelectorAll("a:not([data-mention-ref])")].map((link) => link.textContent),
-    ["the docs"],
+    ["the docs", "https://linear.app/acme/issue/LUKE-9"],
   );
   assert.deepEqual(
     [...container.querySelectorAll("code")].map((code) => code.textContent),
@@ -163,13 +164,13 @@ test("off a plan's page, as in the workspace's Inbox, the same links are chips, 
   ]);
   assert.deepEqual(
     [...container.querySelectorAll("a:not([data-mention-ref])")].map((link) => link.textContent),
-    ["the docs"],
+    ["the docs", "https://linear.app/acme/issue/LUKE-9"],
   );
   assert.equal(carriesTarget(container), false);
 });
 
 test("a reference link is read through its definition, and a file's page far longer than a page's bound is still the file", () => {
-  const files: { path: string; lines: MentionLines | undefined }[] = [];
+  const files: { path: string; lines: OpenFileLines | undefined }[] = [];
   // Each letter spelled in six characters, so the address passes a page's bound while its path stays inside a path's.
   const longPath = `apps/${"é".repeat(400)}.ts`;
   const longPage = `https://github.com/${REPOSITORY}/blob/HEAD/apps/${"%C3%A9".repeat(400)}.ts`;
