@@ -30,9 +30,10 @@ function tagMember(name: ESTree.JSXElementName): string | undefined {
  * Outside `@repo/ui-native`, the iOS app draws with that package and never
  * builds a control of its own: no React Native control (`Pressable`,
  * `TextInput`, `Switch`, the touchables, its `Button`) is imported or
- * re-exported, no press prop is handed to a React Native primitive, and
- * `@expo/ui` and `expo-glass-effect` are imported nowhere, since every piece
- * of SwiftUI and glass a screen draws is one of the package's wrappers.
+ * re-exported, by name or with all of React Native; no press prop is handed
+ * to a React Native primitive; and `@expo/ui` and `expo-glass-effect` are
+ * imported nowhere, since every piece of SwiftUI and glass a screen draws is
+ * one of the package's wrappers.
  */
 export const noRawPressOutsideUiNativeRule = defineRule({
   meta: {
@@ -48,6 +49,8 @@ export const noRawPressOutsideUiNativeRule = defineRule({
         "`{{event}}` on `<{{tag}}>` hears a press outside `@repo/ui-native`. Give the press a home in `@repo/ui-native`: an existing component's prop, or a new component named for what it does.",
       wrappedImport:
         "`{{source}}` is imported only by `@repo/ui-native`, which wraps it. Draw with that package's components, or add the piece you need to it.",
+      reExportAll:
+        "Re-exporting all of `react-native` hands on its controls (`Pressable`, `TextInput`, and the rest) under another module's name. Re-export the pieces you need by name, or draw with `@repo/ui-native`.",
     },
   },
   createOnce(context) {
@@ -101,10 +104,15 @@ export const noRawPressOutsideUiNativeRule = defineRule({
           reportControls(node.specifiers);
         }
       },
+      // Note that a star re-export of React Native is refused whole, `export *
+      // as` among it, because an import of its controls from the module that
+      // re-exports them never names `react-native` for this rule to see.
       ExportAllDeclaration(node) {
         const source = node.source.value;
         if (isWrappedModule(source)) {
           context.report({ node: node.source, messageId: "wrappedImport", data: { source } });
+        } else if (source === REACT_NATIVE_MODULE) {
+          context.report({ node: node.source, messageId: "reExportAll" });
         }
       },
       JSXOpeningElement(node) {

@@ -93,5 +93,10 @@ tester.run("no-raw-press-outside-ui-native", noRawPressOutsideUiNativeRule, {
         { messageId: "wrappedImport", data: { source: "@expo/ui/swift-ui/modifiers" } },
       ],
     },
+    {
+      code: 'export * from "react-native"; export * as RN from "react-native";',
+      filename: MOBILE_FILE,
+      errors: [{ messageId: "reExportAll" }, { messageId: "reExportAll" }],
+    },
   ],
 });

@@ -54,7 +54,7 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
             label: "Mark done",
             symbol: "checkmark",
             tone: ROW_ACTION_TONE.ACCENT,
-            onPress: () => setDone(new Set([...done, item.id])),
+            onPress: () => setDone((previous) => new Set([...previous, item.id])),
           },
         ];
         return collection.route === COLLECTION_ROUTE.TASKS && item.status !== undefined ? (
