@@ -510,6 +510,7 @@ const StartedFromColumnSchema = Schema.NullOr(
     sandbox: Schema.optionalKey(Schema.String),
     session: Schema.optionalKey(Schema.String),
     cutBefore: Schema.optionalKey(Schema.String),
+    translated: Schema.optionalKey(Schema.Literal(true)),
   }),
 );
 /** An author as the agent's row holds it. */

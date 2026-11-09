@@ -152,6 +152,11 @@ export function replayTokens(bytes: number): number {
   return Math.ceil(bytes / BYTES_PER_TOKEN);
 }
 
+/** The bytes this many tokens of replay text are told at, as above. */
+export function tokensBytes(tokens: number): number {
+  return tokens * BYTES_PER_TOKEN;
+}
+
 /** Tokens the retired runtime estimated at four bytes each, told again at two, as the replay beside them is. */
 export function fromEveEstimate(tokens: number): number {
   return replayTokens(tokens * EVE_BYTES_PER_TOKEN);

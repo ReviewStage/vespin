@@ -937,7 +937,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   const inherited: Inherited = { from: taken.from, rules };
   // An agent started from another runs on that agent's choice unless the Start names one, and is
   // landed with that agent's replay fitted to the choice's window.
-  const { read, landing, carried } = yield* landedInheriting(
+  const { read, landing, carried, translated } = yield* landedInheriting(
     userId,
     ask,
     inherited,
@@ -1169,7 +1169,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   );
   // The source's transcript is the new agent's own before its first open forks it, and a continue's
   // source stops once it opened, since the work goes on in the new agent; a fork's goes on beside it.
-  yield* openedTakingOver(agentSessions, ask.startedBy, inherited, agent, opening);
+  yield* openedTakingOver(agentSessions, ask.startedBy, inherited, agent, translated, opening);
   // The Start answers the last transaction it committed in, which Realtime delivers after every
   // one before it, so a client waiting on it sees the agent and its task's standing alike.
   let committed = txid;

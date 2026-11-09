@@ -99,6 +99,16 @@
  * firewall holds every credential and leaves only placeholders inside. Its
  * commands still inherit no bearer or key (`shell_environment_policy`),
  * since none is theirs to use, a placeholder or not.
+ *
+ * History. An agent continued or forked from a Claude Code agent starts a
+ * thread of its own, handed the source's session the service translated
+ * into Responses items (`CodexConfig`'s `history`): read from the service's
+ * store beside app-server's start, and injected right after `thread/start`,
+ * before the first turn (`thread/inject_items`), so the thread's rollout,
+ * which the store mirrors, holds them and every later launch resumes them as
+ * Codex's own. Where Codex refuses them as items, they are handed as one
+ * message of their text, as a replay would be; a history that cannot be
+ * read fails the launch before any thread is started.
  */
 
 import { randomUUID } from "node:crypto";
@@ -116,6 +126,7 @@ import {
   spawnAppServer,
 } from "./app-server.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
+import type { JsonValue } from "./codex-protocol/serde_json/JsonValue.js";
 import type {
   ChatgptAuthTokensRefreshResponse,
   SandboxPolicy,
@@ -154,6 +165,7 @@ import {
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
+  RUNNER_TRANSCRIPTS,
   RUNNER_WARM,
   type RunnerEnd,
 } from "./protocol.js";
@@ -241,6 +253,7 @@ const METHOD = {
   THREAD_START: "thread/start",
   THREAD_RESUME: "thread/resume",
   THREAD_FORK: "thread/fork",
+  THREAD_INJECT_ITEMS: "thread/inject_items",
   THREAD_TURNS_LIST: "thread/turns/list",
   THREAD_REVERT: "thread/revert",
   TURN_START: "turn/start",
@@ -771,6 +784,92 @@ const ROLLOUT_UNREAD = "the thread's rollout could not be read from the service"
 /** The resumed thread's rollout not written back from the service's store, which fails the launch before its thread opens. */
 class RolloutUnread extends Data.TaggedError("RolloutUnread") {}
 
+/** What a launch whose translated history the service's store did not hand back ends with. */
+const HISTORY_UNREAD = "the history the agent was started with could not be read from the service";
+
+/** The translated history not read from the service's store, which fails the launch before its thread starts. */
+class HistoryUnread extends Data.TaggedError("HistoryUnread") {}
+
+/** What heads the one message a history Codex refused as items is handed in. */
+const HISTORY_AS_TEXT_LEAD =
+  "The conversation you go on from, as it stood, which could not be handed to you as its own turns:";
+
+/** A Responses item's content parts as text, an image as a mark. */
+function partsText(parts: unknown): string {
+  if (typeof parts === "string") return parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .map((part) => {
+      if (typeof part !== "object" || part === null) return "";
+      const { type, text } = part as { readonly type?: unknown; readonly text?: unknown };
+      return type === "input_image" ? "[image]" : typeof text === "string" ? text : "";
+    })
+    .join("\n");
+}
+
+/** The items as the text of one user message, each a line or a block of its own: a message by its role, a call by its tool and input, a result by its output. */
+function historyAsText(items: readonly Schema.Json[]): Schema.Json {
+  const lines = items.map((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return "";
+    const each = item as Readonly<Record<string, unknown>>;
+    if (each.type === "message") return `[${String(each.role)}] ${partsText(each.content)}`;
+    if (each.type === "function_call" || each.type === "custom_tool_call") {
+      const named = `${typeof each.namespace === "string" ? each.namespace : ""}${String(each.name)}`;
+      return `[call ${named}] ${String(each.arguments ?? each.input)}`;
+    }
+    return `[result] ${partsText(each.output)}`;
+  });
+  return {
+    type: "message",
+    role: "user",
+    content: [{ type: "input_text", text: `${HISTORY_AS_TEXT_LEAD}\n\n${lines.join("\n\n")}` }],
+  };
+}
+
+/** The translated history a launch that starts a thread is handed (`CodexConfig`'s `history`), read from the service's store; none where its config names none. */
+function historyOf(
+  context: LaunchContext<CodexConfig>,
+): Effect.Effect<readonly Schema.Json[] | undefined, HistoryUnread> {
+  const { config } = context;
+  const { history, transcriptsUrl } = config;
+  if (history === undefined || transcriptsUrl === undefined || config.threadId !== undefined) {
+    return Effect.succeed(undefined);
+  }
+  const store = transcriptStore(transcriptsUrl, context.bearer, context.trace.headers);
+  return Effect.tryPromise(() =>
+    store.load({ projectKey: RUNNER_TRANSCRIPTS.CODEX_HISTORY_PROJECT, sessionId: history }),
+  ).pipe(
+    // SAFETY: the store's entries are JSON as the service answered them.
+    Effect.map((entries) => (entries === null ? undefined : (entries as readonly Schema.Json[]))),
+    Effect.mapError(() => new HistoryUnread()),
+  );
+}
+
+/**
+ * The translated history injected into the thread just started, before its
+ * first turn; as one message of its text where Codex refuses the items, which
+ * is logged. A refusal of that message too fails the launch.
+ */
+const injectedHistory = Effect.fn("agent-runner/codex/injectedHistory")(function* (
+  server: AppServer,
+  threadId: string,
+  items: readonly Schema.Json[],
+) {
+  // SAFETY: the items are JSON as the service's store answered them, which is what app-server's `JsonValue` names.
+  const inject = (sent: readonly Schema.Json[]) =>
+    server.request(METHOD.THREAD_INJECT_ITEMS, { threadId, items: [...sent] as JsonValue[] });
+  yield* inject(items).pipe(
+    Effect.catch((refused) =>
+      Effect.andThen(
+        Effect.logWarning(
+          `agent-runner: the history was refused as items, and is handed as text: ${refused.detail}`,
+        ),
+        inject([historyAsText(items)]),
+      ),
+    ),
+  );
+});
+
 /**
  * Starts app-server in a scope of its own and opens the thread on it:
  * `thread/fork` where the thread is another agent's, `thread/resume` where
@@ -787,6 +886,8 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
   fork: boolean,
   /** Whether the thread's rollout stands on the sandbox's disk, written back where it had to be. */
   rollouts: Effect.Effect<boolean>,
+  /** The translated history a new thread is injected with, read from the service's store; none where the config names none. */
+  history: Effect.Effect<readonly Schema.Json[] | undefined, HistoryUnread>,
 ) {
   const { config, env, bearer } = launch.context;
   const { auth } = launch;
@@ -848,6 +949,8 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       yield* server.request(METHOD.SKILLS_EXTRA_ROOTS_SET, { extraRoots: [skills] });
     }
     if (!(yield* rollouts)) return yield* new RolloutUnread();
+    // Note that the history is read before the thread starts, so one that cannot be read leaves no thread behind.
+    const items = threadId === undefined ? yield* history : undefined;
     const thread = {
       cwd: config.cwd,
       model: launch.model,
@@ -875,6 +978,9 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       });
     }
     seen.threadId = opened.value.thread.id;
+    if (items !== undefined && items.length > 0) {
+      yield* injectedHistory(server, opened.value.thread.id, items);
+    }
     return opened.value.thread;
   });
   const openedThread = yield* opened.pipe(
@@ -1248,17 +1354,24 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.orElseSucceed(() => false),
     Effect.forkScoped,
   );
+  // A thread started for an agent continued from a Claude Code agent is handed its translated history, read beside app-server's start.
+  const historyRead = yield* historyOf(context).pipe(Effect.forkScoped);
   const opened = yield* openAppServer(
     { context, signals, model: config.model, auth },
     config.threadId,
     config.fork === true,
     Fiber.join(restoring),
+    Fiber.join(historyRead),
   ).pipe(Effect.result);
   if (opened._tag === "Failure") {
     const failure = opened.failure;
     return ended(
       RUNNER_END.FAILED,
-      failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
+      failure._tag === "RolloutUnread"
+        ? ROLLOUT_UNREAD
+        : failure._tag === "HistoryUnread"
+          ? HISTORY_UNREAD
+          : `${failure.method}: ${failure.detail}`,
     );
   }
   const { path, ...server } = opened.success;

@@ -277,6 +277,8 @@ export const RUNNER_TRANSCRIPTS = {
     DELETE: "delete",
     LIST_SUBKEYS: "listSubkeys",
   },
+  /** The project a Claude Code session translated for a Codex agent is kept under, as Responses items, by the session's id (`CodexConfig`'s `history`). */
+  CODEX_HISTORY_PROJECT: "codex-history",
 } as const;
 
 /** The SDK's `SessionKey`: a project, a session, and a subpath, absent for the main transcript. */
@@ -488,6 +490,15 @@ export const CodexConfigSchema = Schema.Struct({
   rewindBefore: Schema.optionalKey(Schema.String),
   /** Whether the thread is another agent's, which a continued or forked agent forks as its own (`thread/fork`). */
   fork: Schema.optionalKey(Schema.Boolean),
+  /**
+   * The session of a Claude Code agent this one was continued or forked
+   * from, kept translated at the service as Responses items under
+   * `RUNNER_TRANSCRIPTS.CODEX_HISTORY_PROJECT`: loaded through
+   * `transcriptsUrl` and injected into the new thread (`thread/inject_items`)
+   * before its first turn, as one message of their text where Codex refuses
+   * them as items. Named only for a launch that starts a thread.
+   */
+  history: Schema.optionalKey(Schema.String),
   firstSequence: SequenceSchema,
   eventsUrl: Schema.String,
   /** Where the runner reads the service's lines past its config (`RUNNER_LINES`); none where the service writes them to its stdin. */

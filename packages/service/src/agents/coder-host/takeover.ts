@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
@@ -7,12 +8,17 @@ import {
   readAgentContext,
   readAgentRouting,
 } from "@repo/database/models/agent-store";
-import { copySessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
+import {
+  copySessionEntries,
+  holdsSession,
+  writeSessionEntries,
+} from "@repo/database/models/claude-session-entries";
 import { readForkCut, readNativeRewind } from "@repo/database/models/conversation-rewind";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   type NoteFiles,
   type Replay,
@@ -33,10 +39,10 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
-import { bothInOrder } from "@repo/runtime/effect";
+import { bothInOrder, failureKind } from "@repo/runtime/effect";
 import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { START_LINE_BRIEF } from "@repo/wire";
-import { Effect, Option, Result } from "effect";
+import { Cause, Clock, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { SERVER_AGENT_START_KIND, type ServerAgentStartKind } from "../../events/server-events.js";
 import {
@@ -50,7 +56,9 @@ import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
+import { CODER } from "./bounds.js";
 import { contextWindowOf } from "./context.js";
+import { type TranslatedSession, translatedSessionOf } from "./native-history.js";
 import { agentPublished } from "./published.js";
 import {
   type FittedReplay,
@@ -111,7 +119,8 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  * that source and its ask, then fits the source's replay once its choice is
  * accepted (`landedInheriting`), and
  * opens its agent through `openedTakingOver`, which copies a carried
- * transcript before the open and stops the source only after it.
+ * transcript before the open, or writes it translated where the source ran
+ * the other harness (`native-history.ts`), and stops the source only after it.
  */
 
 /** How a Start stands to the agent it starts from: none, a continue of its whole work, or a fork at one of its messages. */
@@ -574,6 +583,20 @@ const measuredStepOf = Effect.fnUntraced(function* (userId: string, lineage: rea
   return undefined;
 });
 
+/** The new agent's window as the catalog lists its model, the long one where the choice names none, and the model's lowest effort, which a summary is written at. */
+const windowOfChoice = Effect.fnUntraced(function* (choice: ModelChoice) {
+  const catalog = yield* ModelCatalog;
+  const offered = yield* catalog.read.pipe(Effect.orElseSucceed(() => []));
+  return {
+    windowTokens: contextWindowOf(
+      offered,
+      choice.model,
+      choice.contextWindow ?? CONTEXT_WINDOW.LONG,
+    ),
+    lowest: offered.find((model) => model.id === choice.model)?.efforts[0] ?? choice.effort,
+  };
+});
+
 /**
  * How the replay of the agent a Start takes over from is fitted: against
  * the window of the model the new agent runs on, as the catalog lists it,
@@ -592,14 +615,7 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   summaryModel: SummaryModelOf | undefined,
   files: readonly AgentAttachment[],
 ): Effect.fn.Return<ReplayFitter, never, DatabaseServices | ModelCatalog> {
-  const catalog = yield* ModelCatalog;
-  const offered = yield* catalog.read.pipe(Effect.orElseSucceed(() => []));
-  const windowTokens = contextWindowOf(
-    offered,
-    choice.model,
-    choice.contextWindow ?? CONTEXT_WINDOW.LONG,
-  );
-  const lowest = offered.find((model) => model.id === choice.model)?.efforts[0] ?? choice.effort;
+  const { windowTokens, lowest } = yield* windowOfChoice(choice);
   const measured = yield* measuredStepOf(userId, from.lineage);
   // Note that a native harness's step estimates no instructions (`runner-events-app.ts`), since
   // the CLI composes its own, so it is told the fallback as a source that measured none is.
@@ -653,10 +669,18 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   };
 });
 
-/** The source's CLI session a Start carries, and the line its session is cut just before as the new agent forks it, none where it is forked whole. */
+/** The source's session a translation reads: the harness it ran, its id, and the account and conversation its rows are read as. */
+interface TranslatedSource {
+  readonly runtime: string;
+  readonly session: string;
+  readonly owner: { readonly userId: string; readonly conversationId: string };
+}
+
+/** The source's CLI session a Start carries, the line its session is cut just before as the new agent forks it, none where it is forked whole, and what it was translated into where the new agent runs the other harness, already cut. */
 interface CarriedSession {
   readonly session: string;
   readonly cutBefore: string | undefined;
+  readonly translated?: TranslatedSession | undefined;
 }
 
 /**
@@ -684,15 +708,23 @@ const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
  * The source's CLI session a continue or a fork forks as its own, in place
  * of a replay of its steps, cut where `sessionCutOf` cuts it: one the
  * service holds the transcript of from its first entry (`holdsSession`),
- * since the fork reads the copy alone, on the harness the new agent runs
- * (`runtime`), for an agent in the cloud, where its runner reads the
- * transcript back; none wherever else, and for a fork its session cannot be
- * cut for.
+ * since the fork reads the copy alone, for an agent in the cloud, where its
+ * runner reads the transcript back. On the harness the new agent runs
+ * (`runtime`) it is copied; on the other it is translated into that
+ * harness's own turns, cut and fitted to the new agent's window
+ * (`translate`), and a translation that holds nothing or fails is logged
+ * and replayed instead. None wherever else, and for a fork its session
+ * cannot be cut for.
  */
 const carriedSessionOf = Effect.fnUntraced(function* (
   ask: Pick<TakeoverAsk, "runsOn">,
   from: StartFrom,
   runtime: Effect.Effect<AgentRuntimeChoice, HostedRefusal, DatabaseServices>,
+  translate: (
+    read: TranslatedSource,
+    to: AgentRuntimeChoice["runtime"],
+    cutBefore: string | undefined,
+  ) => Effect.Effect<TranslatedSession | undefined, never, DatabaseServices | ModelCatalog>,
 ) {
   const { source } = from;
   const place = ask.runsOn ?? { machine: source.machine ?? AGENT_MACHINE.VERCEL };
@@ -700,16 +732,69 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
   if (read?.nativeSession == null) return undefined;
-  if ((yield* runtime).runtime !== read.runtime) return undefined;
+  const to = (yield* runtime).runtime;
   const held = yield* hostedStoreOrUnavailable(
     holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
   if (!held) return undefined;
   const cut = yield* sessionCutOf(from);
-  return Option.isNone(cut)
+  if (Option.isNone(cut)) return undefined;
+  if (to === read.runtime) {
+    return { session: read.nativeSession, cutBefore: cut.value } satisfies CarriedSession;
+  }
+  const session = read.nativeSession;
+  const owner = { userId: source.userId, conversationId: source.conversationId };
+  const translated = yield* translate({ runtime: read.runtime, session, owner }, to, cut.value);
+  return translated === undefined
     ? undefined
-    : ({ session: read.nativeSession, cutBefore: cut.value } satisfies CarriedSession);
+    : ({ session, cutBefore: undefined, translated } satisfies CarriedSession);
 });
+
+/**
+ * How a Start translates its source's session for the other harness
+ * (`native-history.ts`), for the account and the choice it runs on: against
+ * that choice's window, the turns left out summarized on the model
+ * `summaryModel` finds at the model's lowest effort, where it finds one.
+ * A source on the retired runtime is translated into nothing, and a
+ * translation that fails is logged and answered none, so the Start replays.
+ */
+const translatorOf =
+  (userId: string, choice: ModelChoice, summaryModel: SummaryModelOf | undefined) =>
+  (read: TranslatedSource, to: AgentRuntimeChoice["runtime"], cutBefore: string | undefined) =>
+    Effect.gen(function* () {
+      const from = read.runtime;
+      if (from !== CONVERSATION_RUNTIME.CLAUDE_CODE && from !== CONVERSATION_RUNTIME.CODEX) {
+        return undefined;
+      }
+      const { windowTokens, lowest } = yield* windowOfChoice(choice);
+      const model =
+        summaryModel === undefined ? undefined : yield* summaryModel(userId, choice, lowest);
+      const now = new Date(yield* Clock.currentTimeMillis).toISOString();
+      return yield* translatedSessionOf({
+        source: read.owner,
+        from,
+        to,
+        session: read.session,
+        cutBefore,
+        checkoutPath: CODER.CHECKOUT_PATH,
+        windowTokens,
+        summarize: (steps) =>
+          model === undefined
+            ? Effect.succeed(Option.none())
+            : summarizeSteps(model, steps, windowTokens),
+        newId: randomUUID,
+        now,
+      });
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.as(
+          Effect.logWarning(
+            `a session was not translated for the other harness: ${failureKind(Cause.squash(cause))}`,
+          ),
+          undefined,
+        ),
+      ),
+    );
 
 /** The source as a Start hands it on where its transcript is carried: none of its steps replayed, and its session named with where it is cut. */
 function carryingTranscript(from: StartFrom, carried: CarriedSession): StartFrom {
@@ -718,7 +803,12 @@ function carryingTranscript(from: StartFrom, carried: CarriedSession): StartFrom
     steps: [],
     totalSteps: 0,
     carriedSummary: undefined,
-    told: { ...from.told, transcript: carried.session, transcriptCut: carried.cutBefore },
+    told: {
+      ...from.told,
+      transcript: carried.session,
+      transcriptCut: carried.cutBefore,
+      transcriptTranslated: carried.translated !== undefined,
+    },
   };
 }
 
@@ -781,6 +871,8 @@ export const landedInheriting = <
     readonly read: A;
     readonly landing: L;
     readonly carried: readonly AgentAlsoRepository[] | undefined;
+    /** The source's session translated for the other harness, which the open writes (`openedTakingOver`); none where it is copied or replayed. */
+    readonly translated: TranslatedSession | undefined;
   },
   E1 | E2 | HostedRefusal,
   R1 | R2 | DatabaseServices | ModelCatalog
@@ -791,12 +883,18 @@ export const landedInheriting = <
       read,
       landing,
       carried: undefined,
+      translated: undefined,
     }));
   }
   return Effect.gen(function* () {
     if (rules.checksPlanWriter) yield* admitsPlanWriter(userId, from.source);
     const read = yield* accepted;
-    const session = yield* carriedSessionOf(ask, from, runtimeOf(read.choice.model, read.keys));
+    const session = yield* carriedSessionOf(
+      ask,
+      from,
+      runtimeOf(read.choice.model, read.keys),
+      translatorOf(userId, read.choice, ask.summaryModel),
+    );
     const handedFrom = session === undefined ? from : carryingTranscript(from, session);
     const fitter = yield* replayFitterOf(
       userId,
@@ -810,7 +908,7 @@ export const landedInheriting = <
     const carried = rules.carriesExtras
       ? yield* carriedExtrasOf(userId, from.source, landing.repository)
       : undefined;
-    return { read, landing, carried };
+    return { read, landing, carried, translated: session?.translated };
   });
 };
 
@@ -849,9 +947,10 @@ const stoppedSource = (
 
 /**
  * The new agent's `opening` run around what it inherits: the source's CLI
- * transcript made the new agent's own before its first open forks it, then
- * the opening, and once that succeeded the source of a continue stopped,
- * since the work goes on in the new agent.
+ * transcript made the new agent's own before its first open forks it,
+ * copied, or written as `translated` where the Start translated it for the
+ * other harness, then the opening, and once that succeeded the source of a
+ * continue stopped, since the work goes on in the new agent.
  */
 export const openedTakingOver = <E, R>(
   agentSessions: Effect.Effect<
@@ -862,11 +961,17 @@ export const openedTakingOver = <E, R>(
   startedBy: Agent | undefined,
   inherited: Inherited,
   agent: Agent,
+  translated: TranslatedSession | undefined,
   opening: Effect.Effect<void, E, R>,
 ): Effect.Effect<void, E | HostedRefusal, R | DatabaseServices | HttpClient.HttpClient | Sandbox> =>
   Effect.gen(function* () {
     const { from, rules } = inherited;
-    if (from !== undefined && agent.startedFrom?.session !== undefined) {
+    const target = { userId: agent.userId, conversationId: agent.conversationId };
+    if (translated !== undefined) {
+      yield* hostedStoreOrUnavailable(
+        writeSessionEntries(target, translated.key, translated.entries),
+      );
+    } else if (from !== undefined && agent.startedFrom?.session !== undefined) {
       yield* hostedStoreOrUnavailable(
         copySessionEntries(
           { userId: from.source.userId, conversationId: from.source.conversationId },

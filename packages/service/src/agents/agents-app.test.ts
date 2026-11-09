@@ -16,7 +16,10 @@ import {
   takeAgentMentionedServers,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
-import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
+import {
+  appendSessionEntries,
+  loadSessionEntries,
+} from "@repo/database/models/claude-session-entries";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
@@ -50,6 +53,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
+import { AGENT_DEFAULT_CHOICE } from "@repo/features/models-wire";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
@@ -349,6 +353,63 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           [session, line?.clientId],
         );
         assert.deepEqual(parts.replay?.steps, []);
+      }),
+  );
+
+  it.effect(
+    "a continue on Claude Code of a Codex source whose rollout the store holds carries it translated into a session of Claude Code's own",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, source, stored } = yield* sourceAgent;
+        const thread = randomUUID();
+        yield* recordAgentNativeSession(stored.userId, stored.id, thread);
+        const said = (role: string, kind: string, words: string) => ({
+          timestamp: "2026-11-09T11:00:00.000Z",
+          type: "response_item",
+          payload: { type: "message", role, content: [{ type: kind, text: words }] },
+        });
+        yield* appendSessionEntries(
+          stored.userId,
+          stored.conversationId,
+          { projectKey: "codex", sessionId: thread, subpath: `sessions/rollout-${thread}.jsonl` },
+          [
+            { type: "session_meta", payload: { id: thread } },
+            said("user", "input_text", "Use the mailer."),
+            said("assistant", "output_text", "On it."),
+          ],
+        );
+
+        const started = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            startAs(owner, task.id, {
+              idempotencyKey: randomUUID(),
+              from: { agentId: source.id },
+              model: AGENT_DEFAULT_CHOICE.model,
+              effort: AGENT_DEFAULT_CHOICE.effort,
+            }),
+          ),
+        ).agent;
+
+        const continued = Option.getOrThrow(yield* readAgent(owner, started.id));
+        assert.deepEqual(
+          [continued.startedFrom?.session, continued.startedFrom?.translated],
+          [thread, true],
+        );
+        // The session's root opens it, so the launch forks it as a session the store holds whole.
+        const entries = yield* loadSessionEntries(owner, continued.conversationId, {
+          projectKey: "-workspace-repository",
+          sessionId: thread,
+        });
+        const read = Option.getOrThrow(entries).map((entry) => {
+          const message = entry.message as { readonly role: string; readonly content: unknown };
+          return [entry.sessionId, message.role, message.content];
+        });
+        assert.deepEqual(read, [
+          [thread, "user", [{ type: "text", text: "Use the mailer." }]],
+          [thread, "assistant", [{ type: "text", text: "On it." }]],
+        ]);
       }),
   );
 

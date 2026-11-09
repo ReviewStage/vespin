@@ -8,7 +8,8 @@
  * is the SDK's `SessionKey`: a project, a session, and a subpath, absent for
  * the main transcript. Beside them, a Start copies its source's rows to the
  * conversation it starts, so a continued or forked agent forks the source's
- * transcript as its own.
+ * transcript as its own, or, where the new agent runs the other harness,
+ * reads the source's session and writes what it translated it into.
  *
  * A session is held from its first entry where the store holds the entry
  * that opens it (`opensTranscript`), which an append marks as it inserts it.
@@ -241,6 +242,34 @@ const findSubkeys = SqlSchema.findAll({
     ),
 });
 
+const findSessionRows = SqlSchema.findAll({
+  Request: Schema.Struct({ ...OwnerFields, sessionId: Schema.String }),
+  Result: Schema.Struct({
+    projectKey: Schema.String,
+    subpath: Schema.NullOr(Schema.String),
+    entry: EntrySchema,
+  }),
+  execute: ({ userId, conversationId, sessionId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          projectKey: claudeSessionEntries.projectKey,
+          subpath: claudeSessionEntries.subpath,
+          entry: claudeSessionEntries.entry,
+        })
+        .from(claudeSessionEntries)
+        .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
+        .where(
+          and(
+            ownConversation(userId, conversationId),
+            eq(claudeSessionEntries.conversationId, conversationId),
+            eq(claudeSessionEntries.sessionId, sessionId),
+          ),
+        )
+        .orderBy(asc(claudeSessionEntries.id)),
+    ),
+});
+
 const copyEntries = SqlSchema.void({
   Request: Schema.Struct({
     sourceUserId: Schema.String,
@@ -465,6 +494,44 @@ export function holdsSession(
   sessionId: string,
 ): EntryEffect<boolean> {
   return findOpening({ userId, conversationId, sessionId }).pipe(Effect.map(Option.isSome));
+}
+
+/** One row of a session's transcripts: the project and file it is kept under, no subpath for Claude Code's main transcript, and its entry. */
+export interface SessionRow {
+  readonly projectKey: string;
+  readonly subpath: string | null;
+  readonly entry: SessionEntry;
+}
+
+/** Every row of the session given in the account's conversation, of every project and file, in the order it was appended; none where the conversation is not the account's. */
+export function readSessionRows(
+  source: { readonly userId: string; readonly conversationId: string },
+  sessionId: string,
+): EntryEffect<readonly SessionRow[]> {
+  return findSessionRows({ ...source, sessionId });
+}
+
+/** The most entries one insert of written entries carries, well inside Postgres's bound on a statement's parameters. */
+const WRITE_BATCH = 1_000;
+
+/**
+ * Entries a Start wrote for the conversation given, rather than copied
+ * (`copySessionEntries`), such as a session translated from the other
+ * harness, appended under the key given in their order, a batch at a time.
+ */
+export function writeSessionEntries(
+  target: { readonly userId: string; readonly conversationId: string },
+  key: SessionEntryKey,
+  entries: readonly SessionEntry[],
+): EntryEffect<void> {
+  const batches = Array.from({ length: Math.ceil(entries.length / WRITE_BATCH) }, (_, at) =>
+    entries.slice(at * WRITE_BATCH, (at + 1) * WRITE_BATCH),
+  );
+  return Effect.forEach(
+    batches,
+    (batch) => appendSessionEntries(target.userId, target.conversationId, key, batch),
+    { discard: true },
+  );
 }
 
 /** Every row of the source conversation, read as its own account, copied to the conversation given in their order, its broken sessions marked broken there too. */

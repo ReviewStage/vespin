@@ -650,6 +650,47 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
   );
 
   it.effect(
+    "an agent continued from a Claude Code agent starts a thread of its own, handed the session the Start translated for it, never a thread to fork",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const openai = openAi();
+        const { userId, agent: source } = yield* openAgent;
+        const task = yield* startTask(userId, { name: "Teammate invitations, continued" });
+        const started = yield* createAgent(userId, {
+          taskId: task.id,
+          idempotencyKey: "continue-1",
+          model: "openai/gpt-6.1-sol",
+          effort: "xhigh",
+          descriptionSnapshot: "# Teammate invitations\n",
+          prompt: null,
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CODEX,
+          startedFrom: {
+            agentId: source.id,
+            steps: 0,
+            totalSteps: 0,
+            session: "claude-session",
+            translated: true,
+          },
+        });
+        const agent = Option.getOrThrow(started).agent;
+        yield* signIn(userId, 60);
+        const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api, openai)));
+
+        const opened = yield* deliveredOpen(sessions, yield* writtenLine(agent, "Go on."));
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const [config] = (yield* launchLines(api.commands[0])) as [CodexConfig];
+        assert.deepEqual(
+          [config.history, config.threadId, config.fork],
+          ["claude-session", undefined, undefined],
+        );
+      }),
+  );
+
+  it.effect(
     "an agent its starter's OpenAI API key pays for launches with a placeholder as OPENAI_API_KEY, the key held at the firewall, an Ultrafast version on the ultrafast tier, never asks the plan, and is refused once the key is gone",
     () =>
       Effect.gen(function* () {

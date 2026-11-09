@@ -16,6 +16,7 @@ import {
   listSessionEntrySubkeys,
   loadSessionEntries,
   loadSessionEntryPage,
+  readSessionRows,
   type SessionEntryPage,
 } from "../claude-session-entries.js";
 import { deleteConversations } from "../conversation-delete.js";
@@ -123,6 +124,12 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         [],
       );
       assert.deepEqual(yield* loaded(owner.userId, owner.conversationId, MAIN), [entry("a")]);
+      // A Start reads a session's rows of every file as the source's account alone.
+      const asOther = { userId: other.userId, conversationId: owner.conversationId };
+      assert.deepEqual(yield* readSessionRows(asOther, SESSION), []);
+      assert.deepEqual(yield* readSessionRows(owner, SESSION), [
+        { projectKey: PROJECT, subpath: null, entry: entry("a") },
+      ]);
     }),
   );
 

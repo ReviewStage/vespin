@@ -196,7 +196,7 @@ import { SqlError } from "effect/sql/SqlError";
 import { HostedEnvironment } from "../../environment.js";
 import {
   recordServerEvent,
-  type SERVER_AGENT_HARNESS,
+  SERVER_AGENT_HARNESS,
   SERVER_EVENT,
   SERVER_HANDOFF_PATH,
 } from "../../events/server-events.js";
@@ -440,6 +440,8 @@ interface ResumedSession {
   /** The client id of the source's line a forked session is cut just before (`StoredStartedFrom`'s `cutBefore`); none where it is forked whole. */
   readonly cut?: string;
   readonly replay?: boolean;
+  /** The session a Codex agent's new thread is handed, translated from the Claude Code agent it was started from (`StoredStartedFrom`'s `translated`), as items injected before its first turn. */
+  readonly inject?: string;
 }
 
 /** The message line as the runner takes it, the turn's own words ahead of the developer's, and what the session has handed once it took it. */
@@ -1019,6 +1021,7 @@ export const runnerSessions = <
                   ? { transcriptsUrl: named(options.transcriptsUrl) }
                   : undefined),
                 ...(resumed.fork === true ? { fork: true } : undefined),
+                ...(resumed.inject === undefined ? undefined : { history: resumed.inject }),
                 warm: true,
                 ...(warmForMs === undefined ? undefined : { warmForMs }),
               },
@@ -1481,7 +1484,9 @@ export const runnerSessions = <
      * anew (`created`), whose disk is gone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
      * Start copied a transcript the store holds from its first entry, cut
-     * where the Start cut it.
+     * where the Start cut it; one whose source ran Claude Code and that runs
+     * Codex starts a thread of its own, handed the source's session the
+     * Start translated for it (`inject`), already cut.
      * Whether the place was made anew is read only where it decides the
      * session, so a launch prepared beside its place's resume waits on that
      * resume only there.
@@ -1504,7 +1509,15 @@ export const runnerSessions = <
           return (resumes ? { resume: own } : { replay: true }) satisfies ResumedSession;
         }
         const source = agent.startedFrom?.session;
-        if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
+        if (!layout.transcriptsKept || source === undefined) return {};
+        // Note that a translated history is injected into whatever new thread a launch starts, a place made anew or not.
+        if (
+          agent.startedFrom?.translated === true &&
+          harness.runtime === SERVER_AGENT_HARNESS.CODEX
+        ) {
+          return { inject: source } satisfies ResumedSession;
+        }
+        if (!(yield* created)) return {};
         const held = yield* holdsSession(userId, conversationId, source);
         if (!held) return {} satisfies ResumedSession;
         const cut = agent.startedFrom?.cutBefore;

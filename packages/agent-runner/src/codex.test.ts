@@ -562,6 +562,63 @@ it.effect(
 );
 
 it.effect(
+  "a thread started for an agent continued from a Claude Code agent is injected with the history the service translated, after it starts and before its first turn",
+  () =>
+    Effect.gen(function* () {
+      const history = [
+        {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "Fix the mailer." }],
+        },
+        {
+          type: "function_call",
+          name: "exec_command",
+          arguments: '{"cmd":"pnpm test"}',
+          call_id: "toolu_1",
+        },
+        { type: "function_call_output", call_id: "toolu_1", output: "ok" },
+      ];
+      const loads: unknown[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+        const call = JSON.parse(String(init?.body));
+        if (call.call === "loadPage") loads.push(call.key);
+        return new Response(
+          JSON.stringify(call.call === "loadPage" ? { entries: history, next: null } : {}),
+        );
+      });
+      const injected: Exchange = { method: "thread/inject_items", reply: [{ id: 0, result: {} }] };
+      const script: Script = {
+        exchanges: [...OPEN, injected, ...WORKFLOW.exchanges.slice(OPEN.length)],
+      };
+      const service = fakeService("ci-watch");
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({
+        ...CONFIG,
+        history: "claude-session",
+        transcriptsUrl: "https://app.test/api/agents/runner-transcripts",
+      });
+      yield* write(message("The probe's first turn.", LINE.FIRST));
+      yield* service.seen;
+      yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const [process] = spawned;
+      assert.deepEqual(process?.unexpected, []);
+      assert.deepEqual(loads, [{ projectKey: "codex-history", sessionId: "claude-session" }]);
+      assert.deepEqual(received(process, "thread/inject_items"), [
+        { threadId: THREAD, items: history },
+      ]);
+      assert.deepEqual(process?.received.map((each) => each.method).slice(2, 5), [
+        "thread/start",
+        "thread/inject_items",
+        "turn/start",
+      ]);
+      vi.restoreAllMocks();
+    }),
+);
+
+it.effect(
   "resumes the thread it is given and sends a message the ended turn refused as the next turn",
   () =>
     Effect.gen(function* () {

@@ -859,6 +859,8 @@ interface ReplayTold {
   readonly transcript?: string | undefined;
   /** The client id of the source's line that session is cut just before; none where it is forked whole. */
   readonly transcriptCut?: string | undefined;
+  /** Whether that session was translated from the other harness's rather than copied (`native-history.ts`). */
+  readonly transcriptTranslated?: boolean | undefined;
 }
 
 /** A replay fitted to the new agent's window, and what the new agent's row keeps of where it came from. */
@@ -913,6 +915,7 @@ export function replayOf(
       ...startedOn(told.work),
       ...(told.transcript === undefined ? undefined : { session: told.transcript }),
       ...(told.transcriptCut === undefined ? undefined : { cutBefore: told.transcriptCut }),
+      ...(told.transcriptTranslated === true ? { translated: true } : undefined),
     },
   };
 }
