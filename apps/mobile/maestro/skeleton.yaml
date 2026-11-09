@@ -26,14 +26,19 @@ appId: dev.vespin.ios
 - assertVisible: "Describe the task, and an agent starts on it."
 - takeScreenshot: new-task
 - openLink: vespin://signed-out
-# The link comes from outside the app, so iOS asks before opening it there;
-# the prompt is the system's, and a simulator that has already allowed it
-# shows none.
+# The link comes from outside the app, so iOS asks before opening it there.
+# The prompt is the system's, and SpringBoard raises it, and then hands the
+# link to the app, in its own time: on a loaded CI simulator each has taken
+# 20 seconds, past a tap's or a plain assertion's wait, so both are waited
+# for as long as a minute. A simulator that has already allowed the link
+# shows no prompt, which the optional wait and tap pass over.
+- extendedWaitUntil:
+    visible: "Open"
+    timeout: 60000
+    optional: true
 - tapOn:
     text: "Open"
     optional: true
-# SpringBoard hands the link to the app in its own time, which on a loaded
-# CI simulator has been 20 seconds after the prompt, past a plain assertion's wait.
 - extendedWaitUntil:
     visible: "Sign in"
     timeout: 60000
