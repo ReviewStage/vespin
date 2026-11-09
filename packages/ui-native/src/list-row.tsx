@@ -15,6 +15,7 @@ import {
   foregroundStyle,
   lineLimit,
   listRowBackground,
+  listRowSeparator,
   monospacedDigit,
   padding,
   tag,
@@ -133,7 +134,8 @@ function RowTime({
 
 /**
  * A row's frame in its list: the id its list picks it by, the list's own
- * ground behind it rather than a card's, and its acts. They stand twice, as
+ * ground behind it rather than a card's, no rule between it and the next, as
+ * the panel's rows stand, and its acts. They stand twice, as
  * the system's own rows carry them: behind a swipe from either edge, and in
  * the menu a long press opens, the trailing ones first, so a person who never
  * swipes still finds them.
@@ -149,7 +151,7 @@ function RowFrame({
 }) {
   const colors = useColors();
   const actions = [...trailingActions, ...leadingActions];
-  const frame = [tag(id), listRowBackground("clear")];
+  const frame = [tag(id), listRowBackground("clear"), listRowSeparator("hidden")];
   if (actions.length === 0) return <HStack modifiers={frame}>{row}</HStack>;
   return (
     <SwipeActions modifiers={frame}>
