@@ -2825,17 +2825,12 @@ svg.lucide {
   height: 13px;
 }
 
-/* The field that answers a thread, or starts one, on `@repo/ui`'s
-   `ComposerFrame`: a reply as every box in the window is, an edit in the
-   card's well, a first comment bare on the card. What stands here lays out
-   what it holds. */
+/* The field that answers a thread, starts one, or edits a comment, on the
+   message box (`message-box.tsx`): a reply as every box in the window is, an
+   edit in the card's well, a first comment bare on the card. What stands
+   here lays out what it holds. */
 .comment-field {
   --comment-field-inline: var(--ui-space-8);
-  /* The plain field's insets and height (`PlainCommentText`), the editor's below. */
-  --ui-text-area-inset-start: var(--ui-space-8);
-  --ui-text-area-inset-inline: var(--comment-field-inline);
-  --ui-text-area-inset-end: var(--ui-space-2);
-  --ui-text-area-least: 36px; /* off-scale: one line and its padding, as the editor stands */
   margin-top: var(--ui-control-gap);
 }
 
@@ -2854,23 +2849,20 @@ svg.lucide {
 }
 
 .comment-field .agent-composer-input {
-  min-height: 36px; /* off-scale: one line and its padding, as the plain field stands */
+  min-height: 36px; /* off-scale: one line and its padding */
   padding: var(--ui-row-inset) var(--comment-field-inline) var(--ui-space-2);
   line-height: 1.45;
 }
 
-/* A field's foot, a reply's `ComposerFoot` and an edit's Cancel and Save,
-   holds its tools a size under a page's, at the field's padding; a
-   dictation's strip stands at their height. A finger keeps the page's size,
-   so on a coarse pointer the tools stand a touch target tall and Dictate's
-   press never reaches Reply. */
-.comment-field-foot,
+/* A field's foot, its `ComposerFoot`, holds its tools a size under a
+   page's, at the field's padding; a dictation's strip stands at their
+   height. A finger keeps the page's size, so on a coarse pointer the tools
+   stand a touch target tall and Dictate's press never reaches Reply. */
 .comment-field .ui-composer-foot {
   padding: var(--ui-space-2) var(--ui-item-gap) var(--ui-item-gap);
 }
 
 @media not all and (pointer: coarse) {
-  .comment-field-foot,
   .comment-field .ui-composer-foot {
     --ui-control-height: 26px; /* off-scale: a field's foot holds its tools a size under a page's */
   }
@@ -2879,14 +2871,6 @@ svg.lucide {
 /* The files over a reply's words (`ComposerBody`) stand at its foot's inset. */
 .comment-field .ui-composer-files {
   padding: var(--ui-item-gap) var(--ui-item-gap) 0;
-}
-
-.comment-field-foot {
-  display: flex;
-  min-height: 26px; /* off-scale: as its tools */
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-item-gap);
 }
 
 /* A thread's first comment is the card itself (`COMPOSER_LOOK.BARE`): its
