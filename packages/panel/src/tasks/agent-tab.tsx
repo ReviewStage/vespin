@@ -2447,8 +2447,14 @@ function AgentTranscriptView({
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
     // What stands after the messages is the log's last row, so the virtualizer measures it as it does a message (`ConversationRows`' `foot`).
+    // Note that it stands too while a line not yet sent does, which stays last as the agent's lines land before it, so their landing changes the foot's key, which the virtualizer follows.
     const footed =
-      working || ended !== undefined || endTrail !== undefined || (failed && connected);
+      working ||
+      ended !== undefined ||
+      endTrail !== undefined ||
+      (failed && connected) ||
+      undelivered.size > 0 ||
+      unsent.size > 0;
     const foot = !footed
       ? undefined
       : () => (

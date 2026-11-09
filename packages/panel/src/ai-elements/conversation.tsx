@@ -46,7 +46,9 @@ import {
  * or a reply box, is the run's last row (`foot`), and so is the log's room
  * at its end, which its last row wears (`.conversation-rows > [data-row-last]`, tasks.css). Note
  * that the virtualizer follows a row appended only where the last row's key
- * changes, so the foot is keyed by the line before it.
+ * changes, so the foot is keyed by the lines before it: a line landing
+ * anywhere above it, before a last line that stays as one not yet sent
+ * does, changes it.
  *
  * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
  * the caller asks, and holds its lines in one block of its own inside it
@@ -189,14 +191,15 @@ export function ConversationContent({
 }
 
 /**
- * The key of the log's foot after the line keyed `last`, so a line landing
- * before the foot changes the run's last key, which is what the virtualizer
- * follows. Note that a row's key is one string (`VirtualRows`), so the
- * foot's is the line's with a mark after it, as an Inbox thread's line of
- * what happened is keyed by the message it follows.
+ * The key of the log's foot after `keys`, which changes as a line lands
+ * anywhere before the foot, so the run's last key changes, which is what the
+ * virtualizer follows: by how many lines stand before it, and the last of
+ * them. Note that a row's key is one string (`VirtualRows`), so the foot's
+ * is those with a mark after them, as an Inbox thread's line of what
+ * happened is keyed by the message it follows.
  */
-function footKeyAfter(last: string | undefined): string {
-  return `${last ?? ""}#foot`;
+function footKeyAfter(keys: readonly string[]): string {
+  return `${keys.length}#${keys.at(-1) ?? ""}#foot`;
 }
 
 /**
@@ -243,10 +246,7 @@ export function ConversationRows({
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
   const footed = foot !== undefined;
-  const rows = useMemo(
-    () => (footed ? [...keys, footKeyAfter(keys.at(-1))] : keys),
-    [keys, footed],
-  );
+  const rows = useMemo(() => (footed ? [...keys, footKeyAfter(keys)] : keys), [keys, footed]);
   useImperativeHandle(handle, () => {
     const now = () => run.current;
     return {
