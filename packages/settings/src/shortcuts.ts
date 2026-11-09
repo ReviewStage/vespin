@@ -104,7 +104,6 @@ export const APP_COMMAND = {
   NEW_TERMINAL: "new-terminal",
   MENTION_LINES: "mention-lines",
   GROUP_TASKS_BY_REPOSITORY: "group-tasks-by-repository",
-  GROUP_TASKS_BY_PROGRESS: "group-tasks-by-progress",
   LIST_TASKS_UNGROUPED: "list-tasks-ungrouped",
   SHOW_FINISHED_SUB_TASKS: "show-finished-sub-tasks",
   HIDE_FINISHED_SUB_TASKS: "hide-finished-sub-tasks",
@@ -144,7 +143,6 @@ export type MenuCommand = keyof typeof MENU_COMMAND_LABELS;
 const PALETTE_COMMAND_LABELS = {
   [APP_COMMAND.ADMIN]: "Admin",
   [APP_COMMAND.GROUP_TASKS_BY_REPOSITORY]: "Group tasks by repository",
-  [APP_COMMAND.GROUP_TASKS_BY_PROGRESS]: "Group tasks by progress",
   [APP_COMMAND.LIST_TASKS_UNGROUPED]: "Show tasks in one list",
   [APP_COMMAND.SHOW_FINISHED_SUB_TASKS]: "Show completed sub-tasks",
   [APP_COMMAND.HIDE_FINISHED_SUB_TASKS]: "Hide completed sub-tasks",
