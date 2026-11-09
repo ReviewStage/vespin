@@ -115,7 +115,9 @@ const POST_THREAD_WORDS =
   "do (a to-do: something only they can do by hand, such as changing a GitHub setting, adding a secret, or testing by hand what you could not test yourself; " +
   `its steps, at most ${INBOX_BOUNDS.MAX_STEPS}, say exactly what to do, a command to run in a fenced block in its step, after the words saying where to run it, which they copy whole, and they tick each before they mark it done, or say they couldn't), ` +
   `or answer (one to ${INBOX_BOUNDS.MAX_FIELDS} typed fields, text, number, select with its options and the one you recommend, or boolean, each named by its label and required where it must be filled; ` +
-  "or no fields for an answer in their own words); never end an answer with an optional free-text field, because the reply box under every ask already takes a note; " +
+  "or no fields for an answer in their own words); a text field takes one exact value they type, such as an ID, a name, an address, or a price, " +
+  "never a description of what they saw or think, anything else to add, or the numbers of options to pick, because the reply box under every ask already takes their words: " +
+  `offer up to ${INBOX_BOUNDS.MAX_OPTIONS} options as a decide, multiple where several may be picked, and ask for picks among more as an answer in their own words; ` +
   "never ask for a credential or a secret in a form, since the answer reaches your transcript: " +
   "that is a do the developer does by hand. A post without ask asks nothing: something they should only know, or your reply on the thread. " +
   "It waits until they acknowledge it, which never reaches you unless they write something. " +
