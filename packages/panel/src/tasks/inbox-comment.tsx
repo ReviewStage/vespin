@@ -74,28 +74,36 @@ export function InboxComment({
   trailing?: React.ReactNode;
   /** The message a thread's message comment draws, which a send scrolls to. */
   messageId?: string | undefined;
-  /** Where it stands in the thread's run of rows (`ConversationRows`). */
-  place: VirtualRowPlace;
+  /** Where it stands in the thread's run of rows (`ConversationRows`); none for the reader's draft reply, which docks under the thread. */
+  place?: VirtualRowPlace | undefined;
   children?: React.ReactNode;
 }): React.JSX.Element {
-  return (
+  const comment = (
+    <Comment author={author} nameRef={nameRef} said={said} at={at} now={now} trailing={trailing}>
+      {children === undefined ? undefined : (
+        // Note that the reader's draft reply lets what stands over its box's field, its @ and / lists, run past the comment.
+        <div
+          className={cn(
+            "inbox-comment-body flex min-w-0 flex-col gap-control-gap text-body-size leading-reading text-foreground",
+            kind === COMMENT.DRAFT
+              ? "overflow-visible"
+              : "overflow-clip [overflow-clip-margin:var(--ui-focus-ring-room)]",
+          )}
+          {...(kind === COMMENT.DRAFT ? {} : { [REPLY_SCOPE]: "" })}
+        >
+          {children}
+        </div>
+      )}
+    </Comment>
+  );
+  // Note that a comment docked under the thread is no item of its list.
+  return place === undefined ? (
+    <div className={INBOX_COMMENT} data-inbox-comment={kind} data-message-id={messageId}>
+      {comment}
+    </div>
+  ) : (
     <li {...place} className={INBOX_COMMENT} data-inbox-comment={kind} data-message-id={messageId}>
-      <Comment author={author} nameRef={nameRef} said={said} at={at} now={now} trailing={trailing}>
-        {children === undefined ? undefined : (
-          // Note that the reader's draft reply lets what stands over its box's field, its @ and / lists, run past the comment.
-          <div
-            className={cn(
-              "inbox-comment-body flex min-w-0 flex-col gap-control-gap text-body-size leading-reading text-foreground",
-              kind === COMMENT.DRAFT
-                ? "overflow-visible"
-                : "overflow-clip [overflow-clip-margin:var(--ui-focus-ring-room)]",
-            )}
-            {...(kind === COMMENT.DRAFT ? {} : { [REPLY_SCOPE]: "" })}
-          >
-            {children}
-          </div>
-        )}
-      </Comment>
+      {comment}
     </li>
   );
 }

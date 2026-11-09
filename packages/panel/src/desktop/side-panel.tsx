@@ -76,6 +76,7 @@ import {
   tabKey,
 } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
+import { runHolding } from "@repo/ui/virtual-rows";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { absurd } from "effect";
@@ -102,7 +103,7 @@ import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
 import { ADDRESS, type Address } from "../places/pressed-address.js";
-import { centerWithin } from "../scroll-within.js";
+
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
 import {
@@ -1900,9 +1901,14 @@ function seekCall(callId: string): void {
         `.desktop-task-column [role="log"] [data-call-id="${CSS.escape(callId)}"]`,
       ),
     ready: drawnVisibly,
+    // Note that the log's own virtualizer scrolls it (`runHolding`), so no write beside it undoes one of its own.
     act: (row) => {
       const log = row.closest<HTMLElement>('[role="log"]');
-      if (log !== null) centerWithin(log, row);
+      const run = runHolding(row);
+      if (log === null || run === undefined) return;
+      const room = log.getBoundingClientRect();
+      const line = row.getBoundingClientRect();
+      run.scrollBy(line.top + line.height / 2 - (room.top + room.height / 2));
     },
   });
 }

@@ -1692,15 +1692,16 @@ export function askMarker(pane: HTMLElement): string | null {
 }
 
 /**
- * The reader's draft reply, the thread's last comment: its head, then
+ * The reader's draft reply, docked under the thread: its head, then
  * "controls" where the open question's controls stand in its box over the
  * note, with no words of their own over them, such as what the question
  * asks or the keys that pick it, since the agent's message says it.
  */
 export function draftReply(pane: HTMLElement): (string | null)[] {
   const draft =
-    pane.querySelector<HTMLElement>(".inbox-thread > li:last-child") ?? assert.fail("no thread");
-  assert.strictEqual(draft.dataset.inboxComment, "draft", "the draft reply ends the thread");
+    pane.querySelector<HTMLElement>(".inbox-draft-dock > .inbox-comment") ??
+    assert.fail("no draft reply");
+  assert.strictEqual(draft.dataset.inboxComment, "draft", "the draft reply docks under the thread");
   const head = wordsOf(draft.querySelector(".ui-comment-head"));
   const question = draft.querySelector("form.inbox-answer > [data-inbox-draft-ask]");
   if (question === null) return [head];
