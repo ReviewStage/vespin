@@ -1063,8 +1063,15 @@ it.effect(
       assert.equal(options.env?.PLAYWRIGHT_BROWSERS_PATH, "0");
       // The first turn waits on no server the CLI may connect in the background.
       assert.equal(options.env?.CLAUDE_CODE_MCP_STARTUP_WAIT_MS, "0");
-      // The hour-long prompt cache is on only where the config asks for it.
-      assert.equal(options.env?.ENABLE_PROMPT_CACHING_1H, undefined);
+      // The hour-long prompt cache is on only where the config asks for it, whatever the runner's own environment holds.
+      const inherited = yield* launch(SHORT_TURN, fakeService(), {
+        ...ENV,
+        ENABLE_PROMPT_CACHING_1H: "1",
+      });
+      yield* inherited.write(CONFIG);
+      yield* inherited.write(FIRST_MESSAGE);
+      yield* Fiber.join(inherited.run);
+      assert.equal(inherited.cli.options?.env?.ENABLE_PROMPT_CACHING_1H, undefined);
       const hour = yield* launch(SHORT_TURN, fakeService());
       yield* hour.write({ ...CONFIG, promptCacheHour: true });
       yield* hour.write(FIRST_MESSAGE);
