@@ -6,8 +6,8 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 
 /**
  * The image set the mark is drawn from. The app's config writes it into the
- * asset catalog (`apps/mobile/app.config.ts`'s `withBrandMark`) from the
- * brand's copper PNGs, light and dark, so SwiftUI picks the appearance's own
+ * asset catalog (`apps/mobile/app.config.ts`'s `withImageSets`) from the
+ * brand's copper SVGs, light and dark, so SwiftUI picks the appearance's own
  * and the mark is never redrawn in JavaScript.
  */
 export const BRAND_MARK_ASSET = "BrandMark";

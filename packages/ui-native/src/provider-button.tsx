@@ -18,7 +18,7 @@ import { SPACE } from "./tokens/space.js";
 /**
  * The image sets the providers' marks are drawn from, which the app's config
  * writes into its asset catalog (`apps/mobile/app.config.ts`'s
- * `withProviderMarks`) from the brand's own paths: GitHub's a template drawn
+ * `withImageSets`) from the brand's own paths: GitHub's a template drawn
  * in the button's ink, Google's in its own colors.
  */
 export const PROVIDER_MARK_ASSET = {
