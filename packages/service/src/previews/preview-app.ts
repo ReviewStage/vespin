@@ -85,11 +85,15 @@ const NOT_SIGNED_IN = "Sign in to view this preview.";
 const NOT_SHARED = "This preview isn't shared right now. Ask whoever shared it to share it again.";
 const WAKING = "Waking up the preview. This page reloads when it's ready.";
 
-/** How often the waking page reloads itself. */
-const WAKING_RELOAD_SECONDS = 2;
+/** How often the waking page asks whether the preview is ready. */
+const WAKING_POLL_SECONDS = 2;
 
-/** The page a visit sees while the agent's sandbox or its server comes up, reloading itself until the preview answers. */
-const WAKING_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="${WAKING_RELOAD_SECONDS}"><title>Waking up the preview</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#444;text-align:center}h1{font-size:17px;color:#111;margin:0 0 6px}</style></head><body><main><h1>Waking up the preview</h1><p>This page reloads when it's ready.</p></main></body></html>`;
+/**
+ * The page a visit sees while the agent's sandbox or its server comes up: it
+ * asks the preview's status path in the background and reloads once, when
+ * the preview answers. Without script it reloads itself instead.
+ */
+const WAKING_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><noscript><meta http-equiv="refresh" content="5"></noscript><title>Waking up the preview</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#444;text-align:center}h1{font-size:17px;color:#111;margin:0 0 6px}</style></head><body><main><h1>Waking up the preview</h1><p>This page reloads when it's ready.</p></main><script>(function poll(){fetch("${PREVIEW_LINK.STATUS_PATH}",{cache:"no-store",credentials:"same-origin"}).then(function(r){return r.ok?r.json():{ready:false}}).catch(function(){return {ready:false}}).then(function(s){if(s.ready)location.reload();else setTimeout(poll,${WAKING_POLL_SECONDS * 1000})})})()</script></body></html>`;
 
 /** The page sandbox, or not found on a deployment that has none. */
 const pageSandbox = Effect.gen(function* () {
@@ -218,7 +222,7 @@ function notShared() {
 
 /** What a visit is answered while the sandbox or its server comes up: a page that reloads itself for a page load, a bare 503 for anything else. */
 function wakingPage(request: Request) {
-  const headers = { ...NEVER_KEPT, "Retry-After": String(WAKING_RELOAD_SECONDS) };
+  const headers = { ...NEVER_KEPT, "Retry-After": String(WAKING_POLL_SECONDS) };
   if (request.headers.get("sec-fetch-mode") !== "navigate") {
     return HttpServerResponse.text(WAKING, {
       status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
@@ -231,6 +235,27 @@ function wakingPage(request: Request) {
     headers,
   });
 }
+
+/** The status path's answer: whether a reload would now show the preview, never kept by the CDN. */
+function statusAnswer(ready: boolean) {
+  return HttpServerResponse.text(JSON.stringify({ ready }), {
+    status: HOSTED_HTTP_STATUS.OK,
+    contentType: "application/json",
+    headers: NEVER_KEPT,
+  });
+}
+
+/** Whether the shared port's server answers through its route, rather than the relay saying it is still starting. */
+const serverAnswers = (upstream: string) =>
+  Effect.tryPromise(() => fetch(upstream, { redirect: "manual" })).pipe(
+    Effect.map((answered) => {
+      void answered.body?.cancel();
+      return (
+        !answered.headers.has(STARTING_HEADER) && answered.status < HOSTED_HTTP_STATUS.BAD_GATEWAY
+      );
+    }),
+    Effect.orElseSucceed(() => false),
+  );
 
 /** The request passed on to the shared port's route, and its answer passed back, a redirect to the route's own address turned to the preview's. */
 const passedOn = (request: Request, upstream: string, origin: string, asked: string) =>
@@ -308,18 +333,21 @@ const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =
         }),
         seams.sandbox,
       );
+    const status = asked.split("?")[0] === PREVIEW_LINK.STATUS_PATH;
     const preview = yield* onSandbox((agent) => agent.preview(sessionId));
-    if (preview.kind === PREVIEW_STANDING.NONE) return notShared();
+    // Note that a share gone while the page waited reloads it too, so it shows why.
+    if (preview.kind === PREVIEW_STANDING.NONE) return status ? statusAnswer(true) : notShared();
     if (preview.kind === PREVIEW_STANDING.WAKING) {
-      // Note that the visit answers at once and the resume runs after it, so the waking page reloads until the sandbox is up.
+      // Note that the visit answers at once and the resume runs after it, so the waking page asks again until the sandbox is up.
       if (preview.state === SANDBOX_STATE.STOPPED) {
         yield* afterResponse(
           "a preview woke its agent's sandbox",
           Effect.ignore(onSandbox((agent) => agent.resume(sessionId))),
         );
       }
-      return wakingPage(request);
+      return status ? statusAnswer(false) : wakingPage(request);
     }
+    if (status) return statusAnswer(yield* serverAnswers(preview.url));
     if (now - (touched.get(preview.name) ?? 0) >= Duration.toMillis(SANDBOX_TOUCH_EVERY)) {
       touched.set(preview.name, now);
       yield* afterResponse("a preview kept its agent's sandbox up", touchSandbox(preview.name));
