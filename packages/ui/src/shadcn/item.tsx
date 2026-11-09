@@ -34,7 +34,8 @@ import { cn } from "../cn.js";
  *   rather than being cut, and `ItemTitle` stands only where the label
  *   carries an adornment, the two wrapping between each other.
  *   `ItemActions` ends the line and wraps its controls, and stands nowhere
- *   while it holds none.
+ *   while it holds none; which end of its box they wrap toward is the row's
+ *   sheet's, since a dropped row's start where its words do.
  * - `ItemGroup`, `ItemSeparator`, `ItemHeader`, and `ItemFooter` are
  *   dropped, because nothing draws them: a section's card holds and rules
  *   its rows (`components/settings-section/`).
@@ -136,7 +137,7 @@ function ItemActions({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="item-actions"
       className={cn(
-        "ui-settings-row-controls flex min-w-0 flex-initial flex-wrap items-center justify-end gap-control-gap empty:hidden",
+        "ui-settings-row-controls flex min-w-0 flex-initial flex-wrap items-center gap-control-gap empty:hidden",
         className,
       )}
       {...props}

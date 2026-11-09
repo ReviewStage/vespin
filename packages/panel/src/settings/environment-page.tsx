@@ -70,7 +70,8 @@ const NO_CAPTURE = "ph-no-capture";
 /** A variable's row while the names are read. */
 const VARIABLE_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: false,
-  controls: [SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
 /** Whether a name is one the service takes, so Save waits for one it would not refuse by shape. */

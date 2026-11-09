@@ -52,6 +52,7 @@
     "anti-slop/no-shadcn-focus-ring": "error",
     "anti-slop/no-source-read-in-test": "error",
     "anti-slop/retired": "error",
+    "anti-slop/settings-row-end": "error",
     "anti-slop/skeleton-through-components": "error"
   },
   "overrides": [

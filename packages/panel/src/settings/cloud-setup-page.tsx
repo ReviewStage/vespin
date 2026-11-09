@@ -69,7 +69,8 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 /** A script's row while the setup is read. */
 const SCRIPT_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: false,
-  controls: [SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
 /** The most lines a script stands at under its row before it scrolls. */

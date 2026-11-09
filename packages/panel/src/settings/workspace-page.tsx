@@ -310,14 +310,16 @@ const MEMBER_ESTIMATE_PX = 60;
 const MEMBER_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: true,
   mark: actorMarkWidth(ACTOR_SIZE.CARD),
-  controls: [SETTINGS_SKELETON_CONTROL.VALUE, SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [SETTINGS_SKELETON_CONTROL.VALUE],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
 /** An invitation's row while the invitations are read: the invited face, the role and expiry under the email, Copy link and the ⋯. */
 const INVITATION_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: true,
   mark: actorMarkWidth(ACTOR_SIZE.CARD),
-  controls: [SETTINGS_SKELETON_CONTROL.BUTTON, SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
 /** The services the Workspace connections group draws a row for, in order, each by its own row. */
@@ -350,6 +352,7 @@ const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonShape[] = [
       described: true,
       mark: SETTINGS_ROW_MARK_WIDTH,
       controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
+      end: [SETTINGS_SKELETON_CONTROL.MORE],
     })),
   },
 ];
@@ -526,12 +529,8 @@ function MemberRow({
             </OneLine>
           ),
           error: replayMaskedError(refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_MEMBER)),
-          control: (
-            <>
-              <SettingsRowValue>{ROLE_WORDS[member.role]}</SettingsRowValue>
-              {slotted && !acting ? <SettingsRowActSlot /> : null}
-            </>
-          ),
+          control: <SettingsRowValue>{ROLE_WORDS[member.role]}</SettingsRowValue>,
+          end: slotted && !acting ? <SettingsRowActSlot /> : null,
         }}
       />
       <ConfirmDialog
@@ -1146,7 +1145,7 @@ function ManagedGitHub({
   add: React.ReactNode;
   /** What the last add was refused with, said under the row. */
   addRefusal: string | undefined;
-  /** The chevron folding GitHub's accounts under the row, last at its end. */
+  /** The chevron folding GitHub's accounts under the row, last in its end. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
   const { mutateAsync: sendWorkspaceGithubConnect } = useMutation(
@@ -1179,6 +1178,7 @@ function ManagedGitHub({
         error={replayMaskedError(
           refusedShown(refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
         )}
+        end={() => chevron}
       >
         {() => (
           <>
@@ -1203,7 +1203,6 @@ function ManagedGitHub({
                 {CONNECT}
               </Button>
             )}
-            {chevron}
           </>
         )}
       </SettingsRow>
@@ -1253,13 +1252,9 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
             label="GitHub"
             description={connectionLine(connections.length > 0, false)}
             error={replayMaskedError(refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB))}
+            end={() => chevron}
           >
-            {() => (
-              <>
-                {add}
-                {chevron}
-              </>
-            )}
+            {() => add}
           </SettingsRow>
         )
       }
@@ -1370,8 +1365,8 @@ function ManagedSentry({
                 {CONNECT}
               </Button>
             ),
-          // Note that Sentry folds nothing, so it keeps the chevron's room for its controls to end in GitHub's and Slack's column.
-          chevron: <SettingsRowActSlot />,
+          // Note that Sentry folds nothing, so it keeps the chevron's room for its end to stand in GitHub's and Slack's column.
+          end: <SettingsRowActSlot />,
         }}
       />
       <ConfirmDialog
@@ -1445,7 +1440,7 @@ function ManagedSlackBot({
   workspace: Workspace;
   slack: WorkspaceSlack;
   channels: readonly SlackListedChannel[] | undefined;
-  /** The chevron folding the bot's rows under its row, last at its end. */
+  /** The chevron folding the bot's rows under its row, last in its end. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
   const { mutateAsync: sendWorkspaceSlackBotConnect } = useMutation(
@@ -1527,7 +1522,7 @@ function ManagedSlackBot({
                 {CONNECT}
               </Button>
             ),
-          chevron,
+          end: chevron,
         }}
       />
       <ConfirmDialog
@@ -1634,9 +1629,8 @@ function SlackBotRows({
           leading={SLACK_MARK}
           label="Slack"
           description={connectionLine(slack.team !== undefined, false)}
-        >
-          {() => chevron}
-        </SettingsRow>
+          end={() => chevron}
+        />
       )}
       rows={
         slack.team === undefined ? undefined : <SlackNotificationsRow workspaceId={workspace.id} />

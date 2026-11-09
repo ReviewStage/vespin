@@ -104,7 +104,8 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 /** An installed skill's row while the skills are read: its book, its words over its source, and its ⋯. */
 const SKILL_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: true,
-  controls: [SETTINGS_SKELETON_CONTROL.MORE],
+  controls: [],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
   mark: SETTINGS_ROW_MARK_WIDTH,
 };
 

@@ -221,7 +221,8 @@ const SECTIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
     headed: true,
     rows: Array.from({ length: CLIENT_SKELETON_ROWS }, () => ({
       described: true,
-      controls: [SETTINGS_SKELETON_CONTROL.MORE],
+      controls: [],
+      end: [SETTINGS_SKELETON_CONTROL.MORE],
     })),
   },
   {

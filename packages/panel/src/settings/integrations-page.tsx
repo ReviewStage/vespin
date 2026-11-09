@@ -138,7 +138,8 @@ const INTEGRATIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
     rows: INTEGRATION_PROVIDER_LIST.slice(0, CONNECTED_SKELETON_ROWS).map(() => ({
       described: true,
       mark: SETTINGS_ROW_MARK_WIDTH,
-      controls: [SETTINGS_SKELETON_CONTROL.MORE],
+      controls: [],
+      end: [SETTINGS_SKELETON_CONTROL.MORE],
     })),
   },
   {

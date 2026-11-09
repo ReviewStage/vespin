@@ -90,8 +90,10 @@ export const SETTINGS_ROW_MARK_WIDTH = "var(--ui-settings-row-mark-size)";
 export interface SettingsRowSkeletonShape {
   /** Whether the row that lands carries a description under its label. */
   readonly described: boolean;
-  /** The controls at its end, in order; none where it ends in nothing. */
+  /** The controls before its end, in order; none where it has none. */
   readonly controls: readonly SettingsSkeletonControl[];
+  /** What its end holds (`SettingsRow`'s `end`): its ⋯, a chevron, or the room of one; none where it has no end. */
+  readonly end?: readonly SettingsSkeletonControl[] | undefined;
   /** How wide the face or mark it leads with stands, a length; none where it leads with none. */
   readonly mark?: string | undefined;
 }
@@ -163,6 +165,14 @@ function RowSkeleton({
         shape.mark === undefined ? undefined : (
           <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={shape.mark} />
         )
+      }
+      end={
+        shape.end === undefined || shape.end.length === 0
+          ? undefined
+          : () =>
+              shape.end?.map((control, place) => (
+                <SettingsControlSkeleton key={place} control={control} />
+              ))
       }
     >
       {() =>

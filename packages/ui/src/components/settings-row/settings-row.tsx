@@ -28,9 +28,16 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * that was refused is one the developer believes landed. The row is its own inline-size
  * container, so where its controls stand is decided by the row's width and
  * not the window's: at any width they stay on the name's line while the
- * words keep a legible stretch beside them, and drop below the words to the
- * row's end wherever they would leave the words less; under 380px the name
- * keeps to one line, fading where it is cut, so only the description wraps.
+ * words keep a legible stretch beside them, and drop below the words,
+ * starting where the words start, wherever they would leave the words less;
+ * under 380px the name keeps to one line, fading where it is cut, so only
+ * the description wraps.
+ *
+ * What the row ends in, its ⋯, a fold's chevron, a dismiss, is its `end`:
+ * quiet presses a glyph wide that stand last on the name's line at any
+ * width, centered on the row, as a phone's list keeps a cell's chevron, so
+ * a row whose controls drop keeps its end where every other row's stands
+ * rather than carrying it down with them.
  * The row owns its padding, the least height its profile gives a row (the
  * window's rows stand even whether or not they carry a description), and the
  * room between its parts; its edges and the rules between rows are its
@@ -209,6 +216,7 @@ export function SettingsRow({
   controls = SETTINGS_ROW_CONTROLS.DROP,
   landed = false,
   children,
+  end,
   below,
 }: {
   label: ReactNode;
@@ -231,8 +239,10 @@ export function SettingsRow({
   controls?: SettingsRowControls | undefined;
   /** Whether the row just arrived, which lights it once. */
   landed?: boolean | undefined;
-  /** The row's controls at its end, handed the row's ids to name and describe them by. */
+  /** The row's controls, handed the row's ids to name and describe them by; they drop below the words where they would leave them less than a legible stretch. */
   children?: ((control: SettingsRowControl) => ReactNode) | undefined;
+  /** What the row ends in at any width, on its name's line after its controls: its ⋯, a fold's chevron, a dismiss. */
+  end?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the row grows under its words and owns alone, handed the same ids; never a page's layout. */
   below?: ((control: SettingsRowControl) => ReactNode) | undefined;
 }): React.JSX.Element {
@@ -266,37 +276,45 @@ export function SettingsRow({
       data-indent={indent}
       data-labels-control={labelsControl}
       data-controls={controls}
+      data-led={led}
       {...landedMark(landed, LANDED.WITHIN)}
     >
       <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
-        <div
-          className={
-            density === SETTINGS_ROW_DENSITY.COMPACT
-              ? "ui-settings-row-line flex flex-wrap items-center"
-              : "ui-settings-row-line flex items-center"
-          }
-        >
-          <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
-            {led ? (
-              <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
-                {leading}
-              </ItemMedia>
-            ) : null}
-            <ItemContent>
-              {said(adornment) ? (
-                <ItemTitle className={ADORNED_TITLE_CLASS}>
-                  {name}
-                  {adornment}
-                </ItemTitle>
-              ) : (
-                name
-              )}
-              {described ? (
-                <ItemDescription id={descriptionId}>{description}</ItemDescription>
+        <div className="ui-settings-row-line flex items-center">
+          <div
+            className={
+              density === SETTINGS_ROW_DENSITY.COMPACT
+                ? "ui-settings-row-main flex min-w-0 flex-1 flex-wrap items-center"
+                : "ui-settings-row-main flex min-w-0 flex-1 items-center"
+            }
+          >
+            <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
+              {led ? (
+                <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
+                  {leading}
+                </ItemMedia>
               ) : null}
-            </ItemContent>
+              <ItemContent>
+                {said(adornment) ? (
+                  <ItemTitle className={ADORNED_TITLE_CLASS}>
+                    {name}
+                    {adornment}
+                  </ItemTitle>
+                ) : (
+                  name
+                )}
+                {described ? (
+                  <ItemDescription id={descriptionId}>{description}</ItemDescription>
+                ) : null}
+              </ItemContent>
+            </div>
+            <ItemActions>{children?.(control)}</ItemActions>
           </div>
-          <ItemActions>{children?.(control)}</ItemActions>
+          {end === undefined ? null : (
+            <div className="ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden">
+              {end(control)}
+            </div>
+          )}
         </div>
         {below === undefined ? null : (
           <div

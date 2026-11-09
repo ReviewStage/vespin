@@ -77,21 +77,19 @@ export function MicrophoneSection({
             </Inline>
           }
           description={row.detail}
+          end={() =>
+            row.offerSystemSettings ? (
+              <Tooltip label={OPEN_PRIVACY}>
+                <IconButton
+                  icon={<ExternalIcon />}
+                  label={OPEN_PRIVACY}
+                  onClick={microphone.onOpenSettings}
+                />
+              </Tooltip>
+            ) : null
+          }
         >
-          {() => (
-            <>
-              {row.offerSystemSettings ? (
-                <Tooltip label={OPEN_PRIVACY}>
-                  <IconButton
-                    icon={<ExternalIcon />}
-                    label={OPEN_PRIVACY}
-                    onClick={microphone.onOpenSettings}
-                  />
-                </Tooltip>
-              ) : null}
-              {row.offerAccess ? <AllowMicrophone microphone={microphone} /> : null}
-            </>
-          )}
+          {() => (row.offerAccess ? <AllowMicrophone microphone={microphone} /> : null)}
         </SettingsRow>
       </div>
       <SchemaSettingRows

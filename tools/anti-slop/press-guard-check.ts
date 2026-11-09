@@ -23,6 +23,7 @@ import {
 } from "./shared/press-guard.ts";
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
+import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";
 import { SHADCN_FOCUS_GUARD_RULE, SHADCN_SOURCE } from "./shared/shadcn-focus-guard.ts";
 import { SKELETON_GUARD_RULE } from "./shared/skeleton-guard.ts";
 import {
@@ -40,8 +41,9 @@ import {
  * directive that would silence `no-raw-press-outside-ui`, on one outside
  * `@repo/ui-native` holding one that would silence
  * `no-raw-press-outside-ui-native`, on any JSX-capable
- * file holding one that would silence `skeleton-through-components` or
- * `async-press-needs-busy`, whose baseline is the only way past it, on a
+ * file holding one that would silence `skeleton-through-components`,
+ * `settings-row-end`, or `async-press-needs-busy`, whose baseline is the
+ * only way past it, on a
  * JSX-capable file outside `@repo/ui` holding one that would silence
  * `no-open-page-from-button`, `no-raw-heading-outside-ui` or
  * `no-hand-written-live-region`, on any TypeScript file outside `@repo/ui`
@@ -101,6 +103,13 @@ const GUARDS = [
     sources: JSX_SOURCE,
     watches: (absolute: string) => isOutsideUiNative(absolute),
     remedy: "Move the press onto a @repo/ui-native component or variant instead",
+  },
+  {
+    rule: SETTINGS_ROW_END_GUARD_RULE,
+    sources: JSX_SOURCE,
+    watches: () => true,
+    remedy:
+      "Stand the ⋯, chevron, or other glyph-wide press in the row's `end`, which keeps to the name's line at any width",
   },
   {
     rule: SKELETON_GUARD_RULE,

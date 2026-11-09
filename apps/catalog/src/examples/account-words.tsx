@@ -92,13 +92,9 @@ function Rows(): React.JSX.Element {
               </SettingsRowStateLine>
             )
           }
+          end={() => <MoreButton thing={row.name} />}
         >
-          {() => (
-            <>
-              {row.expired ? <Button variant={BUTTON_VARIANT.OUTLINE}>Reconnect</Button> : null}
-              <MoreButton thing={row.name} />
-            </>
-          )}
+          {() => (row.expired ? <Button variant={BUTTON_VARIANT.OUTLINE}>Reconnect</Button> : null)}
         </SettingsRow>
       ))}
     </SettingsSection>

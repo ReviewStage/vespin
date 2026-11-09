@@ -26,6 +26,7 @@ import { noRunPromiseOutsideEdgesRule } from "./rules/no-run-promise-outside-edg
 import { noShadcnFocusRingRule } from "./rules/no-shadcn-focus-ring.ts";
 import { noSourceReadInTestRule } from "./rules/no-source-read-in-test.ts";
 import { retiredRule } from "./rules/retired.ts";
+import { settingsRowEndRule } from "./rules/settings-row-end.ts";
 import { skeletonThroughComponentsRule } from "./rules/skeleton-through-components.ts";
 
 /**
@@ -34,7 +35,7 @@ import { skeletonThroughComponentsRule } from "./rules/skeleton-through-componen
  * forms the browser checks with its own bubble, loading skeletons that copy the surface they stand for, buttons that wait on a press without saying so, buttons that open a page, placeholders that end in an ellipsis,
  * popovers that close on a press through a listener of their own, view choices stored by hand rather than through `useKept`, a follow
  * opened beside the live reads' queries, a vendored
- * shadcn component hiding the keyboard's ring, a script asking the OS whether to move rather than the motion tokens, and the classes, glyphs and patterns phase 2 retired coming back; and the testing policy's
+ * shadcn component hiding the keyboard's ring, a script asking the OS whether to move rather than the motion tokens, a settings row's ⋯ or chevron standing among the controls that drop below its words, and the classes, glyphs and patterns phase 2 retired coming back; and the testing policy's
  * guards against a test that mocks a module of this repository, runs less than it declares, or reads source text.
  */
 const antiSlopPlugin = eslintCompatPlugin({
@@ -66,6 +67,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "no-shadcn-focus-ring": noShadcnFocusRingRule,
     "no-source-read-in-test": noSourceReadInTestRule,
     retired: retiredRule,
+    "settings-row-end": settingsRowEndRule,
     "skeleton-through-components": skeletonThroughComponentsRule,
   },
 });

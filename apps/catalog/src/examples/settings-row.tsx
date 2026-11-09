@@ -275,13 +275,12 @@ function StateRows(): React.JSX.Element {
       >
         {() => null}
       </SettingsRow>
-      <SettingsRow label="Ada Lovelace" description="ada@example.com">
-        {() => (
-          <>
-            <SettingsRowValue>Admin</SettingsRowValue>
-            <SettingsRowActSlot />
-          </>
-        )}
+      <SettingsRow
+        label="Ada Lovelace"
+        description="ada@example.com"
+        end={() => <SettingsRowActSlot />}
+      >
+        {() => <SettingsRowValue>Admin</SettingsRowValue>}
       </SettingsRow>
     </SettingsSection>
   );
@@ -415,16 +414,19 @@ function RowsFoldRows(): React.JSX.Element {
               </SettingsRowStateLine>
             }
             leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
+            end={() => chevron}
           >
             {() => (
               <>
+                <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />}>
+                  Add repository
+                </Button>
                 <Button
                   variant={BUTTON_VARIANT.OUTLINE}
                   icon={<ExternalLinkIcon aria-hidden="true" />}
                 >
                   Manage on GitHub
                 </Button>
-                {chevron}
               </>
             )}
           </SettingsRow>
@@ -454,15 +456,17 @@ function RowsFoldRows(): React.JSX.Element {
               </SettingsRowStateLine>
             }
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
-          >
-            {() => (
+            end={() => (
               <>
-                <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />}>
-                  Add channel
-                </Button>
                 <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
                 {chevron}
               </>
+            )}
+          >
+            {() => (
+              <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />}>
+                Add channel
+              </Button>
             )}
           </SettingsRow>
         )}
@@ -491,14 +495,13 @@ function RowsFoldRows(): React.JSX.Element {
               </SettingsRowStateLine>
             }
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
-          >
-            {() => (
+            end={() => (
               <>
                 <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
                 {chevron}
               </>
             )}
-          </SettingsRow>
+          />
         )}
       />
     </SettingsSection>

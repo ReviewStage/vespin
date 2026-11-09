@@ -141,7 +141,7 @@ const WORDS = {
 
 /** The row that stands while the machines are read: a machine with its ⋯. */
 const HOSTS_SKELETON: readonly SettingsRowSkeletonShape[] = [
-  { described: true, controls: [SETTINGS_SKELETON_CONTROL.MORE] },
+  { described: true, controls: [], end: [SETTINGS_SKELETON_CONTROL.MORE] },
 ];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };

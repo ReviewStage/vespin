@@ -23,9 +23,10 @@ import {
 /**
  * settings-row-fold.tsx -- a settings row that folds open what it owns under its words, a line each, as a GitHub account its repositories.
  *
- * The row is `SettingsRow` as it stands, its chevron last at its end, a
- * quiet `IconButton` after any ⋯ the row holds, so every fold row's chevron
- * stands in one column, which turns as the fold opens and
+ * The row is `SettingsRow` as it stands, its chevron last in the row's
+ * `end`, a quiet `IconButton` after any ⋯ the row holds, so every fold
+ * row's chevron stands in one column on the name's line at any width,
+ * which turns as the fold opens and
  * says whether it is open in `aria-expanded`. The fold
  * stands in the row's own `below`, inside the row's rule and inset to its
  * words, so what it holds reads as part of the row rather than a box of its
@@ -44,7 +45,7 @@ import {
  *
  * A row that owns whole rows rather than lines, as an integration its
  * accounts or channels, folds them with `SettingsRowsFold`: the same
- * chevron last at the head row's end, and the rows after it in a box of
+ * chevron, which the head row stands last in its `end`, and the rows after it in a box of
  * their own, each a row of the card in its own right, ruled as the card's
  * own (settings-section.css). Note that a closed fold hides its rows rather
  * than letting them go, because a row keeps what it is waiting on, such as
@@ -75,7 +76,7 @@ const LINES = "ui-settings-row-fold-lines m-0 flex list-none flex-col gap-ui-4 p
 /**
  * A row named `label` that folds `children` open under its words, its
  * chevron named `foldLabel`, open at first where `defaultOpen` says, and
- * the row's other controls, such as its ⋯, before the chevron at its end.
+ * the row's ⋯ (`actions`) before the chevron in its end.
  */
 export function SettingsFoldRow({
   label,
@@ -96,7 +97,7 @@ export function SettingsFoldRow({
   /** The chevron's name, which a sighted reader has from the row ("Repositories of acme"). */
   foldLabel: string;
   defaultOpen?: boolean | undefined;
-  /** The row's other controls, handed its ids, standing before the chevron. */
+  /** The row's ⋯ or another glyph-wide press, handed its ids, standing before the chevron in the row's end. */
   actions?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** The fold's many lines, drawn only near the view, before `children`. */
   run?: SettingsFoldRun | undefined;
@@ -145,8 +146,7 @@ export function SettingsFoldRow({
               )
             : undefined
         }
-      >
-        {(control) => (
+        end={(control) => (
           <>
             {actions?.(control)}
             <IconButton
@@ -157,7 +157,7 @@ export function SettingsFoldRow({
             />
           </>
         )}
-      </SettingsRow>
+      />
     </DisclosureScope>
   );
 }
@@ -165,7 +165,7 @@ export function SettingsFoldRow({
 /**
  * A head row and the rows it owns under it, closed until its chevron is
  * pressed: `head` draws the row, handed the chevron (named `label`) to
- * stand last at its end, or, where there are no `rows` to fold, the
+ * stand last in the row's `end`, or, where there are no `rows` to fold, the
  * chevron's room alone, so the controls of every row in the card end in one
  * column whether it folds or not.
  */
@@ -176,7 +176,7 @@ export function SettingsRowsFold({
 }: {
   /** The chevron's name, which a sighted reader has from the head row ("GitHub's accounts"). */
   label: string;
-  /** The head row, handed the chevron to draw after its other controls. */
+  /** The head row, handed the chevron to draw last in its `end`. */
   head: (chevron: ReactNode) => ReactNode;
   /** The rows the fold owns, or nothing where it owns none now. */
   rows?: ReactNode;
