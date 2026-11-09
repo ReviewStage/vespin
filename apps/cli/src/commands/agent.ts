@@ -497,7 +497,7 @@ const continueCommand = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Continue an agent as a new one on its task, handed its brief and transcript, as the app's Continue does; the agent is stopped. --at forks it at a message instead, and it goes on",
+    "Continue an agent as a new one on its task, handed its brief and transcript, as the app's Continue does; the agent is stopped, and the new one runs as you, on your own plan. --at forks it at a message instead, and it goes on",
   ),
   Command.withExamples([
     {
