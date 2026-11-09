@@ -1,0 +1,152 @@
+name: Release iOS
+
+# Builds Vespin's iOS app (apps/mobile) and uploads it to App Store Connect,
+# where TestFlight picks it up. It runs on an ios-v<version> tag, whose version
+# must match app.config.ts's, and on a manual dispatch, which uploads the same
+# way: a TestFlight build is a rehearsal of its own, since nothing reaches a
+# tester until it is added to a group.
+#
+# Expo generates the native project, Xcode archives it with automatic signing
+# through an App Store Connect API key of its own, apart from the one the Mac
+# release notarizes with, and exports it straight to App Store Connect. The
+# build number is the run's, so every upload is one TestFlight has not seen.
+
+on:
+  push:
+    tags:
+      - "ios-v*"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Whether the signing secrets and the team exist, asked in a step because a
+  # job-level `if` cannot read the `secrets` context. The expression compares
+  # to empty and never prints a secret.
+  gate:
+    name: Check for signing secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      signable: ${{ steps.check.outputs.signable }}
+    steps:
+      - id: check
+        env:
+          SIGNABLE: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 != '' && secrets.APP_STORE_CONNECT_KEY_ID != '' && secrets.APP_STORE_CONNECT_ISSUER_ID != '' && vars.APPLE_TEAM_ID != '' }}
+        run: echo "signable=$SIGNABLE" >> "$GITHUB_OUTPUT"
+
+  testflight:
+    name: Archive and upload to TestFlight
+    # A tag push without the secrets skips this job cleanly; a manual dispatch
+    # runs it regardless, so it fails loudly at the check below.
+    needs: gate
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.gate.outputs.signable == 'true' }}
+    # GitHub's Xcode 27 image, as ci.yml's iOS job uses: macos-26 has no Xcode 27.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      EXPO_NO_TELEMETRY: "1"
+      LANG: en_US.UTF-8
+      VESPIN_IOS_BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: "27.1"
+
+      - name: Check release secrets
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+        run: |
+          for secret_name in \
+            APP_STORE_CONNECT_KEY_P8_BASE64 \
+            APP_STORE_CONNECT_KEY_ID \
+            APP_STORE_CONNECT_ISSUER_ID; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "error: required GitHub Actions secret is missing: $secret_name" >&2
+              exit 1
+            fi
+          done
+          if [[ -z "$APPLE_TEAM_ID" ]]; then
+            echo "error: required GitHub Actions variable is missing: APPLE_TEAM_ID" >&2
+            exit 1
+          fi
+
+      - uses: ./.github/actions/setup
+
+      - name: Resolve release version
+        working-directory: apps/mobile
+        run: |
+          config=$(pnpm exec expo config --type public --json)
+          VERSION=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).version)' "$config")
+          BUILD_NUMBER=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).ios.buildNumber)' "$config")
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF" != "refs/tags/ios-v$VERSION" ]]; then
+            echo "error: tag $GITHUB_REF does not match the app's version ios-v$VERSION" >&2
+            exit 1
+          fi
+          if [[ "$BUILD_NUMBER" != "$VESPIN_IOS_BUILD_NUMBER" ]]; then
+            echo "error: app.config.ts names build $BUILD_NUMBER, not the run's $VESPIN_IOS_BUILD_NUMBER" >&2
+            exit 1
+          fi
+          echo "Vespin $VERSION ($BUILD_NUMBER)"
+
+      - name: Generate the native project
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform ios --clean
+
+      - name: Archive, export, and upload
+        working-directory: apps/mobile
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+        run: |
+          set -o pipefail
+          key_directory=$(mktemp -d "$RUNNER_TEMP/vespin-asc.XXXXXX")
+          trap 'rm -rf "$key_directory"' EXIT
+          key_path="$key_directory/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8"
+          printf '%s' "$APP_STORE_CONNECT_KEY_P8_BASE64" | /usr/bin/base64 -D > "$key_path"
+          chmod 600 "$key_path"
+          archive_path="$RUNNER_TEMP/Vespin.xcarchive"
+          authentication=(
+            -allowProvisioningUpdates
+            -authenticationKeyPath "$key_path"
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          )
+
+          xcodebuild \
+            -workspace ios/Vespin.xcworkspace \
+            -scheme Vespin \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$archive_path" \
+            "${authentication[@]}" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            archive | xcbeautify
+
+          entitlements=$(codesign -d --entitlements - --xml "$archive_path/Products/Applications/Vespin.app" 2>/dev/null)
+          if ! grep -q "aps-environment" <<< "$entitlements"; then
+            echo "error: the archived app carries no aps-environment entitlement" >&2
+            exit 1
+          fi
+
+          export_options="$key_directory/ExportOptions.plist"
+          cp release/ExportOptions.plist "$export_options"
+          plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$archive_path" \
+            -exportOptionsPlist "$export_options" \
+            -exportPath "$key_directory/export" \
+            "${authentication[@]}" | xcbeautify

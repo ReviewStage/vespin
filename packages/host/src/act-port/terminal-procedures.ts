@@ -27,8 +27,7 @@ import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
 import { TERMINAL_ACT_KIND, type TerminalActKind } from "../contract/index.js";
 import type { HostOperator } from "../host-operator.js";
-import { actPortFor, refuseUnlessPanel } from "./base.js";
-import type { PlatformActProcedures } from "./index.js";
+import { actPortFor, type PlatformActProcedures, refuseUnlessPanel } from "./base.js";
 
 /** The host's end of one attached shell's channel. */
 export interface HostTerminalPort {

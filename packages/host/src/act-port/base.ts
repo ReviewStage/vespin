@@ -1,9 +1,15 @@
 import "@orpc/experimental-effect/extensions/effect";
 import { createORPCErrorConstructorMap } from "@orpc/contract";
 import type { WithEffectContext } from "@orpc/experimental-effect";
-import { type AnyProcedure, implement, ORPCError } from "@orpc/server";
+import { type AnyProcedure, type ContractedRouter, implement, ORPCError } from "@orpc/server";
 import { Effect } from "effect";
-import { ACT_ERROR, actPortContract, panelOnlyOf } from "../contract/index.js";
+import {
+  ACT_ERROR,
+  type actContract,
+  actPortContract,
+  type PlatformPortActKind,
+  panelOnlyOf,
+} from "../contract/index.js";
 
 /**
  * base.ts -- the implementer every act procedure is built from: who asked, and the refusal of a sender this build does not trust.
@@ -78,3 +84,13 @@ export function actPortFor<Sender>() {
 
 /** The act contract to implement, for the host's own procedures, which read no platform's handle on a window. */
 export const actPort = actPortFor<unknown>();
+
+/**
+ * The procedures a platform answers itself, built from `actPortFor`: every
+ * port kind that reaches its windows, ports, or system, and none of the
+ * host's, so each kind has its procedure on exactly one side.
+ */
+export type PlatformActProcedures<Sender> = ContractedRouter<
+  Pick<typeof actContract, PlatformPortActKind>,
+  ActPortContext<Sender>
+>;

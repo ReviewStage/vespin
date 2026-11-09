@@ -18,6 +18,10 @@ const ASSOCIATED_DOMAIN = "vespin.dev";
 
 const ACCENT_COLOR_NAME = "AccentColor";
 
+// The build number TestFlight orders uploads by: release-ios.yml names its
+// run in it, and a local build, which never uploads, is build 1.
+const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
+
 // The splash's ground and mark are the brand's, in both appearances: the
 // mark is generated beside the icon, in each mode's copper on transparency.
 const SPLASH = {
@@ -91,10 +95,15 @@ const config = (_context?: ConfigContext): ExpoConfig =>
     platforms: ["ios"],
     ios: {
       bundleIdentifier: BUNDLE_IDENTIFIER,
+      buildNumber: BUILD_NUMBER,
       deploymentTarget: "26.0",
       supportsTablet: true,
       icon: "../../packages/brand/assets/ios/Vespin.icon",
       associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`],
+      // The TestFlight build takes its pushes from production APNs, which
+      // the distribution profile release-ios.yml exports it with allows; a
+      // simulator build is unsigned and carries no entitlement at all.
+      entitlements: { "aps-environment": "production" },
     },
     plugins: [
       "expo-router",
