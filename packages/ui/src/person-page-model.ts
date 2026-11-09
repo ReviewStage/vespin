@@ -1,5 +1,5 @@
 import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
-import { agentMovedAt } from "@repo/features/task-agents-model";
+import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { createdByOnly, TASK_ORDER, taskTime } from "./task-list-model.js";
 
@@ -65,7 +65,7 @@ function agentsOf(
     const task = agent.planId === null ? undefined : byId.get(agent.planId);
     if (task === undefined || agent.archivedAt !== undefined) return [];
     if (agent.startedBy?.userId !== userId) return [];
-    return [{ task, agent, at: agentMovedAt(agent) ?? agent.runStartedAt ?? agent.createdAt }];
+    return [{ task, agent, at: agentLastMovedAt(agent) }];
   });
 }
 

@@ -20,11 +20,9 @@ import {
   Fill,
   GAP,
   InlineEdit,
-  LIST_DENSITY,
+  LIST_INSET,
   List,
-  type ListDensity,
   ListRow,
-  type ListRun,
   MoreButton,
   moreLabel,
   NOT_FOUND_THING,
@@ -38,7 +36,7 @@ import {
   ShowMoreRow,
   STATUS_TONE,
   Stack,
-  type StatusTone,
+  TASK_ROW_EDGES,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -48,6 +46,7 @@ import {
   useMenu,
   useMinute,
   usePageScroll,
+  VirtualTaskRows,
 } from "@repo/ui";
 import {
   ACTOR_KIND,
@@ -71,7 +70,7 @@ import { ASSIGNED_TO } from "@repo/ui/task-list-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQueryClient } from "@tanstack/react-query";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -103,7 +102,7 @@ import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
-import { AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
 import { automationNextText } from "./automation-words.js";
 import {
@@ -185,29 +184,17 @@ function headName(person: Actor): string {
 function PersonSection({
   title,
   count,
-  tone,
-  density = LIST_DENSITY.REGULAR,
-  run,
   children,
 }: {
   title: string;
   count: number;
-  tone?: StatusTone | undefined;
-  /** How tightly its rows stand. */
-  density?: ListDensity;
-  /** The run its rows are drawn in, drawing only those near the view, in place of `children`. */
-  run?: ListRun | undefined;
-  /** Its rows, where it draws every one. */
-  children?: ReactNode;
+  children: ReactNode;
 }): React.JSX.Element {
-  const list = (
-    <List label={title} density={density} moves run={run}>
-      {children}
-    </List>
-  );
   return (
-    <PersonSectionFrame label={title} title={title} count={count} tone={tone}>
-      {list}
+    <PersonSectionFrame label={title} title={title} count={count}>
+      <List label={title} inset={LIST_INSET.ROW} moves>
+        {children}
+      </List>
     </PersonSectionFrame>
   );
 }
@@ -223,30 +210,35 @@ const AUTOMATION_THING = "Automation";
 
 /**
  * One of their agents as a row, the row the task's own agents stand in at
- * the head of its description (`agent-list-row.tsx`): its glyph wearing
- * where it stands and its name on one dense line, muted after it the task
- * it works on where the agent goes by another name, then where it runs,
- * its failed mark once its turn failed, and its pull request's chip, which
- * opens its Pull request tab on that task; its card says when it last
- * moved; a press opens its tab, and its ⋯, right-click,
- * long press and menu key offer the agent's one menu over the doors a row has
- * (`agent-actions.tsx`), as a task's summary offers it: Copy link, Rename,
- * which turns the row into its name's field, Archive, asking first while a
- * teammate's agent still works, read again by its own id wherever it
- * stands, and Permanently delete, asked first. A finger's row draws no ⋯,
- * as a phone's Inbox row draws none, so its name keeps the room.
+ * the head of its description (`agent-list-row.tsx`), in a task's row's
+ * anatomy: its glyph wearing where it stands in the status column and its
+ * name where a task's stands, then its trailing run, muted first the task
+ * it works on where the agent goes by another name, its pull request's
+ * chip, which opens its Pull request tab on that task, where it runs, and
+ * its failed mark once its turn failed, and last when it last moved,
+ * lining up with their tasks' rows above; its card hangs beside it; a press
+ * opens its tab, and its ⋯, right-click, long press and menu key offer the
+ * agent's one menu over the doors a row has (`agent-actions.tsx`), as a
+ * task's summary offers it: Copy link, Rename, which turns the row's name
+ * into its field, Archive, asking first while a teammate's agent still
+ * works, read again by its own id wherever it stands, and Permanently
+ * delete, asked first. A finger's row draws no ⋯, as a phone's Inbox row
+ * draws none, so its name keeps the room.
  */
 function AgentRow({
   each,
   tasks,
   pullRequests,
+  more,
   place,
 }: {
   each: PersonAgent;
   tasks: TasksControl;
   /** The pull request each listed agent opened, by agent. */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
-  /** Where it stands in its section's run of rows (`VirtualRows`). */
+  /** Whether it draws its ⋯, as its list does. */
+  more: boolean;
+  /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
   place: VirtualRowPlace;
 }): React.JSX.Element {
   const { task, agent, at } = each;
@@ -263,55 +255,50 @@ function AgentRow({
     shown: tasks.shown,
     terminals: { onOpenTerminal: undefined },
   });
-  const row = useRef<HTMLElement | null>(null);
-  const hold = useCallback((element: HTMLElement | null) => {
-    row.current = element;
-  }, []);
+  const press = useRef<HTMLButtonElement | null>(null);
   const { rename } = actions;
   const editing = rename?.editing === true;
-  const endedByKey = useRefocusAfterEdit(editing, row);
-  const coarse = useCoarsePointer();
+  const endedByKey = useRefocusAfterEdit(editing, press);
   return (
-    <>
-      <AgentListRow
-        agent={agent}
-        subject={subject}
-        title={
-          editing && rename !== undefined ? (
-            <InlineEdit
-              value={rename.asked ?? subject.name}
-              label="Agent name"
-              maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-              editing
-              onEnd={(edit) => {
-                endedByKey(edit.byKey);
-                rename.end(edit.value);
-              }}
-            />
-          ) : undefined
-        }
-        card={<AgentCard subject={subject} models={models} />}
-        models={models}
-        devices={macs}
-        pullRequest={pullRequests.get(agent.id)}
-        refused={rename?.refused === true ? <span>{RENAME_FAILED}</span> : undefined}
-        // Note that the task is named only where the agent goes by another name, since most are named for their task.
-        about={task.name === subject.name ? undefined : task.name}
-        editing={editing}
-        motionKey={agent.id}
-        place={place}
-        rowRef={hold}
-        menu={
-          editing
-            ? undefined
-            : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), tasks.shown, true)
-        }
-        more={!coarse}
-        onPress={() => tasks.onShowAgent(task.id, agent.id)}
-        onOpenPullRequest={() => tasks.onShowPanelTab(task.id, changesTab(agent.id))}
-      />
+    <AgentListRow
+      agent={agent}
+      subject={subject}
+      at={at}
+      editor={
+        editing && rename !== undefined ? (
+          <InlineEdit
+            value={rename.asked ?? subject.name}
+            label="Agent name"
+            maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
+            editing
+            onEnd={(edit) => {
+              endedByKey(edit.byKey);
+              rename.end(edit.value);
+            }}
+          />
+        ) : undefined
+      }
+      card={<AgentCard subject={subject} models={models} />}
+      models={models}
+      devices={macs}
+      pullRequest={pullRequests.get(agent.id)}
+      note={rename?.refused === true ? RENAME_FAILED : undefined}
+      // Note that the task is named only where the agent goes by another name, since most are named for their task.
+      about={task.name === subject.name ? undefined : task.name}
+      edges={TASK_ROW_EDGES.UNCHOSEN}
+      place={place}
+      pressRef={press}
+      menu={
+        editing
+          ? undefined
+          : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), tasks.shown, true)
+      }
+      more={more}
+      onPress={() => tasks.onShowAgent(task.id, agent.id)}
+      onOpenPullRequest={() => tasks.onShowPanelTab(task.id, changesTab(agent.id))}
+    >
       {actions.dialog}
-    </>
+    </AgentListRow>
   );
 }
 
@@ -320,17 +307,14 @@ function agentKey({ agent }: PersonAgent): string {
   return agent.id;
 }
 
-/** The height an agent's row is taken to have before it is measured, in pixels: a dense `ListRow`'s, a control's height. */
-const AGENT_ROW_ESTIMATE_PX = 30;
-
-/** The room between two agents' rows, in pixels: a list's (`--ui-list-gap`). */
-const AGENT_ROW_GAP_PX = 2;
+/** How wide the cells whose words differ row to row stand: an agent's row draws none of them. */
+const AGENT_ROWS_FIT = {};
 
 /**
  * A section of their agents: its name and count over its rows, each drawn
  * on after it is no longer listed until its exit has played (`useLeaving`),
  * drawing only those near the view of the page's scroller (`usePageScroll`),
- * every row while a find bar stands open (`List`'s `run`).
+ * every row while a find bar stands open (`VirtualTaskRows`' `overscan`).
  */
 function PersonAgentsSection({
   title,
@@ -349,26 +333,38 @@ function PersonAgentsSection({
   const { scroller, shiftedBy } = usePageScroll();
   // Note that the run draws every row while a find bar stands open over the page.
   const finding = useFindOpen();
+  const more = !useCoarsePointer();
   return (
-    <PersonSection
-      title={title}
-      count={agents.length}
-      density={LIST_DENSITY.DENSE}
-      run={{
-        scroller,
-        shiftedBy,
-        keys,
-        estimate: AGENT_ROW_ESTIMATE_PX,
-        gap: AGENT_ROW_GAP_PX,
-        overscan: finding ? keys.length : undefined,
-        row: (index, at) => {
-          const entry = drawn[index];
-          return entry === undefined ? null : (
-            <AgentRow each={entry.value} tasks={tasks} pullRequests={pullRequests} place={at} />
-          );
-        },
-      }}
-    />
+    <PersonSectionFrame label={title} title={title} count={agents.length}>
+      <ReplayMask>
+        <VirtualTaskRows
+          label={title}
+          cells={AGENT_ROW_CELLS}
+          more={more}
+          edges={TASK_ROW_EDGES.UNCHOSEN}
+          moves
+          scroller={scroller}
+          shiftedBy={shiftedBy}
+          keys={keys}
+          overscan={finding ? keys.length : undefined}
+          fit={AGENT_ROWS_FIT}
+        >
+          {(index, place) => {
+            const entry = drawn[index];
+            return entry === undefined ? null : (
+              <AgentRow
+                key={entry.key}
+                each={entry.value}
+                tasks={tasks}
+                pullRequests={pullRequests}
+                more={more}
+                place={place}
+              />
+            );
+          }}
+        </VirtualTaskRows>
+      </ReplayMask>
+    </PersonSectionFrame>
   );
 }
 

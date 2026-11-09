@@ -1,9 +1,11 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { GROUP_HEADING, GroupHeader, LIST_DENSITY, List, ListRow } from "@repo/ui";
+import { agentLastMovedAt } from "@repo/features/task-agents-model";
+import { GROUP_HEADING, GroupHeader, LIST_DENSITY, List, ListRow, TaskRows } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { agentStillWriting } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
 import { NEEDS_YOU, threadsWaitingWords } from "../tasks/inbox-model.js";
@@ -11,34 +13,36 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
-import { AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_CELLS, AgentListRow, AgentStartRow } from "./agent-list-row.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 
 /**
- * plan-agents.tsx -- the open task's agents at the head of its description, as a group: one dense row each, its tab's glyph and name, where it runs, its failure where it failed, and its pull request.
+ * plan-agents.tsx -- the open task's agents at the head of its description, as a group: one row each in a task's row's anatomy, its tab's glyph and name, its pull request, where it runs, its failure where it failed, and when it last moved.
  *
  * The agents stand under a group head, Agents and how many, which folds
  * them, folded where the page asks, the same shape every group of
- * the head takes, a `GroupHeader` over a dense `List`. Each row is the
+ * the head takes, a `GroupHeader` over their rows. Each row is the
  * task's agent as its "+" row draws it (`agentEntries`),
- * drawn as a person's page draws its agents too (`agent-list-row.tsx`): its
+ * drawn as a person's page draws its agents too (`agent-list-row.tsx`), in
+ * the columns a task's row stands in (`TaskRows`), New agent among them
+ * (`AgentStartRow`), so every glyph and name of the group lines up: its
  * tab's glyph, which gives way to the working mark while it works, its
- * tab's name, where it runs (`runs-on.tsx`), Cloud or the device, each
- * agent's own, the failed mark at its end once its
- * turn failed, and the card its tab hangs. Its pull request, where it opened
- * one, stands after it as a chip of GitHub's mark in GitHub's color for
- * where it stands and its number (`pull-request-chip.tsx`), hanging the
- * pull request's one card as its Pull request tab does, the agent whose it
- * is and who it names among what the card says (`pull-request-card.tsx`).
+ * tab's name, its pull request, where it opened one, as a chip of GitHub's
+ * mark in GitHub's color for where it stands and its number
+ * (`pull-request-chip.tsx`), hanging the pull request's one card as its
+ * Pull request tab does, the agent whose it is and who it names among what
+ * the card says (`pull-request-card.tsx`), where it runs (`runs-on.tsx`),
+ * Cloud or the device, each agent's own, the failed mark once its turn
+ * failed, and when it last moved, its card hanging beside it as its tab's.
  * A row's press is the page's to answer (`onOpenAgent`): the side panel's
  * plan opens the agent as its tab's own press does. The chip opens the pull
  * request as the agent's own pull request chip does, in its Pull request
  * tab; it is still a link to its page, so a right-click offers its address.
- * An agent with threads waiting on the developer counts them at its end,
- * before where it runs, in the orange figure its tab and the sidebar's
+ * An agent with threads waiting on the developer counts them in its run,
+ * before its pull request, in the orange figure its tab and the sidebar's
  * Inbox row draw (`WaitingCount`), so a task opened on its plan says which
  * agent waits and on how much; the threads themselves, titles and all, are
- * the Inbox's to say, so the row stays one dense line.
+ * the Inbox's to say, so the row stays one line.
  * Those agents come first, then those at work, then the newest started; an
  * archived agent is not listed. New agent follows them at every width, as
  * the strip's "+" offers it (`newAgentStarts`), so the group stands even on a
@@ -85,7 +89,7 @@ function listedOrder(
   );
 }
 
-/** One agent's row (`AgentListRow`): its tab's look and card, how many of its threads wait on the developer, where it runs, its failed mark, and its pull request's chip where it opened one. */
+/** One agent's row (`AgentListRow`): its tab's look and card, how many of its threads wait on the developer, its pull request's chip where it opened one, where it runs, its failed mark, and when it last moved. */
 function PlanAgentRow({
   entry,
   waits,
@@ -93,6 +97,7 @@ function PlanAgentRow({
   agents,
   held,
   tab,
+  more,
   onOpenPullRequest,
 }: {
   entry: AddEntry;
@@ -102,6 +107,8 @@ function PlanAgentRow({
   agents: AgentsControl;
   held: HeldTranscripts;
   tab: MainTabsControl["tab"];
+  /** Whether it draws its ⋯, as its list does. */
+  more: boolean;
   onOpenPullRequest: () => void;
 }): React.JSX.Element | null {
   const { row, agent, card } = entry;
@@ -111,12 +118,13 @@ function PlanAgentRow({
     <AgentListRow
       agent={agent}
       subject={agentSubject(agents, row.id, held, chosen)}
+      at={agentLastMovedAt(agent)}
       card={card}
       models={agents.models}
       devices={agents.macs}
       pullRequest={pullRequest}
       waits={waits}
-      motionKey={row.id}
+      more={more}
       onPress={entry.onPick}
       onOpenPullRequest={onOpenPullRequest}
     />
@@ -178,6 +186,7 @@ export function PlanAgents({
   let unmarked = 0;
   for (const [agentId, items] of waiting) if (!listed.has(agentId)) unmarked += items.length;
   const inboxRow = phone !== undefined && unmarked > 0 ? phone : undefined;
+  const more = !useCoarsePointer();
   if (!grouped && inboxRow === undefined) return null;
   return (
     // Note that the group is pulled out by a row's inset on each side, so its marks stand on the title's edge and its fills hang past it.
@@ -199,7 +208,7 @@ export function PlanAgents({
             fold={{ defaultOpen: !folded }}
           >
             {entries.length + starts.length === 0 ? null : (
-              <List label={AGENTS_LIST} density={LIST_DENSITY.DENSE} moves>
+              <TaskRows label={AGENTS_LIST} cells={AGENT_ROW_CELLS} more={more} moves>
                 {listedOrder(entries, waiting).map((entry) => (
                   <PlanAgentRow
                     key={entry.row.id}
@@ -209,22 +218,21 @@ export function PlanAgents({
                     agents={agents}
                     held={held}
                     tab={tab}
+                    more={more}
                     onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
                   />
                 ))}
                 {starts.map((start) => (
-                  <ListRow
+                  <AgentStartRow
                     key={start.label}
-                    leading={start.icon ?? <GLYPH.ADD />}
-                    title={start.label}
-                    description={start.detail}
-                    descriptionReplayMasked
+                    label={start.label}
+                    glyph={start.icon ?? <GLYPH.ADD />}
+                    detail={start.detail}
                     disabled={start.disabled}
-                    chevron
-                    onPress={start.onSelect}
+                    onStart={start.onSelect}
                   />
                 ))}
-              </List>
+              </TaskRows>
             )}
             {phone?.archived}
           </GroupHeader>

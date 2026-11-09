@@ -1,4 +1,4 @@
-import { List } from "@repo/ui";
+import { LIST_INSET, List } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { type RefObject, useState } from "react";
 import { useInboxRowDrafts } from "../composer-drafts.js";
@@ -22,7 +22,9 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * to write it under, Mark as read or unread, Remind me, and Resolve, at
  * once with Undo. No row here is chosen, so U, H, and E, which act on the
  * chosen item, are the Inbox's alone. The rows stay masked in a screen recording
- * but for the words a row unmasks itself.
+ * but for the words a row unmasks itself. They stand among task rows, so
+ * they stand their words at a task row's inset (`LIST_INSET.ROW`), their
+ * marks starting and their times ending where the task rows' do.
  */
 
 /** The listed workspace's items `listed` as the Inbox's rows, in a list named `label` that joins the page's walk or moves its rows where said. */
@@ -73,7 +75,7 @@ export function InboxItemRows({
   return (
     <>
       <ReplayMask>
-        <List label={label} joinsWalk={joinsWalk} moves={moves}>
+        <List label={label} inset={LIST_INSET.ROW} joinsWalk={joinsWalk} moves={moves}>
           {listed.map((each) => (
             <InboxItemRow
               key={each.item.id}

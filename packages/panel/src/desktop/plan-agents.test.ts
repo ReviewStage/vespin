@@ -149,13 +149,19 @@ function mount(
   return { host, opened };
 }
 
+/** What a row says but when it last moved, which the fixture's clock leaves at no time worth reading. */
+function rowWords(row: Element): string {
+  const time = row.querySelector('[data-cell="updated"]')?.textContent ?? "";
+  return (row.textContent ?? "").replace(time, "");
+}
+
 test("the agents at work come first, then the newest, each saying where it runs, each row and chip opening its own", () => {
   const { host, opened } = mount([OLDEST, WORKING, NEWEST]);
   const list = host.querySelector('[aria-label="Agents"]');
   assert.ok(list !== null);
-  const rows = [...list.querySelectorAll("li")].map((row) => row.textContent ?? "");
+  const rows = [...list.querySelectorAll("li")].map(rowWords);
   assert.deepEqual(
-    rows.map((row) => row.replace(/#42$/u, "")),
+    rows.map((row) => row.replace("#42", "")),
     ["Expired invite pageStudio", "Invite emailCloud", "Research providersRemoved device"],
   );
   const chip = host.querySelector<HTMLAnchorElement>(
@@ -179,7 +185,7 @@ test("an agent waiting on the developer comes first, counting what needs them bu
   });
   const rows = [...(host.querySelector('[aria-label="Agents"]')?.querySelectorAll("li") ?? [])];
   assert.deepEqual(
-    rows.map((row) => row.textContent?.replace(/#42$/u, "")),
+    rows.map((row) => rowWords(row).replace("#42", "")),
     [
       "Research providers1 needs youRemoved device",
       "Expired invite pageStudio",

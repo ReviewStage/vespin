@@ -585,6 +585,19 @@ export function taskRowColumns(cells: readonly TaskRowCell[], more = true): stri
   return [...before, "minmax(0, 1fr)", ...after, ...moreColumn].join(" ");
 }
 
+/** A mark in the status column at a status chip's size, centered in it. */
+const GLYPH =
+  "ui-task-row-glyph inline-flex size-chip-compact flex-none items-center justify-center";
+
+/**
+ * A mark standing in a row's status column where the row's thing wears no
+ * status chip, as an agent's glyph does: as wide as the chip, so its name
+ * lines up with the names of the task rows beside it.
+ */
+export function TaskRowGlyph({ children }: { children: ReactNode }): React.JSX.Element {
+  return <span className={GLYPH}>{children}</span>;
+}
+
 /** One task's row: its press, which opens it, its cells in their columns, and its ⋯ over its end. */
 export function TaskRow({
   taskId,

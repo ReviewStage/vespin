@@ -32,12 +32,14 @@ import {
   TaskPriorityMark,
   TaskRow,
   TaskRowDraft,
+  TaskRowGlyph,
   TaskRowSkeleton,
   TaskRows,
   TaskStatusMark,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  Time,
   TrashIcon,
   taskRowFit,
   UnassignedAvatar,
@@ -461,6 +463,47 @@ function TasksPageRows(): React.JSX.Element {
   );
 }
 
+/** An hour before the catalog was opened, as a row's time says it. */
+const AN_HOUR_AGO = Date.now() - 60 * 60 * 1000;
+
+/** A task at a glance beside a row that is no task, an agent's, its glyph standing in the status column at a status chip's size, so the two names and the two times line up. */
+function GlanceRows(): React.JSX.Element {
+  return (
+    <TaskRows label="Recent" cells={GLANCE_CELLS} edges={TASK_ROW_EDGES.UNCHOSEN}>
+      <TaskRow
+        taskId={PARENT.id}
+        name={PARENT.name}
+        cells={GLANCE_CELLS}
+        content={{
+          [TASK_ROW_CELL.STATUS]: (
+            <MarkChip mark={<TaskStatusMark status={PARENT.status} />} words={PARENT.status} />
+          ),
+          [TASK_ROW_CELL.REPOSITORY]: "relay",
+          [TASK_ROW_CELL.UPDATED]: <Time at={AN_HOUR_AGO} hint={false} />,
+        }}
+        edges={TASK_ROW_EDGES.UNCHOSEN}
+        onOpen={ignore}
+      />
+      <TaskRow
+        taskId="agent"
+        name="Build the invite email"
+        cells={GLANCE_CELLS}
+        content={{
+          [TASK_ROW_CELL.STATUS]: (
+            <TaskRowGlyph>
+              <GLYPH.AGENT />
+            </TaskRowGlyph>
+          ),
+          [TASK_ROW_CELL.AGENTS]: "Cloud",
+          [TASK_ROW_CELL.UPDATED]: <Time at={AN_HOUR_AGO} hint={false} />,
+        }}
+        edges={TASK_ROW_EDGES.UNCHOSEN}
+        onOpen={ignore}
+      />
+    </TaskRows>
+  );
+}
+
 /** How wide each placeholder row's name stands. */
 const READING_NAMES = ["46%", "38%", "54%"] as const;
 
@@ -508,6 +551,9 @@ function TaskRowsExample(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="task-row-draft" title="A quick add's draft over a row">
         <DraftOverRow />
+      </CatalogSection>
+      <CatalogSection id="task-rows-glance" title="A task and an agent at a glance, lined up">
+        <GlanceRows />
       </CatalogSection>
       <CatalogSection id="task-rows-reading" title="A list never chosen, still being read">
         <ReadingRowsSkeleton />

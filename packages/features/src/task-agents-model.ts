@@ -125,6 +125,13 @@ export function agentMovedAt(
   return WORKING.has(agent.status) ? agent.runStartedAt : agent.settledAt;
 }
 
+/** When an agent last moved, as its row's time says it (`agentMovedAt`); else when its newest run began, else when it was started. */
+export function agentLastMovedAt(
+  agent: Pick<ListedAgent, "status" | "runStartedAt" | "settledAt" | "createdAt">,
+): number {
+  return agentMovedAt(agent) ?? agent.runStartedAt ?? agent.createdAt;
+}
+
 /** A task's pull requests among those the window holds, every one, in the order the task names them; none where it opened none. */
 export function pullRequestsOfTask(
   listed: readonly TaskPullRequests[] | undefined,

@@ -318,6 +318,14 @@ export const LIST_DENSITY = {
 
 export type ListDensity = (typeof LIST_DENSITY)[keyof typeof LIST_DENSITY];
 
+/** How far in from a list's sides its rows stand their words: a list's own inset, or a row's, the inset a task's row stands at (`TaskRow`), so a list standing among task rows lines its marks and its metadata up with theirs. */
+export const LIST_INSET = {
+  LIST: "list",
+  ROW: "row",
+} as const;
+
+export type ListInset = (typeof LIST_INSET)[keyof typeof LIST_INSET];
+
 /** The ink a row's title rests in: the text's own, or a sidebar's quieter one, lifted to the text's while the row is reached for, open, or unread. */
 export const LIST_ROW_INK = {
   TEXT: "text",
@@ -491,6 +499,7 @@ export function List({
   label,
   variant = LIST_VARIANT.PLAIN,
   density = LIST_DENSITY.REGULAR,
+  inset = LIST_INSET.LIST,
   fingerTall = false,
   moves = false,
   joinsWalk = false,
@@ -504,6 +513,8 @@ export function List({
   label: string;
   variant?: ListVariant;
   density?: ListDensity;
+  /** How far in from its sides its rows stand their words; a dense or compact list's stand at a row's already. */
+  inset?: ListInset;
   /** Whether each row stands a finger's press tall on a coarse pointer. */
   fingerTall?: boolean | undefined;
   /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion` (`motionRows`). */
@@ -568,6 +579,7 @@ export function List({
           ...selectionRoot(),
           "data-variant": variant,
           "data-density": density,
+          "data-inset": inset,
           "data-finger-tall": fingerTall ? "true" : undefined,
         }}
       >
@@ -584,6 +596,7 @@ export function List({
       {...selectionRoot()}
       data-variant={variant}
       data-density={density}
+      data-inset={inset}
       data-finger-tall={fingerTall ? "true" : undefined}
       aria-label={label}
       onPointerDown={onPointerDown}

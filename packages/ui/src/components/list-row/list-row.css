@@ -152,6 +152,12 @@
     --ui-list-row-inset-inline: var(--ui-row-inset);
   }
 
+  /* A list standing among task rows stands its rows' words at a row's
+     inset, as theirs stand, keeping its own room above and below them. */
+  .ui-list[data-inset="row"] > .ui-list-row {
+    --ui-list-row-inset-inline: var(--ui-row-inset);
+  }
+
   /* A list whose rows a finger opens stands each a finger's press tall on a
      coarse pointer, its words still centered; a mouse keeps its height. */
   @media (pointer: coarse) {

@@ -605,8 +605,8 @@ test("an agent's row says its failure at its end and hangs the agent's card whil
   await settle();
 
   const row = button(page, "Flaky retry");
-  assert.ok(row.querySelector(".failed-mark"));
-  assert.equal(button(page, "Jittered backoff").querySelector(".failed-mark"), null);
+  assert.ok(row.closest("li")?.querySelector(".failed-mark"));
+  assert.equal(button(page, "Jittered backoff").closest("li")?.querySelector(".failed-mark"), null);
 
   restOn(row);
   const card = document.querySelector(".ui-tooltip-card [data-agent-card]");
