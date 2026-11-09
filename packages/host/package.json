@@ -31,7 +31,8 @@
     "./update-service": "./src/update-service.js",
     "./task-code": "./src/task-code.js",
     "./task-code-remote": "./src/task-code-remote.js",
-    "./task-code-worker": "./src/task-code-worker.js"
+    "./task-code-worker": "./src/task-code-worker.js",
+    "./follow-stream": "./src/follow-stream.js"
   },
   "types": "./src/index.ts",
   "scripts": {

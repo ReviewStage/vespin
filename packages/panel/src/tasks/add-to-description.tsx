@@ -6,6 +6,7 @@ import {
 } from "@repo/features/agent-pictures-model";
 import type { FileChip } from "@repo/features/attachment-model";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
+import { holderTaskId } from "@repo/features/mention-holder";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -29,7 +30,6 @@ import { pressWrite, type UndoWrite } from "../undo-stack.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { ViewerAction } from "./attachment-viewer.js";
-import { holderTaskId } from "./mention-holder.js";
 import { useTaskMentions } from "./task-mentions.js";
 
 /**

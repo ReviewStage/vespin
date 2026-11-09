@@ -12,13 +12,13 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACTOR_KIND, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { TOOL_BLOCK, TOOL_STATE } from "../ai-elements/tool.js";
 import { MemberDirectory } from "../member-directory.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { handMembers } from "../testing/app-state.js";

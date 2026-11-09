@@ -1,4 +1,5 @@
 import { CHECK_SUMMARY } from "@repo/features/agent-wire";
+import { fileName } from "@repo/features/code-ref-words";
 import {
   type KnownNames,
   THING_KIND,
@@ -26,7 +27,6 @@ import { usePerson } from "../member-directory.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { providerOf } from "./agent-model.js";
 import { WorkspaceDirectory } from "./chip-cards.js";
-import { fileName } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { InboxItemChipGlyph } from "./inbox-item-chip.js";
 import { IssueMark } from "./issue-mark.js";

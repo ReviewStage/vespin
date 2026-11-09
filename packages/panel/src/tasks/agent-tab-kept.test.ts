@@ -12,6 +12,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { TOOL_TARGET } from "@repo/features/tool-call-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -23,7 +24,6 @@ import { focusRestOn } from "../testing/hint-rest.js";
 import { agentsControl, tellingTranscripts } from "../testing/tasks-control.js";
 import { NOTHING_HELD } from "./agent-ref.js";
 import { AgentTab, type BriefTask, type TranscriptCards } from "./agent-tab.js";
-import { TOOL_TARGET } from "./tool-call-model.js";
 
 /**
  * agent-tab-kept.test.ts -- a running agent's tab draws again only the

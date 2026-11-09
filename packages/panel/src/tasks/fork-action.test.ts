@@ -8,6 +8,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -18,7 +19,6 @@ import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AGENT_LEAD, AgentMessage, AgentTab } from "./agent-tab.js";
 import { agentForkDoors, ForkProvider } from "./fork-action.js";
 import type { AgentFork } from "./fork-model.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * fork-action.test.ts -- Fork to new agent stands on an agent's own
