@@ -635,7 +635,8 @@ function renewedFrom(
 }
 
 /**
- * An access token for the account's ChatGPT plan, good for at least the
+ * An access token for the account's ChatGPT plan of this id, or its first
+ * where none is named, good for at least the
  * renewal margin, or the longer one a caller names (a launch of Codex asks
  * for a token that outlasts its first turn's start): the one it holds where
  * it is, a renewed one otherwise. Runs under the row's lock, OpenAI's token
@@ -647,12 +648,13 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
   userId: string,
   ring: KeyRing,
   margin: Duration.Duration = REFRESH_MARGIN,
+  subscriptionId?: string,
 ) {
   const access: ChatGptAccess = yield* withProviderKeyLocked(
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
-    undefined,
+    subscriptionId,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked)) return { outcome: CHATGPT_ACCESS.NONE };
       const row = locked.value;

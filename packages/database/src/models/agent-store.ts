@@ -363,6 +363,8 @@ export interface AgentRouting {
   readonly runnerTokenHash: string | null;
   /** Who pays for the agent's model calls; null for an agent from before the column. */
   readonly payer: AgentPayer | null;
+  /** The starter's subscription a plan payer names, as its latest launch recorded it; null for their first of its kind. */
+  readonly subscriptionId: string | null;
 }
 
 /** The columns every read and every `returning` projects, so a row decodes one way whatever wrote it. */
@@ -1166,6 +1168,18 @@ const updateAgentAuthor = SqlSchema.void({
     ),
 });
 
+const updateAgentSubscription = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    subscriptionId: Schema.NullOr(Schema.String),
+  }),
+  execute: ({ userId, agentId, subscriptionId }) =>
+    Database.use((db) =>
+      db.update(agentTable).set({ subscriptionId }).where(reachableAgent(userId, agentId)),
+    ),
+});
+
 const findAgentRouting = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
   Result: Schema.Struct({
@@ -1173,6 +1187,7 @@ const findAgentRouting = SqlSchema.findOneOption({
     nativeSession: Schema.NullOr(Schema.String),
     runnerTokenHash: Schema.NullOr(Schema.String),
     payer: Schema.NullOr(PayerColumnSchema),
+    subscriptionId: Schema.NullOr(Schema.String),
   }),
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
@@ -1182,6 +1197,7 @@ const findAgentRouting = SqlSchema.findOneOption({
           nativeSession: conversations.nativeSession,
           runnerTokenHash: agentTable.runnerTokenHash,
           payer: agentTable.payer,
+          subscriptionId: agentTable.subscriptionId,
         })
         .from(agentTable)
         .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
@@ -3458,6 +3474,19 @@ export function recordAgentAuthor(
   author: AgentAuthor,
 ): AgentStoreEffect<void> {
   return updateAgentAuthor({ userId, agentId, author });
+}
+
+/**
+ * The starter's subscription a launch put the agent on, over whatever
+ * stood, or none, which reads as their first of its kind; nothing for an
+ * agent of a workspace the account is not in.
+ */
+export function recordAgentSubscription(
+  userId: string,
+  agentId: string,
+  subscriptionId: string | null,
+): AgentStoreEffect<void> {
+  return updateAgentSubscription({ userId, agentId, subscriptionId });
 }
 
 /** How the agent is run (`AgentRouting`); nothing for an agent of a workspace the account is not in. */

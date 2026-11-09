@@ -25,6 +25,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
+import { accountProviderKey } from "./account-provider-key.js";
 import { organization, user } from "./auth.js";
 import { automation, automationRun } from "./automation.js";
 import { device } from "./device.js";
@@ -112,7 +113,8 @@ import { task } from "./task.js";
  * the starter's Claude or ChatGPT plan, their own API key, or the service's,
  * recorded as it starts and never moved after; null for an agent from
  * before the column. What answers its conversation is the conversation's
- * own `runtime`.
+ * own `runtime`. `subscription_id` is which of the starter's subscriptions
+ * a plan payer names, as the agent's latest launch put it on.
  * There is no commit column: the
  * checkout's own output is in the transcript, and the pull request on
  * GitHub records its base.
@@ -315,6 +317,16 @@ export const agentTable = pgTable(
     githubAccess: text("github_access").$type<GitHubAccess>().notNull().default(GITHUB_ACCESS.APP),
     /** Who pays for the agent's model calls, recorded as it starts and never moved; null for an agent from before the column. */
     payer: text("payer").$type<AgentPayer>(),
+    /**
+     * The starter's subscription the agent runs on where its payer is a plan,
+     * recorded as each launch puts it on one: the one whose token it is
+     * handed and whose row a limit its turn hits is written to. Null where
+     * none was recorded, and once the subscription is removed, either of
+     * which reads as the starter's first of its kind.
+     */
+    subscriptionId: text("subscription_id").references(() => accountProviderKey.id, {
+      onDelete: "set null",
+    }),
     /**
      * The digest of the bearer the agent's runner presents at our MCP server and its events
      * route, never the bearer itself; null where no runner holds one. Kept on the agent's row rather

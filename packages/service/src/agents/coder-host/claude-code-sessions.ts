@@ -6,7 +6,9 @@
  * harness shares (`runner-sessions.ts`). What is Claude Code's own: the
  * runner's config names the image's `claude` and appends our coder
  * instructions to Claude Code's prompt; the plan's token, opened from the
- * account's sealed `claude_setup_token` row, is the launch's credential, or,
+ * sealed `claude_setup_token` row of the subscription the launch put the
+ * agent on and recorded on its row (`agent.subscription_id`), for now the
+ * account's first, is the launch's credential, or,
  * for an agent its starter's API key pays for, that key opened as
  * `ANTHROPIC_API_KEY`; a plan's is refused in its plan's words where the
  * row is gone, refused, unreadable, or at a limit whose named reset is
@@ -31,7 +33,11 @@ import {
   RUNNER_ENV,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
-import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
+import {
+  type Agent,
+  readAgentRouting,
+  recordAgentSubscription,
+} from "@repo/database/models/agent-store";
 import {
   openProviderKey,
   PROVIDER_KEY_UNREADABLE,
@@ -124,14 +130,18 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   const { userId } = options;
 
   /**
-   * The account's setup-token's row, where its plan may pay: refused in the
+   * The setup-token's row of the subscription named, the account's first
+   * where none is, where its plan may pay: refused in the
    * plan's words where it is gone, refused, or at a limit whose named reset
    * is still ahead. A launch and every message to a live runner ask it, so a
    * plan another agent's turn found refused stops this agent's too.
    */
-  const standingPlan = Effect.gen(function* () {
-    const rows = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN);
-    const row = rows.find((each) => each.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC);
+  const standingPlan = Effect.fnUntraced(function* (subscriptionId: string | undefined) {
+    const rows = (yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN)).filter(
+      (each) => each.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC,
+    );
+    const row =
+      subscriptionId === undefined ? rows[0] : rows.find((each) => each.id === subscriptionId);
     if (row === undefined) {
       return yield* new LaunchRefused({
         reason: "no setup-token",
@@ -159,6 +169,12 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   const payerOf = (agent: Agent) =>
     Effect.map(readAgentRouting(userId, agent.id), (routing) =>
       Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.payer)),
+    );
+
+  /** The subscription the agent's launch put it on; none for the account's first. */
+  const subscriptionOf = (agent: Agent) =>
+    Effect.map(readAgentRouting(userId, agent.id), (routing) =>
+      Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.subscriptionId)),
     );
 
   /**
@@ -219,10 +235,15 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     return launchCredential(CLI_CREDENTIAL.API_KEY, key);
   });
 
-  /** The CLI's credential and the variable it is read from: the account's plan token opened. */
-  const planCredential = Effect.gen(function* () {
+  /**
+   * The CLI's credential and the variable it is read from: the plan token
+   * opened of the subscription the launch puts the agent on, recorded on its
+   * row so its turns' limits name it: for now the account's first.
+   */
+  const planCredential = Effect.fnUntraced(function* (agent: Agent) {
     const ring = yield* keyRing;
-    const row = yield* standingPlan;
+    const row = yield* standingPlan(undefined);
+    yield* recordAgentSubscription(userId, agent.id, row.id);
     const opened = openProviderKey(
       ring,
       {
@@ -281,7 +302,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     const model = providerModelOf(agent.model);
     const asked = Effect.gen(function* () {
       if ((yield* savedPayer(agent)) === AGENT_PAYER.API_KEY) return;
-      yield* standingPlan;
+      yield* standingPlan(yield* subscriptionOf(agent));
     });
     return Effect.as(asked, {
       lines: [
@@ -304,7 +325,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       Effect.gen(function* () {
         return yield* (yield* savedPayer(agent)) === AGENT_PAYER.API_KEY
           ? apiKeyCredential
-          : planCredential;
+          : planCredential(agent);
       }),
     config,
     // Note that Claude Code reads a checkout's skills from `.claude/skills` alone.

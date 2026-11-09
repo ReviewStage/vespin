@@ -6,7 +6,9 @@
  * tokens and whenever app-server asks it for fresh ones after a 401, and on
  * a host through its token command, which app-server runs as a turn's
  * requests go out, again once the token it holds is five minutes old, and
- * after a 401. This answers the account's access token, renewed first where
+ * after a 401. This answers the access token of the subscription the agent's
+ * launch put it on (`agent.subscription_id`), the account's first where none
+ * is recorded, renewed first where
  * less than the token margin is left of it (`refreshChatGptAccess`, under
  * the row's lock, so two runners of one account never race its rotating
  * refresh token), and the ChatGPT workspace it pays from as the plan names
@@ -233,12 +235,10 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
   // Note that only an agent its starter's plan pays for, on Codex, is handed the plan's token: one
   // started on the plan, or one recorded with an older payer whose launch turns to the plan
   // (`codex-sessions.ts`'s `savedPayer`).
-  const payer = Option.getOrUndefined(
-    Option.flatMap(
-      Option.filter(routing, (row) => row.runtime === CONVERSATION_RUNTIME.CODEX),
-      (row) => Option.fromNullishOr(row.payer),
-    ),
+  const codex = Option.getOrUndefined(
+    Option.filter(routing, (row) => row.runtime === CONVERSATION_RUNTIME.CODEX),
   );
+  const payer = codex?.payer ?? undefined;
   const onPlan = payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION || payer === AGENT_PAYER.MAC_SIGN_IN;
   if (!onPlan) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   if (!(yield* brake.check(agent.value.id))) {
@@ -251,7 +251,12 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
   const access = yield* hostedStoreOrUnavailable(
-    refreshChatGptAccess(target.userId, ring.success, CODEX_TOKEN_MARGIN),
+    refreshChatGptAccess(
+      target.userId,
+      ring.success,
+      CODEX_TOKEN_MARGIN,
+      codex?.subscriptionId ?? undefined,
+    ),
   );
   if (access.outcome !== CHATGPT_ACCESS.READY) {
     return yield* Effect.fail(REFUSAL_OF_ACCESS[access.outcome]);

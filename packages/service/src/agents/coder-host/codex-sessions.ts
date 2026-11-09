@@ -26,7 +26,9 @@
  *   every few minutes, and after a 401, and sends it to Codex's ChatGPT
  *   backend, which the runner is told to send its requests to
  *   (`planBackendEnv`).
- * - The token is the account's `chatgpt_oauth` row's, renewed first where
+ * - The token is the agent's subscription's, the `chatgpt_oauth` row its
+ *   launch put it on and recorded on its row (`agent.subscription_id`), for
+ *   now the account's first, renewed first where
  *   less than the token margin is left of it (`refreshChatGptAccess`, under
  *   the row's lock). A launch, and each message, renews it so too before it
  *   goes out, which refuses one the sign-in can no longer pay for and
@@ -59,7 +61,11 @@ import {
   RUNNER_ENV,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
-import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
+import {
+  type Agent,
+  readAgentRouting,
+  recordAgentSubscription,
+} from "@repo/database/models/agent-store";
 import { PROVIDER_KEY_UNREADABLE, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -204,11 +210,12 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
   const { userId, tokenUrl } = options;
 
   /**
-   * The account's sign-in asked whether it still pays, its access token
-   * renewed first where it is due, answering the plan it pays from; the
-   * runner asks the route for the token, so none is handed here.
+   * The subscription's sign-in asked whether it still pays, the account's
+   * first where none is named, its access token renewed first where it is
+   * due, answering the plan it pays from; the runner asks the route for the
+   * token, so none is handed here.
    */
-  const standingPlan = Effect.gen(function* () {
+  const standingPlan = Effect.fnUntraced(function* (subscriptionId: string | undefined) {
     const environment = yield* HostedEnvironment;
     const ring = environment.providerKeyEncryptionKeys;
     const parsed = ring === undefined ? undefined : parseKeyRing(ring);
@@ -218,7 +225,12 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
         planRefusal: PLAN_REFUSAL.UNREADABLE,
       });
     }
-    const access = yield* refreshChatGptAccess(userId, parsed.success, CODEX_TOKEN_MARGIN);
+    const access = yield* refreshChatGptAccess(
+      userId,
+      parsed.success,
+      CODEX_TOKEN_MARGIN,
+      subscriptionId,
+    );
     if (access.outcome !== CHATGPT_ACCESS.READY) {
       return yield* new LaunchRefused({
         reason: `ChatGPT sign-in ${access.outcome}`,
@@ -236,6 +248,24 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     Effect.map(readAgentRouting(userId, agent.id), (routing) =>
       Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.payer)),
     );
+
+  /** The subscription the agent's launch put it on; none for the account's first. */
+  const subscriptionOf = (agent: Agent) =>
+    Effect.map(readAgentRouting(userId, agent.id), (routing) =>
+      Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.subscriptionId)),
+    );
+
+  /**
+   * The subscription a launch puts the agent on, recorded on its row so the
+   * token route and its turns' limits name it: for now the account's first.
+   */
+  const launchSubscription = (agent: Agent) =>
+    Effect.gen(function* () {
+      const rows = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+      const first = rows.find((row) => row.provider === PROVIDER_KEY_PROVIDER.OPENAI)?.id;
+      yield* recordAgentSubscription(userId, agent.id, first ?? null);
+      return first;
+    });
 
   /**
    * Where the account's saved credential pays for the agent: its own API key
@@ -293,9 +323,9 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
    * runner asks our route for the plan's tokens, so no credential of the
    * plan's is declared here.
    */
-  const planEnv = (layout: Pick<MachineLayout, "codexHome">) =>
+  const planEnv = (agent: Agent, layout: Pick<MachineLayout, "codexHome">) =>
     Effect.map(
-      standingPlan,
+      Effect.flatMap(launchSubscription(agent), standingPlan),
       (plan): HarnessLaunch => ({ env: { ...homeOf(layout), ...planBackendEnv(plan) } }),
     );
 
@@ -307,7 +337,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
    */
   const launch = (agent: Agent, layout: MachineLayout) =>
     Effect.gen(function* () {
-      return yield* (yield* onApiKey(agent)) ? apiKeyEnv(layout) : planEnv(layout);
+      return yield* (yield* onApiKey(agent)) ? apiKeyEnv(layout) : planEnv(agent, layout);
     });
 
   const config = (
@@ -358,7 +388,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     // Note that an agent on its API key has no plan to ask, and its runner holds what it launched with.
     const asked = Effect.gen(function* () {
       if (yield* onApiKey(agent)) return;
-      yield* standingPlan;
+      yield* standingPlan(yield* subscriptionOf(agent));
     });
     return Effect.as(asked, { lines: [choice] });
   };
