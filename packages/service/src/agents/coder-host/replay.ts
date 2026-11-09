@@ -1228,7 +1228,8 @@ export interface RestartFit {
  * that a line in no turn yet, as the one being sent and any waiting for the
  * launch, is left out, since each is handed on its own, as is the line being
  * sent where a turn already took it (`sending`), as a retried turn's opening
- * line is; and that an agent
+ * line is, and, where that line is the agent's first message, the note and
+ * replay it carries itself; and that an agent
  * handed its description is handed none of it again here, since the next
  * turn hands its task as it stands now.
  */
@@ -1253,7 +1254,9 @@ export const restartReplayOf = (
     const own = transcriptSteps(records, senders, undefined) ?? [];
     if (own.length === 0) return undefined;
     const opened = records[0]?.message.role === MESSAGE_ROLE.USER ? records[0].placedAt : undefined;
-    const handed = agent.prompt === null ? undefined : briefOf(agent.prompt, opened);
+    // Note that a first message handed again carries its own note and replay, so neither is replayed ahead of it.
+    const resent = sending !== undefined && records[0]?.clientId === sending;
+    const handed = agent.prompt === null || resent ? undefined : briefOf(agent.prompt, opened);
     const mine = handed?.note === undefined ? own : [handed.note, ...own];
     const steps = [...(handed?.carried?.steps ?? []), ...mine];
     const totalSteps = (handed?.carried?.totalSteps ?? 0) + mine.length;
