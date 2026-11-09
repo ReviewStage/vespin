@@ -102,6 +102,7 @@ import {
   standingGithubRow,
 } from "../testing/github-app-fake.js";
 import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "../testing/integration-connect.js";
+import { MEMBER_MCP_AGENT_SANDBOX } from "../testing/member-mcp-auth.js";
 import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
@@ -487,7 +488,9 @@ export const standing = (
     });
     yield* Effect.addFinalizer(() => Effect.promise(() => agents.dispose()));
     const memberMcp = HttpRouter.toWebHandler(
-      memberMcpApp(memberMcpBearers(bearers)).pipe(HttpRouter.provideRequest(services)),
+      memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX).pipe(
+        HttpRouter.provideRequest(services),
+      ),
       { disableLogger: true },
     );
     yield* Effect.addFinalizer(() => Effect.promise(() => memberMcp.dispose()));
