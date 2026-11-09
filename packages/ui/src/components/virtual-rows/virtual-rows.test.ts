@@ -228,12 +228,12 @@ test("a row moved to another place, the run's length unchanged, is drawn under i
   assert.deepEqual(handle.current?.drawnKeys(), drawn);
 });
 
-/** A scroller as the browser lays one out, its height, its content's, and its scroll the test's to set, and the resize observers the run arms, which the test fires. */
+/** A scroller as the browser lays one out, its height, its content's, and its scroll the test's to set, and the resize observers the run arms, which the test fires: each one, or those observing what `only` picks. */
 function standScroller(): {
   readonly scroller: { shown: boolean; height: number; top: number };
-  readonly resize: () => void;
+  readonly resize: (only?: (observed: Element) => boolean) => void;
 } {
-  const heard: ResizeObserverCallback[] = [];
+  const heard: { hear: ResizeObserverCallback; observed: Element }[] = [];
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -241,8 +241,8 @@ function standScroller(): {
       constructor(hear: ResizeObserverCallback) {
         this.#hear = hear;
       }
-      observe(): void {
-        heard.push(this.#hear);
+      observe(observed: Element): void {
+        heard.push({ hear: this.#hear, observed });
       }
       unobserve(): void {}
       disconnect(): void {}
@@ -278,9 +278,9 @@ function standScroller(): {
       if (options?.top !== undefined) this.scrollTop = options.top;
     },
   });
-  const resize = () =>
+  const resize = (only: (observed: Element) => boolean = () => true) =>
     act(() => {
-      for (const hear of heard) hear([], {} as ResizeObserver);
+      for (const { hear, observed } of heard) if (only(observed)) hear([], {} as ResizeObserver);
     });
   return { scroller, resize };
 }
@@ -327,7 +327,8 @@ test("a reader at the end of a run anchored to its end is kept there as a row gr
   resize();
   scroller.top = 49_600;
   scroller.height = 50_500;
-  resize();
+  // Note that only the run's own block is heard growing, as a row growing inside it resizes it and not the scroller.
+  resize((observed) => observed.classList.contains("ui-virtual-rows"));
   assert.equal(scroller.top, 49_900);
 });
 
