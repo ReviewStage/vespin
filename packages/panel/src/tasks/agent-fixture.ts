@@ -986,6 +986,11 @@ function terminalStage(stage: AgentStage): TerminalStage | undefined {
   return "terminal" in stage ? stage.terminal : undefined;
 }
 
+/** The port the fixture's agent shares by link, which its share and its close move, so the plug's menu reads back what it pressed. */
+const STAGED_SHARE: { shared: { readonly port: number; readonly url: string } | null } = {
+  shared: null,
+};
+
 /** One kind's answer, from its payload and the profile's stage. */
 type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
@@ -1003,6 +1008,17 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   }),
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
+  [ACT_KIND.AGENTS_PORTS]: () => ({ running: true, ports: [3000, 5173] }),
+  [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: STAGED_SHARE.shared }),
+  [ACT_KIND.AGENTS_PORT_SHARE]: ({ port }) => {
+    const url = `https://sb-relay-${port}.vercel.run`;
+    STAGED_SHARE.shared = { port, url };
+    return { url };
+  },
+  [ACT_KIND.AGENTS_PORT_UNSHARE]: () => {
+    STAGED_SHARE.shared = null;
+    return { shared: null };
+  },
   [ACT_KIND.TASKS_FILE]: ({ path, firstLine, lastLine, raw }) => {
     const lines = FILES.get(path);
     if (lines === undefined) return { refusal: TASK_FILE_REFUSAL.MISSING };

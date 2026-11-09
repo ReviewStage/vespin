@@ -68,9 +68,9 @@ export const CALL_KIND = {
   STOP_AGENT: "stop-agent",
   /** The ports a server listens on in a coding agent's own sandbox listed (`list_ports`). */
   LIST_PORTS: "list-ports",
-  /** A port of a coding agent's own sandbox shared by a public link (`share_port`), its row naming the port. */
+  /** A port of a coding agent's own sandbox shared by link (`share_port`), its row naming the port. */
   SHARE_PORT: "share-port",
-  /** A coding agent's public link to its port closed (`share_port` of null). */
+  /** A coding agent's link to its port closed (`share_port` of null). */
   UNSHARE_PORT: "unshare-port",
   /** A coding agent renamed, moved to another model, pinned, or given other servers (`update_agent`), its row naming it by its chip. */
   UPDATE_AGENT: "update-agent",

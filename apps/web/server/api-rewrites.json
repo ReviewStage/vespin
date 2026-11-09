@@ -171,6 +171,10 @@
     "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
   },
   {
+    "src": "/api/previews/sign-in",
+    "dest": "/api/default.js?route=previews/sign-in"
+  },
+  {
     "src": "/api/slack/events",
     "dest": "/api/default.js?route=slack/events"
   },
@@ -197,6 +201,10 @@
   {
     "src": "/api/pages/sandbox",
     "dest": "/api/page-sandbox.js?route=pages/sandbox"
+  },
+  {
+    "src": "/api/previews/proxy",
+    "dest": "/api/preview-proxy.js?route=previews/proxy"
   },
   {
     "src": "/api/browser/live",

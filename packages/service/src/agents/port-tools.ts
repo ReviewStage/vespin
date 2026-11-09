@@ -1,5 +1,5 @@
 /**
- * port-tools.ts -- the tools a coding agent lists the ports listening in its own cloud sandbox by, and shares one by a public link, so it can hand the developer a preview.
+ * port-tools.ts -- the tools a coding agent lists the ports listening in its own cloud sandbox by, and shares one by link, so it can hand the developer a preview.
  *
  * `list_ports` and `share_port` are doors over the one ports operation
  * (`agent-ports.ts`) that the hosted `agentPorts` procedures run too: each
@@ -7,8 +7,8 @@
  * Terminal tab's rule, so a tool reaches no sandbox its member's own
  * controls would not. A coding agent's call names no agent and acts on its
  * own (`../tool-catalog/catalog.ts`), and the catalog offers both only to an
- * agent in a sandbox of ours. Sharing opens the sandbox's own route to the
- * port, which anyone holding the link can open, replaces any port shared
+ * agent in a sandbox of ours. Sharing answers the agent's members-only
+ * preview host, as the member's own Share does, replaces any port shared
  * before, and lives only while the sandbox runs; a `share_port` of null
  * closes it. Every answer is data the model reads, never a credential.
  */
@@ -26,6 +26,7 @@ import {
   type WireRecord,
 } from "../core.js";
 import type { HostedRefusal } from "../http/http-effect.js";
+import type { PageLinks } from "../pages/page-links.js";
 import { listAgentPorts, shareAgentPort, unshareAgentPort } from "./agent-ports.js";
 import { agentToolRejected } from "./agent-tools.js";
 import type { AgentSandbox } from "./terminal/agent-sandbox.js";
@@ -75,9 +76,9 @@ export const LIST_PORTS_TOOL = {
 export const SHARE_PORT_TOOL = {
   name: AGENT_TOOL.SHARE_PORT,
   description:
-    "Share a port of your own sandbox by a public link, so the developer can open a running " +
-    "app, such as a dev server you started, from their own browser. Anyone holding the link " +
-    "can open it, so share only what the developer should see. One port is shared at a time: " +
+    "Share a port of your own sandbox by a link, so the developer can open a running app, " +
+    "such as a dev server you started, from their own browser: a member of your workspace " +
+    "who can reach you opens it signed in. One port is shared at a time: " +
     "sharing another replaces the first, and the link lives only while your sandbox runs. " +
     "Pass null to stop sharing. Answers `accepted` with the port and its link, or with shared " +
     "null once sharing stopped, or `rejected` and why.",
@@ -92,8 +93,8 @@ export interface PortsReach {
 
 /** What a tool answers: the operation's answer as accepted, or its refusal in words. */
 function answered<A extends object>(
-  operation: Effect.Effect<A, HostedRefusal, AgentSandbox | DatabaseServices>,
-): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices> {
+  operation: Effect.Effect<A, HostedRefusal, AgentSandbox | DatabaseServices | PageLinks>,
+): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices | PageLinks> {
   return operation.pipe(
     Effect.map((answer) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
     Effect.catch((refusal) =>
@@ -107,15 +108,15 @@ function answered<A extends object>(
 /** One call of `list_ports`: the ports listened on in the agent's sandbox, and whether it runs. */
 export function runListPorts(
   reach: PortsReach,
-): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices> {
+): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices | PageLinks> {
   return answered(listAgentPorts(reach.userId, reach.agentId));
 }
 
-/** One call of `share_port`: the port shared by a public link, answering it with its link, or the share closed. */
+/** One call of `share_port`: the port shared by link, answering it with its link, or the share closed. */
 export function runSharePort(
   reach: PortsReach,
   input: UnparsedWireValue,
-): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices> {
+): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices | PageLinks> {
   const asked = readShareAsked(input);
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(PORT_TOOL_REFUSAL.UNREADABLE_SHARE));

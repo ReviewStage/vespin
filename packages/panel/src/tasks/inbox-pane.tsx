@@ -839,13 +839,12 @@ function closeNotes(events: ThreadEventsAfter): ReadonlySet<string> {
   return notes;
 }
 
-/** What a row of the thread draws: a line of what happened to it, a message, the line saying earlier messages are cut, a reply on its way, or the reader's draft reply. */
+/** What a row of the thread draws: a line of what happened to it, a message, the line saying earlier messages are cut, or a reply on its way; the reader's draft reply is the log's foot after them. */
 const THREAD_ROW = {
   EVENT: "event",
   MESSAGE: "message",
   EARLIER: "earlier",
   PENDING: "pending",
-  DRAFT: "draft",
 } as const;
 
 type ThreadRow =
@@ -860,8 +859,7 @@ type ThreadRow =
       readonly kind: typeof THREAD_ROW.PENDING;
       readonly key: string;
       readonly reply: PendingInboxReply;
-    }
-  | { readonly kind: typeof THREAD_ROW.DRAFT; readonly key: string };
+    };
 
 /** The height a row of the thread is taken to have before it is drawn, in pixels: a short message's. */
 const THREAD_ROW_ESTIMATE_PX = 96;
@@ -871,8 +869,9 @@ const THREAD_ROW_ESTIMATE_PX = 96;
  * draws them (`ConversationRows`): the lines of what happened before its
  * first message, then each message, a close's note drawn under the close's
  * own line instead, with the lines that follow it, the line saying earlier
- * messages are cut after the first, which always stands, the reader's
- * replies on their way, and the draft reply last. Note that the run names
+ * messages are cut after the first, which always stands, and the reader's
+ * replies on their way; the draft reply stands after them as the log's foot
+ * (`ConversationRows`' `foot`). Note that the run names
  * its rows by one string each (`VirtualRows`), and a line of what happened
  * is kept by the message it follows, so its row is that message's id with
  * the line's kind after it.
@@ -898,7 +897,6 @@ function threadRows(
     rows.push(...eventsAt(at));
   }
   for (const reply of pending) rows.push({ kind: THREAD_ROW.PENDING, key: reply.key, reply });
-  rows.push({ kind: THREAD_ROW.DRAFT, key: THREAD_ROW.DRAFT });
   return rows;
 }
 
@@ -1916,6 +1914,7 @@ export function InboxPane({
                   className={INBOX_THREAD}
                   aria-label="Messages"
                   handle={run}
+                  foot={draftReply}
                 >
                   {(at, place) => {
                     const row = rows[at];
@@ -1957,8 +1956,6 @@ export function InboxPane({
                             place={place}
                           />
                         );
-                      case THREAD_ROW.DRAFT:
-                        return draftReply(place);
                       default:
                         return null;
                     }

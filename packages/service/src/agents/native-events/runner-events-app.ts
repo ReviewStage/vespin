@@ -200,11 +200,13 @@ interface Applying {
   readonly read: NativeReader;
   /** Who pays for the agent, as recorded as it started; none for an agent from before payers. */
   readonly payer: AgentPayer | undefined;
+  /** The subscription its latest launch put it on, which a plan payer's word is written to; none for the account's first. */
+  readonly subscriptionId: string | undefined;
   /** The description or prompt the agent was handed first, whose share of its context the ring estimates. */
   readonly brief: string;
 }
 
-/** The row each plan is kept in, which a turn's word on the plan is written to; a key's payer has none. */
+/** The kind of row each plan is kept in, the agent's subscription among them taking a turn's word on the plan; a key's payer has none. */
 const PLAN_ROW: Partial<
   Record<AgentPayer, { readonly provider: ProviderKeyProvider; readonly kind: ProviderKeyKind }>
 > = {
@@ -551,8 +553,9 @@ function landWrite(
       // Said once the batch has landed, so a turn is said failed only once its row is.
       return Effect.void;
     case NATIVE_WRITE.PLAN_STATUS: {
-      // Note that the row is the starter's credential that pays: its plan's, or, for an agent its API key
-      // pays for, that key's, which a refusal marks invalid; a plan's limit is no key's.
+      // Note that the row is the starter's credential that pays: the plan's subscription the agent ran on,
+      // or, for an agent its API key pays for, that key's, which a refusal marks invalid; a plan's limit
+      // is no key's.
       const row =
         applying.payer === AGENT_PAYER.API_KEY
           ? write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
@@ -570,6 +573,7 @@ function landWrite(
         write.resetsAt === undefined ? undefined : new Date(write.resetsAt),
         new Date(write.turnOpenedAt ?? now),
         new Date(now),
+        applying.payer === AGENT_PAYER.API_KEY ? undefined : applying.subscriptionId,
       );
     }
   }
@@ -825,6 +829,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     writer,
     read: reader,
     payer: Option.getOrUndefined(routing)?.payer ?? undefined,
+    subscriptionId: Option.getOrUndefined(routing)?.subscriptionId ?? undefined,
     brief: agent.value.prompt ?? agent.value.descriptionSnapshot ?? "",
   };
   // Note that the turns the batch settles are heard once its transaction commits, not as the

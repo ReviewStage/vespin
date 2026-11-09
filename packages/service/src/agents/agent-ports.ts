@@ -1,5 +1,5 @@
 /**
- * agent-ports.ts -- the TCP ports a server listens on in a coding agent's cloud sandbox, and the one shared by a public link: listed, shared, read back, and closed, for the account that reaches the agent.
+ * agent-ports.ts -- the TCP ports a server listens on in a coding agent's cloud sandbox, and the one shared by link: listed, shared, read back, and closed, for the account that reaches the agent.
  *
  * This is the one implementation every door runs: the hosted `agentPorts`
  * procedures a member's desktop and web call (`agent-ports-procedures.ts`),
@@ -18,10 +18,14 @@
  * is never woken here, and answers so with no ports; an agent on a Mac has
  * no sandbox, and answers the same.
  *
- * One port may be shared by a public link, the sandbox's own route to it,
- * only from a running sandbox: a share is refused as stopped otherwise, and
- * the link lives only while the sandbox runs. Sharing another port replaces
- * the first. The share is read back from the sandbox's routes.
+ * One port may be shared, only from a running sandbox: a share is refused as
+ * stopped otherwise, and the link lives only while the sandbox runs. Sharing
+ * another port replaces the first. The sandbox's own route to the port is
+ * never handed out: the link answered is the agent's preview host
+ * (`../previews/preview-links.ts`), which only a signed-in member who reaches
+ * the agent can open, on a deployment with the page sandbox; one without it,
+ * a Preview or a local run, answers the route. The share is read back from
+ * the sandbox's routes.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -34,11 +38,13 @@ import type {
 import type { SandboxError } from "@repo/sandbox";
 import { Effect } from "effect";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
+import { PageLinks } from "../pages/page-links.js";
+import { previewOrigin } from "../previews/preview-links.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
 /** One operation on an agent's ports, refused as every sandbox route refuses. */
-type PortsEffect<A> = Effect.Effect<A, HostedRefusal, AgentSandbox | DatabaseServices>;
+type PortsEffect<A> = Effect.Effect<A, HostedRefusal, AgentSandbox | DatabaseServices | PageLinks>;
 
 /** The session of the agent's cloud sandbox the account reaches; none for an agent on a Mac or one that has not run. */
 const cloudSession = (userId: string, id: string) =>
@@ -52,6 +58,13 @@ const onSandbox = <A>(call: (sandbox: AgentSandboxService) => Effect.Effect<A, S
     return yield* sandboxOrUpstream(call(yield* AgentSandbox));
   });
 
+/** The link a member is handed for the agent's shared port: its preview host where the deployment has one, the route otherwise. */
+const linkOf = (id: string, route: string) =>
+  Effect.gen(function* () {
+    const { sandbox } = yield* PageLinks;
+    return sandbox === undefined ? route : `${previewOrigin(sandbox, id)}/`;
+  });
+
 /** The ports listened on in the agent's sandbox, and whether it is running. */
 export function listAgentPorts(userId: string, id: string): PortsEffect<ListeningPortsAnswer> {
   return Effect.flatMap(cloudSession(userId, id), (sessionId) =>
@@ -61,7 +74,7 @@ export function listAgentPorts(userId: string, id: string): PortsEffect<Listenin
   );
 }
 
-/** The port shared by a public link, replacing any shared before; a sandbox not running is refused as stopped. */
+/** The port shared by link, replacing any shared before; a sandbox not running is refused as stopped. */
 export function shareAgentPort(
   userId: string,
   id: string,
@@ -72,7 +85,7 @@ export function shareAgentPort(
     if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
     const url = yield* onSandbox((sandbox) => sandbox.share(sessionId, port));
     if (url === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
-    return { url };
+    return { url: yield* linkOf(id, url) };
   });
 }
 
@@ -87,12 +100,11 @@ export function unshareAgentPort(userId: string, id: string): PortsEffect<Shared
 
 /** The port shared now and its link; none where none is shared or the sandbox is not running. */
 export function sharedAgentPort(userId: string, id: string): PortsEffect<SharedPortAnswer> {
-  return Effect.flatMap(cloudSession(userId, id), (sessionId) =>
-    sessionId === undefined
-      ? Effect.succeed({ shared: null })
-      : Effect.map(
-          onSandbox((sandbox) => sandbox.shared(sessionId)),
-          (shared) => ({ shared }),
-        ),
-  );
+  return Effect.gen(function* () {
+    const sessionId = yield* cloudSession(userId, id);
+    if (sessionId === undefined) return { shared: null };
+    const shared = yield* onSandbox((sandbox) => sandbox.shared(sessionId));
+    if (shared === null) return { shared: null };
+    return { shared: { port: shared.port, url: yield* linkOf(id, shared.url) } };
+  });
 }

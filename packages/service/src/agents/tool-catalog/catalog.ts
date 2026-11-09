@@ -59,6 +59,7 @@ import type { HostedEnvironment } from "../../environment.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import type { IntegrationConnect } from "../../integrations/integration-connect.js";
+import type { PageLinks } from "../../pages/page-links.js";
 import type { ModelCatalog } from "../../providers/model-catalog.js";
 import {
   type CommentToolName,
@@ -189,7 +190,8 @@ export type WorkspaceMcpServices =
   | ModelCatalog
   | IntegrationConnect
   | HostedEnvironment
-  | SentryApp;
+  | SentryApp
+  | PageLinks;
 
 /** What a tool runs against: the doors' services, and the agent's browser and sandbox, which the server provides itself (`../workspace-mcp/app.ts`). */
 type WorkspaceMcpToolServices = WorkspaceMcpServices | AgentBrowser | AgentSandbox;
@@ -550,7 +552,7 @@ const CATALOG = [
     content: browserContent,
     refused: browserNotRun,
   }),
-  // The ports of the agent's sandbox, and the one it shares by a public link.
+  // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
 ] as const;

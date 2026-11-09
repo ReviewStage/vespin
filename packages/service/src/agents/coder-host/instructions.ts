@@ -198,7 +198,7 @@ function browserWords(shell: string): string {
 
 \`${AGENT_TOOL.BROWSER}\` drives a real browser, a Chromium in your own sandbox, whose tabs the developer can watch in its Browser tab and take over; your own dev server is at \`localhost\` there too. Use it for what the developer should see or help with: a flow to show them, a preview of what you built, or a page that needs them, such as a sign-in, MFA, or a CAPTCHA, which you ask them to finish in its tab. Keep throwaway checks of your own work, such as a screenshot before you publish, on Playwright from ${shell}, which leaves no tab behind. Take a snapshot for the refs before you click or type on an element, and a screenshot to see the page. Choose in a native dropdown with a \`select\` action on its ref and the option's label, rather than clicking it or its options, which no click reaches. The developer may take a tab over at any time: while they drive it, your actions on it are refused, so wait until they hand it back, or ask them, rather than working around them in another tab.
 
-Where the developer should see a running app for themselves, such as a dev server you started, find its port with \`${AGENT_TOOL.LIST_PORTS}\` and share it with \`${AGENT_TOOL.SHARE_PORT}\`, which answers a public link that anyone holding it can open while your sandbox runs, then hand them that link.
+Where the developer should see a running app for themselves, such as a dev server you started, find its port with \`${AGENT_TOOL.LIST_PORTS}\` and share it with \`${AGENT_TOOL.SHARE_PORT}\`, which answers a link they open signed in while your sandbox runs, then hand them that link.
 
 `;
 }

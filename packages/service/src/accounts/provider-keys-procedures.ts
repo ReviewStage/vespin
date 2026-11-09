@@ -242,8 +242,24 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         if (refused !== undefined) return yield* keysAnswer(userId, ring, refused);
         const now = yield* DateTime.nowAsDate;
         const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
+        const placement = {
+          ...(input.subscriptionId === undefined
+            ? undefined
+            : { subscriptionId: input.subscriptionId }),
+          ...(input.add === undefined ? undefined : { add: input.add }),
+        };
         yield* hostedStoreOrUnavailable(
-          saveProviderKey(userId, provider, kind, sealed, providerKeyHint(key), null, now),
+          saveProviderKey(
+            userId,
+            provider,
+            kind,
+            sealed,
+            providerKeyHint(key),
+            null,
+            now,
+            null,
+            placement,
+          ),
         );
         yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
         return yield* keysAnswer(userId, ring);
@@ -276,18 +292,23 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** One provider's credential removed, by the provider and the kind the query names; an API key where it names none. A ChatGPT plan is revoked at OpenAI first. */
+    /** One provider's credential removed, by the provider, the kind, and the subscription the query names; an API key where it names no kind, the first of its kind where it names no subscription. A ChatGPT plan is revoked at OpenAI first. */
     removeProviderKey: keyed.removeProviderKey.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       const kind = input.query.kind ?? PROVIDER_KEY_KIND.API_KEY;
+      const { subscriptionId } = input.query;
       if (
         kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
         input.query.provider === SUBSCRIPTION_KIND_PROVIDER[kind]
       ) {
-        const confirmed = yield* hostedStoreOrUnavailable(removeChatGptCredentials(userId, ring));
+        const confirmed = yield* hostedStoreOrUnavailable(
+          removeChatGptCredentials(userId, ring, subscriptionId),
+        );
         return yield* keysAnswer(userId, ring, undefined, !confirmed);
       }
-      yield* hostedStoreOrUnavailable(removeProviderKey(userId, input.query.provider, kind));
+      yield* hostedStoreOrUnavailable(
+        removeProviderKey(userId, input.query.provider, kind, subscriptionId),
+      );
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -295,7 +316,13 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
     setProviderKeyForAgents: keyed.setProviderKeyForAgents.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       yield* hostedStoreOrUnavailable(
-        setProviderKeyForAgents(userId, input.provider, input.kind, input.forAgents),
+        setProviderKeyForAgents(
+          userId,
+          input.provider,
+          input.kind,
+          input.forAgents,
+          input.subscriptionId,
+        ),
       );
       return yield* keysAnswer(userId, ring);
     }),

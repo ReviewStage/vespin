@@ -1,4 +1,4 @@
-import type { HostedAgentClient } from "@repo/features";
+import type { HostedAgentClient, HostedAgentPortsClient } from "@repo/features";
 import { ACCOUNT_INBOX_REPOSITORYLESS } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
@@ -278,6 +278,8 @@ export type AgentClient = Pick<
 export interface AgentsDependencies extends AccountGateDependencies {
   kernel: Pick<HostKernel, "emit" | "now"> & AccountGateDependencies["kernel"];
   client: AgentClient;
+  /** The service's side of an agent's ports and its shared link, asked on the window's behalf. */
+  ports: Pick<HostedAgentPortsClient, "list" | "shared" | "share" | "unshare">;
   /** The account signed in now, by its id, which every live read names; none where nobody is. */
   accountId: () => string | undefined;
   /** The content this host keeps under keys it never changes under, which a picture's, an attachment's, and an image's reads answer from (`kept-content.ts`). */
@@ -1222,6 +1224,11 @@ function composed(
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: ({ agentId, messageId }) => asked(client.rewind(agentId, messageId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
+    // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
+    AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
+    AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),
+    AGENTS_PORT_SHARE: ({ agentId, port }) => asked(dependencies.ports.share(agentId, port)),
+    AGENTS_PORT_UNSHARE: ({ agentId }) => asked(dependencies.ports.unshare(agentId)),
     AGENTS_DELETE: declaredWrite(dependencies.pool, deleted),
     AGENTS_PAGE: ({ agentId }) => asked(client.agent(agentId)),
     AGENTS_CHANGES: ({ agentId, number }) => asked(client.changes(agentId, number)),

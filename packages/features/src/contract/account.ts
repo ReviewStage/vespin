@@ -56,6 +56,7 @@ import {
   providerKeyKindSchema,
   providerKeySaveRequestSchema,
   providerKeysAnswerSchema,
+  subscriptionIdSchema,
 } from "../provider-key-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
@@ -109,6 +110,7 @@ export const accountContract = {
             Object.values(PROVIDER_KEY_PROVIDER),
           ),
           [PROVIDER_KEY_QUERY.KIND]: EffectSchema.optionalKey(providerKeyKindSchema),
+          [PROVIDER_KEY_QUERY.SUBSCRIPTION_ID]: EffectSchema.optionalKey(subscriptionIdSchema),
         }),
       }),
     )

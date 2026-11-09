@@ -9,6 +9,7 @@ import {
   readAgent,
   readAgentContext,
   readAgentRouting,
+  recordAgentPayer,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
@@ -1983,6 +1984,78 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+      }),
+  );
+
+  it.effect(
+    "a limit a Codex turn reaches is written to the subscription its agent runs on, and the account's first stands",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CODEX, ["Find the queue."]);
+        yield* signedIn(agent.userId);
+        const second = yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-sign-in" },
+          "ChatGPT",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+          second,
+        );
+
+        const resetsAt = Date.UTC(2026, 9, 22, 9);
+        yield* post(
+          agent.bearer,
+          refusedLaunch(
+            agent.lineId,
+            0,
+            {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+            [
+              {
+                method: "account/rateLimits/updated",
+                params: {
+                  rateLimits: {
+                    limitId: null,
+                    limitName: null,
+                    primary: {
+                      usedPercent: 100,
+                      windowDurationMins: 300,
+                      resetsAt: resetsAt / 1000,
+                    },
+                    secondary: null,
+                    rateLimitReachedType: "rate_limit_reached",
+                  },
+                },
+              },
+            ],
+          ),
+        );
+        const rows = yield* listProviderKeyRows(agent.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+
+        assert.deepEqual(
+          rows.map((row) => [
+            row.id === second,
+            row.status,
+            row.limitResetsAt?.toISOString() ?? null,
+          ]),
+          [
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null],
+            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString()],
+          ],
+        );
       }),
   );
 

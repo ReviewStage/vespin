@@ -24,6 +24,14 @@ import { SpinnerRing } from "../spinner/spinner.js";
  * sign-in has been out a moment (`--ui-settle-delay`), as every busy
  * button does.
  *
+ * A gate button waited on may offer its way back (`cancel`): a quiet
+ * Cancel at the button's trailing edge, in the button's own ink, standing
+ * over it rather than under the card, so the card keeps its height as the
+ * wait begins and ends and nothing beside it moves. It is a button of its
+ * own beside the waited one, never inside it, since the waited one refuses
+ * every press; the waited one's words keep the center, the inset at both
+ * ends widened to the room Cancel takes.
+ *
  * The way in taken last (`lastUsed`) wears "Last used" on its top-right
  * corner, a pill hung over the button rather than a word inside it, so the
  * button is still named by its words alone and the pill describes it.
@@ -40,6 +48,12 @@ export const PROVIDER_BUTTON_SIZE = {
 
 export type ProviderButtonSize = (typeof PROVIDER_BUTTON_SIZE)[keyof typeof PROVIDER_BUTTON_SIZE];
 
+/** A waited gate button's way back: its words and its press. */
+export interface ProviderButtonCancel {
+  readonly label: string;
+  readonly onPress: () => void;
+}
+
 /**
  * The gate's button: forty pixels tall on the window's control corner, the
  * quiet fill in a hairline, or, primary, filled in the text's ink the way a
@@ -49,7 +63,8 @@ export type ProviderButtonSize = (typeof PROVIDER_BUTTON_SIZE)[keyof typeof PROV
  */
 const GATE =
   "ui-provider-button m-0 flex h-provider-gate items-center justify-center gap-icon-gap rounded-control border-0 bg-muted px-ui-16 py-0 font-ui text-label-inline font-label text-foreground shadow-provider-gate transition-[background-color,opacity] duration-(--ui-duration-hover) ease-motion-exit pointer-coarse:h-provider-gate-touch in-data-[ui-profile=desktop]:[-webkit-app-region:no-drag] hover:not-disabled:bg-fill-strong [&:disabled:not([aria-busy=true])]:opacity-disabled " +
-  "data-[primary=true]:bg-primary data-[primary=true]:text-primary-foreground data-[primary=true]:shadow-none data-[primary=true]:hover:not-disabled:bg-ink";
+  "data-[primary=true]:bg-primary data-[primary=true]:text-primary-foreground data-[primary=true]:shadow-none data-[primary=true]:hover:not-disabled:bg-ink " +
+  "data-[cancelable=true]:px-ui-64";
 
 /**
  * "Last used": a small pill hung on the top-right corner of the button it
@@ -62,6 +77,14 @@ const GATE =
  */
 const LAST_USED_PILL =
   "ui-provider-button-last-used pointer-events-none absolute -top-ui-8 -right-ui-6 rounded-ui-full border border-transparent bg-provider-last-used px-ui-6 py-0 text-tag leading-caption font-tag whitespace-nowrap text-provider-last-used-ink transition-opacity duration-(--ui-duration-hover) ease-motion-exit [.ui-provider-button:disabled:not([aria-busy=true])+&]:opacity-disabled [.ui-button:disabled+&]:opacity-disabled";
+
+/**
+ * A waited gate button's way back, over its trailing edge, in the waited
+ * button's ink: the text's on the plain fill, the inverse on the primary.
+ * Only the desktop's window is dragged, so a press on its bar stays a press.
+ */
+const CANCEL =
+  "ui-provider-button-cancel absolute inset-y-0 end-ui-4 flex items-center in-data-[ui-profile=desktop]:[-webkit-app-region:no-drag] data-[primary=true]:[&_.ui-button]:text-primary-foreground";
 
 /** What the last-used pill says. */
 const LAST_USED = "Last used";
@@ -77,6 +100,7 @@ function GateButton({
   busy,
   busyLabel,
   disabled,
+  cancelable,
   describedBy,
   onPress,
 }: {
@@ -86,6 +110,8 @@ function GateButton({
   busy: boolean;
   busyLabel: string | undefined;
   disabled: boolean;
+  /** Whether a Cancel stands over its trailing edge, which its inset makes room for. */
+  cancelable: boolean;
   describedBy: string | undefined;
   onPress: () => void;
 }): React.JSX.Element {
@@ -95,6 +121,7 @@ function GateButton({
       type="button"
       className={GATE}
       data-primary={primary ? "true" : undefined}
+      data-cancelable={cancelable ? "true" : undefined}
       disabled={disabled || busy}
       aria-busy={busy ? true : undefined}
       aria-describedby={describedBy}
@@ -123,6 +150,7 @@ export function ProviderButton({
   disabled = false,
   lastUsed = false,
   words: said,
+  cancel,
   onPress,
 }: BusyProps & {
   provider: MarkProvider;
@@ -136,9 +164,12 @@ export function ProviderButton({
   lastUsed?: boolean;
   /** What it says where it is no sign-in ("Install on GitHub"); "Continue with" its name where none is given. */
   words?: string | undefined;
+  /** A gate button's way back while it is busy, drawn at its trailing edge; none where the wait cannot be taken back here. */
+  cancel?: ProviderButtonCancel | undefined;
   onPress: () => void;
 }): React.JSX.Element {
   const badge = useId();
+  const cancelable = size === PROVIDER_BUTTON_SIZE.GATE && busy && cancel !== undefined;
   const words = said ?? `Continue with ${name}`;
   const describedBy = lastUsed ? badge : undefined;
   return (
@@ -151,6 +182,7 @@ export function ProviderButton({
           busy={busy}
           busyLabel={busyLabel}
           disabled={disabled}
+          cancelable={cancelable}
           describedBy={describedBy}
           onPress={onPress}
         />
@@ -167,6 +199,13 @@ export function ProviderButton({
           {words}
         </Button>
       )}
+      {cancelable && cancel !== undefined ? (
+        <span className={CANCEL} data-primary={primary ? "true" : undefined}>
+          <Button variant={BUTTON_VARIANT.QUIET} onClick={cancel.onPress}>
+            {cancel.label}
+          </Button>
+        </span>
+      ) : null}
       {lastUsed ? (
         <span id={badge} className={LAST_USED_PILL}>
           {LAST_USED}

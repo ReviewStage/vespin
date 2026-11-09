@@ -26,6 +26,7 @@ import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { BROWSER_AGENT_ACTION } from "@repo/features/browser-agent-actions";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
+import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
@@ -38,7 +39,7 @@ import {
 } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Layer, Option } from "effect";
+import { Clock, Effect, Layer, Option, Redacted } from "effect";
 import { Base64 } from "effect/encoding";
 import { type HttpClient, HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -51,6 +52,7 @@ import {
   completeIntegrationSignIn,
 } from "../../integrations/integration-store.js";
 import { INTEGRATION } from "../../integrations/integrations.js";
+import { PageLinks } from "../../pages/page-links.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import type { CommentToolName } from "../../tasks/comment-tools.js";
 import { PICTURE_LOOK_REFUSAL, pictureNotLooked } from "../../tasks/picture-look.js";
@@ -153,6 +155,18 @@ const NO_INTEGRATIONS = integrationConnectOf(() => ({
   configured: false,
 }));
 
+/** A deployment with no page sandbox, as a Preview is, whose shared port's link is its sandbox's own route. */
+const NO_PAGE_SANDBOX = Layer.succeed(PageLinks, { sandbox: undefined });
+
+/** A deployment with the page sandbox, whose shared port's link is the agent's members-only preview host. */
+const PAGE_SANDBOX = Layer.succeed(PageLinks, {
+  sandbox: {
+    origin: PAGE_SANDBOX_ORIGIN,
+    key: Redacted.make("synthetic-preview-key-for-tests-only-00000"),
+    appOrigins: [ORIGIN],
+  },
+});
+
 /** The services the doors run against, over the test's database: GitHub, the catalog, and Linear none of them reach. */
 const doorServices = Effect.gen(function* () {
   return Layer.mergeAll(
@@ -165,6 +179,7 @@ const doorServices = Effect.gen(function* () {
     NO_INTEGRATIONS,
     Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
     Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+    NO_PAGE_SANDBOX,
   );
 });
 
@@ -210,15 +225,16 @@ function sharingSandbox() {
   return { layer, shared };
 }
 
-/** The server's group over the test's database, the sandbox door, the browser, and the agent's sandbox given, and any services that stand in for the ones given, as a fetch a client is handed. */
+/** The server's group over the test's database, the sandbox door, the browser, the agent's sandbox, and the page links given, and any services that stand in for the ones given, as a fetch a client is handed. */
 const standingOver = (
   sandbox: InboxSandboxDoor = NO_SANDBOX,
   instead?: Layer.Layer<IntegrationConnect | HttpClient.HttpClient>,
   browser: WorkspaceMcpBrowser = noSandboxBrowserLayer,
   agentSandbox: WorkspaceMcpAgentSandbox = NO_AGENT_SANDBOX,
+  pageLinks: Layer.Layer<PageLinks> = NO_PAGE_SANDBOX,
 ) =>
   Effect.gen(function* () {
-    const base = yield* doorServices;
+    const base = Layer.merge(yield* doorServices, pageLinks);
     const services = instead === undefined ? base : Layer.merge(base, instead);
     const web = HttpRouter.toWebHandler(
       workspaceMcpApp({ sandbox: () => ({ files: sandbox }), browser, agentSandbox }).pipe(
@@ -1173,7 +1189,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "share_port shares a port of the agent's own sandbox by a public link, and null stops sharing",
+    "share_port shares a port of the agent's own sandbox at its members-only preview host, never the sandbox's route, and null stops sharing",
     () =>
       Effect.gen(function* () {
         const agent = yield* agentWithBearer;
@@ -1182,7 +1198,13 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const now = new Date(yield* Clock.currentTimeMillis);
         yield* claimRuntimeSession(admitted.target, sessionId, now);
         const sandbox = sharingSandbox();
-        const fetch = yield* standingOver(NO_SANDBOX, undefined, undefined, sandbox.layer);
+        const fetch = yield* standingOver(
+          NO_SANDBOX,
+          undefined,
+          undefined,
+          sandbox.layer,
+          PAGE_SANDBOX,
+        );
         const client = yield* connected(fetch, agent.bearer);
 
         const share = yield* Effect.promise(() =>
@@ -1194,10 +1216,12 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         yield* Effect.promise(() => client.close());
 
+        // The agent's preview host is its id without dashes under the page sandbox's domain.
+        const host = `${agent.agentId.replaceAll("-", "")}.vespin.page`;
         assert.deepEqual(firstJson(share), {
           status: "accepted",
           port: 3000,
-          url: `https://${sessionId}-3000.sandbox.test`,
+          url: `https://${host}/`,
         });
         assert.deepEqual(sharedThen, [[sessionId, 3000]]);
         assert.deepEqual(firstJson(stop), { status: "accepted", shared: null });

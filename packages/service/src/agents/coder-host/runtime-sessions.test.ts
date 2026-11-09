@@ -17,7 +17,6 @@ import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-ke
 import {
   listProviderKeyRows,
   saveProviderKey,
-  setProviderKeyForAgents,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
@@ -1177,7 +1176,7 @@ const startIn = (workspaceId: string, model: string, key = randomUUID()) => ({
 });
 
 it.layer(Layer.merge(getTestDB(), REACHED))(
-  "a Start decides the runtime and the payer once",
+  "a Start decides the runtime and its first payer",
   (it) => {
     it.effect(
       "an account with a setup-token starts a Claude agent on Claude Code paid by its plan; a GPT model or an account with no setup-token, none with an API key, is refused by name with the provider, since Vespin's key pays for no coding agent, and a function with no harness refuses it as not here rather than run it on the retired runtime; each leaves no agent",
@@ -2063,85 +2062,47 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "where the Claude plan is offered, Settings' choice alone decides: Subscription runs every Claude model on Claude Code, a fast version with its own fast mode, and API key runs on Claude Code on the API key, a fast version included; with no API key saved and the plan not selected, or nothing connected, the Start is refused, never run on Vespin's key",
+      "a Start of a Claude model runs on Claude Code on the plan where the account keeps a subscription of it, a fast version with its own fast mode, and on the API key where it keeps none; with neither, the Start is refused, never run on Vespin's key",
       () =>
         Effect.gen(function* () {
           const cases: readonly {
             readonly name: string;
             readonly plan: boolean;
-            readonly forAgents: boolean;
             readonly apiKey: boolean;
             readonly model: string;
             readonly recorded: readonly [string, AgentPayer | null] | "refused";
           }[] = [
             {
-              name: "Subscription, an API key saved too",
+              name: "a subscription, an API key saved too",
               plan: true,
-              forAgents: true,
               apiKey: true,
               model: "anthropic/claude-opus-5.5",
               recorded: ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
             },
             {
-              name: "Subscription, a fast version",
+              name: "a subscription, a fast version",
               plan: true,
-              forAgents: true,
               apiKey: false,
               model: "anthropic/claude-opus-5.5-fast",
               recorded: ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
             },
             {
-              name: "API key, saved",
-              plan: true,
-              forAgents: false,
-              apiKey: true,
-              model: "anthropic/claude-opus-5.5",
-              recorded: ["claude_code", AGENT_PAYER.API_KEY],
-            },
-            {
-              name: "API key, a fast version",
-              plan: true,
-              forAgents: false,
+              name: "no subscription, an API key saved, a fast version",
+              plan: false,
               apiKey: true,
               model: "anthropic/claude-opus-5.5-fast",
               recorded: ["claude_code", AGENT_PAYER.API_KEY],
             },
             {
-              name: "the plan off, no API key",
-              plan: true,
-              forAgents: false,
+              name: "nothing connected",
+              plan: false,
               apiKey: false,
               model: "anthropic/claude-opus-5.5",
-              recorded: "refused",
-            },
-            {
-              name: "no plan connected, an API key saved",
-              plan: false,
-              forAgents: true,
-              apiKey: true,
-              model: "anthropic/claude-opus-5.5",
-              recorded: ["claude_code", AGENT_PAYER.API_KEY],
-            },
-            {
-              name: "no plan connected, a fast version",
-              plan: false,
-              forAgents: true,
-              apiKey: false,
-              model: "anthropic/claude-opus-5.5-fast",
               recorded: "refused",
             },
           ];
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(each.plan);
-            if (!each.forAgents) {
-              const turned = yield* setProviderKeyForAgents(
-                owner,
-                PROVIDER_KEY_PROVIDER.ANTHROPIC,
-                PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-                false,
-              );
-              assert.equal(turned, true, each.name);
-            }
             if (each.apiKey) yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC);
             const { agentSessions, claudeCode, native } = runtimes();
             const layers = Layer.mergeAll(
@@ -2171,12 +2132,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "where the ChatGPT plan is offered, Settings' choice alone decides: Subscription runs GPT models on Codex on the plan, and API key on Codex on the OpenAI API key, and the Start is refused where none was saved",
+      "a Start of a GPT model runs on Codex on the plan where the account keeps a ChatGPT sign-in, and on its OpenAI API key where it keeps none, and is refused where neither was saved",
       () =>
         Effect.gen(function* () {
           const cases: readonly {
             readonly name: string;
-            readonly forAgents: boolean;
+            readonly signedIn: boolean;
             readonly apiKey:
               | typeof PROVIDER_KEY_PROVIDER.OPENAI
               | typeof PROVIDER_KEY_PROVIDER.ANTHROPIC
@@ -2185,38 +2146,32 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             readonly recorded: readonly [string, AgentPayer | null] | "refused";
           }[] = [
             {
-              name: "Subscription, an API key saved too",
-              forAgents: true,
+              name: "a sign-in, an API key saved too",
+              signedIn: true,
               apiKey: PROVIDER_KEY_PROVIDER.OPENAI,
               model: "openai/gpt-5.5",
               recorded: ["codex", AGENT_PAYER.CHATGPT_SUBSCRIPTION],
             },
             {
-              name: "API key, saved",
-              forAgents: false,
+              name: "no sign-in, an API key saved",
+              signedIn: false,
               apiKey: PROVIDER_KEY_PROVIDER.OPENAI,
               model: "openai/gpt-5.5",
               recorded: ["codex", AGENT_PAYER.API_KEY],
             },
             {
-              name: "the plan off, only an Anthropic API key saved",
-              forAgents: false,
+              name: "no sign-in, only an Anthropic API key saved",
+              signedIn: false,
               apiKey: PROVIDER_KEY_PROVIDER.ANTHROPIC,
               model: "openai/gpt-5.5",
               recorded: "refused",
             },
           ];
           for (const each of cases) {
-            const { owner, workspaceId } = yield* openStarter(false, "signed_in");
-            if (!each.forAgents) {
-              const turned = yield* setProviderKeyForAgents(
-                owner,
-                PROVIDER_KEY_PROVIDER.OPENAI,
-                PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-                false,
-              );
-              assert.equal(turned, true, each.name);
-            }
+            const { owner, workspaceId } = yield* openStarter(
+              false,
+              each.signedIn ? "signed_in" : "none",
+            );
             if (each.apiKey !== undefined) yield* saveApiKey(owner, each.apiKey);
             const { agentSessions, codex, native } = runtimes();
             const layers = Layer.mergeAll(
@@ -2250,21 +2205,16 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "with the ChatGPT plan or API key selected a GPT fast version is offered beside its model, and a Start on one runs on Codex, which runs it on its fast tier, while its Ultrafast version is offered on API key alone",
+      "on a ChatGPT sign-in or an OpenAI API key a GPT fast version is offered beside its model, and a Start on one runs on Codex, which runs it on its fast tier, while its Ultrafast version is offered on the API key alone",
       () =>
         Effect.gen(function* () {
-          for (const forAgents of [true, false]) {
-            const { owner, workspaceId } = yield* openStarter(false, "signed_in");
-            if (!forAgents) {
-              yield* setProviderKeyForAgents(
-                owner,
-                PROVIDER_KEY_PROVIDER.OPENAI,
-                PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-                false,
-              );
-              // API key selected is a key saved, which pays now that ours never does.
-              yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.OPENAI);
-            }
+          for (const signedIn of [true, false]) {
+            const { owner, workspaceId } = yield* openStarter(
+              false,
+              signedIn ? "signed_in" : "none",
+            );
+            // Note that an account with no sign-in pays on its key, which a key saved is, now that ours never does.
+            if (!signedIn) yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.OPENAI);
             const { agentSessions, codex, native } = runtimes();
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
@@ -2288,10 +2238,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 "openai/gpt-5.5",
                 "openai/gpt-5.5-fast",
                 "openai/gpt-6.1-sol",
-                ...(forAgents ? [] : ["openai/gpt-6.1-sol-ultrafast"]),
+                ...(signedIn ? [] : ["openai/gpt-6.1-sol-ultrafast"]),
               ],
             );
-            assert.ok(Result.isSuccess(started), String(forAgents));
+            assert.ok(Result.isSuccess(started), String(signedIn));
             assert.equal(started.success.agent.model, "openai/gpt-5.5-fast");
             assert.deepEqual(heard(agentSessions), []);
             assert.ok(heard(codex).length > 0, "Codex runs it");
