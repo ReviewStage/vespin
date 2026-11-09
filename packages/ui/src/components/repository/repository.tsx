@@ -258,7 +258,8 @@ export function RepositoryLines({
   pictures: boolean;
 }): React.JSX.Element {
   const scroller = useRef<HTMLDivElement | null>(null);
-  const keys = repositories.map(({ repository }) => repository.toLowerCase());
+  // Note that a line is keyed by its name as spelled, because two names that differ only in case are two lines.
+  const keys = repositories.map(({ repository }) => repository);
   return (
     <div className="ui-repository-lines flex min-w-0 max-h-repository-lines flex-col">
       <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>

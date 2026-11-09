@@ -221,7 +221,11 @@ function ReachedGitHub({
   const pictures = useRepositoryPictures();
   const held = useHeldToken();
   const onToken = held && reachedRoute(repositories) === GITHUB_ACCESS.TOKEN;
-  const [refusal, setRefusal] = useState<string | undefined>(undefined);
+  // Note that a refusal is held with the route it came from, so it goes once the other route stands.
+  const [refused, setRefused] = useState<{ onToken: boolean; words: string } | undefined>();
+  const refusal = refused?.onToken === onToken ? refused.words : undefined;
+  const setRefusal = (words: string | undefined) =>
+    setRefused(words === undefined ? undefined : { onToken, words });
   const lines = repositories.map(({ fullName, access }) => ({
     repository: fullName,
     token: access === GITHUB_ACCESS.TOKEN,
