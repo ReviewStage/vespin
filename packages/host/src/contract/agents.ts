@@ -70,6 +70,14 @@ import {
   hostPairingViewSchema,
 } from "@repo/features/host-pairing-view";
 import { LIVE_READ } from "@repo/features/live-wire";
+import {
+  agentPortShareAnswerViewSchema,
+  agentPortShareParamsSchema,
+  agentPortsAnswerViewSchema,
+  agentPortsParamsSchema,
+  agentPortUnshareAnswerViewSchema,
+  agentSharedPortAnswerViewSchema,
+} from "@repo/features/port-forward-acts";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
@@ -287,6 +295,39 @@ export const AGENT_ACTS = declaredActs({
     input: agentStopParamsSchema,
     output: agentWarmAnswerViewSchema,
     refusal: "Could not keep the agent warm on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  // Note that an agent's ports and its shared link are asked of the service on every host, forwarding nothing, so a browser tab's plug can share one (`agent-forward.tsx`).
+  AGENTS_PORTS: hostAct({
+    input: agentPortsParamsSchema,
+    output: agentPortsAnswerViewSchema,
+    refusal: "Could not read the agent's ports on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_PORT_SHARED: hostAct({
+    input: agentPortsParamsSchema,
+    output: agentSharedPortAnswerViewSchema,
+    refusal: "Could not read the agent's shared link on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_PORT_SHARE: hostAct({
+    input: agentPortShareParamsSchema,
+    output: agentPortShareAnswerViewSchema,
+    refusal: "Could not share this port.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_PORT_UNSHARE: hostAct({
+    input: agentPortsParamsSchema,
+    output: agentPortUnshareAnswerViewSchema,
+    refusal: "Could not stop sharing this port.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
