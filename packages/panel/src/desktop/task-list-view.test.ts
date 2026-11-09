@@ -374,10 +374,10 @@ test("the scope switcher offers Assigned to, Group by, and New section, Assigned
   assert.deepEqual(lastMenuItems(), [
     "Assigned to",
     "Group by",
-    "Show finished sub-tasks",
+    "Show completed sub-tasks",
     "New section",
   ]);
-  assert.equal(menuItem("Show finished sub-tasks").getAttribute("aria-checked"), "false");
+  assert.equal(menuItem("Show completed sub-tasks").getAttribute("aria-checked"), "false");
   act(() => menuItem("Assigned to").click());
   await vi.waitFor(() =>
     assert.deepEqual(
@@ -454,7 +454,7 @@ test("a workspace nobody shares lists every task and offers no Assigned to, Grou
   assert.equal(headWords(sidebar), "My tasks");
   const button = scopeButton(sidebar);
   act(() => button.click());
-  assert.deepEqual(lastMenuItems(), ["Group by", "Show finished sub-tasks", "New section"]);
+  assert.deepEqual(lastMenuItems(), ["Group by", "Show completed sub-tasks", "New section"]);
   act(() => menuItem("Group by").click());
   assert.deepEqual(
     ["Repository", "Progress", "None"].map((choice) =>
@@ -609,7 +609,7 @@ test("⌘K offers each view choice only while it would change the list, and runn
   assert.equal(headWords(sidebar), "My tasks");
 });
 
-test("Show finished sub-tasks stands a parent's finished sub-tasks under it, muted, never a finished task at the top, and ⌘K hides them again", async () => {
+test("Show completed sub-tasks stands a parent's finished sub-tasks under it, muted, never a finished task at the top, and ⌘K hides them again", async () => {
   const of = (
     id: string,
     name: string,
@@ -633,7 +633,7 @@ test("Show finished sub-tasks stands a parent's finished sub-tasks under it, mut
   ]);
   const button = scopeButton(sidebar);
   act(() => button.click());
-  act(() => menuItem("Show finished sub-tasks").click());
+  act(() => menuItem("Show completed sub-tasks").click());
   const fold = sidebar.querySelector<HTMLButtonElement>(
     'button[aria-label="Sub-tasks of Onboarding"]',
   );

@@ -30,7 +30,7 @@ import type { TaskListViewControl } from "./task-list-view.js";
  * label's ink, so it reads as the switch it is rather than one more group.
  * Its menu holds, in a shared workspace, Assigned to: Me, Anyone, or each
  * member by face; Group by, a choice of Repository, Progress, or None;
- * Show finished sub-tasks, a switch that stands each parent's finished
+ * Show completed sub-tasks, a switch that stands each parent's completed
  * sub-tasks back under it, muted, as Linear's Always hide completed
  * sub-issues turned off does; and, while
  * the account keeps sections, New section. Note that the switcher's own
@@ -56,8 +56,8 @@ const GROUPING_WORDS = {
   [TASK_GROUPING.NONE]: "None",
 } as const satisfies Record<TaskGrouping, string>;
 
-/** The switch that stands each parent's finished sub-tasks under it, or leaves them out. */
-const SHOW_FINISHED_SUB_TASKS = "Show finished sub-tasks";
+/** The switch that stands each parent's completed sub-tasks under it, or leaves them out, in the words the Tasks page's Show completed uses for the same Done and Canceled tasks. */
+const SHOW_COMPLETED_SUB_TASKS = "Show completed sub-tasks";
 
 /** What the scope switcher says for Me and Anyone; a member's list is called by their name (`tasksHeadWords`). */
 const TASKS_HEAD_WORDS = {
@@ -133,7 +133,7 @@ function viewEntries(
     })),
   };
   const finished: MenuAction = {
-    label: SHOW_FINISHED_SUB_TASKS,
+    label: SHOW_COMPLETED_SUB_TASKS,
     icon: <ListChecksIcon />,
     checked: view.finishedSubTasks,
     mark: MENU_ITEM_MARK.SWITCH,
