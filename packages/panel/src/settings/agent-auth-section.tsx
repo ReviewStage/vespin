@@ -901,7 +901,12 @@ function placeOf(credential: Credential): number {
 /** What a key from a service that predates the order is told apart by among its harness's rows. */
 const KEY_WITHOUT_ID = "api-key";
 
-/** The harness's plans and its key in the account's order. */
+/** When a credential was added, which breaks a tie between two at one place as the service's payer choice does. */
+function addedOf(credential: Credential): number {
+  return "plan" in credential ? credential.plan.addedAt : credential.key.addedAt;
+}
+
+/** The harness's plans and its key in the account's order: by place, then the earlier added, as a turn tries them. */
 function credentialsOf(
   plans: readonly SubscriptionKeySummary[],
   key: ProviderKeySummary | undefined,
@@ -909,7 +914,7 @@ function credentialsOf(
   // Note that a key from a service that names no id is still drawn; the order it is sent in names an id no row holds, which the service passes over.
   const keyed: Credential[] = key === undefined ? [] : [{ key, id: key.id ?? KEY_WITHOUT_ID }];
   return [...plans.map((plan) => ({ plan, id: plan.id })), ...keyed].toSorted(
-    (a, b) => placeOf(a) - placeOf(b),
+    (a, b) => placeOf(a) - placeOf(b) || addedOf(a) - addedOf(b),
   );
 }
 
