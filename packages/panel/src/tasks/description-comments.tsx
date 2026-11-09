@@ -66,6 +66,7 @@ import {
   MenuSurface,
   PaneBar,
   POPOVER_SIDE,
+  QuietWords,
   RectFloat,
   SCROLL_FADE,
   SCROLL_OVERSCROLL,
@@ -139,6 +140,7 @@ import { coarsePointerNow, FINGER_SELECTION_GAP } from "../coarse-pointer.js";
 import {
   type DescriptionCommentPlace,
   DRAFT_PLACE,
+  type DraftPageElement,
   type DraftPlace,
   EMPTY_DRAFT,
   heldLines,
@@ -154,6 +156,7 @@ import {
   type EditorSpan,
 } from "../description-editor/contract.js";
 import type { MenuAction } from "../desktop/action-menu.js";
+import { DRAFT_WORD } from "../draft-mark.js";
 import { enterSubmitKey } from "../enter-sends.js";
 import { confirmFailure, failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
@@ -3279,6 +3282,7 @@ export const PAGE_COMMENT_WORDS = {
   COMMENT: "Comment on the page",
   PICKING: "Press an element of the page to comment on it",
   WHOLE_PAGE: "Whole page",
+  DRAFT: "Draft comment",
 } as const;
 
 /** What a page's comments hold or keep open, and what keeps a card standing by the page open as it is pressed: its own boxes, a pin, and a menu or a question one of them opened. */
@@ -3654,6 +3658,46 @@ function HeldPin({
   );
 }
 
+/** What a draft's pin says where a comment's time would stand. */
+function DraftWords(): React.JSX.Element {
+  return (
+    <QuietWords>
+      <ReplayUnmask>{DRAFT_WORD}</ReplayUnmask>
+    </QuietWords>
+  );
+}
+
+/**
+ * The pin of a comment the reader started on the page and left unsent,
+ * its words kept as its draft: the muted pencil in a face's place, told
+ * over it the words left, Draft where the time would stand; a press opens
+ * the comment again where it was started, its words as they were left.
+ */
+function DraftPin({
+  words,
+  stands,
+  onOpen,
+  onHint,
+}: {
+  words: string;
+  stands: CommentPinStands;
+  onOpen: () => void;
+  onHint: (over: boolean) => void;
+}): React.JSX.Element {
+  const { author, nameRef } = useReaderWriter();
+  return (
+    <CommentPin
+      look={COMMENT_PIN_LOOK.DRAFT}
+      label={PAGE_COMMENT_WORDS.DRAFT}
+      open={false}
+      stands={stands}
+      onPress={onOpen}
+      onHover={onHint}
+      preview={<PinPreview head={{ author, nameRef, trailing: <DraftWords /> }} words={words} />}
+    />
+  );
+}
+
 /** The comments held in a review on each element of the page, by its path, in the order they were held; one on the whole page is on none. */
 function heldByElement(held: readonly HeldComment[]): ReadonlyMap<string, readonly HeldComment[]> {
   const by = new Map<string, HeldComment[]>();
@@ -3662,6 +3706,28 @@ function heldByElement(held: readonly HeldComment[]): ReadonlyMap<string, readon
     if (path !== undefined) by.set(path, [...(by.get(path) ?? []), comment]);
   }
   return by;
+}
+
+/**
+ * Where a draft's pin stands: by its element's top start corner, stepped
+ * left past the pins already standing there, or at the frame's top corner
+ * where it is on the whole page or its element is no longer on the page;
+ * none while its element is scrolled up out of the frame or not yet
+ * measured. `at` is the element's box, which its card opens by again.
+ */
+function draftPinAt(
+  drafted: { readonly element: DraftPageElement | undefined } | undefined,
+  marks: ReadonlyMap<string, FrameBox | null>,
+  pinsAt: (path: string) => number,
+): { box: FrameBox; step: number; at: FrameBox | undefined } | undefined {
+  if (drafted === undefined) return undefined;
+  const path = drafted.element?.path;
+  if (path === undefined) return { box: PAGE_TOP, step: 0, at: undefined };
+  const box = marks.get(path);
+  if (box === undefined) return undefined;
+  if (box === null) return { box: PAGE_TOP, step: 0, at: undefined };
+  if (box.bottom < 0) return undefined;
+  return { box, step: pinsAt(path) * HELD_PIN_STEP, at: box };
 }
 
 /**
@@ -3679,7 +3745,10 @@ function heldByElement(held: readonly HeldComment[]): ReadonlyMap<string, readon
  * instead, pinned dashed to its element until the review is sent, its pin
  * opening the comments held there in a card under it, as a posted
  * pin opens its threads, column or no column, since the column lists
- * posted threads alone. A card
+ * posted threads alone. A comment started and let go with words of the
+ * writer's own left in it is pinned where it was started, the muted pencil
+ * in a face's place, its pin opening it again as it was left, so a draft
+ * never waits unseen until its element is picked again. A card
  * closes on a press away, a press in the page among them, as a
  * description's does. It stands over the frame's room, where every box the frame
  * says it measured in its own viewport stands as it is, and takes no press
@@ -3703,6 +3772,8 @@ export function PageCommentLayer({
   onStopPick,
   onStarted,
   onCancel,
+  drafted,
+  onReopen,
   review,
 }: {
   control: DescriptionCommentsControl;
@@ -3731,6 +3802,10 @@ export function PageCommentLayer({
   onStopPick: () => void;
   onStarted: (threadId: string) => void;
   onCancel: () => void;
+  /** The comment started and let go with words of the writer's own, its words and the element it was started on, none on the whole page; none where no such draft waits. */
+  drafted: { readonly words: string; readonly element: DraftPageElement | undefined } | undefined;
+  /** Opens the draft again where it was started, `box` where its element stands in the frame, none on the whole page. */
+  onReopen: (box: FrameBox | undefined) => void;
 }): React.JSX.Element {
   const full = { ...doors, control, review };
   const byElement = threadsByElement(control.threads);
@@ -3759,6 +3834,12 @@ export function PageCommentLayer({
     if (box === undefined || box === null || box.bottom < 0) return [];
     return [{ path, held, box, step: byElement.has(path) ? HELD_PIN_STEP : 0 }];
   });
+  // Note that a draft's pin stands left of its element's posted and held pins, so none covers another.
+  const draftMark = draftPinAt(
+    drafted,
+    marks,
+    (path) => Number(byElement.has(path)) + Number(heldMarks.some((mark) => mark.path === path)),
+  );
   return (
     <div className="page-comment-layer">
       {review === undefined
@@ -3812,6 +3893,28 @@ export function PageCommentLayer({
           />
         </span>
       ))}
+      {drafted === undefined || draftMark === undefined ? null : (
+        <span
+          className="page-comment-pin"
+          data-stands={pinStands(draftMark.box)}
+          style={{
+            left: Math.max(draftMark.box.left - draftMark.step, 0),
+            top: Math.max(draftMark.box.top, 0),
+          }}
+        >
+          <DraftPin
+            words={drafted.words}
+            stands={pinStands(draftMark.box)}
+            onOpen={() => {
+              if (review?.editing === true) return;
+              setHeldOpen(undefined);
+              onOpen(undefined);
+              onReopen(draftMark.at);
+            }}
+            onHint={(over) => onHint(over ? drafted.element?.path : undefined)}
+          />
+        </span>
+      )}
       <RectFloat
         open={floats && opened.length > 0}
         // Note that a thread opens under its pin, or by its element where its pin is not yet drawn, as one just started is.

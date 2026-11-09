@@ -52,7 +52,7 @@ import {
 } from "@repo/ui/icons";
 import { pageTab } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Option, Schema } from "effect";
+import { Equal, Option, Schema } from "effect";
 import {
   type ReactNode,
   type RefObject,
@@ -63,7 +63,13 @@ import {
   useState,
 } from "react";
 import { appPlatform } from "../app-platform.js";
-import { type DescriptionCommentPlace, useDraftWriter } from "../composer-drafts.js";
+import {
+  type DescriptionCommentPlace,
+  type Draft,
+  type DraftPageElement,
+  useDraftWriter,
+  useKeptDraft,
+} from "../composer-drafts.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useLinkWorkspace } from "../copy-link-item.js";
 import type { MenuAction } from "../desktop/action-menu.js";
@@ -612,9 +618,12 @@ function versionStepAction(
  * being started is let go on Escape, Cancel, or a press away, its draft
  * kept where it holds words or files of the writer's own, and dropped where
  * it holds only the quotes it was started from, so the next starts afresh.
+ * The draft keeps the element its comment is started on, so the page pins
+ * a draft let go there, and its pin opens it again where it was started.
  */
 function useCommenting(place: DescriptionCommentPlace | undefined) {
   const drafts = useDraftWriter();
+  const kept = useKeptDraft(place);
   const [column, setColumn] = useState(false);
   const [picking, setPicking] = useState(false);
   const [pending, setPending] = useState<PageCommentOn | undefined>(undefined);
@@ -628,6 +637,13 @@ function useCommenting(place: DescriptionCommentPlace | undefined) {
     }
     if (pending === undefined) setPending(on);
   };
+  // Note that the draft is told the element as its words come and as a pick moves it, so a tab shut with its card open still pins it there.
+  const element = pending?.element;
+  useEffect(() => {
+    if (place === undefined || pending === undefined || !holdsAny(kept)) return;
+    if (Equal.equals(kept.element, element)) return;
+    drafts.update(place, (was) => withElement(was, element));
+  }, [place, pending, kept, element, drafts]);
   const dismiss = () => {
     setPicking(false);
     setOpen(undefined);
@@ -657,7 +673,28 @@ function useCommenting(place: DescriptionCommentPlace | undefined) {
     },
     dismiss,
     setOpen,
+    // The draft left on the page with its card closed, where it was started; none while its card is open or it holds nothing of the writer's own.
+    drafted:
+      pending === undefined && (ownWordsIn(kept.text) || kept.attachments.length > 0)
+        ? { words: kept.text, element: kept.element }
+        : undefined,
+    reopen: (box: FrameBox | undefined) => {
+      setPicking(false);
+      setOpen(undefined);
+      setPending({ element: kept.element, box });
+    },
   };
+}
+
+/** Whether a draft holds words or files, which an element is kept beside. */
+function holdsAny(draft: Draft): boolean {
+  return draft.text !== "" || draft.attachments.length > 0;
+}
+
+/** A draft kept on `element`, or on the page as a whole where none is named. */
+function withElement(draft: Draft, element: DraftPageElement | undefined): Draft {
+  const { element: _was, ...rest } = draft;
+  return element === undefined ? rest : { ...rest, element };
 }
 
 /**
@@ -672,10 +709,11 @@ function pageReserve(row: HTMLElement): number {
   return row.getBoundingClientRect().width * (1 - COMMENTS_SHARE);
 }
 
-/** The elements holding open threads, each once, in the order their threads were started, with the words the first quotes where it was started on words selected; then those holding only comments held in the reader's review. */
+/** The elements holding open threads, each once, in the order their threads were started, with the words the first quotes where it was started on words selected; then those holding only comments held in the reader's review; then the one a draft was started on, untinted. */
 function threadMarks(
   threads: readonly DescriptionCommentThread[],
   held: PageReviewControl["held"],
+  drafted: DraftPageElement | undefined,
 ): readonly PageMark[] {
   const posted = [...threadsByElement(threads)].map(([path, [first]]) =>
     first?.scope === DESCRIPTION_COMMENT_SCOPE.WORDS ? { path, words: first.quote } : { path },
@@ -687,7 +725,10 @@ function threadMarks(
     marked.add(on.path);
     return [on.words === true ? { path: on.path, words: on.quote } : { path: on.path }];
   });
-  return [...posted, ...heldMarks];
+  // Note that a draft is no thread, so the words it was started on are not tinted.
+  const draftMark =
+    drafted === undefined || marked.has(drafted.path) ? [] : [{ path: drafted.path }];
+  return [...posted, ...heldMarks, ...draftMark];
 }
 
 /**
@@ -733,9 +774,10 @@ export function PagePane({
   const review = usePageReview(comments?.control, page.id, version);
   // Note that a phone draws no bar for the review's press, so its comments post at once and none it holds are drawn.
   const reviewing = phone ? undefined : review;
+  const draftedOn = commenting.drafted?.element;
   const marks = useMemo(
-    () => threadMarks(threads ?? [], reviewing?.held ?? []),
-    [threads, reviewing?.held],
+    () => threadMarks(threads ?? [], reviewing?.held ?? [], draftedOn),
+    [threads, reviewing?.held, draftedOn],
   );
   const [hinted, setHinted] = useState<string | undefined>(undefined);
   // The element a held comment's quote line shows, until a press in the page lets it go.
@@ -997,6 +1039,8 @@ export function PagePane({
                   onStopPick={commenting.stopPick}
                   onStarted={commenting.started}
                   onCancel={commenting.dismiss}
+                  drafted={commenting.drafted}
+                  onReopen={commenting.reopen}
                   review={reviewing}
                 />
               )}
