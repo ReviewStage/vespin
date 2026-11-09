@@ -186,7 +186,7 @@ export interface MenuAction {
   label: string;
   /** What tells it from the other items of its menu, as a list's key, where its label may not: a value already its own, such as a repository's full name or a step's place on a trail; its label where none is given. */
   key?: string | number | undefined;
-  /** The glyph leading the label, drawn in a column every item in a menu keeps whether or not it has one; a field's pinned row without one keeps none, its label starting at the row's inset. */
+  /** The glyph leading the label, drawn in a column every item in a menu keeps whether or not it has one, while any item of that menu has one (`menu.css`); a field's pinned row without one keeps none, its label starting at the row's inset. */
   icon?: React.JSX.Element;
   /** A muted second line under the label, such as who shares a workspace, which a reader hears after it. */
   detail?: string | undefined;

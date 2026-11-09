@@ -108,7 +108,7 @@ export function MenuGlyph({
   return (
     <span
       {...(masked ? REPLAY_MASKED : undefined)}
-      className="ui-menu-item-glyph inline-flex size-menu-glyph flex-none items-center justify-center text-muted-foreground group-data-[variant=destructive]/menu-item:text-inherit [&_svg]:size-menu-glyph [&_svg]:flex-none [&>img]:size-menu-glyph [&>img]:flex-none"
+      className="ui-menu-item-glyph size-menu-glyph flex-none items-center justify-center text-muted-foreground group-data-[variant=destructive]/menu-item:text-inherit [&_svg]:size-menu-glyph [&_svg]:flex-none [&>img]:size-menu-glyph [&>img]:flex-none"
     >
       {children}
     </span>
