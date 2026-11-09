@@ -26,6 +26,8 @@ import {
   browserLivePath,
   browserLiveSendParamsSchema,
 } from "@repo/features/browser-live-acts";
+import { openedUnderCredential } from "@repo/features/relay-credential";
+import type { OpenTerminalSocket, TerminalSocket } from "@repo/features/relay-socket";
 import {
   carried,
   GATEWAY_EVENT,
@@ -37,8 +39,6 @@ import {
 import { Effect, FiberMap, Stream } from "effect";
 import type { AccountComposer } from "./compose-account.js";
 import type { HostKernel } from "./host-kernel.js";
-import { openedUnderCredential } from "./relay-credential.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 /** The most text frames a view holds for a socket still opening; past it the panel's newest are let go. */

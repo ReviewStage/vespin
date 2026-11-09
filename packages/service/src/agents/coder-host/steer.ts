@@ -29,6 +29,7 @@ import {
   STORE_WRITE_REFUSAL,
   type StoreWriter,
   turnOpeningLine,
+  turnWaitingLines,
 } from "@repo/database/models/writer";
 import { type ConversationRuntime, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/features/agent-wire";
@@ -656,8 +657,11 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
  * conversation's record names (`NativeSessions`' `retry`), whose launch
  * chooses its payer anew. The line keeps its client id, so the turn its
  * runner opens it in takes no row of it again, and the conversation shows
- * it once. Nothing it reads is the ended launch's, so it may run long after
- * that launch ended. An agent gone or on no harness, a session that never
+ * it once. The lines sent to the turn that no runner took, as a message
+ * another agent sent while the limit held the turn, are handed on after it,
+ * in the order they were written (`turnWaitingLines`), so none is lost with
+ * the runner that ended. Nothing it reads is the ended launch's, so it may
+ * run long after that launch ended. An agent gone or on no harness, a session that never
  * claimed its record, a function that cannot reach the harness, and a turn
  * that took no line hand nothing on; answers whether the line went.
  */
@@ -682,8 +686,15 @@ export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function
   const line = yield* turnOpeningLine(target, turn.turnId);
   if (Option.isNone(line)) return false;
   const message = yield* lostLineMessage(target, agent.value, line.value);
-  const sent = yield* (yield* reached.value).retry(sessionId, message);
-  return sent.outcome === SESSION_SEND_OUTCOME.ACCEPTED;
+  const sessions = yield* reached.value;
+  const sent = yield* sessions.retry(sessionId, message);
+  if (sent.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return false;
+  // Note that a line queued for a runner that reads its lines is the relaunch's already, and sent again under its id is the same row.
+  const waiting = yield* turnWaitingLines(target, turn.turnId);
+  for (const each of waiting) {
+    yield* sessions.send(sessionId, yield* lostLineMessage(target, agent.value, each));
+  }
+  return true;
 });
 
 /** How many turns waiting on a limit's reset one sweep has go on. */

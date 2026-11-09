@@ -1,12 +1,13 @@
-import type { Effect, Scope, Stream } from "effect";
-
 /**
- * relay-socket.ts -- the sockets the host's relays carry bytes over: a relay socket the terminals, port forwards, mirrors, and browser live view open, and a connection a loopback listener accepts.
+ * relay-socket.ts -- the sockets the service's relays carry bytes over: a relay socket the host's terminals, port forwards, mirrors, and browser live view open, and a connection a loopback listener accepts.
  *
- * Each composer opens these through a seam the platform provides
- * (`effect/seams.ts`), so their shapes stand below every composer and seam
- * that names them rather than in the one composer that first needed them.
+ * The host's composers and the CLI open these through a seam the platform
+ * provides (`@repo/host`'s `effect/seams.ts`, or `./node/index.ts` directly),
+ * so their shapes stand below every caller and seam that names them rather
+ * than in the one that first needed them.
  */
+
+import type { Effect, Scope, Stream } from "effect";
 
 /** What one relay socket hands up: a binary frame's bytes, a text frame, or the close code that ended it, last. */
 export type TerminalSocketArrival =
@@ -47,7 +48,7 @@ export interface LoopbackConnection {
   readonly close: Effect.Effect<void>;
 }
 
-/** Listens on this Mac's `127.0.0.1` at the port given for the scope's life: the connections it accepts, or nothing where the port is taken. */
+/** Listens on this machine's `127.0.0.1` at the port given for the scope's life: the connections it accepts, or nothing where the port is taken. */
 export type ListenOnLoopback = (
   port: number,
 ) => Effect.Effect<Stream.Stream<LoopbackConnection> | undefined, never, Scope.Scope>;

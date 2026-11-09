@@ -2172,6 +2172,48 @@ export function turnOpeningLine(
   return findOpeningLine({ ...target, turnId });
 }
 
+/** The developer's lines that await the turn named and no turn took, in the order they were written, as a resend of a lost line reads them. */
+const findTurnWaitingLines = SqlSchema.findAll({
+  Request: Schema.Struct({ ...ConversationTargetSchema.fields, turnId: Schema.String }),
+  Result: LostLineSchema,
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: messages.id,
+          clientId: messages.clientId,
+          parts: messages.parts,
+          sender: messages.sender,
+          senderUserId: messages.senderUserId,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.userId, key.userId),
+            eq(messages.conversationId, key.conversationId),
+            eq(messages.awaitsTurnId, key.turnId),
+            isNull(messages.turnId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+          ),
+        )
+        .orderBy(asc(messages.seq)),
+    ),
+});
+
+/**
+ * The developer's lines sent to the coding agent's turn named that no
+ * runner took, in the order they were written, as a resend hands each on
+ * (`LostLine`): what a launch on the next payer is handed after the turn's
+ * opening line, so a message sent while the plan's limit held the turn is
+ * not lost with the runner that ended.
+ */
+export function turnWaitingLines(
+  target: ConversationTarget,
+  turnId: string,
+): Effect.Effect<readonly LostLine[], StoreFailure, DatabaseServices> {
+  return findTurnWaitingLines({ ...target, turnId });
+}
+
 const findLostLines = SqlSchema.findAll({
   Request: ConversationTargetSchema,
   Result: LostLineSchema,

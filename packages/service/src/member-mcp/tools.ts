@@ -115,7 +115,6 @@ import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.
 import {
   ADDED_REPOSITORY_INPUT,
   AGENT_CALLER,
-  AGENT_TOOL_BOUNDS,
   AGENT_TOOL_REFUSAL,
   type AgentCall,
   type AgentReadCall,
@@ -142,6 +141,7 @@ import {
   START_AGENT_TOOL,
   startAgentToolOf,
   TASKS_LIST_LIMIT,
+  TRANSCRIPT_PAGE_WORDS,
   UPDATE_AGENT_TOOL,
   UPDATE_TASK_REFUSAL,
   UPDATE_TASK_TOOL,
@@ -508,12 +508,15 @@ const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
   run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runListAgents(call, asked)),
 });
 
-/** A read of one agent names it and, at most, how long a tail to read. */
+/** A read of one agent names it and, at most, which page of its transcript to read and how many entries. */
 const ReadAgentInputSchema = Schema.Struct({
   agentId: describeWire(
     wireUuidSchema,
     `The agent's id, as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered it.`,
   ),
+  from: CODER_READ_AGENT_TOOL.inputSchema.fields.from,
+  before: CODER_READ_AGENT_TOOL.inputSchema.fields.before,
+  after: CODER_READ_AGENT_TOOL.inputSchema.fields.after,
   entries: CODER_READ_AGENT_TOOL.inputSchema.fields.entries,
 });
 
@@ -523,11 +526,9 @@ const MEMBER_READ_AGENT_TOOL = memberMcpTool({
     "Read one coding agent the member can see, by its id, on any task and started by any " +
     "member, in whichever of the member's workspaces it stands: what " +
     `${MEMBER_MCP_TOOL.LIST_AGENTS} says of it, the branch it pushed and the pull request from ` +
-    "it as GitHub holds them, its state and checks among it, and the tail of its transcript, " +
-    "what it last said and which tools it called on what, newest last, each entry cut to " +
-    `${AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS} characters and with the messageId of the message ` +
-    "it stands in. Read one to learn why an agent went quiet, what it is stuck on, or what it " +
-    `did; ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} reads the files its pull request changes. It ` +
+    `it as GitHub holds them, its state and checks among it, and ${TRANSCRIPT_PAGE_WORDS} Read ` +
+    "one to learn why an agent went quiet, what it is stuck on, what it did, or what was said " +
+    `to it and why; ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} reads the files its pull request changes. It ` +
     "only reads: the agent is not told. Answers `accepted` with the reading, or `rejected` and why.",
   input: ReadAgentInputSchema,
   annotations: READ_ONLY,

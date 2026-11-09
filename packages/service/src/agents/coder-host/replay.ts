@@ -55,6 +55,7 @@ import {
   isWireString,
   MESSAGE_ROLE,
   type StoredToolPart,
+  type StoredUIMessage,
   UI_PART_TYPE,
   type UnparsedWireValue,
 } from "../../core.js";
@@ -221,7 +222,7 @@ function cutLine(text: string, maximumChars: number): string {
 }
 
 /** A text cut to the bound as it stands, never inside a surrogate pair, ending in an ellipsis where it was cut. */
-function cutText(text: string, maximumChars: number): string {
+export function cutText(text: string, maximumChars: number): string {
   if (text.length <= maximumChars) return text;
   const end = maximumChars - 1;
   const code = text.charCodeAt(end - 1);
@@ -335,7 +336,7 @@ function senderOf(sent: LineSent | undefined): NonNullable<ReplayStep["sender"]>
 }
 
 /** Who sent a line, by the name a reader knows them by; the developer where the row kept no sender. */
-function senderName(sent: LineSent | undefined): string {
+export function senderName(sent: LineSent | undefined): string {
   switch (sent?.kind) {
     case undefined:
       return REPLAY_WORDS.DEVELOPER;
@@ -368,19 +369,24 @@ function lineStep(
   };
 }
 
-/** One row as its steps: a line's words and the names of its files, or a journal's words and calls in order, its reasoning left out. */
-function rowSteps(record: StoredMessageRecord, sent: LineSent | undefined): readonly ReplayStep[] {
-  const { parts, role } = record.message;
-  if (role === MESSAGE_ROLE.USER) {
-    const words = parts.flatMap((part) => {
+/** A line's words: its texts and the names of its files, in order; empty where it carries neither. */
+export function lineWords(parts: StoredUIMessage["parts"]): string {
+  return parts
+    .flatMap((part) => {
       if (isTextUIPart(part)) return part.text.trim() === "" ? [] : [part.text];
       if (isFileUIPart(part))
         return [`${REPLAY_WORDS.ATTACHED}: ${part.filename ?? part.mediaType}`];
       return [];
-    });
-    return words.length === 0
-      ? []
-      : [lineStep(senderName(sent), senderOf(sent), words.join("\n\n"), record.placedAt)];
+    })
+    .join("\n\n");
+}
+
+/** One row as its steps: a line's words and the names of its files, or a journal's words and calls in order, its reasoning left out. */
+function rowSteps(record: StoredMessageRecord, sent: LineSent | undefined): readonly ReplayStep[] {
+  const { parts, role } = record.message;
+  if (role === MESSAGE_ROLE.USER) {
+    const words = lineWords(parts);
+    return words === "" ? [] : [lineStep(senderName(sent), senderOf(sent), words, record.placedAt)];
   }
   if (role !== MESSAGE_ROLE.ASSISTANT) return [];
   return parts.flatMap((part): readonly ReplayStep[] => {

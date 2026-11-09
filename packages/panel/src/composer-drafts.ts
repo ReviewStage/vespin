@@ -1264,19 +1264,3 @@ export function useDescriptionDrafted(taskId: string): boolean {
 export function useDraftedAgents(): readonly string[] {
   return useSelector(draftsStore, draftedAgents, { compare: Equal.equals });
 }
-
-/**
- * Whether New task holds a draft in a workspace, none before the workspaces
- * are read, which the sidebar's New task row marks with the pencil
- * (`draft-mark.tsx`): the words its card keeps there. Note that it answers
- * a boolean, so the row draws again only as the draft comes or goes, never
- * on each word typed.
- */
-export function useNewTaskDrafted(workspaceId: string | undefined): boolean {
-  return useSelector(draftsStore, (drafts) =>
-    drafts.some(
-      ({ place }) =>
-        place.kind === DRAFT_PLACE.NEW_TASK && place.workspaceId === (workspaceId ?? null),
-    ),
-  );
-}

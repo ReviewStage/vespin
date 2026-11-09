@@ -190,10 +190,6 @@ export interface InboxAgent {
 
 /** Why a post was not written. */
 export const INBOX_POST_REFUSAL = {
-  /** The agent holds as many open asks as it may; it closes one first. */
-  TOO_MANY_OPEN: "too-many-open",
-  /** The agent holds as many notices the developer has yet to acknowledge as it may. */
-  TOO_MANY_NOTICES: "too-many-notices",
   /** The agent is no longer the account's. */
   NO_AGENT: "no-agent",
   /** The post names no title and opens a thread under a key with no item, which needs one. */
@@ -668,47 +664,6 @@ const lockAgent = SqlSchema.findOneOption({
           and(eq(agentTable.id, agentId), eq(agentTable.userId, userId), agentReachableBy(userId)),
         )
         .for("update"),
-    ),
-});
-
-/** How many asks the agent holds open under a key other than the one given; a notice holds none. */
-const countOpenBesides = SqlSchema.findOne({
-  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
-  Result: Schema.Struct({ open: Schema.Number }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            ASKING,
-            ne(inboxItem.key, key),
-          ),
-        ),
-    ),
-});
-
-/** How many notices the agent holds open, waiting on the developer's nod, under a key other than the one given. */
-const countNoticesBesides = SqlSchema.findOne({
-  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
-  Result: Schema.Struct({ open: Schema.Number }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
-            NOTICE,
-            ne(inboxItem.key, key),
-          ),
-        ),
     ),
 });
 
@@ -2573,39 +2528,6 @@ function keepPost(
   });
 }
 
-/** The agent's open asks besides the key's against the bound: whether one more may stand open. */
-function roomToAsk(agent: InboxAgent, key: string): InboxStoreEffect<boolean> {
-  return countOpenBesides({ ...agent, key }).pipe(
-    // A count that returned no row is the database breaking its own contract, not an outcome.
-    Effect.catchTag("NoSuchElementError", Effect.die),
-    Effect.map(({ open }) => open < INBOX_BOUNDS.MAX_OPEN_PER_AGENT),
-  );
-}
-
-/** The agent's open notices besides the key's against the same bound: whether one more may wait on the developer's nod. */
-function roomToNotify(agent: InboxAgent, key: string): InboxStoreEffect<boolean> {
-  return countNoticesBesides({ ...agent, key }).pipe(
-    // A count that returned no row is the database breaking its own contract, not an outcome.
-    Effect.catchTag("NoSuchElementError", Effect.die),
-    Effect.map(({ open }) => open < INBOX_BOUNDS.MAX_OPEN_PER_AGENT),
-  );
-}
-
-/** Whether the post finds room under its bound: an ask among the open asks, a notice among the open notices. */
-function roomToPost(
-  agent: InboxAgent,
-  key: string,
-  ask: InboxAsk | undefined,
-): InboxStoreEffect<Result.Result<void, InboxPostRefusal>> {
-  return ask === undefined
-    ? Effect.map(roomToNotify(agent, key), (room) =>
-        room ? Result.void : Result.fail(INBOX_POST_REFUSAL.TOO_MANY_NOTICES),
-      )
-    : Effect.map(roomToAsk(agent, key), (room) =>
-        room ? Result.void : Result.fail(INBOX_POST_REFUSAL.TOO_MANY_OPEN),
-      );
-}
-
 /** A post as the tool from version 5 writes one: the item's key, its title where the post names one, the agent's words in Markdown, the ask they end with, if any, and whether the agent is to hear the answer. */
 interface InboxThreadPost {
   readonly key: string;
@@ -2734,8 +2656,6 @@ export function postInboxThread(
         }
         const title = post.title ?? Option.getOrUndefined(standing)?.title;
         if (title === undefined) return Result.fail(INBOX_POST_REFUSAL.NO_TITLE);
-        const room = yield* roomToPost(agent, post.key, post.ask);
-        if (Result.isFailure(room)) return Result.fail(room.failure);
         const now = yield* DateTime.nowAsDate;
         const { kept, idOf } = yield* Effect.sync(() => picturesByPath(pictures));
         const view = { title, needsReply: post.needsReply ?? true };

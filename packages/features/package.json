@@ -205,6 +205,10 @@
     "./browser-tabs-live": "./src/browser-tabs-live.js",
     "./browser-live-acts": "./src/browser-live-acts.js",
     "./port-forward-acts": "./src/port-forward-acts.js",
+    "./port-forward-tunnel": "./src/port-forward-tunnel.js",
+    "./relay-credential": "./src/relay-credential.js",
+    "./relay-socket": "./src/relay-socket.js",
+    "./node": "./src/node/index.js",
     "./agent-browser-tab-wire": "./src/agent-browser-tab-wire.js",
     "./browser-agent-actions": "./src/browser-agent-actions.js",
     "./browser-agent-cdp": "./src/browser-agent-cdp.js",
@@ -242,13 +246,15 @@
     "ignore": "7.0.14",
     "mdast-util-from-markdown": "2.0.3",
     "mdast-util-gfm": "3.1.0",
-    "micromark-extension-gfm": "3.0.0"
+    "micromark-extension-gfm": "3.0.0",
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@sentry/core": "11.7.0",
     "@types/mdast": "4.0.4",
     "@types/node": "catalog:",
+    "@types/ws": "8.18.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

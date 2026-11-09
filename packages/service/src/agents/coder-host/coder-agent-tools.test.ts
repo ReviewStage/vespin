@@ -48,7 +48,7 @@ import { attachment } from "@repo/database/schemas/attachment";
 import { device } from "@repo/database/schemas/device";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   DEVICE_LAYOUT,
   joinWorkspace,
@@ -114,6 +114,7 @@ import {
   AssistantMessageBuilder,
   isRecord,
   isWireString,
+  MESSAGE_ROLE,
   RUN_EVENT,
   RUN_STATUS,
   RUN_TURN_ORIGIN,
@@ -156,6 +157,7 @@ import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import { scriptedHarness } from "../../testing/native-harness-fake.js";
 import { SentryApp, sentryAppService } from "../../triggers/sentry/sentry-app-config.js";
 import {
+  AGENT_TOOL_BOUNDS,
   AGENT_TOOL_REFUSAL,
   LIST_MODELS_REFUSAL,
   READ_PAGE_REFUSAL,
@@ -705,13 +707,15 @@ async function answeredTurnOn(agent: StartedAgent, answer: AssistantMessageBuild
   );
 }
 
-/** The tail a read answered, each entry as the record it is. */
+/** The page of a transcript a read answered, each entry as the record it is. */
 function tailOf(read: WireRecord): readonly WireRecord[] {
-  assert.ok(Array.isArray(read.tail), JSON.stringify(read));
-  return read.tail.map((entry) => (isRecord(entry) ? entry : assert.fail(JSON.stringify(entry))));
+  assert.ok(Array.isArray(read.transcript), JSON.stringify(read));
+  return read.transcript.map((entry) =>
+    isRecord(entry) ? entry : assert.fail(JSON.stringify(entry)),
+  );
 }
 
-/** What each entry of a read's tail says. */
+/** What each entry of a read's page says. */
 function tailTexts(read: WireRecord): readonly unknown[] {
   return tailOf(read).map((entry) => entry.text);
 }
@@ -913,7 +917,7 @@ test("list_agents from an agent another started names its starter first, ahead o
   assert.equal(agentSessions.sent.length, 0, "a list sends nothing");
 });
 
-test("read_agent reads a teammate's agent on another task of the caller's workspace, with the tail of its transcript in entries kept longer than Vespin's and as many as asked, older turns included, and reads no agent of another workspace", async () => {
+test("read_agent reads a teammate's agent on another task of the caller's workspace, with a page of its whole transcript, a member's line under their name, read back from its end or on from its start a place at a time, as many entries as asked and as fit its budget, and reads no agent of another workspace", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -971,6 +975,73 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
     4,
     "each turn's journal is a message of its own",
   );
+
+  // A member's line reads under their name, and a page reads on from the place the last one answered.
+  await database.run(
+    writer.writeAwaitingLine(
+      { userId: agents.teammates.userId, conversationId: agents.teammates.conversationId },
+      {
+        text: "Why does it stall?",
+        clientKey: randomUUID(),
+        sender: { kind: MESSAGE_SENDER.MEMBER, userId: agents.teammates.userId },
+      },
+      Effect.succeed(true),
+    ),
+  );
+  const agentId = agents.teammates.id;
+  const newest = await call(AGENT_TOOL.READ_AGENT, { agentId, entries: 2 });
+  assert.deepEqual(tailTexts(newest), ["Said: Turn 4 done.", "Test User: Why does it stall?"]);
+  assert.equal(tailOf(newest)[1]?.messageId, undefined, "a line is no message a fork is cut at");
+  assert.equal(newest.newer, undefined, "the newest page reaches the newest entry");
+  const back = await call(AGENT_TOOL.READ_AGENT, { agentId, before: newest.older, entries: 2 });
+  assert.deepEqual(tailTexts(back), ["Said: Turn 2 done.", "Said: Turn 3 done."]);
+  const first = await call(AGENT_TOOL.READ_AGENT, { agentId, from: "start", entries: 2 });
+  assert.deepEqual(tailTexts(first), ["Ran: pnpm test", `Said: ${report}`]);
+  assert.equal(first.older, undefined, "the first page opens the transcript");
+  const rest = await call(AGENT_TOOL.READ_AGENT, { agentId, after: first.newer });
+  assert.deepEqual(tailTexts(rest), [
+    "Said: Turn 2 done.",
+    "Said: Turn 3 done.",
+    "Said: Turn 4 done.",
+    "Test User: Why does it stall?",
+  ]);
+  assert.equal(rest.newer, undefined);
+
+  // A page holds entries cut to their bound until its budget of characters, and leaves the rest to the next.
+  const long = new AssistantMessageBuilder();
+  for (const each of ["1", "2", "3", "4", "5"]) {
+    long.stepStart();
+    long.text(each.repeat(AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS));
+  }
+  await answeredTurnOn(agents.teammates, long);
+  const full = await call(AGENT_TOOL.READ_AGENT, { agentId });
+  const texts = tailTexts(full).map((text) => (typeof text === "string" ? text : assert.fail()));
+  assert.deepEqual(
+    texts.map((text) => [text.slice(0, "Said: 2".length), text.length, text.at(-1)]),
+    ["2", "3", "4", "5"].map((each) => [`Said: ${each}`, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS, "…"]),
+  );
+  assert.ok(full.older !== undefined, "the entry that did not fit is the next page's");
+
+  // A page that reaches a message that does not read is refused, rather than passing for the transcript's end.
+  await database.run(
+    Database.use((db) =>
+      db.insert(messages).values({
+        userId: agents.teammates.userId,
+        conversationId: agents.teammates.conversationId,
+        seq: 1_000_000,
+        clientId: randomUUID(),
+        role: MESSAGE_ROLE.USER,
+        // SAFETY: a text part with no text is the row a read cannot decode, which is the point.
+        parts: [{ type: "text" }] as never,
+        createdAt: new Date(NOW),
+        placedAt: new Date(NOW),
+      }),
+    ),
+  );
+  assert.deepEqual(await call(AGENT_TOOL.READ_AGENT, { agentId }), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason: AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT,
+  });
 
   // An agent of another workspace is none of the caller's, even one its starter is also in.
   for (const other of [agents.otherWorkspaces, agents.strangers]) {

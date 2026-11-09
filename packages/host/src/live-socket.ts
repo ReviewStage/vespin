@@ -42,6 +42,8 @@ import {
   type LiveSocketAsk,
   liveSocketAnswerSchema,
 } from "@repo/features/live-wire";
+import { openedUnderCredential } from "@repo/features/relay-credential";
+import type { OpenTerminalSocket, TerminalSocket } from "@repo/features/relay-socket";
 import { unparsedWire } from "@repo/wire";
 import { Clock, Deferred, Duration, Effect, Exit, Result, Schema, Scope, Stream } from "effect";
 import {
@@ -50,8 +52,6 @@ import {
   type HttpClientRequest,
   HttpClientResponse,
 } from "effect/http";
-import { openedUnderCredential } from "./relay-credential.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 
 /** How long each socket and each ask is given, by what bounds it. */
 const LIVE_SOCKET_BOUNDS = {

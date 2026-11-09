@@ -471,6 +471,8 @@ export const AGENT_FAILURE = {
   NO_PROGRESS: "no_progress",
   /** No runner took the turn before its pickup deadline. */
   LINE_UNTAKEN: "line_untaken",
+  /** The plan's usage limit cut the turn short, and its launch on the next payer, or past the reset, never took it up. */
+  PLAN_LIMIT: "plan_limit",
   OTHER: "other",
 } as const;
 

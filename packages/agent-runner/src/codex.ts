@@ -855,16 +855,23 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       sandbox: SANDBOX_MODE,
       developerInstructions: config.developerInstructions,
     } satisfies ThreadStartParams;
-    const answer =
+    // Note that a resume refused for its provider forks the thread, so whether it forked is told with the answer.
+    const forking = (forkedId: string) =>
+      server.request(METHOD.THREAD_FORK, { ...thread, threadId: forkedId, excludeTurns: true });
+    const { answer, forked } =
       threadId === undefined
-        ? yield* server.request(METHOD.THREAD_START, thread)
+        ? { answer: yield* server.request(METHOD.THREAD_START, thread), forked: false }
         : fork
-          ? yield* server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true })
+          ? { answer: yield* forking(threadId), forked: true }
           : yield* server
               .request(METHOD.THREAD_RESUME, { ...thread, threadId, excludeTurns: true })
               .pipe(
+                Effect.map((resumed) => ({ answer: resumed, forked: false })),
                 Effect.catchIf(providerMismatch, () =>
-                  server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true }),
+                  Effect.map(forking(threadId), (forkedAnswer) => ({
+                    answer: forkedAnswer,
+                    forked: true,
+                  })),
                 ),
               );
     const opened = decodeThreadAnswer(answer);
@@ -875,13 +882,19 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       });
     }
     seen.threadId = opened.value.thread.id;
-    return opened.value.thread;
+    return { ...opened.value.thread, forked };
   });
   const openedThread = yield* opened.pipe(
     (handshake) => launch.context.trace.step(RUNNER_SPAN.HANDSHAKE, handshake),
     Effect.tapError(() => Scope.close(serverScope, Exit.void)),
   );
-  return { server, serverScope, threadId: openedThread.id, path: openedThread.path ?? undefined };
+  return {
+    server,
+    serverScope,
+    threadId: openedThread.id,
+    path: openedThread.path ?? undefined,
+    forked: openedThread.forked,
+  };
 });
 
 /** How many turns a page of the rewind's read back from the thread's end holds. */
@@ -1267,7 +1280,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
     );
   }
-  const { path, ...server } = opened.success;
+  const { path, forked, ...server } = opened.success;
   const reverting =
     config.threadId !== undefined && config.rewindBefore !== undefined
       ? revertedBefore(server.server, server.threadId, config.rewindBefore).pipe(
@@ -1280,7 +1293,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
         )
       : Effect.succeed(undefined);
   const segment = yield* reverting;
-  const resumed = config.threadId !== undefined && config.fork !== true;
+  // Note that only a thread resumed as it was stands in the store whole: a fork's file, the fallback's for a provider among them, is Codex's new writing.
+  const resumed = config.threadId !== undefined && !forked;
   // A fork cut by a revert stands on the file Codex forked it into, which the store holds none of, so it is sent whole before the mirror follows the thread.
   if (store !== undefined && path !== undefined && segment !== undefined && !resumed) {
     const forked = yield* openRolloutMirror(

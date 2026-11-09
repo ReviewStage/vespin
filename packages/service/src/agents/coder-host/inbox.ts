@@ -115,11 +115,10 @@ const POST_THREAD_WORDS =
   "or no fields for an answer in their own words); never end an answer with an optional free-text field, because the reply box under every ask already takes a note; " +
   "never ask for a credential or a secret in a form, since the answer reaches your transcript: " +
   "that is a do the developer does by hand. A post without ask asks nothing: something they should only know, or your reply on the thread. " +
-  "It waits until they acknowledge it, which never reaches you unless they write something; " +
-  `you may have at most ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} such posts waiting to be acknowledged, apart from your open asks. ` +
+  "It waits until they acknowledge it, which never reaches you unless they write something. " +
   "A thread holds one open ask, and a newer ask replaces it. " +
   "An answer to any ask, decide, do, or answer, always reaches you as a message. " +
-  `You may hold at most ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} open asks. The call answers with your threads as they stand.`;
+  "The call answers with your threads as they stand.";
 
 /** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input. */
 export const INBOX_TOOLS = {
@@ -211,8 +210,6 @@ export const INBOX_REFUSAL = {
     `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none.`,
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
-  TOO_MANY: `Not posted: you hold ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} open asks already. Withdraw one you no longer need first.`,
-  TOO_MANY_NOTICES: `Not posted: the developer has ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} notices of yours to acknowledge. Follow up on one under its key, or wait until they do.`,
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,
   NO_OPTIONS: "Not posted: a decide's options each stand under a label of their own.",
   UNKNOWN_RECOMMENDATION: "Not posted: recommended names a label no option has.",
@@ -424,10 +421,6 @@ function askRefusal(ask: InboxAskInput | undefined): string | undefined {
 /** What the store's refusal of a post reads as to the model. */
 function storeRefusal(refusal: InboxPostRefusal): string {
   switch (refusal) {
-    case INBOX_POST_REFUSAL.TOO_MANY_OPEN:
-      return INBOX_REFUSAL.TOO_MANY;
-    case INBOX_POST_REFUSAL.TOO_MANY_NOTICES:
-      return INBOX_REFUSAL.TOO_MANY_NOTICES;
     case INBOX_POST_REFUSAL.NO_TITLE:
       return INBOX_REFUSAL.NO_TITLE;
     case INBOX_POST_REFUSAL.NO_AGENT:

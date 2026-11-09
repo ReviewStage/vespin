@@ -281,6 +281,23 @@ export const RUNNER_TRANSCRIPTS = {
   CODEX_PROJECT: "codex",
 } as const;
 
+/**
+ * Whether a Codex rollout's subpath, as the store keeps it, names a file
+ * inside `CODEX_HOME`: a relative path of plain segments, none of them `.`
+ * or `..`, ending in `.jsonl`, as the mirror keys every rollout Codex
+ * writes. Note that a transcript is copied from agent to agent, a sandbox's
+ * onto a Mac among them, so a subpath its runner appended is never trusted
+ * as a place to write.
+ */
+export function rolloutSubpathContained(subpath: string): boolean {
+  if (!subpath.endsWith(".jsonl") || subpath.includes("\\") || subpath.includes("\0")) {
+    return false;
+  }
+  return subpath
+    .split("/")
+    .every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
 /** How long a Claude Code project key runs before the SDK cuts it and adds the path's hash. */
 const CLAUDE_PROJECT_KEY_CHARS = 200;
 
