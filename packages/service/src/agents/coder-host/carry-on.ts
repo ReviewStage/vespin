@@ -62,7 +62,7 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 /** The services a carry-on's send runs over: the store, and what a message to an agent reaches (`steerAgentWritten`). */
 export type CarryOnServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
 
-export const CARRY_ON = {
+const CARRY_ON = {
   /** How long after its settle a cut-off turn is still carried on, as the header says. */
   WINDOW: Duration.hours(1),
 } as const;
@@ -116,7 +116,7 @@ export function carryOnKey(turnId: string): string {
 }
 
 /** What the carry-on line says carried it. */
-export function carryOnLine(reason: CarryOnReason): CarryOnLineMetadata {
+function carryOnLine(reason: CarryOnReason): CarryOnLineMetadata {
   return { channel: MESSAGE_CHANNEL.CARRY_ON, reason };
 }
 
@@ -126,7 +126,7 @@ export function carryOnLine(reason: CarryOnReason): CarryOnLineMetadata {
  * since what the turn had under way may be half done and the model's own
  * memory of it stops where the turn did.
  */
-export function carryOnPrompt(reason: CarryOnReason): string {
+function carryOnPrompt(reason: CarryOnReason): string {
   return (
     `${PROMPT_LEAD} your previous turn was interrupted before it ended: ${CUT_OFF_WORDS[reason]}. ` +
     "Nothing was sent to you meanwhile. Whatever that turn had under way may be half done: " +
@@ -142,7 +142,7 @@ export function carryOnPrompt(reason: CarryOnReason): string {
  * sweep words by the Mac's name (`hostLostOf`). Nothing for a turn that
  * ended any other way, a runner still running but silent among them.
  */
-export function cutOffReasonOf(
+function cutOffReasonOf(
   agent: Pick<Agent, "machine">,
   turn: CarryOnTurn | undefined,
 ): CarryOnReason | undefined {
