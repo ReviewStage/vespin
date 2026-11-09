@@ -209,7 +209,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`apply_patch`",
     "`update_plan`",
     "Codex's own web search",
-    "Codex's own subagents",
+    "Codex's own subagent tools",
   ];
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const repository of ["Acme/Relay", null]) {
