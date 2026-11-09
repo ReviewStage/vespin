@@ -27,6 +27,7 @@ import {
   GripVertical,
   Hash,
   History,
+  KeyRound,
   Layers,
   ListChecks,
   ListEnd,
@@ -144,6 +145,8 @@ export const GLYPH = {
   CHANNEL: lucideGlyph(Hash),
   // A channel only its members see, as Slack marks a private one.
   PRIVATE_CHANNEL: lucideGlyph(Lock),
+  // A provider's API key, pasted from its console, beside a plan that signs in.
+  API_KEY: lucideGlyph(KeyRound),
   // A thread, the Inbox's item, where no ask of its own says more.
   THREAD: lucideGlyph(MessagesSquare),
   TERMINAL: TerminalIcon,

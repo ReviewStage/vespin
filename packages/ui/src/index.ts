@@ -100,7 +100,6 @@ export * from "./components/message/message-line.js";
 export * from "./components/more-button/more-button.js";
 export * from "./components/nav-item/nav-item.js";
 export * from "./components/note-line/note-line.js";
-export * from "./components/numbered-steps/numbered-steps.js";
 export * from "./components/one-line/one-line.js";
 export * from "./components/over-pane/over-pane.js";
 export * from "./components/page-embed/page-embed.js";
