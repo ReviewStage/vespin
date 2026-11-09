@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PencilLineIcon } from "../../icons/icons.js";
+import { drawsSomething } from "../../said.js";
 import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Tooltip } from "../tooltip/hint.js";
 import type { CommentAuthor } from "./comment.js";
@@ -63,11 +64,6 @@ const POINT = {
   [COMMENT_PIN_STANDS.BESIDE]: "rounded-tr-none",
   [COMMENT_PIN_STANDS.INSIDE]: "rounded-tl-none",
 } as const satisfies Record<CommentPinStands, string>;
-
-/** Whether a node draws anything: none, null, and a boolean, as a condition leaves it, draw nothing. */
-function drawsSomething(node: ReactNode): boolean {
-  return node !== undefined && node !== null && typeof node !== "boolean";
-}
 
 /** What a pin of comments wears: the face of who started its first thread and how many threads stand there; a draft's wears the pencil alone. */
 type PinFace =

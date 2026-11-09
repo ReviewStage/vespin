@@ -21,6 +21,7 @@
  */
 
 import type { ReactNode } from "react";
+import { drawsSomething } from "../../said.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 
@@ -39,11 +40,6 @@ export const MESSAGE_LINE_INSET = {
 } as const;
 
 export type MessageLineInset = (typeof MESSAGE_LINE_INSET)[keyof typeof MESSAGE_LINE_INSET];
-
-/** Whether a node draws anything: none, null, and a boolean, as a condition leaves it, draw nothing. */
-function drawsSomething(node: ReactNode): boolean {
-  return node !== undefined && node !== null && typeof node !== "boolean";
-}
 
 /** Whether the line opens at a bubble's inset: at its start where it keeps to the left, unless its message's words stand on no ground. */
 function opensInset(align: MessageLineAlign, inset: MessageLineInset): boolean {
