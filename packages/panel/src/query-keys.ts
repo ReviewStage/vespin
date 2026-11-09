@@ -38,6 +38,8 @@ export const QUERY_ROOT = {
   AGENT_PART: "agent-part",
   /** The window's one app-state document (`use-app-state.ts`'s `appStateQuery`), read by no id. */
   APP_STATE: "appState",
+  /** A web page's preview for the card a plain link hangs, by the link's address (`tasks/link-preview-card.tsx`). */
+  LINK_PREVIEW: "link-preview",
   TASK_FILE: "task-file",
   TASK_TREE: "task-tree",
   PAGE_SOURCE: "page-source",

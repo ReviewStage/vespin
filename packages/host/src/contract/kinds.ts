@@ -471,6 +471,8 @@ export const TASKS_ACT_KIND = {
   TASKS_FILE: "tasks.file",
   /** A File tab's tree listing one folder of the open task's repository, read from GitHub through the service; answered to the tree, never on the document. */
   TASKS_TREE: "tasks.tree",
+  /** What a web page a plain link names says of itself, for the card the link hangs: fetched as the card shows, and kept by the window alone. */
+  TASKS_LINK_PREVIEW: "tasks.linkPreview",
   /** The skills a developer may choose of a task's repository, read from GitHub through the service; answered to the asker, never on the document. */
   TASKS_SKILLS: "tasks.skills",
   /**
@@ -1015,6 +1017,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_STANDING: ACT_USE.WRITE,
   TASKS_FILE: ACT_USE.FETCH,
   TASKS_TREE: ACT_USE.FETCH,
+  TASKS_LINK_PREVIEW: ACT_USE.FETCH,
   TASKS_SKILLS: ACT_USE.FETCH,
   TASKS_LINK_STANDING_FOLLOW: ACT_USE.READ,
   TASKS_BROWSER_TAB_OPEN: ACT_USE.WRITE,

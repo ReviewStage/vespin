@@ -336,6 +336,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     overviewConversation: NOT_YET_BUILT,
   },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
+  // A page the member hovers, read for their own screen: an agent reads a page with its own tools.
+  linkPreviews: { read: SCREEN_ONLY },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {

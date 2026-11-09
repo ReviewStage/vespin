@@ -23,6 +23,7 @@ import { hostsContract } from "./hosts.js";
 import { inboxContract } from "./inbox.js";
 import { installedSkillsContract } from "./installed-skills.js";
 import { integrationsContract } from "./integrations.js";
+import { linkPreviewsContract } from "./link-previews.js";
 import { liveContract } from "./live.js";
 import { macCommandsContract } from "./mac-commands.js";
 import { mcpClientsContract } from "./mcp-clients.js";
@@ -70,6 +71,7 @@ export const hostedContract = {
   inbox: inboxContract,
   installedSkills: installedSkillsContract,
   integrations: integrationsContract,
+  linkPreviews: linkPreviewsContract,
   live: liveContract,
   deviceAgents: deviceAgentsContract,
   macCommands: macCommandsContract,

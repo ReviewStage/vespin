@@ -1,0 +1,89 @@
+/**
+ * link-preview-procedures.ts -- a web page's preview for the card a plain link hangs, as the hosted oRPC router answers it.
+ *
+ * `GET /api/link-previews?url=` answers, to any signed-in account, what the
+ * page at the address says of itself (`link-preview-read.ts`), or why it
+ * has no preview, inside the answer. The read is the service's own, from
+ * its network, so the member's machine contacts no third party; what the
+ * service may reach is held by `link-address.ts` before any byte is sent.
+ * An answer is kept for a while per address, a few minutes where the page
+ * answered and a moment where it did not, so a link many members hover
+ * is read once, and the reads under way at once are bounded per instance.
+ * Nothing of the address or the page is logged: an address may carry a
+ * token, and the page is a third party's.
+ */
+
+import { LINK_PREVIEW_REFUSAL, type LinkPreviewAnswer } from "@repo/features/link-preview-wire";
+import { Cache, Duration, Effect, type Exit, Semaphore } from "effect";
+import type * as HttpClient from "effect/http/HttpClient";
+import type { UserIdResolver } from "../http/http-effect.js";
+import { accountMiddleware, hosted } from "../orpc/base.js";
+import { webPageAddressOf } from "./link-address.js";
+import { type AddressResolver, readLinkPreview } from "./link-preview-read.js";
+
+export interface LinkPreviewsProcedureSeams {
+  resolveUserId: UserIdResolver;
+  /** The addresses a host name resolves to, which the guard holds every page and picture to. */
+  resolveAddresses: AddressResolver;
+}
+
+/** How previews are kept on one instance. */
+const PREVIEWS_KEPT = {
+  /** The most addresses whose previews one instance keeps. */
+  CAPACITY: 128,
+  /** How long a preview the page answered is kept. */
+  ANSWERED: Duration.minutes(10),
+  /** How long a refusal or an unread page is kept, so a hover repeated at once asks nothing again. */
+  UNANSWERED: Duration.minutes(1),
+  /** The most pages one instance reads at once. */
+  CONCURRENT_READS: 8,
+} as const;
+
+/** The previews one instance keeps, by the page's address without its fragment. */
+type LinkPreviewCache = Cache.Cache<string, LinkPreviewAnswer, never, HttpClient.HttpClient>;
+
+/** How long an answer is kept: longer where the page answered. */
+function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
+  return exit._tag === "Success" && "preview" in exit.value
+    ? PREVIEWS_KEPT.ANSWERED
+    : PREVIEWS_KEPT.UNANSWERED;
+}
+
+/**
+ * The instance's one cache of previews, made on the first ask and kept for
+ * the instance's life, as the published cache is
+ * (`agents/coder-host/published.ts`), since the procedures are built with
+ * no Effect to build one in.
+ */
+function instanceLinkPreviewCache(resolve: AddressResolver): Effect.Effect<LinkPreviewCache> {
+  const reads = Semaphore.makeUnsafe(PREVIEWS_KEPT.CONCURRENT_READS);
+  const made = Cache.makeWith(
+    (address: string) => reads.withPermits(1)(readLinkPreview(address, { resolve })),
+    {
+      capacity: PREVIEWS_KEPT.CAPACITY,
+      requireServicesAt: "lookup",
+      timeToLive: previewKept,
+    },
+  );
+  let kept: LinkPreviewCache | undefined;
+  return Effect.suspend(() =>
+    kept === undefined ? Effect.map(made, (cache) => (kept ??= cache)) : Effect.succeed(kept),
+  );
+}
+
+/** The link previews resource: one page's preview, read for a signed-in account. */
+export function linkPreviewsProcedures(seams: LinkPreviewsProcedureSeams) {
+  const previews = instanceLinkPreviewCache(seams.resolveAddresses);
+  const signedIn = hosted.linkPreviews.use(accountMiddleware(seams.resolveUserId));
+  return {
+    read: signedIn.read.effect(function* ({ input }) {
+      const url = webPageAddressOf(input.url);
+      if (url === undefined) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
+      // Note that the fragment never reaches the server, so two links to one page differing in it share one read.
+      url.hash = "";
+      const cache = yield* previews;
+      const answer = yield* Cache.get(cache, url.href);
+      return "preview" in answer ? { preview: { ...answer.preview, url: input.url } } : answer;
+    }),
+  };
+}

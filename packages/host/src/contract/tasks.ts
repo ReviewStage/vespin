@@ -20,6 +20,11 @@ import {
   adminReadAnswerSchema,
   adminReadParamsSchema,
 } from "@repo/features/admin-wire";
+import {
+  LINK_PREVIEW_UNANSWERED,
+  linkPreviewParamsSchema,
+  linkPreviewViewSchema,
+} from "@repo/features/link-preview-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   codeLinesSchema,
@@ -316,6 +321,14 @@ export const TASKS_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.READ,
     unanswered: UNANSWERED,
+  }),
+  TASKS_LINK_PREVIEW: hostAct({
+    input: linkPreviewParamsSchema,
+    output: linkPreviewViewSchema,
+    refusal: "Could not read that link's page on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: LINK_PREVIEW_UNANSWERED,
   }),
   TASKS_BROWSER_TAB_OPEN: hostAct({
     input: tasksBrowserTabOpenParamsSchema,

@@ -39,6 +39,8 @@ import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import { imageBodyOf } from "./image-body.js";
 import { WRITE_UNTAKEN, type WriteUntaken, writeUntakenOf } from "./keyed-write.js";
+import type { LinkPreviewView } from "./link-preview-view.js";
+import { LINK_PREVIEW_QUERY } from "./link-preview-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import type { PagePlace, PageVersion } from "./page-wire.js";
 import {
@@ -567,6 +569,11 @@ export class HostedTaskClient {
     return Effect.map(hostedCall(this.#hosted.taskFiles.file, { id: taskId, ...query }), (read) =>
       "failure" in read ? undefined : read,
     );
+  }
+
+  /** What a web page a plain link names says of itself, for the card the link hangs, read by the service (`link-preview-wire.ts`): its answer, or why it did not answer. */
+  linkPreview(url: string): Effect.Effect<LinkPreviewView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.linkPreviews.read, { [LINK_PREVIEW_QUERY.URL]: url });
   }
 
   /** One window of a file of a repository the workspace's installation reaches, as `readFile` reads a task's; nothing where the service did not answer, or where the window is not one the wire admits. */
