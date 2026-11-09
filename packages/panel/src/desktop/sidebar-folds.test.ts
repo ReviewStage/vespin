@@ -364,12 +364,13 @@ test("a finished sub-task the view hides hands its open child tasks to the neare
   assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding", "Delete", "Keep"]);
 });
 
-test("a canceled parent the view hides takes its child tasks to do out of the sidebar with it", () => {
+test("a canceled parent the view hides takes its child tasks to do out of the sidebar with it, at every depth", () => {
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [
         family("Migrate", undefined, { status: TASK_STATUS.CANCELED }),
         family("Import", "Migrate", { status: TASK_STATUS.TODO }),
+        family("Map", "Import", { status: TASK_STATUS.TODO }),
         family("Other", undefined, { status: TASK_STATUS.IN_PROGRESS }),
       ],
     }),

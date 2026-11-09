@@ -535,8 +535,8 @@ export function drawnTaskRows(
  * reader's sight, is passed by, walked through `every`, so its child task
  * stands under the nearest ancestor a list does hold, and its open work
  * never leaves the sidebar; one none of whose ancestors any list holds is
- * drawn nowhere, never at the top. A pinned task stays in Pinned, under no
- * parent.
+ * drawn nowhere, never at the top, and so is every task under it, however
+ * deep. A pinned task stays in Pinned, under no parent.
  */
 export function homedTaskRows(
   lists: readonly (readonly TaskRow[])[],
@@ -556,15 +556,20 @@ export function homedTaskRows(
     if (row.kind !== TASK_ROW.TASK) return list;
     const walked = new Set([row.task.id]);
     let at = row.task;
+    let looped = false;
     // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached.
     for (let above = heldAncestor(at, held, every); above !== undefined; ) {
       const parent = byId.get(above);
-      if (parent === undefined || walked.has(parent.id)) break;
+      if (parent === undefined || walked.has(parent.id)) {
+        looped = true;
+        break;
+      }
       walked.add(parent.id);
       at = parent;
       above = heldAncestor(at, held, every);
     }
-    return at === row.task && underParent(at) ? undefined : listOf.get(at.id);
+    // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
+    return !looped && underParent(at) ? undefined : listOf.get(at.id);
   };
   const homed = lists.map((rows, list) => rows.map((row) => ({ row, home: homeOf(row, list) })));
   return lists.map((_, list) => [
