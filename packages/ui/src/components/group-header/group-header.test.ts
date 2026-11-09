@@ -18,7 +18,8 @@ import {
  * group-header.test.ts -- pressing a group's head folds and unfolds its
  * rows and says so in `aria-expanded`, open or folded from the start or as
  * its holder keeps it; an action beside the fold presses without folding;
- * a head that folds nothing draws its rows always and no fold control; the count is
+ * a head that folds nothing draws its rows always and no fold control; a head
+ * whose label drops a menu presses as that menu's button; the count is
  * drawn as its caller gives it; a folded group draws what it leaves
  * standing; and a head named in place keeps its rows and ends its edit on
  * Return, Escape, or the focus leaving it, though not for a layer its glyph's
@@ -140,6 +141,30 @@ test("a head that folds nothing is a heading with its rows always drawn under it
   assert.equal(container.querySelector("button"), null);
   assert.equal(container.querySelector("h2")?.textContent, "acme/web");
   assert.ok(container.textContent?.includes(ROWS));
+});
+
+test("a head whose label drops a menu is one button that says so and asks for the menu, folding nothing", () => {
+  const asked: string[] = [];
+  const container = render(
+    group(undefined, {
+      menu: {
+        "aria-haspopup": "menu",
+        "aria-expanded": false,
+        "aria-controls": undefined,
+        onClick: () => asked.push("menu"),
+      },
+    }),
+  );
+  const buttons = container.querySelectorAll("button");
+  assert.equal(buttons.length, 1);
+  const label = buttons[0] ?? assert.fail("the label is a button");
+  assert.equal(label.getAttribute("aria-haspopup"), "menu");
+  assert.equal(label.textContent, "acme/web");
+  assert.equal(label.getAttribute("aria-expanded"), "false");
+
+  act(() => label.click());
+  assert.deepEqual(asked, ["menu"]);
+  assert.ok(container.textContent?.includes(ROWS), "its rows stand");
 });
 
 test("the count is drawn as its caller gives it, none included, and read with its noun", () => {

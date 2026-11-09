@@ -25,7 +25,6 @@ import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
   Fill,
-  GROUP_HEADING,
   GroupHeader,
   HoldPress,
   IconButton,
@@ -73,7 +72,6 @@ import {
 import {
   ArrowDownFromLineIcon,
   ArrowUpToLineIcon,
-  FolderPlusIcon,
   HouseIcon,
   ListTodoIcon,
   MailOpenIcon,
@@ -177,7 +175,7 @@ import {
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
-import { useInboxWaiting } from "./places-waiting.js";
+import { needsYouOf, useInboxWaiting } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
 import { SidebarAgent } from "./sidebar-agent.js";
@@ -190,7 +188,6 @@ import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
   type DrawnSection,
   moveToSectionEntry,
-  NEW_SECTION,
   PINNED_DROP_ZONE,
   rowMember,
   SidebarSections,
@@ -200,7 +197,7 @@ import {
 } from "./sidebar-sections.js";
 import {
   NONE_MATCH,
-  TaskViewOptions,
+  TaskScopeSwitcher,
   tasksHeadWords,
   useTaskViewCommands,
 } from "./sidebar-task-view.js";
@@ -399,6 +396,8 @@ interface RowContext {
   /** Whether a pin is the one the open place was opened from, which the sidebar marks in its holder's place. */
   readonly markedPin: (pin: SidebarPin) => boolean;
   readonly onOpen: (taskId: string) => void;
+  /** Whether a row stands under its group's fold: the open one, or one a thread of which waits on the reader (`needsYouOf`). */
+  readonly standsFolded: (row: TaskRow) => boolean;
   /** Whether a row is the one standing: the open plan's, or the agent's whose page stands. */
   readonly currentRow: (row: TaskRow) => boolean;
   /** Opens an agent with no plan on its own page. */
@@ -1185,6 +1184,9 @@ const PIN_NOUN: CountNoun = { one: "pin", many: "pins" };
 /** Pinned's key, by which it leaves the column once it stands for nothing. */
 const PINNED_KEY = "pinned";
 
+/** The scope switcher's key, by which it glides as Pinned comes and goes above it. */
+const SCOPE_KEY = "scope";
+
 /** Pinned listed, or not, for `LeavingGroups`: constants, so a render that changes neither lists nothing new. */
 const PINNED_LISTED: readonly string[] = [PINNED_KEY];
 const NOTHING_LISTED: readonly string[] = [];
@@ -1222,7 +1224,7 @@ function RepositorySection({
   const { repository } = group;
   const folded = folds.folded(repository);
   const named = repository === null ? NO_REPOSITORY : label;
-  const standing = group.rows.filter(context.currentRow);
+  const standing = group.rows.filter(context.standsFolded);
   // The menu is drawn over the window rather than inside the sidebar, so it
   // closes with the sidebar folding away as well as with the tab hiding.
   const menu = useMenu(context.tasks.shown && context.inSight);
@@ -1331,15 +1333,16 @@ function taskSections(
   };
 }
 
-/** The rows the sections draw, in their order: each group's unless folded, the row standing under its fold. */
+/** The rows the sections draw, in their order: each group's unless folded, the rows standing under its fold (`stands`). */
 function drawnTasks(
   sections: TaskSections,
   folds: FoldedGroups,
   current: (row: TaskRow) => boolean,
+  stands: (row: TaskRow) => boolean,
   every: TasksById,
 ): TaskRow[] {
   const under = (folded: boolean, rows: readonly TaskRow[]) =>
-    nestedRows(folded ? rows.filter(current) : rows, folds, current, every);
+    nestedRows(folded ? rows.filter(stands) : rows, folds, current, every);
   switch (sections.grouping) {
     case TASK_GROUPING.REPOSITORY:
       return sections.groups.flatMap((group) => under(folds.folded(group.repository), group.rows));
@@ -1870,8 +1873,6 @@ function SidebarColumn({
   );
   const automationsRunning = runningRuns(workspaceRuns);
   const failedRuns = useFailedRuns();
-  const inboxTaskless = useInboxTaskless();
-  const listedInbox = useListedInbox(tasks);
   const automationFailed = useFailedRunsMark(
     failedRuns,
     tasks.workspace?.id,
@@ -1916,8 +1917,6 @@ function SidebarColumn({
   const newTaskIn = (repository: string) => newTaskOver(() => tasks.newTask.onOpenIn(repository));
   const folds = useFoldedGroups(sidebar.staged);
   const taskView = useTaskListView(tasks.workspace?.id, sidebar.staged);
-  // The Tasks head's own menu, on a right-click and a long press, drawn only once it offers more than the buttons beside it.
-  const newSectionButton = useRef<HTMLButtonElement | null>(null);
   const reader = useMemberDirectory();
   // Only a workspace somebody shares has people to filter by, so one nobody shares lists every task.
   const { memberCount } = tasks.workspace ?? {};
@@ -1939,6 +1938,19 @@ function SidebarColumn({
   const agentShown = onTasks && !inAdmin ? tasks.agentView.agentId : undefined;
   const currentRow = (row: TaskRow) =>
     row.kind === TASK_ROW.TASK ? current(row.task.id) : row.agent.id === agentShown;
+  // A folded section or repository keeps standing, beside the open row, the rows a thread of which waits on the reader, as the Inbox's row counts them.
+  const listedInbox = useListedInbox(tasks);
+  const inboxTaskless = useInboxTaskless();
+  const needsYou = useMemo(
+    () => needsYouOf(listedInbox.inbox, inboxTaskless, tasks.me, now),
+    [listedInbox.inbox, inboxTaskless, tasks.me, now],
+  );
+  const standsFolded = (row: TaskRow) =>
+    currentRow(row) ||
+    (tasks.signedIn &&
+      (row.kind === TASK_ROW.TASK
+        ? needsYou.tasks.has(row.task.id)
+        : needsYou.agents.has(row.agent.id)));
   const openAgent = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   // The list is the chosen workspace's; the unread marks above read every task.
   const { listed: listedRows, listedAgents } = tasks;
@@ -2024,15 +2036,13 @@ function SidebarColumn({
     ]);
   };
   const { chosen } = overlay;
-  // The reader's own tasks, which the list holds until the reader chooses otherwise.
-  const mine: AssignedTo = { kind: ASSIGNED_TO.ME };
-  // The Tasks head and its list are called whose tasks the list holds.
+  // The scope switcher and the list are called whose tasks the list holds.
   const tasksHead = tasksHeadWords(assignedTo, shared, reader, tasks.listed.tasks);
-  // New section stands on the Tasks head while the account keeps sections.
+  // New section stands in the scope switcher's menu while the account keeps sections.
   // Note that a new section is named in place at the foot of the sections, so the sidebar stays standing rather than being put away as a choice puts it.
-  const askNewSection = () => {
+  const askNewSection = (from: HTMLElement | null) => {
     const { workspace } = tasks;
-    if (workspace !== undefined) sectionEdits.beginCreate(workspace.id, newSectionButton.current);
+    if (workspace !== undefined) sectionEdits.beginCreate(workspace.id, from);
   };
   const newSectionOffered = sectionsShown && tasks.workspace !== undefined;
   const context: RowContext = {
@@ -2050,6 +2060,7 @@ function SidebarColumn({
       markedPin.agent === row.agent.id
         ? false
         : currentRow(row),
+    standsFolded,
     onOpenAgent: chosen(openAgent),
     onDeletedAgent: (agentId) => () => {
       if (tasks.agentView.agentId === agentId) tasks.agentView.onClose();
@@ -2176,7 +2187,7 @@ function SidebarColumn({
   const pinnedWalked = pinnedTaskRows(pinnedDrawnRows);
   const sectionsDrawn = homedSections.flatMap(({ section, rows: held }) =>
     nestedRows(
-      folds.sectionFolded(section.id) ? held.filter(currentRow) : held,
+      folds.sectionFolded(section.id) ? held.filter(standsFolded) : held,
       folds,
       currentRow,
       everyTask,
@@ -2186,7 +2197,7 @@ function SidebarColumn({
   const drawn = [
     ...pinnedShownDrawn,
     ...sectionsDrawn,
-    ...drawnTasks(homedTasks, folds, currentRow, everyTask),
+    ...drawnTasks(homedTasks, folds, currentRow, standsFolded, everyTask),
   ];
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : []));
@@ -2354,6 +2365,23 @@ function SidebarColumn({
                         />
                       )}
                     />
+                    {/* The scope switcher heads what its view filters, the sections and the list, Pinned standing above it unfiltered; a row let go on it leaves its section, as one let go on the list does. */}
+                    {tasks.signedIn ? (
+                      <div
+                        className="sidebar-group sidebar-scope-zone"
+                        data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
+                        {...motionKey(SCOPE_KEY)}
+                      >
+                        <TaskScopeSwitcher
+                          shown={tasks.shown && overlay.inSight}
+                          words={tasksHead}
+                          masked={assignedTo.kind === ASSIGNED_TO.MEMBER}
+                          control={taskView}
+                          shared={shared}
+                          onNewSection={newSectionOffered ? askNewSection : undefined}
+                        />
+                      </div>
+                    ) : null}
                     <SidebarSections
                       sections={homedSections}
                       workspaceId={sectionsShown ? tasks.workspace?.id : undefined}
@@ -2362,6 +2390,7 @@ function SidebarColumn({
                         dialogs: sectionDialogs,
                         edits: sectionEdits,
                         current: currentRow,
+                        standsFolded,
                         unread,
                         inSight: overlay.inSight,
                         folded: folds.sectionFolded,
@@ -2416,39 +2445,6 @@ function SidebarColumn({
                       data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
                       {...motionRows()}
                     >
-                      {tasks.signedIn ? (
-                        <GroupHeader
-                          heading={GROUP_HEADING.NONE}
-                          label={
-                            assignedTo.kind === ASSIGNED_TO.MEMBER ? (
-                              <ReplayMask>{tasksHead}</ReplayMask>
-                            ) : (
-                              tasksHead
-                            )
-                          }
-                          actions={
-                            <>
-                              {!newSectionOffered ? null : (
-                                <Tooltip label={NEW_SECTION}>
-                                  <IconButton
-                                    ref={newSectionButton}
-                                    icon={<FolderPlusIcon />}
-                                    label={NEW_SECTION}
-                                    size={BUTTON_SIZE.COMPACT}
-                                    onClick={askNewSection}
-                                  />
-                                </Tooltip>
-                              )}
-                              <TaskViewOptions
-                                shown={tasks.shown && overlay.inSight}
-                                control={taskView}
-                                shared={shared}
-                                filtered={shared && assignedTo.kind !== mine.kind}
-                              />
-                            </>
-                          }
-                        />
-                      ) : null}
                       {assignedTo.kind !== ASSIGNED_TO.ANYONE &&
                       rows.length === 0 &&
                       shownSections.every((drawn) => drawn.rows.length === 0) &&

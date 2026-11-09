@@ -397,6 +397,13 @@ body,
   margin-top: var(--ui-section-gap);
 }
 
+/* The scope switcher heads the groups its view filters, the sections and the
+   list, so the first of them stands a tight gap under it rather than a
+   section's (sidebar-task-view.tsx). */
+.sidebar-scope-zone + .sidebar-group {
+  margin-top: var(--ui-tight-gap);
+}
+
 /* The account's own sections, between Pinned and Tasks (sidebar-sections.tsx).
    Each is dragged among the others by its header, on the rows' own timing,
    and carried as a copy while held as a row is. */

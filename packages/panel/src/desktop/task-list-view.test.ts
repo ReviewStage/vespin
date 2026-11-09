@@ -30,7 +30,7 @@ import { SIDEBAR_OVERLAY } from "./sidebar-collapse.js";
 
 /**
  * task-list-view.test.ts -- the sidebar's Tasks section lists the work under
- * way, the reader's own until View options says otherwise, grouped as it
+ * way, the reader's own until the scope switcher says otherwise, grouped as it
  * says, each row saying what its group does not, the pins standing apart in
  * a section of their own, and each workspace keeping its own view on this
  * Mac.
@@ -253,10 +253,17 @@ function menuItem(label: string): HTMLElement {
   return found;
 }
 
-/** Turns off Group by repository in the Tasks head's View options, listing the tasks in one run, and lets the menu go. */
+/** The scope switcher, which drops the view's menu. */
+function scopeButton(sidebar: HTMLElement): HTMLButtonElement {
+  return (
+    sidebar.querySelector<HTMLButtonElement>('.sidebar-scope button[aria-haspopup="menu"]') ??
+    assert.fail("the scope switcher stands")
+  );
+}
+
+/** Turns off Group by repository in the scope switcher's menu, listing the tasks in one run, and lets the menu go. */
 function listUngrouped(sidebar: HTMLElement): void {
-  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
-  assert.ok(button, "the Tasks head offers View options");
+  const button = scopeButton(sidebar);
   act(() => button.click());
   const grouping = menuItem("Group by repository");
   act(() => grouping.click());
@@ -267,10 +274,9 @@ function listUngrouped(sidebar: HTMLElement): void {
   });
 }
 
-/** Chooses `choice` under `submenu` in the Tasks head's View options. */
+/** Chooses `choice` under `submenu` in the scope switcher's menu. */
 async function choose(sidebar: HTMLElement, submenu: string, choice: string): Promise<void> {
-  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
-  assert.ok(button, "the Tasks head offers View options");
+  const button = scopeButton(sidebar);
   act(() => button.click());
   act(() => menuItem(submenu).click());
   // Note that a member is offered once the workspace's members reach their query.
@@ -332,10 +338,11 @@ async function mountRead(
   return sidebar;
 }
 
-/** What the Tasks head says, which the list is called by too. */
+/** What the scope switcher says, which the list is called by too. */
 function headWords(sidebar: HTMLElement): string | undefined {
   const list = sidebar.querySelector(TASK_LIST);
-  const said = list?.querySelector(".ui-group-header-lead")?.textContent ?? undefined;
+  const said =
+    sidebar.querySelector(".sidebar-scope .ui-group-header-lead")?.textContent ?? undefined;
   assert.equal(
     list?.getAttribute("aria-label") ?? undefined,
     said,
@@ -344,7 +351,7 @@ function headWords(sidebar: HTMLElement): string | undefined {
   return said;
 }
 
-test("a shared workspace opens on your own tasks, those you are on and those no one is on that you made, by repository, newest updated first, with no dot", async () => {
+test("a shared workspace opens on your own tasks, those you are on and those no one is on that you made, by repository, newest updated first", async () => {
   const sidebar = await mountRead(ACME, MINE_UNASSIGNED);
 
   assert.deepEqual(groupNames(sidebar), ["relay", "console"]);
@@ -352,19 +359,17 @@ test("a shared workspace opens on your own tasks, those you are on and those no 
     taskRows(sidebar).map((row) => row.name),
     ["Fix flaky deploy", "Audit logs"],
   );
-  const options = sidebar.querySelector('button[aria-label="View options"]');
-  assert.equal(options?.getAttribute("aria-description"), null);
 });
 
-test("View options offers Group by repository, on at first, and Assigned to: Me, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
+test("the scope switcher offers Assigned to, Group by repository, on at first, and New section, Assigned to holding Me, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
   const sidebar = await mountRead(ACME, ASSIGNED);
-  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
-  assert.ok(button, "the Tasks head offers View options");
+  const button = scopeButton(sidebar);
   act(() => button.click());
   assert.deepEqual(lastMenuItems(), [
+    "Assigned to",
     "Group by repository",
     "Show finished sub-tasks",
-    "Assigned to",
+    "New section",
   ]);
   assert.equal(menuItem("Show finished sub-tasks").getAttribute("aria-checked"), "false");
   assert.equal(menuItem("Group by repository").getAttribute("aria-checked"), "true");
@@ -388,7 +393,7 @@ test("View options offers Group by repository, on at first, and Assigned to: Me,
   assert.equal(cardName(), "Charles Pan");
 });
 
-test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with a dot and no chip", async () => {
+test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with no chip", async () => {
   const mine = await mountRead(ACME, ASSIGNED);
   assert.equal(headWords(mine), "My tasks");
   await choose(mine, "Assigned to", "Anyone");
@@ -398,8 +403,6 @@ test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › A
   assert.equal(taskRows(sidebar).length, 3);
   assert.equal(headWords(sidebar), "Everyone's tasks");
   assert.equal(sidebar.querySelector('button[aria-label="Show my tasks"]'), null, "no chip");
-  const options = sidebar.querySelector('button[aria-label="View options"]');
-  assert.equal(options?.getAttribute("aria-description"), "Filtered");
 });
 
 test("grouped by none, the tasks run in one list", () => {
@@ -440,15 +443,17 @@ test("each workspace keeps its own view on this Mac across launches", () => {
   assert.deepEqual(groupNames(mountSidebar(other, elsewhere)), ["relay"]);
 });
 
-test("a workspace nobody shares lists every task and offers Group by repository alone", () => {
+test("a workspace nobody shares lists every task and offers no Assigned to", () => {
   const sidebar = mountSidebar(PERSONAL);
   assert.equal(taskRows(sidebar).length, 3);
   assert.equal(headWords(sidebar), "My tasks");
-  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
-  assert.ok(button, "the Tasks head offers View options");
-  assert.equal(button.getAttribute("aria-description"), null);
+  const button = scopeButton(sidebar);
   act(() => button.click());
-  assert.deepEqual(lastMenuItems(), ["Group by repository", "Show finished sub-tasks"]);
+  assert.deepEqual(lastMenuItems(), [
+    "Group by repository",
+    "Show finished sub-tasks",
+    "New section",
+  ]);
 });
 
 test("a list of your own that holds nothing says so, and Show all lists everyone's", async () => {
@@ -543,8 +548,7 @@ test("Show finished sub-tasks stands a parent's finished sub-tasks under it, mut
     of("d", "Delete", TASK_STATUS.IN_PROGRESS, "a"),
     of("s", "Shipped", TASK_STATUS.DONE),
   ]);
-  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
-  assert.ok(button, "the Tasks head offers View options");
+  const button = scopeButton(sidebar);
   act(() => button.click());
   act(() => menuItem("Show finished sub-tasks").click());
   const fold = sidebar.querySelector<HTMLButtonElement>(
@@ -852,8 +856,7 @@ test("Assigned to says the members could not be read, with Retry, under Me and A
     },
   });
   const sidebar = await mountRead(ACME, ASSIGNED);
-  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
-  assert.ok(button, "the Tasks head offers View options");
+  const button = scopeButton(sidebar);
   act(() => button.click());
   act(() => menuItem("Assigned to").click());
   const offered = () =>

@@ -24,7 +24,8 @@ import { ArchivedAgents } from "./agent-archive.js";
  * sidebar-folds.test.ts -- every group that folds folds under one
  * header, `GroupHeader`: the sidebar's Pinned and repositories, and the summary's archived
  * agents, alike but for what each counts, each unrolling as it opens, and a
- * folded group leaving the task open standing.
+ * folded group leaving the task open, and a repository's the tasks that need
+ * the reader, standing.
  */
 
 const roots: Root[] = [];
@@ -137,24 +138,36 @@ test("Pinned folds on its name, counts its pins folded, and leaves the pin that 
   assert.deepEqual(names(), ["Invite expiry", "Retry audit"]);
 });
 
-test("a folded repository leaves the task that is open standing, and unfolds to every task", () => {
+test("a folded repository leaves the task that is open and the task that needs you standing, and unfolds to every task", () => {
+  handInbox({
+    waiting: [
+      {
+        taskId: "p-3",
+        items: [{ id: "item-1", agentId: "agent-1", title: "Retry?", postedAt: 1 }],
+      },
+    ],
+  });
   const sidebar = mountSidebar(
     tasksControl({
-      tasks: [task("p-1", "Invite expiry", "acme/relay"), task("p-2", "Retry audit", "acme/relay")],
+      tasks: [
+        task("p-1", "Invite expiry", "acme/relay"),
+        task("p-2", "Retry audit", "acme/relay"),
+        task("p-3", "Webhook retries", "acme/relay"),
+      ],
       activeTaskId: "p-1",
     }),
   );
   const names = () =>
-    [...sidebar.querySelectorAll('nav[aria-label="My tasks"] .ui-list-row-title')].map(
-      (title) => title.firstChild?.textContent,
-    );
-  assert.deepEqual(names().sort(), ["Invite expiry", "Retry audit"]);
+    [...sidebar.querySelectorAll('nav[aria-label="My tasks"] .ui-list-row-title')]
+      .map((title) => title.firstChild?.textContent)
+      .sort();
+  assert.deepEqual(names(), ["Invite expiry", "Retry audit", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
-  assert.deepEqual(names(), ["Invite expiry"]);
+  assert.deepEqual(names(), ["Invite expiry", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
-  assert.deepEqual(names().sort(), ["Invite expiry", "Retry audit"]);
+  assert.deepEqual(names(), ["Invite expiry", "Retry audit", "Webhook retries"]);
 });
 
 test("a repository's header folds on its name, says it is kept at top, counts its plans folded, keeps its + outside the fold, and opens its menu on a right-click", () => {

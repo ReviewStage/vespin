@@ -7,6 +7,7 @@ import {
   useRef,
 } from "react";
 import { isComposingKey } from "../../composing-key.js";
+import { ChevronDownIcon } from "../../icons/lucide-glyphs.js";
 import { ShadcnInput } from "../../shadcn/input.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { CountFigure } from "../count-figure/count-figure.js";
@@ -53,7 +54,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * pointer or the keyboard, in the glyph's place or in an empty glyph cell
  * where the group has no glyph of its own, which keeps its label over the
  * rows' names. Its caller counts a folded group at rest, so a fold still
- * reads as folded while no chevron stands.
+ * reads as folded while no chevron stands. A head may instead say whose
+ * rows the list under it holds and drop the menu that changes it (`menu`),
+ * the sidebar's "My tasks ▾": its label is then one button, in the label's
+ * own ink and a step heavier than a group's heading, the ▾ after it, so it
+ * reads as the switch it is and never as one more group.
  *
  * Note that the head is a heading holding a button, beside the group's
  * actions, rather than a `details` summary holding them, because a summary
@@ -114,10 +119,11 @@ export const GROUP_HEADING = {
 } as const;
 export type GroupHeading = (typeof GROUP_HEADING)[keyof typeof GROUP_HEADING];
 
-/** How a head reads: as a row among the rows, or as a heading set apart over them, the sidebar's, its chevron only brought. */
+/** How a head reads: as a row among the rows, as a heading set apart over them, the sidebar's, its chevron only brought, or as the switch saying whose rows the list holds, in the label's ink. */
 export const GROUP_LOOK = {
   ROW: "row",
   HEADING: "heading",
+  SCOPE: "scope",
 } as const;
 export type GroupLook = (typeof GROUP_LOOK)[keyof typeof GROUP_LOOK];
 
@@ -156,6 +162,16 @@ export const GROUP_ROWS = {
 } as const;
 export type GroupRows = (typeof GROUP_ROWS)[keyof typeof GROUP_ROWS];
 
+/** The props of the button a head's label drops its menu from (`useMenu`'s `trigger()`). */
+export interface GroupMenuTrigger {
+  readonly "aria-haspopup": "menu";
+  readonly "aria-expanded": boolean;
+  readonly "aria-controls": string | undefined;
+  readonly onClick: (event: React.MouseEvent<HTMLElement>) => void;
+  /** The button itself, for its owner to hand the focus back to once something the menu began ends. */
+  readonly ref?: Ref<HTMLButtonElement> | undefined;
+}
+
 /** How a group folds: open from the start or not, or as its holder keeps it. */
 export type GroupFold = { readonly defaultOpen: boolean } | DisclosureControl;
 
@@ -181,12 +197,14 @@ const FADE = "transition-[opacity] duration-(--ui-duration-hover) ease-plain";
  */
 const PART = {
   HEADING: "ui-group-header-heading m-0 flex min-w-0 flex-auto [font:inherit]",
-  LEAD: "ui-group-header-lead group/lead m-0 flex min-w-0 flex-auto items-center gap-icon-gap rounded-control border-0 bg-transparent px-row-inset py-0 text-left font-ui text-muted-foreground",
+  LEAD: "ui-group-header-lead group/lead m-0 flex min-w-0 flex-auto items-center gap-icon-gap rounded-control border-0 bg-transparent px-row-inset py-0 text-left font-ui",
   GLYPH:
     "ui-group-header-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center *:[grid-area:1/1]",
   ICON: `ui-group-header-icon grid place-items-center [&>svg]:size-control-icon ${FADE}`,
   CHEVRON: `ui-group-header-chevron grid place-items-center ${FADE}`,
   MARK: "ui-group-header-mark inline-flex flex-none text-muted-foreground [&>svg]:size-group-header-mark",
+  /* The ▾ after a label that drops a menu, in the label's ink, a mark's size. */
+  DROPS: "ui-group-header-drops -ml-ui-2 inline-flex flex-none [&>svg]:size-group-header-mark",
   COUNT: `ui-group-header-count flex-none text-caption-inline tabular-nums ${FADE}`,
   /* Each action waits for the pointer or the keyboard on its own (`group-header.css`), a row's acts' gap apart, so a head's acts stand over the rows' acts beneath it. */
   ACTIONS: "ui-group-header-actions flex flex-none items-center gap-ui-4",
@@ -196,6 +214,14 @@ const PART = {
 const LEAD_HEIGHT = {
   [GROUP_LOOK.ROW]: "h-control",
   [GROUP_LOOK.HEADING]: "h-control-compact",
+  [GROUP_LOOK.SCOPE]: "h-control-compact",
+} as const satisfies Record<GroupLook, string>;
+
+/** A lead's ink in each look: a group's heading a tone below the rows, and the scope's switch in the label's own. */
+const LEAD_INK = {
+  [GROUP_LOOK.ROW]: "text-muted-foreground",
+  [GROUP_LOOK.HEADING]: "text-muted-foreground",
+  [GROUP_LOOK.SCOPE]: "text-foreground",
 } as const satisfies Record<GroupLook, string>;
 
 /** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
@@ -265,6 +291,7 @@ function Count({ count }: { count: NavCount }): React.JSX.Element {
 function Lead({
   glyph,
   folds,
+  drops,
   look,
   label,
   mark,
@@ -272,6 +299,8 @@ function Lead({
 }: {
   glyph: ReactNode;
   folds: boolean;
+  /** Whether the label drops a menu, which draws the ▾ after it. */
+  drops: boolean;
   look: GroupLook;
   label: ReactNode;
   mark: ReactNode;
@@ -296,9 +325,23 @@ function Lead({
           ) : null}
         </span>
       ) : null}
-      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP} truncate>
-        {label}
-      </Text>
+      {look === GROUP_LOOK.SCOPE ? (
+        // Note that the scope's switch is set in a group's size at the emphasis weight, in the lead's ink, since the group role's own ink is a tone below.
+        <span className="ui-group-header-scope flex min-w-0 text-group font-emphasis">
+          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
+            {label}
+          </Text>
+        </span>
+      ) : (
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP} truncate>
+          {label}
+        </Text>
+      )}
+      {drops ? (
+        <span className={PART.DROPS} aria-hidden="true">
+          <ChevronDownIcon />
+        </span>
+      ) : null}
       {said(mark) ? <span className={PART.MARK}>{mark}</span> : null}
       {count === undefined ? null : <Count count={count} />}
     </>
@@ -445,6 +488,7 @@ export function GroupHeader({
   actions,
   actionsShown = GROUP_ACTIONS.ON_HOVER,
   fold,
+  menu,
   look = GROUP_LOOK.ROW,
   standing,
   tooltip,
@@ -472,6 +516,8 @@ export function GroupHeader({
   actionsShown?: GroupActions;
   /** How the group folds; left out, the head folds nothing and the rows always stand. */
   fold?: GroupFold | undefined;
+  /** The menu the label drops, for a head that folds nothing (`useMenu`'s `trigger()`): the label is its button, the ▾ after it. */
+  menu?: GroupMenuTrigger | undefined;
   /** How the head reads: as a row, or as a heading set apart over the rows, the sidebar's; a row unless it says so. */
   look?: GroupLook;
   /** What a folded group leaves drawn under its head once its rows have faded; nothing is drawn while the group stands open. */
@@ -517,23 +563,38 @@ export function GroupHeader({
               ? NAV_COUNT_SHOWN.ON_HOVER
               : NAV_COUNT_SHOWN.ALWAYS),
         };
+  // Note that a head that folds is pressed for its fold, so only one that folds nothing drops a menu from its label.
+  const drops = !folds && menu !== undefined;
   const lead = (
-    <Lead glyph={glyph} folds={folds} look={look} label={label} mark={mark} count={counted} />
+    <Lead
+      glyph={glyph}
+      folds={folds}
+      drops={drops}
+      look={look}
+      label={label}
+      mark={mark}
+      count={counted}
+    />
   );
+  const leadBox = `${PART.LEAD} ${LEAD_HEIGHT[look]} ${LEAD_INK[look]}`;
   const hint = tooltip ?? (card === undefined || typeof label !== "string" ? undefined : label);
   // Note that only a head with a hint or a card is wrapped, because the tooltip hands its control a click handler of its own, which a head that folds nothing must not hear.
   const control = folds ? (
     <button
       type="button"
-      className={`${PART.LEAD} ${LEAD_HEIGHT[look]} ${PRESSED_AS_ROW.LEAD}`}
+      className={`${leadBox} ${PRESSED_AS_ROW.LEAD}`}
       aria-expanded={state.open}
       aria-controls={rows ? rowsId : undefined}
       onClick={state.toggle}
     >
       {lead}
     </button>
+  ) : drops ? (
+    <button type="button" className={`${leadBox} ${PRESSED_AS_ROW.LEAD}`} {...menu}>
+      {lead}
+    </button>
   ) : (
-    <span className={`${PART.LEAD} ${LEAD_HEIGHT[look]}`}>{lead}</span>
+    <span className={leadBox}>{lead}</span>
   );
   const subgrid = rowsStand === GROUP_ROWS.SUBGRID;
   const named = (
@@ -552,7 +613,7 @@ export function GroupHeader({
       <div
         className={`ui-group-header min-w-0 ${subgrid ? SUBGRID.ROOT : ""}`}
         data-folds={folds ? "true" : undefined}
-        data-look={look === GROUP_LOOK.HEADING ? look : undefined}
+        data-look={look === GROUP_LOOK.ROW ? undefined : look}
         data-head={head === GROUP_HEAD.STICKS ? head : undefined}
         data-rows={subgrid ? rowsStand : undefined}
         data-disclosure={folds ? details["data-disclosure"] : undefined}
@@ -563,11 +624,11 @@ export function GroupHeader({
           <div
             className={[
               HEAD,
-              folds ? PRESSED_AS_ROW.HEAD : "",
+              folds || drops ? PRESSED_AS_ROW.HEAD : "",
               head === GROUP_HEAD.STICKS ? STICKS : "",
               subgrid ? SUBGRID.HEAD : "",
             ].join(" ")}
-            data-menu-open={menuOpen ? "true" : undefined}
+            data-menu-open={menuOpen || (drops && menu?.["aria-expanded"]) ? "true" : undefined}
             {...withContextMenu<HTMLDivElement>(contextMenu, {})}
           >
             {named}

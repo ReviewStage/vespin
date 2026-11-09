@@ -33,7 +33,8 @@ import { CatalogSection } from "../section";
  * with its buttons standing; a list's head whose buttons wait,
  * a filter that is on standing with its dot; the count on a wide page and
  * in a narrow column; the sidebar's heads, set apart over their rows, their
- * chevrons brought only by the pointer, a folded one counted at rest; and a
+ * chevrons brought only by the pointer, a folded one counted at rest, and
+ * its scope switcher, whose label drops a menu; and a
  * group named in place, its glyph's button hanging a panel and its field in
  * the head's type over its rows.
  */
@@ -189,7 +190,7 @@ function Filtered(): React.JSX.Element {
   );
 }
 
-/** The sidebar's heads: shorter than a row, the chevron brought by the pointer in the glyph's place or an empty cell, and a folded group counted at rest. */
+/** The sidebar's heads: shorter than a row, the chevron brought by the pointer in the glyph's place or an empty cell, and a folded group counted at rest; and its scope switcher, in the label's ink, its ▾ dropping its menu. */
 function Headings(): React.JSX.Element {
   return (
     <div className="catalog-narrow">
@@ -202,6 +203,17 @@ function Headings(): React.JSX.Element {
       >
         <Rows names={TASKS} />
       </GroupHeader>
+      <GroupHeader
+        label="My tasks"
+        look={GROUP_LOOK.SCOPE}
+        heading={GROUP_HEADING.NONE}
+        menu={{
+          "aria-haspopup": "menu",
+          "aria-expanded": false,
+          "aria-controls": undefined,
+          onClick: ignore,
+        }}
+      />
       <GroupHeader
         label="acme/web"
         glyph={<FolderIcon />}
