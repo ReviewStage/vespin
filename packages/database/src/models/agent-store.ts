@@ -1168,15 +1168,16 @@ const updateAgentAuthor = SqlSchema.void({
     ),
 });
 
-const updateAgentSubscription = SqlSchema.void({
+const updateAgentPayer = SqlSchema.void({
   Request: Schema.Struct({
     userId: Schema.String,
     agentId: Schema.String,
+    payer: PayerColumnSchema,
     subscriptionId: Schema.NullOr(Schema.String),
   }),
-  execute: ({ userId, agentId, subscriptionId }) =>
+  execute: ({ userId, agentId, payer, subscriptionId }) =>
     Database.use((db) =>
-      db.update(agentTable).set({ subscriptionId }).where(reachableAgent(userId, agentId)),
+      db.update(agentTable).set({ payer, subscriptionId }).where(reachableAgent(userId, agentId)),
     ),
 });
 
@@ -3477,16 +3478,18 @@ export function recordAgentAuthor(
 }
 
 /**
- * The starter's subscription a launch put the agent on, over whatever
- * stood, or none, which reads as their first of its kind; nothing for an
- * agent of a workspace the account is not in.
+ * Who pays for the agent's next turn and the starter's subscription a plan
+ * payer names, as a launch chose them, over whatever stood; a subscription
+ * of none reads as their first of its kind. Nothing for an agent of a
+ * workspace the account is not in.
  */
-export function recordAgentSubscription(
+export function recordAgentPayer(
   userId: string,
   agentId: string,
+  payer: AgentPayer,
   subscriptionId: string | null,
 ): AgentStoreEffect<void> {
-  return updateAgentSubscription({ userId, agentId, subscriptionId });
+  return updateAgentPayer({ userId, agentId, payer, subscriptionId });
 }
 
 /** How the agent is run (`AgentRouting`); nothing for an agent of a workspace the account is not in. */

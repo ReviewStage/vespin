@@ -9,8 +9,8 @@ import {
   readAgent,
   readAgentContext,
   readAgentRouting,
+  recordAgentPayer,
   recordAgentRunnerToken,
-  recordAgentSubscription,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
 import {
@@ -2005,7 +2005,12 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           null,
           { add: true },
         );
-        yield* recordAgentSubscription(agent.userId, agent.agentId, second);
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+          second,
+        );
 
         const resetsAt = Date.UTC(2026, 9, 22, 9);
         yield* post(

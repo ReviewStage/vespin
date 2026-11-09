@@ -26,17 +26,19 @@
  *   every few minutes, and after a 401, and sends it to Codex's ChatGPT
  *   backend, which the runner is told to send its requests to
  *   (`planBackendEnv`).
- * - The token is the agent's subscription's, the `chatgpt_oauth` row its
- *   launch put it on and recorded on its row (`agent.subscription_id`), for
- *   now the account's first, renewed first where
+ * - Each launch chooses who pays for the agent's turns and records it on
+ *   its row (`turnPayerOf`): the first of the account's ChatGPT
+ *   subscriptions with room, else its OpenAI API key, else the plan's
+ *   refusal. The token is the chosen subscription's, the `chatgpt_oauth` row
+ *   recorded as `agent.subscription_id`, which the token route reads too,
+ *   renewed first where
  *   less than the token margin is left of it (`refreshChatGptAccess`, under
  *   the row's lock). A launch, and each message, renews it so too before it
  *   goes out, which refuses one the sign-in can no longer pay for and
  *   leaves a fresh token to hand on. A sign-in the account does
  *   not hold, one OpenAI signed out, one the deployment cannot open, or
- *   OpenAI not answering fails the call with that refusal: an agent paid for
- *   by the plan never turns to another payer.
- * - An agent its starter's OpenAI API key pays for is launched with
+ *   OpenAI not answering fails the call with that refusal.
+ * - A turn its starter's OpenAI API key pays for is launched with
  *   `OPENAI_API_KEY`, which the runner names as app-server's provider
  *   `env_key` in place of the token command, declared as a fixed credential:
  *   on a Mac the key opened, and in a sandbox a placeholder minted for the
@@ -61,17 +63,12 @@ import {
   RUNNER_ENV,
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
-import {
-  type Agent,
-  readAgentRouting,
-  recordAgentSubscription,
-} from "@repo/database/models/agent-store";
+import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
 import { PROVIDER_KEY_UNREADABLE, parseKeyRing } from "@repo/database/models/provider-key-seal";
-import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
-import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { Duration, Effect, Option, type Redacted, Result } from "effect";
 import {
   CHATGPT_ACCESS,
@@ -95,6 +92,7 @@ import {
   type PlanRefusal,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
+import { turnPayerOf } from "./agent-runtime-choice.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import {
   type HarnessLaunch,
@@ -243,63 +241,20 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     return access.plan;
   });
 
-  /** Who pays for the agent, as recorded as it started; none for an agent from before payers were. */
-  const payerOf = (agent: Agent) =>
-    Effect.map(readAgentRouting(userId, agent.id), (routing) =>
-      Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.payer)),
-    );
-
-  /** The subscription the agent's launch put it on; none for the account's first. */
-  const subscriptionOf = (agent: Agent) =>
-    Effect.map(readAgentRouting(userId, agent.id), (routing) =>
-      Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.subscriptionId)),
-    );
-
-  /**
-   * The subscription a launch puts the agent on, recorded on its row so the
-   * token route and its turns' limits name it: for now the account's first.
-   */
-  const launchSubscription = (agent: Agent) =>
-    Effect.gen(function* () {
-      const rows = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
-      const first = rows.find((row) => row.provider === PROVIDER_KEY_PROVIDER.OPENAI)?.id;
-      yield* recordAgentSubscription(userId, agent.id, first ?? null);
-      return first;
-    });
-
-  /**
-   * Where the account's saved credential pays for the agent: its own API key
-   * for an agent started on it; for one started on its Mac's sign-in, signed
-   * out since, the plan where the account keeps a ChatGPT sign-in, its key
-   * where it keeps only that, and the plan's refusal where it keeps neither;
-   * the plan for every other.
-   */
-  const savedPayer = (agent: Agent) =>
-    Effect.gen(function* () {
-      const payer = yield* payerOf(agent);
-      if (payer === AGENT_PAYER.API_KEY) return AGENT_PAYER.API_KEY;
-      if (payer !== AGENT_PAYER.MAC_SIGN_IN) return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
-      const openai = (rows: readonly { readonly provider: string }[]) =>
-        rows.some((row) => row.provider === PROVIDER_KEY_PROVIDER.OPENAI);
-      if (openai(yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH))) {
-        return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
-      }
-      // Note that an account that saved neither is refused in the plan's words, as signed out, which its Mac now is.
-      return openai(yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.API_KEY))
-        ? AGENT_PAYER.API_KEY
-        : AGENT_PAYER.CHATGPT_SUBSCRIPTION;
-    });
-
-  /** Whether the agent's saved credential is its starter's own OpenAI API key rather than the plan. */
-  const onApiKey = (agent: Agent) =>
-    Effect.map(savedPayer(agent), (payer) => payer === AGENT_PAYER.API_KEY);
+  /** Who pays for the agent's turns and on which subscription, as its latest launch chose them; none for an agent from before payers were. */
+  const recordedPayer = (agent: Agent) =>
+    Effect.map(readAgentRouting(userId, agent.id), (routing) => ({
+      payer: Option.getOrUndefined(Option.flatMapNullishOr(routing, (row) => row.payer)),
+      subscriptionId: Option.getOrUndefined(
+        Option.flatMapNullishOr(routing, (row) => row.subscriptionId),
+      ),
+    }));
 
   /**
    * The account's OpenAI API key opened, declared as `OPENAI_API_KEY`, which
    * the runner names as app-server's provider `env_key` in place of the
    * plan's token command; a Preview's stand-in where the key is gone or
-   * unreadable (`accounts/own-api-key.ts`); refused where neither is, and
-   * never turned to the plan.
+   * unreadable (`accounts/own-api-key.ts`); refused where neither is.
    */
   const apiKeyEnv = (layout: Pick<MachineLayout, "codexHome">) =>
     Effect.gen(function* () {
@@ -319,25 +274,27 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     });
 
   /**
-   * The plan asked, and the runner told the backend it pays through; the
-   * runner asks our route for the plan's tokens, so no credential of the
-   * plan's is declared here.
+   * The chosen subscription asked, and the runner told the backend it pays
+   * through; the runner asks our route for the plan's tokens, so no
+   * credential of the plan's is declared here.
    */
-  const planEnv = (agent: Agent, layout: Pick<MachineLayout, "codexHome">) =>
+  const planEnv = (subscriptionId: string | undefined, layout: Pick<MachineLayout, "codexHome">) =>
     Effect.map(
-      Effect.flatMap(launchSubscription(agent), standingPlan),
+      standingPlan(subscriptionId),
       (plan): HarnessLaunch => ({ env: { ...homeOf(layout), ...planBackendEnv(plan) } }),
     );
 
   /**
-   * The credential a launch starts with, chosen here alone: the account's
-   * saved credential (`savedPayer`), its key, which the agent's machine
-   * hands over as it decides, or the plan's token, asked of our route over
-   * HTTPS.
+   * The credential a launch starts with, chosen here alone (`turnPayerOf`):
+   * the account's key, which the agent's machine hands over as it decides,
+   * or the chosen subscription's token, asked of our route over HTTPS.
    */
   const launch = (agent: Agent, layout: MachineLayout) =>
     Effect.gen(function* () {
-      return yield* (yield* onApiKey(agent)) ? apiKeyEnv(layout) : planEnv(agent, layout);
+      const turn = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.OPENAI);
+      return yield* turn.payer === AGENT_PAYER.API_KEY
+        ? apiKeyEnv(layout)
+        : planEnv(turn.subscriptionId, layout);
     });
 
   const config = (
@@ -387,8 +344,9 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     };
     // Note that an agent on its API key has no plan to ask, and its runner holds what it launched with.
     const asked = Effect.gen(function* () {
-      if (yield* onApiKey(agent)) return;
-      yield* standingPlan(yield* subscriptionOf(agent));
+      const recorded = yield* recordedPayer(agent);
+      if (recorded.payer === AGENT_PAYER.API_KEY) return;
+      yield* standingPlan(recorded.subscriptionId);
     });
     return Effect.as(asked, { lines: [choice] });
   };

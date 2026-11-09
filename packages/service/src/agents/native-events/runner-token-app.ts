@@ -233,8 +233,7 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(target.userId, agent.value.id));
   // Note that only an agent its starter's plan pays for, on Codex, is handed the plan's token: one
-  // started on the plan, or one recorded with an older payer whose launch turns to the plan
-  // (`codex-sessions.ts`'s `savedPayer`).
+  // whose latest launch chose the plan (`turnPayerOf`), or one recorded with an older payer.
   const codex = Option.getOrUndefined(
     Option.filter(routing, (row) => row.runtime === CONVERSATION_RUNTIME.CODEX),
   );

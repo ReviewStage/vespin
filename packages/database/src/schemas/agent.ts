@@ -111,7 +111,8 @@ import { task } from "./task.js";
  * from before the column, which writes as the App.
  * `payer` is who pays for the agent's model calls (`AGENT_PAYER`),
  * the starter's Claude or ChatGPT plan, their own API key, or the service's,
- * recorded as it starts and never moved after; null for an agent from
+ * recorded as it starts and chosen again at each launch, so it moves between
+ * the plan and the key from one turn to the next; null for an agent from
  * before the column. What answers its conversation is the conversation's
  * own `runtime`. `subscription_id` is which of the starter's subscriptions
  * a plan payer names, as the agent's latest launch put it on.
@@ -315,7 +316,7 @@ export const agentTable = pgTable(
     author: text("author").$type<AgentAuthor>(),
     /** How the agent's repository was reached as it started: the workspace's GitHub App, or its starter's own token. */
     githubAccess: text("github_access").$type<GitHubAccess>().notNull().default(GITHUB_ACCESS.APP),
-    /** Who pays for the agent's model calls, recorded as it starts and never moved; null for an agent from before the column. */
+    /** Who pays for the agent's model calls, recorded as it starts and again by each launch's choice; null for an agent from before the column. */
     payer: text("payer").$type<AgentPayer>(),
     /**
      * The starter's subscription the agent runs on where its payer is a plan,

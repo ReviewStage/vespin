@@ -529,6 +529,24 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             return Option.getOrUndefined(record)?.fingerprint;
           });
 
+        // The plan pays while its sign-in has room, and the key once it is at its limit.
+        const sandboxPlan = yield* fingerprintOf(
+          yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.VERCEL),
+        );
+        const macPlan = yield* fingerprintOf(
+          yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.DEVICE),
+        );
+        const now = yield* DateTime.nowAsDate;
+        yield* setPlanStatus(
+          userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          new Date(now.getTime() + 30 * 60_000),
+          now,
+          now,
+        );
+
         // Each digest but the sandbox plan's is the one a launch recorded before its machine handed its
         // credential over, so a warm runner launched then is not relaunched for it: the first 32 hex
         // characters of the SHA-256 of
@@ -540,13 +558,9 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             sandboxKey: yield* fingerprintOf(
               yield* agentOn(AGENT_PAYER.API_KEY, AGENT_MACHINE.VERCEL),
             ),
-            sandboxPlan: yield* fingerprintOf(
-              yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.VERCEL),
-            ),
+            sandboxPlan,
             macKey: yield* fingerprintOf(yield* agentOn(AGENT_PAYER.API_KEY, AGENT_MACHINE.DEVICE)),
-            macPlan: yield* fingerprintOf(
-              yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.DEVICE),
-            ),
+            macPlan,
           },
           {
             sandboxKey: "6b61996f589fd234bed48d87b442c8b9",
