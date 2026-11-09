@@ -1,6 +1,5 @@
 import { noMatchWords, TERM } from "@repo/features/words";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
-import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   ALIGN,
   ComboboxList,
@@ -9,10 +8,7 @@ import {
   INLINE_REF_FIT,
   InlineRefFitScope,
   MENU_SURFACE_INSET,
-  type MenuKey,
-  MenuKeys,
   MenuSurface,
-  menuKey,
   POPOVER_WIDTH,
   RectFloat,
   Stack,
@@ -89,13 +85,6 @@ const SKILL_MENU_NOTE = {
 
 /** The list's own name, which its listbox is read by. */
 const SKILL_MENU_LABEL = "Skills";
-
-/** The keys the list hears, said at its foot. */
-const SKILL_MENU_KEYS: readonly MenuKey[] = [
-  menuKey("Move", SHORTCUT_KEY.UP, SHORTCUT_KEY.DOWN),
-  menuKey("Insert", SHORTCUT_KEY.ENTER, SHORTCUT_KEY.TAB),
-  menuKey("Close", SHORTCUT_KEY.ESCAPE),
-];
 
 /** No skill is known, before the read lands or where it did not. */
 const NO_NAMES: ReadonlySet<string> = new Set();
@@ -183,7 +172,6 @@ function SkillMenu({
         }}
         note={rows.length === 0 ? <MenuNote read={read} /> : undefined}
       />
-      <MenuKeys keys={SKILL_MENU_KEYS} />
     </MenuSurface>
   );
 }

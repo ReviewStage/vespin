@@ -45,7 +45,6 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
-import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   BackButton,
   type ComboboxGroup,
@@ -57,11 +56,8 @@ import {
   KeepFocus,
   MENU_SURFACE_INSET,
   MenuGlyph,
-  type MenuKey,
-  MenuKeys,
   type MenuRow,
   MenuSurface,
-  menuKey,
   NO_BACK_KEY,
   POPOVER_WIDTH,
   ProviderMark,
@@ -404,16 +400,6 @@ const MENU_LABEL = "Mention";
 
 /** What the list says where it has no row. */
 const NO_MATCH = noMatchWords(TERM.RESULT);
-
-/** The keys the list hears, said at its foot as far as it hears them now. */
-const MENU_KEY = {
-  MOVE: menuKey("Move", SHORTCUT_KEY.UP, SHORTCUT_KEY.DOWN),
-  MENTION: menuKey("Mention", SHORTCUT_KEY.ENTER, SHORTCUT_KEY.TAB),
-  OPEN: menuKey("Open", SHORTCUT_KEY.RIGHT),
-  WIDEN: menuKey("All kinds", SHORTCUT_KEY.BACKSPACE),
-  UP: menuKey("Up", SHORTCUT_KEY.BACKSPACE),
-  CLOSE: menuKey("Close", SHORTCUT_KEY.ESCAPE),
-} as const satisfies Record<string, MenuKey>;
 
 /** What a narrowed list's back arrow is read by: back to every kind, or up out of a folder. */
 const BACK_LABEL = {
@@ -1390,14 +1376,13 @@ interface MentionReadFailure {
   readonly retry: () => void;
 }
 
-/** The list itself: a narrowed list's crumb, each group's heading and rows, the highlighted one washed, and the keys it hears at its foot. */
+/** The list itself: a narrowed list's crumb, and each group's heading and rows, the highlighted one washed. */
 function MentionMenu({
   id,
   crumb,
   groups,
   query,
   at,
-  keys,
   reading,
   failures,
   rowCard,
@@ -1410,7 +1395,6 @@ function MentionMenu({
   /** The words the groups were found by, which mark each row. */
   query: string;
   at: number;
-  keys: readonly MenuKey[];
   /** Whether a read the list offers rows from is still out, which the list says in place of "no match". */
   reading: boolean;
   /** The reads that failed, which the list says could not be read, with Retry, in place of "no match". */
@@ -1454,7 +1438,6 @@ function MentionMenu({
           ) : undefined
         }
       />
-      <MenuKeys keys={keys} />
     </MenuSurface>
   );
 }
@@ -2083,15 +2066,6 @@ export function useMentionPicker({
     return field.onKeyDown(event);
   };
 
-  // The foot names the keys the list hears now: → where a row opens, ⌫ where the list is narrowed.
-  const keys = [
-    MENU_KEY.MOVE,
-    MENU_KEY.MENTION,
-    ...(rows.some(opens) ? [MENU_KEY.OPEN] : []),
-    ...(scope?.kind === undefined ? [] : [scope.walked.length > 0 ? MENU_KEY.UP : MENU_KEY.WIDEN]),
-    MENU_KEY.CLOSE,
-  ];
-
   // Note that a row's card is the chip's, made as the row is drawn, because the repository's paths are thousands and only the few listed hang one.
   const rowCard: RowCardOf = (row) => {
     if (!("mention" in row)) return undefined;
@@ -2117,7 +2091,6 @@ export function useMentionPicker({
       groups={groups}
       query={term}
       at={at}
-      keys={keys}
       reading={reading}
       failures={failures}
       rowCard={rowCard}
