@@ -27,6 +27,7 @@ import {
   type RunnerTranscriptPage,
   type RunnerTranscriptSessions,
   type RunnerTranscriptSubkeys,
+  rolloutSubpathContained,
 } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
@@ -61,6 +62,23 @@ export const RUNNER_TRANSCRIPTS_PATH = "/api/agents/runner-transcripts";
 const MAX_BODY_BYTES = 4.5 * 1024 * 1024;
 
 const decodeCall = Schema.decodeUnknownOption(RunnerTranscriptCallSchema);
+
+/**
+ * Whether a call keeps its rows only where a restore may write them back:
+ * an append of a Codex rollout under a subpath inside `CODEX_HOME`
+ * (`rolloutSubpathContained`), and any other call as it is, since a
+ * transcript is copied to the agents continued or forked from it, a Mac's
+ * among them, whose runner writes a rollout back where its subpath names.
+ */
+function keptWhereRestored(call: RunnerTranscriptCall): boolean {
+  if (call.call !== RUNNER_TRANSCRIPTS.CALL.APPEND) return true;
+  const { projectKey, subpath } = call.key;
+  return (
+    projectKey !== RUNNER_TRANSCRIPTS.CODEX_PROJECT ||
+    subpath === undefined ||
+    rolloutSubpathContained(subpath)
+  );
+}
 
 /** One call run on the conversation given, and what it is answered. */
 const answerOf = Effect.fn("web/runnerTranscriptAnswer")(function* (
@@ -116,7 +134,9 @@ const runnerTranscriptsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTranscrip
     const { target } = admitted.value;
     const body = yield* readBodyBytesEffect(MAX_BODY_BYTES);
     const call = decodeCall(yield* parseJsonBytes(body));
-    if (Option.isNone(call)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    if (Option.isNone(call) || !keptWhereRestored(call.value)) {
+      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    }
     const answer = yield* hostedStoreOrUnavailable(
       answerOf(target.userId, target.conversationId, call.value),
     );

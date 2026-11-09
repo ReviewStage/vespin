@@ -517,12 +517,14 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
 );
 
 it.effect(
-  "a thread resumed in a sandbox that no longer holds its rollout has every file of it written back whole from the service's store first, across its pages, a revert's segment among them",
+  "a thread resumed in a sandbox that no longer holds its rollout has every file of it written back whole from the service's store first, across its pages, a revert's segment among them, and none whose subpath escapes its home",
   () =>
     Effect.gen(function* () {
       const home = mkdtempSync(join(tmpdir(), "codex-home-"));
       const subpath = `sessions/2026/11/06/rollout-2026-11-06T18-00-00-${THREAD}.jsonl`;
       const segment = subpath.replace(".jsonl", "_01a1c22e-c54f-77b3-8748-7037accf178c.jsonl");
+      // A subpath another agent's runner appended, carried with its copy, names a place outside the home.
+      const escaping = "../escaped.jsonl";
       const kept = [
         { type: "session_meta", payload: { id: THREAD } },
         { type: "response_item", payload: { type: "message", role: "user" } },
@@ -538,7 +540,7 @@ it.effect(
         const call = JSON.parse(String(init?.body));
         const answer =
           call.call === "listSubkeys"
-            ? { subkeys: [subpath, segment] }
+            ? { subkeys: [subpath, segment, escaping] }
             : call.call === "loadPage"
               ? call.key.subpath === segment
                 ? { entries: segmentKept, next: null }
@@ -567,6 +569,7 @@ it.effect(
         [readFileSync(join(home, subpath), "utf8"), readFileSync(join(home, segment), "utf8")],
         [lines(kept), lines(segmentKept)],
       );
+      assert.equal(existsSync(join(home, escaping)), false, "a rollout written outside the home");
       vi.restoreAllMocks();
       rmSync(home, { recursive: true, force: true });
     }),

@@ -28,7 +28,7 @@ import { mkdir, open, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import type { SessionStoreEntry } from "@anthropic-ai/claude-agent-sdk";
 import { Effect } from "effect";
-import { RUNNER_TRANSCRIPTS } from "./protocol.js";
+import { RUNNER_TRANSCRIPTS, rolloutSubpathContained } from "./protocol.js";
 import type { transcriptStore } from "./transcripts.js";
 
 /** The store's project Codex's threads are kept under. */
@@ -45,7 +45,7 @@ export interface RolloutMirror {
   sent: number;
 }
 
-/** The thread's files the store holds, each written back to its path under `CODEX_HOME` where it is missing. */
+/** The thread's files the store holds, each written back to its path under `CODEX_HOME` where it is missing; one whose subpath names a place outside it (`rolloutSubpathContained`) is left unwritten. */
 export const restoreRollouts = Effect.fn("agent-runner/codex/restoreRollouts")(function* (
   store: TranscriptStore,
   codexHome: string,
@@ -54,6 +54,7 @@ export const restoreRollouts = Effect.fn("agent-runner/codex/restoreRollouts")(f
   const key = { projectKey: CODEX_PROJECT, sessionId: threadId };
   const subpaths = yield* Effect.tryPromise(() => store.listSubkeys(key));
   for (const subpath of subpaths) {
+    if (!rolloutSubpathContained(subpath)) continue;
     const path = join(codexHome, subpath);
     if (existsSync(path)) continue;
     const entries = yield* Effect.tryPromise(() => store.load({ ...key, subpath }));
@@ -61,7 +62,8 @@ export const restoreRollouts = Effect.fn("agent-runner/codex/restoreRollouts")(f
     const text = entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
     yield* Effect.tryPromise(async () => {
       await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, text);
+      // Note that the file is made only where none stands, never through a link left in its place.
+      await writeFile(path, text, { flag: "wx" });
     });
   }
 });
