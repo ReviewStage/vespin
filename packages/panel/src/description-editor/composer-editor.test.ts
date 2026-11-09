@@ -221,6 +221,23 @@ test("on a coarse pointer Enter is a new line, ⌘ or Ctrl with Enter sends, and
   assert.equal(box.sends.count, 2);
 });
 
+test("where Enter writes, a bare Enter is a new line with a mouse too, ⌘ or Ctrl with Enter is the owner's but not with Shift held, and the return key says so", () => {
+  pointerIs(false);
+  const box = mounted("Ship it", { enterWrites: true });
+  assert.equal(composerEditor(box.host).getAttribute("enterkeyhint"), "enter");
+
+  pressInComposer(box.host, "Enter");
+  typeInComposer(box.host, "today");
+  pressInComposer(box.host, "Enter", { metaKey: true, shiftKey: true });
+  pressInComposer(box.host, "Enter", { ctrlKey: true, shiftKey: true });
+  assert.equal(box.sends.count, 0);
+  assert.equal(box.drafts.at(-1), "Ship it\ntoday");
+
+  pressInComposer(box.host, "Enter", { metaKey: true });
+  pressInComposer(box.host, "Enter", { ctrlKey: true });
+  assert.equal(box.sends.count, 2);
+});
+
 test("with a mouse Enter sends, and the return key says Send", () => {
   pointerIs(false);
   const box = mounted("Ship it");

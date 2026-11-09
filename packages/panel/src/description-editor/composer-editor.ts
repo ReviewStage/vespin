@@ -780,6 +780,8 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
     handleKeyDown: (view, event) => {
       if (composing(view, event)) return false;
       if (props.onKey(event) || removedChip(view, event.key)) return true;
+      // Note that Shift with Enter is never the owner's, ⌘ or Ctrl held too, since Shift is what breaks a line.
+      if (event.shiftKey) return false;
       if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
       return true;
