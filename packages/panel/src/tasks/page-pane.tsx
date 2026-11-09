@@ -125,7 +125,7 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * opens (`useOpenLink`), a site in the browser and a link of ours in the
  * window. Reload draws the page again. What the page draws is the
  * task's, so the frame is left out of the screen recording (`ph-no-capture`);
- * the recording could not see into the frame in any case.
+ * the comment pins and cards over it record masked.
  *
  * The bar's code toggle shows the version's HTML in the frame's place, as a
  * File tab draws a file (`file-tab.tsx`): the same numbered, colored lines
@@ -462,10 +462,10 @@ function PageFrame({
   useFrameFocus(frame);
   const loaded = framedSrc === src;
   return (
-    <div ref={room} className="page-view-room ph-no-capture relative flex min-h-0 flex-1">
+    <div ref={room} className="page-view-room relative flex min-h-0 flex-1">
       <iframe
         ref={frame}
-        className={cn("block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
+        className={cn("ph-no-capture block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
         title={title}
         src={src}
         sandbox={PAGE_SANDBOX}
