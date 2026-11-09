@@ -766,6 +766,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         callName: (callId) => state.turn?.calls[callId],
         session: state.session,
         sequence,
+        planLimited: state.rateLimit !== undefined,
       };
       const moments = applying.read(message, held);
       if (afterLimit === undefined && endsOnLimit(state, moments)) {

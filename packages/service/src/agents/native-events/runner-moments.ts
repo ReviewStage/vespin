@@ -13,6 +13,7 @@ import {
   valueFromJsonText,
   type WireValue,
 } from "@repo/wire";
+import { type UsageLimitAgent, usageLimitWords } from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import { NATIVE_ENDING, NATIVE_MOMENT, type NativeMoment } from "./native-moments.js";
 
@@ -195,4 +196,15 @@ export function toolAnswerSettlement(
   const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
   // Note that the settlement is handed the answer as read, since it reads its JSON again and would make its NUL anew.
   return toolCallSettlementOf(JSON.stringify(output), status);
+}
+
+/**
+ * A worker's call its plan's usage limit ended, as the transcript settles
+ * it: answered with the limit notice's words rather than the harness's
+ * error, whose raw text the developer never reads. The plan's limit itself
+ * is the turn's to read from the harness's own report of it.
+ */
+export function usageLimitSettlement(agent: UsageLimitAgent): ToolCallSettlement {
+  const text = usageLimitWords(agent);
+  return toolAnswerSettlement({ workspaceTool: false, text, output: text }, false);
 }

@@ -2845,3 +2845,231 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
     }),
   );
 });
+
+/** The CLI's words for a subagent the plan's limit stopped, which its call's error and task notification both carry, as the pinned Claude Code (2.1.304) wrote them. */
+const WORKER_LIMIT_WORDS =
+  "Agent terminated early due to an API error: You've hit your session limit · resets 4am (UTC) (error type rate_limit, HTTP 429, request id req_fixture, model sent to the API: claude-opus-5-5)";
+
+/** The plan's limit as the CLI reports it, refused or lifted. */
+const claudeRateLimit = (status: "allowed" | "rejected") => ({
+  type: "rate_limit_event",
+  rate_limit_info: {
+    status,
+    resetsAt: 1_794_269_818,
+    ...(status === "rejected" ? { rateLimitType: "five_hour" } : undefined),
+  },
+  uuid: randomUUID(),
+  session_id: SESSION,
+});
+
+/** A worker's call, on Claude Code, as its model asks for it. */
+const claudeWorker = (background: boolean) => ({
+  type: "assistant",
+  message: {
+    id: "msg_1",
+    content: [
+      {
+        type: "tool_use",
+        id: "toolu_worker",
+        name: "Agent",
+        input: {
+          description: "Collect real menu items",
+          prompt: "List the menus.",
+          subagent_type: "general-purpose",
+          ...(background ? undefined : { run_in_background: false }),
+        },
+      },
+    ],
+  },
+  parent_tool_use_id: null,
+  session_id: SESSION,
+});
+
+/** The worker's task failing, as the CLI says it: its state, then its notification. */
+const claudeWorkerFailed = [
+  {
+    type: "system",
+    subtype: "task_updated",
+    task_id: "a1",
+    patch: { status: "failed", error: WORKER_LIMIT_WORDS },
+    session_id: SESSION,
+  },
+  {
+    type: "system",
+    subtype: "task_notification",
+    task_id: "a1",
+    tool_use_id: "toolu_worker",
+    status: "failed",
+    output_file: "/tmp/a1.output",
+    summary: WORKER_LIMIT_WORDS,
+    session_id: SESSION,
+  },
+];
+
+/** The main thread going on past its worker and finishing its turn. */
+const claudeFinished = [
+  {
+    type: "assistant",
+    message: { id: "msg_2", content: [{ type: "text", text: "Done." }] },
+    parent_tool_use_id: null,
+    session_id: SESSION,
+  },
+  { type: "result", subtype: "success", is_error: false, parent_tool_use_id: null },
+  { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+];
+
+/** A spawn on Codex, and its subagent's thread. */
+const codexSpawn = {
+  type: "collabAgentToolCall",
+  id: "call_spawn",
+  tool: "spawnAgent",
+  status: "inProgress",
+  senderThreadId: THREAD,
+  receiverThreadIds: [],
+  prompt: null,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: {},
+};
+
+/**
+ * Each way a worker the plan's usage limit stopped reaches the route, as
+ * the pinned harnesses emit it: on Claude Code, the rejected limit the CLI
+ * reports ahead of the worker's failure, which a background worker's task
+ * notification and a foreground worker's error answer each follow; on
+ * Codex, the subagent's thread failing with `usageLimitExceeded`.
+ */
+const WORKERS_LIMITED = [
+  {
+    name: "a background worker on Claude Code",
+    harness: HARNESS.CLAUDE_CODE,
+    events: (lineId: string): readonly WireValue[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      claudeWorker(true),
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_worker",
+              content: "Async agent launched successfully. agentId: a1",
+            },
+          ],
+        },
+        tool_use_result: { status: "async_launched", agentId: "a1" },
+        parent_tool_use_id: null,
+        session_id: SESSION,
+      },
+      claudeRateLimit("allowed"),
+      claudeRateLimit("rejected"),
+      {
+        type: "assistant",
+        message: {
+          id: "msg_limit",
+          model: "<synthetic>",
+          content: [{ type: "text", text: "You've hit your session limit · resets 4am (UTC)" }],
+        },
+        error: "rate_limit",
+        parent_tool_use_id: "toolu_worker",
+        session_id: SESSION,
+      },
+      ...claudeWorkerFailed,
+      ...claudeFinished,
+    ],
+    part: "tool-Agent",
+    said: "Claude usage limit reached",
+  },
+  {
+    name: "a foreground worker on Claude Code",
+    harness: HARNESS.CLAUDE_CODE,
+    events: (lineId: string): readonly WireValue[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      claudeWorker(false),
+      claudeRateLimit("allowed"),
+      claudeRateLimit("rejected"),
+      ...claudeWorkerFailed,
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_worker",
+              content: WORKER_LIMIT_WORDS,
+              is_error: true,
+            },
+          ],
+        },
+        tool_use_result: `Error: ${WORKER_LIMIT_WORDS}`,
+        parent_tool_use_id: null,
+        session_id: SESSION,
+      },
+      ...claudeFinished,
+    ],
+    part: "tool-Agent",
+    said: "Claude usage limit reached",
+  },
+  {
+    name: "a subagent on Codex",
+    harness: HARNESS.CODEX,
+    events: (lineId: string): readonly WireValue[] => [
+      { method: "thread/started", params: { thread: { id: THREAD, parentThreadId: null } } },
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      notification("turn/started", { turn: { id: "turn-1" } }),
+      notification("item/started", { item: codexSpawn }),
+      notification("item/completed", {
+        item: {
+          ...codexSpawn,
+          status: "completed",
+          receiverThreadIds: ["thread-sub"],
+          prompt: "List the menus.",
+        },
+      }),
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-sub",
+          turn: {
+            id: "turn-sub",
+            status: "failed",
+            error: {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+          },
+        },
+      },
+      notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
+      { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+    ],
+    part: "tool-collabAgentToolCall",
+    said: "Codex usage limit reached",
+  },
+] as const;
+
+it.layer(SUITE)("the runner events route, for a worker its plan's limit stopped", (it) => {
+  it.effect.each(WORKERS_LIMITED)(
+    "settles the worker's call with the limit notice's words, never the harness's error: $name",
+    ({ harness, events, part, said }) =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(harness, ["Collect the menus."]);
+        // SAFETY: each message is one the pinned harness or the runner emits, written in its JSON shape.
+        const posted = events(agent.lineId).map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, posted);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        const worker = rows.at(-1)?.parts.find((each) => each.type === part);
+        assert.deepEqual(worker === undefined ? undefined : drawn(worker), [
+          part,
+          "output-available",
+          said,
+        ]);
+      }),
+  );
+});
