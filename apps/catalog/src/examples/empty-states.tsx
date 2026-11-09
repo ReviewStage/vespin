@@ -1,5 +1,5 @@
 import { EMPTY_STATE_ACTION_LOOK, EmptyState, SearchIcon, UserIcon } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

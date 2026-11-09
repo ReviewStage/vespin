@@ -4,7 +4,7 @@
  */
 
 import { Button, TabNotice } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** A press the catalog has nowhere to take. */

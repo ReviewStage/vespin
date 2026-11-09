@@ -1,6 +1,6 @@
 import { SOCIAL_PROVIDER } from "@repo/features/sign-in-provider";
 import { GAP, SocialProviderButton, SocialSignInChoices, Stack } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

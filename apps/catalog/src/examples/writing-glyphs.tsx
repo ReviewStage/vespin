@@ -1,6 +1,6 @@
 import { WRITING_BLOCK, WRITING_INSERT, WRITING_MARK } from "@repo/settings/shortcuts";
 import { GAP, Inline, TEXT_VARIANT, Text, WritingGlyph } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

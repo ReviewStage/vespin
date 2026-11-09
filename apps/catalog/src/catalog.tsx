@@ -16,7 +16,8 @@ import {
   type Theme,
 } from "@repo/ui";
 import { useState } from "react";
-import { EXAMPLES, type Example } from "./examples";
+import type { Example } from "./example";
+import { EXAMPLES } from "./examples";
 
 /**
  * catalog.tsx -- the catalog's page: the index of examples, the profile and

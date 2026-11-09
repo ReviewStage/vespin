@@ -22,7 +22,7 @@ import {
 } from "@repo/ui";
 import { GLYPH, ListFilterIcon, SlidersHorizontalIcon } from "@repo/ui/icons";
 import { useRef, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

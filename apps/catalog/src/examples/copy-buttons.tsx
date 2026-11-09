@@ -11,7 +11,7 @@ import {
   Stack,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

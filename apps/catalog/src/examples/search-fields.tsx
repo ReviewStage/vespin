@@ -7,7 +7,7 @@ import {
   Stack,
 } from "@repo/ui";
 import { type ReactNode, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

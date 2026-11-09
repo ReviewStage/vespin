@@ -1,5 +1,5 @@
 import { BUTTON_VARIANT, Button, MoreButton, PAGE_HEADER_END, PageHeader } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

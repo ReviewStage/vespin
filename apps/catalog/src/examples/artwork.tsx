@@ -19,7 +19,7 @@ import {
 import codexOneX from "../../../../packages/panel/marks/codex-16.png";
 import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
 import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

@@ -10,7 +10,7 @@ import {
 import { PICTURE_STATE, type PictureState } from "@repo/ui/picture-read";
 import { useState } from "react";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

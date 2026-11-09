@@ -1,3 +1,4 @@
+import type { Example } from "./example";
 import { ACCOUNT_WORDS_EXAMPLE } from "./examples/account-words";
 import { ADDRESS_FIELDS_EXAMPLE } from "./examples/address-fields";
 import { ANCHORED_POPOVER_EXAMPLE } from "./examples/anchored-popover";
@@ -157,13 +158,6 @@ import { ZOOM_IMAGES_EXAMPLE } from "./examples/zoom-images";
  * each state a reader or a test needs to see. The PR that adds a shared
  * component adds its example here in the same change.
  */
-
-/** One entry of the index: its address, its heading, and what it draws. */
-export interface Example {
-  readonly id: string;
-  readonly title: string;
-  readonly Render: () => React.JSX.Element;
-}
 
 export const EXAMPLES: readonly Example[] = [
   ARTWORK_EXAMPLE,

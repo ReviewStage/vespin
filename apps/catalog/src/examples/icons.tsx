@@ -1,7 +1,7 @@
 import * as ui from "@repo/ui";
 import { GAP, GlyphSlot, Inline, TEXT_VARIANT, Text } from "@repo/ui";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

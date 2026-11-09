@@ -5,7 +5,7 @@
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { GAP, Progress, Stack, TEXT_TONE, TEXT_VARIANT, Text } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 const SHARES = [0, 42, 100] as const;

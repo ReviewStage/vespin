@@ -47,7 +47,7 @@ import {
 import { ExternalLinkIcon, GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

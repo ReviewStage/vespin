@@ -1,7 +1,7 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { APP_COMMAND, APP_SHORTCUTS, SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { GAP, Inline, Shortcut, Stack, Text } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

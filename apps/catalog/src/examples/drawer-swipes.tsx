@@ -14,7 +14,7 @@ import {
   useDrawerSwipe,
 } from "@repo/ui";
 import { useRef, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 function DrawerSwipes(): React.JSX.Element {

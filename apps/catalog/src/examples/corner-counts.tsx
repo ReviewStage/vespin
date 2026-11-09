@@ -18,7 +18,7 @@ import {
   StatusGlyph,
 } from "@repo/ui";
 import { FlaskConicalIcon, GLYPH } from "@repo/ui/icons";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

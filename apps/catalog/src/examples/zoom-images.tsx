@@ -3,7 +3,7 @@
  */
 
 import { Button, Inline, Stack, useImageZoom, ZoomImage } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** A stand-in diagram, finer than its frame, so a press has pixels to zoom to. */

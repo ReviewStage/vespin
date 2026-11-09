@@ -23,7 +23,7 @@ import {
 } from "@repo/ui";
 import { ReloadState } from "@repo/ui/error-boundary";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** A press the catalog has nowhere to take. */

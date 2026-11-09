@@ -1,7 +1,7 @@
 import { APP_COMMAND, SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { BUTTON_VARIANT, Button, GAP, Inline, TEXT_TONE, Text, Tooltip } from "@repo/ui";
 import { useRef } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
