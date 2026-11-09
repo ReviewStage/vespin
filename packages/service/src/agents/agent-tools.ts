@@ -1034,7 +1034,8 @@ export const TRANSCRIPT_PAGE_WORDS =
   "member by name, the developer, an agent, an automation, or GitHub), what it said, and which " +
   "tools it called on what, a call's output left out, each entry cut to " +
   `${AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS} characters and the page to ` +
-  `${AGENT_TOOL_BOUNDS.PAGE_CHARS}, each with the messageId of the message it stands in. The ` +
+  `${AGENT_TOOL_BOUNDS.PAGE_CHARS}, and each of its own with the messageId of the message it ` +
+  "stands in. The " +
   "newest page comes first; pass the page's older as before to read back the page before it, " +
   `and its newer as after to read on; from ${TRANSCRIPT_FROM.START} reads its first page. Older ` +
   "is left out where the page opens the transcript, and newer where it reaches the newest " +
@@ -1865,10 +1866,10 @@ interface PageAsked {
   readonly entries: number;
 }
 
-/** One entry of a page: its place, the message it stands in, and its words, cut to the bound. */
+/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, and its words, cut to the bound. */
 interface PageEntry {
   readonly place: TranscriptPlace;
-  readonly messageId: string;
+  readonly messageId: string | undefined;
   readonly text: string;
 }
 
@@ -1897,7 +1898,8 @@ function pageEntriesOf(
 ): PageEntry[] {
   const entries = rowEntriesOf(record, sent).map((text, entry) => ({
     place: { seq: record.seq, entry },
-    messageId: record.id,
+    // Note that only the agent's own journal is named, because a fork is cut at one and refuses a line.
+    messageId: record.message.role === MESSAGE_ROLE.ASSISTANT ? record.id : undefined,
     text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
   }));
   return way === PAGE_WAY.BACK ? entries.reverse() : entries;
@@ -1990,7 +1992,9 @@ function pageAnswer(asked: PageAsked, page: PageRead): WireRecord {
   const older = (back ? page.more : asked.place !== undefined) ? first?.place : undefined;
   const newer = (back ? asked.place !== undefined : page.more) ? last?.place : undefined;
   return {
-    transcript: entries.map(({ messageId, text }) => ({ messageId, text })),
+    transcript: entries.map(({ messageId, text }) =>
+      messageId === undefined ? { text } : { messageId, text },
+    ),
     ...(older === undefined ? undefined : { older: { ...older } }),
     ...(newer === undefined ? undefined : { newer: { ...newer } }),
   };

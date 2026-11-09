@@ -988,6 +988,7 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
   const agentId = agents.teammates.id;
   const newest = await call(AGENT_TOOL.READ_AGENT, { agentId, entries: 2 });
   assert.deepEqual(tailTexts(newest), ["Said: Turn 4 done.", "Test User: Why does it stall?"]);
+  assert.equal(tailOf(newest)[1]?.messageId, undefined, "a line is no message a fork is cut at");
   assert.equal(newest.newer, undefined, "the newest page reaches the newest entry");
   const back = await call(AGENT_TOOL.READ_AGENT, { agentId, before: newest.older, entries: 2 });
   assert.deepEqual(tailTexts(back), ["Said: Turn 2 done.", "Said: Turn 3 done."]);
