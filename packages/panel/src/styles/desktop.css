@@ -1695,7 +1695,7 @@ body,
 
 /* Where the Runs on chip draws its glyph alone, the foot's left, the "+"
    and that glyph, stands whole, so the model chip's words give way first. */
-/* off-scale: 520px, the card under which the Runs on chip draws its glyph alone (`agent-composer.tsx`'s `FOLD_WIDTH.PUBLISHED`) */
+/* off-scale: 520px, the card under which the Runs on chip draws its glyph alone (`agent-composer.tsx`'s `FOLD_WIDTH.TOOLS`) */
 @container composer (width < 520px) {
   .new-task-composer .ui-composer-foot-tools {
     flex-shrink: 0;

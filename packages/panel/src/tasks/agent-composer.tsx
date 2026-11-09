@@ -4,7 +4,6 @@ import {
   type AgentBrief,
   type AgentContext,
   type AgentPayer,
-  type AgentPullRequestAnswer,
   type AgentStatus,
   type AgentUsage,
   hasWordsOrFiles,
@@ -58,7 +57,6 @@ import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
 import { noteWhileOffline } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
-import { BranchChip, type PublishedDoors } from "./agent-published.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { AttachFilesButton, type AttachPicker, attachmentRow } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
@@ -75,7 +73,7 @@ import type { AgentModelControl } from "./use-agent-model.js";
 import { useModifierHeld } from "./use-modifier-held.js";
 
 /**
- * agent-composer.tsx -- the message box pinned under an agent's transcript: one card, two chips at its foot, one button, and a note under it when a message or a change did not go.
+ * agent-composer.tsx -- the message box pinned under an agent's transcript: one card, the model's chip at its foot, one button, and a note under it when a message or a change did not go.
  *
  * The box is the shared composer card (../ai-elements/prompt-input.tsx),
  * at its default type, its files over its words and its foot as every message
@@ -83,11 +81,10 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * out as ChatGPT's and Codex's are: at the left the "+", which raises a
  * menu of Attachment, which attaches files, and MCP servers, which opens
  * the servers popover beside the menu as its submenu, where the agent is
- * handed a switch for each server (`agent-servers.tsx`); and,
- * once the agent has pushed a branch with no pull request yet,
- * the branch's chip, which opens it on GitHub (`agent-published.tsx`); a
- * pull request, once one stands, is the row pinned over the card rather
- * than a chip here (`agent-tab.tsx`); at the right,
+ * handed a switch for each server (`agent-servers.tsx`); a pushed branch
+ * wears nothing here, and a pull request, once one stands, is the row
+ * pinned over the card (`agent-published.tsx`, `agent-tab.tsx`), so the
+ * foot holds only what the next message goes with; at the right,
  * in this order, the model chip naming what the agent runs on, which opens
  * the menu that changes it for the next step (`agent-model-chip.tsx`),
  * the ring that shows, once a step has ended, how full the agent's model's
@@ -178,8 +175,7 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * The foot answers the card's own width, not the window's, so the box
  * holds in the main column and the side panel alike, the way Cursor's and
  * ChatGPT's narrow panes do (planning.css's `composer` container). As the
- * card narrows, the branch's chip draws its mark alone, and so does New
- * task's Runs on chip, which stands in its place; then a ⋯ takes in, in this order, the
+ * card narrows, New task's Runs on chip draws its mark alone; then a ⋯ takes in, in this order, the
  * context ring and the microphone, where the ring stands, since a ⋯ holding
  * the microphone alone would be one press behind two; then the model chip draws
  * its harness's mark alone; and last the + goes into the ⋯ too, the ⋯
@@ -243,16 +239,15 @@ export const BUTTON = {
 } as const;
 
 /**
- * The card widths below which a press draws its mark alone: the branch's
- * chip first, and the owner's tools after the "+" with it (New task's Runs
- * on chip), then the owner's presses that carry words (New task's Plan
+ * The card widths below which a press draws its mark alone: the owner's
+ * tools after the "+" first (New task's Runs on chip), then the owner's presses that carry words (New task's Plan
  * toggle, at the step the ⋯ stands), then the model
  * chip. Note that they are steps of the same order as the stylesheet's
  * `composer` queries (tasks.css's, and New task's in desktop.css, at 400
  * and 240), because the room each leaves is counted on the steps before it.
  */
 const FOLD_WIDTH = {
-  PUBLISHED: 520,
+  TOOLS: 520,
   ACTIONS: 400,
   MODEL: 300,
 } as const;
@@ -486,8 +481,6 @@ export function AgentComposer({
   plus = [],
   context,
   brief,
-  published,
-  doors,
   onStop,
   followsUp,
   keywords = [],
@@ -538,10 +531,6 @@ export function AgentComposer({
   context?: AgentContext | undefined;
   /** What the agent was handed, which names the brief's part of the context. */
   brief?: AgentBrief | undefined;
-  /** What the agent published, once the service has said; nothing before, or where the box draws no branch chip, as an Inbox answer's. */
-  published?: AgentPullRequestAnswer | undefined;
-  /** What the branch's chip opens and copies through; none where the box draws no branch chip. */
-  doors?: PublishedDoors | undefined;
   /** Stops the agent, answering whether the service took the Stop. */
   onStop: () => Promise<boolean>;
   /** Whether the conversation already holds a message, so the box takes a follow up rather than the first. */
@@ -948,14 +937,7 @@ export function AgentComposer({
                   more={plusRows}
                 />
               </ComposerAttach>
-              {doors === undefined ? null : (
-                <BranchChip
-                  published={published}
-                  doors={doors}
-                  narrow={folds(FOLD_WIDTH.PUBLISHED)}
-                />
-              )}
-              {tools?.(folds(FOLD_WIDTH.PUBLISHED))}
+              {tools?.(folds(FOLD_WIDTH.TOOLS))}
             </>
           }
           counter={{ length: composer.draft.length, limit: maxLength }}
