@@ -13,9 +13,10 @@ committed copy from them, and what those copies are.
   tokens, and provider-mark paths the apps draw from.
 
 Regenerate the generated files (under `src/generated/`, `assets/`, and
-`@repo/ui`'s `src/tokens/brand.css` and `motion-tokens.css`) from the sources
-rather than hand-editing; `pnpm --filter @repo/brand check` reports drift when
-run by hand.
+`@repo/ui`'s `src/tokens/brand.css` and `motion-tokens.css`, and
+`@repo/ui-native`'s `src/tokens/brand-colors.ts`) from the sources rather than
+hand-editing; `pnpm --filter @repo/brand check` reports drift when run by hand,
+and `scripts/repository-checks.sh` runs the surface generator's half of it.
 
 This package draws nothing itself. `@repo/ui` is the shared React layer
 that traces the generated artwork into the window (`ProductMark`), so the mark

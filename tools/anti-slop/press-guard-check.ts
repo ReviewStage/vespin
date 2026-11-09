@@ -10,6 +10,7 @@ import { HOST_READ_GUARD_RULE, isWatchedSource } from "./shared/host-read-guard.
 import { KEPT_GUARD_RULE } from "./shared/kept-guard.ts";
 import { LIVE_REGION_GUARD_RULE } from "./shared/live-region-guard.ts";
 import { LUCIDE_GUARD_RULE } from "./shared/lucide-guard.ts";
+import { isOutsideUiNative, NATIVE_PRESS_GUARD_RULE } from "./shared/native-press-guard.ts";
 import { OPEN_PAGE_GUARD_RULE } from "./shared/open-page-guard.ts";
 import { namesEllipsisPlaceholder, PLACEHOLDER_GUARD_RULE } from "./shared/placeholder-guard.ts";
 import {
@@ -36,7 +37,9 @@ import {
  * The design system's guards have no escape hatch: oxlint honors every
  * inline disable and has no flag to refuse one, so `pnpm lint` runs this
  * after it. It fails on a JSX-capable file outside `@repo/ui` holding a
- * directive that would silence `no-raw-press-outside-ui`, on any JSX-capable
+ * directive that would silence `no-raw-press-outside-ui`, on one outside
+ * `@repo/ui-native` holding one that would silence
+ * `no-raw-press-outside-ui-native`, on any JSX-capable
  * file holding one that would silence `skeleton-through-components` or
  * `async-press-needs-busy`, whose baseline is the only way past it, on a
  * JSX-capable file outside `@repo/ui` holding one that would silence
@@ -92,6 +95,12 @@ const GUARDS = [
     sources: JSX_SOURCE,
     watches: (absolute: string) => isOutsideUi(absolute),
     remedy: "Move the press onto a @repo/ui component or variant instead",
+  },
+  {
+    rule: NATIVE_PRESS_GUARD_RULE,
+    sources: JSX_SOURCE,
+    watches: (absolute: string) => isOutsideUiNative(absolute),
+    remedy: "Move the press onto a @repo/ui-native component or variant instead",
   },
   {
     rule: SKELETON_GUARD_RULE,

@@ -22,6 +22,7 @@ export default defineConfig({
       "apps/host",
       "apps/cli",
       "apps/mobile",
+      "packages/ui-native",
       "packages/host",
       "packages/sync",
       "packages/ui",

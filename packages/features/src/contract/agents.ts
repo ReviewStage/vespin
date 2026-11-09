@@ -3,7 +3,7 @@
  *
  * Every path names the task or the agent it is about as `{id}`, and a shell
  * as `{terminal}`, which the handler reads as an id: one that is no UUID
- * names no row and is answered not found, as the old groups answered it. A
+ * names no row and is answered not found. A
  * procedure with a path and a JSON body reads them apart
  * (`inputStructure: "detailed"`), the body exactly. A Start answers 201
  * for the agent it made and 200 for the one a retry under the same key
@@ -183,13 +183,13 @@ const offsetQuery = EffectSchema.NumberFromString.pipe(
   EffectSchema.decodeTo(EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0))),
 );
 
-/** What a list's `archived` query may say, read as the old groups read it: `include`, or anything else for none. */
+/** What a list's `archived` query may say, `include`, or anything else for none. */
 const archivedQuery = EffectSchema.optionalKey(EffectSchema.String);
 
 /**
  * One change of an agent (PATCH): its title, its archive, its pin, the
  * reader's read mark, its MCP servers, a repository added beside its own,
- * or its model and effort, read in that order as the old group read them.
+ * or its model and effort, tried in that order.
  */
 const agentChangeRequestSchema = EffectSchema.Union([
   agentRenameRequestSchema,

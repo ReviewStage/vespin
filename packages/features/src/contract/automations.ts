@@ -1,16 +1,15 @@
 /**
  * automations.ts -- the account's automations (`automation-wire.ts`), as procedures: list and make them, read, change and delete one, run one now, and read its runs.
  *
- * Every output is its wire schema flipped, so oRPC's output check encodes
- * the handler's value into the bytes the wire carries
+ * Every output is its wire schema flipped, so oRPC's output check encodes the
+ * handler's value into the bytes the wire carries
  * (`packages/service/src/orpc/base.ts`). A body refuses a key it does not
- * name (`exactInput`, `exactBodyInput`), as the old group's read did; the
- * list's query does not, as it did not. A path's id beside a body is read
- * apart from it (`inputStructure: "detailed"`), so a change is the keys it
- * was sent with. A path's id is any segment, since one that is no UUID
- * names no automation and is answered as not found, not as malformed. "Run
- * now" answers 201 for the run it made and 200 for one its key already
- * made, so its output is detailed.
+ * name (`exactInput`, `exactBodyInput`); the list's query does not. A path's
+ * id beside a body is read apart from it (`inputStructure: "detailed"`), so a
+ * change is the keys it was sent with. A path's id is any segment, since one
+ * that is no UUID names no automation and is answered as not found, not as
+ * malformed. "Run now" answers 201 for the run it made and 200 for one its
+ * key already made, so its output is detailed.
  *
  * Each declares the refusals its handler answers
  * (`packages/service/src/automations/automations-procedures.ts`) beyond any

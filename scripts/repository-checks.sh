@@ -139,6 +139,11 @@ pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/function-rewrites.ts --che
 # if a shortcut changed without the page.
 pnpm --dir "$APP_REPO_ROOT/packages/settings" exec tsx scripts/shortcuts-docs.ts --check
 
+# The brand's colors are written from packages/brand's one table into
+# @repo/ui's roles, the plain values, and @repo/ui-native's tokens, and the
+# motion tokens beside them; --check fails if a copy no longer matches.
+node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
+
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until
 # production answers 404. Every /api/ literal and path builder under

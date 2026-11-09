@@ -1,119 +1,156 @@
 // collection-screens.tsx -- a tab's placeholder list and detail: the Stack's two screens in a compact window, one split view in a regular one.
 
 import {
-  ContentUnavailableView,
-  Host,
-  Label,
-  List,
-  NavigationSplitView,
-  type NavigationSplitViewVisibility,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
-import {
-  font,
-  listStyle,
-  navigationSplitViewStyle,
-  navigationTitle,
-  padding,
-  tag,
-} from "@expo/ui/swift-ui/modifiers";
+  ChoiceList,
+  EmptyState,
+  LIST_LOOK,
+  type ListLook,
+  ListRow,
+  PageHeader,
+  ROW_ACTION_TONE,
+  type RowAction,
+  RowList,
+  Screen,
+  SplitView,
+  TaskRow,
+} from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import type { PlaceholderCollection, PlaceholderItem } from "../placeholders.js";
+import {
+  COLLECTION_ROUTE,
+  type PlaceholderCollection,
+  type PlaceholderItem,
+} from "../placeholders.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-
-/** The host fills its screen, so SwiftUI lays out in the whole window. */
-const FILL = { flex: 1 } as const;
 
 /** The route a collection's row opens in a compact window. */
 function itemHref(collection: PlaceholderCollection, id: string): string {
   return `/${collection.route}/${id}`;
 }
 
-/** The one row a SwiftUI `List` selection names, where it names one. */
-function selectedId(selection: readonly (string | number)[]): string | undefined {
-  const first = selection[0];
-  return typeof first === "string" ? first : undefined;
-}
+type CollectionListProps = {
+  readonly collection: PlaceholderCollection;
+  readonly look: ListLook;
+  readonly selected?: string | undefined;
+  readonly onSelect: (id: string) => void;
+};
 
-function CollectionRows({ collection }: { collection: PlaceholderCollection }) {
-  return collection.items.map((item) => (
-    <Label key={item.id} title={item.title} systemImage={item.symbol} modifiers={[tag(item.id)]} />
-  ));
-}
-
-function ItemDetail({ item }: { item: PlaceholderItem }) {
+// Note that Mark done only hides the row here, since the placeholder has no
+// host to write to; the host's state replaces this list and its acts.
+function CollectionList({ collection, look, selected, onSelect }: CollectionListProps) {
+  const [done, setDone] = useState<ReadonlySet<string>>(new Set());
+  const items = collection.items.filter((item) => !done.has(item.id));
   return (
-    <VStack alignment="leading" spacing={8} modifiers={[padding({ horizontal: 20, vertical: 16 })]}>
-      <Text modifiers={[font({ textStyle: "title2", weight: "semibold" })]}>{item.title}</Text>
-      <Text>{item.summary}</Text>
-    </VStack>
+    <RowList
+      look={look}
+      selected={selected}
+      onSelect={onSelect}
+      title={look === LIST_LOOK.SIDEBAR ? collection.title : undefined}
+    >
+      {items.map((item) => {
+        const acts: readonly RowAction[] = [
+          {
+            label: "Mark done",
+            symbol: "checkmark",
+            tone: ROW_ACTION_TONE.ACCENT,
+            onPress: () => setDone((previous) => new Set([...previous, item.id])),
+          },
+        ];
+        return collection.route === COLLECTION_ROUTE.TASKS && item.status !== undefined ? (
+          <TaskRow
+            key={item.id}
+            id={item.id}
+            name={item.title}
+            status={item.status}
+            unread={item.unread}
+            pullRequest={item.pullRequest}
+            at={item.at}
+            trailingActions={acts}
+          />
+        ) : (
+          <ListRow
+            key={item.id}
+            id={item.id}
+            title={item.title}
+            task={item.task}
+            line={item.line}
+            summary={item.summary}
+            unread={item.unread}
+            done={item.done}
+            face={item.face}
+            at={item.at}
+            trailingActions={acts}
+          />
+        );
+      })}
+    </RowList>
   );
 }
 
-function EmptyDetail({ collection }: { collection: PlaceholderCollection }) {
-  return <ContentUnavailableView title={collection.emptyDetail} systemImage={collection.symbol} />;
+function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
+  const [picked, setPicked] = useState<readonly string[]>([]);
+  if (item.ask === undefined) {
+    return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
+  }
+  return (
+    <RowList look={LIST_LOOK.PLAIN}>
+      <ChoiceList
+        title={item.ask.question}
+        choices={item.ask.choices}
+        recommended={item.ask.recommended}
+        picked={picked}
+        onChange={setPicked}
+      />
+    </RowList>
+  );
+}
+
+function EmptyDetail({ collection }: { readonly collection: PlaceholderCollection }) {
+  return <EmptyState title={collection.emptyDetail} symbol={collection.symbol} />;
 }
 
 // A compact window: the list under the Stack's large title, each row pushing
 // its detail as the Stack's next screen.
-function CollectionStackList({ collection }: { collection: PlaceholderCollection }) {
+function CollectionStackList({ collection }: { readonly collection: PlaceholderCollection }) {
   const router = useRouter();
   return (
     <>
       <Stack.Screen options={{ title: collection.title, headerLargeTitle: true }} />
-      <Host style={FILL}>
-        <List
-          selection={[]}
-          onSelectionChange={(selection) => {
-            const id = selectedId(selection);
-            if (id !== undefined) router.push(itemHref(collection, id));
-          }}
-          modifiers={[listStyle("insetGrouped")]}
-        >
-          <CollectionRows collection={collection} />
-        </List>
-      </Host>
+      <Screen>
+        <CollectionList
+          collection={collection}
+          look={LIST_LOOK.PLAIN}
+          onSelect={(id) => router.push(itemHref(collection, id))}
+        />
+      </Screen>
     </>
   );
 }
 
-// A regular window, such as the unfolded iPhone Duo's or an iPad's: SwiftUI's
-// own split view, the list as its sidebar and the selected row's detail
-// beside it. The Stack's header steps aside, since the split view draws each
-// column's navigation bar itself. Note that the columns start out all shown
-// and balanced, because SwiftUI's automatic style hides the sidebar of a
-// portrait iPad until it is asked for, and the list is what the window is
-// wide enough to keep beside the detail.
-function CollectionSplitScreen({ collection }: { collection: PlaceholderCollection }) {
+// A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
+// as the split view's sidebar and the selected row's detail beside it. The
+// Stack's header steps aside, since the split view draws each column's
+// navigation bar itself.
+function CollectionSplitScreen({ collection }: { readonly collection: PlaceholderCollection }) {
   const [selected, setSelected] = useState<string | undefined>(undefined);
-  const [columns, setColumns] = useState<NavigationSplitViewVisibility>("all");
   const item = collection.items.find((candidate) => candidate.id === selected);
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <Host style={FILL}>
-        <NavigationSplitView
-          columnVisibility={columns}
-          onColumnVisibilityChange={setColumns}
-          modifiers={[navigationSplitViewStyle("balanced")]}
-        >
-          <NavigationSplitView.Sidebar>
-            <List
-              selection={selected === undefined ? [] : [selected]}
-              onSelectionChange={(selection) => setSelected(selectedId(selection))}
-              modifiers={[listStyle("sidebar"), navigationTitle(collection.title)]}
-            >
-              <CollectionRows collection={collection} />
-            </List>
-          </NavigationSplitView.Sidebar>
-          <NavigationSplitView.Detail>
-            {item ? <ItemDetail item={item} /> : <EmptyDetail collection={collection} />}
-          </NavigationSplitView.Detail>
-        </NavigationSplitView>
-      </Host>
+      <Screen>
+        <SplitView
+          sidebar={
+            <CollectionList
+              collection={collection}
+              look={LIST_LOOK.SIDEBAR}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          }
+          detail={item ? <ItemDetail item={item} /> : <EmptyDetail collection={collection} />}
+        />
+      </Screen>
     </>
   );
 }
@@ -135,9 +172,7 @@ export function CollectionDetailScreen({ collection }: { collection: Placeholder
   return (
     <>
       <Stack.Screen options={{ title: item?.title ?? collection.title }} />
-      <Host style={FILL}>
-        {item ? <ItemDetail item={item} /> : <EmptyDetail collection={collection} />}
-      </Host>
+      <Screen>{item ? <ItemDetail item={item} /> : <EmptyDetail collection={collection} />}</Screen>
     </>
   );
 }

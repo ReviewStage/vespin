@@ -1,4 +1,4 @@
-# skeleton.yaml -- every tab and the signed-out placeholder, each shot once.
+# skeleton.yaml -- every tab, a thread, an ask's choices, and a task, each shot once.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device.
@@ -9,10 +9,17 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - takeScreenshot: inbox
 # A row's detail: pushed over the list in a compact window, and beside it in
-# a regular one. The next tab's tap leaves it either way, so no step goes back.
+# a regular one.
 - tapOn: "Review the invite flow"
 - assertVisible: "A pull request waits for your go."
 - takeScreenshot: inbox-thread
+# Note that pressing the Inbox tab again pops its stack back to the list on a
+# compact window, and is a no-op beside the split view on a regular one.
+- tapOn: "Inbox"
+- tapOn: "Pick the tab bar's placement"
+- assertVisible: "Recommended"
+- takeScreenshot: inbox-ask
+- tapOn: "Inbox"
 - tapOn: "Tasks"
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
@@ -25,23 +32,3 @@ appId: dev.vespin.ios
 - tapOn: "New task"
 - assertVisible: "Describe the task, and an agent starts on it."
 - takeScreenshot: new-task
-- openLink: vespin://signed-out
-# The link comes from outside the app, so iOS asks before opening it there.
-# The prompt is the system's, and SpringBoard raises it, and then hands the
-# link to the app, in its own time: on a loaded CI simulator each has taken
-# 20 seconds, past a tap's or a plain assertion's wait, so both are waited
-# for as long as a minute. A simulator that has already allowed the link
-# shows no prompt, which the optional wait and tap pass over.
-- extendedWaitUntil:
-    visible: "Open"
-    timeout: 60000
-    optional: true
-- tapOn:
-    text: "Open"
-    optional: true
-- extendedWaitUntil:
-    visible: "Sign in"
-    timeout: 60000
-- takeScreenshot: signed-out
-- tapOn: "Sign in"
-- assertVisible: "Review the invite flow"

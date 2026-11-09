@@ -5,7 +5,7 @@
  * back as `{ error: code }` unchanged and a desktop that reads `error` reads
  * the refusal as it always did. A refusal that carries more than its slug
  * declares the rest as the error's `data`, which the encoder writes beside
- * `error` at the top level, exactly where the old body carried it.
+ * `error` at the top level.
  *
  * Note that a `data` schema is flipped, because oRPC decodes an error's data
  * against it before the encoder writes it: flipped, that decode is the wire

@@ -42,7 +42,11 @@ repeated UI shape must live in `packages/ui` whatever app mounts it, even one
 app alone, with no exceptions, and a duplicate is folded into one; an app or
 `packages/panel` must compose those components and never hand-builds a control
 (a raw `<button>`, input, tab, or card with its own press handling) outside
-`@repo/ui`: the design system is one rigid set that every agent must use. A hook or DOM-free view
+`@repo/ui`: the design system is one rigid set that every agent must use. The iOS app's
+components live in `packages/ui-native` the same way, as React Native
+components wrapping `@expo/ui`'s SwiftUI: `apps/mobile` composes them and
+never builds a control, imports `@expo/ui` or `expo-glass-effect`, or draws
+React Native's own controls itself. A hook or DOM-free view
 model lives in `packages/ui` when more than one app can mount it, the panel every client mounts, the desktop's panel window and the
 web's tab alike, in `packages/panel`, the hosted service's logic in
 `packages/service`, its contract and clients in `packages/features`, and a
@@ -78,6 +82,14 @@ no-suppression check): `Skeleton` and `SkeletonRegion` are drawn only by a
 component named `*Skeleton`, in which an intrinsic element's class must be a
 literal naming itself a skeleton's (`…-skeleton…`); every other box is a
 component, factored out of the surface where it builds the box by hand.
+
+Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
+under the same no-suppression check): outside `packages/ui-native`, an
+import of React Native's `Pressable`, `TextInput`, `Switch`, `Button`, or a
+touchable, a press prop (`onPress`, `onPressIn`, `onPressOut`,
+`onLongPress`) on a React Native primitive, and an import of `@expo/ui` or
+`expo-glass-effect` are errors. Where it fires, use a `@repo/ui-native`
+component, or add the component or variant there.
 
 ## Never
 

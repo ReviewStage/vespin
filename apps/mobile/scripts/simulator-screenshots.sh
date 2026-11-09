@@ -5,7 +5,9 @@
 #
 # Each simulator is booted, handed the app, driven through every flow under
 # maestro/, and shut down again, so the Mac holds no booted simulator once
-# the run ends. A device's screenshots land under <output>/<device slug>/.
+# the run ends. Every flow runs once in the light appearance and once in the
+# dark, and a device's screenshots land under
+# <output>/<device slug>/<appearance>/debug/<flow>/takeScreenshot/.
 # The simulator is named as `xcrun simctl list devices` names it, such as
 # "iPhone 18 Pro" or "iPhone Duo"; the first available device of that name
 # is used, and where none exists one is created from the device type of that
@@ -61,6 +63,32 @@ simulator_udid() {
 udid=""
 trap '[[ -n "$udid" ]] && xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true' EXIT
 
+# The appearances every flow is shot in, as `xcrun simctl ui` names them.
+APPEARANCES=(light dark)
+
+# How many times a device's flows run in one appearance before they count as
+# failed.
+FLOW_ATTEMPTS=2
+
+# Maestro starts its XCUITest driver on the simulator and waits this long, in
+# milliseconds, for it to answer; a loaded CI runner's first boot has taken
+# longer than Maestro's own default, which then fails every flow unread.
+export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
+
+# Runs every flow under maestro/ once on the booted simulator `$1`, from a
+# clean app, its output under `$2`, which a run before it is cleared from.
+# Maestro's own debug output, the screenshot it takes when a step fails among
+# it, lands beside the flow's screenshots, so a failure can be read.
+run_flows() {
+    rm -rf "$2"
+    xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
+    maestro --udid "$1" test \
+        --test-output-dir "$2" \
+        --debug-output "$2/debug" \
+        --flatten-debug-output \
+        "$APP_DIRECTORY/maestro"
+}
+
 failed=0
 for name in "$@"; do
     slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-')
@@ -70,18 +98,26 @@ for name in "$@"; do
     echo "==> $name ($udid)"
     xcrun simctl bootstatus "$udid" -b
     xcrun simctl install "$udid" "$app"
-    # The flows read a clean app, so a state another run left is cleared first.
-    xcrun simctl terminate "$udid" "$bundle_id" 2>/dev/null || true
-    # Maestro's own debug output, the screenshot it takes when a step fails
-    # among it, lands beside the flow's screenshots, so a failure can be read.
-    if ! maestro --udid "$udid" test \
-        --test-output-dir "$device_output" \
-        --debug-output "$device_output/debug" \
-        --flatten-debug-output \
-        "$APP_DIRECTORY/maestro"; then
-        echo "error: the flows failed on $name; its output is under $device_output" >&2
-        failed=1
-    fi
+    # Every flow runs once in each appearance, so the brand's light and dark
+    # colors are both seen. Note that the simulator's own appearance is set
+    # here, because Maestro's `setDarkMode` leaves an iOS simulator light.
+    for appearance in "${APPEARANCES[@]}"; do
+        xcrun simctl ui "$udid" appearance "$appearance"
+        appearance_output="$device_output/$appearance"
+        # Note that a device's flows run again once where they fail, because
+        # a slow boot or a system prompt that lands late fails a run that a
+        # second one passes, and costs nothing like a whole job's rerun.
+        attempt=1
+        until run_flows "$udid" "$appearance_output"; do
+            if ((attempt == FLOW_ATTEMPTS)); then
+                echo "error: the flows failed on $name in $appearance; its output is under $appearance_output" >&2
+                failed=1
+                break
+            fi
+            attempt=$((attempt + 1))
+            echo "the flows failed on $name in $appearance; running them again ($attempt of $FLOW_ATTEMPTS)" >&2
+        done
+    done
     xcrun simctl shutdown "$udid"
     udid=""
 done
