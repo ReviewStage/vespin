@@ -22,6 +22,7 @@ import {
 import { PICTURE_BOUNDS, type Picture } from "@repo/features/picture-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
+import { trimmedText } from "@repo/features/text-schema";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Data, Effect, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -87,11 +88,6 @@ const DESCRIPTION_EDIT = {
   /** The most characters a picture's caption may spell: one short line. */
   MAX_CAPTION_CHARS: 200,
 } as const;
-
-/** A text settled with its ends trimmed, refused when nothing but whitespace stands, and bounded. */
-function trimmedText(maximumChars: number) {
-  return Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(maximumChars));
-}
 
 /** One picture the agent adds: its file in the sandbox, its words, and the section it goes under. */
 const pictureSchema = Schema.Struct({

@@ -158,6 +158,7 @@
     "./mcp-client-wire": "./src/mcp-client-wire.js",
     "./mcp-connect": "./src/mcp-connect.js",
     "./shell-quote": "./src/shell-quote.js",
+    "./text-schema": "./src/text-schema.js",
     "./oauth-client-ids": "./src/oauth-client-ids.js",
     "./mcp-client-view": "./src/mcp-client-view.js",
     "./skill-file": "./src/skill-file.js",
