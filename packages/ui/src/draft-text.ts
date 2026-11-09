@@ -90,8 +90,8 @@ const MARK_ELEMENT = {
   [DRAFT_MARK.CODE]: "code",
 } as const satisfies Record<DraftMark, string>;
 
-/** An email's subject line, which only its first line may be. */
-const SUBJECT_LINE = /^subject:[ \t]*(.*)$/iu;
+/** What an email's subject line opens with, in any case; only its first line may be one. */
+const SUBJECT_LEAD = "subject:";
 
 /** A Slack link: an address Slack opens, then its label after a bar where it has one. */
 const SLACK_LINK = /^<((?:https?:\/\/|mailto:)[^|>\s]+)(?:\|([^>\n]*))?>/u;
@@ -207,8 +207,14 @@ export function draftKindOf(language: string): DraftKind | undefined {
 export function readDraft(kind: DraftKind, text: string): Draft {
   if (kind === DRAFT_KIND.SLACK) return { kind, subject: undefined, runs: slackRuns(text) };
   const [first = "", ...rest] = text.split("\n");
-  const subject = kind === DRAFT_KIND.EMAIL ? SUBJECT_LINE.exec(first)?.[1]?.trim() : undefined;
-  const body = subject === undefined ? text : rest.join("\n").replace(/^(?:[ \t]*\n)+/u, "");
+  const subject =
+    kind === DRAFT_KIND.EMAIL && first.toLowerCase().startsWith(SUBJECT_LEAD)
+      ? first.slice(SUBJECT_LEAD.length).trim()
+      : undefined;
+  // Note that the blank lines after a subject are dropped line by line, since a pattern over them would backtrack on a long run of spaces.
+  const blank = rest.findIndex((line) => line.trim() !== "");
+  const body =
+    subject === undefined ? text : rest.slice(blank === -1 ? rest.length : blank).join("\n");
   return { kind, subject, runs: body === "" ? [] : [{ kind: DRAFT_RUN.TEXT, text: body }] };
 }
 
