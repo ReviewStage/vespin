@@ -80,7 +80,7 @@ function Looks(): React.JSX.Element {
             </>
           }
         >
-          <Text>Sam archived this agent: superseded by the new flow</Text>
+          <Text>This agent is archived</Text>
         </Banner>
       </div>
       <div className="catalog-frame">

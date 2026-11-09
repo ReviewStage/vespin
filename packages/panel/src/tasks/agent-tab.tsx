@@ -140,7 +140,6 @@ import {
   agentRows,
   agentStillWriting,
   agentWorkingSince,
-  archivedByReading,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
   commentLineOf,
@@ -3032,11 +3031,6 @@ function AgentTabView({
           <ArchivedComposerNote
             onUnarchive={onUnarchive}
             stop={offersStop(agent) ? onStop : undefined}
-            archivedBy={
-              agent.archivedAt === undefined || agent.archivedBy === undefined
-                ? undefined
-                : archivedByReading(agent.archivedBy, readerId)
-            }
           />
         ) : continuedNote !== undefined ? (
           continuedNote

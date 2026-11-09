@@ -10,7 +10,6 @@ import {
   PULL_REQUEST_PART,
 } from "@repo/features/agent-view";
 import {
-  AGENT_ARCHIVER,
   AGENT_BRIEF,
   AGENT_SENDER,
   AGENT_STATUS,
@@ -1346,30 +1345,6 @@ test("an archived agent's page offers Unarchive in its composer's place, which b
   await settle();
 
   assert.deepEqual(archives, [{ agentId: AGENT_ID, archived: false }]);
-});
-
-test("an agent another agent archived says on its page who archived it, for which member, and why, over its Unarchive", async () => {
-  listed = {
-    ...PAGE,
-    archivedAt: 2,
-    archivedBy: {
-      by: AGENT_ARCHIVER.AGENT,
-      member: { userId: "user-dean", name: "Dean Stratakos" },
-      agent: { id: "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", name: "Bill by seat" },
-      reason: "Its pull request merged.",
-    },
-  };
-  const page = mount();
-  await settle();
-
-  assert.ok(
-    [...page.querySelectorAll("p")].some(
-      (each) =>
-        each.textContent ===
-        "Archived by Bill by seat for Dean Stratakos: Its pull request merged.",
-    ),
-  );
-  assert.ok([...page.querySelectorAll("button")].some((each) => each.textContent === "Unarchive"));
 });
 
 test("an Unarchive the service refuses says why, and the agent stays archived", async () => {
