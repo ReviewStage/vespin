@@ -1,8 +1,10 @@
 import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import { inboxRowsOf } from "@repo/host/app-state-reads";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
@@ -10,7 +12,6 @@ import { noNetwork } from "@repo/wire/testing";
 import { Context, Effect, Layer } from "effect";
 import { expect } from "vitest";
 import { composeMobile, type DeviceSeams, MobileHostTag } from "./compose-mobile.js";
-import { selectInboxCollection } from "./inbox-rows.js";
 
 /**
  * compose-mobile.test.ts -- the shared host as the Expo app composes it,
@@ -65,9 +66,8 @@ it.effect(
         const state = yield* Effect.promise(() => bridge.requestAppState());
 
         expect(state.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
-        expect(selectInboxCollection(state).items.map(({ title }) => title)).toContain(
-          STAGED_THREAD,
-        );
+        const rows = inboxRowsOf(state.inbox, state[LIVE_READ.INBOX_ITEMS]);
+        expect(rows.map(({ title }) => title)).toContain(STAGED_THREAD);
       }),
     ),
 );
