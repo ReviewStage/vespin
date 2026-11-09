@@ -22,6 +22,7 @@ import {
   type LinkDestination,
   linkOf,
   MENTION_SIGIL,
+  markdownLink,
   pullRequestAddressOf,
   type ReadLink,
   readLink,
@@ -83,6 +84,7 @@ import {
 } from "./date-picker.js";
 import { useInboxItemTitle } from "./inbox-item-chip.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
+import { WrittenAs } from "./selection-markdown.js";
 import { useKnownNames, useWordTargets } from "./use-known-names.js";
 import {
   type LinkStanding,
@@ -935,6 +937,20 @@ export function linkChip(
   label: string,
   doors: MentionDoors,
   at?: MarkdownSpan | undefined,
+): React.JSX.Element | undefined {
+  const chip = chipOfLink(href, label, doors, at);
+  // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
+  return chip === undefined ? undefined : (
+    <WrittenAs markdown={markdownLink(label, href)}>{chip}</WrittenAs>
+  );
+}
+
+/** A link in words as its chip, as `linkChip` draws it, before it is held as the link it was written as. */
+function chipOfLink(
+  href: string,
+  label: string,
+  doors: MentionDoors,
+  at: MarkdownSpan | undefined,
 ): React.JSX.Element | undefined {
   const bare = isBareLink(label, href);
   const placed = pageDoors(doors, href);

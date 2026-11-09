@@ -46,6 +46,7 @@ export * from "./components/comment/comment-pin.js";
 export * from "./components/composer-frame/composer-body.js";
 export * from "./components/composer-frame/composer-foot.js";
 export * from "./components/composer-frame/composer-frame.js";
+export * from "./components/composer-frame/composer-quote.js";
 export * from "./components/confirm-dialog/confirm-dialog.js";
 export * from "./components/copy-button/copy-button.js";
 export * from "./components/copy-field/copy-field.js";

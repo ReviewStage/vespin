@@ -1,18 +1,10 @@
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import {
-  BUTTON_SIZE,
-  Button,
-  IconButton,
-  MENU_SURFACE_FLOW,
-  MenuSurface,
-  Tooltip,
-  useWait,
-} from "@repo/ui";
+import { Button, ComposerQuote, MENU_SURFACE_FLOW, MenuSurface, Tooltip, useWait } from "@repo/ui";
 import { clipsAround, cutTo as cutToClips } from "@repo/ui/clip-room";
 import { replyOf } from "@repo/ui/reply-quote";
 import { type ViewportBox, visibleViewport } from "@repo/ui/visible-viewport";
 import { Duration, Effect } from "effect";
-import { ReplyIcon, XIcon } from "lucide-react";
+import { ReplyIcon } from "lucide-react";
 import {
   createContext,
   type ReactNode,
@@ -24,7 +16,10 @@ import {
 import { createPortal } from "react-dom";
 import { useAppCommand } from "../app-commands.js";
 import { coarsePointerNow, FINGER_SELECTION_GAP } from "../coarse-pointer.js";
-import type { ComposerQuote } from "../description-editor/contract.js";
+import type { ComposerQuote as Quoted } from "../description-editor/contract.js";
+import { MarkdownMessage } from "../markdown-message.js";
+import { selectedMarkdown } from "./selection-markdown.js";
+import { useMentionLink } from "./task-mentions.js";
 
 /**
  * reply-to-selection.tsx -- words selected in an agent's message answered from its message box: Reply over the selection, and the quote block it lays into the box.
@@ -40,9 +35,12 @@ import type { ComposerQuote } from "../description-editor/contract.js";
  * or, on a touch screen, once it has rested for `SELECTION_SETTLE`, since
  * the handles a finger drags it by may let go with no pointerup on iOS;
  * there it stands under the words, where the system's own selection menu
- * does not (`coarse-pointer.ts`). A press hands the words to the box
+ * does not (`coarse-pointer.ts`). The words are read as the Markdown they
+ * were drawn from, their marks and each chip as its link
+ * (`selection-markdown.tsx`), never as the selection's bare words, which
+ * lose both. A press hands the words to the box
  * (`AgentComposer`'s `replyDoor`), whose editor lays them in (`insertQuote`), drawn here
- * (`ComposerQuoteView`), and sends them as a Markdown blockquote set apart
+ * as they will read once sent (`ComposerQuoteView`), and sends them as a Markdown blockquote set apart
  * by a blank line (`@repo/ui/reply-quote`). The press is drawn over the window, not inside
  * the transcript, but stands as though it were inside it, as ChatGPT's and
  * Medium's do: it keeps the side it was offered on while the log scrolls,
@@ -192,7 +190,7 @@ function pickedIn(scope: HTMLElement, kept?: Picked): Picked | undefined {
   // Note that words a hidden pane holds keep their selection, as the narrow Inbox's item does behind its list, but are no longer on screen to reply to.
   if (words.closest("[hidden]") !== null) return undefined;
   if (reachesField(words, range)) return undefined;
-  const reply = replyOf(selection.toString());
+  const reply = replyOf(selectedMarkdown(range));
   if (reply === "") return undefined;
   const box = range.getBoundingClientRect();
   return { reply, words, ...pressPlace(box, roomAround(words), kept?.below) };
@@ -356,30 +354,23 @@ export function ReplyPress({
   );
 }
 
-/** A quote block in the message box: the words quoted, three lines at most, and the press that takes it out, off while the box is held. */
+/**
+ * A quote block in the message box, drawn as `@repo/ui`'s quote: the words
+ * quoted as the message will draw them once sent, their marks and chips
+ * among them, three lines at most, and the press that takes it out, off
+ * while the box is held.
+ */
 export function ComposerQuoteView({
   quote,
   held,
 }: {
-  quote: ComposerQuote;
+  quote: Quoted;
   held: boolean;
 }): React.JSX.Element {
+  const link = useMentionLink();
   return (
-    <div className="composer-quote my-tight-gap mx-0 flex select-none items-start gap-control-gap border-l-3 border-border-strong pl-[0.8em] text-caption leading-body text-muted-foreground">
-      <span className="composer-quote-words m-0 min-w-0 flex-auto whitespace-pre-line wrap-anywhere line-clamp-3">
-        {quote.words}
-      </span>
-      <Tooltip label={REPLY_WORDS.REMOVE}>
-        {/* Note that the press keeps the caret where it stands, so the words around the quote stay where they were. */}
-        <IconButton
-          icon={<XIcon aria-hidden="true" />}
-          label={REPLY_WORDS.REMOVE}
-          size={BUTTON_SIZE.COMPACT}
-          disabled={held}
-          keepFocus
-          onClick={quote.remove}
-        />
-      </Tooltip>
-    </div>
+    <ComposerQuote removeLabel={REPLY_WORDS.REMOVE} onRemove={quote.remove} disabled={held}>
+      <MarkdownMessage words={quote.words} className="composer-quote-words" link={link} />
+    </ComposerQuote>
   );
 }

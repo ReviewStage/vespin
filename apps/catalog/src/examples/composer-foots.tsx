@@ -10,6 +10,7 @@ import {
   ComposerFootSkeleton,
   ComposerFrame,
   type ComposerLook,
+  ComposerQuote,
   GAP,
   IconButton,
   SKELETON_SHAPE,
@@ -32,7 +33,8 @@ import { CatalogSection } from "../section";
  * Send unavailable; an unfinished answer's, its Send refusing a press and
  * saying what is missing; holding files, which stand over its words; near its limit, the counter showing;
  * sending; Stop in the send's place, and stopping; with a cut paste's note,
- * a refused send's Retry, and a closed box's mend under its note; dictating;
+ * a refused send's Retry, and a closed box's mend under its note; quoting a
+ * reply, its words cut to three lines; dictating;
  * then at a field's and a bare frame's inset, and still loading.
  */
 
@@ -62,11 +64,14 @@ function Box({
   look = COMPOSER_LOOK.CARD,
   words,
   files,
+  quote,
   ...foot
 }: Partial<ComponentProps<typeof ComposerFoot>> & {
   look?: ComposerLook;
   words: string;
   files?: ReactNode;
+  /** A reply's quote over the words, where it holds one. */
+  quote?: ReactNode;
 }): React.JSX.Element {
   return (
     <ComposerFrame
@@ -76,6 +81,7 @@ function Box({
     >
       <ComposerBody files={files}>
         <div className="catalog-composer">
+          {quote}
           <Text tone={TEXT_TONE.MUTED}>{words}</Text>
         </div>
       </ComposerBody>
@@ -131,6 +137,18 @@ function ComposerFoots(): React.JSX.Element {
                   />
                   <AttachmentChip name="plan.pdf" icon={<GLYPH.FILE />} onRemove={ignore} />
                 </>
+              }
+            />
+            <Box
+              words="Should the draft clear once the invite is sent?"
+              quote={
+                <ComposerQuote removeLabel="Remove quote" onRemove={ignore}>
+                  <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
+                    <strong>The invite form</strong> now keeps its draft as the member types, so a
+                    closed tab or a reload never loses what was written in the invite's note.
+                    Opening the form again restores it, and sending the invite clears it.
+                  </Text>
+                </ComposerQuote>
               }
             />
             <Box
