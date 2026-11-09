@@ -28,9 +28,9 @@ id `start_agent` answered, and it reports to yours.
 | Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, to it instead, as above |
 | Valid model ids | `list_models` |
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
-| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` |
+| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` (where `create_task` offers one) |
 | Draw a dependency | `update_task` on the subtask of the PR that builds on another, with `blockedBy: { add: [<the other PR's subtask id>] }` |
-| Start a worker | `start_agent` with `taskId` set to its PR's subtask, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, `title` set to the PR title, plus `model` and `effort` (below) |
+| Start a worker | `start_agent` with `taskId` set to its PR's subtask, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, `title` set to the PR title, plus `model` and `effort` (below); the whole brief as `prompt` where the subtask has no description |
 | Start a helper | `start_agent` on your own task (no `taskId`, or the rollout task's id where you work on none), with the brief as `prompt` |
 | Worker's base branch | `start_agent`'s `branch` |
 | Open a PR | `open_pull_request` with `base` |
@@ -146,8 +146,12 @@ worker starts on it and is told to pass it as `base` when it opens its PR.
 Leave `prompt` out, so the worker works from its subtask's description and
 not the whole plan, give the rest of the brief (its items 2 to 5) as `note`,
 which holds at most 64,000 characters, and the chosen `model` and `effort`,
-checked against `list_models`. The call carries everything the worker is
-told; do not follow it with a message.
+checked against `list_models`. Where the workspace has Task descriptions off,
+`create_task` offers no `description` and `start_agent` refuses a start with
+no `prompt`: make the subtask by its name alone and give the whole brief as
+`prompt` instead, its first item there and the rest in `note` where it runs
+long. The call carries everything the worker is told; do not follow it with
+a message.
 
 Every brief must contain:
 
