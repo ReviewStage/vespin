@@ -17,8 +17,9 @@ import { SetupSteps } from "./setup-steps.js";
 /**
  * Setup's Welcome as the developer walks back to it: a team's workspace
  * made and then left for Just me lists the account's own workspace again,
- * so GitHub is not installed on the team's, and is deleted while nobody
- * else joined it, which the service checks. And its survey, kept on the
+ * so GitHub is not installed on the team's, and keeps it until setup
+ * finishes as Just me, which deletes it while nobody else joined it, as the
+ * service checks. And its survey, kept on the
  * account once for each set of answers setup goes on with. Synthetic
  * throughout.
  */
@@ -74,24 +75,22 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-test("Just me after a team's workspace was made lists the account's own workspace again and deletes the team's while nobody joined it", async () => {
-  // Setup stands at Welcome, for the team, whose workspace was made before Back, as the account keeps it.
-  const place = JSON.stringify({ audience: "team", at: 0, team: PAPERSTAR.id });
-  writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
-  const deleted: unknown[] = [];
-  const places: unknown[] = [];
+/** The fake act port answering a workspace's delete, each payload pushed to `deleted`, and keeping setup's place as `place`. */
+function answeringDeletes(place: string, deleted: unknown[]): void {
   fakeActPort({
     [WORKSPACE_ACT_KIND.WORKSPACE_DELETE]: (payload) => {
       deleted.push(payload);
       return Promise.resolve();
     },
-    [SETTINGS_ACT_KIND.SETTING_UPDATE]: ({ field, value }) => {
-      if (field === "setupPlace") places.push(JSON.parse(String(value)));
+    [SETTINGS_ACT_KIND.SETTING_UPDATE]: () => {
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
   });
-  const chosen: string[] = [];
+}
+
+/** Setup drawn for the account, with its own workspace and Paperstar listed, each workspace chosen pushed to `chosen`. */
+function setupDrawn(chosen: string[] = []): HTMLElement {
   const base = tasksControl();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -111,15 +110,38 @@ test("Just me after a team's workspace was made lists the account's own workspac
       ),
     ),
   );
+  return container;
+}
+
+test("Just me after a team's workspace was made lists the account's own workspace again and keeps the team's", async () => {
+  // Setup stands at Welcome, for the team, whose workspace was made before Back, as the account keeps it.
+  const place = JSON.stringify({ audience: "team", at: 0, team: PAPERSTAR.id });
+  writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
+  const deleted: unknown[] = [];
+  answeringDeletes(place, deleted);
+  const chosen: string[] = [];
+  const container = setupDrawn(chosen);
 
   act(() => buttonStarting(container, "Just me").click());
-  // Note that the delete's answer reaches setup a tick after the press, as a mutation's does.
-  await vi.waitFor(() => assert.equal(places.length, 2));
+  await act(() => Promise.resolve());
 
   assert.deepEqual(chosen, [OWN.id]);
+  // Note that the team's workspace stands until setup finishes as Just me, so With my team chosen again finds it as made.
+  assert.deepEqual(deleted, []);
+});
+
+test("setup finished as Just me deletes the team's workspace it made while nobody joined it", async () => {
+  // Setup stands at its last step, for the account alone, after a team's workspace was made and left.
+  const place = JSON.stringify({ audience: "me", at: 4, team: PAPERSTAR.id });
+  writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
+  const deleted: unknown[] = [];
+  answeringDeletes(place, deleted);
+  const container = setupDrawn();
+
+  act(() => buttonStarting(container, "Finish").click());
+
   // The service refuses the delete once anyone else is a member, so a workspace someone joined stays.
-  assert.deepEqual(deleted, [{ workspaceId: PAPERSTAR.id, ifAlone: true }]);
-  assert.deepEqual(places.at(-1), { audience: "me", at: 0 });
+  await vi.waitFor(() => assert.deepEqual(deleted, [{ workspaceId: PAPERSTAR.id, ifAlone: true }]));
 });
 
 test("the survey keeps its answers on the account, Other's words among them, and again after a refusal", async () => {
