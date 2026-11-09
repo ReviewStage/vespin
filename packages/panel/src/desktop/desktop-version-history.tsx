@@ -282,10 +282,10 @@ function RevisionRow({
         ? []
         : [{ label: SECTIONS_LABEL, icon: <GLYPH.SECTION />, onSelect: onOpenSections }]),
       ...(source === undefined ? [] : [sourceItem(source)]),
+      ...(onRestore === undefined
+        ? []
+        : [{ label: "Restore this version", icon: <RotateCcwIcon />, onSelect: onRestore }]),
     ],
-    onRestore === undefined
-      ? []
-      : [{ label: "Restore this version", icon: <RotateCcwIcon />, onSelect: onRestore }],
   ].filter((group) => group.length > 0);
   // Note that the author's card hangs beside the row as the pointer rests on it, the app's its own; an agent or an automation the version names by name alone hangs nothing.
   const card = actorCard(author);

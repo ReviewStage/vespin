@@ -120,7 +120,7 @@ import {
   automationOwnerName,
   READING_AUTOMATIONS,
 } from "./automation-words.js";
-import { PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
+import { PhoneHead, PlaceMore, phoneBar, phoneFindItems } from "./phone-head.js";
 import { useWorkspaceRuns, type WorkspaceRunsRead } from "./use-automation-runs.js";
 import {
   AUTOMATION_DELETE_MUTATION,
@@ -583,8 +583,8 @@ function AutomationsHead({
                 disabled: workspace === undefined,
                 onSelect: tasks.newTask.onOpenForAutomation,
               },
+              ...phoneFindItems(),
             ],
-            ...phoneFindGroups(),
           ]}
         />
       }

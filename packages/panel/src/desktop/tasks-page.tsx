@@ -33,7 +33,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
-import { PhoneHead, PlaceMore, phoneFindGroups, useMenuAsk } from "./phone-head.js";
+import { PhoneHead, PlaceMore, phoneFindItems, useMenuAsk } from "./phone-head.js";
 import { TasksBoard } from "./tasks-board.js";
 import { TasksList } from "./tasks-list.js";
 import type { TasksPageHeld } from "./tasks-page-held.js";
@@ -257,8 +257,8 @@ export function TasksPage({
                   opens: true,
                   onSelect: () => optionsAsk.onAsk(opener),
                 },
+                ...phoneFindItems(),
               ],
-              ...phoneFindGroups(),
             ]}
           />
         }

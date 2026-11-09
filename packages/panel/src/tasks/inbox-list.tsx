@@ -132,7 +132,7 @@ import {
   type MenuAsk,
   PhoneHead,
   PlaceMore,
-  phoneFindGroups,
+  phoneFindItems,
   useAskedMenu,
   useMenuAsk,
 } from "../desktop/phone-head.js";
@@ -1019,18 +1019,20 @@ function ListHead({
               shown={shown}
               groups={(opener) =>
                 [
-                  view === undefined
-                    ? []
-                    : [
-                        {
-                          label: VIEW_OPTIONS,
-                          icon: <SlidersHorizontalIcon />,
-                          opens: true,
-                          onSelect: () => asked.onAsk(opener),
-                        },
-                      ],
-                  ...phoneFindGroups(),
-                  readAll === undefined ? [] : [markAllAction(readAll)],
+                  [
+                    ...(view === undefined
+                      ? []
+                      : [
+                          {
+                            label: VIEW_OPTIONS,
+                            icon: <SlidersHorizontalIcon />,
+                            opens: true,
+                            onSelect: () => asked.onAsk(opener),
+                          },
+                        ]),
+                    ...phoneFindItems(),
+                    ...(readAll === undefined ? [] : [markAllAction(readAll)]),
+                  ],
                 ].filter((group) => group.length > 0)
               }
             />

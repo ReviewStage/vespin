@@ -223,9 +223,9 @@ function accountMenuGroups(
     acts.onProfile === undefined
       ? []
       : [{ label: "Your profile", icon: <UserRoundIcon />, onSelect: acts.onProfile }];
-  const groups: MenuEntry[][] = [
-    ...(profile.length === 0 ? [] : [profile]),
+  return [
     [
+      ...profile,
       { label: "Changelog", icon: <NewspaperIcon />, onSelect: acts.onOpenChangelog },
       ...(desktopApp
         ? [
@@ -249,11 +249,11 @@ function accountMenuGroups(
           { label: "Email", icon: <MailIcon />, onSelect: acts.onEmail },
         ],
       },
+      ...(signedIn
+        ? [{ label: VERB.SIGN_OUT, icon: <LogOutIcon />, onSelect: acts.onSignOut }]
+        : []),
     ],
   ];
-  if (signedIn)
-    groups.push([{ label: VERB.SIGN_OUT, icon: <LogOutIcon />, onSelect: acts.onSignOut }]);
-  return groups;
 }
 
 /**

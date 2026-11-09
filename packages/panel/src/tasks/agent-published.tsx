@@ -139,7 +139,7 @@ function branchActions(
         ]),
   ];
   const open: MenuAction[] = opens === undefined ? [] : [opens];
-  return [copies, open].filter((group) => group.length > 0);
+  return [[...copies, ...open]].filter((group) => group.length > 0);
 }
 
 /**

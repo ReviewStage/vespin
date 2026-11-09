@@ -141,7 +141,7 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
  *
  * Every door draws the same items in the one order every menu of the
  * window keeps, Copy, then name and read, then organize, then open
- * elsewhere, and Delete last and alone, so a task in a list can be acted on
+ * elsewhere, and Delete last, so a task in a list can be acted on
  * without being opened first, and the open task's topbar and its sidebar row
  * offer the one menu. Status, Priority, and Assignee stand as submenus
  * listing what the chips list (`standing-submenus.tsx`), as Linear's
@@ -636,7 +636,7 @@ function moveToEntries(
  * panel, and Remove parent where the task has one, New sub-task being the
  * add menu's and ⌘K's; then Pin, Move to section, and Move to workspace
  * where the task may be moved; then Change repository, which says Choose a
- * repository on a task with none. Permanently delete is last and alone.
+ * repository on a task with none. Permanently delete is last.
  * Only the open task's items print their chords, since a chord acts on the
  * open task alone.
  */
@@ -731,10 +731,7 @@ function taskActionGroups(
     [...copy, ...link],
     [rename, ...versions, ...read],
     [...doors.standing],
-    [...relate, ...unparent],
-    [...pinAction(doors.pins, task, lettered), ...move],
-    [repository],
-    [remove],
+    [...relate, ...unparent, ...pinAction(doors.pins, task, lettered), ...move, repository, remove],
   ];
   return groups.filter((group) => group.length > 0);
 }

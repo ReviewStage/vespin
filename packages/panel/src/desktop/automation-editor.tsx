@@ -201,7 +201,7 @@ import { automationDeleteQuestion, automationOwnerName } from "./automation-word
 import { useRunsPanel } from "./folded-groups.js";
 import { type NarrowColumns, useNarrowFocus } from "./narrow-focus.js";
 import { PaneGlide } from "./pane-motion.js";
-import { PhoneHead, phoneFindGroups } from "./phone-head.js";
+import { PhoneHead, phoneFindItems } from "./phone-head.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 import {
   AUTOMATION_DELETE_MUTATION,
@@ -1063,7 +1063,7 @@ export function runNowAction(running: boolean, onRunNow: () => void): MenuAction
 /**
  * An automation's own acts, as its row and its editor's ⋯ offer them alike:
  * Copy link, where the page hands down a workspace; Run now, where it can
- * run; and Delete, red, which asks first, last and alone.
+ * run; and Delete, red, which asks first, last.
  */
 export function automationActionGroups({
   links,
@@ -1076,10 +1076,12 @@ export function automationActionGroups({
   onDelete: () => void;
 }): MenuAction[][] {
   return [
-    [...links],
-    runNow === undefined ? [] : [runNow],
-    [{ label: "Delete", icon: <GLYPH.DELETE />, onSelect: onDelete, danger: true }],
-  ].filter((group) => group.length > 0);
+    [
+      ...links,
+      ...(runNow === undefined ? [] : [runNow]),
+      { label: "Delete", icon: <GLYPH.DELETE />, onSelect: onDelete, danger: true },
+    ],
+  ];
 }
 
 /** The editor's ⋯: the automation's own acts (`automationActionGroups`), under whatever a phone leads it with. */
@@ -1123,9 +1125,10 @@ function AutomationActions({
           menu={menu.drawn}
           heading={heading}
           // Note that a phone's ⋯, the one given a lead, also stands in for ⌘F, read as the menu is drawn.
-          groups={[...(lead === undefined ? [] : [...lead, ...phoneFindGroups()]), ...own].filter(
-            (group) => group.length > 0,
-          )}
+          groups={[
+            ...(lead === undefined ? [] : [[...lead.flat(), ...phoneFindItems()]]),
+            ...own,
+          ].filter((group) => group.length > 0)}
           onClose={menu.close}
         />
       )}

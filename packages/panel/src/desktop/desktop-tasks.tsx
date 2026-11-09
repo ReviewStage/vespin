@@ -130,7 +130,7 @@ import {
   phoneAgentStarts,
   TaskTopbar,
 } from "./main-tabs.js";
-import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
+import { leadWithPhoneFind, PhoneBack, PhoneHead, PlaceMore, phoneBar } from "./phone-head.js";
 import { PlanAgents } from "./plan-agents.js";
 import { PlanPages } from "./plan-pages.js";
 import { PlanRelations } from "./plan-relations.js";
@@ -1309,7 +1309,7 @@ function DescriptionDocument({
         <PlaceMore
           thing={PHONE_THING[pane]}
           shown={tasks.shown}
-          groups={(opener) => [...phoneFindGroups(), ...shownGroups(opener)]}
+          groups={(opener) => leadWithPhoneFind(shownGroups(opener))}
           ends={() => (pane === TASK_PANE.OVERVIEW ? descriptionMenu : undefined)}
         />
       }

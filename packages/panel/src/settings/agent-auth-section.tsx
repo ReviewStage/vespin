@@ -525,7 +525,7 @@ function GetKeyLink({
   );
 }
 
-/** A credential row's ⋯ and the menu it opens, its acts in groups with a rule between each. */
+/** A credential row's ⋯ and the menu it opens. */
 function CredentialMenu({
   thing,
   groups,
@@ -1075,23 +1075,17 @@ function PlanRow({
             thing={name}
             door={door}
             groups={[
-              ...(claude ? [[{ label: WORDS.RENAME, onSelect: () => onOpen(STEPS.RENAME) }]] : []),
-              ...(count > 1
-                ? [
-                    [
-                      ...(at > 0
-                        ? [{ label: WORDS.MOVE_UP, onSelect: () => onMove(at, at - 1) }]
-                        : []),
-                      ...(at < count - 1
-                        ? [{ label: WORDS.MOVE_DOWN, onSelect: () => onMove(at, at + 1) }]
-                        : []),
-                    ],
-                  ]
-                : []),
-              ...(claude
-                ? [[{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }]]
-                : []),
-              [{ label: WORDS.DISCONNECT, danger: true, onSelect: removal.ask }],
+              [
+                ...(claude ? [{ label: WORDS.RENAME, onSelect: () => onOpen(STEPS.RENAME) }] : []),
+                ...(at > 0 ? [{ label: WORDS.MOVE_UP, onSelect: () => onMove(at, at - 1) }] : []),
+                ...(at < count - 1
+                  ? [{ label: WORDS.MOVE_DOWN, onSelect: () => onMove(at, at + 1) }]
+                  : []),
+                ...(claude
+                  ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }]
+                  : []),
+                { label: WORDS.DISCONNECT, danger: true, onSelect: removal.ask },
+              ],
             ]}
           />
         )}
@@ -1281,8 +1275,10 @@ function HarnessCredentials({
                     thing={keyName}
                     door={keyPress}
                     groups={[
-                      [{ label: WORDS.REPLACE_KEY, onSelect: openSteps(STEPS.KEY) }],
-                      [{ label: WORDS.REMOVE_KEY, danger: true, onSelect: keyRemoval.ask }],
+                      [
+                        { label: WORDS.REPLACE_KEY, onSelect: openSteps(STEPS.KEY) },
+                        { label: WORDS.REMOVE_KEY, danger: true, onSelect: keyRemoval.ask },
+                      ],
                     ]}
                   />
                 )

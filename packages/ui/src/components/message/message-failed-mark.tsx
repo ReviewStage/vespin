@@ -6,7 +6,7 @@
  * (`BUTTON_VARIANT.DANGER_QUIET`), so one red glyph says what a row of
  * buttons under every such bubble would. Its menu is headed by why the
  * message did not go and offers the caller's acts on it, Retry first, and,
- * where the failure is the app's, Copy details last in a group of its own,
+ * where the failure is the app's, Copy details before what destroys,
  * as a failure note offers it. The mark says the failure was shown as it is
  * drawn and hidden as it goes, which reports it once (`FailureCopy`'s
  * `useFailureDetails`), so a failure drawn here is reported as one drawn in
@@ -24,6 +24,19 @@ import { Menu, type MenuEntry, useMenu } from "../menu/menu.js";
 const COPY_DETAILS = "Copy details";
 const COPIED = "Copied";
 const NOT_COPIED = "Could not copy";
+
+/** `groups` with `copy` at the end of the last, before the red acts it ends on. */
+function withCopy(
+  groups: readonly (readonly MenuEntry[])[],
+  copy: readonly MenuEntry[],
+): (readonly MenuEntry[])[] {
+  const last = groups.at(-1) ?? [];
+  const at = last.findIndex((entry) => "danger" in entry && entry.danger === true);
+  const cut = at === -1 ? last.length : at;
+  return [...groups.slice(0, -1), [...last.slice(0, cut), ...copy, ...last.slice(cut)]].filter(
+    (group) => group.length > 0,
+  );
+}
 
 /**
  * Copies `details` through `copy` and says how it went, as the window's one
@@ -56,7 +69,7 @@ export function MessageFailedMark({
   label: string;
   /** Why the message did not go, which heads the menu. */
   reason: string;
-  /** The acts on the message, in groups, a rule between each. */
+  /** The acts on the message, in groups, Copy details joining the last before what destroys. */
   groups: readonly (readonly MenuEntry[])[];
   /** The failure beneath it, reported as the mark first stands; words that are no failure of the app's offer nothing to copy. */
   failure: ReportedFailure | Unreported | undefined;
@@ -66,17 +79,15 @@ export function MessageFailedMark({
   const menu = useMenu(true);
   const reported = isReported(failure) ? failure : undefined;
   const details = useFailureDetails(reported);
-  const copy: readonly (readonly MenuEntry[])[] =
+  const copy: readonly MenuEntry[] =
     reported === undefined || details === undefined
       ? []
       : [
-          [
-            {
-              label: COPY_DETAILS,
-              icon: <GLYPH.COPY />,
-              onSelect: () => copyAnswered(reported.copy, details),
-            },
-          ],
+          {
+            label: COPY_DETAILS,
+            icon: <GLYPH.COPY />,
+            onSelect: () => copyAnswered(reported.copy, details),
+          },
         ];
   return (
     <>
@@ -91,7 +102,7 @@ export function MessageFailedMark({
           label={label}
           heading={reason}
           menu={menu.drawn}
-          groups={[...groups, ...copy]}
+          groups={withCopy(groups, copy)}
           onClose={menu.close}
           replayUnmasked={replayUnmasked}
         />

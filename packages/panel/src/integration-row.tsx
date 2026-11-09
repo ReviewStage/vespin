@@ -384,9 +384,7 @@ export function IntegrationRow({
         ]
       : [];
   const actions = held
-    ? [[...naming, ...adding], broken || expired ? [] : [reconnect], [leave]].filter(
-        (group) => group.length > 0,
-      )
+    ? [[...naming, ...adding, ...(broken || expired ? [] : [reconnect]), leave]]
     : [];
   return (
     // Note that a row is followed by its connection, because one that connects or disconnects leaves one section for the other and glides across rather than leaving one and arriving in the other.

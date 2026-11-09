@@ -204,8 +204,6 @@ export function usePendingActs(
                 setEditing(true);
               },
             },
-          ],
-          [
             {
               label: PENDING_WORDS.DELETE,
               icon: <GLYPH.DELETE />,

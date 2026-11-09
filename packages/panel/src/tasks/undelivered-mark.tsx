@@ -139,19 +139,17 @@ export function UndeliveredMark({ messageId }: { messageId: string }): ReactNode
       label={UNDELIVERED_WORDS}
       reason={marks.notes.get(messageId)?.text ?? UNDELIVERED_WORDS}
       groups={[
-        ...(retry === undefined || takeBack === undefined
-          ? []
-          : [
-              [
+        [
+          ...(retry === undefined || takeBack === undefined
+            ? []
+            : [
                 { label: ACT_WORDS.RETRY, icon: <GLYPH.RETRY />, onSelect: () => retry(messageId) },
                 {
                   label: ACT_WORDS.EDIT,
                   icon: <GLYPH.RENAME />,
                   onSelect: () => takeBack(messageId),
                 },
-              ],
-            ]),
-        [
+              ]),
           {
             label: ACT_WORDS.DELETE,
             icon: <GLYPH.DELETE />,

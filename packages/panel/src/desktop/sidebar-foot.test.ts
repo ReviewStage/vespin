@@ -220,7 +220,7 @@ function accountItem(label: string): HTMLButtonElement {
   return item ?? assert.fail(`the account's menu offers ${label}`);
 }
 
-test("the account opens its menu: who is signed in, then the changelog, Keyboard shortcuts, Contact us, and Sign out, parted by rules", async () => {
+test("the account opens its menu: who is signed in, then, under a rule, the changelog, Keyboard shortcuts, Contact us, and Sign out", async () => {
   const button = mount(DEAN);
   await stateArrived();
   act(() => button.click());
@@ -231,7 +231,6 @@ test("the account opens its menu: who is signed in, then the changelog, Keyboard
     "Changelog",
     "Keyboard shortcuts ⌘/",
     "Contact us",
-    "—",
     "Sign out",
   ]);
 });
@@ -275,7 +274,7 @@ test("Contact us flies out its own menu beside the account's, which stands whole
     ["GitHub", "Email"],
   );
   assert.equal(document.activeElement?.textContent, "GitHub", "focus lands on its first item");
-  assert.equal(accountMenuLines().length, 7, "the account's menu keeps every line");
+  assert.equal(accountMenuLines().length, 6, "the account's menu keeps every line");
   assert.equal(contact.getAttribute("aria-expanded"), "true");
 });
 

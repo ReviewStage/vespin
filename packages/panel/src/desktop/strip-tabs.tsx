@@ -257,7 +257,7 @@ function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
  * The chosen tab's actions on what it shows: what its body hands
  * up while it is drawn (`handed`), first, then `contentActionGroups`. Note
  * that a tab's Copy link, and Open in new tab under it, lead even what its
- * body hands up, alone in their group, because Copy link leads every menu
+ * body hands up, in its first group, because Copy link leads every menu
  * that holds one.
  */
 function tabContentGroups(doors: TabDoors): TabActionGroups {
@@ -265,9 +265,12 @@ function tabContentGroups(doors: TabDoors): TabActionGroups {
   if (handed === undefined || links === undefined || links.length === 0) {
     return [...(handed ?? []), ...contentActionGroups(doors)].filter((group) => group.length > 0);
   }
-  return [[...links], ...handed, ...contentActionGroups({ ...doors, links: undefined })].filter(
-    (group) => group.length > 0,
-  );
+  const [first = [], ...rest] = handed;
+  return [
+    [...links, ...first],
+    ...rest,
+    ...contentActionGroups({ ...doors, links: undefined }),
+  ].filter((group) => group.length > 0);
 }
 
 /** Whether two items draw alike: named, said, and standing the same, a submenu by its items, and a panel by its name alone, since it draws its own. */

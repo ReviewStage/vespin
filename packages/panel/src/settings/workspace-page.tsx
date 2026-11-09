@@ -509,7 +509,7 @@ function MemberRow({
     <Stack gap={GAP.NONE}>
       <MenuRow
         thing={member.name}
-        actions={[profileActs, roleActs, removeActs]}
+        actions={[profileActs, [...roleActs, ...removeActs]]}
         row={{
           leading: (
             <ReplayMask>

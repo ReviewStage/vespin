@@ -23,7 +23,7 @@ import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { useRef, useState } from "react";
 import type { Kept } from "../act.js";
 import type { MenuEntry } from "../desktop/action-menu.js";
-import { PhoneHead, PlaceMore, phoneFindGroups } from "../desktop/phone-head.js";
+import { PhoneHead, PlaceMore, phoneFindItems } from "../desktop/phone-head.js";
 import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { TOAST_HOLD, type ToastNotice, useToast } from "../toast.js";
@@ -466,8 +466,8 @@ export function VersionView({
             detail: viewing.current ? CURRENT_HINT : undefined,
             onSelect: () => restore.onRestore(),
           },
+          ...phoneFindItems(),
         ],
-        ...phoneFindGroups(),
       ]}
     >
       <VersionContent

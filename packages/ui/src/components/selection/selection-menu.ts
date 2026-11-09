@@ -27,12 +27,12 @@ function selectionEntry(act: SelectionAct): MenuEntry {
 
 /**
  * A row's menu groups for the selection `acts` take: one group, each act an
- * item or a submenu of its choices, and after it, alone, the acts that cannot
- * be taken back, as every menu of the window ends on its delete; none where
- * there is no act.
+ * item or a submenu of its choices, the acts that cannot be taken back last,
+ * as every menu of the window ends on its delete; none where there is no act.
  */
 export function selectionMenu(acts: readonly SelectionAct[]): readonly (readonly MenuEntry[])[] {
   const kept = acts.filter((act) => act.danger !== true).map(selectionEntry);
   const lost = acts.filter((act) => act.danger === true).map(selectionEntry);
-  return [kept, lost].filter((group) => group.length > 0);
+  const all = [...kept, ...lost];
+  return all.length === 0 ? [] : [all];
 }

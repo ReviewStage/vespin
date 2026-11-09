@@ -162,12 +162,12 @@ export type SkillAction = (typeof SKILL_ACTION)[keyof typeof SKILL_ACTION];
 
 /**
  * What a row's ⋯ holds: View for every row, since anyone who sees a skill
- * may read it; then, a rule apart, Remove. A row the account may not
+ * may read it; then Remove. A row the account may not
  * remove holds View alone.
  */
 export function skillActions(row: SkillRow): readonly (readonly SkillAction[])[] {
   if (!row.skill.manageable) return [[SKILL_ACTION.VIEW]];
-  return [[SKILL_ACTION.VIEW], [SKILL_ACTION.REMOVE]];
+  return [[SKILL_ACTION.VIEW, SKILL_ACTION.REMOVE]];
 }
 
 /**

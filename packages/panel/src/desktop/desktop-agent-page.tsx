@@ -105,7 +105,7 @@ import {
   useAutomationRunPlace,
 } from "./automation-agent-run.js";
 import { AgentPane } from "./main-tabs.js";
-import { PhoneBack, PhoneHead, phoneBar, phoneFindGroups } from "./phone-head.js";
+import { leadWithPhoneFind, PhoneBack, PhoneHead, phoneBar } from "./phone-head.js";
 import {
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -353,21 +353,17 @@ function AgentPageBar({
         groups={
           phone === undefined
             ? groups
-            : [
-                ...phoneFindGroups(),
-                ...groups,
-                ...(phone.onShowPanel === undefined
-                  ? []
-                  : [
-                      [
-                        {
-                          label: SHOW_PANEL,
-                          icon: <SidePanelIcon />,
-                          onSelect: phone.onShowPanel,
-                        },
-                      ],
-                    ]),
-              ]
+            : leadWithPhoneFind([
+                ...groups.slice(0, -1),
+                [
+                  ...(groups.at(-1) ?? []),
+                  ...(phone.onShowPanel === undefined
+                    ? []
+                    : [
+                        { label: SHOW_PANEL, icon: <SidePanelIcon />, onSelect: phone.onShowPanel },
+                      ]),
+                ],
+              ])
         }
         onClose={menu.close}
       />

@@ -152,7 +152,7 @@ test("a row's ⋯ holds View, then Remove, and View alone for a skill the accoun
   const locked = rowOf(
     skill("release-notes", INSTALLED_SKILL_SCOPE.WORKSPACE, { manageable: false }),
   );
-  assert.deepEqual(skillActions(own), [[SKILL_ACTION.VIEW], [SKILL_ACTION.REMOVE]]);
+  assert.deepEqual(skillActions(own), [[SKILL_ACTION.VIEW, SKILL_ACTION.REMOVE]]);
   assert.deepEqual(skillActions(locked), [[SKILL_ACTION.VIEW]]);
 });
 

@@ -162,7 +162,7 @@ test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside
     ) ?? assert.fail("the pane's bar ends in its ⋯ menu");
 
   act(() => ellipsis().click());
-  assert.deepEqual(menuWords(), ["Copy link", "—", "Mark as unreadU", "Remind meH", "ResolveE"]);
+  assert.deepEqual(menuWords(), ["Copy link", "Mark as unreadU", "Remind meH", "ResolveE"]);
   act(() => menuItem("Mark as unread").click());
   await settle();
   assert.ok(world.readMarks.includes(`unread:${THRESHOLD.id}`), "the menu marks the item unread");
@@ -182,7 +182,7 @@ test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside
   act(() => ellipsis().click());
   assert.deepEqual(
     menuWords(),
-    ["Copy link", "—", "Mark as unreadU", "Remind meH"],
+    ["Copy link", "Mark as unreadU", "Remind meH"],
     "a settled item offers Remind me but no Resolve",
   );
 });

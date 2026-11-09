@@ -41,7 +41,7 @@ import { type AgentActions, agentMenuGroups, rowDoors, useAgentActions } from ".
 import { SidebarAgent } from "./sidebar-agent.js";
 
 /**
- * sidebar-agent.test.ts -- an agent with no task, as a row among the sidebar's tasks, offers every action its tab and its page offer but those `NOT_ON_A_ROW` names, a local agent's Terminal only where it runs on This Mac, and is acted on as a task's row is: archived from its right-click at once while it rests, read again by its own id first, asked first while it works, and brought back by Unarchive once archived; renamed in place; deleted for good once asked, last and alone in its menu; and hanging its card while rested on.
+ * sidebar-agent.test.ts -- an agent with no task, as a row among the sidebar's tasks, offers every action its tab and its page offer but those `NOT_ON_A_ROW` names, a local agent's Terminal only where it runs on This Mac, and is acted on as a task's row is: archived from its right-click at once while it rests, read again by its own id first, asked first while it works, and brought back by Unarchive once archived; renamed in place; deleted for good once asked, last in its menu; and hanging its card while rested on.
  *
  * The service is a script at the act boundary; synthetic agents throughout.
  */
@@ -460,7 +460,7 @@ function dialogAnswer(words: string): HTMLButtonElement {
   );
 }
 
-test("Permanently delete stands last and alone in the row's right-click, asks first naming the agent, and once answered deletes it and leaves its page", async () => {
+test("Permanently delete stands last in the row's right-click, asks first naming the agent, and once answered deletes it and leaves its page", async () => {
   const row = mount(RUN);
   const items = rightClick(row);
   assert.equal(wordsOf(items.at(-1)), "Permanently delete");
@@ -564,7 +564,7 @@ test("every action an agent's tab and page offer stands in its row's right-click
   }
 });
 
-test("an agent's row draws the one agent menu in its order: Rename and the read mark, then Pin, then Archive, then Permanently delete alone; Copy link stands nowhere under no workspace", () => {
+test("an agent's row draws the one agent menu in its order: Rename and the read mark, then Pin, then Archive, then Permanently delete; Copy link stands nowhere under no workspace", () => {
   const row = mount(RUN);
   const labels = rightClick(row).map((each) => each.textContent);
   assert.deepEqual(labels, ["Rename", "Mark as unreadU", "PinP", "Archive", "Permanently delete"]);

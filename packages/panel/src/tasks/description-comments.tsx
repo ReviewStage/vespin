@@ -746,7 +746,7 @@ function CommentEntry({
         ]
       : []),
   ];
-  const groups = [copies, edits, deletes].filter((group) => group.length > 0);
+  const groups = [[...copies, ...edits, ...deletes]].filter((group) => group.length > 0);
   const settle = first && openThread(thread);
   // Note that a resolve or a reopen is drawn by the host on the press; one refused is taken back and said in a toast.
   const settleThread = () =>
@@ -3554,8 +3554,6 @@ export function PendingPageComment({
               icon: <GLYPH.RENAME />,
               onSelect: () => setEditing(words),
             },
-          ],
-          [
             {
               label: COMMENT_WORDS.DELETE,
               icon: <TrashIcon />,

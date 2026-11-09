@@ -46,7 +46,7 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * Every surface that draws an agent offers what `useAgentActions` answers,
  * laid out by `agentMenuGroups` in the one order every menu of the window
  * keeps, Copy, then name and read, then organize, then open elsewhere, then
- * lifecycle, and Delete last and alone: Copy link and Copy transcript ›,
+ * lifecycle, and Delete last: Copy link and Copy transcript ›,
  * Concise or Full, read whole from the service; Rename, which opens its name's field
  * where the surface draws its name, while neither it nor what it stands
  * under is archived, and Mark as unread or Mark as read, for an agent with
@@ -63,7 +63,7 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * cloud or another of the member's devices, while the agent may be
  * continued there (`move-agent.tsx`); Archive, asked
  * first while a teammate's agent works (`agent-archive.tsx`), or Unarchive once it is
- * archived; and last and alone, Permanently delete, always asked first
+ * archived; and last, Permanently delete, always asked first
  * (`agent-delete.tsx`), which closes the surface once it landed. A row
  * leaves out only what `NOT_ON_A_ROW` names, and nothing of its own is
  * added beside the menu but what the row's kind keeps, a pinned tab's Unpin
@@ -135,7 +135,7 @@ export interface AgentMenuDoors {
  * copies; Rename and the read mark; Pin and Move to section; Show terminal,
  * Show browser where a phone offers it, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
- * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
+ * Add repository…, Move to ›, and Archive or Unarchive; and last, Permanently delete. The copies, Show
  * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
  * and ⌘⌫ only where the menu is the chosen tab's or the agent's page's,
  * since each chord acts on that agent; the read mark and Pin print U and P
@@ -215,17 +215,16 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   ];
   return [
     copies,
-    named,
-    organized,
+    [...named, ...organized],
     opened,
     [
       ...(addRepository === undefined ? [] : [addRepository]),
       ...(moveTo === undefined ? [] : [moveTo]),
       ...(archive === undefined ? [] : [archive]),
+      ...(deletion === undefined
+        ? []
+        : [chosen ? { ...deletion, command: APP_COMMAND.DELETE } : deletion]),
     ],
-    deletion === undefined
-      ? []
-      : [chosen ? { ...deletion, command: APP_COMMAND.DELETE } : deletion],
   ].filter((group) => group.length > 0);
 }
 

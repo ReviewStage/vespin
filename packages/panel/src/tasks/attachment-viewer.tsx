@@ -364,7 +364,7 @@ function viewerGroups(input: {
         ]
       : []),
   ];
-  return [walking, looking, keeping].filter((group) => group.length > 0);
+  return [walking, [...looking, ...keeping]].filter((group) => group.length > 0);
 }
 
 /** The place's own action as an item of a phone's ⋯: its press, or the page it opens, none for a file with no page. */

@@ -736,7 +736,7 @@ function sectionActionGroups(
   const read: MenuEntry[] = drawnSectionTasks(drawn).some(context.unread)
     ? [{ label: "Mark all as read", icon: <MailOpenIcon />, onSelect: doors.onMarkRead }]
     : [];
-  return [[...edit, ...read], remove];
+  return [[...edit, ...read, ...remove]];
 }
 
 /**

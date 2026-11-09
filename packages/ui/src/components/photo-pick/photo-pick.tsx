@@ -103,8 +103,8 @@ export function PhotoPick({
           label={label}
           menu={menu.drawn}
           groups={[
-            [{ label: PICK_WORDS.REPLACE, icon: <ImageUpIcon />, onSelect: picker.open }],
             [
+              { label: PICK_WORDS.REPLACE, icon: <ImageUpIcon />, onSelect: picker.open },
               {
                 label: PICK_WORDS.REMOVE,
                 icon: <GLYPH.REMOVE />,

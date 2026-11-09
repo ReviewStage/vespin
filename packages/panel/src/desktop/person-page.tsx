@@ -115,7 +115,7 @@ import {
   RowsSkeleton,
   SectionSkeleton,
 } from "./person-frame.js";
-import { PhoneBack, PhoneHead, phoneBar, phoneFindGroups } from "./phone-head.js";
+import { leadWithPhoneFind, PhoneBack, PhoneHead, phoneBar } from "./phone-head.js";
 import { RecentTasks, RecentTasksSkeleton } from "./recent-tasks.js";
 import { useTaskListView } from "./task-list-view.js";
 import type { TaskHeadBack } from "./task-pane-switcher.js";
@@ -399,28 +399,27 @@ function PersonActions({
       ? []
       : [{ label: "Copy email", icon: <MailIcon />, onSelect: () => copy(email, "Email copied") }]),
   ];
-  const actions: MenuAction[][] = [
-    ...(copies.length === 0 ? [] : [copies]),
+  const acts: MenuAction[] = [
+    ...copies,
     ...(phone && shared
-      ? [[{ label: showTasks, icon: <ListFilterIcon />, onSelect: onShowTasks }]]
+      ? [{ label: showTasks, icon: <ListFilterIcon />, onSelect: onShowTasks }]
       : []),
     ...(workspace === undefined || !manages
       ? []
       : [
-          [
-            {
-              label: "Manage in workspace settings",
-              icon: <UsersIcon />,
-              onSelect: () =>
-                openSettings({
-                  page: SETTINGS_VIEW.WORKSPACE,
-                  workspaceId: workspace.id,
-                  section: SETTINGS_SECTION.MEMBERS,
-                }),
-            },
-          ],
+          {
+            label: "Manage in workspace settings",
+            icon: <UsersIcon />,
+            onSelect: () =>
+              openSettings({
+                page: SETTINGS_VIEW.WORKSPACE,
+                workspaceId: workspace.id,
+                section: SETTINGS_SECTION.MEMBERS,
+              }),
+          },
         ]),
   ];
+  const actions: MenuAction[][] = acts.length === 0 ? [] : [acts];
   return (
     <>
       {shared && !phone ? (
@@ -428,7 +427,7 @@ function PersonActions({
           {showTasks}
         </Button>
       ) : null}
-      {/* A phone's ⋯ always stands, since it also stands in for ⌘F (`phoneFindGroups`). */}
+      {/* A phone's ⋯ always stands, since it also stands in for ⌘F (`phoneFindItems`). */}
       {actions.length === 0 && !phone ? null : (
         <>
           <MoreButton thing={PERSON} {...menu.trigger()} />
@@ -437,7 +436,7 @@ function PersonActions({
               label={moreLabel(PERSON)}
               replayUnmasked
               menu={menu.drawn}
-              groups={phone ? [...phoneFindGroups(), ...actions] : actions}
+              groups={phone ? leadWithPhoneFind(actions) : actions}
               onClose={menu.close}
             />
           )}

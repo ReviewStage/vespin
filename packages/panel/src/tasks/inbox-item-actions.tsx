@@ -33,7 +33,7 @@ interface InboxItemDoors {
 
 /** An item's acts as a menu draws them. */
 interface InboxItemActions {
-  /** The menu's groups, with `lead` over the item's own: a phone's, standing for what its bar draws. */
+  /** The menu's groups, with `lead` over the item's own, which run on in its last group: a phone's, standing for what its bar draws. */
   readonly groups: (lead?: readonly MenuAction[][]) => MenuEntry[][];
   /** Opens the item in a tab of its own, which a middle-click on its row takes; none where the window opens no tabs. */
   readonly openInTab: (() => void) | undefined;
@@ -56,9 +56,10 @@ export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): Inb
   const resolve = resolveAction([item], onResolve, keyed);
   const groups = (lead: readonly MenuAction[][] = []) =>
     [
-      ...lead,
-      links,
+      ...lead.slice(0, -1),
       [
+        ...(lead.at(-1) ?? []),
+        ...links,
         ...(read === undefined ? [] : [read]),
         ...(remind === undefined ? [] : remindEntries(item, remind, keyed)),
         ...(resolve === undefined ? [] : [resolve]),

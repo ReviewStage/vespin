@@ -148,11 +148,11 @@ function selectionActs(
         replayMasked: true,
         onSelect: move(section.id),
       })),
+      ...(sections.length === 0 ? [] : [{ label: SELECTION_ACT.NO_SECTION, onSelect: move(null) }]),
       newSectionAction(
         acted(() => doors.askNew(workspace, put, movesInto(taskIds.length, chosen[0]?.name))),
       ),
     ],
-    ...(sections.length === 0 ? [] : [[{ label: SELECTION_ACT.NO_SECTION, onSelect: move(null) }]]),
   ];
   return [
     {

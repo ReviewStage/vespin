@@ -156,21 +156,27 @@ export function PhoneBack({ back }: { back: TaskHeadBack }): React.JSX.Element {
  * window's own Find, so it opens the bar where ⌘F would, and stands only
  * while something on screen offers Find, read as the menu is drawn: an
  * Activity list, which finds nothing, offers none. Each ⋯ heading a place
- * that finds spreads it in as a group of its own, after its views; it is
- * no group at all where nothing offers Find, so no rule is drawn for it.
+ * that finds spreads it into the group beside it, since Find is no section
+ * of its own.
  */
-export function phoneFindGroups(): MenuAction[][] {
+export function phoneFindItems(): MenuAction[] {
   if (!appCommandOffered(APP_COMMAND.FIND)) return [];
   return [
-    [
-      {
-        label: APP_SHORTCUTS[APP_COMMAND.FIND].label,
-        icon: <SearchIcon />,
-        command: APP_COMMAND.FIND,
-        onSelect: () => runAppCommand(APP_COMMAND.FIND),
-      },
-    ],
+    {
+      label: APP_SHORTCUTS[APP_COMMAND.FIND].label,
+      icon: <SearchIcon />,
+      command: APP_COMMAND.FIND,
+      onSelect: () => runAppCommand(APP_COMMAND.FIND),
+    },
   ];
+}
+
+/** `groups` led by a phone's Find, in their first group rather than one of its own. */
+export function leadWithPhoneFind<T extends MenuEntry>(
+  groups: readonly (readonly T[])[],
+): (readonly (MenuAction | T)[])[] {
+  const [first = [], ...rest] = groups;
+  return [[...phoneFindItems(), ...first], ...rest].filter((group) => group.length > 0);
 }
 
 /**

@@ -159,9 +159,8 @@ export function RunRow({
     subject === undefined
       ? undefined
       : { label: subject.label, icon: <ExternalLinkIcon />, onSelect: () => openLink(subject.url) };
-  const groups = [links, openSubject === undefined ? [] : [openSubject]].filter(
-    (group) => group.length > 0,
-  );
+  const items = [...links, ...(openSubject === undefined ? [] : [openSubject])];
+  const groups = items.length === 0 ? [] : [items];
   // A run a link named is brought into the middle of the box that scrolls it, once, as it is drawn.
   const row = useRef<HTMLElement | null>(null);
   useEffect(() => {

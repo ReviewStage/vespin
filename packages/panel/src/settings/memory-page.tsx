@@ -289,8 +289,8 @@ function MemoryRow({
   const { memory, actor } = shown;
   const menu = useMenu(true);
   const own: readonly (readonly MenuEntry[])[] = [
-    [{ label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onSelect: onCopy }],
     [
+      { label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onSelect: onCopy },
       {
         label: MEMORY_ACT.FORGET,
         icon: <TrashIcon />,

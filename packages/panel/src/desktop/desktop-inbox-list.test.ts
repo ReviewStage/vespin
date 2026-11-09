@@ -1196,7 +1196,7 @@ test("a row's menu and U each mark an item read or unread: Mark as unread on a r
   await settle();
   const retry = "How is a failed email retried?";
   // Note that U acts only on the chosen item, so another row's menu does not name it.
-  assert.deepEqual(rowMenu(page, retry), ["Copy link", "—", "Mark as unread", "Remind me"]);
+  assert.deepEqual(rowMenu(page, retry), ["Copy link", "Mark as unread", "Remind me"]);
   act(() => menuItem("Mark as unread").click());
   await settle();
   await vi.waitFor(() => assert.equal(unreadOf(page, retry), true));
@@ -1206,13 +1206,12 @@ test("a row's menu and U each mark an item read or unread: Mark as unread on a r
     "a press on the mark opens nothing",
   );
 
-  assert.deepEqual(rowMenu(page, retry), ["Copy link", "—", "Mark as read", "Remind me"]);
+  assert.deepEqual(rowMenu(page, retry), ["Copy link", "Mark as read", "Remind me"]);
   act(() => menuItem("Mark as read").click());
   await settle();
   await vi.waitFor(() => assert.equal(unreadOf(page, retry), false));
   assert.deepEqual(rowMenu(page, "Alert at 80%?"), [
     "Copy link",
-    "—",
     "Mark as unreadU",
     "Remind meH",
     "ResolveE",

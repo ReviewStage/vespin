@@ -507,10 +507,11 @@ function PinnedAgentRow({
   const { rename } = actions;
   const editing = rename?.editing === true;
   const endedByKey = useRefocusAfterEdit(editing, row);
-  const groups = [
-    [unpinItem(onUnpin)],
-    ...agentMenuGroups({ ...rowDoors(actions.doors), onCopy: actions.doors.onCopy }),
-  ];
+  const [first = [], ...rest] = agentMenuGroups({
+    ...rowDoors(actions.doors),
+    onCopy: actions.doors.onCopy,
+  });
+  const groups = [[unpinItem(onUnpin), ...first], ...rest];
   return (
     <>
       <PinnedTabRow
@@ -620,7 +621,7 @@ export function SidebarPinnedTab({
   return (
     <PinnedTabRow
       drawn={drawn}
-      groups={[[unpinItem(onUnpin)], ...(links.length === 0 ? [] : [links])]}
+      groups={[[unpinItem(onUnpin), ...links]]}
       openInTab={linked === undefined ? undefined : inTabOf(linked)}
     />
   );

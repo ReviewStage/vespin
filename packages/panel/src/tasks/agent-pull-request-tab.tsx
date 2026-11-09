@@ -1158,7 +1158,7 @@ function ThreadMenu({
             onSelect: jump,
           },
         ];
-  const groups = [links, views].filter((group) => group.length > 0);
+  const groups = [[...links, ...views]].filter((group) => group.length > 0);
   if (groups.length === 0) return null;
   const label = moreLabel(THREAD_REVEAL_WORDS.THING);
   return (
@@ -1194,8 +1194,10 @@ function GitHubEntryMenu({ thing, url }: { thing: EntryThing; url: string }): Re
   const menu = useMenu(true);
   const copy = useCopyToast();
   const groups = [
-    [commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), false)],
-    [commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => appPlatform().openGitHub(url), false)],
+    [
+      commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), false),
+      commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => appPlatform().openGitHub(url), false),
+    ],
   ];
   return (
     <span className="pull-request-entry-menu flex">
@@ -3460,8 +3462,7 @@ function PullRequestTabBody({
     handed === undefined
       ? undefined
       : [
-          ...handed,
-          phone ? previewActions(checksLanded, openLink) : [],
+          [...handed.flat(), ...(phone ? previewActions(checksLanded, openLink) : [])],
           ...(phone && viewActions.held?.view === view ? viewActions.held.actions : []),
         ].filter((group) => group.length > 0),
   );

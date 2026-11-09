@@ -99,7 +99,7 @@ import {
 import { useAutomation } from "../automation-directory.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { AgentCrumbMenu, type CrumbHeld, TaskCrumbMenu } from "../desktop/crumb-menus.js";
-import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
+import { PhoneHead, phoneFindItems } from "../desktop/phone-head.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -1249,7 +1249,7 @@ function phoneItemGroups(
     phone.onShowPanel === undefined
       ? []
       : [{ label: "Show panel", icon: <SidePanelIcon />, onSelect: phone.onShowPanel }];
-  return [steps, [...holderItem, agentItem], panel].filter((group) => group.length > 0);
+  return [steps, [...holderItem, agentItem, ...panel]].filter((group) => group.length > 0);
 }
 
 /** What a phone's ⋯ calls the crumbs' presses. */
@@ -1296,7 +1296,9 @@ function InboxItemMenu({
     remind: onRemind === undefined ? undefined : { onRemind },
   });
   // Note that a phone's ⋯, the one given a lead, also stands in for ⌘F, read here as the menu is drawn rather than as the lead was made.
-  const groups = itemGroups(lead === NO_LEAD ? lead : [...lead, ...phoneFindGroups()]);
+  const groups = itemGroups(
+    lead === NO_LEAD ? lead : [...lead.slice(0, -1), [...(lead.at(-1) ?? []), ...phoneFindItems()]],
+  );
   if (groups.length === 0) return null;
   return (
     <>

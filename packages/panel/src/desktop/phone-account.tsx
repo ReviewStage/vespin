@@ -66,7 +66,7 @@ export function PhoneAccount({
               <AccountHeading account={account} />
             ) : undefined
           }
-          groups={[...workspaceGroups, footGroup, ...accountGroups]}
+          groups={[...workspaceGroups, [...footGroup, ...accountGroups.flat()]]}
           onClose={menu.close}
         />
       )}

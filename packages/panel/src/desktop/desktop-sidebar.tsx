@@ -1177,7 +1177,7 @@ function repositoryActionGroups(
     icon: <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />,
     onSelect: () => openRepositoryOnGitHub(repositoryPageUrl(repository)),
   };
-  return [[top, github], ...read];
+  return [[top, github, ...read.flat()]];
 }
 
 /** Pinned holds tabs as well as tasks, so its count is read as pins. */

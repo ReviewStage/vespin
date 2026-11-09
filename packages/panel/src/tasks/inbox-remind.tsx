@@ -187,12 +187,22 @@ export function remindManyGroups(
   onPick: (() => void) | undefined,
 ): MenuAction[][] {
   return [
-    timeActions((at) => onRemindMany(items, at)),
-    onPick === undefined ? [] : [{ label: WORDS.PICK, icon: <GLYPH.TIME />, onSelect: onPick }],
-    items.some(hasReminder)
-      ? [{ label: WORDS.CLEAR_ALL, icon: <InboxIcon />, onSelect: () => onRemindMany(items, null) }]
-      : [],
-  ].filter((group) => group.length > 0);
+    [
+      ...timeActions((at) => onRemindMany(items, at)),
+      ...(onPick === undefined
+        ? []
+        : [{ label: WORDS.PICK, icon: <GLYPH.TIME />, onSelect: onPick }]),
+      ...(items.some(hasReminder)
+        ? [
+            {
+              label: WORDS.CLEAR_ALL,
+              icon: <InboxIcon />,
+              onSelect: () => onRemindMany(items, null),
+            },
+          ]
+        : []),
+    ],
+  ];
 }
 
 /**
@@ -291,10 +301,12 @@ export function useInboxReminding({
     chosen === undefined || onRemind === undefined
       ? []
       : [
-          timeActions((at) => onRemind(chosen, at)),
-          [{ label: WORDS.PICK, icon: <GLYPH.TIME />, onSelect: () => onPick(chosen) }],
-          clearReminderActions(chosen, onRemind),
-        ].filter((group) => group.length > 0);
+          [
+            ...timeActions((at) => onRemind(chosen, at)),
+            { label: WORDS.PICK, icon: <GLYPH.TIME />, onSelect: () => onPick(chosen) },
+            ...clearReminderActions(chosen, onRemind),
+          ],
+        ];
   const popover = (
     <>
       {menu.drawn === undefined || groups.length === 0 ? null : (

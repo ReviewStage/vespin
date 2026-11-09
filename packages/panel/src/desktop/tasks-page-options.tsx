@@ -516,8 +516,8 @@ function filterEntries(
     return { ...head, items: values };
   });
   return [
-    fields,
     [
+      ...fields,
       {
         label: "Clear filters",
         icon: <RotateCcwIcon />,
@@ -787,6 +787,15 @@ function displayEntries({
           onSelect: () => set({ order: each }),
         })),
       },
+      {
+        label: "Show completed",
+        icon: <CircleCheckIcon />,
+        items: Object.values(COMPLETED_WINDOW).map((each) => ({
+          label: COMPLETED_WORDS[each],
+          checked: display.completed === each,
+          onSelect: () => set({ completed: each }),
+        })),
+      },
     ],
     [
       ...(board
@@ -803,17 +812,6 @@ function displayEntries({
             }),
           ]
         : []),
-    ],
-    [
-      {
-        label: "Show completed",
-        icon: <CircleCheckIcon />,
-        items: Object.values(COMPLETED_WINDOW).map((each) => ({
-          label: COMPLETED_WORDS[each],
-          checked: display.completed === each,
-          onSelect: () => set({ completed: each }),
-        })),
-      },
     ],
     [
       {
