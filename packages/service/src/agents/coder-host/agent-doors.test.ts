@@ -220,7 +220,8 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
         assert.deepEqual(missed, {
           status: ACTION_RESULT_STATUS.REJECTED,
-          reason: DESCRIPTION_EDIT_REFUSAL.CONFLICT,
+          reason:
+            "Not saved: none of this call's notes was taken, because the note in missed names text that stands nowhere in the description; it may have changed since you read it, so copy the words from current. The description as it stands is in current; retry from it.",
           missed: "replace a phrase the description never held",
           current: before.text,
         });
