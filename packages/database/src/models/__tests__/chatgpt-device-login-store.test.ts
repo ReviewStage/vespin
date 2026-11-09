@@ -14,15 +14,17 @@ import {
 } from "../chatgpt-device-login-store.js";
 
 /**
- * An account's pending ChatGPT device-code login, over a real dialect: a
- * start replaces the account's login under a new id, a settled login keeps
- * its outcome and leaves its codes, and one account neither reads, settles,
+ * An account's pending ChatGPT device-code logins, over a real dialect: two
+ * starts stand side by side under their own ids, a start clears the
+ * account's lapsed logins, a settled login keeps its outcome and leaves its
+ * codes, and one account neither reads, settles,
  * nor drops another's login. The sealed column is opaque text here, as the
  * store holds it. Synthetic accounts, ids, and seals throughout.
  */
 
 const AT = new Date("2026-11-06T01:00:00Z");
 const LAPSES = new Date("2026-11-06T01:15:00Z");
+const LATER = new Date("2026-11-06T01:30:00Z");
 
 const openAccount = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
@@ -40,45 +42,56 @@ const readLogin = (userId: string, loginId: string) =>
 
 it.layer(getTestDB())("a pending ChatGPT device-code login", (it) => {
   it.effect(
-    "a start replaces the account's login under a new id, and a settled login keeps its outcome and leaves its codes",
+    "two starts stand side by side, a start clears the account's lapsed logins, and a settled login keeps its outcome and leaves its codes",
     () =>
       Effect.gen(function* () {
         const userId = yield* openAccount;
-        yield* beginChatGptDeviceLogin({ userId, loginId: "login-1" }, "sealed-1", LAPSES, AT);
-        yield* beginChatGptDeviceLogin({ userId, loginId: "login-2" }, "sealed-2", LAPSES, AT);
+        const [first, second, third] = [randomUUID(), randomUUID(), randomUUID()];
+        yield* beginChatGptDeviceLogin({ userId, loginId: first }, "sealed-1", LAPSES, AT);
+        yield* beginChatGptDeviceLogin({ userId, loginId: second }, "sealed-2", LAPSES, AT, true);
 
-        assert.equal(yield* readLogin(userId, "login-1"), undefined);
-        const pending = yield* readLogin(userId, "login-2");
-        assert.equal(pending?.sealedCodes, "sealed-2");
-        assert.equal(pending?.outcome, null);
-        assert.equal(pending?.expiresAt.getTime(), LAPSES.getTime());
+        assert.deepEqual(
+          [yield* readLogin(userId, first), yield* readLogin(userId, second)].map((row) => [
+            row?.sealedCodes,
+            row?.adds,
+            row?.outcome,
+            row?.expiresAt.getTime(),
+          ]),
+          [
+            ["sealed-1", false, null, LAPSES.getTime()],
+            ["sealed-2", true, null, LAPSES.getTime()],
+          ],
+        );
 
         yield* settleChatGptDeviceLogin(
-          { userId, loginId: "login-2" },
+          { userId, loginId: second },
           CHATGPT_DEVICE_LOGIN.CONNECTED,
         );
-        const settled = yield* readLogin(userId, "login-2");
+        const settled = yield* readLogin(userId, second);
         assert.equal(settled?.outcome, CHATGPT_DEVICE_LOGIN.CONNECTED);
         assert.equal(settled?.sealedCodes, null);
 
-        yield* dropChatGptDeviceLogin({ userId, loginId: "login-2" });
-        assert.equal(yield* readLogin(userId, "login-2"), undefined);
+        yield* dropChatGptDeviceLogin({ userId, loginId: second });
+        assert.equal(yield* readLogin(userId, second), undefined);
+
+        yield* beginChatGptDeviceLogin({ userId, loginId: third }, "sealed-3", LATER, LAPSES);
+        assert.equal(yield* readLogin(userId, first), undefined, "a lapsed login is cleared");
+        assert.equal((yield* readLogin(userId, third))?.sealedCodes, "sealed-3");
       }),
   );
 
   it.effect("one account neither reads, settles, nor drops another's login", () =>
     Effect.gen(function* () {
       const [owner, other] = [yield* openAccount, yield* openAccount];
-      yield* beginChatGptDeviceLogin({ userId: owner, loginId: "login-1" }, "sealed", LAPSES, AT);
+      const loginId = randomUUID();
+      yield* beginChatGptDeviceLogin({ userId: owner, loginId }, "sealed", LAPSES, AT);
 
-      assert.equal(yield* readLogin(other, "login-1"), undefined);
-      yield* settleChatGptDeviceLogin(
-        { userId: other, loginId: "login-1" },
-        CHATGPT_DEVICE_LOGIN.REFUSED,
-      );
-      yield* dropChatGptDeviceLogin({ userId: other, loginId: "login-1" });
+      assert.equal(yield* readLogin(other, loginId), undefined);
+      yield* settleChatGptDeviceLogin({ userId: other, loginId }, CHATGPT_DEVICE_LOGIN.REFUSED);
+      yield* dropChatGptDeviceLogin({ userId: other, loginId });
+      yield* beginChatGptDeviceLogin({ userId: other, loginId: randomUUID() }, "s", LATER, LATER);
 
-      const standing = yield* readLogin(owner, "login-1");
+      const standing = yield* readLogin(owner, loginId);
       assert.equal(standing?.sealedCodes, "sealed");
       assert.equal(standing?.outcome, null);
     }),

@@ -141,6 +141,9 @@ export const PROVIDER_KEY_REJECTION = {
 export type ProviderKeyRejection =
   (typeof PROVIDER_KEY_REJECTION)[keyof typeof PROVIDER_KEY_REJECTION];
 
+/** No subscription id we mint is longer; one past it is none of ours. */
+const SUBSCRIPTION_ID_MAX_CHARS = 64;
+
 const PROVIDER_KEY_BOUNDS = {
   /** No provider key is shorter; a paste this short is no key. */
   MIN_KEY_CHARS: 20,
@@ -148,16 +151,23 @@ const PROVIDER_KEY_BOUNDS = {
   MAX_KEY_CHARS: 512,
 } as const;
 
-/** The query `DELETE` names its provider in, and the kind where it is not an API key. */
+/** The query `DELETE` names its provider in, the kind where it is not an API key, and the subscription where it is not the first of its kind. */
 export const PROVIDER_KEY_QUERY = {
   PROVIDER: "provider",
   KIND: "kind",
+  SUBSCRIPTION_ID: "subscriptionId",
 } as const;
 
 const providerSchema = EffectSchema.Literals(Object.values(PROVIDER_KEY_PROVIDER));
 
 /** A stored credential's kind, as a request names it; a request that names none means an API key. */
 export const providerKeyKindSchema = EffectSchema.Literals(Object.values(PROVIDER_KEY_KIND));
+
+/** One of the account's subscriptions of a kind, by its id; a request that names none means the first of its kind in the account's order. */
+export const subscriptionIdSchema = EffectSchema.String.check(
+  EffectSchema.isMinLength(1),
+  EffectSchema.isMaxLength(SUBSCRIPTION_ID_MAX_CHARS),
+);
 
 /** What the account sees of one stored key: never the key, only what tells it apart. */
 const providerKeySummarySchema = EffectSchema.Struct({
@@ -240,11 +250,18 @@ export function pastedKeyFits(pasted: string): boolean {
   return Option.isSome(readPastedKey(pasted));
 }
 
-/** Saving a key for a provider (PUT), replacing the one of its kind it held; a request naming no kind saves an API key. */
+/**
+ * Saving a key for a provider (PUT); a request naming no kind saves an API
+ * key, replacing the provider's one. A subscription replaces the one its id
+ * names, or is added at the bottom of the account's order where `add` says
+ * so, or replaces the first of its kind where it names neither.
+ */
 export const providerKeySaveRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
   kind: EffectSchema.optionalKey(providerKeyKindSchema),
   key: pastedKeySchema,
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
+  add: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** The subscription kinds, which alone carry a default for the account's coding agents. */
@@ -255,13 +272,15 @@ const subscriptionKindSchema = EffectSchema.Literals([
 
 /**
  * Turning a connected plan's default for the account's coding agents on or
- * off (PATCH): the provider and the subscription's kind, and whether it
- * pays for them unless Start picks another payer. A plan the account does
- * not hold changes nothing, and the answer shows it absent.
+ * off (PATCH): the provider and the subscription's kind, the subscription
+ * where it is not the first of its kind, and whether it pays for them
+ * unless Start picks another payer. A plan the account does not hold
+ * changes nothing, and the answer shows it absent.
  */
 export const providerKeyForAgentsRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
   kind: subscriptionKindSchema,
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
   forAgents: EffectSchema.Boolean,
 });
 

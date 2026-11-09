@@ -210,6 +210,7 @@ const IdTokenClaimsJson = Schema.fromJsonString(
     aud: Schema.Union([Schema.String, Schema.Array(Schema.String)]),
     exp: Schema.Number,
     sub: Schema.NonEmptyString,
+    email: Schema.optionalKey(Schema.String),
     [CODEX_DEVICE_OAUTH.AUTH_CLAIM]: Schema.optionalKey(AuthClaimSchema),
   }),
 );
@@ -382,9 +383,10 @@ export const dropRetiredChatGptCredentials = /* @__PURE__ */ Effect.fnUntraced(f
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
+    undefined,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked) || !retiredChatGptRow(ring, userId, locked.value)) return false;
-      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind);
+      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind, locked.value.id);
       return true;
     }),
   );
@@ -550,7 +552,8 @@ const checkIdToken = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * A Codex device-code login's ID token checked before its credentials are
  * kept, as `checkIdToken` checks one, under Codex's client, answering the
- * account it names and the ChatGPT workspace its claim names. Note that its
+ * account it names, its email where it names one, and the ChatGPT workspace
+ * its claim names. Note that its
  * access token's audience is not asked, because the service received it
  * from OpenAI's token endpoint itself rather than from a client.
  */
@@ -564,6 +567,7 @@ export const verifyCodexDeviceIdToken = /* @__PURE__ */ Effect.fnUntraced(functi
   return {
     verdict: checked.verdict,
     accountId: checked.claims.sub,
+    email: checked.claims.email,
     chatgptAccountId: auth?.chatgpt_account_id,
   };
 });
@@ -648,6 +652,7 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
+    undefined,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked)) return { outcome: CHATGPT_ACCESS.NONE };
       const row = locked.value;
@@ -657,7 +662,7 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
       const credentials = openCredentials(ring, userId, row);
       if (credentials === undefined) return { outcome: CHATGPT_ACCESS.UNREADABLE };
       if (credentials === RETIRED) {
-        yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind);
+        yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind, row.id);
         return { outcome: CHATGPT_ACCESS.NONE };
       }
       const now = yield* DateTime.nowAsDate;
@@ -709,14 +714,7 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
       if (renewed === undefined) return { outcome: CHATGPT_ACCESS.UNREACHABLE };
       const { expiresAt } = renewed;
       const sealed = sealCredentials(ring, userId, renewed.credentials);
-      yield* resealProviderKey(
-        userId,
-        OWNER_KIND.provider,
-        OWNER_KIND.kind,
-        row.sealedKey,
-        sealed,
-        expiresAt,
-      );
+      yield* resealProviderKey(userId, row.id, row.sealedKey, sealed, expiresAt);
       return {
         outcome: CHATGPT_ACCESS.READY,
         accessToken: Redacted.make(renewed.credentials.accessToken),
@@ -770,20 +768,22 @@ const revokeSession = (credentials: SealedCredentials) =>
   );
 
 /**
- * Removes the account's ChatGPT plan, revoking its renewable session at
- * OpenAI first, under the row's lock so no renewal rotates the token being
- * revoked. The row goes whether or not OpenAI confirmed it; answers whether
+ * Removes the account's ChatGPT plan of this id, or its first where none is
+ * named, revoking its renewable session at OpenAI first, under the row's
+ * lock so no renewal rotates the token being revoked. The row goes whether or not OpenAI confirmed it; answers whether
  * it did, and true where there was nothing to revoke, as for a row the
  * retired third-party sign-in sealed, which OpenAI is never asked about.
  */
 export const removeChatGptCredentials = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   ring: KeyRing,
+  subscriptionId?: string,
 ) {
   return yield* withProviderKeyLocked(
     userId,
     OWNER_KIND.provider,
     OWNER_KIND.kind,
+    subscriptionId,
     Effect.fnUntraced(function* (locked) {
       if (Option.isNone(locked)) return true;
       const credentials = openCredentials(ring, userId, locked.value);
@@ -791,7 +791,7 @@ export const removeChatGptCredentials = /* @__PURE__ */ Effect.fnUntraced(functi
         credentials === undefined
           ? false
           : credentials === RETIRED || (yield* revokeSession(credentials));
-      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind);
+      yield* removeProviderKey(userId, OWNER_KIND.provider, OWNER_KIND.kind, locked.value.id);
       return confirmed;
     }),
   );

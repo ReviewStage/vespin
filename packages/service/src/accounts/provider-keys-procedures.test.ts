@@ -289,6 +289,7 @@ const ID_CLAIMS = {
   iss: AUTH_ORIGIN,
   aud: CODEX_DEVICE_OAUTH.CLIENT_ID,
   sub: "chatgpt-subject-0000",
+  email: "person@example.test",
   exp: 4_000_000_000,
 } as const;
 
@@ -1014,6 +1015,12 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         ]);
         assert.deepEqual(again, { outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: connected.keys });
         assert.deepEqual(countedProviders(owner), [{ provider: PROVIDER_KEY_PROVIDER.OPENAI }]);
+        const [plan] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+        assert.equal(
+          plan?.accountEmail,
+          ID_CLAIMS.email,
+          "the plan is named by its account's email",
+        );
 
         // The calls Codex makes, in Codex's own bodies.
         const bodyOf = (url: string) =>
