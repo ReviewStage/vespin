@@ -66,6 +66,12 @@ export const CALL_KIND = {
   /** A list of the models a coding agent may be started on (`list_models`). */
   LIST_MODELS: "list-models",
   STOP_AGENT: "stop-agent",
+  /** The ports a server listens on in a coding agent's own sandbox listed (`list_ports`). */
+  LIST_PORTS: "list-ports",
+  /** A port of a coding agent's own sandbox shared by a public link (`share_port`), its row naming the port. */
+  SHARE_PORT: "share-port",
+  /** A coding agent's public link to its port closed (`share_port` of null). */
+  UNSHARE_PORT: "unshare-port",
   /** A coding agent renamed, moved to another model, pinned, or given other servers (`update_agent`), its row naming it by its chip. */
   UPDATE_AGENT: "update-agent",
   /** One task of the workspace read with its description (`read_task`), its row naming the task once answered. */
@@ -160,6 +166,9 @@ export const CALL_WORDS = {
   [CALL_KIND.UNARCHIVE_AGENT]: { verb: "Unarchived the agent", code: false },
   [CALL_KIND.LIST_MODELS]: { verb: "Listed the models", code: false },
   [CALL_KIND.STOP_AGENT]: { verb: "Stopped the agent", code: false },
+  [CALL_KIND.LIST_PORTS]: { verb: "Listed the ports", code: false },
+  [CALL_KIND.SHARE_PORT]: { verb: "Shared port", code: true },
+  [CALL_KIND.UNSHARE_PORT]: { verb: "Stopped sharing the port", code: false },
   [CALL_KIND.UPDATE_AGENT]: { verb: "Changed the agent", code: false },
   [CALL_KIND.READ_TASK]: { verb: "Read the task", code: false },
   [CALL_KIND.CREATE_SECTION]: { verb: "Made the section", code: false },

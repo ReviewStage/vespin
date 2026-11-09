@@ -723,6 +723,23 @@ function agentUpdateKind(input: WireValue | undefined): CallKind {
   return archived === false ? CALL_KIND.UNARCHIVE_AGENT : CALL_KIND.UPDATE_AGENT;
 }
 
+/**
+ * A `share_port` call as its row reads it: a port shared, named by its
+ * number, or a share closed, whose input names none.
+ */
+function sharePortView(input: WireValue | undefined, output: WireValue | undefined): ToolCallView {
+  const port = isRecord(input) && isWireNumber(input.port) ? input.port : undefined;
+  return {
+    ...namedCall(
+      port === undefined ? CALL_KIND.UNSHARE_PORT : CALL_KIND.SHARE_PORT,
+      input,
+      output,
+      undefined,
+    ),
+    subject: port === undefined ? "" : String(port),
+  };
+}
+
 /** What a call to another agent sent it, in the caller's own words: the words, and a start's note beside them. */
 export interface SentWords {
   readonly words: string | undefined;
@@ -996,6 +1013,9 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : browserOutput(output),
     };
   },
+  [AGENT_TOOL.LIST_PORTS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_PORTS, input, output, undefined),
+  [AGENT_TOOL.SHARE_PORT]: ({ input, output }) => sharePortView(input, output),
   [AGENT_TOOL.BASH]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
     const description = commandDescription(stringAt(input, "description"));

@@ -24,6 +24,9 @@
  * session the sandbox is tagged with (`admitted.runtimeSessionId`), its
  * tabs kept under the agent's own conversation; its
  * screenshots reach the agent as images, which the transcript leaves out.
+ * `list_ports` and `share_port` reach the same sandbox through the one
+ * ports operation the member's own controls run (`../agent-ports.ts`), as
+ * the agent's starter.
  *
  * Left out, beside the harness's own shell, files, todos, waiting,
  * subagents, skills, and web reads: the retired runtime's `connection_search` and
@@ -148,6 +151,13 @@ import {
   SAVE_MEMORY_TOOL,
   SEARCH_MEMORY_TOOL,
 } from "../memory-tools.js";
+import {
+  LIST_PORTS_TOOL,
+  type PortsReach,
+  runListPorts,
+  runSharePort,
+  SHARE_PORT_TOOL,
+} from "../port-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   CREATE_SECTION_TOOL,
@@ -163,6 +173,7 @@ import {
   runCreateTask,
   runReadTask,
 } from "../task-tools.js";
+import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import type { ExperimentsOn } from "../workspace-experiment-on.js";
 import { type AgentStanding, GATES, standingOf, TOOL_GATE, type ToolGate } from "./gates.js";
 
@@ -180,8 +191,8 @@ export type WorkspaceMcpServices =
   | HostedEnvironment
   | SentryApp;
 
-/** What a tool runs against: the doors' services, and the agent's browser, which the server provides itself (`../workspace-mcp/app.ts`). */
-type WorkspaceMcpToolServices = WorkspaceMcpServices | AgentBrowser;
+/** What a tool runs against: the doors' services, and the agent's browser and sandbox, which the server provides itself (`../workspace-mcp/app.ts`). */
+type WorkspaceMcpToolServices = WorkspaceMcpServices | AgentBrowser | AgentSandbox;
 
 /** What a call carries beside its input: the door to the agent's sandbox, where a tool reads a file the agent names by its path; the key it runs under, read from the store by the tools that key a row on it (`../workspace-mcp/call-key.ts`); and the seams the doors that reach an agent's sessions or the store's writer read. */
 export interface WorkspaceMcpCallContext {
@@ -428,6 +439,29 @@ function runTurnCappedEditDescription(
   );
 }
 
+/**
+ * A tool on the ports of the agent's own sandbox, run as its starter on its
+ * own id (`../port-tools.ts`), so it reaches the sandbox by the same rule
+ * the starter's own controls do. Note that an agent whose row is gone is
+ * refused before the sandbox is asked.
+ */
+function portTool<const Name extends string>(
+  spec: ToolSpec<Name>,
+  run: (
+    reach: PortsReach,
+    input: UnparsedWireValue,
+  ) => Effect.Effect<WorkspaceMcpToolResult, never, WorkspaceMcpToolServices>,
+) {
+  const door: Door = (_admitted, input, { standing }) => {
+    if (Option.isNone(standing.agent)) {
+      return Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT));
+    }
+    const { userId, id } = standing.agent.value;
+    return run({ userId, agentId: id }, input);
+  };
+  return served(spec, door, { gate: TOOL_GATE.SANDBOX });
+}
+
 /** Loaded from the first turn (`CatalogTool`'s `alwaysLoad`). */
 const LOADED: Served = { alwaysLoad: true };
 
@@ -516,6 +550,9 @@ const CATALOG = [
     content: browserContent,
     refused: browserNotRun,
   }),
+  // The ports of the agent's sandbox, and the one it shares by a public link.
+  portTool(LIST_PORTS_TOOL, runListPorts),
+  portTool(SHARE_PORT_TOOL, runSharePort),
 ] as const;
 
 /** The name of a tool the catalog serves. */

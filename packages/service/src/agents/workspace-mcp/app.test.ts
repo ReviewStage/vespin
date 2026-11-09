@@ -11,6 +11,7 @@ import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
@@ -86,6 +87,7 @@ import { postToInbox } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
+import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import {
   isServedTool,
   listedTool,
@@ -98,6 +100,7 @@ import {
   WORKSPACE_INTEGRATION_MCP_PATH,
   WORKSPACE_MCP_PATH,
   WORKSPACE_MCP_PROTOCOL_VERSIONS,
+  type WorkspaceMcpAgentSandbox,
   type WorkspaceMcpBrowser,
   workspaceMcpApp,
 } from "./app.js";
@@ -190,17 +193,35 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
 /** A sandbox no call opens: a tool that reads no file never asks for it. */
 const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
 
-/** The server's group over the test's database, the sandbox door and the browser given, and any services that stand in for the ones given, as a fetch a client is handed. */
+/** An agent's sandbox whose every ask dies: a tool that touches no port never asks it. */
+const NO_AGENT_SANDBOX: WorkspaceMcpAgentSandbox = Layer.mock(AgentSandbox)({});
+
+/** An agent's sandbox that shares one port at a time by a link named for its session, the port shared kept by session; its every other ask dies. */
+function sharingSandbox() {
+  const shared = new Map<string, number>();
+  const layer = Layer.mock(AgentSandbox)({
+    share: (sessionId, port) =>
+      Effect.sync(() => {
+        shared.set(sessionId, port);
+        return `https://${sessionId}-${port}.sandbox.test`;
+      }),
+    unshare: (sessionId) => Effect.sync(() => void shared.delete(sessionId)),
+  });
+  return { layer, shared };
+}
+
+/** The server's group over the test's database, the sandbox door, the browser, and the agent's sandbox given, and any services that stand in for the ones given, as a fetch a client is handed. */
 const standingOver = (
   sandbox: InboxSandboxDoor = NO_SANDBOX,
   instead?: Layer.Layer<IntegrationConnect | HttpClient.HttpClient>,
   browser: WorkspaceMcpBrowser = noSandboxBrowserLayer,
+  agentSandbox: WorkspaceMcpAgentSandbox = NO_AGENT_SANDBOX,
 ) =>
   Effect.gen(function* () {
     const base = yield* doorServices;
     const services = instead === undefined ? base : Layer.merge(base, instead);
     const web = HttpRouter.toWebHandler(
-      workspaceMcpApp({ sandbox: () => ({ files: sandbox }), browser }).pipe(
+      workspaceMcpApp({ sandbox: () => ({ files: sandbox }), browser, agentSandbox }).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },
@@ -382,6 +403,8 @@ const SERVED_TOOLS = [
   "update_comment",
   "run_on_mac",
   "browser",
+  "list_ports",
+  "share_port",
 ] as const;
 
 type ServedTool = (typeof SERVED_TOOLS)[number];
@@ -401,12 +424,18 @@ const commentTool =
 /**
  * Each tool's own door, called directly as the catalog calls it: the server's answer to
  * a tool is to be this one's, so a tool routed to any other door, or to
- * none, answers otherwise. The agent tools are left out, since each one's
+ * none, answers otherwise. The agent tools and the ports' are left out, since each one's
  * catalog entry names its run itself, and no door of theirs stands apart
  * from the catalog to call.
  */
 const DOOR_OF: Readonly<
-  Record<Exclude<ServedTool, "run_on_mac" | "browser" | (typeof AGENT_TOOLS)[number]>, DirectCall>
+  Record<
+    Exclude<
+      ServedTool,
+      "run_on_mac" | "browser" | "list_ports" | "share_port" | (typeof AGENT_TOOLS)[number]
+    >,
+    DirectCall
+  >
 > = {
   post_thread: (admitted, input) =>
     runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox: NO_SANDBOX }),
@@ -651,7 +680,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["open_pull_request"],
     },
     {
-      why: "on a device, the browser and run_on_mac",
+      why: "on a device, the browser, run_on_mac, and the sandbox's ports",
       agent: Effect.gen(function* () {
         const agent = yield* agentWithBearer;
         yield* Database.use((db) =>
@@ -662,7 +691,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         return agent;
       }),
-      withheld: ["browser", "run_on_mac"],
+      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory and the description's tools where its starter has Memory and Task descriptions off",
@@ -1141,5 +1170,38 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         reason: BROWSER_TOOL_REFUSAL.NO_SANDBOX,
       });
     }),
+  );
+
+  it.effect(
+    "share_port shares a port of the agent's own sandbox by a public link, and null stops sharing",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        const admitted = Option.getOrThrow(yield* admitRunnerBearer(agent.bearer));
+        const sessionId = `wrun_${randomUUID()}`;
+        const now = new Date(yield* Clock.currentTimeMillis);
+        yield* claimRuntimeSession(admitted.target, sessionId, now);
+        const sandbox = sharingSandbox();
+        const fetch = yield* standingOver(NO_SANDBOX, undefined, undefined, sandbox.layer);
+        const client = yield* connected(fetch, agent.bearer);
+
+        const share = yield* Effect.promise(() =>
+          client.callTool({ name: "share_port", arguments: { port: 3000 } }),
+        );
+        const sharedThen = [...sandbox.shared];
+        const stop = yield* Effect.promise(() =>
+          client.callTool({ name: "share_port", arguments: { port: null } }),
+        );
+        yield* Effect.promise(() => client.close());
+
+        assert.deepEqual(firstJson(share), {
+          status: "accepted",
+          port: 3000,
+          url: `https://${sessionId}-3000.sandbox.test`,
+        });
+        assert.deepEqual(sharedThen, [[sessionId, 3000]]);
+        assert.deepEqual(firstJson(stop), { status: "accepted", shared: null });
+        assert.deepEqual([...sandbox.shared], []);
+      }),
   );
 });
