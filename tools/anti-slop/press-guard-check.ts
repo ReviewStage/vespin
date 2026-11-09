@@ -26,6 +26,7 @@ import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
 import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
 import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";
 import { SHADCN_FOCUS_GUARD_RULE, SHADCN_SOURCE } from "./shared/shadcn-focus-guard.ts";
+import { callsSubjectBuilder, SHORTCUT_FLAG_GUARD_RULE } from "./shared/shortcut-flag-guard.ts";
 import { SKELETON_GUARD_RULE } from "./shared/skeleton-guard.ts";
 import {
   INTERNAL_MOCK_GUARD_RULE,
@@ -62,7 +63,9 @@ import {
  * way past it, on any TypeScript file that spells
  * a retired name and holds one that would silence `retired`, whose retired
  * file's baseline is the only way past it, on a vendored shadcn component
- * holding one that would silence `no-shadcn-focus-ring`, on any test file
+ * holding one that would silence `no-shadcn-focus-ring`, on any TypeScript
+ * file calling a menu-item builder that takes the menu's subject and holding
+ * one that would silence `no-shortcut-flag`, which has no way past it, on any test file
  * holding one that would silence `no-internal-vi-mock`,
  * `no-focused-or-skipped-test` or `no-source-read-in-test`, which hold rules
  * root AGENTS.md's "Testing" says never bend, and on an `.oxlintrc.json` that
@@ -231,6 +234,17 @@ const GUARDS = [
     sources: TYPESCRIPT_SOURCE,
     watches: (absolute: string) => SHADCN_SOURCE.test(path.relative(REPOSITORY_ROOT, absolute)),
     remedy: "Drop the utility, so the window's own ring stands for the control",
+  },
+  {
+    rule: SHORTCUT_FLAG_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that calls no builder taking a subject has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/anti-slop/") &&
+      existsSync(absolute) &&
+      callsSubjectBuilder(readFileSync(absolute, "utf8")),
+    remedy:
+      "Pass the menu's subject (`shortcutSubject`), and say where its keys act from the place that offers them (`useShortcutTarget`)",
   },
   {
     rule: INTERNAL_MOCK_GUARD_RULE,

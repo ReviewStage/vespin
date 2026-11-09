@@ -96,7 +96,12 @@ each with its reason, handing `@repo/ui`'s `TaskRow` its `menu`, `editor`,
 onto one. `ListRow` is not held: it is the row of many kinds, each drawn
 where it is listed. A menu shows a shortcut exactly where pressing it would act on the
 menu's subject, so a key it prints always works and one it leaves out does
-not act there.
+not act there. `[check: anti-slop/no-shortcut-flag]`, under the same
+no-suppression check: `commandAction` and its siblings take the menu's
+subject, and the place offering a key says what it acts on
+(`useShortcutTarget`, `packages/panel/src/shortcut-target.ts`); a literal
+`true` or `false`, a negation, a comparison, `&&` or `||`, or a condition
+choosing between the subject and nothing where they take it is an error.
 
 Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
 under the same no-suppression check): outside `packages/ui-native`, an
