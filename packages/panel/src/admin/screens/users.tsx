@@ -1,6 +1,7 @@
 import type { AdminUserList, AdminUserListRow } from "@repo/features/admin-answer-wire";
 import { ADMIN_USERS_SEARCH_MAX_LENGTH, type AdminMetricsWindow } from "@repo/features/admin-wire";
 import { formatCount } from "@repo/features/number-format";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { formatDate, formatDayTick } from "@repo/features/time-format";
 import {
   type Noun,
@@ -18,7 +19,6 @@ import {
   Text,
 } from "@repo/ui";
 import { ACCOUNTS_SORT_KEY, type AccountsDetailColumn } from "@repo/ui/accounts-sort";
-import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {

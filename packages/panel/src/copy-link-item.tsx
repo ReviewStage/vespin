@@ -1,13 +1,14 @@
 import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { createContext, useContext, useEffect } from "react";
+import { appPlatform, opensTabs } from "./app-platform.js";
 import { commandAction, PANEL_COMMAND } from "./command-items.js";
 import { LINK_COPY, useCopyToast } from "./copy-feedback.js";
 import type { MenuAction } from "./desktop/action-menu.js";
 import { useNumberedPlace } from "./tasks/use-link-standing.js";
 
 /**
- * copy-link-item.tsx -- Copy link as any menu offers it: the one item every thing's ⋯ and right-click menu holds, copying the thing's app link and saying Link copied.
+ * copy-link-item.tsx -- Copy link as any menu offers it: the item every thing's ⋯ and right-click menu holds, copying the thing's app link and saying Link copied, with Open in new tab under it in a browser.
  *
  * A menu names its thing by place (`@repo/features/link-grammar`), and the
  * item writes it under the workspace the surface's links are written in,
@@ -19,6 +20,12 @@ import { useNumberedPlace } from "./tasks/use-link-standing.js";
  * (`useNumberedPlace`), as the address bar writes it. The item prints
  * ⇧⌘C only where its link is the one the chord would copy now, the open or
  * focused thing's (`links-at-hand.ts`); every other row's prints nothing.
+ *
+ * In a browser, whose tabs the window can open (`opensTabs`), the same link
+ * opens in a tab of its own: on a middle-click on a row that goes to it, as
+ * on a link, and from Open in new tab, which stands under Copy link in every
+ * menu that offers it (`linkItems`). The Mac app has no tabs, so it offers
+ * neither.
  */
 
 /** The links ⇧⌘C would copy now, as the keyboard stands outside the side panel and in it, which the window's Copy link holds (`useHoldChordLinks`). */
@@ -48,24 +55,35 @@ export function useChordLinks(): readonly string[] {
   return useSelector(chordLinksStore);
 }
 
+/** Opens `link`, an app link, in a tab of its own, which a middle-click on a row going to it takes; none where the window opens no tabs. */
+export function openInTabOf(link: string): (() => void) | undefined {
+  return opensTabs() ? () => appPlatform().openInTab?.(link) : undefined;
+}
+
 /**
  * Copy link, copying `link`, an app link, through `copy`, the window's menu
- * copy (`useCopyToast`): the one item every Copy link in a menu draws,
- * printing ⇧⌘C where the chord copies the same link, one of `chord`
- * (`useChordLinks`). Note that a GitHub address is no app link and is
- * offered as Copy GitHub link (`PANEL_COMMAND.COPY_GITHUB_LINK`), and a
- * link's own right-click keeps its browser's Copy link (`link-menu.tsx`).
+ * copy (`useCopyToast`), printing ⇧⌘C where the chord copies the same link,
+ * one of `chord` (`useChordLinks`); and under it Open in new tab, opening
+ * the link in a tab of its own, where the window opens tabs: the items every
+ * menu offering a thing's link draws, so no menu offers one without the
+ * other. Note that a GitHub address is no app link and is offered as Copy
+ * GitHub link (`PANEL_COMMAND.COPY_GITHUB_LINK`), and a link's own
+ * right-click keeps its browser's Copy link (`link-menu.tsx`).
  */
-export function copyLinkItem(
+export function linkItems(
   copy: (words: string, label: string) => void,
   link: string,
   chord: readonly string[],
-): MenuAction {
-  return commandAction(
+): MenuAction[] {
+  const copied = commandAction(
     PANEL_COMMAND.COPY_LINK,
     () => copy(link, LINK_COPY.COPIED),
     chord.includes(link),
   );
+  const open = openInTabOf(link);
+  return open === undefined
+    ? [copied]
+    : [copied, commandAction(PANEL_COMMAND.OPEN_IN_NEW_TAB, open, false)];
 }
 
 /** The copy of a place's link under the workspace the surface hands down, saying Link copied; none where it hands down none. */
@@ -78,16 +96,32 @@ export function useCopyLink(): ((place: LinkPlace) => void) | undefined {
     : (place) => copy(linkOf(numbered(place, workspace), workspace), LINK_COPY.COPIED);
 }
 
-/** Copy link for a place, under the workspace the surface hands down; none where it hands down none. */
-export function useCopyLinkItem(): (place: LinkPlace) => MenuAction | undefined {
+/** A place's link under the workspace the surface hands down, by the task's number where the window lists one; none where it hands down none. */
+function usePlaceLink(): (place: LinkPlace) => string | undefined {
   const workspace = useContext(LinkWorkspaceContext);
-  const copy = useCopyToast();
-  const chord = useChordLinks();
   const numbered = useNumberedPlace();
   return (place) =>
-    workspace === undefined
-      ? undefined
-      : copyLinkItem(copy, linkOf(numbered(place, workspace), workspace), chord);
+    workspace === undefined ? undefined : linkOf(numbered(place, workspace), workspace);
+}
+
+/** Copy link and Open in new tab for a place (`linkItems`), under the workspace the surface hands down; none where it hands down none. */
+export function useLinkItems(): (place: LinkPlace) => MenuAction[] {
+  const linkOfPlace = usePlaceLink();
+  const copy = useCopyToast();
+  const chord = useChordLinks();
+  return (place) => {
+    const link = linkOfPlace(place);
+    return link === undefined ? [] : linkItems(copy, link, chord);
+  };
+}
+
+/** Opens a place in a tab of its own, under the workspace the surface hands down, which a middle-click on the row going to it takes; none where it hands down none or the window opens no tabs. */
+export function useOpenInTab(): (place: LinkPlace) => (() => void) | undefined {
+  const linkOfPlace = usePlaceLink();
+  return (place) => {
+    const link = linkOfPlace(place);
+    return link === undefined ? undefined : openInTabOf(link);
+  };
 }
 
 /** The place an agent is linked by, its own whichever task it works on, which its reader finds by the agent. */

@@ -45,9 +45,6 @@ import { useHeldThroughExit } from "../use-held-through-exit.js";
 import { useBusyPress } from "./busy-press.js";
 import { GitHubTokenDialog, TokenFacts } from "./github-dialog.js";
 
-/** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
-
 /** The row's name. */
 const TOKEN_LABEL = "GitHub personal access token";
 
@@ -97,7 +94,7 @@ function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React
   );
 
   return (
-    <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.GITHUB_ACCESS)} className={NO_CAPTURE}>
+    <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.GITHUB_ACCESS)}>
       <SettingsRow
         // Note that the row stands under the account's own, whose face is wider than a mark, so its words start where the account's do.
         lead={SETTINGS_ROW_LEAD.FACE}
@@ -105,7 +102,14 @@ function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React
           <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} size={PROVIDER_MARK_SIZE.ROW} />
         }
         label={<OneLine hint={wholeWordsHint(TOKEN_LABEL)}>{TOKEN_LABEL}</OneLine>}
-        description={token ? <TokenFacts token={token} /> : undefined}
+        description={
+          // Note that the token's facts are masked, because Settings shows its own words and the hint ends the token.
+          token ? (
+            <ReplayMask>
+              <TokenFacts token={token} />
+            </ReplayMask>
+          ) : undefined
+        }
         // Note that a row with nothing below draws no `below` at all, since its box keeps a margin.
         below={
           read.isError

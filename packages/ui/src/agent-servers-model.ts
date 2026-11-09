@@ -9,9 +9,9 @@ import {
   type IntegrationStatus,
   integrationAccountNames,
 } from "@repo/features/integration-wire";
+import { searchTokens } from "@repo/features/search-tokens";
 import { MCP_SERVER_LABEL, readFailedWords } from "@repo/features/words";
 import { integrationFound } from "./integration-search.js";
-import { searchTokens } from "./search-tokens.js";
 
 /**
  * agent-servers-model.ts -- what the MCP servers popover at an agent's composer says of each server: whether this agent has it on, or how to connect it; which section it stands under; and what a search of it finds.

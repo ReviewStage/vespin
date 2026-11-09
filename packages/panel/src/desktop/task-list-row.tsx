@@ -46,6 +46,7 @@ import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
+import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { TASK_STATUS_WORDS, TaskKey } from "../tasks/task-standing.js";
 import { openerOf } from "../tasks/use-link-standing.js";
@@ -343,6 +344,7 @@ export function TaskListRow({
       hint={card === undefined || rename.editing ? undefined : { Hint: RowHint, label: task.name }}
       disabled={actions.deletion.busy}
       onOpen={onOpen}
+      onOpenInTab={openTaskInTab(tasks.workspaces, task)}
       pressRef={press}
       depth={depth}
       nest={nest}

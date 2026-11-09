@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement } from "react";
+import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import {
@@ -14,8 +14,9 @@ import {
 /**
  * conversation.test.ts -- a log opens on its newest line, offers the way
  * back to it once the reader scrolls away, and asks for older lines as the
- * reader nears its top. jsdom lays nothing out, so the log's heights are
- * stood in for.
+ * reader nears its top; its foot keeps what it holds, as a reply being
+ * written does, as lines land above it. jsdom lays nothing out, so the
+ * log's heights are stood in for.
  */
 
 declare global {
@@ -33,14 +34,14 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
 });
 
-/** Lays out every log drawn from now on as `lines()` lines of 200px in a 600px box, its rows' block 16px down it. */
-function logsLaidOut(lines: () => number): void {
+/** Lays out every log drawn from now on as 2000px of lines in a 600px box, its rows' block 16px down it. */
+function logsLaidOut(): void {
   const tops = new WeakMap<Element, number>();
   const isLog = (element: Element) => element.getAttribute("role") === "log";
   vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
     this: HTMLElement,
   ) {
-    return isLog(this) ? lines() * 200 : 0;
+    return isLog(this) ? 2000 : 0;
   });
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
     this: HTMLElement,
@@ -59,7 +60,7 @@ function logsLaidOut(lines: () => number): void {
     this: Element,
     to: number,
   ) {
-    tops.set(this, Math.max(0, Math.min(to, isLog(this) ? lines() * 200 - 600 : 0)));
+    tops.set(this, Math.max(0, Math.min(to, isLog(this) ? 1400 : 0)));
   });
 }
 
@@ -74,10 +75,9 @@ function scroll(box: HTMLElement, top: number): void {
   });
 }
 
-/** Draws a long log of ten lines, asking for older lines through `onNearTop` where one is handed, and answers its box and a way to draw it again with other lines. */
+/** Draws a long log of ten lines, asking for older lines through `onNearTop` where one is handed, and answers its box. */
 function mountLog(onNearTop?: () => void) {
-  let keys = Array.from({ length: 10 }, (_, index) => `line-${index}`);
-  logsLaidOut(() => keys.length);
+  logsLaidOut();
   // jsdom has no `scrollTo` on an element, which the virtualizer writes through.
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
     configurable: true,
@@ -85,10 +85,11 @@ function mountLog(onNearTop?: () => void) {
       if (options?.top !== undefined) this.scrollTop = options.top;
     },
   });
+  const keys = Array.from({ length: 10 }, (_, index) => `line-${index}`);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  const draw = () =>
+  act(() =>
     root.render(
       createElement(
         Conversation,
@@ -105,14 +106,10 @@ function mountLog(onNearTop?: () => void) {
         ),
         createElement(ConversationScrollButton),
       ),
-    );
-  act(draw);
+    ),
+  );
   const box = container.querySelector<HTMLElement>("[role=log]") ?? assert.fail("the log");
-  const redraw = (next: string[]) => {
-    keys = next;
-    act(draw);
-  };
-  return { container, box, keys: () => keys, redraw };
+  return { container, box };
 }
 
 test("a long log opens on its newest line, and offers the way back to it once the reader scrolls away", () => {
@@ -139,12 +136,38 @@ test("a log asks for its older lines as the reader scrolls up near its top", () 
   assert.deepEqual(asked, ["older"], "a scroll up within a screen of the top asks for older lines");
 });
 
-test("a line put before a last line that stands still, as a reply box, keeps a reader at the end there", () => {
-  const { box, keys, redraw } = mountLog();
-  scroll(box, box.scrollTop);
-  assert.equal(box.scrollTop, 1400, "the log stands at its end");
-  const reply = keys().at(-1) ?? assert.fail("the reply box");
-  redraw([...keys().slice(0, -1), "sent", reply]);
-  scroll(box, box.scrollTop);
-  assert.equal(box.scrollTop, 1600, "the log follows on to its new end");
+test("a log's foot keeps what it holds as lines land above it, as a reply being written does", () => {
+  logsLaidOut();
+  // Note that the foot holds what it was first drawn with, as a draft holds its words and the files it reads.
+  let drafts = 0;
+  function Draft(): ReactNode {
+    const [draft] = useState(() => `draft ${++drafts}`);
+    return createElement("p", { "data-draft": "" }, draft);
+  }
+  let keys = Array.from({ length: 10 }, (_, index) => `line-${index}`);
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  const draw = () =>
+    root.render(
+      createElement(
+        Conversation,
+        null,
+        createElement(
+          ConversationContent,
+          null,
+          createElement(ConversationRows, {
+            keys,
+            estimate: 160,
+            gap: 12,
+            overscan: keys.length,
+            foot: () => createElement(Draft),
+            children: (index: number) => createElement("p", null, keys[index]),
+          }),
+        ),
+      ),
+    );
+  act(draw);
+  keys = [...keys, "reply"];
+  act(draw);
+  assert.equal(document.querySelector("[data-draft]")?.textContent, "draft 1");
 });

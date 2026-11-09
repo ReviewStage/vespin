@@ -13,6 +13,7 @@
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -25,7 +26,6 @@ import { KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { type PressedRows, pressRows, type RowWrite } from "../undo-stack.js";
 import { appStateIn } from "../use-app-state.js";
-import { isUnread } from "./inbox-model.js";
 
 /** What one toast says of read marks given to several items: how many the service took, and how many not. */
 export function markedNote(unread: boolean, landed: number, refused: number): string {

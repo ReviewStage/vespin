@@ -92,6 +92,8 @@ export interface AgentTranscriptControl {
   usage: AgentUsage | undefined;
   /** Who pays for the agent, as the last page said; nothing on a worker's, and for an agent from before payers. */
   payer: AgentPayer | undefined;
+  /** The starter's subscription a plan payer runs the agent on, as the last page said; nothing where it named none. */
+  payerSubscriptionId: string | undefined;
   /** What the agent's model's context holds as its newest step left it, as the last page said; nothing before a step ended, and on a worker's. */
   context: AgentContext | undefined;
   /** When the run under way began, as the last page said; nothing where it did not, which is where a worker's tab counts from. */
@@ -302,6 +304,7 @@ export function useAgentTranscript(input: {
     hostLost: word?.hostLost,
     usage: word?.usage,
     payer: word?.payer,
+    payerSubscriptionId: word?.payerSubscriptionId,
     context: word?.context,
     runStartedAt: word?.runStartedAt,
     pageStatus: word?.status,

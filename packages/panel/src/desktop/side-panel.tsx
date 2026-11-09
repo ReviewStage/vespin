@@ -9,6 +9,7 @@ import {
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { readingWords } from "@repo/features/words";
@@ -93,7 +94,7 @@ import { createPortal } from "react-dom";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { FindScope } from "../find-in-tab.js";
 import { drawnVisibly, focusSeek } from "../focus-seek.js";
 import { panelTabPlace } from "../links-at-hand.js";
@@ -161,7 +162,7 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import { cardTitle, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
+import { TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import {
   agentTranscript,
   readWholeTranscript,
@@ -1442,7 +1443,7 @@ function PanelTabs({
   const strip = inTaskOrder(kinds, panel.order, (entry) => entry.tab);
   // Note that only a task's panel hands its looks over, since an agent's page holds its panel under the agent's id.
   useStripLooks(LOOK_STRIP.PANEL, holder === SIDE_PANEL_HOLDER.TASK ? taskId : undefined, strip);
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   // ⌘W closes the tab chosen, as its menu's Close does; with none, the key
   // falls through to the menu bar, which closes the window (`app-menu.ts`).
   // Close others closes every tab but the one at `at`, then shows it; none where there is no other.
@@ -1504,7 +1505,7 @@ function PanelTabs({
       onCloseOthers: closeOthersOf(entry, at),
       pin: pinOf(entry),
       onCopy: entry.copy,
-      copyLink: linked === undefined ? undefined : copyLink(linked),
+      links: linked === undefined ? undefined : linkItemsOf(linked),
       onOpenInTask:
         agent === undefined || transcriptDoors === undefined
           ? undefined

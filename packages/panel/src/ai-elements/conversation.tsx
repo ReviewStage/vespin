@@ -35,12 +35,22 @@ import {
  * the log here draws its lines through `ConversationRows`, TanStack
  * Virtual's run (`@repo/ui/virtual-rows`), which keeps to the newest line
  * as the library's chat guide does: it opens at the end, a line appended
- * follows on to it while the reader stands near the end, as does a line put
- * before a last line that stands still, a reply box's, a line growing at
+ * follows on to it while the reader stands near the end, a line growing at
  * the end keeps them there, and lines put before the first leave the
  * reader's place where it was. The context the children read is the
  * registry's: whether the log is at its bottom (`isAtEnd()`), and a way to
  * go there (`scrollToEnd()`).
+ *
+ * As the guide's log does, the log's scroll box holds nothing after the run
+ * the virtualizer measures: what stands after the messages, a working line
+ * or a reply box, is the run's last row (`foot`), and so is the log's room
+ * at its end, which its last row wears (`.conversation-rows > [data-row-last]`, tasks.css). Note
+ * that the virtualizer follows a row appended only where the last row's key
+ * changes, so the foot is keyed by the lines before it: a line landing
+ * anywhere above it, before a last line that stays as one not yet sent
+ * does, changes it. The foot keeps its element as its key changes
+ * (`steadyLast`), so a reply being written in it keeps its words, its
+ * focus, and the files it is reading.
  *
  * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
  * the caller asks, and holds its lines in one block of its own inside it
@@ -175,7 +185,7 @@ export function ConversationContent({
       fadeInset={fadeInset}
       onScroll={onScroll}
     >
-      <div className={cn("conversation-log px-content-inset pt-section-gap pb-ui-20", className)}>
+      <div className={cn("conversation-log px-content-inset pt-section-gap", className)}>
         {children}
       </div>
     </ScrollArea>
@@ -183,11 +193,23 @@ export function ConversationContent({
 }
 
 /**
+ * The key of the log's foot after `keys`, which changes as a line lands
+ * anywhere before the foot, so the run's last key changes, which is what the
+ * virtualizer follows: by how many lines stand before it, and the last of
+ * them. Note that a row's key is one string (`VirtualRows`), so the foot's
+ * is those with a mark after them, as an Inbox thread's line of what
+ * happened is keyed by the message it follows.
+ */
+function footKeyAfter(keys: readonly string[]): string {
+  return `${keys.length}#${keys.at(-1) ?? ""}#foot`;
+}
+
+/**
  * The log's lines, drawn only near the view (`@repo/ui/virtual-rows`), in
- * the log's own scroll box, as one line of the log: lines after it, a
- * working line's, stand after the run. The run keeps to the newest line
- * as the log's header says, and keeps the reader's place as lines land
- * before its first.
+ * the log's own scroll box, as one line of the log, what stands after its
+ * lines drawn as its last row (`foot`). The run keeps to the newest line as
+ * the log's header says, and keeps the reader's place as lines land before
+ * its first.
  */
 export function ConversationRows({
   keys,
@@ -199,6 +221,7 @@ export function ConversationRows({
   rowClassName,
   "aria-label": label,
   handle,
+  foot,
   children,
 }: {
   keys: readonly string[];
@@ -216,21 +239,16 @@ export function ConversationRows({
   /** What the lines are called, to a reader. */
   "aria-label"?: string | undefined;
   handle?: RefObject<VirtualRowsHandle | null> | undefined;
+  /** Draws what stands after the lines, a working line or a reply box, as the run's last row, which wears `place` as a line does; none where nothing stands there. */
+  foot?: ((place: VirtualRowPlace) => ReactNode) | undefined;
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, hold, askOlder, isAtBottom, atBottom } = useConversation();
+  const { list, hold, askOlder, atBottom } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
-  // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an inbox thread's end, is followed here while the reader stood at the end.
-  const drawn = useRef(keys);
-  useLayoutEffect(() => {
-    const was = drawn.current;
-    drawn.current = keys;
-    if (isAtBottom && keys.length > was.length && keys.at(-1) === was.at(-1)) {
-      run.current?.scrollToEnd();
-    }
-  }, [keys, isAtBottom]);
+  const footed = foot !== undefined;
+  const rows = useMemo(() => (footed ? [...keys, footKeyAfter(keys)] : keys), [keys, footed]);
   useImperativeHandle(handle, () => {
     const now = () => run.current;
     return {
@@ -248,18 +266,21 @@ export function ConversationRows({
   return (
     <VirtualRows
       scroller={list}
-      keys={keys}
+      keys={rows}
       estimate={estimate}
       gap={gap}
       overscan={overscan}
       listItems={listItems}
-      className={className}
+      className={cn("conversation-rows", className)}
       rowClassName={rowClassName}
       aria-label={label}
       handle={run}
       onAtEnd={atBottom}
+      steadyLast={footed}
     >
-      {children}
+      {(index, place) =>
+        foot !== undefined && index === keys.length ? foot(place) : children(index, place)
+      }
     </VirtualRows>
   );
 }

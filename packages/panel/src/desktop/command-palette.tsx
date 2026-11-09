@@ -64,8 +64,16 @@
 import type { TasklessAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { holderName, type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
+import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  type MatchRange,
+  matchesTokens,
+  matchRanges,
+  searchTokens,
+} from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   TASK_CREATE_RELATION_KIND,
@@ -133,7 +141,6 @@ import {
   type SearchSubject,
   searchHit,
 } from "@repo/ui/search-score";
-import { type MatchRange, matchesTokens, matchRanges, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
 import {
@@ -198,14 +205,12 @@ import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { fileName } from "../tasks/file-ref-model.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, ItemMark } from "../tasks/inbox-item-parts.js";
-import { holderName, type InboxListed, inboxItemWords } from "../tasks/inbox-model.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
 import { agentEndMark, openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
-import { cardTitle } from "../tasks/tool-call-model.js";
 import { type AgentsControl, type HeldPeople, readAgentById } from "../tasks/use-agents.js";
 import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";

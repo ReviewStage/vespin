@@ -21,6 +21,7 @@ import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -249,7 +250,6 @@ import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import {
   calledAgent,
-  cardTitle,
   delegationView,
   isServerCallTool,
   loadedSkill,
@@ -346,9 +346,8 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * where the pull request the agent opened lives; every other address is
  * drawn and goes nowhere. No line here names a price: a price in the
  * window is the whole run's, said only on the model menu's last line
- * (`agentPayerLine`). Every word here is the agent's or the description's, so the
- * root is left out of the screen recording (`ph-no-capture`) as a second
- * line behind the recording's text masking. Under the transcript stands
+ * (`agentPayerLine`). Every word here is the agent's or the description's,
+ * which the screen recording masks. Under the transcript stands
  * the composer (`agent-composer.tsx`), with no head above either: where
  * the agent stands is its tab's glyph and the transcript's own lines, what
  * it runs on is the model chip at the box's foot, and what it published
@@ -2277,6 +2276,7 @@ function AgentTranscriptView({
   failedWith,
   working,
   phase = WORKING_PHASE.WORKING,
+  waitsUntil,
   startedAt,
   ended,
   endReason = FAILURE_REASON.OTHER,
@@ -2320,6 +2320,8 @@ function AgentTranscriptView({
   working: boolean;
   /** What the agent is doing while it works, which its working line says (`tabTurnOf`); working where unsaid. */
   phase?: WorkingPhase;
+  /** When the usage limit its open turn waits on resets, which a waiting line names; none where it waits on none. */
+  waitsUntil?: number | undefined;
   /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
@@ -2446,6 +2448,57 @@ function AgentTranscriptView({
     const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || origin !== undefined);
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
+    // What stands after the messages is the log's last row, so the virtualizer measures it as it does a message (`ConversationRows`' `foot`).
+    // Note that it stands too while a line not yet sent does, which stays last as the agent's lines land before it, so their landing changes the foot's key, which the virtualizer follows.
+    const footed =
+      working ||
+      ended !== undefined ||
+      endTrail !== undefined ||
+      (failed && connected) ||
+      undelivered.size > 0 ||
+      unsent.size > 0;
+    const foot = !footed
+      ? undefined
+      : () => (
+          <>
+            {working ? (
+              <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
+            ) : null}
+            {ended === undefined && endTrail === undefined ? null : (
+              <div
+                className="agent-end flex flex-col items-start gap-control-gap"
+                data-ended={ended === undefined ? undefined : ""}
+              >
+                {ended === undefined
+                  ? null
+                  : (signInCard ?? (
+                      <AgentEndRow
+                        ended={ended}
+                        endReason={endReason}
+                        keyProvider={keyProvider}
+                        onOpenApiKeys={onOpenApiKeys}
+                        about={failureAbout ?? { agentId, taskId }}
+                        press={endPress}
+                      />
+                    ))}
+                {endTrail}
+              </div>
+            )}
+            {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
+            {failed && connected ? (
+              <ErrorState
+                failure={failureShown({
+                  surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
+                  cause: failedWith ?? FAILURE_CONDITION.UNREAD,
+                  about: { agentId },
+                })}
+                onRetry={onRetry}
+              >
+                {TRANSCRIPT_FAILED_LINE}
+              </ErrorState>
+            ) : null}
+          </>
+        );
     return (
       <TranscriptAgent value={agentId}>
         <LiveDoors value={live}>
@@ -2475,6 +2528,7 @@ function AgentTranscriptView({
                   gap={0}
                   rowClassName={rowClassOf}
                   handle={rowsHandle}
+                  foot={foot}
                 >
                   {(at) => {
                     const entry = entries[at];
@@ -2539,42 +2593,6 @@ function AgentTranscriptView({
                     );
                   }}
                 </ConversationRows>
-                {working ? (
-                  <WorkingLine startedAt={startedAt} words={workingLineWords(phase)} />
-                ) : null}
-                {ended === undefined && endTrail === undefined ? null : (
-                  <div
-                    className="agent-end flex flex-col items-start gap-control-gap"
-                    data-ended={ended === undefined ? undefined : ""}
-                  >
-                    {ended === undefined
-                      ? null
-                      : (signInCard ?? (
-                          <AgentEndRow
-                            ended={ended}
-                            endReason={endReason}
-                            keyProvider={keyProvider}
-                            onOpenApiKeys={onOpenApiKeys}
-                            about={failureAbout ?? { agentId, taskId }}
-                            press={endPress}
-                          />
-                        ))}
-                    {endTrail}
-                  </div>
-                )}
-                {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
-                {failed && connected ? (
-                  <ErrorState
-                    failure={failureShown({
-                      surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
-                      cause: failedWith ?? FAILURE_CONDITION.UNREAD,
-                      about: { agentId },
-                    })}
-                    onRetry={onRetry}
-                  >
-                    {TRANSCRIPT_FAILED_LINE}
-                  </ErrorState>
-                ) : null}
               </ConversationContent>
               <ConversationScrollButton />
             </Conversation>
@@ -2685,7 +2703,7 @@ function AgentTabView({
   readModels: () => void;
   transcript: AgentTranscriptControl;
   composer: HeldComposer;
-  model: AgentModelControl;
+  model: AgentModelControl | undefined;
   servers: AgentServersControl;
   /** What the agent published, once the service has said; nothing before. */
   published: AgentPullRequestAnswer | undefined;
@@ -2953,6 +2971,7 @@ function AgentTabView({
                         failedWith={transcript.failedWith}
                         working={standing.working}
                         phase={standing.phase}
+                        waitsUntil={standing.waitsUntil}
                         // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                         startedAt={
                           !counts
@@ -3047,6 +3066,7 @@ function AgentTabView({
             readModels={readModels}
             usage={transcript.usage}
             payer={transcript.payer}
+            payerSubscriptionId={transcript.payerSubscriptionId}
             servers={servers}
             context={transcript.context}
             brief={agent.brief}

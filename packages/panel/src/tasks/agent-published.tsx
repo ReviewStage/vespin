@@ -40,6 +40,7 @@ import {
 import { MentionChipCard } from "./mention-chip.js";
 import { holderTaskId } from "./mention-holder.js";
 import { PullRequestMark } from "./pull-request-mark.js";
+import { usePullRequestsOnGitHub } from "./pull-request-opens.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { useLinkStanding } from "./use-link-standing.js";
 import { linkPressOf } from "./use-open-link.js";
@@ -56,9 +57,11 @@ import { linkPressOf } from "./use-open-link.js";
  * changes what the developer would do, and the lines added and removed. A
  * press of it opens its Pull request tab in the side panel
  * (`agent-pull-request-tab.tsx`) where a panel takes it, and GitHub's page
- * otherwise; a right-click offers what a press does not: copying its
- * GitHub link, the branch's name, or the command that checks it out, and
- * the pull request on GitHub, where the press opened its tab. The pointer resting on it hangs the
+ * otherwise, or where the account opens pull requests on GitHub
+ * (`pull-request-opens.ts`); a right-click offers what a press does not:
+ * copying its GitHub link, the branch's name, or the command that checks it
+ * out, and the pull request wherever the press did not open it, on GitHub
+ * or in its tab. The pointer resting on it hangs the
  * card the pull request's chip hangs (`mention-chip.tsx`): its key and
  * state, size, who opened it and when, branches, labels, and counts, as
  * the workspace's GitHub App answers them (`use-link-standing.ts`).
@@ -102,13 +105,13 @@ export const PUBLISHED_META_CLASS = "agent-published-meta inline-flex items-cent
  * What a ⋯ and right-click offer: the pull request's address on GitHub, its
  * Copy GitHub link, where one stands, and the branch's name and the command
  * that checks it out, each to the clipboard, where a branch is named; then
- * `opens`, a page of GitHub's, opened there.
+ * `opens`, the place a press does not open it in.
  */
 function branchActions(
   branch: string | null,
   doors: PublishedDoors,
   pullRequestUrl: string | undefined,
-  opens: string | undefined,
+  opens: MenuAction | undefined,
 ): MenuAction[][] {
   const copies: MenuAction[] = [
     ...(pullRequestUrl === undefined
@@ -135,11 +138,28 @@ function branchActions(
           },
         ]),
   ];
-  const open: MenuAction[] =
-    opens === undefined
-      ? []
-      : [commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => doors.openGitHub(opens), false)];
+  const open: MenuAction[] = opens === undefined ? [] : [opens];
   return [copies, open].filter((group) => group.length > 0);
+}
+
+/**
+ * A pull request's press and the menu's other place: where it opens in its
+ * Pull request tab (`inApp`), a press opens the tab and the menu GitHub's
+ * page, the other way round where the account opens pull requests on
+ * GitHub; where the view stands in no panel, a press opens the page and the
+ * menu nothing more.
+ */
+function pullRequestPlaces(
+  url: string,
+  inApp: (() => void) | undefined,
+  onGitHub: boolean,
+  doors: PublishedDoors,
+): { readonly press: () => void; readonly other: MenuAction | undefined } {
+  const openGitHub = () => doors.openGitHub(url);
+  if (inApp === undefined) return { press: openGitHub, other: undefined };
+  return onGitHub
+    ? { press: openGitHub, other: commandAction(PANEL_COMMAND.OPEN_IN_APP, inApp, false) }
+    : { press: inApp, other: commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, openGitHub, false) };
 }
 
 /** What the box's foot wears while a branch stands with no pull request: the branch's chip, which opens it compared on GitHub, and its ⋯, which its right-click drops too, offering the copies; nothing otherwise, the pull request's row standing over the box instead. */
@@ -222,14 +242,13 @@ export function PublishedRow({
 }): ReactNode {
   const state = pullRequestStateWord(pullRequest);
   const coarse = useCoarsePointer();
-  const inPanel = doors.openPullRequest;
-  // Note that Open on GitHub is offered only where a press opens the tab instead.
-  const actions = branchActions(
-    branch,
-    doors,
+  const places = pullRequestPlaces(
     pullRequest.url,
-    inPanel === undefined ? undefined : pullRequest.url,
+    doors.openPullRequest,
+    usePullRequestsOnGitHub(),
+    doors,
   );
+  const actions = branchActions(branch, doors, pullRequest.url, places.other);
   const mentionDoors = useMentionDoors();
   const mention = {
     kind: MENTION_KIND.LINK,
@@ -269,10 +288,7 @@ export function PublishedRow({
               </span>
             }
             hint={{ Hint: RowHint, label: pullRequest.title }}
-            onPress={() => {
-              if (inPanel === undefined) doors.openGitHub(pullRequest.url);
-              else inPanel();
-            }}
+            onPress={places.press}
             menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
             more={!coarse}
           />
@@ -282,14 +298,18 @@ export function PublishedRow({
   );
 }
 
-/** Opens one of the agent's pull requests: the one it stands on in its Pull request tab, another by its number in that tab, each on GitHub where the view stands in no panel. */
-function openDocked(docked: DockedPullRequest, doors: PublishedDoors): void {
-  const { pullRequest } = docked;
-  const inPanel = docked.current ? doors.openPullRequest : undefined;
-  const byNumber = doors.openPullRequestNumber;
-  if (inPanel !== undefined) inPanel();
-  else if (byNumber !== undefined) byNumber(pullRequest.number);
-  else doors.openGitHub(pullRequest.url);
+/** Where one of the agent's pull requests opens in the app: the one it stands on in its Pull request tab, another by its number in that tab; none where the view stands in no panel. */
+function dockedInApp(docked: DockedPullRequest, doors: PublishedDoors): (() => void) | undefined {
+  const { openPullRequest, openPullRequestNumber } = doors;
+  if (docked.current && openPullRequest !== undefined) return openPullRequest;
+  return openPullRequestNumber === undefined
+    ? undefined
+    : () => openPullRequestNumber(docked.pullRequest.number);
+}
+
+/** One of the agent's pull requests' press and the menu's other place (`pullRequestPlaces`). */
+function dockedPlaces(docked: DockedPullRequest, doors: PublishedDoors, onGitHub: boolean) {
+  return pullRequestPlaces(docked.pullRequest.url, dockedInApp(docked, doors), onGitHub, doors);
 }
 
 /** One pull request's segment of the split bar: its mark and number and title, its line counts where the segment has room, a press opening it, and a right-click offering its page and its link. */
@@ -303,7 +323,8 @@ function PublishedSegment({
   doors: PublishedDoors;
 }): ReactNode {
   const { pullRequest, branch } = docked;
-  const actions = branchActions(branch, doors, pullRequest.url, pullRequest.url);
+  const places = dockedPlaces(docked, doors, usePullRequestsOnGitHub());
+  const actions = branchActions(branch, doors, pullRequest.url, places.other);
   return (
     <ListRow
       leading={<PullRequestMark pullRequest={pullRequest} />}
@@ -314,7 +335,7 @@ function PublishedSegment({
         ) : undefined
       }
       hint={{ Hint: RowHint, label: pullRequest.title }}
-      onPress={() => openDocked(docked, doors)}
+      onPress={places.press}
       menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
       more={false}
     />
@@ -339,6 +360,7 @@ export function PublishedBar({
   docked: readonly DockedPullRequest[];
   doors: PublishedDoors;
 }): ReactNode {
+  const onGitHub = usePullRequestsOnGitHub();
   if (docked.length < 2) {
     return published === undefined || published.pullRequest === null ? null : (
       <PublishedRow pullRequest={published.pullRequest} branch={published.branch} doors={doors} />
@@ -363,7 +385,7 @@ export function PublishedBar({
               icon: <PullRequestMark pullRequest={each.pullRequest} />,
               detail: pullRequestStateLabel(each.pullRequest),
               detailPlace: MENU_DETAIL.BESIDE,
-              onSelect: () => openDocked(each, doors),
+              onSelect: dockedPlaces(each, doors, onGitHub).press,
             })),
         }}
       />

@@ -166,6 +166,8 @@
     "./tasks/shown-file": "./src/tasks/shown-file.js",
     "./pages/page-links": "./src/pages/page-links.js",
     "./pages/page-sandbox-app": "./src/pages/page-sandbox-app.js",
+    "./previews/preview-app": "./src/previews/preview-app.js",
+    "./previews/preview-links": "./src/previews/preview-links.js",
     "./providers/model-catalog": "./src/providers/model-catalog.js",
     "./providers/openai": "./src/providers/openai.js",
     "./providers/posthog": "./src/providers/posthog.js",

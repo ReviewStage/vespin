@@ -185,7 +185,7 @@ export function ComposerField({
   /** Whether the editor takes the caret as it mounts, over `takesFocus` and whoever is typing elsewhere; left out, those decide. Read as it mounts. */
   focus?: boolean | undefined;
   /** The span its keystrokes are timed under. */
-  keystrokeSpan?: KeystrokeSpanName;
+  keystrokeSpan?: KeystrokeSpanName | undefined;
   /** What stands over the field, a list it opened. */
   children?: ReactNode;
 }): React.JSX.Element {

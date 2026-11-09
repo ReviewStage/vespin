@@ -35,7 +35,8 @@
  * To add a tool, name it in `MEMBER_MCP_TOOL`, declare it with
  * `memberMcpTool`, and list it in `MEMBER_MCP_TOOLS`; its golden is settled
  * by `app.test.ts`, and `coverage.ts` refuses to build until it names the
- * hosted procedures that do what the tool does.
+ * hosted procedures that do what the tool does, and the CLI's
+ * `mcp-parity.ts` until it names the `vespin` command that does it.
  */
 
 import { randomUUID } from "node:crypto";
@@ -55,7 +56,7 @@ import { listTaskSections } from "@repo/database/models/task-section-store";
 import { readTask, readTaskWorkspace } from "@repo/database/models/task-store";
 import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { AGENT_TOOL, RETIRED_TOOL } from "@repo/features/agent-tools";
+import { RETIRED_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -85,6 +86,7 @@ import {
   INBOX_STATUS,
   inboxAnswersSchema,
 } from "@repo/features/inbox-wire";
+import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -108,11 +110,7 @@ import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@re
 import { Effect, Option, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
-import {
-  READ_AGENT_CHANGES,
-  READ_AGENT_CHANGES_INPUT,
-  runReadAgentChanges,
-} from "../agents/agent-changes-tool.js";
+import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
   ADDED_REPOSITORY_INPUT,
@@ -179,6 +177,7 @@ import {
   SAVE_MEMORY_TOOL,
   SEARCH_MEMORY_TOOL,
 } from "../agents/memory-tools.js";
+import { runListPortsShared, runSharePort, SHARE_PORT_TOOL } from "../agents/port-tools.js";
 import {
   CREATE_SECTION_TOOL,
   DELETE_SECTION_TOOL,
@@ -194,6 +193,7 @@ import {
   runCreateTask,
   runReadTask,
 } from "../agents/task-tools.js";
+import type { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
 import { WORKSPACE_AGENTS_LIST_LIMIT } from "../agents/workspace-agents.js";
 import {
   EXPERIMENT_OFF_REFUSAL,
@@ -212,6 +212,7 @@ import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
+import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import {
   COMMENT_TOOL_REFUSAL,
@@ -229,17 +230,13 @@ import {
 } from "../tasks/description-comments-procedures.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
-import {
-  answerAskAsMember,
-  closeThreadAsMember,
-  MEMBER_INBOX_TOOL,
-  readMemberInbox,
-  replyAsMember,
-} from "./inbox.js";
+import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
+  | AgentSandbox
+  | PageLinks
   | DatabaseServices
   | HttpClient.HttpClient
   | GitHubApp
@@ -278,45 +275,7 @@ interface MemberMcpToolWords {
   readonly input: MemberMcpToolInput;
 }
 
-/** The tools by name, each the name a model calls it by. */
-export const MEMBER_MCP_TOOL = {
-  LIST_WORKSPACES: "list_workspaces",
-  LIST_TASKS: AGENT_TOOL.LIST_TASKS,
-  READ_TASK: AGENT_TOOL.READ_TASK,
-  LIST_AGENTS: AGENT_TOOL.LIST_AGENTS,
-  READ_AGENT: AGENT_TOOL.READ_AGENT,
-  READ_AGENT_CHANGES,
-  LIST_MODELS: AGENT_TOOL.LIST_MODELS,
-  READ_PAGE: AGENT_TOOL.READ_PAGE,
-  CREATE_TASK: AGENT_TOOL.CREATE_TASK,
-  UPDATE_TASK: AGENT_TOOL.UPDATE_TASK,
-  EDIT_DESCRIPTION: AGENT_TOOL.EDIT_DESCRIPTION,
-  CREATE_SECTION: AGENT_TOOL.CREATE_SECTION,
-  DELETE_SECTION: AGENT_TOOL.DELETE_SECTION,
-  START_AGENT: AGENT_TOOL.START_AGENT,
-  MESSAGE_AGENT: AGENT_TOOL.MESSAGE_AGENT,
-  STOP_AGENT: AGENT_TOOL.STOP_AGENT,
-  UPDATE_AGENT: AGENT_TOOL.UPDATE_AGENT,
-  READ_INBOX: MEMBER_INBOX_TOOL.READ,
-  ANSWER_ASK: MEMBER_INBOX_TOOL.ANSWER,
-  REPLY_TO_THREAD: MEMBER_INBOX_TOOL.REPLY,
-  CLOSE_THREAD: MEMBER_INBOX_TOOL.CLOSE,
-  AGENT_PULL_REQUEST_ACTION: "agent_pull_request_action",
-  READ_COMMENTS: AGENT_TOOL.READ_COMMENTS,
-  COMMENT_ON_DESCRIPTION: "comment_on_description",
-  REPLY_TO_COMMENT: AGENT_TOOL.REPLY_TO_COMMENT,
-  UPDATE_COMMENT: AGENT_TOOL.UPDATE_COMMENT,
-  SEARCH_MEMORY: AGENT_TOOL.SEARCH_MEMORY,
-  SAVE_MEMORY: AGENT_TOOL.SAVE_MEMORY,
-  FORGET_MEMORY: "forget_memory",
-  LIST_AUTOMATIONS: AGENT_TOOL.LIST_AUTOMATIONS,
-  CREATE_AUTOMATION: AGENT_TOOL.CREATE_AUTOMATION,
-  UPDATE_AUTOMATION: AGENT_TOOL.UPDATE_AUTOMATION,
-  RUN_AUTOMATION: AGENT_TOOL.RUN_AUTOMATION,
-  DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
-} as const;
-
-export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];
+export { MEMBER_MCP_TOOL, type MemberMcpToolName };
 
 /**
  * The member tools since renamed, each with the tool in its place, which
@@ -1186,6 +1145,57 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
       AGENT_TOOL_REFUSAL.NO_AGENT,
       (call) => runUpdateAgent(call, asked),
     ),
+});
+
+// An agent's cloud sandbox's ports, through the agents' own `list_ports` and `share_port` (`../agents/port-tools.ts`), reached as the member by the Terminal tab's rule.
+
+/** The agent whose sandbox a call reaches, as the admitted member. */
+const memberPortsReach = (agentId: string) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    return { userId: member.userId, agentId };
+  });
+
+/** A share names the agent and the port the agents' own share names, in words that name the member's list. */
+const ShareAgentPortInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  port: describeWire(
+    SHARE_PORT_TOOL.inputSchema.fields.port,
+    `The port to share, one a server listens on as ${MEMBER_MCP_TOOL.LIST_AGENT_PORTS} lists ` +
+      "them; null to stop sharing.",
+  ),
+});
+
+const LIST_AGENT_PORTS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_AGENT_PORTS,
+  description:
+    "List the TCP ports a server listens on in the cloud sandbox of a coding agent the member " +
+    "can see, by its id, such as a dev server it started, the lowest first, and the port it " +
+    `shares by link now, if any, with that link, to choose one to share with ` +
+    `${MEMBER_MCP_TOOL.SHARE_AGENT_PORT}. A sandbox that is not running is never woken: it ` +
+    "answers running false with no ports, as does an agent on a Mac. Answers `accepted` with " +
+    "whether the sandbox is running, its ports, and the port shared with its link, or shared " +
+    "null, or `rejected` and why.",
+  input: AgentIdInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) => Effect.flatMap(memberPortsReach(asked.agentId), runListPortsShared),
+});
+
+const SHARE_AGENT_PORT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SHARE_AGENT_PORT,
+  description:
+    "Share a port of the cloud sandbox of a coding agent the member can see, by its id, by a " +
+    "link, so a running app, such as a dev server it started, opens from a browser, as the " +
+    "member's Share would: a member of the agent's workspace who can reach it opens it signed " +
+    "in. One port is " +
+    "shared at a time: sharing another replaces the first, and the link lives only while the " +
+    "sandbox runs; a sandbox that is not running is refused, never woken. Pass null to stop " +
+    "sharing. Answers `accepted` with the port and its link, or with shared null once sharing " +
+    `stopped, or \`rejected\` and why. ${MEMBER_MCP_TOOL.LIST_AGENT_PORTS} reads the link back.`,
+  input: ShareAgentPortInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ agentId, port }) =>
+    Effect.flatMap(memberPortsReach(agentId), (reach) => runSharePort(reach, { port })),
 });
 
 // The member's inbox (`inbox.ts`): the threads their agents ask them things on, read and worked as theirs.
@@ -2170,6 +2180,8 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_MESSAGE_AGENT_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
+  LIST_AGENT_PORTS_TOOL,
+  SHARE_AGENT_PORT_TOOL,
   READ_INBOX_TOOL,
   ANSWER_ASK_TOOL,
   REPLY_TO_THREAD_TOOL,

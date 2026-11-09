@@ -1,6 +1,7 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary, TasklessAgent } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
 import {
   inPinOrder,
   type PinPlace,
@@ -118,7 +119,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useConnected } from "../connection.js";
-import { LinkWorkspaceProvider } from "../copy-link-item.js";
+import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
@@ -1579,10 +1580,13 @@ function SidebarHomeRow({
   current,
   disabled,
   onOpen,
+  onOpenInTab,
 }: {
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the place in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <NavItem
@@ -1592,6 +1596,7 @@ function SidebarHomeRow({
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.HOME].chord} />}
       disabled={disabled}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Home
     </NavItem>
@@ -1609,11 +1614,14 @@ function SidebarTasksRow({
   current,
   disabled,
   onOpen,
+  onOpenInTab,
   onPreload,
 }: {
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the place in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
   /** Reads the Board's route ahead of a press, its chunk among it. */
   onPreload: () => void;
 }): React.JSX.Element {
@@ -1629,6 +1637,7 @@ function SidebarTasksRow({
       disabled={disabled}
       onPointerEnter={onPreload}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Tasks
     </NavItem>
@@ -1651,6 +1660,7 @@ function SidebarAutomationsRow({
   running,
   disabled,
   onOpen,
+  onOpenInTab,
 }: {
   current: boolean;
   failed: boolean;
@@ -1658,6 +1668,8 @@ function SidebarAutomationsRow({
   running: number;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the place in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <NavItem
@@ -1669,6 +1681,7 @@ function SidebarAutomationsRow({
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.AUTOMATIONS].chord} />}
       disabled={disabled}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Automations
     </NavItem>
@@ -2239,6 +2252,11 @@ function SidebarColumn({
   const newTaskShown = tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON);
   // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const phone = room === SHELL_ROOM.NARROW;
+  // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
+  const listedStep =
+    tasks.workspace === undefined ? undefined : (tasks.workspace.slug ?? tasks.workspace.id);
+  const inTab = (place: LinkPlace) =>
+    listedStep === undefined ? undefined : openInTabOf(linkOf(place, listedStep));
   const places = (
     <>
       <SidebarPlaces>
@@ -2253,12 +2271,18 @@ function SidebarColumn({
             >
               Search
             </NavItem>
-            <SidebarHomeRow current={atHome} disabled={!tasks.signedIn} onOpen={chosen(goHome)} />
+            <SidebarHomeRow
+              current={atHome}
+              disabled={!tasks.signedIn}
+              onOpen={chosen(goHome)}
+              onOpenInTab={inTab({ kind: LINK_PLACE.HOME })}
+            />
             <SidebarInboxRow
               waiting={waiting}
               current={inInbox}
               disabled={!tasks.signedIn}
               onOpen={chosen(openInbox)}
+              onOpenInTab={inTab({ kind: LINK_PLACE.INBOX })}
             />
           </>
         )}
@@ -2267,6 +2291,7 @@ function SidebarColumn({
             current={inBoard}
             disabled={!tasks.signedIn}
             onOpen={chosen(openBoard)}
+            onOpenInTab={inTab({ kind: LINK_PLACE.BOARD })}
             onPreload={board.preload}
           />
         )}
@@ -2276,6 +2301,7 @@ function SidebarColumn({
           running={automationsRunning}
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
+          onOpenInTab={inTab({ kind: LINK_PLACE.AUTOMATIONS })}
         />
       </SidebarPlaces>
       <SidebarRule />

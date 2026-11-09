@@ -173,7 +173,7 @@ import { useAppCommand } from "../app-commands.js";
 import { useScreenRef, useScreenSplit } from "../column-split.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { confirmFailure, failureShown, unreadShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useCreator } from "../member-directory.js";
@@ -1066,16 +1066,17 @@ export function runNowAction(running: boolean, onRunNow: () => void): MenuAction
  * run; and Delete, red, which asks first, last and alone.
  */
 export function automationActionGroups({
-  copyLink,
+  links,
   runNow,
   onDelete,
 }: {
-  copyLink: MenuAction | undefined;
+  /** Copy link and Open in new tab (`linkItems`); none where the page hands down no workspace. */
+  links: readonly MenuAction[];
   runNow: MenuAction | undefined;
   onDelete: () => void;
 }): MenuAction[][] {
   return [
-    copyLink === undefined ? [] : [copyLink],
+    [...links],
     runNow === undefined ? [] : [runNow],
     [{ label: "Delete", icon: <GLYPH.DELETE />, onSelect: onDelete, danger: true }],
   ].filter((group) => group.length > 0);
@@ -1102,12 +1103,12 @@ function AutomationActions({
   heading?: ReactNode;
 }): React.JSX.Element {
   const menu = useMenu(true);
-  const linkItem = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   const own =
     automation === undefined
       ? []
       : automationActionGroups({
-          copyLink: linkItem({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id }),
+          links: linkItemsOf({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id }),
           // Note that the desktop's toolbar stands Run now beside the ⋯, so only a phone's ⋯, the one given a lead, offers it.
           runNow: lead === undefined ? undefined : runNowAction(running, onRunNow),
           onDelete,

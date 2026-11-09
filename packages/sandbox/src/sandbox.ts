@@ -195,10 +195,14 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/s
 /**
  * How long a sandbox runs past its last touch: what every open and create
  * runs for, and how far ahead of now each touch puts its end, so this alone
- * decides when an idle sandbox stops. Five minutes, because an idle sandbox
- * bills its memory until it stops, and a resume from its snapshot is quick.
+ * decides when an idle sandbox stops. Three minutes, because an idle sandbox
+ * bills its memory until it stops, and a resume from its snapshot is quick:
+ * measured over a week of cloud agents, cutting five minutes to three left
+ * nine in a hundred next messages to a resume, about eleven seconds each,
+ * and below three each resume saved half as much. An agent on screen is
+ * touched every minute whatever this is (`use-warm-agent.ts`).
  */
-export const SANDBOX_IDLE = Duration.minutes(5);
+export const SANDBOX_IDLE = Duration.minutes(3);
 
 /**
  * How often whatever holds a sandbox in use touches it: a minute, well

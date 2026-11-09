@@ -1,3 +1,4 @@
+import type { InboxListed } from "@repo/features/inbox-list-model";
 import { LIST_INSET, List } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { type RefObject, useState } from "react";
@@ -7,7 +8,6 @@ import { useSteadyDoor } from "../steady-door.js";
 import { useInboxResolver } from "./inbox-close.js";
 import { useInboxRowPresses } from "./inbox-columns.js";
 import { InboxItemRow, inboxRowDraft } from "./inbox-list.js";
-import type { InboxListed } from "./inbox-model.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { choiceOf } from "./use-inbox-listing.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";

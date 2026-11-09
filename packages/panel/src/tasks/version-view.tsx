@@ -62,9 +62,8 @@ import { useOpenLink } from "./use-open-link.js";
  * version marks it, and a version still being read stands as
  * quiet blocks in the page's shape (`skeleton.tsx`). Restoring asks nothing:
  * a restore is itself a version the history keeps, so it happens at once
- * and its toast's Undo restores the one before it. Everything drawn is the description's words, so the root is left
- * out of the screen recording (`ph-no-capture`) as a second line behind the
- * recording's text masking. Standing alone on a phone, the page is headed as
+ * and its toast's Undo restores the one before it. Everything drawn is the description's words, which the
+ * screen recording masks. Standing alone on a phone, the page is headed as
  * a phone heads every page (`../desktop/phone-head.tsx`): the way back to the
  * versions, when the version was saved, and a ⋯ holding its restore.
  */

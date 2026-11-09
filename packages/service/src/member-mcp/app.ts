@@ -32,7 +32,11 @@ import { logStoreFailure } from "../http/store-failure.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { admitMember, type MemberMcpResourceClient } from "./admission.js";
 import { MEMBER_MCP_PATH, MEMBER_MCP_SCOPE, memberMcpResourceUrl } from "./resource.js";
-import { type MemberMcpRequestServices, memberMcpServer } from "./server.js";
+import {
+  type MemberMcpAgentSandbox,
+  type MemberMcpRequestServices,
+  memberMcpServer,
+} from "./server.js";
 import { MEMBER_MCP_TOOL, memberExperimentsOn, RENAMED_MEMBER_MCP_TOOL } from "./tools.js";
 
 /** The route the metadata's public paths are rewritten onto, and answered at. */
@@ -156,6 +160,7 @@ const renamedToolAnswer = /* @__PURE__ */ Effect.fn("web/memberMcpRenamedTool")(
 /** The server: the request admitted on its token, then answered by the SDK's handler over a server of its own as the admitted member. */
 const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function* (
   auth: MemberMcpAuth,
+  agentSandbox: MemberMcpAgentSandbox,
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   never,
@@ -179,7 +184,7 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
   );
   const services = yield* Effect.context<MemberMcpRequestServices>();
   const handler = createMcpHandler(() =>
-    memberMcpServer(services, admitted.success, experimentsOn),
+    memberMcpServer(services, agentSandbox, admitted.success, experimentsOn),
   );
   const answer = yield* Effect.promise(() => handler.fetch(request));
   return HttpServerResponse.raw(answer);
@@ -197,11 +202,23 @@ const metadataEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpMetadataEndpoin
   return HttpServerResponse.jsonUnsafe(metadata);
 });
 
-/** The group: the server and its metadata over the auth service's resource client, and the hosted vocabulary's own refusal for any other path. */
-export function memberMcpApp(auth: MemberMcpAuth): WebRoutes<MemberMcpRequestServices> {
+/** The metadata's route over the auth service's resource client. */
+const metadataRoute = (auth: MemberMcpAuth) =>
+  HttpRouter.add(ANY_METHOD, MEMBER_MCP_METADATA_ROUTE, hostedRefusing(metadataEndpoint(auth)));
+
+/** The group: the server, its tools reaching an agent's sandbox as the edge composes it, and its metadata over the auth service's resource client, and the hosted vocabulary's own refusal for any other path. */
+export function memberMcpApp(
+  auth: MemberMcpAuth,
+  agentSandbox: MemberMcpAgentSandbox,
+): WebRoutes<MemberMcpRequestServices> {
   return Layer.mergeAll(
-    HttpRouter.add(ANY_METHOD, MEMBER_MCP_PATH, mcpEndpoint(auth)),
-    HttpRouter.add(ANY_METHOD, MEMBER_MCP_METADATA_ROUTE, hostedRefusing(metadataEndpoint(auth))),
+    HttpRouter.add(ANY_METHOD, MEMBER_MCP_PATH, mcpEndpoint(auth, agentSandbox)),
+    metadataRoute(auth),
     hostedNotFoundRoute,
   );
+}
+
+/** The metadata alone, for the function that answers nothing else, so it composes no sandbox. */
+export function memberMcpMetadataApp(auth: MemberMcpAuth): WebRoutes<MemberMcpRequestServices> {
+  return Layer.mergeAll(metadataRoute(auth), hostedNotFoundRoute);
 }

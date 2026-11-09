@@ -50,12 +50,16 @@ import {
   chatGptDeviceLoginRequestSchema,
   chatGptDevicePollAnswerSchema,
   chatGptDeviceStartAnswerSchema,
+  chatGptDeviceStartRequestSchema,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeySaveRequestSchema,
   providerKeysAnswerSchema,
+  subscriptionIdSchema,
+  subscriptionLabelRequestSchema,
+  subscriptionOrderRequestSchema,
 } from "../provider-key-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
@@ -64,6 +68,9 @@ import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** A key's save is a provider and a key bounded at 512 characters, so a body past this is not one. */
 const PROVIDER_KEY_BODY_BYTES = 2_048;
+
+/** An order names at most fifty subscription ids of at most 64 characters each, so a body past this is not one. */
+const SUBSCRIPTION_ORDER_BODY_BYTES = 4_096;
 
 /** A memory's save is a workspace id, a statement of at most 400 characters at JSON's widest escape, and an id, so a body past this is not one. */
 const MEMORY_SAVE_BODY_BYTES = 4_096;
@@ -94,6 +101,20 @@ export const accountContract = {
     .meta(openapi({ method: HTTP_METHOD.PATCH, path: HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS }))
     .input(exactInput(providerKeyForAgentsRequestSchema))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  renameSubscription: declaredProcedure
+    .meta(bodyCap(PROVIDER_KEY_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.PUT, path: HOSTED_SERVICE_PATH.ACCOUNT_SUBSCRIPTION_LABEL }),
+    )
+    .input(exactInput(subscriptionLabelRequestSchema))
+    .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  reorderSubscriptions: declaredProcedure
+    .meta(bodyCap(SUBSCRIPTION_ORDER_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.PUT, path: HOSTED_SERVICE_PATH.ACCOUNT_SUBSCRIPTION_ORDER }),
+    )
+    .input(exactInput(subscriptionOrderRequestSchema))
+    .output(EffectSchema.flip(providerKeysAnswerSchema)),
   removeProviderKey: declaredProcedure
     .meta(
       openapi({
@@ -109,6 +130,7 @@ export const accountContract = {
             Object.values(PROVIDER_KEY_PROVIDER),
           ),
           [PROVIDER_KEY_QUERY.KIND]: EffectSchema.optionalKey(providerKeyKindSchema),
+          [PROVIDER_KEY_QUERY.SUBSCRIPTION_ID]: EffectSchema.optionalKey(subscriptionIdSchema),
         }),
       }),
     )
@@ -162,7 +184,10 @@ export const accountContract = {
     .output(EffectSchema.flip(memorySearchAnswerSchema)),
   startChatGptDeviceLogin: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.QUOTA_EXHAUSTED, HOSTED_API_ERROR.UPSTREAM_ERROR))
+    .meta(bodyCap(CHATGPT_DEVICE_LOGIN_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_CHATGPT_DEVICE }))
+    // Note that a start may send no body, as every desktop before `add` does.
+    .input(exactInput(EffectSchema.UndefinedOr(chatGptDeviceStartRequestSchema)))
     .output(EffectSchema.flip(chatGptDeviceStartAnswerSchema)),
   pollChatGptDeviceLogin: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.QUOTA_EXHAUSTED))

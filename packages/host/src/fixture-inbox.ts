@@ -19,8 +19,10 @@
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
-import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { AGENT_ATTACHMENT_TYPE, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
@@ -33,6 +35,7 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
+import { LINK_PLACE } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { TASK_PRIORITY, TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
@@ -45,7 +48,8 @@ import {
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
-import { FIXTURE_IDS } from "./fixture-stage.js";
+import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import { FIXTURE_IDS, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 /**
  * When the fixture landed, from which every instant here is counted back.
@@ -89,6 +93,9 @@ const AGENT = {
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
+
+/** The fixture's workspace by the name its addresses spell it with, as the panel's tasks fixture names it. */
+const FIXTURE_WORKSPACE_SLUG = "personal";
 
 /* ----- The items ----- */
 
@@ -158,7 +165,21 @@ function item(
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 
-/** The reference journey's task's items: a decision, an approval, a form, a notice with code, and a long thread. */
+/** The recorded thread's files: a still its words draw, and the recording sent after them, by the attachment each is read by. */
+const RECORDED = {
+  ITEM: fixtureId(10),
+  PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
+  VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
+} as const;
+
+/** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
+const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
+  { kind: LINK_PLACE.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  RECORDED.PICTURE,
+  FIXTURE_WORKSPACE_SLUG,
+);
+
+/** The reference journey's task's items: a decision, an approval, a form, a notice with code, a long thread, and a notice with a picture and a recording. */
 const INVITES_ITEMS: readonly InboxItem[] = [
   item(
     1,
@@ -293,6 +314,45 @@ const INVITES_ITEMS: readonly InboxItem[] = [
       { type: INBOX_ASK.ANSWER, ...OPEN },
     ),
   ]),
+  item(
+    10,
+    AGENT.INVITES,
+    "invite-recording",
+    "Recorded the invite flow",
+    [
+      {
+        ...agentSaid(
+          114,
+          25 * MINUTE,
+          [
+            "I walked the invite flow in the preview, from [@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) to the accepted page:",
+            "",
+            `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
+            "",
+            "The recording is under this. The expired page is still the placeholder.",
+          ].join("\n"),
+        ),
+        files: [
+          {
+            attachmentId: RECORDED.PICTURE,
+            name: "invite-page.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+        ],
+      },
+      {
+        ...agentSaid(115, 24 * MINUTE, "And the whole flow, sent to accepted:"),
+        files: [
+          {
+            attachmentId: RECORDED.VIDEO,
+            name: "invite-flow.webm",
+            mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
+          },
+        ],
+      },
+    ],
+    { unread: true },
+  ),
 ];
 
 /** The digest task's items: steps to do, an answer in words, and one answered. */
@@ -515,15 +575,38 @@ const OWN_TASKS: readonly TaskSummary[] = [
 ];
 
 /**
+ * The reference journey's task as a list with no tasks fixture lists it, the
+ * iOS app's: the panel's tasks fixture lists it whole, and this stands for
+ * it only where that one does not.
+ */
+const INVITES_TASK: TaskSummary = {
+  id: TASK.INVITES,
+  workspaceId: FIXTURE_IDS.WORKSPACE,
+  name: FIXTURE_TASK_NAME,
+  createdAt: LANDED - 2 * DAY,
+  updatedAt: LANDED - 4 * MINUTE,
+  repository: "ada/relay",
+  status: TASK_STATUS.IN_PROGRESS,
+  priority: TASK_PRIORITY.HIGH,
+  number: 42,
+  ownerId: ADA.userId,
+  createdBy: ADA,
+};
+
+/**
  * The list as these profiles draw it, from the list the tasks fixture draws:
  * the reference journey's task assigned to the account and its agent at
- * work, and the account's own two tasks after it, so every task holding an
- * item is listed. The same list under any other profile.
+ * work, standing in where the list holds none, and the account's own two
+ * tasks after it, so every task holding an item is listed. The same list
+ * under any other profile.
  */
 export function inboxTasksView(profile: string, list: TasksView): TasksView {
   if (!STAGED_PROFILES.has(profile)) return list;
+  const listed = list.tasks.some((task) => task.id === TASK.INVITES)
+    ? list.tasks
+    : [INVITES_TASK, ...list.tasks];
   const tasks = [
-    ...list.tasks.map((task) =>
+    ...listed.map((task) =>
       task.id === TASK.INVITES
         ? { ...task, ownerId: ADA.userId, createdBy: ADA, assignee: ADA, ...agentsLine(task.id) }
         : task,
@@ -620,6 +703,16 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
+  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId }) => {
+    if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    if (attachmentId === RECORDED.PICTURE) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+    }
+    if (attachmentId === RECORDED.VIDEO) {
+      return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+    }
+    return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+  },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

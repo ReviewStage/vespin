@@ -1,5 +1,5 @@
 /**
- * device-seams.ts -- what the host reads of the device, answered by Expo and React Native: its files, its ids, how an address opens, its socket, and whether the app is in the foreground.
+ * device-seams.ts -- what the host reads of the device, answered by Expo and React Native: its files, its ids, how an address opens, its socket, whether the app is in the foreground, the Keychain's cipher, and the sign-in's authentication session.
  *
  * `compose-mobile.ts` takes these as one value rather than reaching for the
  * device itself, so a test composes the same host over a folder and seams of
@@ -9,8 +9,10 @@
 import { randomUUID } from "expo-crypto";
 import { openURL } from "expo-linking";
 import { AppState } from "react-native";
+import { webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
 import { expoFileSystem } from "./expo-file-system.js";
+import { keychainCipher } from "./keychain-cipher.js";
 import { openRelaySocket } from "./relay-socket.js";
 
 export { hostStateRoot } from "./expo-file-system.js";
@@ -37,5 +39,7 @@ export function deviceSeams(): DeviceSeams {
     },
     openSocket: openRelaySocket,
     onAppActiveChanged,
+    cipher: keychainCipher,
+    authSession: webAuthSession,
   };
 }

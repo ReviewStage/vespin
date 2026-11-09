@@ -1,9 +1,9 @@
+import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import type { MenuAction, MenuEntry } from "../desktop/action-menu.js";
 import { type InboxResolver, resolveAction } from "./inbox-close.js";
-import { isUnread } from "./inbox-model.js";
 import { type RemindDoors, remindEntries } from "./inbox-remind.js";
 import { markReadItem } from "./task-menu-items.js";
 
@@ -35,6 +35,8 @@ interface InboxItemDoors {
 interface InboxItemActions {
   /** The menu's groups, with `lead` over the item's own: a phone's, standing for what its bar draws. */
   readonly groups: (lead?: readonly MenuAction[][]) => MenuEntry[][];
+  /** Opens the item in a tab of its own, which a middle-click on its row takes; none where the window opens no tabs. */
+  readonly openInTab: (() => void) | undefined;
 }
 
 /** The place an item is linked by: its id alone, whose agent and task its reader asks the service for. */
@@ -49,17 +51,18 @@ export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): Inb
     onMark === undefined
       ? undefined
       : markReadItem({ unread: isUnread(item), onMark: (unread) => onMark(item, unread) }, keyed);
-  const copyLink = useCopyLinkItem()(inboxItemPlace(item));
+  const links = useLinkItems()(inboxItemPlace(item));
+  const openInTab = useOpenInTab()(inboxItemPlace(item));
   const resolve = resolveAction([item], onResolve, keyed);
   const groups = (lead: readonly MenuAction[][] = []) =>
     [
       ...lead,
-      copyLink === undefined ? [] : [copyLink],
+      links,
       [
         ...(read === undefined ? [] : [read]),
         ...(remind === undefined ? [] : remindEntries(item, remind, keyed)),
         ...(resolve === undefined ? [] : [resolve]),
       ],
     ].filter((group) => group.length > 0);
-  return { groups };
+  return { groups, openInTab };
 }

@@ -1,5 +1,19 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
+import { askHeadWords } from "@repo/features/inbox-ask-words";
+import {
+  holderAutomationId,
+  holderName,
+  INBOX_HOLDER,
+  INBOX_SETTLED_STANDING,
+  type InboxHolder,
+  type InboxKnownAsk,
+  inboxSettledStanding,
+  itemWorkspaceId,
+  knownAsk,
+  readersItem,
+  sentStamp,
+} from "@repo/features/inbox-list-model";
 import {
   fieldValueWords,
   INBOX_ASK,
@@ -17,6 +31,7 @@ import {
   openAskOf,
 } from "@repo/features/inbox-wire";
 import { markdownLink } from "@repo/features/link-grammar";
+import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -110,7 +125,6 @@ import {
   WaitingMarker,
   WithdrawnWhy,
 } from "./inbox-ask-controls.js";
-import { askHeadWords } from "./inbox-ask-words.js";
 import { type InboxResolver, resolveAction } from "./inbox-close.js";
 import type { InboxCodeDoors } from "./inbox-code-card.js";
 import { INBOX_VIEW_ITEMS } from "./inbox-columns.js";
@@ -125,23 +139,7 @@ import {
   MessageWords,
   useMessageWriter,
 } from "./inbox-message.js";
-import {
-  answerOf,
-  askNumberedPick,
-  EMPTY_INBOX_DRAFT,
-  holderAutomationId,
-  holderName,
-  INBOX_HOLDER,
-  INBOX_SETTLED_STANDING,
-  type InboxDraft,
-  type InboxHolder,
-  type InboxKnownAsk,
-  inboxSettledStanding,
-  itemWorkspaceId,
-  knownAsk,
-  readersItem,
-  sentStamp,
-} from "./inbox-model.js";
+import { answerOf, askNumberedPick, EMPTY_INBOX_DRAFT, type InboxDraft } from "./inbox-model.js";
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
@@ -149,7 +147,6 @@ import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
-import { cardTitle } from "./tool-call-model.js";
 import { INERT_LINK_CLASS, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { opensAsLink } from "./use-open-link.js";
@@ -217,8 +214,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * tab on a press, an archived agent's card saying so. Every time shows its
  * moment in the shared tooltip, and an agent this window does not list, one
  * started on another Mac, still leads with a glyph. The pane shows words an
- * agent wrote and pictures of what it rendered, so its thread is out of the
- * session recording (`ph-no-capture`), and the viewer, drawn over the
+ * agent wrote and pictures of what it rendered: the recording masks its
+ * words and leaves its pictures out (`ph-no-capture`), and the viewer, drawn over the
  * window outside it, is out of it on its own.
  *
  * Words selected anywhere in the thread but the draft reply stand Reply
@@ -839,13 +836,12 @@ function closeNotes(events: ThreadEventsAfter): ReadonlySet<string> {
   return notes;
 }
 
-/** What a row of the thread draws: a line of what happened to it, a message, the line saying earlier messages are cut, a reply on its way, or the reader's draft reply. */
+/** What a row of the thread draws: a line of what happened to it, a message, the line saying earlier messages are cut, or a reply on its way; the reader's draft reply is the log's foot after them. */
 const THREAD_ROW = {
   EVENT: "event",
   MESSAGE: "message",
   EARLIER: "earlier",
   PENDING: "pending",
-  DRAFT: "draft",
 } as const;
 
 type ThreadRow =
@@ -860,8 +856,7 @@ type ThreadRow =
       readonly kind: typeof THREAD_ROW.PENDING;
       readonly key: string;
       readonly reply: PendingInboxReply;
-    }
-  | { readonly kind: typeof THREAD_ROW.DRAFT; readonly key: string };
+    };
 
 /** The height a row of the thread is taken to have before it is drawn, in pixels: a short message's. */
 const THREAD_ROW_ESTIMATE_PX = 96;
@@ -871,8 +866,9 @@ const THREAD_ROW_ESTIMATE_PX = 96;
  * draws them (`ConversationRows`): the lines of what happened before its
  * first message, then each message, a close's note drawn under the close's
  * own line instead, with the lines that follow it, the line saying earlier
- * messages are cut after the first, which always stands, the reader's
- * replies on their way, and the draft reply last. Note that the run names
+ * messages are cut after the first, which always stands, and the reader's
+ * replies on their way; the draft reply stands after them as the log's foot
+ * (`ConversationRows`' `foot`). Note that the run names
  * its rows by one string each (`VirtualRows`), and a line of what happened
  * is kept by the message it follows, so its row is that message's id with
  * the line's kind after it.
@@ -898,7 +894,6 @@ function threadRows(
     rows.push(...eventsAt(at));
   }
   for (const reply of pending) rows.push({ kind: THREAD_ROW.PENDING, key: reply.key, reply });
-  rows.push({ kind: THREAD_ROW.DRAFT, key: THREAD_ROW.DRAFT });
   return rows;
 }
 
@@ -1791,6 +1786,7 @@ export function InboxPane({
           readerId={readerId}
           control={control}
           agent={by.subject.agent}
+          agents={agents}
           thread={thread}
           controls={question}
           skills={agents.readSkills}
@@ -1899,7 +1895,7 @@ export function InboxPane({
         {/* The thread is a log as an agent's transcript is: each item opens at its newest message, the box at its end, and keeps to it while the reader is there; scrolled up, the way back floats over its foot. */}
         <Conversation list={board}>
           <ConversationContent
-            className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} ph-no-capture flex flex-col pt-section-gap`}
+            className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
           >
             {/* The item's words are drawn as documents: its own pictures read through the Inbox, and a link alone on its line as its card. */}
             <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
@@ -1916,6 +1912,7 @@ export function InboxPane({
                   className={INBOX_THREAD}
                   aria-label="Messages"
                   handle={run}
+                  foot={draftReply}
                 >
                   {(at, place) => {
                     const row = rows[at];
@@ -1957,8 +1954,6 @@ export function InboxPane({
                             place={place}
                           />
                         );
-                      case THREAD_ROW.DRAFT:
-                        return draftReply(place);
                       default:
                         return null;
                     }

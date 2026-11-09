@@ -1,4 +1,5 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
+import { NO_ITEMS } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { MentionLines } from "@repo/features/mention-link";
@@ -74,7 +75,7 @@ import {
 } from "../tasks/description-body.js";
 import { CommentFocusScope } from "../tasks/description-comments.js";
 import { useDescriptionEdit, useDescriptionRetry } from "../tasks/description-doors.js";
-import { keyedItem, NO_ITEMS, waitingByAgent } from "../tasks/inbox-model.js";
+import { keyedItem, waitingByAgent } from "../tasks/inbox-model.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
@@ -967,6 +968,7 @@ function DescriptionDocument({
         // Overview's agents stand open, its list the task's own rather than a fold under the description's head.
         folded={false}
         waiting={waitingOf}
+        shown={tasks.shown}
         onOpenAgent={(agentId) => openAgentTab(agentTab(agentId))}
         onOpenPullRequest={openPullRequestDoor}
         // Note that New agent stands at every width, a fresh plan's one next step, as the "+" offers it.

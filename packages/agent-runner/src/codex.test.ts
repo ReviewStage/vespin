@@ -622,6 +622,46 @@ it.effect(
     }),
 );
 
+it.effect("forks a thread app-server will not resume on this launch's model provider", () =>
+  Effect.gen(function* () {
+    const service = fakeService("What exact line");
+    const resumed = exchange(RESUMED, 2);
+    const mismatch: RecordedMessage = {
+      id: 3,
+      error: {
+        code: -32600,
+        message: "Model provider mismatch",
+        data: {
+          type: "modelProviderMismatch",
+          modelProvider: "vespin",
+          currentModelProvider: "openai",
+        },
+      },
+    };
+    const script: Script = {
+      exchanges: [
+        exchange(RESUMED, 0),
+        exchange(RESUMED, 1),
+        { method: "thread/resume", reply: [mismatch] },
+        { method: "thread/fork", reply: resumed.reply },
+        RESUMED_TURN,
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(
+      received(process, "thread/fork").map((params) => params.threadId),
+      [THREAD],
+    );
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+  }),
+);
+
 /** The resumed launch, its second message's steer refused as said, then, where it waits, run as the next turn. */
 function refusedSteer(error: NonNullable<RecordedMessage["error"]>, waits: boolean): Script {
   const refusal: RecordedMessage = { id: 4, error };

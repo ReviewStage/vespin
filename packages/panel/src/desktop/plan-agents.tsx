@@ -43,6 +43,9 @@ import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
  * Inbox row draw (`WaitingCount`), so a task opened on its plan says which
  * agent waits and on how much; the threads themselves, titles and all, are
  * the Inbox's to say, so the row stays one line.
+ * A row's ⋯, a right-click, a long press, and the menu key offer the
+ * agent's one menu, as its row on a person's page and its tab offer it:
+ * Copy link, Rename in the row's place, Archive, and Permanently delete.
  * Those agents come first, then those at work, then the newest started; an
  * archived agent is not listed. New agent follows them at every width, as
  * the strip's "+" offers it (`newAgentStarts`), so the group stands even on a
@@ -89,7 +92,7 @@ function listedOrder(
   );
 }
 
-/** One agent's row (`AgentListRow`): its tab's look and card, how many of its threads wait on the developer, its pull request's chip where it opened one, where it runs, its failed mark, and when it last moved. */
+/** One agent's row (`AgentListRow`), offering the agent's menu as a person's page does: its tab's look and card, how many of its threads wait on the developer, its pull request's chip where it opened one, where it runs, its failed mark, and when it last moved. */
 function PlanAgentRow({
   entry,
   waits,
@@ -97,6 +100,7 @@ function PlanAgentRow({
   agents,
   held,
   tab,
+  shown,
   more,
   onOpenPullRequest,
 }: {
@@ -107,6 +111,8 @@ function PlanAgentRow({
   agents: AgentsControl;
   held: HeldTranscripts;
   tab: MainTabsControl["tab"];
+  /** Whether the group is on screen, which its menu asks on. */
+  shown: boolean;
   /** Whether it draws its ⋯, as its list does. */
   more: boolean;
   onOpenPullRequest: () => void;
@@ -117,11 +123,11 @@ function PlanAgentRow({
   return (
     <AgentListRow
       agent={agent}
+      agents={agents}
+      shown={shown}
       subject={agentSubject(agents, row.id, held, chosen)}
       at={agentLastMovedAt(agent)}
       card={card}
-      models={agents.models}
-      devices={agents.macs}
       pullRequest={pullRequest}
       waits={waits}
       more={more}
@@ -144,6 +150,7 @@ export function PlanAgents({
   tab,
   folded,
   waiting,
+  shown,
   onOpenAgent,
   onOpenPullRequest,
   starts,
@@ -158,6 +165,8 @@ export function PlanAgents({
   folded: boolean;
   /** The task's Inbox items waiting on the developer, by the agent that posted each (`waitingByAgent`). */
   waiting: ReadonlyMap<string, readonly InboxItem[]>;
+  /** Whether the task's page is on screen, which each row's menu asks on. */
+  shown: boolean;
   onOpenAgent: (agentId: string) => void;
   onOpenPullRequest: (agentId: string) => void;
   /** What the group offers after its agents: New agent (`newAgentStarts`), and on a phone the agents' read again too (`phoneAgentStarts`). */
@@ -218,6 +227,7 @@ export function PlanAgents({
                     agents={agents}
                     held={held}
                     tab={tab}
+                    shown={shown}
                     more={more}
                     onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
                   />

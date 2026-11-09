@@ -323,6 +323,10 @@
    message's weighs nothing at all, so a block's own margin wins wherever it
    is set. */
 @layer components {
+  .conversation-log {
+    --conversation-log-end: var(--ui-space-20);
+  }
+
   .conversation-log > :not(:last-child) {
     margin-block-end: var(--ui-block-gap);
   }
@@ -330,6 +334,15 @@
   :where(.message-content > :not(:last-child)) {
     margin-block: 0 var(--ui-control-gap);
   }
+}
+
+/* A log's room at its end (../ai-elements/conversation.tsx) is worn by its
+   last row, never by the log, so the virtualizer measures it with the rows
+   and nothing stands after them in the scroll box, as TanStack Virtual's
+   chat guide has a log. It stands outside the layers, so it wins over a
+   row's own padding at its foot (an Inbox comment's `last:pb-0`). */
+.conversation-rows > [data-row-last] {
+  padding-block-end: var(--conversation-log-end);
 }
 
 /* A message's actions, their glyphs the control icon whichever way each is
@@ -2030,7 +2043,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the area's own scroll padding brings a control focused from below in
    past the fade as well. */
 .agent-log-over-composer {
-  padding-bottom: calc(var(--ui-scroll-fade) + var(--ui-space-4));
+  --conversation-log-end: calc(var(--ui-scroll-fade) + var(--ui-space-4));
 }
 
 /* A to-do list's glyphs (transcript-blocks.tsx's `TodoItems`) stand at 14px
@@ -2204,10 +2217,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
   .agent-composer .agent-context-button,
-  .agent-composer
-    > form:not(.inbox-answer)
-    .agent-composer-actions:has(.agent-context-button)
-    .dictate-button {
+  .agent-composer > form .agent-composer-actions:has(.agent-context-button) .dictate-button {
     display: none;
   }
 
@@ -2228,7 +2238,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the ⋯, and Send. */
 @container composer (width < 240px) {
   .agent-composer .agent-composer-attach,
-  .agent-composer > form:not(.inbox-answer) .dictate-button {
+  .agent-composer > form .dictate-button {
     display: none;
   }
 

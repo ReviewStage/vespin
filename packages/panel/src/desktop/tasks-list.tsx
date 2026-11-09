@@ -211,8 +211,9 @@ import { useTaskDrag } from "./use-row-drag.js";
  * chosen, by X on the row in hand, and as a Mac's list chooses them, ⌘-click
  * one in or out, ⇧-click a run, ⇧↑↓ grow it, ⌘A every row of an open group, and Esc
  * none, across every group, while a plain press still opens the task. While any is chosen, a bar floating at the foot of the page acts on
- * them all at once: Mark done, Set status, and Move to section, each
- * answered by one toast whose Undo puts every task back where it stood.
+ * them all at once (`tasks-selection.tsx`): Status and Move to section,
+ * each answered by one toast whose Undo puts every task back where it
+ * stood, and Permanently delete, asked first.
  */
 
 /** What the page is called, to a screen reader. */

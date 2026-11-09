@@ -21,7 +21,11 @@ import { Redacted, Result, Schema } from "effect";
  * binds the version too, so a sealed key moved onto another account's row,
  * another provider's, another kind's, or another version fails its tag
  * rather than opening as someone else's. An API key binds no kind, as every
- * key sealed before kinds does, so those rows open as they always have. Every failure to open is one
+ * key sealed before kinds does, so those rows open as they always have.
+ * Note that a subscription binds no row id either, because every
+ * subscription of a kind is the same account's: a seal moved onto another
+ * of its own subscriptions of that kind opens there, which binds nothing
+ * worth a re-seal of the rows from before an account could hold several. Every failure to open is one
  * answer, unreadable, which names no cause: a wrong key, a tampered byte,
  * and a version the environment no longer holds are all a key the service
  * must not use.
@@ -55,7 +59,7 @@ import { Redacted, Result, Schema } from "effect";
  * own (`luke/chatgpt-device-login/*`) and the account and the login bound
  * beside them, so the seal opens for no other login. The rewrap does not
  * visit those rows either, which a login's settling clears and the
- * account's next start replaces.
+ * account's next start deletes once its code lapsed.
  *
  * A workspace's environment variables, each one's value, are sealed the
  * same way for as long as the variable stands

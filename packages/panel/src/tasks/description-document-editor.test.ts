@@ -388,9 +388,7 @@ test("a click into a section opens the whole text in place, the caret where the 
 
   assert.equal(open().markdown, BODY);
   assert.deepEqual(open().placement, { x: 120, y: 48 });
-  assert.ok(
-    container.querySelector(".description-document-editor")?.classList.contains("ph-no-capture"),
-  );
+  assert.match(open().className, /\bph-no-capture\b/u, "the text is left out of the recording");
   assert.equal(title(container).textContent, DOCUMENT_NAME, "the title stays over the text");
 });
 

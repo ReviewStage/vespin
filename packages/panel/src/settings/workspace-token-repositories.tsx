@@ -43,7 +43,8 @@ import { GitHubOwnerRow, repositoryCount } from "./workspace-github-accounts.js"
  *
  * They stand under GitHub's row by owner, after the App's accounts and in
  * order of the owners' logins, each owner the same row every account is
- * (`GitHubOwnerRow`), with nothing saying how its repositories got there.
+ * (`GitHubOwnerRow`), each repository wearing the Token mark the picker's
+ * rows wear, which tells it from the App's.
  * A repository's adder or a workspace's owner or admin removes it; Remove
  * asks first, in the accent rather than red: adding it again undoes it, but
  * its agents stop reaching it for every member meanwhile. One the
@@ -312,8 +313,7 @@ export function TokenRepositoryPicker({
     <CheckedRepositoryChip
       rows={rows}
       picked={(offered ?? []).map((one) => one.fullName).filter(isOn)}
-      pictures={pictures}
-      empty={WORDS.ADD_SEVERAL}
+      label={WORDS.ADD_SEVERAL}
       note={
         offered === undefined
           ? list.isError
@@ -400,7 +400,10 @@ function TokenOwnerRow({
       <GitHubOwnerRow
         login={owner.login}
         line={repositoryCount(owner.repositories.length)}
-        names={owner.repositories.map(nameOf)}
+        repositories={owner.repositories.map(({ fullName }) => ({
+          repository: fullName,
+          token: true,
+        }))}
         actions={actions}
       />
       <ConfirmDialog

@@ -29,9 +29,8 @@ import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.
  * control beside it. A card is a surface the pointer crosses onto: its words
  * can be selected, and its presses go no further than the card, because the
  * portal still bubbles them through the tree it was drawn from, and a card
- * hung from a mark inside a row's button would otherwise press the row. Its
- * words are the app's, so a card is left out of a session recording whole,
- * by the recorder's fixed `ph-no-capture` class. A finger has no hover, so
+ * hung from a mark inside a row's button would otherwise press the row. A
+ * card's words are masked in a session recording as every word is. A finger has no hover, so
  * its touch arriving on a card, or lifting off it, tells the app nothing of
  * a pointer resting there; its press still does.
  */

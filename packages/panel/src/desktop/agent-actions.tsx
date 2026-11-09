@@ -15,7 +15,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { agentPlace, useCopyLinkItem } from "../copy-link-item.js";
+import { agentPlace, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { useThisMac } from "../machine-name.js";
 import { renameWrite } from "../rename-write.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -94,8 +94,8 @@ interface PinDoor {
 export interface AgentMenuDoors {
   /** Whether the menu is the chosen tab's or the page's, whose Show terminal alone prints ⌘J, which opens the chosen agent's terminal. */
   chosen?: boolean | undefined;
-  /** Copies the link of what the menu is about (`copy-link-item.tsx`). */
-  copyLink?: MenuAction | undefined;
+  /** Copy link, and Open in new tab where the window opens tabs, for what the menu is about (`copy-link-item.tsx`'s `linkItems`). */
+  links?: readonly MenuAction[] | undefined;
   /** Copies the agent's transcript, concise or full. */
   onCopy?: ((copy: TranscriptCopy) => void) | undefined;
   /** Opens the agent's name's field where the surface draws its name. */
@@ -130,7 +130,8 @@ export interface AgentMenuDoors {
 
 /**
  * The agent's menu, built once for every surface that draws it, in the
- * groups every menu of the window keeps: Copy link and the transcript's two
+ * groups every menu of the window keeps: Copy link, Open in new tab in a
+ * browser, and the transcript's two
  * copies; Rename and the read mark; Pin and Move to section; Show terminal,
  * Show browser where a phone offers it, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
@@ -143,15 +144,14 @@ export interface AgentMenuDoors {
  * with few doors draws the few groups it has in the same order.
  */
 export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
-  const { copyLink, onCopy, onRename, read, agentPin, section, onOpenTerminal, onOpenLocal } =
-    doors;
+  const { links, onCopy, onRename, read, agentPin, section, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack } = doors;
   const { addRepository, moveTo, archive, deletion } = doors;
   const chosen = doors.chosen === true;
   const lettered = chosen || doors.rowKeys === true;
   const copies: MenuEntry[] = [
-    ...(copyLink === undefined ? [] : [copyLink]),
+    ...(links ?? []),
     // Note that the two copies share one Copy transcript beside Copy link, so the menu leads with one copy of the agent's words rather than two.
     ...(onCopy === undefined
       ? []
@@ -242,7 +242,7 @@ export type AgentDoors = Pick<
   | "moveTo"
   | "archive"
   | "deletion"
-  | "copyLink"
+  | "links"
 >;
 
 /**
@@ -281,6 +281,8 @@ export interface AgentTerminalDoors {
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
 export interface AgentActions {
   readonly doors: AgentDoors;
+  /** Opens the agent in a tab of its own, which a middle-click on its row takes; none where the window opens no tabs. */
+  readonly openInTab: (() => void) | undefined;
   /** The rename its Rename opens; none while what it stands under is archived. */
   readonly rename: InlineRename | undefined;
   readonly dialog: React.JSX.Element;
@@ -387,7 +389,8 @@ export function useAgentActions(
 ): AgentActions {
   const { label, shown, terminals, onOpenBrowser, onDeleted } = input;
   const copied = useTranscriptCopier();
-  const copyLink = useCopyLinkItem()(agentPlace(agent.id));
+  const links = useLinkItems()(agentPlace(agent.id));
+  const openInTab = useOpenInTab()(agentPlace(agent.id));
   const renaming = useMutation(agents.rename.options);
   const rename = useInlineRename(agent.id, renameWrite(renaming, agents.rename));
   const archive = useAgentArchive(agent, agents, shown);
@@ -438,8 +441,9 @@ export function useAgentActions(
       moveTo,
       archive: agent.archivedAt === undefined ? archive.action : unarchive,
       deletion: deletion.action,
-      copyLink,
+      links,
     },
+    openInTab,
     rename: renamable ? rename : undefined,
     dialog: (
       <>

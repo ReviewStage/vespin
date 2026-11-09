@@ -35,8 +35,8 @@
  * (`REPLAY_MASKED`), so what its caller hands it is masked too. Words a
  * caller hands as nodes are the caller's to mark, inside the component. A
  * page's title in the bar across its top (`Toolbar`) takes the same opt-in
- * (`titleReplayUnmasked`). A tooltip and a hover card take none, since the
- * recording leaves them out whole (`ph-no-capture`).
+ * (`titleReplayUnmasked`). A tooltip and a hover card take none, so their
+ * words are always masked.
  *
  * Two things reach the recording past its masking, and each is answered
  * here, once, for every surface that has one.

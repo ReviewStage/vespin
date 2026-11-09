@@ -260,6 +260,7 @@ export function SidebarAgent({
           unread={isUnread}
           hint={editing ? undefined : { Hint: RowHint, label: name }}
           onPress={editing ? undefined : onOpen}
+          onOpenInTab={actions.openInTab}
           menu={editing ? undefined : rowMenu("Agent", withRowMoves(groups, rowPlace), shown, true)}
           more={!coarse}
           actionsAt={LIST_ROW_ACTIONS.HOVER}

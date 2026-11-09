@@ -24,6 +24,7 @@ import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
+import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
@@ -642,6 +643,53 @@ test("⌘-clicking a section's task and one under Tasks chooses both, opening ne
     [INVITES.id, TASK_STATUS.DONE],
     [RETRIES.id, TASK_STATUS.DONE],
   ]);
+});
+
+test("in a browser, a middle-click on a place or a task opens its address in a tab of its own, its menu offers Open in new tab under Copy link, and a ⌘-click still chooses it", async () => {
+  const tabbed: string[] = [];
+  const opened: string[] = [];
+  onTestFinished(
+    fakeAppPlatform({ ...QUIET_PANEL, openInTab: (link: string) => tabbed.push(link) }),
+  );
+  const sidebar = await mountSidebar([], SECTIONS, { onResume: (taskId) => opened.push(taskId) });
+  const press = (button: HTMLElement, init: MouseEventInit) =>
+    act(() => {
+      button.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, cancelable: true, ...init }),
+      );
+      button.dispatchEvent(
+        new MouseEvent(init.button === 1 ? "auxclick" : "click", {
+          bubbles: true,
+          cancelable: true,
+          ...init,
+        }),
+      );
+    });
+  const inbox =
+    [...sidebar.querySelectorAll<HTMLElement>("button")].find(
+      (each) => heardName(each) === "Inbox",
+    ) ?? assert.fail("no Inbox row");
+  const retries =
+    [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
+      each.textContent?.includes(RETRIES.name),
+    ) ?? assert.fail(`no ${RETRIES.name} row`);
+
+  press(inbox, { button: 1 });
+  press(retries, { button: 1 });
+  assert.deepEqual(tabbed, [
+    "https://vespin.dev/workspace-personal/inbox",
+    "https://vespin.dev/workspace-personal/task/0a1b2c3d-0000-4000-8000-100000000002",
+  ]);
+  assert.deepEqual(opened, [], "a middle-click opens nothing in this tab");
+
+  press(retries, { button: 0, metaKey: true });
+  assert.equal(retries.getAttribute("aria-description"), "Selected");
+  assert.equal(tabbed.length, 2, "a ⌘-click opens no tab");
+  assert.deepEqual(opened, []);
+
+  openRowMenu(sidebar, INVITES.name);
+  const labels = menuLabels();
+  assert.equal(labels[labels.indexOf("Copy link") + 1], "Open in new tab");
 });
 
 test("a plain click on any row, with tasks chosen and no bar to let them go, opens it and chooses none", async () => {

@@ -18,11 +18,14 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { GitHubSetup } from "./setup-github.js";
 
 /**
- * Setup's GitHub step over a workspace the App reaches: its card stands
- * checked, naming the owners reached. And the token's picker, which adds
- * several repositories in one open menu and keeps the token's card through
- * Back; the shared menu's checks and words are New task's tests' to hold.
- * Synthetic throughout.
+ * Setup's GitHub step over a workspace the App reaches: GitHub's row
+ * counting the repositories, every one listed under it, and its Add
+ * repositories going back to GitHub. The token's paste, which refuses what
+ * no token could be. And the token's picker, which adds several
+ * repositories in one open menu, stands as the row's Add repositories once
+ * they are reached, and keeps the token's card through Back; the shared
+ * menu's checks and words are New task's tests' to hold. Synthetic
+ * throughout.
  */
 
 const WORKSPACE = "workspace-acme";
@@ -50,17 +53,25 @@ async function settle(): Promise<void> {
   await settleQueries(ticks);
 }
 
-test("a workspace reached through the App draws the App's card checked, its done line naming the owners", async () => {
+test("a workspace the App reaches draws GitHub's row counting its repositories, each listed under it by whole name with the token's marked, and its Add repositories opens GitHub's install page", async () => {
   holdRepositoryLists(handHostReads({}).deliverRepositoryLists, () => ({
     repositories: {
       installed: true,
       repositories: [
         reached("octo/tools", 2, GITHUB_ACCESS.APP),
-        reached("acme/web", 1, GITHUB_ACCESS.APP),
+        reached("acme/web", 1, GITHUB_ACCESS.TOKEN),
       ],
       installationUrl: "https://github.com/apps/luke/installations/new",
     },
   }));
+  const connects: unknown[] = [];
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.WORKSPACE_GITHUB_CONNECT]: (payload) => {
+      connects.push(payload);
+      return Promise.resolve(undefined);
+    },
+  });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -72,21 +83,27 @@ test("a workspace reached through the App draws the App's card checked, its done
     ),
   );
 
-  // Note that the step checks a route once the repositories it reaches reach their query.
-  await vi.waitFor(() => {
-    const checked =
-      container.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]') ??
-      assert.fail("the step checks a route");
-    assert.equal(checked.textContent?.includes("GitHub App"), true, checked.textContent ?? "");
-    assert.equal(
-      container.textContent?.includes("2 repositories on octo and acme through the GitHub App"),
-      true,
-      container.textContent ?? "",
-    );
-  });
+  // Note that the step draws GitHub's row once the repositories it reaches reach their query.
+  await vi.waitFor(() =>
+    assert.match(container.textContent ?? "", /GitHub.*2 repositories/u, container.textContent),
+  );
+  assert.equal(container.querySelector('[role="radio"]'), null, "the cards give way");
+  assert.deepEqual(
+    [...container.querySelectorAll("li")].map((line) => line.textContent),
+    ["octo/tools", "acme/webToken"],
+  );
+  act(() =>
+    (
+      [...container.querySelectorAll("button")].find(
+        (each) => each.textContent === "Add repositories",
+      ) ?? assert.fail("no Add repositories")
+    ).click(),
+  );
+  await settle();
+  assert.deepEqual(connects, [{ workspaceId: WORKSPACE }]);
 });
 
-test("a paste too short to be a token says GitHub's invalid words on the token's card until it is edited, and is sent nowhere", async () => {
+test("a paste too short to be a token, entered, says GitHub's invalid words on the token's card until it is edited, and is sent nowhere", async () => {
   holdRepositoryLists(handHostReads({}).deliverRepositoryLists, () => ({
     repositories: {
       installed: false,
@@ -120,21 +137,17 @@ test("a paste too short to be a token says GitHub's invalid words on the token's
     ) ?? assert.fail("the step offers the token");
   act(() => radio.click());
   await settle();
-  const field =
-    [...container.querySelectorAll("label")].find((each) => each.textContent === "Classic token")
-      ?.control ?? assert.fail("no token field");
+  const control = [...container.querySelectorAll("label")].find(
+    (each) => each.textContent === "Paste the token",
+  )?.control;
+  const field = control instanceof HTMLInputElement ? control : assert.fail("no token field");
   const type = (value: string) =>
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, value);
       field.dispatchEvent(new Event("input", { bubbles: true }));
     });
   type("ghp_bad");
-  act(() =>
-    (
-      [...container.querySelectorAll("button")].find((each) => each.textContent === "Save") ??
-      assert.fail("no Save")
-    ).click(),
-  );
+  act(() => field.form?.requestSubmit());
   await settle();
 
   assert.match(container.textContent ?? "", /GitHub rejected this token\./u);
@@ -150,7 +163,7 @@ function reached(fullName: string, updatedAt: number, access: GitHubAccess): Git
   return { owner, name, fullName, defaultBranch: "main", private: true, updatedAt, access };
 }
 
-test("the token's picker adds several repositories in one open menu and keeps standing once the workspace reaches them, and taking them all back after Back keeps the token's card", async () => {
+test("the token's picker adds several repositories in one open menu, stands as Add repositories on GitHub's row over the repositories once they are reached, and taking them all back after Back keeps the token's card", async () => {
   const reach = [
     reached("octo/tools", 2, GITHUB_ACCESS.TOKEN),
     reached("octo/notes", 1, GITHUB_ACCESS.TOKEN),
@@ -223,6 +236,10 @@ test("the token's picker adds several repositories in one open menu and keeps st
   await settle();
   await act(() => lists.again());
   await settle();
+  assert.deepEqual(
+    [...container.querySelectorAll("li")].map((line) => line.textContent),
+    ["octo/toolsToken", "octo/notesToken"],
+  );
   // Back draws the step again, which forgets the card last pressed.
   act(() => first.unmount());
   draw();

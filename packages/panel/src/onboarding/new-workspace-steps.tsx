@@ -123,9 +123,7 @@ function NewWorkspaceStep({ tasks, onClose }: NewWorkspaceStepsProps): React.JSX
       exit={exit}
       title={made === undefined ? "Create a workspace" : "Your new workspace"}
       description={
-        made === undefined
-          ? "Tasks, agents, and repositories, shared with your team."
-          : "Change its name or photo, or invite more of your team."
+        made === undefined ? "Tasks, agents, and repositories, shared with your team." : undefined
       }
       foot={
         <AuthStepFoot
