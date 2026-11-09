@@ -88,6 +88,13 @@ export const inboxItem = pgTable(
     closedBy: text("closed_by").references(() => user.id, { onDelete: "set null" }),
     postedAt: timestamptz("posted_at").notNull(),
     /**
+     * Whether the latest message on the thread is a member's, kept by every
+     * write and delete of a message (`inbox-store.ts`), so a thread still
+     * asking whose member followed up reads as its agent's turn in a read
+     * that cannot order the thread, a count among them.
+     */
+    memberWroteLast: boolean("member_wrote_last").notNull().default(false),
+    /**
      * When the item was last answered or closed; null while it is open, and
      * on an item settled before the column was kept, which a read takes as
      * its last change until a message on its thread first moves that, the

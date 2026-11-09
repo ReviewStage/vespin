@@ -89,6 +89,7 @@ import {
   like,
   max,
   ne,
+  not,
   notExists,
   or,
   type SQL,
@@ -328,6 +329,14 @@ const NOTICE = sql`${inboxItem.openAskMessageId} is null`;
 
 /** Whether the item holds an ask open: open, and no notice. */
 const ASKING = sql<boolean>`(${inboxItem.status} = ${INBOX_STATUS.OPEN} and not (${NOTICE}))`;
+
+/**
+ * Whether the item is its agent's turn: it holds an ask open and a member
+ * wrote its thread's latest message, a follow-up the agent owes an answer
+ * to, as the panel reads it (`inboxAgentsTurn`). It waits on no reader
+ * until the agent posts again, though its ask stands and takes an answer.
+ */
+const AGENTS_TURN = sql<boolean>`(${ASKING} and ${inboxItem.memberWroteLast})`;
 
 const ITEM_TABLE = sql.identifier(getTableName(inboxItem));
 const ITEM_UPDATED_AT = sql`${ITEM_TABLE}.${sql.identifier(inboxItem.updatedAt.name)}`;
@@ -726,7 +735,7 @@ const MessageWriteSchema = Schema.Struct({
 });
 
 /** The message written on the item's thread; nothing where a message of the item's stands under its key already. */
-const insertMessage = SqlSchema.findOneOption({
+const insertMessageRow = SqlSchema.findOneOption({
   Request: MessageWriteSchema,
   Result: Schema.Struct({ id: Schema.String }),
   execute: ({ now, ...message }) =>
@@ -738,6 +747,47 @@ const insertMessage = SqlSchema.findOneOption({
         .returning({ id: inboxMessage.id }),
     ),
 });
+
+/** Whether a member wrote the item's latest message, kept on the item as written. */
+const keepLastWriter = SqlSchema.void({
+  Request: Schema.Struct({ itemId: Schema.String, memberWroteLast: Schema.Boolean }),
+  execute: ({ itemId, memberWroteLast }) =>
+    Database.use((db) =>
+      db.update(inboxItem).set({ memberWroteLast }).where(eq(inboxItem.id, itemId)),
+    ),
+});
+
+/** Whether a member wrote the item's latest message, read again from its thread as it now stands, after a message is taken off it. */
+const rereadLastWriter = SqlSchema.void({
+  Request: Schema.Struct({ itemId: Schema.String }),
+  execute: ({ itemId }) =>
+    Database.use((db) =>
+      db
+        .update(inboxItem)
+        .set({
+          memberWroteLast: sql`coalesce((select ${inboxMessage.author} = ${INBOX_MESSAGE_AUTHOR.MEMBER} from ${inboxMessage} where ${inboxMessage.itemId} = ${itemId} order by ${inboxMessage.createdAt} desc, ${inboxMessage.id} desc limit 1), false)`,
+        })
+        .where(eq(inboxItem.id, itemId)),
+    ),
+});
+
+/**
+ * The message written on the item's thread, which is its latest, and the
+ * item marked by who wrote it (`memberWroteLast`); nothing where a message
+ * of the item's stands under its key already, which marks nothing.
+ */
+function insertMessage(
+  message: typeof MessageWriteSchema.Type,
+): InboxStoreEffect<Option.Option<{ readonly id: string }>> {
+  return Effect.tap(insertMessageRow(message), (written) =>
+    Option.isNone(written)
+      ? Effect.void
+      : keepLastWriter({
+          itemId: message.itemId,
+          memberWroteLast: message.author === INBOX_MESSAGE_AUTHOR.MEMBER,
+        }),
+  );
+}
 
 const MessageFileWriteSchema = Schema.Struct({
   userId: Schema.String,
@@ -913,7 +963,7 @@ const touchItem = SqlSchema.void({
 });
 
 /** The message the member's client wrote under its key on the item, deleted with its files; nothing else of the thread is. */
-const deleteMessage = SqlSchema.void({
+const deleteMessageRow = SqlSchema.void({
   Request: Schema.Struct({ itemId: Schema.String, clientKey: Schema.String }),
   execute: ({ itemId, clientKey }) =>
     Database.use((db) =>
@@ -922,6 +972,14 @@ const deleteMessage = SqlSchema.void({
         .where(and(eq(inboxMessage.itemId, itemId), eq(inboxMessage.clientKey, clientKey))),
     ),
 });
+
+/** The member's message under its key deleted, as `deleteMessageRow` deletes it, and who wrote the item's latest message read again. */
+function deleteMessage(target: {
+  readonly itemId: string;
+  readonly clientKey: string;
+}): InboxStoreEffect<void> {
+  return Effect.andThen(deleteMessageRow(target), rereadLastWriter({ itemId: target.itemId }));
+}
 
 /** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task: its type and its bytes. */
 const findAttachment = SqlSchema.findOneOption({
@@ -1146,23 +1204,25 @@ const findSettledStamps = SqlSchema.findAll({
 
 /**
  * The open items on the tasks of the account's workspaces, whichever
- * member's agent posted each: the rows the account's read of what waits
- * names.
+ * member's agent posted each, but those that are their agent's turn
+ * (`AGENTS_TURN`): the rows the account's read of what waits names.
  */
 function accountWaiting(userId: string) {
   return and(
     isNotNull(inboxItem.taskId),
     itemVisibleTo(userId),
     eq(inboxItem.status, INBOX_STATUS.OPEN),
+    not(AGENTS_TURN),
   );
 }
 
-/** The open items of agents with no task in the account's workspaces, whichever member's agent posted each: what the account's read names beside the tasks' items. */
+/** The open items of agents with no task in the account's workspaces, whichever member's agent posted each, but those that are their agent's turn (`AGENTS_TURN`): what the account's read names beside the tasks' items. */
 function tasklessWaiting(userId: string) {
   return and(
     isNull(inboxItem.taskId),
     itemVisibleTo(userId),
     eq(inboxItem.status, INBOX_STATUS.OPEN),
+    not(AGENTS_TURN),
   );
 }
 
@@ -2790,9 +2850,9 @@ function scopeStamps(scope: InboxScope): InboxStoreEffect<readonly InboxStamp[]>
   );
 }
 
-/** Whether the item is open, an ask not answered or a notice not acknowledged, and waits on the reader: what a to-do count counts. */
+/** Whether the item is open, an ask not answered or a notice not acknowledged, waits on the reader, and is not its agent's turn (`AGENTS_TURN`): what a to-do count counts. */
 function waitingOnReader(userId: string): SQL<boolean> {
-  return sql<boolean>`(${inboxItem.status} = ${INBOX_STATUS.OPEN} and ${WAITS_ON} = ${userId})`;
+  return sql<boolean>`(${inboxItem.status} = ${INBOX_STATUS.OPEN} and ${WAITS_ON} = ${userId} and not ${AGENTS_TURN})`;
 }
 
 /** The item, with the key its answer was taken under; nothing for one of a workspace the account is not in. */

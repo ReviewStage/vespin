@@ -1795,6 +1795,12 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
         // The owner's open ask counts, and so does their open notice, not yet opened.
         yield* postedId(agent, "ask");
         yield* post(agent, { ...NOTICE, key: "notice" });
+        // An ask the owner followed up on before answering is its agent's turn, so it waits on nobody until the agent posts again.
+        const askedBack = yield* postedItem(agent, "asked-back");
+        yield* postInboxMessage(owner, askedBack.id, {
+          text: "Before I pick: what about owners?",
+          clientKey: randomUUID(),
+        });
         // A thread they answered, which its agent writes on again, unread, and one they answered and read: neither waits on them now.
         const followedItem = yield* postedItem(agent, "followed");
         const followed = followedItem.id;
@@ -1822,7 +1828,7 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
             [taskId, 2],
             [shelved.id, 1],
           ]),
-          "the ask and the notice, not the teammate's ask beside them; and the settled task's open ask",
+          "the ask and the notice, not the ask followed up on nor the teammate's ask beside them; and the settled task's open ask",
         );
         assert.equal(
           toDoOf(yield* accountInboxPast(teammate, INBOX_CURSOR_START)).get(taskId),
@@ -1836,6 +1842,15 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
         const read = yield* accountInboxPast(owner, held.cursor);
         assert.notEqual(read.cursor, held.cursor);
         assert.equal(toDoOf(read).get(taskId), 2);
+
+        // The agent's answer to the follow-up makes the ask the owner's again.
+        assert.ok(
+          Option.isSome(yield* replyInboxItem(agent, "asked-back", "Owners count as admins.")),
+        );
+        const answered = yield* accountInboxPast(owner, read.cursor);
+        assert.equal(toDoOf(answered).get(taskId), 3);
+        const live = yield* liveAnswerOf(owner, answered.readAt);
+        assert.deepEqual({ ...live, cursor: answered.cursor }, answered);
       }),
   );
 });
