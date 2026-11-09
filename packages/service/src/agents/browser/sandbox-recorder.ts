@@ -34,7 +34,7 @@
 
 import { PLAYWRIGHT_PIN } from "@repo/agent-runner/pins";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import { LINK_SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 import { RECORDING_CURSOR_SOURCE, RECORDING_CURSOR_STOP } from "./recording-cursor.js";
 import { SANDBOX_BROWSER } from "./sandbox-browser.js";
@@ -421,24 +421,22 @@ export type RecordingStop =
   | { readonly ok: true; readonly seconds: number; readonly bytes: number }
   | { readonly ok: false; readonly reason: RecordingFailure; readonly bytes?: number };
 
-const isRecordingFailure = Schema.is(Schema.Literals(Object.values(RECORDING_FAILURE)));
+/** The line a stop's run prints, as the recorder script and the stop's shell write it. */
+const decodeRecordingStop = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Union([
+      Schema.Struct({ ok: Schema.Literal(true), seconds: Schema.Number, bytes: Schema.Number }),
+      Schema.Struct({
+        ok: Schema.Literal(false),
+        reason: Schema.Literals(Object.values(RECORDING_FAILURE)),
+        bytes: Schema.optionalKey(Schema.Number),
+      }),
+    ]),
+  ),
+);
 
 export function recordingStopOf(run: CommandRun): RecordingStop {
   const failedRun: RecordingStop = { ok: false, reason: RECORDING_FAILURE.ENCODER };
   if (run.exitCode !== 0) return failedRun;
-  let said: unknown;
-  try {
-    said = JSON.parse(run.stdout.trim());
-  } catch {
-    return failedRun;
-  }
-  if (typeof said !== "object" || said === null) return failedRun;
-  const word = said as { ok?: unknown; seconds?: unknown; bytes?: unknown; reason?: unknown };
-  if (word.ok === true && typeof word.seconds === "number" && typeof word.bytes === "number") {
-    return { ok: true, seconds: word.seconds, bytes: word.bytes };
-  }
-  const reason = isRecordingFailure(word.reason) ? word.reason : RECORDING_FAILURE.ENCODER;
-  return typeof word.bytes === "number"
-    ? { ok: false, reason, bytes: word.bytes }
-    : { ok: false, reason };
+  return Option.getOrElse(decodeRecordingStop(run.stdout.trim()), () => failedRun);
 }
