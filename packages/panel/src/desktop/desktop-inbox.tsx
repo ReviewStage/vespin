@@ -42,7 +42,7 @@ import {
 } from "../tasks/inbox-columns.js";
 import { InboxList, InboxListNote, InboxPaneEmpty, NOTHING_HERE } from "../tasks/inbox-list.js";
 import {
-  anyUnread,
+  anyToMarkRead,
   holderAutomationId,
   INBOX_HOLDER,
   type InboxHolder,
@@ -242,7 +242,8 @@ export const DesktopInbox = memo(function DesktopInbox({
     resolveItems,
     onRetry,
   } = useInboxListing(tasks, narrowedTask);
-  const unread = useMemo(() => anyUnread(standing), [standing]);
+  // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
+  const unread = useMemo(() => anyToMarkRead(standing, tasks.me), [standing, tasks.me]);
   // Mark all as read marks the listed workspace's items, or a task's alone, each on its own, since the service marks a workspace's whole.
   const { onMarkAll, onMarkEach } = marks;
   const markAll = () =>
@@ -460,7 +461,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     shown: opened?.item,
     chosen: chosen?.item,
     active: tasks.shown && !sideFocused,
-    onMark: markItem,
+    marks,
   });
   // ⌘O opens what holds the keys in its full place: the agent the panel shows while it holds them, in its task; else the item shown, in its task, or on its agent's page where it has none.
   const panelAgent =

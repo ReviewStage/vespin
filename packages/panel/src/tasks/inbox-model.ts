@@ -1536,6 +1536,15 @@ export function acknowledgedOnOpen(item: InboxItem, readerId: string | undefined
   );
 }
 
+/**
+ * Whether marking the item read by hand acknowledges it too, as opening it
+ * does (`acknowledgedOnOpen`): the reader's own notice, asking nothing, and
+ * no reminder on it still ahead, since one put away until later keeps it.
+ */
+export function settledOnRead(item: InboxItem, readerId: string | undefined): boolean {
+  return acknowledgedOnOpen(item, readerId) && !hasReminder(item);
+}
+
 /** Whether a listed item needs the reader (`needsReader`), whatever its task's status. */
 export function needsYou(listed: InboxListed, readerId: string | undefined): boolean {
   return needsReader(listed.item, readerId);
@@ -1773,9 +1782,11 @@ export function inboxCounts(
   };
 }
 
-/** Whether any task's item is unread, listed or filtered out. */
-export function anyUnread(tasks: readonly InboxGroup[]): boolean {
-  return tasks.some(({ items }) => items.some(isUnread));
+/** Whether Mark all as read would change anything: a task's item is unread, or a notice it acknowledges stands (`settledOnRead`), listed or filtered out. */
+export function anyToMarkRead(tasks: readonly InboxGroup[], readerId: string | undefined): boolean {
+  return tasks.some(({ items }) =>
+    items.some((item) => isUnread(item) || settledOnRead(item, readerId)),
+  );
 }
 
 /** Every item the list draws, in the order it draws them. */

@@ -66,8 +66,8 @@ function toDoByTask(
  * from an agent with no task of that workspace (`listedIn`) that waits on
  * them (`waitsOnReader`), a question or a notice alike, as Needs you lists
  * them, less those whose reminder the developer set for after `now`, which Needs you
- * leaves out until they come back. Note that a notice counts until it is opened, because opening it
- * settles it as Got it does; a teammate's thread and a settled one never
+ * leaves out until they come back. Note that a notice counts until it is opened or marked read, because either
+ * settles it as Got it does (`settledOnRead`); a teammate's thread and a settled one never
  * count, and one the reader settles leaves main's read the moment it is
  * asked (`@repo/host`'s `account-inbox-follow.ts`).
  */

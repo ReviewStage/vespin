@@ -326,7 +326,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [everyItem, narrowedTask, now],
   );
   // Note that every item marked read is pushed with each followed inbox, its marker among its rows, so nothing is read again.
-  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id });
+  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   // The list's search, which narrows what it lists, never what it counts.
   const [query, setQuery] = useState("");
   const search = useMemo(() => searchTokens(query), [query]);

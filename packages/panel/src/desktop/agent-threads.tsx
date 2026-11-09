@@ -193,7 +193,7 @@ export function AgentThreads({
   };
   const pager = useInboxPager(steps, list, chosen, step, { shown: active });
   useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, active ? onBack : undefined);
-  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id });
+  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: me });
   const resolveItems = useInboxResolver();
   // The item shown is read as it opens, as the Inbox reads it, only while the card holds the keys.
   const opened = active && columns.shown !== INBOX_COLUMNS.LIST ? listed : undefined;
@@ -201,7 +201,7 @@ export function AgentThreads({
     shown: opened?.item,
     chosen: listed?.item,
     active,
-    onMark: marks.onMark,
+    marks,
   });
   // Note that the task's page holds its read with its cards' drafts, so the pane takes it whole.
   useNodOnOpen({ shown: opened, readerId: me, control: inbox });

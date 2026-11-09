@@ -690,7 +690,7 @@ function ViewOptions({
   );
 }
 
-/** Mark all as read on the window's Inbox's head, pressable while anything is unread. */
+/** Mark all as read on the window's Inbox's head, pressable while anything is unread or a notice waits on the reader. */
 function MarkAllReadButton({ readAll }: { readAll: InboxReadAll }): React.JSX.Element {
   return (
     <Tooltip label={MARK_ALL_READ}>
@@ -704,7 +704,7 @@ function MarkAllReadButton({ readAll }: { readAll: InboxReadAll }): React.JSX.El
   );
 }
 
-/** Mark all as read, as a phone's ⋯ offers it, a phone having no right-click, pressable while anything is unread. */
+/** Mark all as read, as a phone's ⋯ offers it, a phone having no right-click, pressable while anything is unread or a notice waits on the reader. */
 function markAllAction(readAll: InboxReadAll): MenuAction {
   return {
     label: MARK_ALL_READ,
@@ -1403,7 +1403,7 @@ interface InboxSearchHead {
   readonly onQuery: (query: string) => void;
 }
 
-/** Mark all as read as a phone's ⋯ offers it: whether any item is unread, filtered out or not, and the mark. */
+/** Mark all as read as a phone's ⋯ offers it: whether any item is unread or a notice it acknowledges stands, filtered out or not, and the mark. */
 interface InboxReadAll {
   readonly unread: boolean;
   readonly onMarkAll: () => void;

@@ -1,5 +1,5 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import type { InboxItem } from "@repo/features/inbox-wire";
+import { INBOX_REPLY, type InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -11,7 +11,7 @@ import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import { acknowledgedOnOpen, type InboxListed, isUnread } from "./inbox-model.js";
+import { acknowledgedOnOpen, type InboxListed, isUnread, settledOnRead } from "./inbox-model.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
 import { markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
@@ -30,11 +30,16 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * reads hold it, and a toast says so, unless the caller asks for quiet
  * because it says the refusal itself, as the selection bar does for the
  * items it marked together. Marking every item read marks the items the
- * Inbox lists in the one workspace it lists, as the service marks them; an
- * item waiting on the developer keeps waiting, since the dots are all it
- * clears. A task's items are marked read each on its own instead
- * (`onMarkEach`), since the service marks a whole workspace's at once, and
- * one toast says what it refused.
+ * Inbox lists in the one workspace it lists, as the service marks them. A
+ * task's items are marked read each on its own instead (`onMarkEach`), since
+ * the service marks a whole workspace's at once, and one toast says what it
+ * refused.
+ *
+ * Marking an item read by hand, one or every one, also acknowledges each of
+ * the reader's own notices among them that opening would (`settledOnRead`),
+ * so a thread that asks nothing stops waiting on them as it does once
+ * opened; a question keeps waiting, since only its answer settles it. A
+ * notice put away under a reminder still ahead keeps it.
  *
  * Opening an item marks it read, once each time it is shown
  * (`useReadOnOpen`), so an item the reader marks unread while it is shown
@@ -54,11 +59,13 @@ export interface MarkSaying {
 
 /** What the Inbox's read marks offer: the presses that mark. */
 export interface InboxReadMarks {
-  /** Marks one item read or unread; answers, once the mark went, whether the service took it, with what refused it where it did not, as a batch of marks counts what it refused. A refusal is toasted unless `saying` is quiet. */
+  /** Marks one item read or unread, a notice marked read acknowledged too (`settledOnRead`); answers, once the mark went, whether the service took it, with what refused it where it did not, as a batch of marks counts what it refused. A refusal is toasted unless `saying` is quiet. */
   readonly onMark: (item: InboxItem, unread: boolean, saying?: MarkSaying) => Promise<Kept>;
-  /** Marks every item given that is unread as read, as the service marks the listed workspace's. */
+  /** Marks an item read as opening it does, acknowledging nothing, since opening acknowledges a notice on its own (`useNodOnOpen`). */
+  readonly onOpenRead: (item: InboxItem, unread: boolean) => Promise<Kept>;
+  /** Marks every item given that is unread as read, as the service marks the listed workspace's, and acknowledges the notices among them (`settledOnRead`). */
   readonly onMarkAll: (items: readonly InboxItem[]) => void;
-  /** Marks every item given that is unread as read, each on its own, as a task's are marked, the rest of the workspace's left as they are. */
+  /** Marks every item given that is unread as read, each on its own, as a task's are marked, the rest of the workspace's left as they are, and acknowledges the notices among them (`settledOnRead`). */
   readonly onMarkEach: (items: readonly InboxItem[]) => void;
   /** Sets one item's reminder for an instant, offering Undo, or cancels it where none is given, leaving whether it is read alone; answers whether the service took it, and a refusal is toasted. */
   readonly onRemind: InboxReminder;
@@ -67,15 +74,18 @@ export interface InboxReadMarks {
 /** What a mark the act channel refused hears, as the service not answering. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
-/** The Inbox's read marks, each sent on its act's mutation; every item marked read in `workspaceId` where the Inbox lists one. */
+/** The Inbox's read marks, each sent on its act's mutation; every item marked read in `workspaceId` where the Inbox lists one, and the notices of `readerId`'s it settles acknowledged. */
 export function useInboxReadMarks({
   workspaceId,
+  readerId,
 }: {
   workspaceId: string | undefined;
+  readerId: string | undefined;
 }): InboxReadMarks {
   const toast = useToast();
   const { mutateAsync: sendReadState } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE));
   const { mutateAsync: sendReadAll } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_ALL));
+  const { mutateAsync: sendNod } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
   const { mutateAsync: sendRemind } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
   const refused = useCallback(
     (words: string, cause: unknown, about: FailureAbout) =>
@@ -88,7 +98,32 @@ export function useInboxReadMarks({
       }),
     [toast],
   );
-  const onMark = useCallback(
+  // Note that each notice's nod goes on its own, at the revision the reader was shown, as Got it's does, so one the agent posted over since is not settled unseen; one settled already is not taken and says nothing.
+  const nodAll = useCallback(
+    (items: readonly InboxItem[]) => {
+      const nodding = items.filter((item) => settledOnRead(item, readerId));
+      if (nodding.length === 0) return;
+      const nods = nodding.map((item) =>
+        sendNod({
+          itemId: item.id,
+          revision: item.revision,
+          reply: INBOX_REPLY.ACKNOWLEDGED,
+          clientKey: crypto.randomUUID(),
+        })
+          .catch(unreached)
+          .then((answer) => ("failure" in answer ? notKept(answer) : KEPT)),
+      );
+      void Promise.all(nods).then((taken) => {
+        const landed = taken.filter((each) => each.kept).length;
+        if (landed === nodding.length) return;
+        refused(markedNote(false, landed, nodding.length - landed), firstRefusal(taken), {
+          workspaceId,
+        });
+      });
+    },
+    [sendNod, readerId, workspaceId, refused],
+  );
+  const sendMark = useCallback(
     (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> =>
       sendReadState({ itemId: item.id, unread })
         .catch(unreached)
@@ -101,8 +136,16 @@ export function useInboxReadMarks({
         }),
     [sendReadState, workspaceId, refused],
   );
+  const onMark = useCallback(
+    (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> => {
+      if (!unread) nodAll([item]);
+      return sendMark(item, unread, saying);
+    },
+    [sendMark, nodAll],
+  );
   const onMarkAll = useCallback(
     (items: readonly InboxItem[]) => {
+      nodAll(items);
       const itemIds = items.filter(isUnread).map((item) => item.id);
       if (itemIds.length === 0) return;
       sendReadAll({
@@ -115,14 +158,15 @@ export function useInboxReadMarks({
             refused(markedNote(false, 0, itemIds.length), answer, { workspaceId });
         });
     },
-    [sendReadAll, workspaceId, refused],
+    [sendReadAll, nodAll, workspaceId, refused],
   );
   // Note that each item's mark goes on its own, there being no act marking several but the workspace's whole, and one toast answers them all.
   const onMarkEach = useCallback(
     (items: readonly InboxItem[]) => {
+      nodAll(items);
       const marking = items.filter(isUnread);
       if (marking.length === 0) return;
-      void Promise.all(marking.map((item) => onMark(item, false, { quiet: true }))).then(
+      void Promise.all(marking.map((item) => sendMark(item, false, { quiet: true }))).then(
         (taken) => {
           const landed = taken.filter((each) => each.kept).length;
           if (landed === marking.length) return;
@@ -132,7 +176,7 @@ export function useInboxReadMarks({
         },
       );
     },
-    [onMark, workspaceId, refused],
+    [sendMark, nodAll, workspaceId, refused],
   );
   const { remind } = useInboxPresses();
   // Note that a reminder reaches the reader alone and is undone by putting back what it replaced, so it asks nothing and offers Undo through the undo stack, as the panel's other such acts do.
@@ -160,28 +204,30 @@ export function useInboxReadMarks({
     [sendRemind, remind, workspaceId, refused, toast],
   );
   return useMemo(
-    () => ({ onMark, onMarkAll, onMarkEach, onRemind }),
-    [onMark, onMarkAll, onMarkEach, onRemind],
+    () => ({ onMark, onMarkAll, onMarkEach, onOpenRead: sendMark, onRemind }),
+    [onMark, onMarkAll, onMarkEach, sendMark, onRemind],
   );
 }
 
 /**
  * Marks the item an Inbox shows read as it is opened, once each time it is
- * shown, and offers U, which marks the chosen item read or unread, while
- * the Inbox stands. `shown` is the item the pane draws, none while the
- * Inbox is hidden or shows its list alone.
+ * shown, acknowledging nothing, since `useNodOnOpen` acknowledges a notice
+ * opened on its own; and offers U, which marks the chosen item read or
+ * unread as its row's menu does, while the Inbox stands. `shown` is the item
+ * the pane draws, none while the Inbox is hidden or shows its list alone.
  */
 export function useReadOnOpen({
   shown,
   chosen,
   active,
-  onMark,
+  marks,
 }: {
   shown: InboxItem | undefined;
   chosen: InboxItem | undefined;
   active: boolean;
-  onMark: (item: InboxItem, unread: boolean) => void;
+  marks: Pick<InboxReadMarks, "onMark" | "onOpenRead">;
 }): void {
+  const { onMark, onOpenRead } = marks;
   const readOn = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (shown === undefined) {
@@ -190,8 +236,8 @@ export function useReadOnOpen({
     }
     if (readOn.current === shown.id) return;
     readOn.current = shown.id;
-    if (isUnread(shown)) afterPaint(() => onMark(shown, false));
-  }, [shown, onMark]);
+    if (isUnread(shown)) afterPaint(() => onOpenRead(shown, false));
+  }, [shown, onOpenRead]);
   useAppCommand(
     APP_COMMAND.TOGGLE_READ,
     active && chosen !== undefined ? () => onMark(chosen, !isUnread(chosen)) : undefined,
