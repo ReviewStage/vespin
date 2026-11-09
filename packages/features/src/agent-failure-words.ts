@@ -26,6 +26,9 @@ import {
  * day the page is renamed.
  */
 
+/** What a plan's reached limit says where it is told alone: a refusal with no reset known, and a notice, toast, or reply about an agent its plan's limit stopped. */
+export const LIMIT_REACHED_WORDS = "Usage limit reached";
+
 /** Why a turn failed, by the service's one word for it; nothing for a reason with no words. */
 const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.MODEL]: "the model call failed",

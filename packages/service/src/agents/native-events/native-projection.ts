@@ -554,11 +554,14 @@ class Fold {
     const status = statusOf(moment.ending, turn.failure ?? turn.refusing);
     const failed = status === RUN_STATUS.FAILED;
     const refusal = turn.refusal === true || turn.refusing !== undefined;
+    // A turn its plan's limit cut short with no payer left failed for that limit, which its user expects.
     const failure = ended.openedForEnd
       ? TURN_FAILURE.RUNNER_LOST
-      : refusal
-        ? TURN_FAILURE.REFUSAL
-        : TURN_FAILURE.MODEL;
+      : turn.limited === true
+        ? TURN_FAILURE.PLAN_LIMIT
+        : refusal
+          ? TURN_FAILURE.REFUSAL
+          : TURN_FAILURE.MODEL;
     // Note that a refusal of the starter's own key leads with the coder's word for it, so the window reads the failure as a key to replace rather than a model call failed.
     const ownKeyRefused =
       turn.refused === true && this.#context.ownKey ? CODER_REFUSAL.ACCOUNT_KEY_REFUSED : undefined;

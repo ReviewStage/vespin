@@ -202,6 +202,13 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
           },
         },
       ]);
+
+      // A run its plan's usage limit stopped is told so, not that it failed.
+      yield* pushFailedTurn({ ...turn, status: TURN_STATUS.FAILED, failure: "plan_limit" });
+      assert.deepEqual(sender.sent.at(-1)?.payload.aps.alert, {
+        title: "Opus 5.5",
+        body: "Usage limit reached",
+      });
     }).pipe(Effect.provide(sender.layer));
   });
 });

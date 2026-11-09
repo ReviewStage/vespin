@@ -948,6 +948,11 @@ export function useAgents(input: {
       }),
     [toast],
   );
+  const limitReached = useCallback(
+    (words: string) =>
+      toast({ replayUnmasked: true, words, tone: STATUS_TONE.ATTENTION, hold: TOAST_HOLD.FAILED }),
+    [toast],
+  );
   // Note that the acts and the opening are read through a ref, because the
   // tab hands new closures on every render and a read is owed to the task
   // opening, not to a render.
@@ -1157,10 +1162,12 @@ export function useAgents(input: {
       };
       // Note that a move is chosen from a menu, which has no line beside it to say why, so its
       // refusal is said in a toast wherever the developer stands.
-      if (runsOn !== undefined) failed(refused.text, shown);
-      else if ((latest.current.taskId ?? latest.current.agentId) !== startsOn) {
-        failed(START_FAILED_AWAY, shown);
-      }
+      const away = (latest.current.taskId ?? latest.current.agentId) !== startsOn;
+      // A plan's reached limit is said calmly in its own words, never as a failure to start.
+      if (answer.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED) {
+        if (runsOn !== undefined || away) limitReached(refused.text);
+      } else if (runsOn !== undefined) failed(refused.text, shown);
+      else if (away) failed(START_FAILED_AWAY, shown);
       return refused;
     }
     forgetPress();

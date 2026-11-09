@@ -52,6 +52,7 @@ import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import { TURN_FAILURE } from "../../core.js";
 import {
   recordingProductAnalytics,
   SERVER_EVENT,
@@ -978,10 +979,21 @@ it.layer(SUITE)("the runner events route", (it) => {
         const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
         const context = yield* readAgentContext(agent.userId, agent.agentId);
 
+        const failures = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ failure: turns.failure, detail: turns.failureDetail })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
         assert.deepEqual(ended.map((turn) => [turn.status, turn.failureDetail]).sort(), [
           [TURN_STATUS.FAILED, "error_during_execution; rate_limit_rejected five_hour"],
           [TURN_STATUS.FAILED, "input_closed"],
         ]);
+        // The turn its plan's limit cut short failed for that limit, not as a model call that failed.
+        assert.equal(
+          failures.find(({ detail }) => detail?.includes("rate_limit_rejected") === true)?.failure,
+          TURN_FAILURE.PLAN_LIMIT,
+        );
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
         // Only the last turn's kind stands, so the next message says the call's words no longer hold and hands the task again.
         assert.deepEqual(yield* readNativeTurnHanded(agent.target), { spoken: true });

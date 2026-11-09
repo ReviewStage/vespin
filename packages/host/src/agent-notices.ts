@@ -6,9 +6,12 @@ import type {
   AccountInboxTask,
   AccountTasklessEntry,
 } from "@repo/features/account-inbox-wire";
+import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
 import {
+  AGENT_FAILURE,
   AGENT_STATUS,
+  type AgentFailure,
   type AgentStatus,
   type AgentSummary,
   type TasklessAgent,
@@ -247,6 +250,8 @@ interface HeldAgent {
   /** The plan it works on; null for one an automation started with no plan. */
   taskId: string | null;
   status: AgentStatus;
+  /** Why the turn the status is read from failed, where it did. */
+  failure: AgentFailure | undefined;
   /** The turn the status is read from; none before the first. */
   turnId: string | null;
   /** The turns the agent has left behind, which a list that landed late may still describe. */
@@ -600,7 +605,12 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
             kind: NOTICE_KIND.AGENT_FINISHED,
             title: agent.title ?? taskName ?? UNNAMED_AGENT,
             body:
-              agent.status === AGENT_STATUS.FAILED ? "Your agent failed." : "Your agent finished.",
+              agent.status !== AGENT_STATUS.FAILED
+                ? "Your agent finished."
+                : // An agent its plan's usage limit stopped is told so, not that it failed.
+                  agent.failure === AGENT_FAILURE.PLAN_LIMIT
+                  ? LIMIT_REACHED_WORDS
+                  : "Your agent failed.",
             place: {
               kind: LINK_PLACE.AGENT,
               ...(agent.taskId === null ? undefined : { planId: agent.taskId }),
@@ -845,11 +855,12 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
 
     /** The agent as the ledger holds it, on a plan or with none. */
     function heldOf(
-      agent: Pick<AgentSummary, "planId" | "status" | "turnId" | "startedBy" | "title">,
+      agent: Pick<AgentSummary, "planId" | "status" | "turn" | "turnId" | "startedBy" | "title">,
     ): HeldAgent {
       return {
         taskId: agent.planId,
         status: agent.status,
+        failure: agent.turn?.failure,
         turnId: agent.turnId,
         pastTurns: new Set(),
         startedBy: agent.startedBy?.userId,

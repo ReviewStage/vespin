@@ -181,6 +181,7 @@ import {
   turnStretches,
   turnUnderWay,
   unreadOpeningLine,
+  usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
   wakeupDelayOf,
@@ -2379,10 +2380,15 @@ function AgentTranscriptView({
   const waitingNotice = currentParts.some(
     (part) => part.kind === AGENT_PART.USAGE_LIMIT && part.notice.resetsAt === waitsUntil,
   );
-  const ended =
-    lastPart?.kind === AGENT_PART.USAGE_LIMIT && lastPart.notice.resetsAt === null
-      ? undefined
-      : turnEnded;
+  const endsOnNotice =
+    lastPart?.kind === AGENT_PART.USAGE_LIMIT && lastPart.notice.resetsAt === null;
+  // A turn the plan's limit ended, as the sweep fails one no launch took up, ends on the limit's notice rather than a failure line.
+  const limitEnded = turnEnded?.failure === AGENT_FAILURE.PLAN_LIMIT;
+  const ended = endsOnNotice || limitEnded ? undefined : turnEnded;
+  const limitNotice =
+    limitEnded && !endsOnNotice ? (
+      <UsageLimitNotice notice={{ agent: usageLimitAgentOf(keyProvider), resetsAt: null }} />
+    ) : undefined;
   useTurnEndSaid(ended, working);
   // Note that the card stands alone in the end line's place, without its press, since its own presses answer the failure.
   const signInCard =
@@ -2465,11 +2471,16 @@ function AgentTranscriptView({
     const task = carded || blank ? undefined : first;
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
     const trailing =
-      !working && ended === undefined && endTrail === undefined && !(failed && connected) ? null : (
+      !working &&
+      ended === undefined &&
+      limitNotice === undefined &&
+      endTrail === undefined &&
+      !(failed && connected) ? null : (
         <>
           {working && !waitingNotice ? (
             <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
           ) : null}
+          {limitNotice}
           {ended === undefined && endTrail === undefined ? null : (
             <div
               className="agent-end flex flex-col items-start gap-control-gap"
