@@ -39,6 +39,13 @@ in front. Then look at the list as a set.
 
 - A section gets a picture only where one helps. Plumbing (a shared runtime, a
   fix) gets none; a single row or button is a close-up, not a whole window.
+- A picture shows something a user can newly do, never a new look. A section
+  that redesigns, regroups, or rearranges UI the app already had (the sidebar
+  redone, the side panel moved under each agent, rows lining up their marks)
+  gets none, however large the change or long its notes: a user meets it on
+  launch, and a picture of it tells them nothing they can act on. 0.29.0's
+  redesigned sidebar and per-agent side panel were staged and then dropped
+  for this.
 - No two pictures share a composition. The 0.8.0–0.11.0 pictures fail this:
   seven of them are the same plan document on the left with the feature
   squeezed into a panel on the right. Vary the layout per shot: the sidebar
