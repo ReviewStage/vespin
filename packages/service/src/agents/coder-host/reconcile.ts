@@ -102,8 +102,13 @@ export type ReconciledAgent = Pick<
   "id" | "userId" | "conversationId" | "machine" | "deviceId"
 >;
 
-/** The most running turns' sandboxes one sweep keeps up, each one read and at most one extend, a few at a time, so the sweep answers within its minute. */
-const KEEP_UP_SWEEP = { SANDBOXES: 100, CONCURRENCY: 10 } as const;
+/**
+ * The most running turns' sandboxes one sweep keeps up, each one read and at
+ * most one extend of about a tenth of a second, ten at a time, so four hundred
+ * answer within a few seconds of the sweep's minute: far past the turns that
+ * run at once, and drawn in a fresh order each sweep past it.
+ */
+const KEEP_UP_SWEEP = { SANDBOXES: 400, CONCURRENCY: 10 } as const;
 
 /** The most agents one sweep reaps, each with at most a few calls to its machine, so the sweep answers within its minute. */
 const RECONCILE_SWEEP = { AGENTS: 20, CONCURRENCY: 5 } as const;

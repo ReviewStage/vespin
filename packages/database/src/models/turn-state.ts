@@ -570,7 +570,7 @@ const findRunningSandboxes = SqlSchema.findAll({
   execute: ({ at, limit }) =>
     Database.use((db) =>
       db
-        .selectDistinct({ sandboxName: agentRunnerRecord.sandboxName })
+        .select({ sandboxName: agentRunnerRecord.sandboxName })
         .from(turns)
         .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
         .innerJoin(
@@ -588,6 +588,9 @@ const findRunningSandboxes = SqlSchema.findAll({
             isNotNull(agentRunnerRecord.sandboxSessionId),
           ),
         )
+        .groupBy(agentRunnerRecord.sandboxName)
+        // Note that the order is drawn afresh each sweep, so past the limit no sandbox is left out every minute.
+        .orderBy(sql`random()`)
         .limit(limit),
     ),
 });
