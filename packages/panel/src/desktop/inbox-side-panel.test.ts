@@ -365,14 +365,14 @@ test("a pull request, a page, and a file the item names each open a tab of their
   await pressChip(container, "Old funnel");
   assert.equal(left.links.length + left.tasks.length, 0, "the Inbox still stands");
   const notice = container.querySelector('aside[aria-label="Panel"] .ui-tab-notice');
-  assert.equal(notice?.querySelector("p")?.textContent, OTHER.name, "the page's task named");
+  assert.equal(notice?.querySelector("nav")?.textContent, OTHER.name, "the page's task named");
   const open = [...(notice?.querySelectorAll("button") ?? [])].find(
     (each) => each.textContent === "Open task",
   );
   assert.ok(open, "with Open task");
   act(() => open.click());
   // The task's chip opens it as Open task does.
-  const chip = notice?.querySelector<HTMLElement>("p [data-inline-ref], p button, p a");
+  const chip = notice?.querySelector<HTMLElement>("nav button");
   assert.ok(chip, "the task named by its chip");
   act(() => chip.click());
   const went = `${OTHER_TASK} ${JSON.stringify(pageTab(FUNNEL.id))}`;

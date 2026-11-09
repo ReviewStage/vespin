@@ -15,6 +15,7 @@ import { readingWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
+  Breadcrumbs,
   Button,
   CloseIcon,
   CollapseIcon,
@@ -23,8 +24,6 @@ import {
   HoverCard,
   HoverCardHead,
   IconButton,
-  INLINE_REF_LOOK,
-  InlineRef,
   LIST_DENSITY,
   List,
   ListRow,
@@ -358,6 +357,7 @@ function placesBeside(tabs: readonly OpenPage[], own: PagePlace): readonly PageP
 /** What the line under the panel's bar says of a tab of another task than the one the panel stands for. */
 const BESIDE_WORDS = {
   OPEN_TASK: "Open task",
+  PATH: "Tab's task",
 } as const;
 
 /** The tasks a tab of another task names, by its chip, and the door to that task, the tab still chosen in its panel. */
@@ -2883,27 +2883,33 @@ export function SidePanel({
           besideTask === undefined ||
           taskOfTab === undefined ? null : (
             <TabNotice>
-              <p>
-                <InlineRef
-                  look={INLINE_REF_LOOK.PILL}
-                  glyph={<PlanGlyph status={besideTask.status} />}
-                  label={besideTask.name}
-                  card={
-                    <TaskChipCard
-                      taskId={besideTask.id}
-                      fallback={
-                        <HoverCard data-task-card="">
-                          <HoverCardHead
-                            glyph={<PlanGlyph status={besideTask.status} />}
-                            name={besideTask.name}
-                          />
-                        </HoverCard>
-                      }
-                    />
-                  }
-                  onPress={() => taskOfTab.onShowPanelTab(besideTask.id, tab)}
+              {/* Note that the task is a crumb, as a task's path draws its parent, so it reads as the path the tab stands under and is cut only where the line runs out. */}
+              <div className="flex min-w-0 flex-1">
+                <Breadcrumbs
+                  label={BESIDE_WORDS.PATH}
+                  crumbs={[
+                    {
+                      label: besideTask.name,
+                      glyph: <PlanGlyph status={besideTask.status} />,
+                      hint: besideTask.name,
+                      card: (
+                        <TaskChipCard
+                          taskId={besideTask.id}
+                          fallback={
+                            <HoverCard data-task-card="">
+                              <HoverCardHead
+                                glyph={<PlanGlyph status={besideTask.status} />}
+                                name={besideTask.name}
+                              />
+                            </HoverCard>
+                          }
+                        />
+                      ),
+                      onPress: () => taskOfTab.onShowPanelTab(besideTask.id, tab),
+                    },
+                  ]}
                 />
-              </p>
+              </div>
               <Button onClick={() => taskOfTab.onShowPanelTab(besideTask.id, tab)}>
                 <ReplayUnmask>{BESIDE_WORDS.OPEN_TASK}</ReplayUnmask>
               </Button>
