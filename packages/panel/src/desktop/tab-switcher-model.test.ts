@@ -26,10 +26,10 @@ import {
 /**
  * tab-switcher-model.test.ts -- ⌃Tab's order and its keys: whole screens
  * most recent first across every task, a task's screen named by both its
- * panes' tabs, a tab chosen by a press a stop of its own and one the window
- * chose by itself taking the stop in place, a tap flipping to the screen
- * before, a hold stepping on and back around the cards, and a let-go on the
- * screen here going nowhere.
+ * panes' tabs, what Back takes a step of its own for a stop of its own and
+ * anything else shown on the page taking the stop in place, a tap flipping
+ * to the screen before, a hold stepping on and back around the cards, and a
+ * let-go on the screen here going nowhere.
  */
 
 const screen = (
@@ -102,37 +102,36 @@ describe("the stops", () => {
 
 describe("a move of the window", () => {
   const work = screen("a", agentTab("x"), SIDE_PANEL_TAB.DESCRIPTION);
+  const bySelf = { pressed: false, opened: false };
+  const byHand = { pressed: true, opened: false };
+  const byDoor = { pressed: false, opened: true };
 
   test("onto a task records one stop for the screen, whatever both its panes show", () => {
-    const stops = moved([inbox], inbox, work, false);
+    const stops = moved([inbox], inbox, work, bySelf);
     assert.deepEqual(stops, [work, inbox]);
   });
 
   test("a tab the window chose by itself takes the screen standing in place, so ⌃Tab goes back where you came from", () => {
-    const opening = moved([inbox], inbox, screen("a"), true);
-    const loaded = moved(opening, screen("a"), work, false);
+    const opening = moved([inbox], inbox, screen("a"), byHand);
+    const loaded = moved(opening, screen("a"), work, bySelf);
     assert.deepEqual(loaded, [work, inbox]);
     assert.deepEqual(switcherTarget(pressed(loaded, work, SWITCH_STEP.ON)), inbox);
   });
 
-  test("a tab chosen by a press or a key, in either pane, is a stop of its own", () => {
-    const coded = moved(
-      [work, inbox],
-      work,
-      screen("a", agentTab("x"), SIDE_PANEL_TAB.COMMENTS),
-      true,
-    );
-    assert.deepEqual(coded, [screen("a", agentTab("x"), SIDE_PANEL_TAB.COMMENTS), work, inbox]);
-    const other = moved(coded, coded[0], screen("a", agentTab("z"), SIDE_PANEL_TAB.COMMENTS), true);
-    assert.equal(other.length, 4);
+  test("showing another thing on the page is a stop of its own where Back takes a step: a column tab pressed, or the panel opened by a door naming a thing, and not a tab pressed in the panel's strip", () => {
+    const commented = screen("a", agentTab("x"), SIDE_PANEL_TAB.COMMENTS);
+    assert.deepEqual(moved([work, inbox], work, commented, byHand), [commented, inbox]);
+    assert.deepEqual(moved([work, inbox], work, commented, byDoor), [commented, work, inbox]);
+    const other = screen("a", agentTab("z"), SIDE_PANEL_TAB.DESCRIPTION);
+    assert.deepEqual(moved([work, inbox], work, other, byHand), [other, work, inbox]);
   });
 
   test("to another page is a stop, pressed or not", () => {
-    assert.deepEqual(moved([work], work, inbox, false), [inbox, work]);
+    assert.deepEqual(moved([work], work, inbox, bySelf), [inbox, work]);
   });
 
   test("onto nothing, as Settings, keeps the stops as they are", () => {
-    assert.deepEqual(moved([work, inbox], work, undefined, true), [work, inbox]);
+    assert.deepEqual(moved([work, inbox], work, undefined, byHand), [work, inbox]);
   });
 });
 

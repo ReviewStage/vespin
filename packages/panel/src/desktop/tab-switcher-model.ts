@@ -7,13 +7,16 @@
  * window shows in the task's place, Home, the Inbox, the Board,
  * Automations, an agent's own page, or a person's. Settings and a
  * version history are no stop, since each is a layer over the window rather
- * than a place in it. Arriving on a task is one stop; a tab chosen there by
- * a press or a key, in either pane, makes the new pair another stop, and a
- * tab the window chose by itself, as the tabs arriving as a task opens or
- * the one chosen in place of a tab closed, takes the stop in place
- * (`moved`), as Back's steps do. The stops are kept most recent first
- * (`visited`), one list for every task, so ⌃Tab and a let-go is the screen
- * before this one wherever it was, as ⌘Tab is the app before this one.
+ * than a place in it. Arriving on a task is one stop; what it shows within
+ * is another stop where Back takes another step for it, by Back's own rule
+ * (`places/task-step.ts`'s `stepWithin`): a column tab chosen by a press or
+ * a key, or the side panel shown otherwise by a door naming a thing. A tab
+ * chosen in the panel's strip, its toggle, the panel filling the window, and
+ * a tab the window chose by itself, as the tabs arriving as a task opens or
+ * the one chosen in place of a tab closed, take the stop in place (`moved`).
+ * The stops are kept most recent first (`visited`), one list for every task,
+ * so ⌃Tab and a let-go is the screen before this one wherever it was, as ⌘Tab
+ * is the app before this one.
  *
  * The switcher (`tab-switcher.tsx`) shows the first few as cards. A press of
  * ⌃Tab chooses the card after the one the window stands on, and ⌃⇧Tab the
@@ -24,6 +27,7 @@
  */
 
 import { type StripTab, sameTab } from "@repo/ui/tab-strip-model";
+import { STEP_WITHIN, type StepLed, type StepShown, stepWithin } from "../places/task-step.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 
@@ -255,20 +259,28 @@ export function shownStop(standing: WindowStanding): Stop | undefined {
   };
 }
 
+/** What a task's stop shows within its page, as a step of Back's holds it: the column's tab, and the side panel's, `null` while shut. */
+function shownOf(stop: Stop): StepShown {
+  return stop.kind === STOP_KIND.TASK ? { column: stop.column, side: stop.panel ?? null } : {};
+}
+
 /**
  * The stops after the window moved from standing on `before` to `after`.
- * Another page, or a tab chosen by a press or a key (`pressed`), is a stop
- * visited; a tab the window chose by itself on the page standing takes the
- * stop standing in place.
+ * Another page is a stop visited, and so is another thing shown on the page
+ * standing where Back takes a step of its own for it, by what led to it
+ * (`led`); anything else shown there takes the stop standing in place.
  */
 export function moved(
   stops: readonly Stop[],
   before: Stop | undefined,
   after: Stop | undefined,
-  pressed: boolean,
+  led: StepLed,
 ): readonly Stop[] {
   if (after === undefined) return stops;
-  if (before === undefined || pressed || !samePage(before, after) || sameStop(before, after)) {
+  if (before === undefined || !samePage(before, after) || sameStop(before, after)) {
+    return visited(stops, after);
+  }
+  if (stepWithin(shownOf(before), shownOf(after), led) === STEP_WITHIN.VISIT) {
     return visited(stops, after);
   }
   const rest = stops.filter((stop) => !sameStop(stop, before) && !sameStop(stop, after));

@@ -31,8 +31,9 @@ import { TabSwitcher } from "./tab-switcher.js";
 
 /**
  * tab-switcher.test.ts -- ⌃Tab as the window answers it: a stop is a whole
- * screen, so arriving on a task with both panes is one stop and a tab the
- * window chose by itself takes it in place; a quick tap goes to the screen
+ * screen, taken as Back takes a step, so arriving on a task with both panes
+ * is one stop, and a tab the window chose by itself or one chosen in the side
+ * panel's strip takes it in place; a quick tap goes to the screen
  * before through the task's own doors, both panes restored, and draws
  * nothing; a hold draws the cards, the screen here first and dimmed, each
  * named as Back's list names it; ⇧ steps back, Escape goes nowhere, a card
@@ -129,6 +130,17 @@ function onTask(
   };
 }
 
+/** The window on the task as `onTask` draws it, `tab` opened in its side panel by a door naming it, as a link opens a file, which Back and ⌃Tab take a step for. */
+function openedOnTask(
+  tab: SidePanelTab,
+  told: Asked,
+  overrides: Partial<TasksControl> = {},
+  column?: MainTab,
+): TasksControl {
+  const shown = onTask(tab, told, overrides, column);
+  return { ...shown, sidePanel: { ...shown.sidePanel, opened: shown.sidePanel.opened + 1 } };
+}
+
 /** The switcher over a window, drawn again on each place the test moves the window to. */
 async function mounted(room: ShellRoom = SHELL_ROOM.WIDE) {
   const host = document.createElement("div");
@@ -209,10 +221,12 @@ function cards(): HTMLElement[] {
 /** The Inbox's address under Acme, where a window drawn on it stands. */
 const INBOX_AT = "/acme/inbox";
 
-test("a tab chosen by hand is a screen of its own, and a quick tap goes back to the one before without drawing anything", async () => {
+test("a tab chosen by hand in the side panel's strip takes the screen in place, as Back's step does, so a quick tap goes back where you came from without drawing anything", async () => {
   handCapabilities(DESKTOP_CAPABILITIES);
   const told = asked();
   const window = await mounted();
+  await window.draw(onTask(NOTES, told), ROUTED_PLACE.INBOX, INBOX_AT);
+  press();
   await window.draw(onTask(NOTES, told));
   press();
   await window.draw(onTask(README, told));
@@ -225,7 +239,7 @@ test("a tab chosen by hand is a screen of its own, and a quick tap goes back to 
   );
   letGo();
 
-  assert.deepEqual(told.shown, [`panel the task: ${JSON.stringify(NOTES)}`]);
+  assert.deepEqual([told.shown, window.at()], [[], INBOX_AT]);
   assert.equal(document.querySelector(DIALOG), null);
 });
 
@@ -281,8 +295,7 @@ test("held, the cards show with the screen here first and dimmed; ⇧ steps back
   const window = await mounted();
   await window.draw(onTask(NOTES, told), ROUTED_PLACE.INBOX, INBOX_AT);
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
 
   tab();
   tab();
@@ -308,7 +321,7 @@ test("held, the cards show with the screen here first and dimmed; ⇧ steps back
   assert.deepEqual(told, asked());
 });
 
-/** A field that holds focus before ⌃Tab, and the window moved from one task tab to another so the cards have two screens. */
+/** A field that holds focus before ⌃Tab, and a file opened in the task's side panel so the cards have two screens. */
 async function heldOnField() {
   handCapabilities(DESKTOP_CAPABILITIES);
   const field = document.createElement("input");
@@ -317,8 +330,7 @@ async function heldOnField() {
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
   tab();
   tab();
   return field;
@@ -369,8 +381,7 @@ test("a task's card is named as Back's list names the screen: the task, then its
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
 
   tab();
   tab();
@@ -404,8 +415,7 @@ test("a task's card says the task and its agent's tab by the names they go by no
     agents: agentsControl({ agents: title === undefined ? [] : [agent(title)] }),
   });
   await window.draw(onTask(NOTES, told, named("Token refresh"), column));
-  press();
-  await window.draw(onTask(README, told, named("Token renewal", "Auth rewrite"), column));
+  await window.draw(openedOnTask(README, told, named("Token renewal", "Auth rewrite"), column));
 
   tab();
   tab();
@@ -418,7 +428,7 @@ test("a task's card says the task and its agent's tab by the names they go by no
   };
   assert.deepEqual(left(), ["Auth rewrite", "Token renewal · notes.md"]);
 
-  await window.draw(onTask(README, told, named(undefined, "Auth rewrite"), column));
+  await window.draw(openedOnTask(README, told, named(undefined, "Auth rewrite"), column));
   assert.deepEqual(left(), ["Auth rewrite", "Token refresh · notes.md"]);
 });
 
@@ -478,8 +488,7 @@ test("the screen left is taken as a still of the work area for its card, drawn a
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
 
   tab();
   tab();
@@ -503,8 +512,7 @@ test("a window that is no desktop app leaves ⌃Tab to the browser", async () =>
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
 
   assert.equal(tab().defaultPrevented, false);
   letGo();
@@ -517,8 +525,7 @@ test("the menu bar's Next recent tab goes at once, as a tap does", async () => {
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
 
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.NEXT_RECENT_TAB));
@@ -531,8 +538,7 @@ test("a dialog over the window keeps ⌃Tab, so nothing moves behind it", async 
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told));
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
   const dialog = document.createElement("div");
   dialog.setAttribute("aria-modal", "true");
   document.body.append(dialog);
@@ -584,8 +590,7 @@ test("a tab closed on its task's page stays let go once the Inbox stands in the 
   const told = asked();
   const window = await mounted();
   await window.draw(onTask(NOTES, told, { boundFor: undefined }), ROUTED_PLACE.HOME);
-  press();
-  await window.draw(onTask(README, told));
+  await window.draw(openedOnTask(README, told));
   press();
   await window.draw(onTask(NOTES, told));
   const closed = onTask(NOTES, told);
@@ -742,8 +747,7 @@ test("a screen picked with its panel shut shuts the panel, and one with the pane
   const window = await mounted();
   const shut = onTask(NOTES, told, {}, agentTab("x"));
   await window.draw(doors({ ...shut, sidePanel: { ...shut.sidePanel, open: false } }));
-  press();
-  const filled = onTask(README, told, {}, agentTab("x"));
+  const filled = openedOnTask(README, told, {}, agentTab("x"));
   await window.draw(doors({ ...filled, sidePanel: { ...filled.sidePanel, fullScreen: true } }));
   press();
   await window.draw(doors(onTask(NOTES, told)), ROUTED_PLACE.INBOX, INBOX_AT);

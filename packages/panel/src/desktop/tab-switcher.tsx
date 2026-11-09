@@ -4,10 +4,12 @@
  * The switcher keeps the window's stops most recent first
  * (`tab-switcher-model.ts`), each a whole screen as a step of Back's is: a
  * task with the tabs both its panes showed, or a place. It reads where the
- * window stands on each render: another page, or a tab chosen by a press or
- * a key, is a stop of its own, and a tab the window chose by itself takes
- * the stop standing in place, by the rule Back's steps keep
- * (`places/window-history.ts`). A quick tap of ⌃Tab goes to the screen before
+ * window stands on each render: another page, a column tab chosen by a
+ * press or a key, or the side panel shown by a door naming a thing, is a
+ * stop of its own, and anything else shown on the page standing, a tab
+ * chosen in the panel's strip or one the window chose by itself among it,
+ * takes the stop standing in place, by the rule Back's steps keep
+ * (`places/task-step.ts`). A quick tap of ⌃Tab goes to the screen before
  * this one without drawing anything, so two taps flip between two. Held a
  * beat, the cards show over the window: the screen here first and dimmed,
  * the one after it chosen. Tab and → step on, ⇧Tab and ← back, wrapping
@@ -398,6 +400,8 @@ export function TabSwitcher({
   // How many presses and keys the window has heard, and how many it had as the stops were last moved, as Back's steps count them.
   const presses = useRef(0);
   const pressesMoved = useRef(0);
+  // How many times a door naming a thing had opened it in the side panel as the stops were last moved, as Back's steps count them.
+  const openedMoved = useRef(tasks.sidePanel.opened);
   // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
   const listed = useRef(new Set<string>());
   const places = {
@@ -476,8 +480,10 @@ export function TabSwitcher({
     shown.current = now;
     const first = stops.current[0];
     const pressed = presses.current !== pressesMoved.current;
+    const opened = tasks.sidePanel.opened !== openedMoved.current;
     pressesMoved.current = presses.current;
-    stops.current = moved(stops.current, before, now, pressed);
+    openedMoved.current = tasks.sidePanel.opened;
+    stops.current = moved(stops.current, before, now, { pressed, opened });
     // A tab closed on its task's page is let go then, before a page standing in its place can hide the close.
     standing();
     titles.current = [
