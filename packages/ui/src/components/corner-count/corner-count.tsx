@@ -91,8 +91,7 @@ export function CornerDot({
 /**
  * `children`, a press, wearing `mark`, a glyph, on a small disc over its top
  * end corner: the experiment's flask on a control that is still one, as an
- * app's icon wears a beta badge, or the Draft pencil on New task's glyph
- * while its words wait unsent. The disc is quiet, neutral and hairlined
+ * app's icon wears a beta badge. The disc is quiet, neutral and hairlined
  * like the Experimental tag, opaque so the press's edge does not show
  * through it. It is a picture the caller says in its press's hint, so it is
  * hidden from a reader and takes no pointer, and a press on it presses the
