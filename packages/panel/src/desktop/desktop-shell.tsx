@@ -8,9 +8,7 @@ import {
   BACK_BUTTON_LOOK,
   BackButton,
   COLLECTION_STATE,
-  CORNER_DOT_TONE,
   CollectionPage,
-  CornerDot,
   DrawerScrim,
   IconButton,
   NOT_FOUND_THING,
@@ -92,7 +90,7 @@ import { DesktopInbox } from "./desktop-inbox.js";
 import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
-import { useFloatDismiss } from "./hover-pane.js";
+import { KEY_LAYERS, useFloatDismiss } from "./hover-pane.js";
 import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
@@ -102,7 +100,6 @@ import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
-import { useInboxWaiting } from "./places-waiting.js";
 import { SidePanelChord, SidePanelToggle, usePanelToggleRoom } from "./side-panel.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
@@ -396,35 +393,57 @@ export interface DesktopGates {
  * takes their place at the window's edge (`window-full-screen.ts`). It
  * stands only where there is a sidebar to fold, so it offers the chord too.
  * A peek is not yet open, so over one it still offers to show the sidebar.
- * While the sidebar is away, its Inbox row's count is too, so the toggle
- * wears a dot in the attention tone while anything waits on the developer
- * (`useInboxWaiting`), and says how many in its name, since the dot is
- * hidden from a reader; over a peek the row is in view again, so neither.
+ * It wears no mark of what waits in the Inbox: the window's places say that.
+ * Resting the pointer on it while the sidebar is away peeks the sidebar out,
+ * as the window's left edge does, and a press then shows it.
  */
-function SidebarToggle({
-  sidebar,
-  tasks,
-}: {
-  sidebar: SidebarCollapse;
-  tasks: TasksControl;
-}): React.JSX.Element {
+function SidebarToggle({ sidebar }: { sidebar: SidebarCollapse }): React.JSX.Element {
   const shown = !sidebar.collapsed || sidebar.overlay === SIDEBAR_OVERLAY.OPEN;
   const label = shown ? "Hide sidebar" : "Show sidebar";
   const away = sidebar.collapsed && sidebar.overlay === SIDEBAR_OVERLAY.CLOSED;
-  const waiting = useInboxWaiting(tasks);
-  const marked = away && waiting > 0;
   useAppCommand(APP_COMMAND.TOGGLE_SIDEBAR, sidebar.onToggle);
   return (
-    <CornerDot shown={marked} tone={CORNER_DOT_TONE.ATTENTION}>
-      <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDEBAR}>
-        <IconButton
-          icon={<SidebarIcon />}
-          label={marked ? `${label}, ${waiting} need you` : label}
-          onClick={sidebar.onToggle}
-        />
-      </Tooltip>
-    </CornerDot>
+    <Tooltip label={label} command={APP_COMMAND.TOGGLE_SIDEBAR}>
+      <IconButton
+        icon={<SidebarIcon />}
+        label={label}
+        onClick={sidebar.onToggle}
+        onPointerEnter={(event) => {
+          // Note that a finger's arrival peeks nothing, because iOS plays a
+          // tap's arrival as a hover and would spend the tap on the peek.
+          if (!away || event.pointerType === "touch") return;
+          sidebar.onOverlay(SIDEBAR_OVERLAY.PEEK);
+        }}
+      />
+    </Tooltip>
   );
+}
+
+/**
+ * Puts a peek away as the pointer leaves the title bar's buttons for anywhere
+ * but the sidebar floating under them or a layer they raised, so a peek the
+ * toggle opened goes as the pointer moves off it, as one the edge opened does.
+ * Note that where the pointer went is read against the sidebar's box where it
+ * names no element, because a drag strip in the sidebar's title row may
+ * answer none.
+ */
+function leaveTitleBar(sidebar: SidebarCollapse, event: React.PointerEvent<HTMLElement>): void {
+  if (sidebar.overlay !== SIDEBAR_OVERLAY.PEEK) return;
+  const pane = event.currentTarget.parentElement?.querySelector(".desktop-sidebar");
+  const to = event.relatedTarget;
+  if (to instanceof Element) {
+    if (pane?.contains(to) || to.closest(KEY_LAYERS) !== null) return;
+  } else {
+    const box = pane?.getBoundingClientRect();
+    const over =
+      box !== undefined &&
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom;
+    if (over) return;
+  }
+  sidebar.onOverlay(SIDEBAR_OVERLAY.CLOSED);
 }
 
 /** The sidebar's chord alone, where its toggle is not drawn, as on a phone's task, whose header stands in its place, though the drawer is still there to open. */
@@ -451,9 +470,14 @@ function labelOf(element: HTMLElement): string {
   );
 }
 
-/** Every control of `tag` called `label`, in the order the window draws them. */
+/**
+ * Every control of `tag` called `label` that could take the keyboard, in the order the window draws them. Note that one
+ * under an inert box is left out, as the folded sidebar's New task is beside the title bar's, because it takes no focus.
+ */
 function calledSo(tag: string, label: string): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(tag)].filter((each) => labelOf(each) === label);
+  return [...document.querySelectorAll<HTMLElement>(tag)].filter(
+    (each) => labelOf(each) === label && each.closest("[inert]") === null,
+  );
 }
 
 /** The control holding the keyboard now, named; none where it stands nowhere or on a control with no name. */
@@ -1114,9 +1138,17 @@ export function ShellPlaces(): React.JSX.Element {
       {room === SHELL_ROOM.NARROW ? (
         <SidebarChord sidebar={sidebar} />
       ) : (
-        <PanePin as={PANE_PIN_ELEMENT.DIV} className="title-bar-controls" onPin={keepOverlay}>
-          <SidebarToggle sidebar={sidebar} tasks={tasks} />
-          {sidebar.collapsed ? <NewTaskButton tasks={tasks} /> : null}
+        <PanePin
+          as={PANE_PIN_ELEMENT.DIV}
+          className="title-bar-controls"
+          onPin={keepOverlay}
+          onPointerLeave={(event) => leaveTitleBar(sidebar, event)}
+        >
+          <SidebarToggle sidebar={sidebar} />
+          {/* While the sidebar floats over the work, its workspace row's New task is the one in sight. */}
+          {sidebar.collapsed && sidebar.overlay === SIDEBAR_OVERLAY.CLOSED ? (
+            <NewTaskButton tasks={tasks} />
+          ) : null}
           {sidebar.collapsed ? (
             <ReplayUnmask>
               <OfflineMark />

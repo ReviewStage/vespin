@@ -1052,6 +1052,46 @@ const PINNED = {
   pinPosition: "a0",
 };
 
+test("Pinned's ⋯ stands while a pinned task is unread, and its Mark all as read asks the service to mark it read", async () => {
+  const marks: string[] = [];
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_MARK_READ]: ({ taskId, readMark }) => {
+      marks.push(`${readMark}:${taskId}`);
+      return Promise.resolve(true);
+    },
+  });
+  const read = await mountSidebar([], SECTIONS, {
+    tasks: [{ ...PINNED, readThrough: PINNED.updatedAt }],
+  });
+  assert.equal(read.querySelector('[aria-label="Pinned actions"]'), null);
+  read.remove();
+
+  const sidebar = await mountSidebar([], SECTIONS, {
+    tasks: [{ ...PINNED, readThrough: PINNED.updatedAt - 1 }],
+  });
+  openSectionMenu(sidebar, "Pinned");
+  await act(async () => item("Mark all as read").click());
+  await settle();
+
+  assert.deepEqual(marks, [`read:${PINNED.id}`]);
+});
+
+test("a task row in Pinned and in a section shows when its agents last did something, as a row in Tasks does", async () => {
+  const active = { agents: { total: 1, working: 0, activityAt: 9_000, pullRequestTotal: 0 } };
+  const sidebar = await mountSidebar([], SECTIONS, {
+    tasks: [
+      { ...PINNED, ...active },
+      { ...INVITES, ...active },
+    ],
+  });
+  const shown = (name: string) =>
+    rowPress(sidebar, name).querySelector("time")?.getAttribute("dateTime");
+
+  assert.equal(shown("Pin audit"), new Date(9_000).toISOString());
+  assert.equal(shown("Invite expiry"), new Date(9_000).toISOString());
+});
+
 test("a task dragged from Tasks into Pinned is pinned below the pin it was let go under", async () => {
   const asked = noneAsked();
   // Down the column: Pin audit under Pinned, Invite expiry under Launch, Retry audit under Tasks.

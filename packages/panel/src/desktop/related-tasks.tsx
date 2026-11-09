@@ -14,7 +14,6 @@ import { LIST_COLUMN, type ListColumn, TASK_PROPERTY } from "@repo/ui/tasks-page
 import { type ReactNode, useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useFindOpen } from "../find-in-tab.js";
-import { pullRequestNumberLabel } from "../tasks/agent-model.js";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -49,8 +48,8 @@ import { useTasksSelection } from "./tasks-selection.js";
  * one chosen. A row may stand nested under another (`depth`), read at its
  * level and its place among its siblings (`nestsOf`), and fold the
  * rows nested under it (`fold`), whose owner keeps whether they stand open
- * and hands only the rows drawn. A row may stand settled, its name muted,
- * and lead its menu with groups of its owner's (`menu`).
+ * and hands only the rows drawn. A row may lead its menu with groups of
+ * its owner's (`menu`).
  */
 
 /** One row of the list: the task, what leads it, how deep it is nested, and the rows it folds. */
@@ -62,8 +61,6 @@ export interface RelatedTaskRow {
   readonly relationWords?: string;
   readonly depth?: number;
   readonly fold?: ListRowFold;
-  /** Whether it stands settled beside the rows still open, its name muted: a blocker that is done. */
-  readonly settled?: boolean;
   /** Groups leading its menu, ahead of the task's own: its relation to change or take away. */
   readonly menu?: readonly (readonly MenuEntry[])[];
   /** Whether the window does not list the task yet, so the row draws its name, its end, and its menu's groups alone. */
@@ -95,9 +92,10 @@ function ownRoom(cells: readonly TaskRowCell[]): number {
 }
 
 /**
- * The cells the list draws: the related task's own, leaving out a column no
- * row fills, its relation, its pull requests, or its sub-tasks' count, since
- * an empty column still costs the list a gap.
+ * The cells the list draws: the related task's own, leaving out its
+ * relation where no row says one, since an empty column still costs the
+ * list a gap, and its pull requests and sub-tasks' count where no row has
+ * any, so the list counts no room for them before it folds (`ownRoom`).
  */
 function drawnCells(
   rows: readonly RelatedTaskRow[],
@@ -147,26 +145,16 @@ export function RelatedTasks({
   const more = !useCoarsePointer();
   const nests = nestsOf(rows.map(({ depth = 0 }) => ({ depth })));
   const keys = useMemo(() => rows.map(({ task }) => task.id), [rows]);
-  // What every row says in the cells whose words differ row to row, which its columns stand as wide as, since each row lays them out itself (`taskRowFit`).
+  // What every row says in the columns before its name whose words differ row to row, which those columns stand as wide as, since each row lays them out itself (`taskRowFit`).
   const fit = useMemo(
     () =>
       taskRowFit(
-        rows.map(({ task, relationWords }) => {
-          const counted = subTasks.get(task.id);
-          return {
-            key: task.number === undefined ? undefined : taskKey(workspaceName, task.number),
-            relation: relationWords,
-            pullRequests: openPullRequests(pullRequestsOfTask(pullRequests, task.id)).map(
-              pullRequestNumberLabel,
-            ),
-            subTasks:
-              counted === undefined || counted.total === 0
-                ? undefined
-                : `${counted.finished}/${counted.total}`,
-          };
-        }),
+        rows.map(({ task, relationWords }) => ({
+          key: task.number === undefined ? undefined : taskKey(workspaceName, task.number),
+          relation: relationWords,
+        })),
       ),
-    [rows, subTasks, workspaceName, pullRequests],
+    [rows, workspaceName],
   );
   // Note that the rows are drawn only near the view, and every row while a find bar stands open over the plan.
   const finding = useFindOpen();
@@ -188,7 +176,7 @@ export function RelatedTasks({
         {(index, place) => {
           const row = rows[index];
           if (row === undefined) return null;
-          const { task, relation, depth, fold, settled, menu, unlisted } = row;
+          const { task, relation, depth, fold, menu, unlisted } = row;
           return (
             <TaskListRow
               key={task.id}
@@ -206,7 +194,6 @@ export function RelatedTasks({
               depth={depth}
               nest={nests[index]}
               fold={fold}
-              settled={settled}
               menuGroups={menu}
               unlisted={unlisted}
               more={more}

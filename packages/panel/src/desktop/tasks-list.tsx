@@ -5,7 +5,6 @@ import {
   pinPositionsForMove,
 } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { pullRequestsOfTask } from "@repo/features/task-agents-model";
 import {
   TASK_SECTION_ICON_KIND,
   TASK_SECTION_WRITE,
@@ -126,7 +125,6 @@ import { useBoardDoor } from "../places/routed-doors.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { pullRequestNumberLabel } from "../tasks/agent-model.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import {
   NO_ASSIGNEE_WORDS,
@@ -135,7 +133,6 @@ import {
 } from "../tasks/task-standing.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
-import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { useFittedColumns } from "./fitted-columns.js";
@@ -145,7 +142,7 @@ import { type DraftParts, type QuickAddLine, QuickAddLines, useQuickAdd } from "
 import { sectionGlyph } from "./section-icon-picker.js";
 import { groupCount, sidebarFold } from "./sidebar-fold.js";
 import { type OpenedTask, openedTaskOf, type TaskRowTab, useTaskRowTab } from "./task-actions.js";
-import { openPullRequests, TaskListRow } from "./task-list-row.js";
+import { TaskListRow } from "./task-list-row.js";
 import { CreatorFace, useStandingDoor, WaitingCount } from "./task-row-parts.js";
 import {
   assigneeFor,
@@ -1034,34 +1031,17 @@ export function TasksList({
     [groups],
   );
   const workspaceName = tasks.workspace?.name ?? "";
-  const pullRequests = useListedTaskPullRequests();
-  // What every task listed says in the cells whose words differ row to row, which its columns stand as wide as (`taskRowFit`); read again only as those change, since it walks every task.
+  // What every task listed says in the columns before its name whose words differ row to row, which those columns stand as wide as (`taskRowFit`); read again only as those change, since it walks every task.
   const fit = useMemo(
     () =>
       taskRowFit(
         groups.flatMap((group) =>
-          group.tasks.map((task) => {
-            const subTasks = subTaskCounts.get(task.id);
-            const waiting = waitingOn.get(task.id) ?? 0;
-            return {
-              key: task.number === undefined ? undefined : taskKey(workspaceName, task.number),
-              pullRequests: openPullRequests(pullRequestsOfTask(pullRequests, task.id)).map(
-                pullRequestNumberLabel,
-              ),
-              subTasks:
-                subTasks === undefined || subTasks.total === 0
-                  ? undefined
-                  : `${subTasks.finished}/${subTasks.total}`,
-              waiting: waiting === 0 ? undefined : String(waiting),
-              repository:
-                task.repository === null
-                  ? NO_REPOSITORY
-                  : repositoryLabel(task.repository, repositories),
-            };
-          }),
+          group.tasks.map((task) => ({
+            key: task.number === undefined ? undefined : taskKey(workspaceName, task.number),
+          })),
         ),
       ),
-    [groups, subTaskCounts, waitingOn, workspaceName, repositories, pullRequests],
+    [groups, workspaceName],
   );
   const listStyle = useMemo(
     () => ({

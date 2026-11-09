@@ -53,9 +53,10 @@ import { CatalogSection } from "../section";
  * task-rows.tsx -- a task's related tasks as a list of their own: each row
  * as the Tasks page's List draws it, led by the relation's kind in words so
  * it reads as a sentence, an open blocker's in the attention tone, then its
- * priority, key, and status before its name, its assignee and its open pull
- * requests after it, and its ⋯; a blocked task wearing its stop sign beside
- * its name and a parent its count of finished sub-tasks; one row nested
+ * status before its name, and after it a trailing run packed against its
+ * time, a blocked task's stop sign leading it, a parent's count of finished
+ * sub-tasks, its open pull requests and its assignee, and its ⋯ over the
+ * time; a finished task muted; one row nested
  * under another that folds it, rows chosen by their box, ⌘-click, and
  * ⇧-click, and a menu their ⋯, a right-click, and the menu key open; a
  * composer's dock of related tasks, bare of a box's gutter and a ⋯, its
@@ -94,6 +95,8 @@ interface CatalogTask {
   readonly blocked?: boolean;
   /** How many of its sub-tasks are finished, of all of them. */
   readonly subTasks?: { readonly finished: number; readonly total: number };
+  /** How long ago it last moved, as its row says it. */
+  readonly updated: string;
 }
 
 const PARENT: CatalogTask = {
@@ -107,6 +110,7 @@ const PARENT: CatalogTask = {
   kind: RELATION_KIND.BLOCKED_BY,
   blocked: true,
   subTasks: { finished: 1, total: 3 },
+  updated: "20m",
 };
 
 const CHILD: CatalogTask = {
@@ -117,6 +121,7 @@ const CHILD: CatalogTask = {
   status: TASK_STATUS.TODO,
   assignee: undefined,
   pullRequests: [615, 611],
+  updated: "2h",
 };
 
 const RELATED: CatalogTask = {
@@ -124,10 +129,11 @@ const RELATED: CatalogTask = {
   name: "Rate limit search",
   key: "ACME-39",
   priority: TASK_PRIORITY.URGENT,
-  status: TASK_STATUS.BACKLOG,
+  status: TASK_STATUS.DONE,
   assignee: "Grace Hopper",
   pullRequests: [],
   kind: RELATION_KIND.BLOCKS,
+  updated: "3d",
 };
 
 /** A task's own menu. */
@@ -216,7 +222,7 @@ function CatalogTaskRow({
     <TaskRow
       taskId={task.id}
       name={task.name}
-      beside={task.blocked === true ? <BlockedMark aria-hidden="true" /> : undefined}
+      flag={task.blocked === true ? <BlockedMark aria-hidden="true" /> : undefined}
       cells={RELATED_TASK_CELLS}
       content={{
         [TASK_ROW_CELL.PRIORITY]: (
@@ -247,9 +253,15 @@ function CatalogTaskRow({
               label={`${task.subTasks.finished} of ${task.subTasks.total} sub-tasks finished`}
             />
           ),
+        [TASK_ROW_CELL.UPDATED]: (
+          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            {task.updated}
+          </Text>
+        ),
       }}
       menu={{ thing: "Task", groups: taskMenu(task.name) }}
       onOpen={ignore}
+      settled={task.status === TASK_STATUS.DONE}
       depth={depth}
       nest={nest}
       fold={fold === undefined ? undefined : { ...fold, label: `Child tasks of ${task.name}` }}
@@ -290,17 +302,7 @@ const RUN_TASKS = [PARENT, CHILD, RELATED] as const;
 function RelatedTasksRun(): React.JSX.Element {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const fit = taskRowFit(
-    RUN_TASKS.map((task) => ({
-      key: task.key,
-      relation: task.kind?.words,
-      pullRequests: task.pullRequests.map((number) => `#${number}`),
-      subTasks:
-        task.subTasks === undefined
-          ? undefined
-          : `${task.subTasks.finished}/${task.subTasks.total}`,
-    })),
-  );
+  const fit = taskRowFit(RUN_TASKS.map((task) => ({ key: task.key, relation: task.kind?.words })));
   return (
     <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT}>
       <VirtualTaskRows

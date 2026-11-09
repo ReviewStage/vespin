@@ -3,6 +3,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { dropBelowStart, GearIcon, IconButton, useMenu } from "@repo/ui";
 import { MessageSquareIcon } from "@repo/ui/icons";
 import { runAppCommand } from "../app-commands.js";
+import { useAdminDoor } from "../places/routed-doors.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu, type MenuEntry } from "./action-menu.js";
 import { AccountAvatar, AccountHeading, useAccountMenuGroups } from "./sidebar-foot.js";
@@ -16,7 +17,7 @@ import { useWorkspaceMenuDoors, workspaceMenuGroups } from "./workspace-switcher
  * (`desktop-sidebar.tsx`), so every place's head leads with the reader's face
  * instead, as phone apps that keep an account and actions of their own do,
  * the actions at the head's other end. Its menu holds the workspaces, New
- * workspace and Workspace settings; Settings and Send feedback, which the
+ * workspace, Workspace settings, and Admin for an admin; Settings and Send feedback, which the
  * desktop's foot draws as buttons beside its account; then the account
  * menu's items, each the same as the desktop's.
  */
@@ -44,7 +45,8 @@ export function PhoneAccount({
       onSelect: () => runAppCommand(APP_COMMAND.SEND_FEEDBACK),
     },
   ];
-  const doors = useWorkspaceMenuDoors();
+  const admin = useAdminDoor(tasks);
+  const doors = useWorkspaceMenuDoors({ onOpen: () => admin.open(), onPreload: admin.preload });
   const listed = tasks.workspace;
   const workspaceGroups = listed === undefined ? [] : workspaceMenuGroups(listed, tasks, doors);
   return (

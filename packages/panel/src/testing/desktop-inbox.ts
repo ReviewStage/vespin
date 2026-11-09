@@ -1033,9 +1033,9 @@ export function openViewOptions(page: HTMLElement): void {
 /** The scopes the view's menu may offer, in their order, and Archived, which it offered while tasks were archived, so a menu offering it again is heard. */
 export const SCOPE_NAMES = ["Open", "Questions", "All", "Archived"] as const;
 
-/** The Inbox's name as the list's head says it. */
+/** The Inbox's name as the list's heading says it to a reader. */
 export function headTitle(page: HTMLElement): string | null | undefined {
-  return page.querySelector(".inbox-tasks .ui-toolbar-title")?.textContent;
+  return page.querySelector(".inbox-tasks h1")?.textContent;
 }
 
 /** Shows the scope `name` from the list's View options. */

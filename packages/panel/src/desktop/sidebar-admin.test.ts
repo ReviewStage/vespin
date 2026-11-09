@@ -15,11 +15,11 @@ import { tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 
 /**
- * sidebar-admin.test.ts -- the Admin row stands after Automations for an
- * admin alone, and a non-admin is drawn nothing in its place; its press
- * opens the window's Admin place rather than a browser, asking the host for
- * nothing; the place then takes the window, its own list where this sidebar
- * stood (`desktop-admin.test.ts`).
+ * sidebar-admin.test.ts -- Admin stands in the workspace menu after
+ * Workspace settings for an admin alone, and a non-admin is offered nothing
+ * in its place; choosing it opens the window's Admin place rather than a
+ * browser, asking the host for nothing; the place then takes the window, its
+ * own list where this sidebar stood (`desktop-admin.test.ts`).
  */
 
 const roots: Root[] = [];
@@ -51,7 +51,7 @@ const ACME: Workspace = {
   github: null,
 };
 
-/** The sidebar beside the work, for an account that is an admin or not. */
+/** The sidebar beside the work, for an account that is an admin or not, its workspace menu open once the account's access is read. */
 async function mount(admin: boolean): Promise<{ sidebar: HTMLElement; path: () => string }> {
   handState({}, { access: { admin } });
   const router = windowRouter(createMemoryHistory({ initialEntries: ["/acme"] }));
@@ -67,46 +67,50 @@ async function mount(admin: boolean): Promise<{ sidebar: HTMLElement; path: () =
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
-  if (admin) await vi.waitFor(() => assert.equal(adminRow(container) !== undefined, true));
+  const switcher =
+    container.querySelector<HTMLButtonElement>('.sidebar-workspace button[aria-haspopup="menu"]') ??
+    assert.fail("the workspace switcher");
+  act(() => switcher.click());
+  if (admin) await vi.waitFor(() => assert.equal(adminItem() !== undefined, true));
   return { sidebar: container, path: () => router.history.location.pathname };
 }
 
-/** The names of the rows the sidebar's places draw, top to bottom. */
-function placeNames(sidebar: HTMLElement): string[] {
-  const places = sidebar.querySelector(".sidebar-places") ?? assert.fail("the sidebar's places");
-  return [...places.querySelectorAll(".ui-nav-item-name")].map((name) => name.textContent ?? "");
-}
-
-/** The Admin row, wherever it is drawn. */
-function adminRow(sidebar: HTMLElement): HTMLElement | undefined {
-  return [...sidebar.querySelectorAll<HTMLElement>(".ui-nav-item")].find(
-    (row) => row.querySelector(".ui-nav-item-name")?.textContent === "Admin",
+/** The labels of the workspace menu's items, top to bottom. */
+function itemNames(): string[] {
+  return [...document.querySelectorAll('[role="menu"] [role^="menuitem"]')].map(
+    (item) => item.querySelector(".ui-menu-item-label")?.textContent ?? "",
   );
 }
 
-test("an account that is no admin is drawn no Admin row, neither hidden nor held back", async () => {
+/** The workspace menu's Admin item, where it is offered. */
+function adminItem(): HTMLElement | undefined {
+  return [...document.querySelectorAll<HTMLElement>('[role="menu"] [role^="menuitem"]')].find(
+    (item) => item.querySelector(".ui-menu-item-label")?.textContent === "Admin",
+  );
+}
+
+test("an account that is no admin is offered no Admin, neither in the menu nor as a row", async () => {
   const { sidebar } = await mount(false);
 
-  assert.equal(adminRow(sidebar), undefined);
+  assert.equal(adminItem(), undefined);
   assert.doesNotMatch(sidebar.textContent ?? "", /Admin/u);
 });
 
-test("an admin's Admin row stands right after Automations", async () => {
-  const { sidebar } = await mount(true);
-  const names = placeNames(sidebar);
+test("an admin is offered Admin right after Workspace settings", async () => {
+  await mount(true);
+  const names = itemNames();
 
   assert.equal(names.at(-1), "Admin");
-  assert.equal(names.at(-2), "Automations");
+  assert.equal(names.at(-2), "Workspace settings");
 });
 
-test("pressing the Admin row opens the window's Admin place and asks the host for nothing", async () => {
+test("choosing Admin opens the window's Admin place and asks the host for nothing", async () => {
   const mounted = await mount(true);
-  const row = adminRow(mounted.sidebar) ?? assert.fail("the Admin row");
+  const item = adminItem() ?? assert.fail("the Admin item");
 
-  assert.ok(row instanceof HTMLButtonElement);
   // Note that the listed workspace's reads are followed from the sidebar's first draw, before any press.
   const before = sent.length;
-  act(() => row.click());
+  act(() => item.click());
   await act(async () => {
     for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
   });

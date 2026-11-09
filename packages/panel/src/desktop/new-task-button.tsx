@@ -1,12 +1,21 @@
 import type { TaskStanding } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/ui";
+import {
+  BUTTON_SIZE,
+  ComposeIcon,
+  CornerBadge,
+  DRAFT_WORD,
+  IconButton,
+  PlusIcon,
+  Tooltip,
+} from "@repo/ui";
+import { PencilLineIcon } from "@repo/ui/icons";
 import { TASKS_GROUP, type TasksGroupHead } from "@repo/ui/tasks-page-model";
 import type { QuickAddInto } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
- * new-task-button.tsx -- New task as a glyph: the title bar's while the sidebar is folded, opening New task's dialog; and a group's +: a sidebar repository's, opening it on the repository, and a Tasks page group's, adding a task in the group in place (`quick-add.tsx`).
+ * new-task-button.tsx -- New task as a glyph: the sidebar's at its workspace row's end, and the title bar's while the sidebar is folded, opening New task's dialog; and a group's +: a sidebar repository's, opening it on the repository, and a Tasks page group's, adding a task in the group in place (`quick-add.tsx`).
  */
 
 /** What a Tasks page group's + names, to a reader, for the task it adds: one in a status, priority, or repository, or for a person. */
@@ -24,21 +33,45 @@ export function groupStanding(head: TasksGroupHead): TaskStanding | undefined {
 }
 
 /**
- * New task's glyph, kept in reach where the sidebar's own button is not: it
- * asks for exactly what the sidebar's button asks for, the New task dialog
- * over whatever stands, or Home's own composer on Home, the way a chat app
- * keeps its compose button in reach. Pressed by nothing while no one is signed in.
+ * New task's glyph: at the end of the sidebar's workspace row, and beside
+ * the toggle while the sidebar is folded. A press asks for the New task
+ * dialog over whatever stands, or Home's own composer on Home, the way a
+ * chat app keeps its compose button in reach; `onNewTask` asks for it where
+ * a press must first leave a place, else the tasks' own door is pressed.
+ * Where told, it is the place shown while New task's words are in sight,
+ * and wears the Draft pencil at its corner while they wait unseen as the
+ * workspace's draft (`composer-drafts.ts`), said to a reader after its
+ * name. Pressed by nothing while no one is signed in.
  */
-export function NewTaskButton({ tasks }: { tasks: TasksControl }): React.JSX.Element {
-  return (
+export function NewTaskButton({
+  tasks,
+  current = false,
+  drafted = false,
+  onNewTask = tasks.newTask.onOpen,
+}: {
+  tasks: TasksControl;
+  /** Whether New task's words are in sight: its card open, or Home shown. */
+  current?: boolean;
+  /** Whether its words wait as the workspace's draft, out of sight. */
+  drafted?: boolean;
+  onNewTask?: () => void;
+}): React.JSX.Element {
+  const button = (
     <Tooltip label="New task" command={APP_COMMAND.NEW_TASK}>
       <IconButton
         icon={<ComposeIcon />}
         label="New task"
+        aria-current={current ? "page" : undefined}
+        aria-description={drafted ? DRAFT_WORD : undefined}
         disabled={!tasks.signedIn}
-        onClick={tasks.newTask.onOpen}
+        onClick={onNewTask}
       />
     </Tooltip>
+  );
+  return drafted ? (
+    <CornerBadge mark={<PencilLineIcon aria-hidden="true" />}>{button}</CornerBadge>
+  ) : (
+    button
   );
 }
 

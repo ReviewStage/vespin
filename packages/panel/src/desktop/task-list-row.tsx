@@ -1,4 +1,5 @@
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { TASK_AGENTS_STATUS, taskAgentsStatus } from "@repo/features/task-agents-model";
 import {
   TASK_BOUNDS,
   type TaskPullRequestLine,
@@ -14,7 +15,6 @@ import {
   InlineEdit,
   type ListRowFold,
   type ListRowNest,
-  PROGRESS_COUNT_LOOK,
   ProgressCount,
   RepositoryName,
   RowHint,
@@ -33,6 +33,7 @@ import {
   type ChildTaskCount,
   repositoryLabel,
   TASK_ORDER,
+  taskFinished,
   taskTime,
 } from "@repo/ui/task-list-model";
 import { RENAME_FAILED_NOTE } from "@repo/ui/tasks-model";
@@ -70,11 +71,14 @@ import { type ChosenTasks, chosenRowMenu } from "./tasks-selection.js";
  * (`use-open-link.ts`); its repository, led by its owner's picture; how its
  * agents stand (`TaskAgentsMark`); and when it last moved. The rest of a
  * list's cells are the list's own (`content`): the Tasks page's what waits
- * on the reader and its creator; a related task's kind at its end. Each
- * cell stands only where the row's list draws it (`cells`). Beside its
- * name stands the stop sign of a task blocked by another (`BlockedMark`),
- * which the press says after the status, and in its own cell how many of
- * its sub-tasks are finished, "1/3", as a badge, as a Board card says it.
+ * on the reader and its creator; a related task's kind leading it. Each
+ * cell stands only where the row's list draws it (`cells`). Its trailing
+ * run is led by the stop sign of a task blocked by another
+ * (`BlockedMark`), which the press says after the status, and holds how
+ * many of its sub-tasks are finished, "1/3", as the sidebar's row says it;
+ * where its open pull requests stand as chips, how its agents stand is
+ * left out while it would only say one is open. A task done or canceled
+ * stands muted, its name in the quieter ink.
  *
  * Its menu is the task's own, after any groups its list leads it with (a
  * related task's Change relation), whose Rename makes its name its field until
@@ -150,7 +154,6 @@ export function TaskListRow({
   depth,
   nest,
   fold,
-  settled,
   menuGroups = [],
   unlisted = false,
   more = true,
@@ -184,8 +187,6 @@ export function TaskListRow({
   nest?: ListRowNest | undefined;
   /** The rows nested under it, which it folds; none where it holds none. */
   fold?: ListRowFold | undefined;
-  /** Whether it stands settled beside the rows still open, its name muted. */
-  settled?: boolean | undefined;
   /** Its list's own groups, ahead of the task's menu: a related task's relation to change. */
   menuGroups?: readonly (readonly MenuEntry[])[] | undefined;
   /** Whether the window does not list the task yet, so only its name, its list's own cells, and its list's own menu groups stand, none of what its standing would say or change. */
@@ -207,6 +208,12 @@ export function TaskListRow({
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const drawn = (cell: TaskRowCell) => cells.includes(cell);
+  const pullRequests = useTaskPullRequests(task.id);
+  // Note that where its open pull requests stand as chips, the agents' mark is left out while it would only say one is open, so the run says it once.
+  const agentsSaidByChips =
+    drawn(TASK_ROW_CELL.PULL_REQUESTS) &&
+    openPullRequests(pullRequests).length > 0 &&
+    taskAgentsStatus(task.agents, pullRequests).kind === TASK_AGENTS_STATUS.PULL_REQUEST;
   const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
@@ -258,7 +265,7 @@ export function TaskListRow({
           </VisuallyHidden>
         )
       }
-      beside={task.blocked === true ? <BlockedMark aria-hidden="true" /> : undefined}
+      flag={task.blocked === true ? <BlockedMark aria-hidden="true" /> : undefined}
       cells={cells}
       content={
         unlisted
@@ -292,7 +299,6 @@ export function TaskListRow({
                     done={subTasks.finished}
                     total={subTasks.total}
                     label={`${subTasks.finished} of ${subTasks.total} sub-tasks finished`}
-                    look={PROGRESS_COUNT_LOOK.BADGE}
                   />
                 ),
               [TASK_ROW_CELL.REPOSITORY]: drawn(TASK_ROW_CELL.REPOSITORY) ? (
@@ -304,9 +310,10 @@ export function TaskListRow({
                   />
                 </ReplayWords>
               ) : null,
-              [TASK_ROW_CELL.AGENTS]: drawn(TASK_ROW_CELL.AGENTS) ? (
-                <TaskRowStatus task={task} size={TASK_AGENTS_MARK_SIZE.MEDIUM} />
-              ) : null,
+              [TASK_ROW_CELL.AGENTS]:
+                drawn(TASK_ROW_CELL.AGENTS) && !agentsSaidByChips ? (
+                  <TaskRowStatus task={task} size={TASK_AGENTS_MARK_SIZE.MEDIUM} />
+                ) : null,
               [TASK_ROW_CELL.UPDATED]: drawn(TASK_ROW_CELL.UPDATED) ? (
                 <Time at={taskTime(task, TASK_ORDER.UPDATED)} hint={false} />
               ) : null,
@@ -339,7 +346,7 @@ export function TaskListRow({
       depth={depth}
       nest={nest}
       fold={fold}
-      settled={settled}
+      settled={!unlisted && taskFinished(task)}
       place={place}
     >
       {actions.dialog}

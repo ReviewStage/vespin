@@ -365,6 +365,25 @@ test("the pointer at the window's left edge peeks the folded sidebar out, which 
   assert.equal(standing(page), "pinned");
 });
 
+test("the pointer resting on the folded sidebar's toggle peeks the sidebar out, which stays as the pointer moves down into it and goes once it leaves for the work", () => {
+  const page = mount(1450);
+  const main = page.querySelector("main.desktop-main");
+  assert.ok(main);
+  act(() => toggle(page).click());
+  assert.equal(standing(page), "away");
+  pointerCross(main, toggle(page));
+  assert.equal(standing(page), "floating");
+  assert.equal(toggle(page).getAttribute("aria-label"), "Show sidebar", "a peek is not yet open");
+  pointerCross(toggle(page), sidebarOf(page));
+  assert.equal(standing(page), "floating", "the sidebar under the toggle is no way out");
+  pointerCross(sidebarOf(page), main);
+  assert.equal(standing(page), "away");
+
+  pointerCross(main, toggle(page));
+  pointerCross(toggle(page), main);
+  assert.equal(standing(page), "away", "the toggle left for the work leaves the peek");
+});
+
 test("a floating sidebar left for Settings by its chord is away when the plans come back", async () => {
   const page = mount(1000);
   act(() => toggle(page).click());

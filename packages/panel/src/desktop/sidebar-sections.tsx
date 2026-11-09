@@ -26,7 +26,6 @@ import {
   type DialogConfirm,
   FormField,
   GAP,
-  GROUP_HEADING,
   GroupHeader,
   type GroupHeaderEditEnd,
   GroupHeaderEditor,
@@ -83,7 +82,7 @@ import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
-import { foldedCount, SIDEBAR_SECTION_SLOT, sidebarFold, TASK_NOUN } from "./sidebar-fold.js";
+import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import { useFormDialog } from "./use-form-dialog.js";
 import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
@@ -896,11 +895,14 @@ function SidebarSection({
             />
           )
         }
-        heading={GROUP_HEADING.NONE}
+        {...sidebarHead({
+          folded,
+          onToggle: () => context.onToggle(section.id),
+          count: drawn.rows.length,
+          noun: TASK_NOUN,
+        })}
         glyph={glyph}
         label={<ReplayMask>{section.title}</ReplayMask>}
-        fold={sidebarFold(folded, () => context.onToggle(section.id))}
-        count={foldedCount(folded, drawn.rows.length, TASK_NOUN)}
         menuOpen={menu.open !== undefined}
         contextMenu={menu.contextMenu(ellipsis)}
         standing={
@@ -994,7 +996,7 @@ export function SidebarSections({
     <nav className="sidebar-group" aria-label="Sections">
       <Stack
         as={LAYOUT_ELEMENT.UL}
-        gap={GAP.CONTROL}
+        gap={GAP.SECTION}
         className="sidebar-sections"
         moves
         onPointerDown={drag}

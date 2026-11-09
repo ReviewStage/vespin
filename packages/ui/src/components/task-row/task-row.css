@@ -11,12 +11,16 @@
    row's middle, and comes in there while the row is in hand, holds the
    keyboard, or has its menu open (`row-menu.css` fades it), as a
    `NavItem`'s and a `ListRow`'s acts do, nothing else in the row moving.
-   Where the row's last cell only says something, the time on the Tasks
-   page, the ⋯ keeps no column, so that cell ends at the row's end inset,
-   and gives way under the ⋯ by its opacity while it stands (`data-under-
-   more`); where the last cell holds a control, or the name is the last, the
-   list keeps the ⋯ a narrow column of its own (`taskRowColumns`), so
-   neither is ever covered. Note that the cell gives way by its opacity,
+   Where the row's last column only says something, its time, the ⋯ keeps
+   no column, so that cell ends at the row's end inset, and gives way under
+   the ⋯ by its opacity while it stands (`data-under-more`); where the last
+   column holds a control, or the name is the last, the list keeps the ⋯ a
+   narrow column of its own (`taskRowColumns`), so neither is ever covered.
+
+   An unweighed priority's chip stands unseen at rest, so a list of tasks
+   no one weighed is not a column of dots, and comes in where the ⋯ does,
+   and while its own menu is open, so it is still set from the row. A
+   screen with no hover draws it at rest. Note that the cell gives way by its opacity,
    never its visibility, so a reader reaching the row still hears it, and
    takes no press while it is gone, so a press there is the ⋯'s. A screen
    with no hover never has a row in hand, so there the ⋯ stands at rest,
@@ -48,7 +52,7 @@
     pointer-events: none;
   }
 
-  .ui-task-row-cell[data-under-more="true"] {
+  .ui-task-row-cell:is([data-under-more="true"], [data-cell="priority"]) {
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
@@ -59,6 +63,11 @@
   @media (hover: hover) {
     .ui-task-row:hover .ui-task-row-more {
       pointer-events: auto;
+    }
+
+    .ui-task-row:not(:hover, :has(:focus-visible), [data-menu-open="true"])
+      > [data-cell="priority"]:not(:has([aria-expanded="true"])):has([data-priority="none"]) {
+      opacity: 0;
     }
 
     .ui-task-row:is(:hover, :has(:focus-visible), [data-menu-open="true"]):has(

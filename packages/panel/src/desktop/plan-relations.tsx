@@ -352,7 +352,6 @@ export function PlanRelations({
             />
           </ReplayUnmask>
         ),
-        settled: blocker && settled,
         menu: relationMenu(kind, doors),
         unlisted: !listed,
       };

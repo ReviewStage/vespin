@@ -984,12 +984,11 @@ function SidebarTaskCard({
  * own words, an agent at work, and its pull request. That it is blocked
  * the press says after the status. Who is on it, its repository, that it
  * is blocked, and its sub-tasks stand on its card alone, so its name keeps
- * the room. Its time is the one the
+ * the room. A task done or canceled stands back (`muted`). Its time is
+ * the one the
  * list's order chooses. Pin
  * and Mark done stand in place of all of it while the row is hovered or
- * reached from the keyboard. A finished sub-task nested under its parent,
- * which the view shows only when asked, is muted, so the open work stands
- * out among them.
+ * reached from the keyboard.
  * A press opens it, and its actions are one menu opened alike by the row's ⋯,
  * a right-click, a long press, and the menu key (`ListRow`'s `menu`). A
  * finger's row draws neither its ⋯ nor Pin and Mark done, as a phone's
@@ -1129,7 +1128,7 @@ export function SidebarTask({
           }
           current={current ? LIST_ROW_CURRENT.PAGE : undefined}
           unread={unread}
-          muted={depth !== undefined && depth > 0 && taskFinished(task)}
+          muted={taskFinished(task)}
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
