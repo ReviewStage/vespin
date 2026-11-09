@@ -30,6 +30,7 @@ export function SidebarIdentity({
   qualifier,
   mark,
   replayUnmasked = false,
+  end,
 }: {
   name: string;
   qualifier?: string | undefined;
@@ -37,6 +38,8 @@ export function SidebarIdentity({
   mark: ReactNode;
   /** Whether its name and qualifier are the app's own, which a screen recording shows as they read; masked unless set (`@repo/ui/session-replay-marks`). */
   replayUnmasked?: boolean | undefined;
+  /** A control at the head's end, such as the app's New task while no workspace heads the sidebar. */
+  end?: ReactNode;
 }): React.JSX.Element {
   return (
     <div className="sidebar-identity flex items-center gap-ui-12 px-row-inset pt-ui-2 pb-section-gap">
@@ -53,6 +56,7 @@ export function SidebarIdentity({
           </span>
         )}
       </span>
+      {end === undefined ? null : <span className="ms-auto flex-none">{end}</span>}
     </div>
   );
 }

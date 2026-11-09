@@ -798,16 +798,10 @@ test("⌘/ is offered in the installed app, where Keyboard shortcuts is a page, 
   assert.deepEqual(tabs, []);
 });
 
-test("New task, by its chord or the sidebar's glyph, opens its card over the Inbox and leaves nothing, and from Settings brings the Tasks tab forward", async () => {
+test("New task, by its chord or the sidebar's glyph, which stands at the app's head before a workspace is read, opens its card over the Inbox and leaves nothing, and from Settings brings the Tasks tab forward", async () => {
   const tabs: PanelTab[] = [];
   const card = () => document.querySelector('[role="dialog"][aria-modal="true"]');
-  const page = mount(
-    true,
-    { workspace: ACME, workspaces: [ACME] },
-    PANEL_TAB.TASKS,
-    (tab) => tabs.push(tab),
-    { collapsed: false },
-  );
+  const page = mount(true, {}, PANEL_TAB.TASKS, (tab) => tabs.push(tab), { collapsed: false });
   await settle();
   act(() => runAppCommand(APP_COMMAND.NEW_TASK));
   const byChord = card() !== null;
@@ -816,7 +810,7 @@ test("New task, by its chord or the sidebar's glyph, opens its card over the Inb
   });
   act(() =>
     page
-      .querySelector<HTMLButtonElement>('.sidebar-workspace button[aria-label="New task"]')
+      .querySelector<HTMLButtonElement>('.sidebar-identity button[aria-label="New task"]')
       ?.click(),
   );
   const byRow = card() !== null;

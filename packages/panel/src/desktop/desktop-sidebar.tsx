@@ -177,7 +177,7 @@ import {
   storedSlot,
   useNestedRows,
 } from "./nested-rows.js";
-import { NewTaskInButton } from "./new-task-button.js";
+import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
 import { useInboxWaiting } from "./places-waiting.js";
@@ -2247,6 +2247,8 @@ function SidebarColumn({
   useAppCommand(APP_COMMAND.PREVIOUS_TASK, listed && at > 0 ? () => step(-1) : undefined);
   useAppCommand(APP_COMMAND.NEXT_TASK, listed && at < drawn.length - 1 ? () => step(1) : undefined);
 
+  // Whether New task's words are in sight; a person's page stands in Home's place without leaving its page, and draws no composer.
+  const newTaskShown = tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON);
   // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const phone = room === SHELL_ROOM.NARROW;
   const places = (
@@ -2338,15 +2340,14 @@ function SidebarColumn({
         <WorkspaceSwitcher
           tasks={tasks}
           inSight={overlay.inSight}
-          newTask={{
-            // A person's page stands in Home's place without leaving its page, and draws no composer.
-            shown: tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON),
-            onOpen: chosen(newTask),
-          }}
+          newTask={{ shown: newTaskShown, onOpen: chosen(newTask) }}
           admin={{ onOpen: chosen(openAdmin), onPreload: admin.preload }}
         />
       ) : (
-        <ProductIdentity />
+        // New task stands at the app's head until a workspace's row takes it, so it is never out of reach.
+        <ProductIdentity
+          end={<NewTaskButton tasks={tasks} current={newTaskShown} onNewTask={chosen(newTask)} />}
+        />
       )}
 
       {/* One scroller for the pages' rows and both sections, so neither the

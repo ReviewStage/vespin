@@ -470,9 +470,14 @@ function labelOf(element: HTMLElement): string {
   );
 }
 
-/** Every control of `tag` called `label`, in the order the window draws them. */
+/**
+ * Every control of `tag` called `label` that could take the keyboard, in the order the window draws them. Note that one
+ * under an inert box is left out, as the folded sidebar's New task is beside the title bar's, because it takes no focus.
+ */
 function calledSo(tag: string, label: string): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(tag)].filter((each) => labelOf(each) === label);
+  return [...document.querySelectorAll<HTMLElement>(tag)].filter(
+    (each) => labelOf(each) === label && each.closest("[inert]") === null,
+  );
 }
 
 /** The control holding the keyboard now, named; none where it stands nowhere or on a control with no name. */
