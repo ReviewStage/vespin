@@ -14,10 +14,16 @@
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { PULL_REQUEST_OPEN } from "@repo/settings";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
-import { appStateIn, appStateQuery, selectAppSettingsView } from "../use-app-state.js";
+import {
+  appStateIn,
+  appStateQuery,
+  selectAppSettingsView,
+  selectSignedIn,
+} from "../use-app-state.js";
 
-/** Whether the account chose to open pull requests on GitHub. */
+/** Whether the account signed in chose to open pull requests on GitHub; signed out, a choice the device still holds from an account is not read. */
 const selectPullRequestsOnGitHub = (state: AppStateSnapshot): boolean =>
+  selectSignedIn(state) !== undefined &&
   selectAppSettingsView(state)?.pullRequestOpen === PULL_REQUEST_OPEN.GITHUB;
 
 /** Whether a press on a pull request opens its page on GitHub, redrawn as the choice moves. */
