@@ -20,6 +20,7 @@ import {
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { ANY_LAUNCH, queueRunnerLine } from "@repo/database/models/runner-line-store";
 import { keepRunsOnPick, readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { createTask } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
@@ -594,13 +595,14 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a rewind ends a Claude Code agent's runner before it cuts and cuts nothing where the runner could not be ended, and cuts the one of an agent on the retired runtime, whose session ended, with nothing to stop and nothing asked of the retired runtime",
+      "a rewind ends a Claude Code agent's runner before it cuts and cuts nothing where the runner could not be ended, stops nothing for a line no runner was handed, and cuts the one of an agent on the retired runtime, whose session ended, with nothing to stop and nothing asked of the retired runtime",
       () =>
         Effect.gen(function* () {
           const { owner, taskId } = yield* openTeam;
           const onRetired = yield* agentOn(owner, taskId, "eve");
           const onClaudeCode = yield* agentOn(owner, taskId, "claude_code");
           const unhalted = yield* agentOn(owner, taskId, "claude_code");
+          const unheard = yield* agentOn(owner, taskId, "claude_code");
           const { agentSessions, claudeCode, native } = runtimes();
           const nativeSession = `${NATIVE_SESSION_PREFIX.claude_code}000000000001-${randomUUID()}`;
           const lines = new Map<string, string>();
@@ -608,16 +610,27 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             [onRetired, "wrun_eve"],
             [onClaudeCode, nativeSession],
             [unhalted, `${nativeSession}0`],
+            [unheard, `${nativeSession}1`],
           ] as const) {
             const target = { userId: owner, conversationId: agent.conversationId };
             yield* claimRuntimeSession(target, sessionId, new Date(0));
             const lineId = randomUUID();
             lines.set(agent.id, lineId);
+            // A line still queued for the runner, which no read handed one, as a Start's first is while its sandbox opens.
+            const clientId = agent === unheard ? randomUUID() : `line-${agent.id}`;
+            if (agent === unheard) {
+              yield* queueRunnerLine(owner, {
+                agentId: agent.id,
+                launch: ANY_LAUNCH,
+                text: '{"type":"message"}',
+                lineId: clientId,
+              });
+            }
             yield* (yield* Database).insert(messages).values({
               id: lineId,
               ...target,
               seq: 100,
-              clientId: `line-${agent.id}`,
+              clientId,
               role: MESSAGE_ROLE.USER,
               parts: [{ type: "text", text: "Expire invitations after a week." }],
               placedAt: new Date(0),
@@ -650,11 +663,13 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const nativeRewound = yield* rewind(onClaudeCode);
           claudeCode.answers.halts = false;
           const refused = yield* rewind(unhalted);
+          const unheardRewound = yield* rewind(unheard);
 
           assert.ok(Result.isSuccess(retiredRewound));
           assert.ok(Result.isSuccess(nativeRewound));
+          assert.ok(Result.isSuccess(unheardRewound));
           assert.deepEqual(refused, Result.fail(HOSTED_REFUSAL.UNAVAILABLE));
-          // Each is stopped before the cut and again after it, and a runner that could not be ended is not cut.
+          // Each is stopped before the cut and again after it, a runner that could not be ended is not cut, and a line no runner was handed stops nothing.
           assert.deepEqual(agentSessions.calls, []);
           assert.deepEqual(claudeCode.calls, [
             `halt:${nativeSession}:${onClaudeCode.conversationId}`,
@@ -662,8 +677,13 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             `halt:${nativeSession}0:${unhalted.conversationId}`,
           ]);
           assert.deepEqual(
-            [yield* standing(onRetired), yield* standing(onClaudeCode), yield* standing(unhalted)],
-            [0, 0, 1],
+            [
+              yield* standing(onRetired),
+              yield* standing(onClaudeCode),
+              yield* standing(unhalted),
+              yield* standing(unheard),
+            ],
+            [0, 0, 1, 0],
           );
         }),
     );

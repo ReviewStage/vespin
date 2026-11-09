@@ -1,5 +1,5 @@
-import { MESSAGE_ROLE } from "@repo/wire";
-import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
+import { and, asc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -10,6 +10,7 @@ import {
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
+import { withdrawUnhandedLines } from "./runner-line-store.js";
 import { settleKeptTurn } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
@@ -34,6 +35,15 @@ import type { ConversationTarget } from "./writer.js";
  * Only a line that opened its turn, or awaits one, can be cut at: a line
  * a turn under way took in after its first step sits inside that turn's
  * work, which no harness can cut through.
+ *
+ * A cut may be asked to drop only what no runner heard (`rewindUnheard`):
+ * every line it drops still queued for the agent's runner and never handed
+ * to one, and every turn it drops still queued. Its lines are withdrawn from
+ * the runner's queue in the cut's own transaction (`withdrawUnhandedLines`),
+ * so nothing the cut drops reaches a runner, and its caller has nothing to
+ * stop: a launch under way, as a Start's while its sandbox opens, goes on
+ * and reads whatever is sent in their place. Where anything it would drop
+ * may have been heard, it cuts nothing and answers so.
  */
 
 /** Why a line cannot be cut at. */
@@ -47,6 +57,15 @@ export const REWIND_REFUSAL = {
 } as const;
 
 export type RewindRefusal = (typeof REWIND_REFUSAL)[keyof typeof REWIND_REFUSAL];
+
+/** Why a cut asked to drop only what no runner heard cuts nothing, beside why any cut is refused. */
+export const UNHEARD_REFUSAL = {
+  ...REWIND_REFUSAL,
+  /** Something the cut would drop may have reached a runner; nothing was cut. */
+  HEARD: "heard",
+} as const;
+
+export type UnheardRefusal = (typeof UNHEARD_REFUSAL)[keyof typeof UNHEARD_REFUSAL];
 
 /** What a rewind cut: the line's client id and words' place, and the turns it dropped. */
 export interface ConversationRewound {
@@ -152,6 +171,51 @@ const findTurnBefore = SqlSchema.findAll({
         .from(turns)
         .where(and(eq(turns.conversationId, conversationId), lt(turns.queuedAt, from)))
         .limit(1),
+    ),
+});
+
+/** The developer's lines a cut drops, as `deleteMessagesFrom` drops them: each one's client id and the turn that took it. */
+const findDroppedLines = SqlSchema.findAll({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    seq: Schema.Number,
+    turnIds: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({ clientId: Schema.String, turnId: Schema.NullOr(Schema.String) }),
+  execute: ({ conversationId, seq, turnIds }) =>
+    Database.use((db) =>
+      db
+        .select({ clientId: messages.clientId, turnId: messages.turnId })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            or(
+              and(isNull(messages.turnId), gte(messages.seq, seq)),
+              turnIds.length === 0 ? sql`false` : inArray(messages.turnId, [...turnIds]),
+            ),
+          ),
+        ),
+    ),
+});
+
+/** The turns named that have left the queue: started, or ended. */
+const findTurnsBegun = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, turnIds: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ conversationId, turnIds }) =>
+    Database.use((db) =>
+      db
+        .select({ id: turns.id })
+        .from(turns)
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            inArray(turns.id, [...turnIds]),
+            ne(turns.status, TURN_STATUS.QUEUED),
+          ),
+        ),
     ),
 });
 
@@ -287,8 +351,34 @@ const cutPoint = (conversationId: string, messageId: string) =>
     return Result.succeed({ seq, clientId, heard: turnId !== null, from });
   });
 
-/** The cut, under the conversation's row lock and with no hand-over under way, answering what it cut or why it could not. */
-const cut = (target: ConversationTarget, messageId: string, place: number) =>
+/**
+ * Whether nothing a cut from the line at `seq` drops was heard: the line
+ * itself untaken, every turn it drops still queued, and every line it drops
+ * withdrawn from the runner's queue unhanded, which the withdrawal does here
+ * where they all were.
+ */
+const withdrawnUnheard = (
+  target: ConversationTarget,
+  seq: number,
+  heard: boolean,
+  turnIds: readonly string[],
+) =>
+  Effect.gen(function* () {
+    const { conversationId } = target;
+    if (heard) return false;
+    if (turnIds.length > 0 && (yield* findTurnsBegun({ conversationId, turnIds })).length > 0) {
+      return false;
+    }
+    const lines = yield* findDroppedLines({ conversationId, seq, turnIds });
+    if (lines.some((line) => line.turnId !== null)) return false;
+    return yield* withdrawUnhandedLines(
+      target,
+      lines.map((line) => line.clientId),
+    );
+  });
+
+/** The cut, under the conversation's row lock and with no hand-over under way, answering what it cut or why it could not; one asked to drop only what no runner heard (`unheard`) cuts nothing where anything was. */
+const cut = (target: ConversationTarget, messageId: string, place: number, unheard: boolean) =>
   Effect.gen(function* () {
     const { conversationId } = target;
     const held = yield* lockConversation(target);
@@ -300,6 +390,9 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     if (Result.isFailure(point)) return Result.fail(point.failure);
     const { seq, clientId, heard, from } = point.success;
     const turnIds = (yield* findTurnsFrom({ conversationId, from })).map((turn) => turn.id);
+    if (unheard && !(yield* withdrawnUnheard(target, seq, heard, turnIds))) {
+      return Result.fail(UNHEARD_REFUSAL.HEARD);
+    }
     yield* deleteMessagesFrom({ conversationId, seq, turnIds });
     // Note that a cut dropping every turn keeps the first one's row, its work gone and settled, because
     // an agent with no turn at all reads as one that never started, and fails past its grace.
@@ -314,6 +407,43 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     yield* markRewound({ conversationId, clientId, heard, turnIds });
     return Result.succeed<ConversationRewound>({ clientId, turnIds });
   });
+
+/** The cut, in one transaction, once no hand-over is under way, waiting for one as long as a claim can stand; refused as heard only where asked to drop nothing heard. */
+function rewound(
+  target: ConversationTarget,
+  messageId: string,
+  unheard: true,
+): Effect.Effect<
+  Result.Result<ConversationRewound, UnheardRefusal>,
+  StoreFailure,
+  DatabaseServices
+>;
+function rewound(
+  target: ConversationTarget,
+  messageId: string,
+  unheard: false,
+): Effect.Effect<Result.Result<ConversationRewound, RewindRefusal>, StoreFailure, DatabaseServices>;
+function rewound(
+  target: ConversationTarget,
+  messageId: string,
+  unheard: boolean,
+): Effect.Effect<
+  Result.Result<ConversationRewound, UnheardRefusal>,
+  StoreFailure,
+  DatabaseServices
+> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    waitingOutDispatchClaim(
+      target.conversationId,
+      (place) => client.withTransaction(cut(target, messageId, place, unheard)),
+      DISPATCH_CLAIM.EXPIRY,
+    ),
+  ).pipe(
+    Effect.catchTag("DispatchClaimHeld", () =>
+      Effect.succeed(Result.fail<UnheardRefusal>(REWIND_REFUSAL.BUSY)),
+    ),
+  );
+}
 
 /**
  * Cuts the conversation back to just before the developer's line named, as
@@ -331,17 +461,25 @@ export function rewindConversation(
   StoreFailure,
   DatabaseServices
 > {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    waitingOutDispatchClaim(
-      target.conversationId,
-      (place) => client.withTransaction(cut(target, messageId, place)),
-      DISPATCH_CLAIM.EXPIRY,
-    ),
-  ).pipe(
-    Effect.catchTag("DispatchClaimHeld", () =>
-      Effect.succeed(Result.fail<RewindRefusal>(REWIND_REFUSAL.BUSY)),
-    ),
-  );
+  return rewound(target, messageId, false);
+}
+
+/**
+ * Cuts the conversation back to just before the developer's line named, as
+ * `rewindConversation` does, where nothing the cut drops was heard, its
+ * lines withdrawn from the runner's queue in the same transaction, so its
+ * caller stops nothing; refused as that is, and as heard, cutting nothing,
+ * where anything it would drop may have reached a runner.
+ */
+export function rewindUnheard(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<
+  Result.Result<ConversationRewound, UnheardRefusal>,
+  StoreFailure,
+  DatabaseServices
+> {
+  return rewound(target, messageId, true);
 }
 
 /** The client id of the line a harness's session is still to be cut before, where a rewind left one; none otherwise. */
@@ -370,20 +508,4 @@ export function readRewoundRevision(
       Option.flatMap(row, ({ rewoundRevision }) => Option.fromNullishOr(rewoundRevision)),
     ),
   );
-}
-
-/**
- * Whether the conversation could be cut back to just before the line named,
- * read without cutting, so a caller stops nothing for a cut that would be
- * refused; the cut itself reads it again under its locks.
- */
-export function readRewindable(
-  target: ConversationTarget,
-  messageId: string,
-): Effect.Effect<Result.Result<void, RewindRefusal>, StoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const standing = yield* findRewoundRevision(target);
-    if (Option.isNone(standing)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
-    return Result.map(yield* cutPoint(target.conversationId, messageId), () => undefined);
-  });
 }

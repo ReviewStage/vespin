@@ -34,7 +34,10 @@ export interface RunnerLineFile {
  * repeated under it queues once; null for every other kind. `accepted_at`
  * is when the runner said it took a message line (its ACCEPTED event); a
  * message line no launch accepted is handed to the next launch too.
- * `files` are the files a message line names, which a launch writes into its
+ * `handed_at` is when a read first answered a runner the message line, so a
+ * rewind tells a line no runner was ever handed, which it withdraws with no
+ * runner to stop, from one a runner may be acting on; null until then, and
+ * for every other kind. `files` are the files a message line names, which a launch writes into its
  * place before its runner reads the line, kept here so the line carries
  * them to whichever launch takes it; null where it names none. `handed` is
  * what the session will have been handed once its runner takes the message
@@ -63,6 +66,8 @@ export const runnerLine = pgTable(
     createdAt: createdAt(),
     /** When the runner said it took the message line; null until then, and for every other kind. */
     acceptedAt: timestamptz("accepted_at"),
+    /** When a read first answered a runner the message line; null until then, and for every other kind. */
+    handedAt: timestamptz("handed_at"),
     /** The files the message line names, each its path, its bytes in base64, and its mode; null where it names none. */
     files: jsonb("files").$type<readonly RunnerLineFile[]>(),
     /** What the session will have been handed once its runner takes the message line; null for every other kind. */

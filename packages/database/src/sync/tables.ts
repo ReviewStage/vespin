@@ -388,12 +388,13 @@ export const integrationConnectionSync = defineSyncTable(integrationConnection, 
 /**
  * A line queued for a cloud agent's runner, on the agent's topic, which the
  * runner's held read waits on (`@repo/service`'s `runner-lines-app.ts`).
- * Note that its acceptance is ignored, because the runner's read waits on
- * new lines alone, and every message the runner takes stamps one.
+ * Note that its acceptance and its handing are ignored, because the runner's
+ * read waits on new lines alone, and every message the runner reads and takes
+ * stamps both.
  */
 const runnerLineSync = defineSyncTable(runnerLine, {
   topics: [{ kind: TOPIC.AGENT, column: runnerLine.agentId }],
-  ignore: [runnerLine.acceptedAt],
+  ignore: [runnerLine.acceptedAt, runnerLine.handedAt],
 });
 
 /** Where an agent's queue stands, moved on by every write to it (`agent-queue-store.ts`), on the agent's topic, which its transcript's held read is woken on. */

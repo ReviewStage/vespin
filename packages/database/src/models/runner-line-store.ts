@@ -21,6 +21,12 @@
  * be handed. A launch's own lines stand whatever their age. A queue drops
  * the agent's lines past their expiry, which no launch would be handed any
  * more.
+ *
+ * A read stamps the message lines it answers as handed, under the same
+ * advisory lock, so a rewind that withdraws lines under it
+ * (`withdrawUnhandedLines`) knows no runner was ever answered one: a read
+ * either stamped it before the withdrawal, which then withdraws nothing, or
+ * comes after and finds it gone.
  */
 
 import { TURN_STATUS, type WireValue, WireValueSchema } from "@repo/wire";
@@ -65,6 +71,10 @@ export const ANY_LAUNCH = 0;
 
 /** A message line's id as the column holds it: a UUID. */
 const LINE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The agent's advisory lock, held to the end of the caller's transaction, which orders its lines' queueing, reading, and withdrawal. */
+const lockAgentLines = (client: SqlClient.SqlClient, agentId: string) =>
+  client`select pg_advisory_xact_lock(hashtextextended(${agentId}, 0))`;
 
 /** One line as a runner reads it: its place in the order, and the line itself. */
 const RunnerLineSchema = Schema.Struct({ seq: Schema.Number, text: Schema.String });
@@ -200,6 +210,92 @@ const findLinesPast = SqlSchema.findAll({
         )
         .orderBy(asc(runnerLine.seq))
         .limit(limit),
+    ),
+});
+
+const stampHanded = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    seqs: Schema.Array(Schema.Number),
+    now: Schema.Date,
+  }),
+  execute: ({ userId, agentId, seqs, now }) =>
+    Database.use((db) =>
+      db
+        .update(runnerLine)
+        .set({ handedAt: now })
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            inArray(runnerLine.seq, [...seqs]),
+            isNotNull(runnerLine.lineId),
+            isNull(runnerLine.handedAt),
+          ),
+        ),
+    ),
+});
+
+const findConversationAgent = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(and(eq(agentTable.userId, userId), eq(agentTable.conversationId, conversationId))),
+    ),
+});
+
+const findLinesById = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    lineIds: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({
+    lineId: Schema.String,
+    handedAt: Schema.NullOr(Schema.Date),
+    acceptedAt: Schema.NullOr(Schema.Date),
+  }),
+  execute: ({ userId, agentId, lineIds }) =>
+    Database.use((db) =>
+      db
+        .select({
+          lineId: sql<string>`${runnerLine.lineId}::text`,
+          handedAt: runnerLine.handedAt,
+          acceptedAt: runnerLine.acceptedAt,
+        })
+        .from(runnerLine)
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            inArray(runnerLine.lineId, [...lineIds]),
+          ),
+        ),
+    ),
+});
+
+const deleteLines = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    lineIds: Schema.Array(Schema.String),
+  }),
+  execute: ({ userId, agentId, lineIds }) =>
+    Database.use((db) =>
+      db
+        .delete(runnerLine)
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            inArray(runnerLine.lineId, [...lineIds]),
+          ),
+        ),
     ),
 });
 
@@ -358,7 +454,7 @@ export function queueRunnerLine(
     client.withTransaction(
       Effect.gen(function* () {
         // Note that the lock is taken before the insert draws its place, so the agent's next line draws a later one.
-        yield* client`select pg_advisory_xact_lock(hashtextextended(${line.agentId}, 0))`;
+        yield* lockAgentLines(client, line.agentId);
         const now = yield* DateTime.nowAsDate;
         const before = new Date(now.getTime() - Duration.toMillis(RUNNER_LINE_EXPIRY));
         yield* deleteExpired({ userId, agentId: line.agentId, before });
@@ -382,14 +478,56 @@ export function queueRunnerLine(
  * The account's agent's lines the launch named is handed past its cursor,
  * in order, at most `limit`: those written for the launch, and the message
  * lines an earlier launch was written and never acknowledged whose turn
- * still waits on them (`awaitsOpenTurn`).
+ * still waits on them (`awaitsOpenTurn`); the message lines among them
+ * stamped handed, under the agent's advisory lock, as the header says.
  */
 export function runnerLinesPast(
   userId: string,
   agentId: string,
   read: { readonly launch: number; readonly after: number; readonly limit: number },
 ): RunnerLineEffect<readonly RunnerLine[]> {
-  return findLinesPast({ userId, agentId, ...read });
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* lockAgentLines(client, agentId);
+        const lines = yield* findLinesPast({ userId, agentId, ...read });
+        if (lines.length === 0) return lines;
+        const now = yield* DateTime.nowAsDate;
+        yield* stampHanded({ userId, agentId, seqs: lines.map((line) => line.seq), now });
+        return lines;
+      }),
+    ),
+  );
+}
+
+/**
+ * The message lines under the ids named withdrawn from the runner of the
+ * account's agent whose conversation is named, where no read ever handed
+ * one of them, nor a runner took one: answers whether they were, and
+ * withdraws nothing where any of them was handed or taken, is not queued, or
+ * the conversation is no agent's. Run inside the caller's transaction, whose
+ * end lets go of the agent's advisory lock taken here, so no read answers a
+ * runner a line the caller drops (the header).
+ */
+export function withdrawUnhandedLines(
+  target: { readonly userId: string; readonly conversationId: string },
+  lineIds: readonly string[],
+): RunnerLineEffect<boolean> {
+  return Effect.gen(function* () {
+    // Note that an id no line could carry is never queued, and the column would refuse it.
+    if (lineIds.length === 0 || !lineIds.every((id) => LINE_ID.test(id))) return false;
+    const agent = yield* findConversationAgent(target);
+    if (Option.isNone(agent)) return false;
+    const { userId } = target;
+    const agentId = agent.value.id;
+    yield* lockAgentLines(yield* SqlClient.SqlClient, agentId);
+    const queued = yield* findLinesById({ userId, agentId, lineIds });
+    const unhanded = queued.filter((line) => line.handedAt === null && line.acceptedAt === null);
+    const named = new Set(lineIds.map((id) => id.toLowerCase()));
+    if (unhanded.length !== named.size) return false;
+    yield* deleteLines({ userId, agentId, lineIds });
+    return true;
+  });
 }
 
 /** When the oldest message line of the account's agent was queued that no launch acknowledged and whose turn still waits on it, which a launch would be handed; none where none stands. */

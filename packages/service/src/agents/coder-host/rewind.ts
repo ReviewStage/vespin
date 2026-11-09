@@ -2,8 +2,9 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
 import {
   REWIND_REFUSAL,
-  readRewindable,
   rewindConversation,
+  rewindUnheard,
+  UNHEARD_REFUSAL,
 } from "@repo/database/models/conversation-rewind";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { Effect, Option, Result } from "effect";
@@ -19,15 +20,20 @@ import { runnerHalted } from "./runtime-sessions.js";
 /**
  * rewind.ts -- a coding agent taken back to just before one of the developer's lines, as though that line and everything after it were never said.
  *
- * Whatever the agent is doing stops first, so nothing it still writes lands
- * after the cut: a native agent's runner is ended, keeping its sandbox and
- * the harness's own session, which the next message's launch cuts before
- * the same line and resumes (`conversation-rewind.ts`'s `nativeRewind`);
- * one on no harness ended for good, so nothing of it runs. Then the
- * conversation is cut in one transaction, and whatever a message sent
- * meanwhile started is stopped again. A cut that would be refused is read
- * first, so it stops nothing. The agent's checkout is left as it stands:
- * only the conversation goes back.
+ * Where nothing the cut drops was heard, every line of it still queued for
+ * the runner and never handed to one, as a Start's first line is while its
+ * sandbox opens, the cut withdraws those lines and stops nothing
+ * (`conversation-rewind.ts`'s `rewindUnheard`): a launch under way goes on,
+ * and its runner reads whatever is sent in their place. Otherwise whatever
+ * the agent is doing stops first, so nothing it still writes lands after
+ * the cut: a native agent's runner is ended, keeping its sandbox and the
+ * harness's own session, which the next message's launch cuts before the
+ * same line and resumes (`conversation-rewind.ts`'s `nativeRewind`); one on
+ * no harness ended for good, so nothing of it runs. Then the conversation is
+ * cut in one transaction, and whatever a message sent meanwhile started is
+ * stopped again. A cut that would be refused is refused by the first try,
+ * so it stops nothing. The agent's checkout is left as it stands: only the
+ * conversation goes back.
  */
 
 /** Why a cut the store refused is refused to its caller. */
@@ -68,10 +74,11 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   yield* admitsPlanWriter(account, agent);
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const target = { userId: agent.userId, conversationId: agent.conversationId };
-  // A cut that would be refused stops nothing.
-  const rewindable = yield* hostedStoreOrUnavailable(readRewindable(target, messageId));
-  if (Result.isFailure(rewindable)) {
-    return yield* Effect.fail(REFUSAL_OF_REWIND[rewindable.failure]);
+  // A cut of what no runner heard stops nothing, nor does one that would be refused.
+  const unheard = yield* hostedStoreOrUnavailable(rewindUnheard(target, messageId));
+  if (Result.isSuccess(unheard)) return;
+  if (unheard.failure !== UNHEARD_REFUSAL.HEARD) {
+    return yield* Effect.fail(REFUSAL_OF_REWIND[unheard.failure]);
   }
   yield* stoppedForRewind(agent);
   const cut = yield* hostedStoreOrUnavailable(rewindConversation(target, messageId));
