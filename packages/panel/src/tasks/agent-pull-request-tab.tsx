@@ -206,6 +206,7 @@ import { DiffListTopRoomContext } from "./diff-list.js";
 import { PierreDiff, useDiffLook } from "./file-diff.js";
 import type { TreeShown } from "./file-view.js";
 import { MergeControl, MergeStatus } from "./merge-box.js";
+import { OpenOnGitHubButton } from "./open-on-github-button.js";
 import {
   PENDING_WORDS,
   type PendingActs,
@@ -3595,6 +3596,7 @@ function PullRequestTabBody({
                     )}
                     <div className="pull-request-title-actions">
                       {overview === undefined ? null : <MergeStatus pullRequest={overview} />}
+                      {held === undefined ? null : <OpenOnGitHubButton url={held.url} />}
                       {phone ? null : (
                         <PreviewControl checks={landed(parts.checks)} shown={shown} />
                       )}
