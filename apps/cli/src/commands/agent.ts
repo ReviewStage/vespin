@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `ports`, and `share`: coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, and the ports their sandbox listens on shared by link.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `ports`, and `share`: coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, and the ports their sandbox listens on shared by link; their shells are `agent-shell.ts`'s.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -41,6 +41,7 @@ import { answer, CommandFailed, columns, note, readInput, streamLines } from "..
 import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
+import { shellCommand, shellsCommand } from "./agent-shell.js";
 
 /** How long after a held read answers the next is asked, so a read that answers at once never spins. */
 const FOLLOW_SPACING = Duration.seconds(1);
@@ -896,7 +897,7 @@ const shareCommand = Command.make(
   ]),
 );
 
-/** The agent group: start, continue, and the rest through share. */
+/** The agent group: start, continue, and the rest through share, and its shells. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
     `Start, continue, follow, message, and stop ${PRODUCT_NAME}'s coding agents`,
@@ -913,6 +914,8 @@ export const agentCommand = Command.make("agent").pipe(
     checkoutCommand,
     portsCommand,
     shareCommand,
+    shellCommand,
+    shellsCommand,
   ]),
   Command.withExamples([
     { command: "vespin agent start ACME-42 --wait", description: "Start an agent, and wait on it" },
