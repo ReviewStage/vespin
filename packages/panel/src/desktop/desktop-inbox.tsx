@@ -801,7 +801,7 @@ function answerPlace(
     holder.kind === INBOX_HOLDER.TASK
       ? holder.task.repository
       : (agents.agentRepository ?? holder.agent.repository);
-  if (workspaceId === undefined || repository === undefined || repository === null) {
+  if (workspaceId === undefined || repository === undefined) {
     return undefined;
   }
   const workspace = tasks.workspaces.find((each) => each.id === workspaceId)?.slug ?? workspaceId;

@@ -639,7 +639,7 @@ export function useMainTabs(
   // An agent brought back from the archive, or another task's opened as it went there, is one of the task's live agents now.
   const letGo = agents?.some((agent) => state.openArchived.includes(agent)) === true;
   useEffect(() => {
-    if (letGo && agents !== undefined) update((held) => withLiveLetGo(held, agents));
+    if (letGo) update((held) => withLiveLetGo(held, agents));
   }, [letGo, agents, update]);
   // A task left on its details lets them go, so it opens on its agents again wherever it is opened
   // from; a phone's, whose details are where a task opens, keeps them.

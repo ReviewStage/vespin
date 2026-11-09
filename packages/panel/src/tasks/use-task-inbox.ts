@@ -493,7 +493,7 @@ export function useHeldTaskInbox(input: {
   // listed, one started on another Mac, posted.
   const readable = (agents.heldIds?.length ?? 0) > 0 || waiting;
   const active = shown && taskId !== undefined && readable;
-  const holderKey = active && taskId !== undefined ? { kind, id: taskId } : undefined;
+  const holderKey = active ? { kind, id: taskId } : undefined;
   const holder = useQuery(holderInboxQuery(holderKey));
   const { mutate: retryHolder } = useMutation(holderInboxRetryMutation());
   // Note that Try again moves with the holder alone, as the read's own did, since a render builds its key anew.
