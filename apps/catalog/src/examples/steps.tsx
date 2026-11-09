@@ -1,5 +1,5 @@
 import { COPY_FIELD_PROMPT, COPY_FIELD_WIDTH, CopyField, STEP_STATE, Step, Steps } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

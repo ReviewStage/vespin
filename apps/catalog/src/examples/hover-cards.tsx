@@ -28,7 +28,7 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

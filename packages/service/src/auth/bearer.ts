@@ -11,32 +11,17 @@ import {
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import type { RelayCredential } from "../http/relay-upgrade.js";
 import { auth } from "./auth.js";
-import { BearerCallers } from "./bearer-callers.js";
+import { BearerCallers, type OAuthUserInfo, type UserInfoEndpoint } from "./bearer-callers.js";
 import { resolveBrowserSessionUserId } from "./browser-session.js";
 import { CREDENTIAL_HEADER, sessionCredential } from "./session-credential.js";
+
+export type { OAuthUserInfo, UserInfoEndpoint } from "./bearer-callers.js";
 
 /** The address a relay page's headers are read against as a request: only the headers are read. */
 const RELAY_PAGE_BASE = "http://localhost/";
 
 /** What every `jose` error's code begins with, and the one of them that is a key set not reached rather than a token refused. */
 const JOSE_CODE = { PREFIX: "ERR_J", KEY_SET_TIMEOUT: "ERR_JWKS_TIMEOUT" } as const;
-
-/** The subject a signed-in OAuth userinfo answer names. */
-export interface OAuthUserInfo {
-  sub: string;
-}
-
-/**
- * The auth service's own userinfo endpoint, called in process. It is the same
- * validation the desktop's identity request goes through over HTTP: expiry,
- * revocation, and scope are all the OAuth provider's answer, never a second
- * implementation here. The call itself is the auth service's promise, so an
- * endpoint is built by wrapping that promise once where it is constructed,
- * and the failure it can answer with is whatever the auth service threw.
- */
-export type UserInfoEndpoint = (input: {
-  headers: Headers;
-}) => Effect.Effect<OAuthUserInfo | undefined, Cause.UnknownError>;
 
 /**
  * The auth service's own session read, called in process: the account the

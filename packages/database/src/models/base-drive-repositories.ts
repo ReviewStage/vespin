@@ -20,19 +20,15 @@ import { Database } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import type { AgentStoreEffect } from "./agent-store.js";
 
-/** A workspace's repository a base drive may stand for, and the account of the newest agent that may have filled it. */
-export interface BaseDriveRepository {
-  readonly workspaceId: string;
-  /** `owner/name` as the newest such agent's row holds it. */
-  readonly repository: string;
-  readonly userId: string;
-}
-
 const BaseDriveRepositorySchema = Schema.Struct({
   workspaceId: Schema.String,
+  /** `owner/name` as the newest such agent's row holds it. */
   repository: Schema.String,
   userId: Schema.String,
 });
+
+/** A workspace's repository a base drive may stand for, and the account of the newest agent that may have filled it. */
+export type BaseDriveRepository = typeof BaseDriveRepositorySchema.Type;
 
 const findBaseDriveRepositories = SqlSchema.findAll({
   Request: Schema.Void,

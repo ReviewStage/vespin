@@ -25,12 +25,10 @@ import {
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
-import { TERMINAL_ACT_KIND } from "../contract/index.js";
+import { TERMINAL_ACT_KIND, type TerminalActKind } from "../contract/index.js";
 import type { HostOperator } from "../host-operator.js";
-import { type ActSender, actPortFor } from "./base.js";
+import { actPortFor, refuseUnlessPanel } from "./base.js";
 import type { PlatformActProcedures } from "./index.js";
-
-type TerminalActKind = (typeof TERMINAL_ACT_KIND)[keyof typeof TERMINAL_ACT_KIND];
 
 /** The host's end of one attached shell's channel. */
 export interface HostTerminalPort {
@@ -75,11 +73,6 @@ export interface TerminalActsDependencies<Sender> {
 }
 
 const readInbound = readEither(terminalPortInboundSchema);
-
-/** The refusal a window that draws no Terminal tab hears, in its kind's own words, or nothing for a panel. */
-function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
-  return actor.panel ? Effect.void : Effect.fail(refused());
-}
 
 /** The host's answer, or the kind's own refusal where the host had none. */
 function answeredOr<Answer, E>(

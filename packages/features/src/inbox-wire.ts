@@ -1363,8 +1363,8 @@ export function inboxTodoTicks(
   answered?: InboxAsk,
 ): InboxTodoTicks | undefined {
   const ask = answered ?? (item.thread ?? []).find((message) => message.id === answers.ask)?.ask;
-  if (ask?.type !== INBOX_ASK.DO) return undefined;
-  const steps = (ask as { readonly steps?: readonly string[] }).steps ?? [];
+  if (ask?.type !== INBOX_ASK.DO || !("steps" in ask)) return undefined;
+  const steps = ask.steps;
   return steps.length === 0 ? undefined : { steps, ticked: answers.steps ?? [] };
 }
 

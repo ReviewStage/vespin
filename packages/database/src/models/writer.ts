@@ -6,6 +6,7 @@ import {
   RUN_STATUS,
   RUN_TURN_ORIGIN,
   type RunEvent,
+  type RunStatus,
   type RunTurnOrigin,
   STEP_START_PART,
   settledToolPart,
@@ -305,8 +306,6 @@ export type StoreWriteResult = Result.Result<
     >
   | MessageRefused
 >;
-
-type RunStatus = (typeof RUN_STATUS)[keyof typeof RUN_STATUS];
 
 /** A turn queued ahead of its start: what opened it and, where the caller knows them, what it will run under. */
 interface TurnEnqueue {

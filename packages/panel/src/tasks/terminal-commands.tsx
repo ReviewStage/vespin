@@ -79,7 +79,7 @@ export function TerminalCommands({
   // The task's agents read while the command waits on them: it lands on one where there is one.
   const waiting = asking !== undefined && agents.agents !== undefined && agents.agents.length > 0;
   useEffect(() => {
-    if (!waiting || asking === undefined) return;
+    if (!waiting) return;
     setAsking(undefined);
     const landed = target();
     if (landed.kind === TERMINAL_TARGET.AGENT) open(landed.agentId, asking);

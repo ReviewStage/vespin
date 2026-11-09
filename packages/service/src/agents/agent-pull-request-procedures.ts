@@ -290,8 +290,7 @@ export const overviewConversationRead = (
       ],
       { concurrency: "unbounded" },
     ),
-    ([conversation, pendingReview]) =>
-      conversation === null ? null : { ...conversation, pendingReview },
+    ([conversation, pendingReview]) => ({ ...conversation, pendingReview }),
   );
 
 /** The changes made by the pull request's number on GitHub's REST API, its requested reviewers and labels, which GraphQL cannot take a reviewer off of. */

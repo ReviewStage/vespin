@@ -218,12 +218,6 @@ function filesLines(files: readonly SandboxFile[]): readonly (readonly SandboxFi
   return lines;
 }
 
-/** A line's payload as the row holds it: a JSON object. */
-function objectOf(value: object): DeviceAgentObject {
-  // SAFETY: every payload is a struct's encoded form, a JSON object of string keys.
-  return value as DeviceAgentObject;
-}
-
 /**
  * A launch's credentials as a Mac's runner takes them, which no firewall of
  * ours stands in front of: each one's value in its variable, sealed with the
@@ -513,15 +507,13 @@ function deviceMachineOver(
             (line) =>
               queued(pin, {
                 kind: DEVICE_AGENT_LINE_KIND.FILES,
-                payload: objectOf(
-                  encodeFilesPayload({
-                    files: line.map((file) => ({
-                      path: file.path,
-                      mode: file.mode,
-                      contents: file.contents,
-                    })),
-                  }),
-                ),
+                payload: encodeFilesPayload({
+                  files: line.map((file) => ({
+                    path: file.path,
+                    mode: file.mode,
+                    contents: file.contents,
+                  })),
+                }),
               }),
             { discard: true },
           ),
@@ -584,7 +576,7 @@ function deviceMachineOver(
           yield* queued(pin, {
             id,
             kind: DEVICE_AGENT_LINE_KIND.LAUNCH,
-            payload: objectOf(encodeLaunchPayload(payload)),
+            payload: encodeLaunchPayload(payload),
             sealedSecrets,
           });
         }).pipe(Effect.tapError(() => Effect.ignore(launch.abandon(ready))));

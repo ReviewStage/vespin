@@ -15,7 +15,7 @@ import {
   TextField,
 } from "@repo/ui";
 import { useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 function KeepFocusExample(): React.JSX.Element {

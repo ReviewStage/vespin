@@ -1,3 +1,4 @@
+import type { VariantProps } from "class-variance-authority";
 import {
   type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
@@ -283,7 +284,7 @@ type ButtonBase = LandingProps &
   };
 
 /** The box a button is drawn in: the control's, a row mark's, a glyph alone in either, or a menu's row. */
-type BoxSize = "control" | "compact" | "icon" | "icon-compact" | "row";
+type BoxSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
 
 /** The box a button of `variant` is drawn in, at `size`, with words or a glyph alone. */
 function boxSize(

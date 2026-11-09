@@ -67,9 +67,9 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { PortActKind } from "@repo/host/contract";
 import { STATUS_TONE } from "@repo/ui";
+import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { Store, useSelector } from "@tanstack/react-store";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
-import { priorityOf, statusOf } from "./desktop/task-row-parts.js";
 import type { ShownFailure } from "./failure-report.js";
 import {
   showToast,
@@ -378,7 +378,7 @@ export interface RowWrite<Rows, Fields extends object, Kind extends PortActKind>
 }
 
 /** What a row write's refusal says, and what it is about. */
-export interface RowRefusal {
+interface RowRefusal {
   readonly words: string;
   readonly about?: FailureAbout;
 }
@@ -682,18 +682,18 @@ function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
 }
 
 /** What a refusal of a held write says, and what it is reported as. */
-export interface HeldRefusal {
+interface HeldRefusal {
   readonly words: string;
   readonly failure: ShownFailure;
 }
 
 /** What a refusal of a held write's act says, and whether the service took none of it, so nothing is left for ⌘Z to take back. */
-export interface HeldActRefusal extends HeldRefusal {
+interface HeldActRefusal extends HeldRefusal {
   readonly whole: boolean;
 }
 
 /** What a refusal of a held write's inverse says, and, where part of it was not reached, what asking again takes back and what that action is called. */
-export interface HeldUndoRefusal<Change> extends HeldRefusal {
+interface HeldUndoRefusal<Change> extends HeldRefusal {
   readonly retry?: { readonly label: string; readonly change: Change };
 }
 

@@ -197,14 +197,6 @@ export const IDEMPOTENCY_KEY = {
   MAX_LENGTH: 255,
 } as const;
 
-/** What one day's allowance looked like when the service last answered. */
-export interface HostedQuota {
-  used: number;
-  limit: number;
-  /** When the day's counter resets, as epoch milliseconds. */
-  resetsAt: number;
-}
-
 const HOSTED_API_ERROR_NAMES = Object.values(HOSTED_API_ERROR);
 
 /**
@@ -236,8 +228,12 @@ export const readServiceAnswer = <S extends EffectSchema.ConstraintDecoder<unkno
 export const hostedQuotaSchema = EffectSchema.Struct({
   used: countedNumber,
   limit: countedNumber,
+  /** When the day's counter resets, as epoch milliseconds. */
   resetsAt: countedNumber,
 });
+
+/** What one day's allowance looked like when the service last answered. */
+export type HostedQuota = typeof hostedQuotaSchema.Type;
 
 /** A member set read with its ends trimmed, the way an enum reads one. */
 function trimmedEnum<const Member extends string>(members: readonly Member[]) {

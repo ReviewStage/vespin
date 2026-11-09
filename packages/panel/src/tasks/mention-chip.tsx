@@ -6,6 +6,7 @@ import {
   readerZone,
 } from "@repo/features/date-mention";
 import { descriptionSections } from "@repo/features/description-document";
+import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import {
   issueAddressOf,
   LINK_PLACE,
@@ -34,9 +35,10 @@ import {
   pastedLinkMention,
   sectionAnchors,
 } from "@repo/features/mention-link";
-import { type KnownNames, placeChipLook } from "@repo/features/place-chip-model";
+import { placeChipLook } from "@repo/features/place-chip-model";
 import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import {
+  type KnownNames,
   THING_KIND,
   THING_WORD,
   thingName,
@@ -819,16 +821,13 @@ function PlaceCard({
   });
 }
 
-/** A link to an Inbox item. */
-type InboxItemLinkPlace = Extract<LinkPlace, { readonly kind: typeof LINK_PLACE.INBOX_ITEM }>;
-
 /** An Inbox item's chip, called by the item's title whether it waits or was settled, as its Inbox row is, which only its followed inbox holds once it no longer waits. */
 function InboxItemChip({
   place,
   ...chip
 }: {
   href: string;
-  place: InboxItemLinkPlace;
+  place: InboxItemPlace;
   workspace: string;
   label: string | undefined;
   doors: MentionDoors;

@@ -1,5 +1,6 @@
 import { Children, type MouseEvent, type ReactNode, useId } from "react";
 import { isReported, type ShownError } from "../../reported-failure.js";
+import { said } from "../../said.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, ButtonLink } from "../button/button.js";
 import { FailureCopy } from "../failure-copy/failure-copy.js";
 
@@ -48,11 +49,6 @@ export interface AuthAction {
 export interface AuthExit {
   readonly label: string;
   readonly onPress: () => void;
-}
-
-/** Whether words say anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
 }
 
 /** A sign-in, consent, or connection page: `title` under `mark`, holding `children`, with `action` under them. */

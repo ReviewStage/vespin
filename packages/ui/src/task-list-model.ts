@@ -368,7 +368,7 @@ function taskRowStatus(row: TaskRow): TaskStatus | undefined {
 }
 
 /** Whether the view draws a row: one of a status shown, or one with no status to leave it out by. */
-export function taskRowInStatuses(row: TaskRow, statuses: readonly TaskStatus[]): boolean {
+function taskRowInStatuses(row: TaskRow, statuses: readonly TaskStatus[]): boolean {
   const status = taskRowStatus(row);
   return status === undefined || statuses.includes(status);
 }

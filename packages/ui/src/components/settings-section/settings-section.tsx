@@ -1,5 +1,6 @@
 import { searchAnchorProps } from "@repo/settings/settings-anchors";
 import { type ReactNode, useId, useRef } from "react";
+import { said } from "../../said.js";
 import { RevealArea, revealArea } from "../reveal/reveal.js";
 import { SettingsRow, SettingsRowValue } from "../settings-row/settings-row.js";
 import { SKELETON_SHAPE, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
@@ -358,7 +359,7 @@ export function SettingsSection({
 }): React.JSX.Element {
   const headingId = useId();
   const captionId = useId();
-  const headed = title !== undefined && title !== null && title !== false && title !== "";
+  const headed = said(title);
   const captioned = headed && caption !== undefined && caption !== null && caption !== false;
   const heading = (
     <SectionHead action={action}>

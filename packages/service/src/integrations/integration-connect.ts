@@ -32,7 +32,7 @@
  * (`accountIntegrationConnect`).
  */
 
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   INTEGRATION_LABEL_MAX,
   INTEGRATION_NAME,
@@ -437,7 +437,7 @@ export const accountIntegrationConnect = /* @__PURE__ */ Effect.fn("web/accountI
     userId: string,
   ): Effect.fn.Return<
     IntegrationConnectService,
-    QueryError | Schema.SchemaError,
+    StoreFailure,
     IntegrationConnect | DatabaseServices
   > {
     const connect = yield* IntegrationConnect;

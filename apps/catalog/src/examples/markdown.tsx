@@ -1,6 +1,6 @@
 import { MARKDOWN_LOOK, Markdown, TaskBox, type TaskBoxItem } from "@repo/ui/markdown";
 import { useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

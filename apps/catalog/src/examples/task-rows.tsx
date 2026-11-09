@@ -48,7 +48,7 @@ import {
 import { GLYPH, HandIcon, OctagonMinusIcon } from "@repo/ui/icons";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { type ReactNode, useRef, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

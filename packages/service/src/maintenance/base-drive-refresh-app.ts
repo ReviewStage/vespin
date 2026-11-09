@@ -47,31 +47,29 @@ interface BaseDriveRefreshOptions<E> {
 }
 
 /** The refresh as its endpoint answers it: a GET under the deployment's secret, answered with what the run did. */
-export const handleBaseDriveRefresh = /* @__PURE__ */ Effect.fn("web/handleBaseDriveRefresh")(
-  function* <E>(
-    options: BaseDriveRefreshOptions<E>,
-  ): Effect.fn.Return<Response, E, RefreshServices> {
-    const { request } = options;
-    if (request.method !== "GET") {
-      return errorResponse(
-        HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
-        HOSTED_API_ERROR.METHOD_NOT_ALLOWED,
-      );
-    }
-    if (options.cronSecret === undefined) {
-      return errorResponse(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE);
-    }
-    if (!bearerMatchesSecret(request, options.cronSecret)) {
-      return errorResponse(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN);
-    }
-    // Note that no member waits on the refresh, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).
-    const refreshed = yield* options.refresh.pipe(Effect.provideService(GitHubBackground, true));
-    return jsonResponse(
-      refreshed.failed > 0 ? HOSTED_HTTP_STATUS.INTERNAL_ERROR : HOSTED_HTTP_STATUS.OK,
-      refreshed,
+const handleBaseDriveRefresh = /* @__PURE__ */ Effect.fn("web/handleBaseDriveRefresh")(function* <
+  E,
+>(options: BaseDriveRefreshOptions<E>): Effect.fn.Return<Response, E, RefreshServices> {
+  const { request } = options;
+  if (request.method !== "GET") {
+    return errorResponse(
+      HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
+      HOSTED_API_ERROR.METHOD_NOT_ALLOWED,
     );
-  },
-);
+  }
+  if (options.cronSecret === undefined) {
+    return errorResponse(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE);
+  }
+  if (!bearerMatchesSecret(request, options.cronSecret)) {
+    return errorResponse(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN);
+  }
+  // Note that no member waits on the refresh, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).
+  const refreshed = yield* options.refresh.pipe(Effect.provideService(GitHubBackground, true));
+  return jsonResponse(
+    refreshed.failed > 0 ? HOSTED_HTTP_STATUS.INTERNAL_ERROR : HOSTED_HTTP_STATUS.OK,
+    refreshed,
+  );
+});
 
 /** The refresh's group: its one path, and the hosted vocabulary's own refusal for any other. */
 export function baseDriveRefreshApp(

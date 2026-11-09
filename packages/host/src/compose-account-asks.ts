@@ -307,10 +307,7 @@ function writesAnswered(
     keysWritten: (answer: ProviderKeysAnswerView) => Effect.as(keysAnswered(answer), answer),
     /** A device-code login's wait or cancel answered whole to the window that asked; once it connected, the keys it carries laid as a write's are. */
     deviceAnswered: (answer: ChatGptDevicePollAnswerView) =>
-      Effect.as(
-        "keys" in answer && answer.keys !== undefined ? keysAnswered(answer.keys) : Effect.void,
-        answer,
-      ),
+      Effect.as("keys" in answer ? keysAnswered(answer.keys) : Effect.void, answer),
     /**
      * A token's write answered whole to the window that asked; where the
      * service took it, the repositories every list holds asked again, since

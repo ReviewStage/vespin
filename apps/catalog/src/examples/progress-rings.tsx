@@ -17,7 +17,7 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 const SHARES = [0, 0.33, 0.67, 1] as const;

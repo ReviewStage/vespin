@@ -12,7 +12,7 @@ import {
   useResizeEdge,
 } from "@repo/ui";
 import { useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 const BOUNDS = { MIN: 120, MAX: 280, DEFAULT: 180 } as const;

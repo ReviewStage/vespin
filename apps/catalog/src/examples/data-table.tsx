@@ -9,7 +9,7 @@ import {
   type SortingState,
 } from "@repo/ui/data-table";
 import { useMemo, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

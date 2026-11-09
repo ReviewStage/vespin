@@ -56,7 +56,6 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import {
   Database,
   type DatabaseServices,
-  type QueryError,
   queryBuilder,
   readConcurrency,
   type StoreFailure,
@@ -179,7 +178,7 @@ export type TaskStandingAgent = typeof TaskStandingAgentSchema.Type;
  */
 export type TaskFinishGuard<R> = (
   agents: readonly TaskStandingAgent[],
-) => Effect.Effect<boolean, QueryError | Schema.SchemaError, R>;
+) => Effect.Effect<boolean, StoreFailure, R>;
 
 /**
  * Which of the task's standing agents stand idle, neither starting nor
@@ -188,7 +187,7 @@ export type TaskFinishGuard<R> = (
  */
 type TaskIdleGuard<R> = (
   agents: readonly TaskStandingAgent[],
-) => Effect.Effect<ReadonlySet<string>, QueryError | Schema.SchemaError, R>;
+) => Effect.Effect<ReadonlySet<string>, StoreFailure, R>;
 
 /** How a task moved to Done archives its idle agents with it: as whom, and how it reads them idle. */
 export interface TaskDoneArchive<R> {

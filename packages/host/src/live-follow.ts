@@ -128,12 +128,15 @@ const POLL_BACKOFF = untilRegained(
     ),
   ),
 );
+/** Why a poll answered no read: what failed, and whether the read names nothing the account reaches any more. */
+export type LiveFailure = { readonly failure: string; readonly gone?: boolean };
+
 /**
  * Whether a failed poll ends the read for good: it names nothing the account
  * reaches any more, or the service refused the session as signed out, which
  * is never asked again.
  */
-function ended(failed: { readonly failure: string; readonly gone?: boolean }): boolean {
+function ended(failed: LiveFailure): boolean {
   return failed.gone === true || failed.failure === LIVE_SIGNED_OUT.failure;
 }
 
@@ -232,7 +235,7 @@ export interface LiveFollowDependencies<Part extends string> {
     after: string | undefined,
     cursor?: string,
     sync?: string,
-  ) => Effect.Effect<SealedRead<Part> | { readonly failure: string; readonly gone?: boolean }>;
+  ) => Effect.Effect<SealedRead<Part> | LiveFailure>;
   /**
    * Hears the read's wait for a write's transaction once an answer carried
    * a snapshot on every part, or the txids only an answer Sync woke

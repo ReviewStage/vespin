@@ -32,7 +32,6 @@
  * from.
  */
 
-import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import * as Sentry from "@sentry/node";
 import { Effect, type Scope } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -165,8 +164,11 @@ const loadedProfiler: Effect.Effect<ProfilingNode | undefined> = Effect.tryPromi
 /** Whether a message is the harness beginning a request to the model. */
 function isModelRequest(message: RunnerMessage): boolean {
   if ("method" in message) return message.method === CODEX_TURN_STARTED;
-  const sdk = message as SDKMessage;
-  return sdk.type === "system" && sdk.subtype === "status" && sdk.status === CLAUDE_REQUESTING;
+  return (
+    message.type === "system" &&
+    message.subtype === "status" &&
+    message.status === CLAUDE_REQUESTING
+  );
 }
 
 /**

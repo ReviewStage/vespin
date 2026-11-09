@@ -91,7 +91,7 @@ const FAST_PROVIDERS: ReadonlySet<ModelProvider> = new Set([
  */
 const BATCH_SLUG_SUFFIX = "-batch";
 
-const PROVIDER_SET: ReadonlySet<string> = new Set(Object.values(MODEL_PROVIDER));
+const isModelProvider = Schema.is(Schema.Literals(Object.values(MODEL_PROVIDER)));
 
 /**
  * What a model's tokens cost, in dollars per token as the catalog lists
@@ -264,9 +264,7 @@ function splitCatalogId(
 }
 
 function providerOf(name: string): ModelProvider | undefined {
-  if (!PROVIDER_SET.has(name)) return undefined;
-  // SAFETY: membership in the set built from MODEL_PROVIDER's values is what the union names.
-  return name as ModelProvider;
+  return isModelProvider(name) ? name : undefined;
 }
 
 /** The entry's prices where it lists both an input and an output price as this module reads them; nothing where it lists either not, or not readably. */

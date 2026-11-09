@@ -24,7 +24,7 @@ import { AtSign, GLYPH, Mic } from "@repo/ui/icons";
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import type { ComponentProps, ReactNode } from "react";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

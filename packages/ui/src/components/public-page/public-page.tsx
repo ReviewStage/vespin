@@ -1,4 +1,5 @@
 import { type ReactNode, useId } from "react";
+import { said } from "../../said.js";
 import { SiteFrame, SiteRule } from "../landing/site-frame.js";
 import { TEXT_VARIANT } from "../text/text.js";
 import { TextLink } from "../text-link/text-link.js";
@@ -92,11 +93,6 @@ const SECTIONS_GAP_CLASS = {
   [PUBLIC_SECTIONS.SPACED]: "mt-ui-32",
   [PUBLIC_SECTIONS.RULED]: "mt-ui-40",
 } as const satisfies Record<PublicSections, string>;
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
-}
 
 /** One section of a public page: `children` under an optional `title`, at the page's rhythm. */
 export function PublicSection({

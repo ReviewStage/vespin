@@ -1,7 +1,7 @@
 import type { ChartConfig } from "@repo/ui/chart";
 import { DailyBars } from "@repo/ui/daily-bars";
 import { useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

@@ -1207,7 +1207,7 @@ function ReplyField({
     go({
       words: trimmed,
       attachments,
-      key: same && was !== undefined ? was.key : crypto.randomUUID(),
+      key: same ? was.key : crypto.randomUUID(),
     });
   };
   // Note that holding lets the words and files go from the field as sending does, into the review rather than to the service.
@@ -2254,7 +2254,7 @@ export function DescriptionCommentLayer({
   useLayoutEffect(() => {
     const room = body.current;
     const toggle = room?.querySelector(`.${COMMENTS_TOGGLE_CLASS}`);
-    if (listing === undefined || room === null || room === undefined || toggle == null) return;
+    if (listing === undefined || room === null || toggle == null) return;
     const top = toggle.getBoundingClientRect().bottom - room.getBoundingClientRect().top + CARD_GAP;
     setListTop((held) => (Math.abs(held - top) < 1 ? held : top));
   });

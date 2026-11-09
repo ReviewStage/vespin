@@ -1,10 +1,10 @@
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type StandingSession,
   standingSessionsNamed,
 } from "@repo/database/models/recorded-session";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { Duration, Effect, Option, Ref, type Schema } from "effect";
+import { Duration, Effect, Option, Ref } from "effect";
 import type { HttpClient } from "effect/http";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
@@ -135,11 +135,7 @@ export function retiredBeforeDelete(
   retiring: Retiring,
 ): (
   conversationIds: readonly string[],
-) => Effect.Effect<
-  void,
-  QueryError | Schema.SchemaError,
-  HttpClient.HttpClient | DatabaseServices
-> {
+) => Effect.Effect<void, StoreFailure, HttpClient.HttpClient | DatabaseServices> {
   return (conversationIds) =>
     Effect.flatMap(standingSessionsNamed(conversationIds), (sessions) =>
       retireSessions(retiring, sessions),

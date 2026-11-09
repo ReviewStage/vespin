@@ -1,4 +1,4 @@
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Agent, fillAgentTitle } from "@repo/database/models/agent-store";
 import {
   listMessagesPast,
@@ -15,7 +15,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { titlesNothing } from "@repo/features/task-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { generateText, isTextUIPart, type LanguageModel, type ToolSet } from "ai";
-import { Effect, Option, type Schema } from "effect";
+import { Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE, type StoredUIMessage } from "../../core.js";
 import { CODER } from "./bounds.js";
@@ -249,7 +249,7 @@ function turnsNoticed(
   target: ConversationTarget,
   tools: ToolSet,
   records: readonly { readonly message: StoredUIMessage; readonly turnId?: string }[],
-): Effect.Effect<ReadonlySet<string>, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<ReadonlySet<string>, StoreFailure, DatabaseServices> {
   const turnIds = records.flatMap((record) =>
     record.message.role === MESSAGE_ROLE.ASSISTANT && record.turnId !== undefined
       ? [record.turnId]
@@ -286,7 +286,7 @@ function conversationExchange(
   target: ConversationTarget,
   tools: ToolSet,
   origin: StoredAutomationOrigin | null,
-): Effect.Effect<ConversationNaming, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<ConversationNaming, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const { userId, conversationId } = target;
     const opening = yield* listMessagesPast(userId, conversationId, tools, CURSOR_START, 1);
@@ -363,7 +363,7 @@ function titleOfConversation(
   target: ConversationTarget,
   tools: ToolSet,
   origin: StoredAutomationOrigin | null = null,
-): Effect.Effect<Option.Option<string>, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const ran = yield* turnsBefore(
       target.userId,
@@ -390,7 +390,7 @@ function titledWithTask(
   userId: string,
   agent: Agent,
   title: string,
-): Effect.Effect<void, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<void, StoreFailure, DatabaseServices> {
   const written = Effect.gen(function* () {
     const filled = yield* fillAgentTitle(userId, agent.id, title);
     if (!filled || agent.taskId === null) return;
@@ -424,7 +424,7 @@ export function titleAgent(
   model: LanguageModel | undefined,
   target: ConversationTarget,
   agent: Agent,
-): Effect.Effect<void, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     if (agent.title !== null) return;
     const title = yield* titleOfConversation(model, target, CODER_TOOL_SET, agent.automationOrigin);

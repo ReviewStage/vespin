@@ -18,17 +18,13 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { INBOX_ATTACHMENT_KIND, type InboxAttachmentKind } from "../storage-vocabulary.js";
-import { bytea, timestamptz } from "./_helpers.js";
+import { bound, bytea, literal, timestamptz } from "./_helpers.js";
 import { organization, user } from "./auth.js";
 import { descriptionComment } from "./description-comment.js";
 import { inboxItem } from "./inbox.js";
 import { inboxMessage } from "./inbox-message.js";
 import { conversations } from "./storage.js";
 import { task } from "./task.js";
-
-/** A value written into a check as SQL rather than a parameter, which a constraint cannot take. */
-const literal = (value: string) => sql.raw(`'${value}'`);
-const bound = (bytes: number) => sql.raw(String(bytes));
 
 /** Whether a row's bytes are a WebM an agent recorded, which an inbox message or a plan holds to a video's bound rather than a picture's. */
 const isWebm = (table: { readonly contentType: AnyPgColumn }) =>

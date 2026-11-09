@@ -52,7 +52,7 @@ import {
   type HeldSlice,
   heldSlice,
 } from "./live-collection.js";
-import { followTakingRows, restarting } from "./live-follow.js";
+import { followTakingRows, type LiveFailure, restarting } from "./live-follow.js";
 
 /** The people's rows as the read's statement answers them: each member's, the plugin's role text among it, and who left. */
 type PeopleRows = typeof WORKSPACE_MEMBERS_READ.rows.Type;
@@ -69,7 +69,6 @@ interface PeopleRow extends PeopleRows {
 const WORKSPACE_PEOPLE = fieldKind((row: PeopleRow) => row.workspaceId);
 
 /** A seal the service did not answer, `gone` where the read names nothing the account reaches any more. */
-type Unsealed = { readonly failure: string; readonly gone?: boolean };
 
 /** What one member write makes of one member: the role they now hold, or that they are gone from the workspace. */
 export type MemberMoved =
@@ -82,7 +81,7 @@ export type MemberWritten<Answer> =
   | { readonly refused: Answer };
 
 /** One kind of member write, as its client declares it: the workspace it writes, what it makes of the members, and how it is sent. */
-export interface MemberWrite<Input, Answer> {
+interface MemberWrite<Input, Answer> {
   readonly workspaceId: (input: Input) => string;
   readonly moves: (input: Input) => readonly MemberMoved[];
   readonly send: (input: Input) => Effect.Effect<MemberWritten<Answer>>;
@@ -98,7 +97,7 @@ export interface WorkspaceMembersDependencies {
    */
   readonly seal: (
     workspaceId: string,
-  ) => (poll: boolean, after?: string) => Effect.Effect<WorkspaceMembersLiveAnswer | Unsealed>;
+  ) => (poll: boolean, after?: string) => Effect.Effect<WorkspaceMembersLiveAnswer | LiveFailure>;
   readonly tell: (held: AppWorkspaceMembers) => void;
   /** The sync engine's pool, which each held workspace's people stand in while it is followed. */
   readonly pool: EntityPool;

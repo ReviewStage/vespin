@@ -23,25 +23,22 @@
  */
 
 import { HTTP_METHOD } from "@repo/wire";
-import { Clock, Config, Context, Effect, Layer, Option, Redacted } from "effect";
+import { Clock, Context, Effect, Layer, Option } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
-import { accountCall, callAnswered, fixedBearer } from "../core.js";
-import { INVITATION_MAIL_ENVIRONMENT } from "./invitation-mail.js";
+import { callAnswered } from "../core.js";
+import { RESEND, readResendSender, resendCall } from "./resend.js";
 
 /** The deployment's variables the sender is read from: the Resend key invitations send with, and the address the note comes from. */
 export const WELCOME_MAIL_ENVIRONMENT = {
-  RESEND_API_KEY: INVITATION_MAIL_ENVIRONMENT.RESEND_API_KEY,
+  RESEND_API_KEY: RESEND.API_KEY_ENVIRONMENT,
   FROM: "WELCOME_FROM",
 } as const;
 
-const RESEND = {
-  BASE_URL: "https://api.resend.com",
-  EMAILS_PATH: "/emails",
-  /** Short, since the sign-up's answer waits on it. */
-  REQUEST_TIMEOUT_MS: 3_000,
-  /** How long after the sign-up Resend sends the note. */
-  SEND_DELAY_MS: 60 * 60 * 1_000,
-} as const;
+/** Short, since the sign-up's answer waits on it. */
+const REQUEST_TIMEOUT_MS = 3_000;
+
+/** How long after the sign-up Resend sends the note. */
+const SEND_DELAY_MS = 60 * 60 * 1_000;
 
 /** What the build says once where a variable is unset, by the variables' names alone. */
 const MAIL_UNSET = `${WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY} or ${WELCOME_MAIL_ENVIRONMENT.FROM} is not set, so new accounts are not sent a welcome email.`;
@@ -77,12 +74,6 @@ export function greetingOf(name: string): string {
   return first === "" ? "Hey," : `Hey ${first},`;
 }
 
-/** A variable as the deployment holds it, trimmed, and nothing where it is unset or blank. */
-function presentText(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
-
 /**
  * The sender over Resend, once the deployment names both its key and its
  * address, read as the services are built; one that sends nothing otherwise.
@@ -91,27 +82,19 @@ export const welcomeMailFromEnvironment: Layer.Layer<WelcomeMail, never, HttpCli
   Layer.effect(
     WelcomeMail,
     Effect.gen(function* () {
-      const read = yield* Config.all({
-        key: Config.option(Config.Redacted(WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY)),
-        from: Config.option(Config.String(WELCOME_MAIL_ENVIRONMENT.FROM)),
-      }).pipe(Effect.orElseSucceed(() => ({ key: Option.none(), from: Option.none() })));
-      const key = presentText(Option.map(read.key, Redacted.value));
-      const from = presentText(read.from);
-      if (key === undefined || from === undefined) {
+      const sender = yield* readResendSender(WELCOME_MAIL_ENVIRONMENT.FROM);
+      if (Option.isNone(sender)) {
         yield* Effect.logWarning(MAIL_UNSET);
         return { send: () => Effect.void };
       }
+      const { key, from } = sender.value;
       const client = yield* HttpClient.HttpClient;
-      const call = accountCall({
-        baseUrl: RESEND.BASE_URL,
-        credential: fixedBearer(key),
-        requestTimeoutMs: RESEND.REQUEST_TIMEOUT_MS,
-      });
+      const call = resendCall(key, REQUEST_TIMEOUT_MS);
       return {
         send: (letter: WelcomeLetter) =>
           Effect.gen(function* () {
             const now = yield* Clock.currentTimeMillis;
-            const scheduledAt = new Date(now + RESEND.SEND_DELAY_MS).toISOString();
+            const scheduledAt = new Date(now + SEND_DELAY_MS).toISOString();
             const answer = yield* call.send({
               method: HTTP_METHOD.POST,
               path: RESEND.EMAILS_PATH,

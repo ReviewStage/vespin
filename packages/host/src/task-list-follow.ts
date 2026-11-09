@@ -7,6 +7,7 @@ import { Effect, Option, Schema, Stream } from "effect";
 import {
   LIVE_GONE,
   LiveBroken,
+  type LiveFailure,
   liveRows,
   restarting,
   type SyncStanding,
@@ -38,7 +39,7 @@ import {
  */
 
 /** A read as the follow asks for it, its rows inline; a failure where the service answered none, `gone` where it never will again. */
-type Sealed = TaskListLiveAnswer | { readonly failure: string; readonly gone?: boolean };
+type Sealed = TaskListLiveAnswer | LiveFailure;
 
 export interface TaskListFollowDependencies {
   /** The read with its rows inline, fetched from the service, past the sync id named, whole where it is empty or none. */

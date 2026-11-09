@@ -60,13 +60,6 @@ export function signedInAccountId(account: AccountSnapshot | undefined): string 
   return account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
 }
 
-/**
- * What a sign-in begun from a window answers: the account it settled on, or
- * the key of why it ended without landing, which the window says in words of
- * its own. No sentence a provider or a client wrote ever rides it.
- */
-export type SignInAnswer = typeof signInAnswerSchema.Type;
-
 /** A sign-in's answer as it crosses to the window that began it. */
 export const signInAnswerSchema = Schema.Union([
   Schema.Struct({ account: accountSnapshotSchema }),

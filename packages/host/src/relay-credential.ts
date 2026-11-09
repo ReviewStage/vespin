@@ -4,7 +4,7 @@
 
 import { type CallCredential, resolvedCredential } from "@repo/features";
 import { Effect, type Scope } from "effect";
-import type { OpenTerminalSocket, TerminalSocketOpening } from "./compose-terminals.js";
+import type { OpenTerminalSocket, TerminalSocketOpening } from "./relay-socket.js";
 
 /** The status a relay refuses an upgrade with for want of an account it answers for. */
 const UNAUTHORIZED = 401;

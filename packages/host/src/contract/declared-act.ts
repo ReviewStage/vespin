@@ -241,7 +241,6 @@ export function declaredActs<
 >(declarations: Declarations): NamedActs<Declarations> {
   const named: Record<string, AnyHostAct> = {};
   for (const [name, declaration] of Object.entries(declarations)) {
-    if (declaration === undefined) continue;
     // SAFETY: the declarations' keys are port act names, by their type.
     const key = name as PortActName;
     const use: ActUse = PORT_ACT_USE[key];

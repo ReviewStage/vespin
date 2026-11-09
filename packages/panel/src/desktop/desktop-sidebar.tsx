@@ -233,7 +233,7 @@ const LIST_SKELETON = ["72%", "54%", "64%", "46%"] as const;
  * folds the column away past its least width; without it, as in Settings,
  * where there is no tasks' sidebar to fold, the drag holds at the bound.
  */
-export function useSidebarEdge(
+function useSidebarEdge(
   sidebar: SidebarCollapse,
   onToggleCollapsed?: () => void,
 ): ResizeEdgeHandle {

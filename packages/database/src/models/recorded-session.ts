@@ -27,7 +27,7 @@ import {
 } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError, queryBuilder } from "../core/query.js";
+import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { conversations } from "../schemas/storage.js";
 import { CONVERSATION_KIND } from "../storage-vocabulary.js";
@@ -215,7 +215,7 @@ export type StandingSession = typeof StandingSessionRowSchema.Type;
 export function standingSessionsOf(
   userId: string,
   conversationIds?: readonly string[],
-): Effect.Effect<readonly StandingSession[], QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<readonly StandingSession[], StoreFailure, DatabaseServices> {
   if (conversationIds !== undefined && conversationIds.length === 0) return Effect.succeed([]);
   return findStandingSessions({
     userId,
@@ -230,7 +230,7 @@ export function standingSessionsOf(
  */
 export function standingSessionsNamed(
   conversationIds: readonly string[],
-): Effect.Effect<readonly StandingSession[], QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<readonly StandingSession[], StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed([]);
   return findStandingSessions({ userId: null, conversationIds });
 }
@@ -238,7 +238,7 @@ export function standingSessionsNamed(
 /** The runtime session the account's own standing conversation runs in, where one has been recorded; a cleared or foreign conversation records none. */
 export function recordedRuntimeSession(
   target: ConversationTarget,
-): Effect.Effect<string | undefined, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> {
   return Effect.map(findStandingSession(target), (row) =>
     Option.isSome(row) ? (row.value.runtimeSessionId ?? undefined) : undefined,
   );
@@ -248,7 +248,7 @@ export function recordedRuntimeSession(
 export function conversationReachableBy(
   userId: string,
   conversationId: string,
-): Effect.Effect<boolean, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
   return Effect.map(findReachableConversation({ userId, conversationId }), Option.isSome);
 }
 
@@ -263,7 +263,7 @@ export const claimRuntimeSession = /* @__PURE__ */ Effect.fn("web/claimRuntimeSe
   target: ConversationTarget,
   runtimeSessionId: string,
   now: Date,
-): Effect.fn.Return<boolean, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
   yield* claimSession({ ...target, runtimeSessionId, now });
   const recorded = yield* findRecordedSession(target.conversationId);
   return Option.isSome(recorded) && recorded.value.runtimeSessionId === runtimeSessionId;

@@ -253,7 +253,7 @@ export function driveAnswered(drive: {
 }
 
 /** A drive as a fake keeps it: its name, the drive it was forked from where it was, and whether it was deleted. */
-export interface FakeDrive {
+interface FakeDrive {
   readonly id: string;
   readonly name: string;
   readonly forkedFrom?: string;

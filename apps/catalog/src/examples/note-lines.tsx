@@ -6,7 +6,7 @@ import {
   NoteLine,
   UserIcon,
 } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

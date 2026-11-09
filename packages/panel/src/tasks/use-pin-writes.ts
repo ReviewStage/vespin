@@ -133,7 +133,7 @@ export interface PinWrites {
 }
 
 /** The pins and sections a surface draws. */
-export interface PinViews {
+interface PinViews {
   /** The repositories the account pinned in the sidebar, newest pinned first, whose groups stand above the rest. */
   pinnedRepositories: readonly string[];
   /** The account's pins of agents on a plan, the archived ones left out, which the sidebar's Pinned section draws beside the pinned plans; none while the list is not followed live. */
@@ -155,7 +155,7 @@ export function useTaskSections(): TaskSections {
 }
 
 /** The pins and sections, as the window lists them: main's, or a fixture run's own. */
-export function usePinViews(): PinViews {
+function usePinViews(): PinViews {
   const taskSections = useTaskSections();
   const repositoryPins =
     useQuery({ ...appStateQuery, select: selectRepositoryPins }).data ?? NO_REPOSITORY_PINS;

@@ -21,6 +21,7 @@ import {
   usePicture,
 } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
+import { Schema } from "effect";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { askAct } from "../act.js";
 import { pictureUnread } from "../failure-report.js";
@@ -481,18 +482,17 @@ export function CallPictures({
 }
 
 /** The media types a message may carry a file of, as the wire takes them. */
-const ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
+const isAgentAttachmentType = Schema.is(Schema.Literals(Object.values(AGENT_ATTACHMENT_TYPE)));
 
 /** A file's bytes as a message carries them, read off a `data:` address; none for any other address. */
 function attachmentOfData(name: string, url: string): AgentAttachment | undefined {
   const read = /^data:([^;,]+);base64,(.+)$/u.exec(url);
   const mediaType = read?.[1];
   const data = read?.[2];
-  if (mediaType === undefined || data === undefined || !ATTACHMENT_TYPES.has(mediaType)) {
+  if (mediaType === undefined || data === undefined || !isAgentAttachmentType(mediaType)) {
     return undefined;
   }
-  // SAFETY: the type was just found among the wire's own.
-  return { name, mediaType: mediaType as AgentAttachment["mediaType"], data };
+  return { name, mediaType, data };
 }
 
 /** One of a line's files as Edit carries it again, by its place on the line, which never changes. */

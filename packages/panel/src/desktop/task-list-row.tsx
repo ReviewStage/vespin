@@ -37,6 +37,7 @@ import {
   taskTime,
 } from "@repo/ui/task-list-model";
 import { RENAME_FAILED_NOTE } from "@repo/ui/tasks-model";
+import { statusOf } from "@repo/ui/tasks-page-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation } from "@tanstack/react-query";
@@ -56,7 +57,7 @@ import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { type OpenedTask, type TaskRowTab, useTaskMenuItems } from "./task-actions.js";
 import { TaskRowStatus } from "./task-card.js";
-import { AssigneeChip, PriorityChip, StatusChip, statusOf, taskSubject } from "./task-row-parts.js";
+import { AssigneeChip, PriorityChip, StatusChip, taskSubject } from "./task-row-parts.js";
 import { type ChosenTasks, chosenRowMenu } from "./tasks-selection.js";
 
 /**

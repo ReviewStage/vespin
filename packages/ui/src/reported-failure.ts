@@ -20,6 +20,7 @@
  */
 
 import type { ReactNode } from "react";
+import { said } from "./said.js";
 
 /** A failure of the app's a component shows, as the app that caught it hands it on. */
 export interface ReportedFailure {
@@ -55,11 +56,6 @@ export type Unreported = (typeof UNREPORTED)[keyof typeof UNREPORTED];
 export interface ShownError {
   readonly words: ReactNode;
   readonly failure: ReportedFailure | Unreported;
-}
-
-/** Whether words say anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
 }
 
 /** The person's input checked, as a line says it, or nothing while `words` say nothing. */

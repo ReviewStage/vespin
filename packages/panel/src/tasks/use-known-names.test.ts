@@ -2,9 +2,9 @@
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import type { KnownNames } from "@repo/features/place-chip-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import type { KnownNames } from "@repo/features/thing-kind";
 import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";

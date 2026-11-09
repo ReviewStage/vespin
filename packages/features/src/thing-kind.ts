@@ -7,7 +7,6 @@ import {
   pullRequestAddressOf,
 } from "./link-grammar.js";
 import { MENTION_KIND, type Mention } from "./mention-link.js";
-import type { KnownNames } from "./place-chip-model.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { TERM } from "./words.js";
 
@@ -119,6 +118,21 @@ export type ThingOf<K extends ThingKind> = Extract<Thing, { readonly kind: K }>;
 
 /** A place of the kind given. */
 type PlaceOf<K extends LinkPlaceKind> = Extract<LinkPlace, { readonly kind: K }>;
+
+/** The names the window holds, each by the id the service minted it under. */
+export interface KnownNames {
+  readonly tasks: ReadonlyMap<string, string>;
+  readonly agents: ReadonlyMap<string, string>;
+  /** The catalog id of the model each agent the window holds runs on, which its harness's mark is read off; titled or not. */
+  readonly agentModels: ReadonlyMap<string, string>;
+  /** The pages of the one task the window holds them for, `pagesTaskId`. */
+  readonly pages: ReadonlyMap<string, string>;
+  /** The task whose pages `pages` names, the window's open one; none where it holds no task's pages. */
+  readonly pagesTaskId: string | undefined;
+  readonly inboxItems: ReadonlyMap<string, string>;
+  readonly people: ReadonlyMap<string, string>;
+  readonly automations: ReadonlyMap<string, string>;
+}
 
 /** What names a thing beyond the names the window holds: the heading its anchor names in the description open, the key and title its provider answered for its page, and the repository, `owner/name`, of the place the thing is named in, which a pull request's or an issue's key leaves out where it is the same. */
 export interface ThingSaid {

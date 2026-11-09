@@ -137,7 +137,7 @@ export function unfurlProblems(app: string, landing: string): readonly string[] 
 }
 
 /** A PNG's width and height, read from its IHDR chunk, which always follows the 8-byte signature. */
-export function pngSize(png: Buffer): string | undefined {
+function pngSize(png: Buffer): string | undefined {
   if (png.toString("latin1", 1, 4) !== "PNG") return undefined;
   return `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`;
 }

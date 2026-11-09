@@ -18,6 +18,7 @@ export {
   APP_SETTING_KIND,
   APP_TOGGLE_VALUE,
   type AppPanelTab,
+  type AppSettingKind,
   appToggleText,
   type DescribedSetting,
 } from "./guide.js";

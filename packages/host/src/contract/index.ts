@@ -79,12 +79,14 @@ export {
   INTEGRATION_ACT_KIND,
   MAC_SHELL_ACT_KIND,
   MAC_TERMINAL_ACT_KIND,
+  type MacShellActKind,
   PLATFORM_PORT_ACT_KIND,
   type PlatformPortActKind,
   type PortActKind,
   SETTINGS_ACT_KIND,
   TASKS_ACT_KIND,
   TERMINAL_ACT_KIND,
+  type TerminalActKind,
   UPDATE_ACT_KIND,
   WINDOW_SURFACE_ACT_KIND,
   WORKSPACE_ACT_KIND,
@@ -93,7 +95,6 @@ export {
   type AnyLiveFollow,
   type AnyLiveFollowDeclaration,
   type FollowKey,
-  HOLD,
   isLiveFollow,
 } from "./live-follow.js";
 export { MAC_COMMAND_ACTS } from "./mac-commands.js";

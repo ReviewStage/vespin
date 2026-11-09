@@ -42,6 +42,7 @@ import type { Composer } from "./composer.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
 import { openedUnderCredential } from "./relay-credential.js";
+import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
@@ -75,36 +76,6 @@ import type { RunMode } from "./run-mode.js";
  * printed is kept here, logged, or counted: it is handed to the event and
  * let go.
  */
-
-/** What one relay socket hands up: a binary frame's bytes, a text frame, or the close code that ended it, last. */
-export type TerminalSocketArrival =
-  | { readonly bytes: Uint8Array }
-  | { readonly text: string }
-  | { readonly close: number };
-
-/** What the host sends on a relay socket: typed bytes, or a text frame. */
-export type TerminalSocketFrame = { readonly bytes: Uint8Array } | { readonly text: string };
-
-/** An open relay socket: what arrives on it, ending with its close, and what the host does with it. */
-export interface TerminalSocket {
-  readonly arrivals: Stream.Stream<TerminalSocketArrival>;
-  send(frame: TerminalSocketFrame): Effect.Effect<void>;
-  /** Stops reading the network until `resume`, so the far side holds what it has not sent. */
-  readonly pause: Effect.Effect<void>;
-  readonly resume: Effect.Effect<void>;
-}
-
-/** How an open ended: the socket, the status the upgrade was refused with, or nothing that answered. */
-export type TerminalSocketOpening =
-  | { readonly socket: TerminalSocket }
-  | { readonly refused: number }
-  | { readonly unreachable: true };
-
-/** Opens one relay socket with the handshake headers given; the scope's close closes it. */
-export type OpenTerminalSocket = (
-  url: string,
-  headers: Readonly<Record<string, string>>,
-) => Effect.Effect<TerminalSocketOpening, never, Scope.Scope>;
 
 /** How long a connection waits before it opens its socket again. */
 export const TERMINAL_RECONNECT = {

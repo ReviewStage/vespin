@@ -9,6 +9,7 @@
  */
 
 import { PRODUCT_NAME } from "./product-name.js";
+import { shellQuoted } from "./shell-quote.js";
 
 /** The member MCP server's path under the service origin. */
 export const MCP_SERVER_PATH = "/api/mcp";
@@ -65,9 +66,7 @@ const PLAIN_WORD = /^[\w@%+=:,./-]+$/u;
 
 /** A command as one line to paste in a shell: each word bare where a shell reads it as itself, else single-quoted. */
 export function shellLine(command: McpCommand): string {
-  return command
-    .map((word) => (PLAIN_WORD.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`))
-    .join(" ");
+  return command.map((word) => (PLAIN_WORD.test(word) ? word : shellQuoted(word))).join(" ");
 }
 
 /** The entry Cursor keeps for a remote server: its address alone. */

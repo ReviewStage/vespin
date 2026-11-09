@@ -372,20 +372,6 @@ export function agentHoldingsOf(
 }
 
 /**
- * Hands the window main's document with its inbox read holding the open
- * items of agents with no task given, and the agents holding items, where
- * none are given, those the items name (`agentHoldingsOf`), as main lists
- * both from one read; written into the test's Query client too, so a case
- * that draws synchronously finds them in its first frame.
- */
-export function handInboxTaskless(
-  taskless: readonly AppInboxTasklessItem[],
-  agents: readonly AppInboxAgentHolding[] = agentHoldingsOf(taskless),
-): void {
-  handInbox({ taskless, agents });
-}
-
-/**
  * Hands the window main's document with its inbox read holding the slices
  * given, nothing in the rest; written into the test's Query client too, so
  * a case that draws synchronously finds them in its first frame.

@@ -44,10 +44,9 @@ export interface GatewayShutdownReport {
  * produced stands — a `Ref` neither step's own interruption can take back —
  * and the step that was cut is counted as never having settled. A cancel or a
  * settle that hangs is interrupted where it waits rather than at the work
- * beneath it, which is the abort signal this bound used to hand the settling
- * step; `persistUnresolved` always runs to
- * completion, whatever the deadline decided, because recovery must never be
- * the thing a cut shutdown also drops.
+ * beneath it; `persistUnresolved` always runs to completion, whatever the
+ * deadline decided, because recovery must never be the thing a cut shutdown
+ * also drops.
  */
 export function shutdownGatewayEffect(
   steps: GatewayShutdownSteps,

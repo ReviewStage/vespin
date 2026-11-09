@@ -15,7 +15,7 @@ import {
 } from "@repo/ui";
 import { UNREPORTED } from "@repo/ui/reported-failure";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** A press the catalog has nowhere to take. */

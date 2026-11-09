@@ -41,7 +41,6 @@ import { type Agent, readAgentOfConversation } from "@repo/database/models/agent
 import { latestTurnsOfReached } from "@repo/database/models/message-reads";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import type { HostedApiError } from "@repo/features";
 import { type AgentQueue, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE, AGENT_STATUS } from "@repo/features/agent-wire";
 import { TURN_STATUS } from "@repo/wire";
@@ -210,9 +209,7 @@ export const sendClaimed = Effect.fn("web/sendClaimedQueued")(function* (
 ) {
   yield* sendQueued(sessionsFor, agent, message).pipe(
     Effect.catch((refusal: HostedRefusal) =>
-      hostedStoreOrUnavailable(
-        refuseQueuedMessage(agent.id, message, refusal.error as HostedApiError),
-      ),
+      hostedStoreOrUnavailable(refuseQueuedMessage(agent.id, message, refusal.error)),
     ),
     Effect.catchCause((cause) => Effect.logWarning("agent-queue: a hand-off failed", cause)),
   );

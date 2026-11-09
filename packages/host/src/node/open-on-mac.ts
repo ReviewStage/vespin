@@ -1,4 +1,5 @@
 import path from "node:path";
+import { shellQuoted } from "@repo/features/shell-quote";
 import type { MirrorPlatformSeam } from "../effect/seams.js";
 
 /**
@@ -70,11 +71,6 @@ const LOGIN_PATH = [
   'PATH="$("${SHELL:-/bin/zsh}" -l -c \'printf %s "$PATH"\' 2>/dev/null || printf %s "$PATH")"',
   "export PATH",
 ];
-
-/** A word quoted for a POSIX shell. */
-function shellQuoted(word: string): string {
-  return `'${word.replaceAll("'", `'\\''`)}'`;
-}
 
 /**
  * The lines that make every Git step of a script non-interactive and bounded,

@@ -1,4 +1,4 @@
-import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { INBOX_SCOPE_KIND, type InboxScopeKind } from "@repo/features/agent-view";
 import {
   type AccountInboxItemsLiveAnswer,
   type AccountInboxItemsLiveRows,
@@ -16,6 +16,7 @@ import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-col
 import {
   confirmWrite,
   followTakingRows,
+  type LiveFailure,
   restarting,
   type SyncStanding,
   syncIdOf,
@@ -52,15 +53,11 @@ import {
  */
 
 /** A read the service did not answer, `gone` where it never will again. */
-type SealFailure = { readonly failure: string; readonly gone?: boolean };
-
-/** The kind of holder an item is on: a plan, or an agent with no task. */
-type HolderKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
 /** One item as the follow last took it, and the plan or agent it is on. */
 interface HeldItem {
   readonly item: InboxItem;
-  readonly kind: HolderKind;
+  readonly kind: InboxScopeKind;
   readonly holder: string;
 }
 
@@ -72,7 +69,7 @@ export interface AccountItemsDependencies {
   readonly seal: (
     userId: string,
     sync: string | undefined,
-  ) => Effect.Effect<AccountInboxItemsLiveAnswer | SealFailure>;
+  ) => Effect.Effect<AccountInboxItemsLiveAnswer | LiveFailure>;
   /** The sync engine's pool, which the items stand in while they are followed. */
   readonly pool: EntityPool;
   /** The account's own reads, among which the feed's wait stands while it is followed. */
@@ -168,7 +165,7 @@ function inboxItemsPatched(
     if (items === undefined) lists[kind].set(holder, [shown]);
     else items.push(shown);
   }
-  const ofKind = (kind: HolderKind) => {
+  const ofKind = (kind: InboxScopeKind) => {
     if (touched[kind].size === 0) return told[kind];
     const next = { ...told[kind] };
     for (const holder of touched[kind]) {

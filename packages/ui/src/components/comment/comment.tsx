@@ -1,4 +1,5 @@
 import { createElement, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import { drawsSomething } from "../../said.js";
 import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarShape } from "../avatar/avatar.js";
 import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
@@ -74,11 +75,6 @@ const TIME = "ui-comment-time flex-none";
 const TRAILING =
   "ui-comment-trailing ms-auto inline-flex h-lh flex-none items-center gap-control-gap self-start";
 const BODY = "ui-comment-body col-start-2 row-start-2 min-w-0 text-body";
-
-/** Whether a node draws anything: none, null, and a boolean, as a condition leaves it, draw nothing. */
-function drawsSomething(node: ReactNode): boolean {
-  return node !== undefined && node !== null && typeof node !== "boolean";
-}
 
 /**
  * The comment's frame, the element it stands in, holding its cells.

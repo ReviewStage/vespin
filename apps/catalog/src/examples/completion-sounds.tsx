@@ -8,7 +8,7 @@ import {
   COMPLETION_SOUNDS,
   type CompletionSoundGroup,
 } from "@repo/wire/app-settings";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

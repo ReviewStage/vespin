@@ -232,7 +232,6 @@ export function liveFollows<
 >(declarations: Declarations): NamedFollows<Declarations> {
   const named: Record<string, AnyLiveFollow> = {};
   for (const [name, declaration] of Object.entries(declarations)) {
-    if (declaration === undefined) continue;
     // SAFETY: the declarations' keys are read act names, by their type.
     const key = name as ReadActName;
     const { retryName } = declaration;

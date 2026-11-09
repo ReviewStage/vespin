@@ -1,5 +1,5 @@
 /**
- * errors.ts -- a hosted refusal as an oRPC error, and that error as the bytes the old groups answered.
+ * errors.ts -- a hosted refusal as an oRPC error, and that error as the hosted refusal body.
  *
  * An endpoint body still fails with a `HostedRefusal`; the wrap below turns
  * it into an `ORPCError` whose code is the refusal's slug and whose data is
@@ -143,10 +143,9 @@ export function hostedRefusalWrap(
 
 /**
  * The body an error is answered with: a refusal as itself, an input its
- * schema refused as the invalid request the old groups answered, a body
- * past the handler's request limit as the request too large they answered,
- * and anything else left to the handler (`handler.ts` answers it as the old
- * groups answered a defect).
+ * schema refused as an invalid request, a body past the handler's request
+ * limit as request too large, and anything else left to the handler
+ * (`handler.ts` answers it as a bare 500).
  */
 export function encodeHostedError(error: ORPCError<string, unknown>): object | null {
   if (Object.hasOwn(REFUSAL_STATUS, error.code)) {

@@ -158,7 +158,7 @@ export const INBOX_TOOLS = {
  * agent still acts on it, and once settled its type and where it stands,
  * and an answered `do`'s steps, which the answer names by their places alone.
  */
-export type AgentAskLine =
+type AgentAskLine =
   | InboxReadAsk
   | (Pick<InboxReadAsk, "type" | "status" | "withdrawnReason"> & {
       readonly steps?: readonly string[];
@@ -260,7 +260,7 @@ function writerOf(message: InboxMessage): string {
 }
 
 /** An ask as the agent reads it back: whole while open, and its type and standing, with why it was withdrawn, once settled; as a member's outside agent reads one too (`member-mcp/inbox.ts`). */
-export function askLineOf(ask: InboxReadAsk): AgentAskLine {
+function askLineOf(ask: InboxReadAsk): AgentAskLine {
   if (ask.status === INBOX_ASK_STATUS.OPEN) return ask;
   return {
     type: ask.type,
@@ -273,7 +273,7 @@ export function askLineOf(ask: InboxReadAsk): AgentAskLine {
 }
 
 /** An answer as the agent reads it back: how the member answered, without the id of the message it answers, which is the ask before it; as a member's outside agent reads one too. */
-export function answersLineOf(answers: InboxAnswers): Omit<InboxAnswers, "ask"> {
+function answersLineOf(answers: InboxAnswers): Omit<InboxAnswers, "ask"> {
   const { ask: _ask, ...answered } = answers;
   return answered;
 }

@@ -9,8 +9,8 @@
  * it does not declare is reported by the service and read by a client as no
  * answer.
  *
- * A JSON body is read as the old routes read one (`readEither`): a key its
- * schema does not name is refused, where the extension would drop it.
+ * A JSON body is read exactly: a key its schema does not name is refused,
+ * where the extension would drop it.
  *
  * A procedure that takes a body may hold it to a cap of its own, in bytes
  * (`bodyCap`), which the handler counts as the body is read and refuses past
@@ -65,7 +65,7 @@ export const [bodyCap, getBodyCap] = defineMeta(
 
 /**
  * A JSON body's schema as a Standard Schema whose decode refuses a key it
- * does not name, as the old groups' `readEither` refused one; the effect
+ * does not name; the effect
  * extension's own conversion ignores an excess key. The schema is made
  * afresh from its AST, because the conversion writes the Standard Schema
  * onto the schema it is handed.

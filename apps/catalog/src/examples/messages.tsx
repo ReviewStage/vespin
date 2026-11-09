@@ -23,7 +23,7 @@ import {
   Text,
 } from "@repo/ui";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** Oct 14, 2026, 3:42 PM, on the viewer's own clock. */

@@ -78,6 +78,7 @@ import {
   githubPost,
   githubRead,
   readBody,
+  repositoryPath,
   send,
 } from "./github-app.js";
 import { rateLimited } from "./github-rate-gate.js";
@@ -322,12 +323,6 @@ const PEOPLE_MAX_PAGES = { REVIEWS: 30 } as const;
 /** A path segment as GitHub takes it, so a branch spelled with a slash stays one branch. */
 function segment(value: string): string {
   return encodeURIComponent(value);
-}
-
-/** The repository's own path under the API, each half a segment of its own. */
-function repositoryPath(fullName: string): string {
-  const [owner = "", name = ""] = fullName.split("/");
-  return `/repos/${segment(owner)}/${segment(name)}`;
 }
 
 /** One read sent on the token, its answer read and closed; not found is none, and any other status the status it is. */

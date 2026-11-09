@@ -21,7 +21,7 @@ import type {
   OpenTerminalSocket,
   TerminalSocketArrival,
   TerminalSocketOpening,
-} from "./compose-terminals.js";
+} from "./relay-socket.js";
 
 /** How the shell ends a socket it no longer wants: normally, the shell going on in tmux. */
 const NORMAL_CLOSE = 1000;

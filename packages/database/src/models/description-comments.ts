@@ -28,7 +28,7 @@ import {
   type DescriptionCommentThreadAnswer,
   descriptionCommentActorSchema,
 } from "@repo/features/description-comment-wire";
-import { descriptionSections } from "@repo/features/description-document";
+import { sectionAt } from "@repo/features/description-document";
 import { and, asc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
@@ -523,11 +523,6 @@ function threadsOf(
         : yield* findFiles({ taskId, entryIds: comments.map((entry) => entry.id) });
     return rows.map((row) => threadOf(row, entries, files));
   });
-}
-
-/** The heading of the section a place in the text stands in; empty before the first heading. */
-function sectionAt(text: string, offset: number): string {
-  return descriptionSections(text).findLast((section) => section.from <= offset)?.heading ?? "";
 }
 
 /** The writer's columns of an entry. */

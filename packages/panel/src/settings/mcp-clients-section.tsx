@@ -317,7 +317,7 @@ function ClientRow({
   );
 
   // Note that an agent that gave no name is called by the app's own words, which show in a screen recording.
-  const named = client.name !== null && client.name !== undefined;
+  const named = client.name !== null;
   return (
     <>
       <MenuRow
@@ -455,10 +455,8 @@ function ConnectSection({
       {arrived === undefined ? null : (
         <SettingsLine>
           <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-            <ReplayWords masked={arrived.name !== null && arrived.name !== undefined}>
-              {clientName(arrived)}
-            </ReplayWords>{" "}
-            is connected.
+            <ReplayWords masked={arrived.name !== null}>{clientName(arrived)}</ReplayWords> is
+            connected.
           </SettingsRowStateLine>
         </SettingsLine>
       )}

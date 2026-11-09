@@ -21,7 +21,6 @@ import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
-import type { KnownNames } from "@repo/features/place-chip-model";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -29,6 +28,7 @@ import {
 } from "@repo/features/shown-failure";
 import { pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
+import type { KnownNames } from "@repo/features/thing-kind";
 import { workingTime } from "@repo/features/time-format";
 import {
   CALL_KIND,
@@ -1015,7 +1015,7 @@ function MadeCallView({
           place={holder}
           pageId={shown.page}
           version={shown.version}
-          title={subject === undefined || subject === "" ? UNTITLED_PAGE : subject}
+          title={subject === "" ? UNTITLED_PAGE : subject}
         />
       )}
     </>

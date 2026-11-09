@@ -354,12 +354,12 @@ const TASKS_LIST_STATUS_ORDER: readonly TaskStatus[] = [
 ];
 
 /** A task's status, Todo for one from a service before statuses. */
-function statusOf(task: TaskSummary): TaskStatus {
+export function statusOf(task: Pick<TaskSummary, "status">): TaskStatus {
   return task.status ?? TASK_STATUS.TODO;
 }
 
 /** A task's priority, No priority for one from a service before priorities. */
-function priorityOf(task: TaskSummary): TaskPriority {
+export function priorityOf(task: Pick<TaskSummary, "priority">): TaskPriority {
   return task.priority ?? TASK_PRIORITY.NONE;
 }
 

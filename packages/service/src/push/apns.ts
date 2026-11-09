@@ -61,6 +61,7 @@ import {
   Ref,
   Result,
 } from "effect";
+import { present } from "../environment.js";
 
 /** The deployment's variables the sender is read from: the APNs key's id, the team that owns it, the key itself as its `.p8` PEM, and the app the pushes are for. */
 export const APNS_ENVIRONMENT = {
@@ -152,12 +153,29 @@ export interface PushDeviceAddress {
   readonly bundleId: string;
 }
 
+/** The `aps` dictionary Apple reads, as far as the service writes it. */
+export interface ApnsAps {
+  readonly alert?: { readonly title: string; readonly body?: string };
+  readonly badge?: number;
+  readonly sound?: string;
+  readonly category?: string;
+  readonly "thread-id"?: string;
+  readonly "mutable-content"?: 1;
+  readonly "content-available"?: 1;
+}
+
+/** The JSON Apple delivers: its `aps`, and the app's own keys at the top level. */
+export interface ApnsPayload {
+  readonly aps: ApnsAps;
+  readonly [key: string]: unknown;
+}
+
 /** One notification to one phone: who, what kind, what Apple delivers, and how Apple routes it. */
 export interface ApnsNotification {
   readonly device: PushDeviceAddress;
   readonly pushType: ApnsPushType;
   /** The JSON Apple delivers, `aps` and the app's own keys at its top level, as Apple documents it; nothing is added to it here. */
-  readonly payload: Readonly<Record<string, unknown>>;
+  readonly payload: ApnsPayload;
   /** Later notifications with the same id replace earlier ones still on the lock screen. */
   readonly collapseId?: string;
   /** How soon Apple delivers; the push type's own default where unset (`DEFAULT_PRIORITY`). */
@@ -221,12 +239,6 @@ interface ProviderToken {
 /** What the build says once where a variable is unset, by the variables' names alone. */
 function unsetMessage(missing: readonly string[]): string {
   return `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not set, so no push is sent to a phone.`;
-}
-
-/** A variable as the deployment holds it, trimmed, and nothing where it is unset or blank. */
-function presentText(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
 }
 
 /** The key as the environment holds it, with the newlines a dashboard paste may have flattened to `\n` restored; none where it is not a key. */
@@ -387,10 +399,10 @@ export const apnsSenderFromEnvironment: Layer.Layer<ApnsSender, never, ApnsTrans
           bundleId: Option.none(),
         })),
       );
-      const keyId = presentText(read.keyId);
-      const teamId = presentText(read.teamId);
-      const pem = presentText(Option.map(read.privateKey, Redacted.value));
-      const bundleId = presentText(read.bundleId);
+      const keyId = present(read.keyId);
+      const teamId = present(read.teamId);
+      const pem = present(Option.map(read.privateKey, Redacted.value));
+      const bundleId = present(read.bundleId);
       const missing = [
         [APNS_ENVIRONMENT.KEY_ID, keyId],
         [APNS_ENVIRONMENT.TEAM_ID, teamId],

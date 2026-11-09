@@ -146,7 +146,7 @@ export function useInvitees(yours: string | undefined): Invitees {
           });
           mark(email, EMAIL_CHIP_STATE.SENT);
         } catch (why) {
-          const words = (why as Error).message;
+          const words = why instanceof Error ? why.message : String(why);
           mark(email, EMAIL_CHIP_STATE.REFUSED, words);
           refused.push(`${email}: ${words}`);
         }

@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { useSideBundles } from "../bundle-loader.js";
 import type { FileLineRange, FileViewHandle, FileViewProps } from "../diff-view/contract.js";
 import { failureShown } from "../failure-report.js";
-import { type FIND_STEP, type FindSource, type FindTally, useFindSource } from "../find-in-tab.js";
+import { type FindSource, type FindStep, type FindTally, useFindSource } from "../find-in-tab.js";
 import {
   findRanges,
   NO_PAINTING,
@@ -69,9 +69,6 @@ const NOTE_KEY_ATTRIBUTE = "data-whole-file-note";
 
 /** What stands in the file's place where the diff bundle failed to load. */
 const FILE_LOAD_FAILED = "The file could not be shown.";
-
-/** How a find steps. */
-type FindStep = (typeof FIND_STEP)[keyof typeof FIND_STEP];
 
 /** No matches. */
 const NO_TALLY: FindTally = { count: 0, at: -1 };

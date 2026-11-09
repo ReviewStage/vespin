@@ -1856,7 +1856,7 @@ function paletteItem(
 function revealChecked(band: HTMLElement): void {
   const bar = band.querySelector<HTMLElement>('[role="radiogroup"]');
   const checked = bar?.querySelector<HTMLElement>('[aria-checked="true"]');
-  if (bar === null || bar === undefined || checked === null || checked === undefined) return;
+  if (bar === null || checked === null || checked === undefined) return;
   const start = checked.offsetLeft;
   const end = start + checked.offsetWidth;
   if (start < bar.scrollLeft) bar.scrollLeft = start;

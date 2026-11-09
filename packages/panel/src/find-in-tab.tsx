@@ -79,7 +79,7 @@ export const FIND_STEP = {
   NEXT: 1,
 } as const;
 
-type FindStep = (typeof FIND_STEP)[keyof typeof FIND_STEP];
+export type FindStep = (typeof FIND_STEP)[keyof typeof FIND_STEP];
 
 /** What the bar says of the matches: how many there are, and which the find is at, -1 for none. */
 export interface FindTally {

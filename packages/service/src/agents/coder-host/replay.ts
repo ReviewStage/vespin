@@ -35,7 +35,6 @@ import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   type AgentAttachment,
-  type AgentAttachmentType,
   type AgentPullRequest,
   type AgentStartFrom,
   base64Bytes,
@@ -45,9 +44,10 @@ import { mentionMarkdownLink } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { shellQuoted } from "@repo/features/shell-quote";
 import { CALL_KIND, CALL_WORDS as ROW_CALL_WORDS } from "@repo/features/turn-rows";
 import { type FileUIPart, isFileUIPart, isTextUIPart } from "ai";
-import { Effect, Option } from "effect";
+import { Effect, Option, Schema } from "effect";
 import {
   isRecord,
   isSettledToolPartState,
@@ -209,7 +209,7 @@ const NOTE_SPEAKER: ReadonlyMap<StartNoteHeading, string> = new Map([
   [START_NOTE_HEADING.AGENT, REPLAY_WORDS.STARTING_AGENT],
 ]);
 
-const ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
+const isAgentAttachmentType = Schema.is(Schema.Literals(Object.values(AGENT_ATTACHMENT_TYPE)));
 
 /** What a source that left no branch, carried none, and could not be copied is taken up from. */
 const NO_BRANCH_WORDS =
@@ -431,11 +431,10 @@ function noteStep(heading: StartNoteHeading, text: string, sentAt: Date | undefi
 /** A file the source's prompt carried, as a Start attaches one again; nothing where its transcript kept no bytes of it. */
 function attachmentOf(url: string, mediaType: string, name: string): AgentAttachment | undefined {
   const prefix = `data:${mediaType};base64,`;
-  if (!url.startsWith(prefix) || !ATTACHMENT_TYPES.has(mediaType)) return undefined;
-  // SAFETY: the type was checked against the vocabulary just above.
+  if (!url.startsWith(prefix) || !isAgentAttachmentType(mediaType)) return undefined;
   return {
     name,
-    mediaType: mediaType as AgentAttachmentType,
+    mediaType,
     data: url.slice(prefix.length),
   };
 }
@@ -566,11 +565,6 @@ const recordsOf = (source: Agent, messageId: string | undefined) =>
 function fetchWords(branch: string): string {
   const quoted = shellQuoted(branch);
   return `fetch and check that branch out with \`git remote set-branches --add origin ${quoted} && git fetch origin ${quoted} && git switch ${quoted}\`, since your checkout was cloned with the default branch alone`;
-}
-
-/** A word quoted for a POSIX shell, so a branch name git allows but a shell reads, such as one with `;` or `$`, stays one word. */
-function shellQuoted(word: string): string {
-  return `'${word.replaceAll("'", "'\\''")}'`;
 }
 
 function capitalized(words: string): string {

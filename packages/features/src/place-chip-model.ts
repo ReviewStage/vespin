@@ -1,6 +1,6 @@
 import { LINK_PLACE, type LinkPlace } from "./link-grammar.js";
 import { UNTITLED_TASK_NAME } from "./task-wire.js";
-import { NOTHING_SAID, thingName, thingOfPlace } from "./thing-kind.js";
+import { type KnownNames, NOTHING_SAID, thingName, thingOfPlace } from "./thing-kind.js";
 
 /**
  * place-chip-model.ts -- a link of ours drawn in words as its chip says it: the name of the place it opens, as the window already knows it, and the task it stands under.
@@ -21,21 +21,6 @@ import { NOTHING_SAID, thingName, thingOfPlace } from "./thing-kind.js";
  * words they gave it. The card under it says the task the place stands
  * under, where the window knows the task.
  */
-
-/** The names the window holds, each by the id the service minted it under. */
-export interface KnownNames {
-  readonly tasks: ReadonlyMap<string, string>;
-  readonly agents: ReadonlyMap<string, string>;
-  /** The catalog id of the model each agent the window holds runs on, which its harness's mark is read off; titled or not. */
-  readonly agentModels: ReadonlyMap<string, string>;
-  /** The pages of the one task the window holds them for, `pagesTaskId`. */
-  readonly pages: ReadonlyMap<string, string>;
-  /** The task whose pages `pages` names, the window's open one; none where it holds no task's pages. */
-  readonly pagesTaskId: string | undefined;
-  readonly inboxItems: ReadonlyMap<string, string>;
-  readonly people: ReadonlyMap<string, string>;
-  readonly automations: ReadonlyMap<string, string>;
-}
 
 /** What a chip says of a place: its name, and the task it stands under where that is known and is not the place itself. */
 export interface PlaceChipLook {

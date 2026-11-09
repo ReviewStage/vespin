@@ -1,8 +1,8 @@
 /**
  * workspace-invitations.ts -- a workspace's invitations as an owner or an admin lists, makes, and cancels them, and one as its recipient is offered it (`workspace-invitation-wire.ts`).
  *
- * The list and the make share one path, told apart by their method, as the
- * old route did. The two reads take their query as their input.
+ * The list and the make share one path, told apart by their method. The
+ * two reads take their query as their input.
  *
  * Each declares the refusals its handler answers beyond any procedure's
  * (`packages/service/src/accounts/workspace-invitations-procedures.ts`): a

@@ -1,11 +1,5 @@
 import type { FailureAbout, FailureSurface } from "@repo/features/shown-failure";
-import {
-  ErrorState,
-  SavedTick,
-  SettingsAttentionMark,
-  SettingsChangedMark,
-  SettingsLine,
-} from "@repo/ui";
+import { ErrorState, SavedTick, SettingsChangedMark, SettingsLine } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { unreadShown } from "../failure-report.js";
@@ -39,19 +33,6 @@ export function SettingMarks({
       <SavedTick saves={saves} />
     </>
   );
-}
-
-/**
- * The small mark beside a name while the feature it belongs to still needs a
- * hand — the same mark wherever it stands, so one urgency reads the same on
- * the row that supplies the missing thing and on a shortcut whose key
- * answers nothing until it is supplied. It is
- * `@repo/ui`'s alert glyph in the attention ink. A statement, not a control:
- * the words are the hover's and the screen reader's, and the page around it
- * is where the missing thing is explained.
- */
-export function AttentionMark({ note }: { note: string }): React.JSX.Element {
-  return <SettingsAttentionMark note={note} />;
 }
 
 /** A card's line where the read of its rows did not land: the read failure, then Retry, in the rows' place. */

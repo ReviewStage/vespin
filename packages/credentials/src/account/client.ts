@@ -2,11 +2,11 @@ import { pinnedPictureUrl } from "@repo/features/account-picture";
 import { onOwnFiber } from "@repo/runtime/effect";
 import {
   HTTP_STATUS,
-  isRecord,
   isWireString,
   text,
   type UnparsedWireValue,
   type WireRecord,
+  wireRecord,
 } from "@repo/wire";
 import { webResponseFromClientResponse } from "@repo/wire/effect";
 import { Data, Duration, Effect, type Layer } from "effect";
@@ -95,14 +95,10 @@ class AccountTransportError extends Data.TaggedError("AccountTransportError")<{
 /** Every way a call on the account service fails. */
 export type AccountClientFailure = AccountClientError | AccountTransportError;
 
-function record(value: UnparsedWireValue): WireRecord | undefined {
-  return isRecord(value) ? value : undefined;
-}
-
 const responseRecord = /* @__PURE__ */ Effect.fnUntraced(function* (
   response: Response,
 ): Effect.fn.Return<WireRecord, AccountClientError> {
-  const body = record(yield* Effect.promise(() => response.json().catch(() => undefined)));
+  const body = wireRecord(yield* Effect.promise(() => response.json().catch(() => undefined)));
   if (!response.ok) {
     return yield* Effect.fail(
       new AccountClientError({
@@ -159,7 +155,7 @@ function sessionFrom(
   body: WireRecord,
 ): Effect.Effect<AccountSession, AccountClientError> {
   const sessionToken = response.headers.get(SESSION_TOKEN_HEADER);
-  const user = record(body.user);
+  const user = wireRecord(body.user);
   if (!sessionToken || !isWireString(user?.id) || !user.id || !isWireString(user.email)) {
     return Effect.fail(
       new AccountClientError({ message: "Account service did not return a session" }),
@@ -354,7 +350,7 @@ export class AccountClient {
         this.#timeoutMs,
       );
       if (response.ok) return;
-      const body = record(yield* Effect.promise(() => response.json().catch(() => undefined)));
+      const body = wireRecord(yield* Effect.promise(() => response.json().catch(() => undefined)));
       const code = text(body?.code);
       return yield* Effect.fail(
         new AccountClientError({

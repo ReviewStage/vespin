@@ -11,7 +11,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ACT_ERROR,
-  type MAC_SHELL_ACT_KIND,
+  type MacShellActKind,
   type PortActKind,
   type PortActPayload,
   type PortActResult,
@@ -121,12 +121,10 @@ interface HostPort {
   readonly say: (message: TerminalPortOutbound | UnparsedWireValue) => void;
 }
 
-type ShellKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
-
 /** One Mac shell act as it rides the act port: its kind, and the payload the kind takes. */
 type ShellAct = {
-  [Kind in ShellKind]: { readonly kind: Kind; readonly payload: PortActPayload<Kind> };
-}[ShellKind];
+  [Kind in MacShellActKind]: { readonly kind: Kind; readonly payload: PortActPayload<Kind> };
+}[MacShellActKind];
 
 /** Any act the tab sends on its act port. */
 type SentAct = AnyAct | ShellAct;
@@ -138,11 +136,11 @@ interface Main {
   /** The shells main holds for this window, which an attach to any other is refused for. */
   readonly shells: Set<string>;
   /** The kinds main refuses outright. */
-  readonly down: Set<PortActKind | ShellKind>;
+  readonly down: Set<PortActKind | MacShellActKind>;
   /** The answers held back, in the order asked, each landing when the test lets it go. */
   readonly held: (() => void)[];
   /** The kinds whose answers are held back until the test lets them go. */
-  readonly holding: Set<PortActKind | ShellKind>;
+  readonly holding: Set<PortActKind | MacShellActKind>;
   /** Posts a shell's port to the tab, as main does after an attach, answering the host's half. */
   readonly post: (terminalId: string) => HostPort;
 }
@@ -164,7 +162,7 @@ beforeEach(() => {
   const refused = (request: ShellAct) =>
     main.down.has(request.kind) ||
     (request.kind === ACT_KIND.MAC_SHELL_ATTACH && !main.shells.has(request.payload.terminalId));
-  const answer = (request: ShellAct): PortActResult<ShellKind> => {
+  const answer = (request: ShellAct): PortActResult<MacShellActKind> => {
     switch (request.kind) {
       case ACT_KIND.MAC_SHELL_MIRROR:
         return { folder: FOLDER };
@@ -213,7 +211,7 @@ beforeEach(() => {
     },
   };
   /** A Mac shell act answered as main's procedure would: refused, held back, or answered now. */
-  const respond = (request: ShellAct): Promise<PortActResult<ShellKind>> => {
+  const respond = (request: ShellAct): Promise<PortActResult<MacShellActKind>> => {
     sent.push(request);
     const refusal = () =>
       new ORPCError(ACT_ERROR.REFUSED, { message: "Could not open that shell." });
@@ -668,7 +666,7 @@ test("a paste longer than one message is cut between characters, never inside on
 });
 
 /** The payload of the last act of the kind the tab sent, as main received it. */
-function lastPayload(kind: PortActKind | ShellKind) {
+function lastPayload(kind: PortActKind | MacShellActKind) {
   const request = main.sent.findLast((each) => each.kind === kind);
   assert.ok(request, `the tab sent ${kind}`);
   return "payload" in request ? request.payload : undefined;

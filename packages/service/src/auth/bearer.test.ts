@@ -28,9 +28,8 @@ import {
   resolveHostedBearerUserId,
   resolveHostedUserId,
   type SessionEndpoint,
-  type UserInfoEndpoint,
 } from "./bearer.js";
-import { BEARER_CALLER_TTL, bearerCallersLayer } from "./bearer-callers.js";
+import { BEARER_CALLER_TTL, bearerCallersLayer, type UserInfoEndpoint } from "./bearer-callers.js";
 
 /**
  * The account a hosted request names: its OAuth bearer where it carries

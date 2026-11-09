@@ -61,7 +61,7 @@ import {
   taskInput,
 } from "./markdown-tasks.js";
 
-export type { MarkdownTaskBox, TaskBoxItem, TaskWrite } from "./markdown-tasks.js";
+export type { MarkdownTaskBox, TaskBoxItem } from "./markdown-tasks.js";
 export { TaskBox } from "./markdown-tasks.js";
 
 /** How a place's words are drawn: as a note, a transcript, or a site's document. */
@@ -439,7 +439,7 @@ export const Markdown = memo(function Markdown({
       <InlineRefFitScope fit={line ? INLINE_REF_FIT.LINE : INLINE_REF_FIT.FLOW}>
         <Streamdown
           mode={streaming ? "streaming" : "static"}
-          {...(root === undefined ? {} : { className: root })}
+          className={root}
           components={transcriptComponents}
           {...(steps === undefined ? {} : { remarkPlugins: steps })}
           {...(line ? { parseMarkdownIntoBlocksFn: oneBlock } : {})}

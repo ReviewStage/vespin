@@ -5,8 +5,7 @@
  */
 
 import { deviceAgentLayout } from "@repo/features/device-agent-wire";
-import type { ActSender } from "@repo/host/act-port";
-import { actPortFor, type PlatformActProcedures } from "@repo/host/act-port";
+import { actPortFor, type PlatformActProcedures, refuseUnlessPanel } from "@repo/host/act-port";
 import { MAC_TERMINAL_ACT_KIND } from "@repo/host/contract";
 import { Effect } from "effect";
 import type { WebContents } from "electron";
@@ -23,11 +22,6 @@ export interface MacTerminalActsDependencies {
 }
 
 const macTerminalPort = actPortFor<WebContents>();
-
-/** The refusal a window that is not a panel hears, in its kind's own words, or nothing for a panel. */
-function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
-  return actor.panel ? Effect.void : Effect.fail(refused());
-}
 
 export function macTerminalProcedures(
   dependencies: MacTerminalActsDependencies,

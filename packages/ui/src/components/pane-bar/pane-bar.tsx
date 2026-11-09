@@ -1,4 +1,5 @@
 import { type ReactNode, useRef } from "react";
+import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { type TitleSeat, useWrapWhenCut } from "../../use-wrap-when-cut.js";
 import { Menu, type MenuEntry, useMenu } from "../menu/menu.js";
@@ -75,11 +76,6 @@ export interface PaneBarMenu {
   readonly groups: readonly (readonly MenuEntry[])[];
   /** Whether its items' words are the app's own, which a screen recording shows as they read (`Menu`'s `replayUnmasked`). */
   readonly replayUnmasked?: boolean | undefined;
-}
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(node: ReactNode): boolean {
-  return node !== undefined && node !== null && node !== false && node !== "";
 }
 
 /** The ⋯ at the bar's end, which drops its menu under itself. */

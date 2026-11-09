@@ -8,6 +8,7 @@ import {
 } from "react";
 import { middlePressOf } from "../../middle-press.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
+import { said } from "../../said.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
 import { CountFigure } from "../count-figure/count-figure.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
@@ -187,11 +188,6 @@ export type NavItemProps = HintProps & {
 /** A pointer's press that leaves the focus where it is. */
 function preventFocusMove(event: MouseEvent<HTMLButtonElement>): void {
   event.preventDefault();
-}
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(node: ReactNode): boolean {
-  return node !== undefined && node !== null && node !== false && node !== "";
 }
 
 /** The glyph's cell. */

@@ -1,6 +1,11 @@
 import { PRODUCT_SETTING_VALUE, type ProductSettingValue } from "@repo/features/analytics";
 import type { UnparsedWireValue } from "@repo/wire";
-import { APP_SETTING_KIND, type AppSettingId, appToggleText } from "@repo/wire/app-settings";
+import {
+  APP_SETTING_KIND,
+  type AppSettingId,
+  type AppSettingKind,
+  appToggleText,
+} from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import {
   type AppSettingReader,
@@ -41,8 +46,6 @@ const toggleAnalytics = (value: StoredSettingValue): ProductSettingValue =>
 const choiceAnalytics = (value: StoredSettingValue): ProductSettingValue =>
   value === undefined ? PRODUCT_SETTING_VALUE.CLEARED : PRODUCT_SETTING_VALUE.SET;
 
-type SettingKind = (typeof APP_SETTING_KIND)[keyof typeof APP_SETTING_KIND];
-
 /** What every schema row declares alike, toggle or choice: its field, its name, and where it stands. */
 interface RowSpec<Field extends string, Id extends AppSettingId> {
   field: Field;
@@ -69,7 +72,7 @@ interface ToggleSpec<Field extends string, Id extends AppSettingId> extends RowS
  */
 function rowEntry<Field extends string, Id extends AppSettingId>(
   spec: RowSpec<Field, Id>,
-  kind: SettingKind,
+  kind: AppSettingKind,
   value: (settings: AppSettingReader) => string,
 ): Pick<
   AppSettingSchemaEntry<Field, unknown, Id>,

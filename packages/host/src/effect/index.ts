@@ -4,12 +4,6 @@ export type {
   AccountSourceSeam,
 } from "../account-source.js";
 export { hostAssemblyLayer } from "../compose-host.js";
-export type { ListenOnLoopback, LoopbackConnection } from "../compose-port-forwards.js";
-export type {
-  OpenTerminalSocket,
-  TerminalSocketArrival,
-  TerminalSocketOpening,
-} from "../compose-terminals.js";
 export { DuplicateGatewayMethod, DuplicateHostAct } from "../composer.js";
 export {
   type CookieSessionDoor,
@@ -28,6 +22,13 @@ export {
   NOT_ON_THIS_PLATFORM,
 } from "../host-concerns.js";
 export { oauthAccountSourceLayer } from "../oauth-account-source.js";
+export type {
+  ListenOnLoopback,
+  LoopbackConnection,
+  OpenTerminalSocket,
+  TerminalSocketArrival,
+  TerminalSocketOpening,
+} from "../relay-socket.js";
 export { type ConnectWebSocket, openTerminalSocketOver } from "../web-socket-terminal.js";
 export { layersInOrder } from "./composer.js";
 export { HostAssemblyTag, HostTag, hostStandingLayer } from "./host.js";

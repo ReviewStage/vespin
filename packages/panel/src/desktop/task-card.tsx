@@ -32,6 +32,7 @@ import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { subTaskCount, subTasksOf, TASK_ORDER, taskTime } from "@repo/ui/task-list-model";
 import { repositoryPageUrl } from "@repo/ui/tasks-model";
+import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { useCreator, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useActorDoor } from "../person-door.js";
@@ -51,7 +52,6 @@ import { useTaskPullRequests, useTaskWork } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { strandedHome } from "./move-task-dialog.js";
 import { useTaskNeedsYou } from "./places-waiting.js";
-import { priorityOf, statusOf } from "./task-row-parts.js";
 import { WorkspaceRef } from "./workspace-ref.js";
 
 /**

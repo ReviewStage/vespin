@@ -18,7 +18,7 @@ import {
   Stack,
 } from "@repo/ui";
 import { repositoryLabel } from "@repo/ui/task-list-model";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** The repositories one view names, two of which share a name. */

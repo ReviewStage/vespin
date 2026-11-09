@@ -23,6 +23,7 @@ import { readFailedWords } from "@repo/features/words";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { CONFIRM_LOSS, type ConfirmLoss, STATUS_TONE } from "@repo/ui";
 import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
+import { fencedBlock } from "../tasks/markdown-fence.js";
 
 /**
  * skills-model.ts -- Settings › Skills and its Add skill dialog as the window draws them, judged without drawing: the rows and their lines, and what a paste would install.
@@ -203,9 +204,7 @@ export function removeQuestion(
  * the block ends on its last line.
  */
 export function fencedSkillFile(text: string): string {
-  const longest = Math.max(0, ...[...text.matchAll(/`+/gu)].map((run) => run[0].length));
-  const fence = "`".repeat(Math.max(3, longest + 1));
-  return `${fence}markdown\n${text.replace(/\n+$/u, "")}\n${fence}`;
+  return fencedBlock(text.replace(/\n+$/u, ""), "markdown");
 }
 
 /* ----- Words for what went wrong ----- */

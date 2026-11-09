@@ -145,7 +145,7 @@ export interface OrganizationAuthApi {
 export interface MemberAuthApi {
   readonly createInvitation: (input: {
     headers: Headers;
-    body: { email: string; role: "admin" | "member"; organizationId: string };
+    body: { email: string; role: AssignableRole; organizationId: string };
   }) => Promise<object | null>;
   readonly listInvitations: (input: {
     headers: Headers;

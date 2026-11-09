@@ -1,7 +1,7 @@
 import { inviteesOf } from "@repo/features/workspace-invitation-wire";
 import { EMAIL_CHIP_STATE, type EmailChip, EmailChipsField, GAP, Stack } from "@repo/ui";
 import { useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

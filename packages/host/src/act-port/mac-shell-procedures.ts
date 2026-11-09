@@ -25,12 +25,10 @@ import {
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
-import { MAC_SHELL_ACT_KIND } from "../contract/index.js";
-import { type ActSender, actPortFor } from "./base.js";
+import { MAC_SHELL_ACT_KIND, type MacShellActKind } from "../contract/index.js";
+import { actPortFor, refuseUnlessPanel } from "./base.js";
 import type { PlatformActProcedures } from "./index.js";
 import type { HostTerminalPort, TerminalPortSeam } from "./terminal-procedures.js";
-
-type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
 
 /** One running shell, as the platform holds it. */
 export interface MacShell {
@@ -69,11 +67,6 @@ interface Held {
 }
 
 const readInbound = readEither(terminalPortInboundSchema);
-
-/** The refusal a window that draws no Terminal tab hears, in its kind's own words, or nothing for a panel. */
-function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
-  return actor.panel ? Effect.void : Effect.fail(refused());
-}
 
 /** Bytes posted on the shell's port, the shell paused once the tab fell far enough behind; none while no port stands. */
 function post(held: Held, bytes: Uint8Array): void {

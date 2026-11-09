@@ -34,7 +34,7 @@ import {
 } from "./machine/sandbox-machine.js";
 
 /** What one day's refresh did, in counts alone: no workspace and no repository is named. */
-export interface BaseDriveRefresh {
+interface BaseDriveRefresh {
   /** Base drives refilled, or found being filled by another. */
   readonly refilled: number;
   /** Repositories passed by: no base drive stands for them, or the workspace's installation no longer reaches them. */

@@ -15,6 +15,7 @@ import {
   type AgentReviewOptionsAnswerView,
   type AgentTranscriptPage,
   INBOX_SCOPE_KIND,
+  type InboxScopeKind,
   PULL_REQUEST_PART,
   type PullRequestPart,
 } from "@repo/features/agent-view";
@@ -392,7 +393,7 @@ export const NO_TRANSCRIPTS: AppTranscripts = {};
 
 /** One value for each holder of inbox items, a plan or an agent, by its kind and then its id, never by a key built from both. */
 type ByInboxHolder<Value> = {
-  readonly [Kind in InboxHolderKind]: Readonly<Record<string, Value>>;
+  readonly [Kind in InboxScopeKind]: Readonly<Record<string, Value>>;
 };
 
 /**
@@ -402,9 +403,6 @@ type ByInboxHolder<Value> = {
  * nothing of holds nothing now.
  */
 export type AppInboxItems = ByInboxHolder<readonly InboxItem[]>;
-
-/** The kind of holder an inbox item is on: a plan, or an agent with no task. */
-type InboxHolderKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
 
 /** One plan's or agent's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;

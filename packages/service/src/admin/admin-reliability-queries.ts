@@ -9,7 +9,7 @@
  * on the server, so the detail is read and never answered.
  */
 
-import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
 import { InstantColumnSchema } from "@repo/database/models/columns";
@@ -65,8 +65,6 @@ import {
   keptByScope,
 } from "./admin-queries.js";
 import { ADMIN_ATTENTION_LIMIT, type AdminReliabilitySource } from "./admin-reliability.js";
-
-type AdminQueryFailure = QueryError | Schema.SchemaError;
 
 /** The provider-key statuses that leave the key unused: refused, out of quota, or unreadable. */
 const BROKEN_KEY_STATUSES = [
@@ -633,7 +631,7 @@ export function readAdminReliabilitySource(input: {
   windowDays: AdminMetricsWindow;
   integrations: readonly AdminIntegration[];
   analyticsConsoleUrl?: string | undefined;
-}): Effect.Effect<AdminReliabilitySource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminReliabilitySource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const database = yield* probeDatabase;
     if (!database.reachable) {

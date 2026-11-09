@@ -10,7 +10,7 @@
  * agent's repository are read, which the developer allowed the admin pages. `admin-account.ts` folds what they answer.
  */
 
-import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
 import {
   latestTurnsOfReached,
@@ -68,8 +68,6 @@ import {
 } from "./admin-account.js";
 import { dayStart, lastNDayKeys } from "./admin-metrics.js";
 import { AggregateColumnSchema } from "./admin-queries.js";
-
-type AdminQueryFailure = QueryError | Schema.SchemaError;
 
 /** The account, and the instant the window opens: its first UTC day's midnight. */
 const WindowRequestSchema = Schema.Struct({ userId: Schema.String, windowStart: Schema.Date });
@@ -406,7 +404,7 @@ export function readAdminAccountSource(input: {
   userId: string;
   now: number;
   windowDays: AdminMetricsWindow;
-}): Effect.Effect<AdminAccountSource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminAccountSource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const { userId } = input;
     const windowStartDay = lastNDayKeys(input.now, input.windowDays)[0] ?? utcDayKey(input.now);

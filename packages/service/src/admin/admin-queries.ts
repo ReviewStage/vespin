@@ -1,8 +1,8 @@
 import {
   Database,
   type DatabaseServices,
-  type QueryError,
   queryBuilder,
+  type StoreFailure,
 } from "@repo/database/core/query";
 import { InstantColumnSchema, NumberFromBigIntColumn } from "@repo/database/models/columns";
 import { utcDayKey } from "@repo/database/models/quota";
@@ -58,8 +58,6 @@ import {
   type AdminUserListSource,
   searchLikePatterns,
 } from "./admin-users.js";
-
-export type AdminQueryFailure = QueryError | Schema.SchemaError;
 
 /**
  * An aggregate as a row carries it. `count` and `sum` answer a bigint, which
@@ -186,7 +184,7 @@ const findSignupsByDay = SqlSchema.findAll({
 const readUserMetrics = /* @__PURE__ */ Effect.fn("web/readUserMetrics")(function* (
   fetchStart: Date,
   scope: AdminMetricsScope,
-): Effect.fn.Return<AdminMetricsSource["users"], AdminQueryFailure, DatabaseServices> {
+): Effect.fn.Return<AdminMetricsSource["users"], StoreFailure, DatabaseServices> {
   const [total, signups] = yield* Effect.all(
     [findUserTotal(scope), findSignupsByDay({ fetchStart, scope })],
     { concurrency: "unbounded" },
@@ -266,7 +264,7 @@ const findCohortActivity = SqlSchema.findAll({
 const readRetentionMetrics = /* @__PURE__ */ Effect.fn("web/readRetentionMetrics")(function* (
   now: number,
   scope: AdminMetricsScope,
-): Effect.fn.Return<AdminMetricsSource["retention"], AdminQueryFailure, DatabaseServices> {
+): Effect.fn.Return<AdminMetricsSource["retention"], StoreFailure, DatabaseServices> {
   const weekKeys = lastNWeekStartKeys(now, ADMIN_RETENTION_WEEKS);
   const oldestWeekStartDay = weekKeys[0] ?? utcWeekStartKey(now);
   const oldestWeekStart = dayStart(oldestWeekStartDay);
@@ -287,7 +285,7 @@ export function readAdminMetricsSource(input: {
   now: number;
   scope: AdminMetricsScope;
   windowDays: AdminMetricsWindow;
-}): Effect.Effect<AdminMetricsSource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminMetricsSource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const fetchStartDay =
       lastNDayKeys(input.now, windowFetchDays(input.windowDays))[0] ?? utcDayKey(input.now);
@@ -605,7 +603,7 @@ export function readAdminUserSource(input: {
   userId: string;
   now: number;
   windowDays: AdminMetricsWindow;
-}): Effect.Effect<AdminUserSource | undefined, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminUserSource | undefined, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     // The daily rows read from the wider bound so the builder's trends hold both runs.
     const fetchStartDay =
@@ -695,7 +693,7 @@ export function readAdminUserSource(input: {
 export function readAdminDayHostedSource(input: {
   day: string;
   scope: AdminMetricsScope;
-}): Effect.Effect<AdminDayHostedSource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminDayHostedSource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const [accountRows, totals] = yield* Effect.all(
       [findDayAccounts(input), findDayTotals(input)],
@@ -742,7 +740,7 @@ export function readAdminUsersSource(input: {
   search: string | undefined;
   viewerId: string;
   windowDays: AdminMetricsWindow;
-}): Effect.Effect<AdminUserListSource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminUserListSource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const windowStart = dayStart(
       lastNDayKeys(input.now, input.windowDays)[0] ?? utcDayKey(input.now),
@@ -797,7 +795,7 @@ export function writeAdminFavorite(input: {
   adminId: string;
   userId: string;
   favorite: boolean;
-}): Effect.Effect<boolean, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const target = yield* findFavoriteTarget(input.userId);
     if (Option.isNone(target)) return false;

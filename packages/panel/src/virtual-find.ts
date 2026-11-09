@@ -1,6 +1,6 @@
 import { VIRTUAL_ROW_KEY_ATTRIBUTE, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { type RefObject, useEffect, useState } from "react";
-import { type FIND_STEP, type FindSource, type FindTally, useFindSource } from "./find-in-tab.js";
+import { type FindSource, type FindStep, type FindTally, useFindSource } from "./find-in-tab.js";
 import {
   findRanges,
   NO_PAINTING,
@@ -64,9 +64,6 @@ interface Grouped {
 function noRanges(): Grouped {
   return { before: [], rows: new Map(), after: [] };
 }
-
-/** How a find steps. */
-type FindStep = (typeof FIND_STEP)[keyof typeof FIND_STEP];
 
 /** No matches. */
 const NO_TALLY: FindTally = { count: 0, at: -1 };

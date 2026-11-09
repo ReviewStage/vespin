@@ -287,7 +287,7 @@ export interface AgentActions {
 }
 
 /** A coding agent's transcript read whole from the service under the title given, since its tab holds it only while shown. */
-export function agentTranscriptRead(
+function agentTranscriptRead(
   readTranscript: AgentsControl["readTranscript"],
   agentId: string,
   title: string,

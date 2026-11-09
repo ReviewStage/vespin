@@ -66,7 +66,7 @@ export const RUN_EVENT = {
 } as const;
 
 /** The kinds of step that count as slow: a whole transcript read, a write the provider carries, or a task call's look into its repository. */
-export const SLOW_STEP_KIND = {
+const SLOW_STEP_KIND = {
   TRANSCRIPT_READ: "transcript_read",
   PROVIDER_WRITE: "provider_write",
   REPOSITORY_READ: "repository_read",
@@ -305,17 +305,4 @@ export function finishedSentencesOf(forming: string): string {
     if (spoken.startsWith(said) && !OPEN_SPAN.test(line)) return forming.slice(0, end);
   }
   return forming.slice(0, Math.max(lineStart - 1, 0));
-}
-
-/**
- * A reply as the sentences it is spoken in: its Markdown taken out, split at
- * sentence ends and line breaks, each trimmed, none empty. The syntax goes
- * before the split, so emphasis that spans a sentence end is still read as a
- * pair and a list item is still a line of its own.
- */
-export function replySentences(text: string): readonly string[] {
-  return spokenProse(text)
-    .split(SENTENCE_BOUNDARY)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length > 0);
 }

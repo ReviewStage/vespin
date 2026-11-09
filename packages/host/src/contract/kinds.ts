@@ -565,6 +565,8 @@ export const MAC_SHELL_ACT_KIND = {
   MAC_SHELL_CLOSE: "macShell.close",
 } as const;
 
+export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
+
 /**
  * A command an agent asked to run on this Mac (`../mac-command-ask.ts`),
  * answered by the developer from the prompt the panel draws over the window:
@@ -602,6 +604,8 @@ export const TERMINAL_ACT_KIND = {
   TERMINAL_RESUME: "terminal.resume",
   TERMINAL_ATTACH: "terminal.attach",
 } as const;
+
+export type TerminalActKind = (typeof TERMINAL_ACT_KIND)[keyof typeof TERMINAL_ACT_KIND];
 
 /**
  * The updater as Settings' row and the sidebar's foot reach it: a check

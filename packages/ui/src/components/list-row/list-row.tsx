@@ -18,6 +18,7 @@ import {
 import { cssCustomProperties } from "../../css.js";
 import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
+import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
@@ -437,11 +438,6 @@ const ListVariantContext = createContext<ListVariant>(LIST_VARIANT.PLAIN);
 /** The custom properties a row's sheet reads: how deep it stands. */
 function rowProperties(depth: number): CSSProperties | undefined {
   return depth === 0 ? undefined : cssCustomProperties({ "--ui-list-row-depth": depth });
-}
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
 }
 
 /** The run a long `List` draws its rows in, only those near the view (`VirtualRows`). */

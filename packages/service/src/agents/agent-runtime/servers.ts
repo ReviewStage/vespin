@@ -39,7 +39,7 @@
  * store failure's message may name a statement.
  */
 
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
 import {
   readAgentOfConversation,
@@ -57,7 +57,7 @@ import {
 } from "@repo/features/integration-wire";
 import { andList } from "@repo/features/words";
 import { causeKind } from "@repo/runtime/effect";
-import { Effect, Option, Result, type Schema } from "effect";
+import { Effect, Option, Result } from "effect";
 import type { GitHubApp } from "../../github/github-app.js";
 import { githubOffered } from "../../integrations/github-integration.js";
 import {
@@ -72,7 +72,7 @@ import type { ConversationAdmission } from "../sessions/admitted-conversation.js
 import { CONNECTION_POLICY, type ConnectionPolicy } from "./role.js";
 
 /** One connection a turn is handed: one account at a provider, by the name it goes by. */
-interface HandedConnection {
+export interface HandedConnection {
   readonly provider: IntegrationProvider;
   /** The name the connection goes by, and the switch and mention that name it. */
   readonly connectionName: string;
@@ -94,11 +94,7 @@ export type ServerStanding =
 const SERVERS_OFF: ServerStanding = { on: false };
 
 /** How the session a turn runs in is admitted: a root's own standing, or a worker's ownership alone. */
-type ServerAdmission = Effect.Effect<
-  ConversationAdmission,
-  QueryError | Schema.SchemaError,
-  DatabaseServices
->;
+type ServerAdmission = Effect.Effect<ConversationAdmission, StoreFailure, DatabaseServices>;
 
 /**
  * The servers mentioned since the agent's last turn started, taken by the

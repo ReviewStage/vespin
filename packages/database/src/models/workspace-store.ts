@@ -35,8 +35,8 @@ import {
   Database,
   type DatabaseServices,
   type DatabaseShape,
-  type QueryError,
   queryBuilder,
+  type StoreFailure,
 } from "../core/query.js";
 import { GITHUB_INSTALLATION_STATUS } from "../github-installation-vocabulary.js";
 import { agentTable } from "../schemas/agent.js";
@@ -129,7 +129,7 @@ export const FORMER_SLUGS = sql<string>`coalesce((select string_agg("former"."sl
 
 export type WorkspaceStoreEffect<A, E = never> = Effect.Effect<
   A,
-  QueryError | Schema.SchemaError | E,
+  StoreFailure | E,
   DatabaseServices
 >;
 
@@ -743,9 +743,6 @@ export function workspaceReachableBy(userId: string, organizationId: string | SQ
   return memberOfWorkspace(userId, organizationId);
 }
 
-/** A coding agent row's workspace: the column itself, never null since `20261015062923_organization_not_null`, so a membership check reaches its indexes. */
-export const AGENT_WORKSPACE = sql<string>`${agentTable.organizationId}`;
-
 /** How a task or an agent row was reached on GitHub, whose it is, and its repository, as `seenThroughGitHub` reads them. */
 interface GitHubReachedColumns {
   readonly access: SQLWrapper;
@@ -796,7 +793,7 @@ export function agentSeenBy(userId: string): SQL {
  * member, or another agent, reads or does to an agent keeps `agentVisibleTo`.
  */
 export function agentReachableBy(userId: string): SQL {
-  return sql`(${memberOfWorkspace(userId, AGENT_WORKSPACE)} and ${agentSeenBy(userId)})`;
+  return sql`(${memberOfWorkspace(userId, agentTable.organizationId)} and ${agentSeenBy(userId)})`;
 }
 
 /**

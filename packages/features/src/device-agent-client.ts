@@ -148,9 +148,6 @@ export const HOST_PAIRING_FAILURE = failureSetOf(
   { as: HOST_PAIRING_RENAMES },
 );
 
-/** How a pairing's start or poll failed (`HOST_PAIRING_FAILURE`), under its older name. */
-export const HOST_PAIRING_OUTCOME = HOST_PAIRING_FAILURE;
-
 /** A pairing's start or poll as it failed, with the floor an upgrade must reach where it names one. */
 export type HostPairingFailed = HostedFailed<
   DeclaredBy<typeof startPairing> | DeclaredBy<typeof pollPairing>,
@@ -200,9 +197,6 @@ type OwnEnrollingMachine = Required<Pick<OwnDeviceEnrollRequest, "name" | "platf
 
 /** How an own device's enroll failed: not found, upgrade needed, refused, or unanswered. */
 export const OWN_ENROLL_FAILURE = failureSetOf({ enrollOwn }, { as: HOST_JOIN_RENAMES });
-
-/** How an own device's enroll failed (`OWN_ENROLL_FAILURE`), under its older name. */
-export const OWN_ENROLL_OUTCOME = OWN_ENROLL_FAILURE;
 
 /** An own device's enroll: its device secret, answered this once, or how it failed. */
 export type OwnEnrollOutcome =

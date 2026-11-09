@@ -18,7 +18,7 @@ import {
   Text,
 } from "@repo/ui";
 import { useRef, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** A press the catalog has nowhere to take. */

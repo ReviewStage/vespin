@@ -26,7 +26,7 @@ import {
   Text,
   ViewingAsBanner,
 } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** Every look, at the width the column gives them. */

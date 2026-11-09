@@ -9,7 +9,7 @@ import {
   type DescriptionCommentStart,
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
-import { descriptionSections } from "@repo/features/description-document";
+import { sectionAt } from "@repo/features/description-document";
 import type {
   TasksCommentActParams,
   TasksCommentAnswer,
@@ -81,11 +81,6 @@ function drawnComment(
     words,
     at,
   };
-}
-
-/** The heading of the section a place in the text stands in, as the service keeps it; empty before the first heading. */
-function sectionAt(text: string, offset: number): string {
-  return descriptionSections(text).findLast((section) => section.from <= offset)?.heading ?? "";
 }
 
 /** Where a thread being started stands, as the service will place it: on the description's words its start measured, or on its page's element, or the whole page. */

@@ -718,7 +718,7 @@ function withoutPictures(output: UnparsedWireValue, forModel: boolean): Unparsed
   return unparsedWire({
     ...output,
     steps: steps.map((step) => {
-      if (!isRecord(step) || !isScreenshotted(step) || !isRecord(step.image)) return step;
+      if (!isRecord(step) || !isScreenshotted(step)) return step;
       const { data: _data, ...image } = step.image;
       const kept = forModel
         ? Object.fromEntries(Object.entries(step).filter(([key]) => !KEPT_NOTE_KEYS.includes(key)))

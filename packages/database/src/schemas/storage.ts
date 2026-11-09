@@ -26,7 +26,7 @@ import {
   type ConversationRuntime,
   type MessageSender,
 } from "../storage-vocabulary.js";
-import { createdAt, timestamptz } from "./_helpers.js";
+import { createdAt, literal, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
 /**
@@ -114,7 +114,7 @@ export const conversations = pgTable(
     // predicate is DDL, which takes no bound parameter, so the kind is inlined rather than passed.
     uniqueIndex("conversations_standing_main")
       .on(table.userId)
-      .where(sql`${table.kind} = ${sql.raw(`'${CONVERSATION_KIND.MAIN}'`)}`),
+      .where(sql`${table.kind} = ${literal(CONVERSATION_KIND.MAIN)}`),
     // The children and agents reads pick one account's rows of one kind.
     index("conversations_user_kind").on(table.userId, table.kind),
     // A recorded session is found by the runtime's own id, by the session's reads and by the sweep
@@ -143,7 +143,7 @@ export function turnlessUserLine(table: {
   readonly role: SQLWrapper;
   readonly turnId: SQLWrapper;
 }): SQL {
-  return sql`(${table.role} = ${sql.raw(`'${MESSAGE_ROLE.USER}'`)} and ${table.turnId} is null)`;
+  return sql`(${table.role} = ${literal(MESSAGE_ROLE.USER)} and ${table.turnId} is null)`;
 }
 
 /**

@@ -77,6 +77,7 @@ import { HOSTED_REFUSAL_DATA, refusalCarriesData } from "./contract/errors.js";
 import { hostedContract } from "./contract/index.js";
 import { outputWireSchema, refusalDeclared } from "./contract/output-schema.js";
 import { FAILURE_FACT, type FailureFacts } from "./failure-facts.js";
+import type { Merged } from "./hosted-failure.js";
 import {
   SENTRY_TRACES_SAMPLE_RATE,
   type SendTrace,
@@ -168,13 +169,6 @@ function sendParent(trace: SendTrace): Tracer.ExternalSpan | undefined {
 
 /** The refusals that carry fields beside their slug. */
 type RefusalWithData = keyof typeof HOSTED_REFUSAL_DATA;
-
-/** A union of records as the one record that holds each of their fields. */
-type Merged<Union> = (Union extends unknown ? (record: Union) => void : never) extends (
-  record: infer Record,
-) => void
-  ? Record
-  : never;
 
 /** The fields a refusal carries beside its slug, by the declared error that carries them, every one optional. */
 type HostedRefusalData = Merged<(typeof HOSTED_REFUSAL_DATA)[RefusalWithData]["Type"]>;

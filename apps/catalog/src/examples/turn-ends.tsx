@@ -8,7 +8,7 @@
 import { BUTTON_VARIANT, Button, TurnEnd } from "@repo/ui";
 import { ArrowRightIcon, GLYPH } from "@repo/ui/icons";
 import { CATALOG_FAILURE } from "../catalog-failure";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /** A press the catalog has nowhere to take. */

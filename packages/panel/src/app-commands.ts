@@ -22,11 +22,11 @@
  * swipe hands the window the same way) leaves the page behind it alone.
  */
 
-import type { HostCapability } from "@repo/settings";
 import {
   APP_COMMAND,
   APP_SHORTCUTS,
   type AppCommand,
+  type AppShortcut,
   commandForKey,
   KEYED_COMMANDS,
   type KeyedCommand,
@@ -98,7 +98,7 @@ const KEYED: readonly KeyedCommand[] = KEYED_COMMANDS.filter((command) => {
 
 /** Whether the platform offers what the command's feature stands on, by the document `client` holds: a chord of one it lacks is the browser's or the system's, never the window's. */
 function platformCarries(client: QueryClient, command: KeyedCommand): boolean {
-  const { capability } = APP_SHORTCUTS[command] as { capability?: HostCapability };
+  const { capability }: AppShortcut = APP_SHORTCUTS[command];
   if (capability === undefined) return true;
   const state = appStateIn(client);
   return state !== undefined && selectCapability(capability)(state);

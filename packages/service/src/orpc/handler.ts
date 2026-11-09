@@ -1,21 +1,21 @@
 /**
- * handler.ts -- the hosted router behind oRPC's `OpenAPIHandler`, answering the bytes the old route groups answered.
+ * handler.ts -- the hosted router behind oRPC's `OpenAPIHandler`, answering in the hosted vocabulary's bytes.
  *
  * Beside the encoder (`errors.ts`), three answers the handler alone would
- * give differently are made here: a success carries `cache-control:
- * private, no-store`, as `hostedJsonResponse` set it, unless its procedure
- * set a `cache-control` of its own through the context's `resHeaders` (the
- * admin gate's `no-store`, on its refusals too), and a refusal does not;
- * a request the router does not match is the hosted vocabulary's own 426,
- * an update needed, where the path is one a renamed procedure was served at
- * (`RETIRED_TASK_PATHS`), which only an older client asks; its 405 when
- * the path is a procedure's under another method; and its 404 otherwise, as
- * the old groups' method check and `hostedNotFoundRoute` answered them, where the handler
- * would answer it unmatched; and a defect is a bare 500 with no body, as the
- * platform's web handler answered one, where oRPC would describe it.
+ * give differently are made here: a success carries `cache-control: private,
+ * no-store`, as `hostedJsonResponse` sets it, unless its procedure set a
+ * `cache-control` of its own through the context's `resHeaders` (the admin
+ * gate's `no-store`, on its refusals too), and a refusal does not; a request
+ * the router does not match is the hosted vocabulary's own 426, an update
+ * needed, where the path is one a renamed procedure was served at
+ * (`RETIRED_TASK_PATHS`), which only an older client asks; its 405 when the
+ * path is a procedure's under another method; and its 404 otherwise, as
+ * `hostedNotFoundRoute` answers them, where the handler would answer it
+ * unmatched; and a defect is a bare 500 with no body, as the platform's web
+ * handler answers one, where oRPC would describe it.
  *
  * Every answer, a refusal and an unmatched path's among them, is also marked
- * as this origin's alone (`SAME_ORIGIN_ANSWER`), which no old group said.
+ * as this origin's alone (`SAME_ORIGIN_ANSWER`).
  *
  * Every body is counted once, as it is read, against the matched
  * procedure's own cap (`bodyCap` in `@repo/features/contract`), or the
@@ -23,8 +23,7 @@
  * past the cap is refused before anything is read, and a body that states
  * none, or understates it, is refused the moment the bytes read pass the
  * cap, before any of it is parsed. Either way the refusal is the hosted
- * vocabulary's `request-too-large`, as the old groups' bounded body read
- * answered it.
+ * vocabulary's `request-too-large`.
  */
 
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
@@ -162,7 +161,7 @@ function refusalResponse(request: Request, status: number, refusal: HostedRefusa
   return Response.json(refusal, { status });
 }
 
-/** The matched answer, its headers settled as the old groups set them. */
+/** The matched answer, its headers settled as the hosted routes set them. */
 function settled(response: Response): Response {
   if (response.status === HOSTED_HTTP_STATUS.INTERNAL_ERROR) {
     return new Response(null, { status: HOSTED_HTTP_STATUS.INTERNAL_ERROR });

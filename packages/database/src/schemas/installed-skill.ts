@@ -7,7 +7,7 @@ import {
 } from "@repo/features/installed-skill-wire";
 import { sql } from "drizzle-orm";
 import { boolean, check, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { bytea, createdAt, updatedAt } from "./_helpers.js";
+import { bound, bytea, createdAt, literal, updatedAt } from "./_helpers.js";
 import { organization, user } from "./auth.js";
 
 /**
@@ -24,9 +24,6 @@ import { organization, user } from "./auth.js";
  * once per owner: one personal skill of a name per account, one workspace
  * skill of a name per workspace. `source` says where the files came from.
  */
-
-const literal = (value: string) => sql.raw(`'${value}'`);
-const bound = (bytes: number) => sql.raw(String(bytes));
 
 /** The largest `SKILL.md` a skill holds, as a repository's skill is read: 64 KB. */
 const MAX_MAIN_FILE_BYTES = 64 * 1024;

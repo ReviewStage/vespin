@@ -11,9 +11,25 @@
  */
 
 import { createHash } from "node:crypto";
-import { Cache, Context, Duration, Effect, Exit, Layer, Option } from "effect";
-import type { OAuthUserInfo, UserInfoEndpoint } from "./bearer.js";
+import { Cache, type Cause, Context, Duration, Effect, Exit, Layer, Option } from "effect";
 import { CREDENTIAL_HEADER } from "./session-credential.js";
+
+/** The subject a signed-in OAuth userinfo answer names. */
+export interface OAuthUserInfo {
+  sub: string;
+}
+
+/**
+ * The auth service's own userinfo endpoint, called in process. It is the same
+ * validation the desktop's identity request goes through over HTTP: expiry,
+ * revocation, and scope are all the OAuth provider's answer, never a second
+ * implementation here. The call itself is the auth service's promise, so an
+ * endpoint is built by wrapping that promise once where it is constructed,
+ * and the failure it can answer with is whatever the auth service threw.
+ */
+export type UserInfoEndpoint = (input: {
+  headers: Headers;
+}) => Effect.Effect<OAuthUserInfo | undefined, Cause.UnknownError>;
 
 /**
  * How long one instance keeps the caller a bearer resolved to. It is the one

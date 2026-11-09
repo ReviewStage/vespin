@@ -15,7 +15,7 @@ import {
 } from "@repo/ui";
 import { markdownClass } from "@repo/ui/markdown-class";
 import { useLayoutEffect, useRef, useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 const SECTIONS = [

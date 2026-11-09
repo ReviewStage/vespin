@@ -9,9 +9,6 @@ export function utcDayKey(now: number): string {
   return new Date(now).toISOString().slice(0, 10);
 }
 
-/** What a meter seam answers: an effect over the ambient client, composed into the request that spent it. */
-export type QuotaEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
-
 /**
  * The day's count as the conflicting row already has it, counted up. This is
  * the one conflicting update that cannot set what the insert carried: the new

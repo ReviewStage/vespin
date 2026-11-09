@@ -1174,7 +1174,7 @@ function sameName(left: string, right: string): boolean {
 }
 
 /** The API path of one repository by `owner/name`, each part encoded. */
-function repositoryPath(fullName: string): string {
+export function repositoryPath(fullName: string): string {
   const [owner = "", name = ""] = fullName.split("/");
   return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 }
@@ -1199,7 +1199,8 @@ function unavailable(error: HttpClientError.HttpClientError): GitHubUnavailable 
   });
 }
 
-function unreadable(status: number): GitHubUnavailable {
+/** GitHub's answer under `status` read as nothing this service can read. */
+export function unreadable(status: number): GitHubUnavailable {
   return new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE, status });
 }
 

@@ -2,7 +2,7 @@
  * tasks.ts -- the account's plans and each one's own reads and writes: the list, a start, one plan found by its number, opened, changed, or deleted, its blocks, its parent, a relation moved, its edit, and its history.
  *
  * Every path names the plan by its id (`{id}`), which the handler reads as
- * the old routes read it: an id that is no UUID names no plan, and answers
+ * an id: one that is no UUID names no plan, and answers
  * as none. Each output is its wire schema flipped, so oRPC's output check
  * encodes the handler's value into the bytes the wire carries
  * (`packages/service/src/orpc/base.ts`); a JSON body is read strictly, its

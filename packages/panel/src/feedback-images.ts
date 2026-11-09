@@ -56,9 +56,9 @@ function base64FromBlob(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      // SAFETY: FileReader returns a data URL string when readAsDataURL succeeds.
-      const url = reader.result as string;
-      resolve(url.slice(url.indexOf(",") + 1));
+      const url = reader.result;
+      if (typeof url === "string") resolve(url.slice(url.indexOf(",") + 1));
+      else reject(new TypeError("FileReader read a data URL as no string"));
     };
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);

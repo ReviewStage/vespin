@@ -4,7 +4,7 @@ import type {
   OpenTerminalSocket,
   TerminalSocketArrival,
   TerminalSocketOpening,
-} from "../compose-terminals.js";
+} from "../relay-socket.js";
 
 /**
  * terminal-socket-over-ws.ts -- one shell's relay socket, opened over `ws`: the seam the terminal composer attaches a shell through.

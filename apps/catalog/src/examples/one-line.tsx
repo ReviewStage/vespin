@@ -7,7 +7,7 @@
  */
 
 import { GAP, ONE_LINE_ELEMENT, ONE_LINE_END, OneLine, Stack, wholeWordsHint } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 const ADDRESS = "sam.rivera+release-notifications@relay.example.com";

@@ -1,4 +1,4 @@
-import { AGENT_CALL_FAILURE, type INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, type InboxScopeKind } from "@repo/features/agent-view";
 import {
   inboxInOrder,
   inboxOfLiveRows,
@@ -37,7 +37,7 @@ import {
 
 /** Which inbox: one plan's, or one agent's, by its id. */
 export class InboxScopeKey extends Data.Class<{
-  readonly kind: (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
+  readonly kind: InboxScopeKind;
   readonly id: string;
 }> {}
 

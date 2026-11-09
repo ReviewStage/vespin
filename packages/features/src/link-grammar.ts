@@ -822,9 +822,7 @@ export function readLink(target: string): ReadLink | undefined {
 
 /** The number a place names its task by in its link's workspace, `42` from `/task/42`, which the service finds the task by; nothing for a place naming its task by its id, or no task. */
 export function taskNumberOf(place: LinkPlace): number | undefined {
-  return "planId" in place && place.planId !== undefined && TASK_NUMBER.test(place.planId)
-    ? Number(place.planId)
-    : undefined;
+  return "planId" in place && TASK_NUMBER.test(place.planId) ? Number(place.planId) : undefined;
 }
 
 /** The place with its task named by the id the service found for its number, everything else as it was. */

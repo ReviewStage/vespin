@@ -1,7 +1,7 @@
 import { WRITING_MARK } from "@repo/settings/shortcuts";
 import { FormatToolbar, LinkField, POPOVER_SIDE, RectFloat } from "@repo/ui";
 import { useRef } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

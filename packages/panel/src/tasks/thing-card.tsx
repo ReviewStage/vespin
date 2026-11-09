@@ -67,7 +67,7 @@ type ThingCards = { readonly [K in ThingKind]: ThingCard<ThingOf<K>> };
 const DEFAULT_BRANCH_WORDS = "On the default branch";
 
 /** A kind with no card of its own, which hangs the chip's own: its glyph and its name. */
-export const OWN_CARD: ThingCard<Thing> = (_thing, at) => at.own;
+const OWN_CARD: ThingCard<Thing> = (_thing, at) => at.own;
 
 /** What a file's card says of the lines a mention pins: where they run, and the commit they were read at. */
 function linesNote(lines: MentionLines | undefined): string | undefined {

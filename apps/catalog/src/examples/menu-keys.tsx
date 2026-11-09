@@ -1,6 +1,6 @@
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import { MenuKeys, menuKey } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

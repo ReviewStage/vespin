@@ -167,7 +167,7 @@ export function useTeamForm({
       }
     } catch (refused) {
       setPressing(undefined);
-      setRefusal((refused as Error).message);
+      setRefusal(refused instanceof Error ? refused.message : String(refused));
       return;
     }
     await write(workspaceId, pending);

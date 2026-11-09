@@ -861,6 +861,9 @@ export const INBOX_SCOPE_KIND = {
   AGENT: "agent",
 } as const;
 
+/** The kind of holder an inbox item is on: a plan, or an agent with no task. */
+export type InboxScopeKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
+
 /** One plan's inbox, or one agent's, as the window follows it: which kind, and the plan's or agent's id. */
 export const agentInboxScopeSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(INBOX_SCOPE_KIND)),

@@ -1,4 +1,4 @@
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type Agent,
   type AgentDelegation,
@@ -60,7 +60,7 @@ import { DEVICE_LAUNCH_STEPS, type DeviceLaunchUnstarted } from "@repo/features/
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { turnRecordOf } from "@repo/features/turn-record";
 import type { ToolSet } from "ai";
-import { Clock, Duration, Effect, Option, type Schema } from "effect";
+import { Clock, Duration, Effect, Option } from "effect";
 import {
   isSettledToolPartState,
   isStoredToolPart,
@@ -191,11 +191,7 @@ export interface TranscriptPage {
   readonly launchUnstarted?: DeviceLaunchUnstarted;
 }
 
-type TranscriptEffect<A, R = never> = Effect.Effect<
-  A,
-  QueryError | Schema.SchemaError,
-  DatabaseServices | R
->;
+type TranscriptEffect<A, R = never> = Effect.Effect<A, StoreFailure, DatabaseServices | R>;
 
 /** The newest turn as a page reads it: which it is, and what it ran under and cost; nothing before the first. */
 type NewestTurn = LatestTurn | undefined;
@@ -718,7 +714,7 @@ function ownTitleWindow(
       newest?.status === TURN_STATUS.SETTLED &&
       newest.settledAt !== null &&
       newest.settledAt >= since;
-    if (!completed || newest.settledAt === null) return Option.none();
+    if (!completed) return Option.none();
     const ran = yield* turnsBefore(
       target.userId,
       target.conversationId,
@@ -965,7 +961,7 @@ export function transcriptNewest(
       messages,
       cursor,
       status,
-      ...(runStartedAt === undefined ? undefined : { runStartedAt }),
+      runStartedAt,
       ...(failureReason === undefined ? undefined : { failureReason }),
       ...(hostLost === undefined ? undefined : { hostLost }),
     };

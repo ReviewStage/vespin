@@ -4,7 +4,7 @@ import {
   checkoutIdentityEnv,
 } from "@repo/features/checkout-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import type { SandboxError } from "@repo/sandbox";
+import type { CommandRun, SandboxError } from "@repo/sandbox";
 import { Data, Duration, Effect, Option, type Redacted, Tracer } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
@@ -182,13 +182,6 @@ export interface SandboxRunOptions {
   readonly env?: Record<string, string>;
 }
 
-/** What a command answered: its exit code and its two outputs, each cut to the bound. */
-export interface CommandResult {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
 /**
  * The sandbox as the shell reaches it: one command run, under the span of
  * the call that ran it where it has one, so a provider that runs it on a
@@ -197,7 +190,8 @@ export interface CommandResult {
  * the checkout's credential and checks nothing out.
  */
 export interface RepositorySandbox {
-  readonly run: (options: SandboxRunOptions, parent?: Tracer.AnySpan) => PromiseLike<CommandResult>;
+  /** Runs a command to its end, its two outputs each cut to the bound. */
+  readonly run: (options: SandboxRunOptions, parent?: Tracer.AnySpan) => PromiseLike<CommandRun>;
   readonly firewall?: RepositoryFirewall;
 }
 
@@ -227,7 +221,7 @@ function cloneUrl(repository: string): string {
 }
 
 /** A git run in the checkout that failed, refused with as much of git's own word as the model is told. */
-function gitRefusal(failed: CommandResult): RepositoryRefusal {
+function gitRefusal(failed: CommandRun): RepositoryRefusal {
   const detail = failed.stderr.trim().slice(0, REPOSITORY_SHELL_BOUNDS.CHECKOUT_ERROR_MAX_CHARS);
   return new RepositoryRefusal({
     reason:
@@ -272,7 +266,7 @@ const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential
   fullName: string,
   token: Redacted.Redacted,
   access: GitHubTokenAccess,
-  run: Effect.Effect<CommandResult, RepositoryRefusal>,
+  run: Effect.Effect<CommandRun, RepositoryRefusal>,
 ): Effect.fn.Return<void, RepositoryRefusal> {
   const firewall = sandbox.firewall;
   if (firewall === undefined)

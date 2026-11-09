@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { customType, timestamp } from "drizzle-orm/pg-core";
 
 /**
@@ -30,3 +31,9 @@ export const updatedAt = () => timestamptz("updated_at").notNull().defaultNow();
 export const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
   dataType: () => "bytea",
 });
+
+/** A value written into a check or an index's predicate as SQL rather than a parameter, which neither can take. */
+export const literal = (value: string) => sql.raw(`'${value}'`);
+
+/** A number written into a check as SQL rather than a parameter, as `literal` writes a value. */
+export const bound = (value: number) => sql.raw(String(value));

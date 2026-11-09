@@ -3,7 +3,7 @@ import { BUTTON_VARIANT, Button, Shortcut } from "@repo/ui";
 import { CommandDialog, type CommandGroup } from "@repo/ui/command";
 import { GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

@@ -1,5 +1,5 @@
 import { CountParts, GAP, Inline, linesCount, STATUS_TONE } from "@repo/ui";
-import type { Example } from "../examples";
+import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**

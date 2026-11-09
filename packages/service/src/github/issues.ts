@@ -14,7 +14,11 @@
  * closed as too. Who opened it is read off the same answer, by login.
  */
 
-import { ISSUE_STATE, type IssueState } from "@repo/features/github-repositories-wire";
+import {
+  type GitHubIssueSummary,
+  ISSUE_STATE,
+  type IssueState,
+} from "@repo/features/github-repositories-wire";
 import { Effect, Option, type Redacted, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -25,18 +29,6 @@ import {
   send,
 } from "./github-app.js";
 import { GitHubOpenerSchema, openerFieldsOf } from "./pull-requests.js";
-
-/** One issue as a link to it draws it. */
-export interface GitHubIssue {
-  readonly number: number;
-  readonly title: string;
-  readonly url: string;
-  readonly state: IssueState;
-  /** The login of who opened it, where GitHub named one, their avatar where GitHub's avatar host serves it, and whether they are an App's bot. */
-  readonly author?: string;
-  readonly authorAvatarUrl?: string;
-  readonly authorBot?: boolean;
-}
 
 /** GitHub's own word for a closed issue, and its reasons for closing one that read as not planned. */
 const GITHUB_CLOSED = "closed";
@@ -67,7 +59,7 @@ export function issueByNumber(
   token: Redacted.Redacted,
   fullName: string,
   number: number,
-): Effect.Effect<Option.Option<GitHubIssue>, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<Option.Option<GitHubIssueSummary>, GitHubUnavailable, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/issues/${number}`;
   return Effect.scoped(
@@ -76,7 +68,7 @@ export function issueByNumber(
         response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
         response.status === GITHUB_HTTP_STATUS.GONE
       ) {
-        return Effect.succeed(Option.none<GitHubIssue>());
+        return Effect.succeed(Option.none<GitHubIssueSummary>());
       }
       return Effect.map(readBody(response, IssueSchema), (record) =>
         record.pull_request === undefined

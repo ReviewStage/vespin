@@ -47,21 +47,23 @@ import { user } from "@repo/database/schemas/auth";
 import { task } from "@repo/database/schemas/task";
 import { HTTP_METHOD, type HttpMethod } from "@repo/wire";
 import { eq, sql } from "drizzle-orm";
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { SqlSchema } from "effect/sql";
-import { accountCall, callAnswered, fixedBearer } from "../core.js";
+import { callAnswered } from "../core.js";
 import { afterResponse } from "../http/after-response.js";
 import { readAccountPerson } from "./account-person.js";
+import { readResendSender, resendCall } from "./resend.js";
 import { greetingOf, WELCOME_MAIL_ENVIRONMENT } from "./welcome-mail.js";
 
-const RESEND = {
-  BASE_URL: "https://api.resend.com",
-  EVENTS_PATH: "/events/send",
-  CONTACTS_PATH: "/contacts",
-  /** Short, though nothing waits on it, so a stalled Resend does not hold the instance awake. */
-  REQUEST_TIMEOUT_MS: 3_000,
+/** Resend's paths the onboarding calls, beside its emails. */
+const RESEND_PATH = {
+  EVENTS: "/events/send",
+  CONTACTS: "/contacts",
 } as const;
+
+/** Short, though nothing waits on it, so a stalled Resend does not hold the instance awake. */
+const REQUEST_TIMEOUT_MS = 3_000;
 
 /** The events the automation listens for, as Resend names them. */
 const ONBOARDING_EVENT = {
@@ -70,7 +72,7 @@ const ONBOARDING_EVENT = {
 } as const;
 
 /** The contact's properties the automation's conditions read, as Resend names them. */
-export const ONBOARDING_PROPERTY = {
+const ONBOARDING_PROPERTY = {
   HAS_TASK: "has_task",
   TASK_DAYS: "task_days",
   LAST_TASK_DAY: "last_task_day",
@@ -132,13 +134,7 @@ const findActivity = SqlSchema.findOneOption({
 
 /** The contact's own address at Resend, which names a contact by its email. */
 function contactPath(email: string): string {
-  return `${RESEND.CONTACTS_PATH}/${encodeURIComponent(email)}`;
-}
-
-/** A variable as the deployment holds it, trimmed, and nothing where it is unset or blank. */
-function presentText(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
+  return `${RESEND_PATH.CONTACTS}/${encodeURIComponent(email)}`;
 }
 
 /**
@@ -153,12 +149,8 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
 > = Layer.effect(
   OnboardingEvents,
   Effect.gen(function* () {
-    const read = yield* Config.all({
-      key: Config.option(Config.Redacted(WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY)),
-      from: Config.option(Config.String(WELCOME_MAIL_ENVIRONMENT.FROM)),
-    }).pipe(Effect.orElseSucceed(() => ({ key: Option.none(), from: Option.none() })));
-    const key = presentText(Option.map(read.key, Redacted.value));
-    if (key === undefined || presentText(read.from) === undefined) {
+    const sender = yield* readResendSender(WELCOME_MAIL_ENVIRONMENT.FROM);
+    if (Option.isNone(sender)) {
       yield* Effect.logWarning(EVENTS_UNSET);
       return {
         signedUp: () => Effect.void,
@@ -168,11 +160,7 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
       };
     }
     const client = yield* HttpClient.HttpClient;
-    const call = accountCall({
-      baseUrl: RESEND.BASE_URL,
-      credential: fixedBearer(key),
-      requestTimeoutMs: RESEND.REQUEST_TIMEOUT_MS,
-    });
+    const call = resendCall(sender.value.key, REQUEST_TIMEOUT_MS);
     // One call, whose refusal is logged by what was asked and its status alone, because the body carries the address.
     const send = (asked: string, method: HttpMethod, path: string, body?: object) =>
       Effect.gen(function* () {
@@ -189,11 +177,11 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
         );
       }).pipe(Effect.provideService(HttpClient.HttpClient, client));
     const sendEvent = (event: string, email: string, payload: Record<string, string>) =>
-      send(event, HTTP_METHOD.POST, RESEND.EVENTS_PATH, { event, email, payload });
+      send(event, HTTP_METHOD.POST, RESEND_PATH.EVENTS, { event, email, payload });
     return {
       signedUp: (email: string, name: string) =>
         Effect.andThen(
-          send("contact", HTTP_METHOD.POST, RESEND.CONTACTS_PATH, { email }),
+          send("contact", HTTP_METHOD.POST, RESEND_PATH.CONTACTS, { email }),
           sendEvent(ONBOARDING_EVENT.SIGNED_UP, email, {
             [SIGNED_UP_PAYLOAD.GREETING]: greetingOf(name),
           }),

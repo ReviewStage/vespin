@@ -148,6 +148,11 @@ export function descriptionSections(text: string): readonly DescriptionSection[]
   });
 }
 
+/** The heading of the section a place in the text stands in; empty before the first heading. */
+export function sectionAt(text: string, offset: number): string {
+  return descriptionSections(text).findLast((section) => section.from <= offset)?.heading ?? "";
+}
+
 /** Each heading's sections' words, in the order they stand, so two sections under one heading are compared one by one. */
 function wordsByHeading(text: string): ReadonlyMap<string, readonly string[]> {
   const byHeading = new Map<string, string[]>();
