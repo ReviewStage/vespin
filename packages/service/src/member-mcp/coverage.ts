@@ -41,12 +41,14 @@ type HostedProcedureNames = {
 
 /** Why a procedure has no member MCP tool. */
 export const MEMBER_MCP_EXCLUSION_REASON = {
-  /** It feeds a window: a live stream, a frame, a picker's options, a composer's state, or a transcript drawn page by page. */
+  /** It feeds a window: a live stream, a frame, a picker's options, or a composer's state. */
   SCREEN_ONLY: "screen-only",
-  /** A sign-in or connect flow that finishes in a browser, or a link only a person opens. */
+  /** A sign-in or connect flow that finishes in a browser, or a link only a person opens; a disconnect is no such flow. */
   NEEDS_BROWSER: "needs-browser",
   /** It reads or writes a secret, which no tool ever carries. */
   SECRET: "secret",
+  /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
+  SECURITY: "security",
   /** It cannot be undone and stays in the app and the CLI alone, by design. */
   DESTRUCTIVE: "destructive",
   /** Pairing, devices, the admin dashboard, and the service's own bookkeeping: no member's work. */
@@ -58,7 +60,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
 export type MemberMcpExclusionReason =
   (typeof MEMBER_MCP_EXCLUSION_REASON)[keyof typeof MEMBER_MCP_EXCLUSION_REASON];
 
-const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, DESTRUCTIVE, INTERNAL, NOT_YET_BUILT } =
+const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, NOT_YET_BUILT } =
   MEMBER_MCP_EXCLUSION_REASON;
 
 /** Each tool's procedures: at least one, so no row stands empty. */
@@ -140,8 +142,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
     removeProviderKey: SECRET,
-    // Note that the settings screen lists every memory; `search_memory` reads them for a model.
-    memories: SCREEN_ONLY,
+    memories: NOT_YET_BUILT,
     startChatGptDeviceLogin: NEEDS_BROWSER,
     pollChatGptDeviceLogin: NEEDS_BROWSER,
     cancelChatGptDeviceLogin: NEEDS_BROWSER,
@@ -197,16 +198,16 @@ export const MEMBER_MCP_EXCLUSIONS = {
   github: {
     connect: NEEDS_BROWSER,
     claim: NEEDS_BROWSER,
-    connection: NEEDS_BROWSER,
-    disconnect: NEEDS_BROWSER,
-    repositories: SCREEN_ONLY,
-    tokenRepositories: SECRET,
-    setTokenRepository: SECRET,
-    repositoryFile: SCREEN_ONLY,
-    repositoryTree: SCREEN_ONLY,
-    repositorySkills: SCREEN_ONLY,
-    repositoryPullRequest: SCREEN_ONLY,
-    repositoryIssue: SCREEN_ONLY,
+    connection: NOT_YET_BUILT,
+    disconnect: NOT_YET_BUILT,
+    repositories: NOT_YET_BUILT,
+    tokenRepositories: NOT_YET_BUILT,
+    setTokenRepository: NOT_YET_BUILT,
+    repositoryFile: NOT_YET_BUILT,
+    repositoryTree: NOT_YET_BUILT,
+    repositorySkills: NOT_YET_BUILT,
+    repositoryPullRequest: NOT_YET_BUILT,
+    repositoryIssue: NOT_YET_BUILT,
   },
   githubToken: { read: SECRET, save: SECRET, remove: SECRET },
   hosts: {
@@ -294,13 +295,12 @@ export const MEMBER_MCP_EXCLUSIONS = {
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
   messages: {
-    // Note that the transcript's pages are drawn by the panel; `read_agent` reads its newest turns.
-    agent: SCREEN_ONLY,
+    agent: NOT_YET_BUILT,
     queue: NOT_YET_BUILT,
-    agentWorker: SCREEN_ONLY,
-    agentWorkerNewest: SCREEN_ONLY,
-    agentPart: SCREEN_ONLY,
-    agentWorkerPart: SCREEN_ONLY,
+    agentWorker: NOT_YET_BUILT,
+    agentWorkerNewest: NOT_YET_BUILT,
+    agentPart: NOT_YET_BUILT,
+    agentWorkerPart: NOT_YET_BUILT,
   },
   plans: {
     find: NOT_YET_BUILT,
@@ -328,7 +328,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   pushDevices: { register: INTERNAL, unregister: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
-  supportAccess: { grant: INTERNAL, revoke: INTERNAL },
+  supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
     file: NOT_YET_BUILT,
     tree: NOT_YET_BUILT,
@@ -342,7 +342,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     putInstall: NOT_YET_BUILT,
     putRepository: NOT_YET_BUILT,
   },
-  workspaceGithub: { connect: NEEDS_BROWSER, disconnect: NEEDS_BROWSER },
+  workspaceGithub: { connect: NEEDS_BROWSER, disconnect: NOT_YET_BUILT },
   workspaceInvitations: {
     list: NOT_YET_BUILT,
     invite: NOT_YET_BUILT,
@@ -351,13 +351,13 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaceSentry: {
     install: NEEDS_BROWSER,
-    installations: NEEDS_BROWSER,
-    disconnect: NEEDS_BROWSER,
+    installations: NOT_YET_BUILT,
+    disconnect: NOT_YET_BUILT,
   },
   workspaceSlackBot: {
     read: NOT_YET_BUILT,
     connect: NEEDS_BROWSER,
-    disconnect: NEEDS_BROWSER,
+    disconnect: NOT_YET_BUILT,
     notifications: NOT_YET_BUILT,
     repository: NOT_YET_BUILT,
     channel: NOT_YET_BUILT,
