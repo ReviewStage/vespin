@@ -857,6 +857,8 @@ interface ReplayTold {
   readonly cut?: StepCut | undefined;
   /** The source's CLI session the new agent forks as its own, its transcript copied with it, in place of a replay of its steps; none where its steps are replayed. */
   readonly transcript?: string | undefined;
+  /** The client id of the source's line that session is cut just before; none where it is forked whole. */
+  readonly transcriptCut?: string | undefined;
 }
 
 /** A replay fitted to the new agent's window, and what the new agent's row keeps of where it came from. */
@@ -910,6 +912,7 @@ export function replayOf(
       totalSteps,
       ...startedOn(told.work),
       ...(told.transcript === undefined ? undefined : { session: told.transcript }),
+      ...(told.transcriptCut === undefined ? undefined : { cutBefore: told.transcriptCut }),
     },
   };
 }

@@ -437,6 +437,8 @@ function besideBytes(turnText: string | undefined, content: readonly ContentBloc
 interface ResumedSession {
   readonly resume?: string;
   readonly fork?: boolean;
+  /** The client id of the source's line a forked session is cut just before (`StoredStartedFrom`'s `cutBefore`); none where it is forked whole. */
+  readonly cut?: string;
   readonly replay?: boolean;
 }
 
@@ -991,12 +993,13 @@ export const runnerSessions = <
             return yield* new LaunchRefused({ reason: "no agent" });
           const named = (url: string) => launchUrl(url, recordedLaunch.value);
           // A rewind's cut is handed to the launch that resumes the harness's session, and let go
-          // once the runner has it; a fresh session never heard the line it names.
+          // once the runner has it; a fresh session never heard the line it names. A forked session
+          // is cut where the Start cut it, through the same cut, since the line it names is the source's.
           const read = Effect.gen(function* () {
             const rewind = Option.getOrUndefined(
               yield* readNativeRewind({ userId, conversationId: agent.conversationId }),
             );
-            const rewindBefore = resumed.resume === undefined ? undefined : rewind;
+            const rewindBefore = resumed.resume === undefined ? undefined : (resumed.cut ?? rewind);
             const config = yield* harness
               .config(agent, layout, resumed.resume, firstSequence, rewindBefore)
               .pipe(Effect.withSpan("web/runnerConfig"));
@@ -1477,7 +1480,8 @@ export const runnerSessions = <
      * none, the session resumes from the disk alone, so not in a place made
      * anew (`created`), whose disk is gone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
-     * Start copied a transcript the store holds from its first entry.
+     * Start copied a transcript the store holds from its first entry, cut
+     * where the Start cut it.
      * Whether the place was made anew is read only where it decides the
      * session, so a launch prepared beside its place's resume waits on that
      * resume only there.
@@ -1502,7 +1506,11 @@ export const runnerSessions = <
         const source = agent.startedFrom?.session;
         if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
         const held = yield* holdsSession(userId, conversationId, source);
-        return (held ? { resume: source, fork: true } : {}) satisfies ResumedSession;
+        if (!held) return {} satisfies ResumedSession;
+        const cut = agent.startedFrom?.cutBefore;
+        return (
+          cut === undefined ? { resume: source, fork: true } : { resume: source, fork: true, cut }
+        ) satisfies ResumedSession;
       });
 
     /** The session a launch resumes in a place known made anew or not (`resumedSessionWhen`). */

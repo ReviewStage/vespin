@@ -41,6 +41,7 @@ import type {
   Options,
   SDKMessage,
   SDKUserMessage,
+  SessionStore,
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   Cause,
@@ -157,12 +158,15 @@ interface ResumePoint {
 const resumePointOf = Effect.fn("agent-runner/resumePointOf")(function* (
   claudeCode: ClaudeCodeShape,
   config: ClaudeCodeConfig,
+  store: SessionStore | undefined,
 ) {
   const { resume, rewindBefore } = config;
   if (resume === undefined) return {} satisfies ResumePoint;
   if (rewindBefore === undefined) return { resume } satisfies ResumePoint;
   const unread: readonly string[] = [];
-  const chain = yield* Effect.tryPromise(() => claudeCode.sessionChain(resume, config.cwd)).pipe(
+  const chain = yield* Effect.tryPromise(() =>
+    claudeCode.sessionChain(resume, config.cwd, store),
+  ).pipe(
     Effect.catch(() =>
       Effect.as(Effect.logWarning("agent-runner: the session to rewind could not be read"), unread),
     ),
@@ -189,8 +193,7 @@ function queryOptions(
   servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
   onStop: HookCallback,
   from: ResumePoint,
-  bearer: Redacted.Redacted,
-  traceHeaders: LaunchTrace["headers"],
+  store: SessionStore | undefined,
 ): Options {
   const options: Options = {
     cwd: config.cwd,
@@ -231,9 +234,7 @@ function queryOptions(
   if (from.at !== undefined) options.resumeSessionAt = from.at;
   if (config.fork === true) options.forkSession = true;
   // The SDK mirrors the transcript to the service as the CLI writes it, and loads it from there to resume.
-  if (config.transcriptsUrl !== undefined) {
-    options.sessionStore = transcriptStore(config.transcriptsUrl, bearer, traceHeaders);
-  }
+  if (store !== undefined) options.sessionStore = store;
   // The member's installed skills load as a local plugin, which leaves the checkout and the
   // settings Claude Code reads (`project` alone) as they stand; we hold its MCP servers.
   const manifest = installedSkillsPath(config.installedSkills, INSTALLED_SKILLS.MANIFEST);
@@ -617,10 +618,14 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     }),
   );
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
-  const from = yield* resumePointOf(claudeCode, config);
+  const store =
+    config.transcriptsUrl === undefined
+      ? undefined
+      : transcriptStore(config.transcriptsUrl, bearer, trace.headers);
+  const from = yield* resumePointOf(claudeCode, config, store);
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
-  const options = queryOptions(config, context.env, servers, onStop, from, bearer, trace.headers);
+  const options = queryOptions(config, context.env, servers, onStop, from, store);
   const started = yield* trace
     .step(
       RUNNER_SPAN.CLI,
