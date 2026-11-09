@@ -10,6 +10,9 @@
  * missing too, and the act port runs over `in-process-channel.ts` instead.
  */
 
+// The device's zone, read from Hermes's own `Intl.DateTimeFormat` before
+// FormatJS's replaces it below, so this import stands first.
+import { SYSTEM_TIME_ZONE } from "./system-time-zone.js";
 // `Intl.PluralRules` and `Intl.ListFormat`: Hermes has neither, and the
 // host's words make them at module load (`@repo/features/words.ts`), so a
 // bundle without them cannot even evaluate. FormatJS fills them in, with
@@ -25,7 +28,48 @@ import "@formatjs/intl-listformat/locale-data/en.js";
 // `Intl.Segmenter`: Hermes lacks it, and a task section's emoji is told
 // from a word by its graphemes (`@repo/features/task-section-wire.ts`).
 import "@formatjs/intl-segmenter/polyfill.js";
+// `Intl.DateTimeFormat`: Hermes has one, but two faults in it break every
+// date the host counts in the reader's zone (`@repo/features/date-mention.ts`'s
+// Today and Tomorrow, through Effect's `DateTime.makeZoned`). Its
+// `formatToParts` types each part by the part's index into the pattern's
+// letters rather than by the letters that drew it, so the offset Effect reads
+// from the `timeZoneName` part is some other field; and it names the device's
+// zone as `NSTimeZone` does, `GMT` for UTC, which Effect reads as an offset
+// with none written. FormatJS's replacement is forced over it, with every
+// zone's rules, since the reader's zone is known only on the device.
+import "@formatjs/intl-datetimeformat/polyfill-force.js";
+import "@formatjs/intl-datetimeformat/locale-data/en.js";
+import "@formatjs/intl-datetimeformat/add-all-tz.js";
+import type { DateTimeFormatConstructor as FormatJsDateTimeFormat } from "@formatjs/intl-datetimeformat";
 import { CryptoDigestAlgorithm, digest, getRandomValues, randomUUID } from "expo-crypto";
+
+/** The minutes in an hour, which a zone's offset is counted in. */
+const MINUTES_PER_HOUR = 60;
+
+/**
+ * The `Etc/GMT` zone of the device clock's offset now, whose sign POSIX
+ * writes reversed (`Etc/GMT-1` is an hour ahead of UTC), or UTC where the
+ * offset is no whole number of hours, which no `Etc` zone names.
+ */
+function offsetTimeZone(): string {
+  const behind = new Date().getTimezoneOffset();
+  if (behind === 0 || behind % MINUTES_PER_HOUR !== 0) return "UTC";
+  const hours = behind / MINUTES_PER_HOUR;
+  return `Etc/GMT${hours > 0 ? "+" : "-"}${Math.abs(hours)}`;
+}
+
+// FormatJS's `Intl.DateTimeFormat` starts in UTC, so it is handed the zone
+// Hermes read: its IANA name, or, where `NSTimeZone` gave `GMT` or a bare
+// offset such as `GMT+0100`, which FormatJS cannot place, the offset's zone.
+// SAFETY: `Intl.DateTimeFormat` is FormatJS's from the forced polyfill above, which adds `__setDefaultTimeZone`.
+const zonedFormat = Intl.DateTimeFormat as unknown as FormatJsDateTimeFormat;
+try {
+  zonedFormat.__setDefaultTimeZone(
+    SYSTEM_TIME_ZONE.startsWith("GMT") ? offsetTimeZone() : SYSTEM_TIME_ZONE,
+  );
+} catch {
+  zonedFormat.__setDefaultTimeZone(offsetTimeZone());
+}
 
 /** The digests the web's `crypto.subtle.digest` names, as `expo-crypto` names them. */
 const DIGEST_ALGORITHM: Readonly<Record<string, CryptoDigestAlgorithm>> = {
