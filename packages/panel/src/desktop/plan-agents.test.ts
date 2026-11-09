@@ -20,7 +20,8 @@ import { PlanAgents } from "./plan-agents.js";
 /**
  * plan-agents.test.ts -- the plan's agents list those waiting on the
  * developer first, each counting what needs them, then those at work,
- * then the newest started, each saying where it runs itself; a row opens its agent, its pull request's chip opens
+ * then the newest started, each saying where it runs itself; a row opens its agent, its ⋯ offers the
+ * agent's menu, its pull request's chip opens
  * the pull request and not the agent, and a task with no agent and no start
  * draws no list; the group ends with New agent, even on a task with no
  * agent, and on a phone the task's Inbox follows it only while something
@@ -131,6 +132,7 @@ function mount(
           tab: undefined,
           folded,
           waiting,
+          shown: true,
           onOpenAgent: (agentId) => opened.agents.push(agentId),
           onOpenPullRequest: (agentId) => opened.pullRequests.push(agentId),
           starts: starts
@@ -176,6 +178,19 @@ test("the agents at work come first, then the newest, each saying where it runs,
   assert.ok(press !== undefined);
   act(() => press.click());
   assert.deepEqual(opened.agents, [OLDEST.id]);
+});
+
+test("an agent's row offers the agent's menu from its ⋯, as its row on a person's page does", () => {
+  const { host } = mount([NEWEST]);
+  const more = host.querySelector<HTMLButtonElement>('button[aria-label="Agent actions"]');
+  assert.ok(more !== null, "the row draws a ⋯");
+  act(() => more.click());
+  const labels = [...document.querySelectorAll('[role="menuitem"]')].map(
+    (each) => each.textContent,
+  );
+  assert.ok(labels.includes("Rename"));
+  assert.ok(labels.includes("Archive"));
+  assert.ok(labels.includes("Permanently delete"));
 });
 
 test("an agent waiting on the developer comes first, counting what needs them but not naming the thread, and a phone's Inbox row leaves that thread to it", () => {

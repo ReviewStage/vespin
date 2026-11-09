@@ -57,7 +57,8 @@ import { type PullRequestWrites, QUEUE_WARNING } from "./pull-request-writes.js"
  * no chip of its own, Disable auto-merge saying it is on, and one held up by
  * its checks alone no chip, since the Checks tab under the
  * header says how they went in its glyph and its color. A narrow header draws the chip's glyph alone,
- * its word still read.
+ * its word still read, but under a finger, a phone's, which has no hover to
+ * raise its hint, the word stays drawn; a tap on the chip opens its sentence.
  *
  * The press is the one thing that may be done from where the pull request
  * stands (`mergeActionOf`), each a change the service makes on GitHub as
@@ -190,11 +191,22 @@ function isLive(pullRequest: AgentOverviewPullRequest): boolean {
   );
 }
 
-/** What a merge GitHub says is blocked waits on, where the reviews or checks say; none where neither does. */
-function blockedWords(merging: PullRequestMerging | undefined): string | undefined {
+/** What a merge held up by its reviews leaves the reader, where no press stands in its place. */
+const HELD_WORDS = ", so it can't be merged yet";
+
+/**
+ * What a merge GitHub says is blocked waits on, where the reviews or checks
+ * say; none where neither does. Where its reviews hold it up and no press
+ * stands (`held`), it says too that it can't be merged, so a reader shown no
+ * merge press is told why there is none.
+ */
+function blockedWords(merging: PullRequestMerging | undefined, held: boolean): string | undefined {
   if (merging === undefined) return undefined;
-  if (merging.review === REVIEW_DECISION.CHANGES_REQUESTED) return "Changes were requested";
-  if (merging.review === REVIEW_DECISION.REVIEW_REQUIRED) return "A required review is missing";
+  const plain = (words: string) => (held ? `${words}${HELD_WORDS}` : words);
+  if (merging.review === REVIEW_DECISION.CHANGES_REQUESTED) return plain("Changes were requested");
+  if (merging.review === REVIEW_DECISION.REVIEW_REQUIRED) {
+    return plain("A required review is missing");
+  }
   if (merging.checks === CHECK_SUMMARY.PENDING) return "Waiting on required checks";
   if (merging.checks === CHECK_SUMMARY.FAILING) return "Required checks are failing";
   return undefined;
@@ -223,12 +235,18 @@ function mergeWords(merge: MergeState, base: string): string {
 /**
  * GitHub's whole sentence for the merge, as the chip's hint and a reader
  * have it: what it waits on, or where the queue or auto-merge has it,
- * then the mergeability beside it where that says something else.
+ * then the mergeability beside it where that says something else; where
+ * its reviews hold it up and no press is offered (`action`), that it can't
+ * be merged yet.
  */
-function sentenceOf(pullRequest: AgentOverviewPullRequest): string {
+function sentenceOf(
+  pullRequest: AgentOverviewPullRequest,
+  action: MergeAction | undefined,
+): string {
   const { merge, merging } = pullRequest;
   const line = mergeWords(merge, pullRequest.base);
-  const standing = (merge === MERGE_STATE.BLOCKED ? blockedWords(merging) : undefined) ?? line;
+  const blocked = merge === MERGE_STATE.BLOCKED;
+  const standing = (blocked ? blockedWords(merging, action === undefined) : undefined) ?? line;
   const queued = merging?.queued ?? null;
   const autoMerge = merging?.autoMerge ?? null;
   const lead =
@@ -543,9 +561,10 @@ export function MergeStatus({
   pullRequest: AgentOverviewPullRequest;
 }): React.JSX.Element | null {
   if (!isLive(pullRequest)) return null;
-  const face = chipOf(pullRequest, actionFor(pullRequest));
+  const action = actionFor(pullRequest);
+  const face = chipOf(pullRequest, action);
   if (face === undefined) return null;
-  return <MergeChip face={face} sentence={sentenceOf(pullRequest)} />;
+  return <MergeChip face={face} sentence={sentenceOf(pullRequest, action)} />;
 }
 
 /**

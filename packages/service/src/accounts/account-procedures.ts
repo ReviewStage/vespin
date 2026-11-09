@@ -217,7 +217,8 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     /**
      * Writes each part the body carries — `preferences`, a validated
      * settings snapshot that replaces the stored one whole, `linkOpen`,
-     * where the account's links open, `agentEnter`, what Enter does in an
+     * where the account's links open, `pullRequestOpen`, where its pull
+     * requests open, `agentEnter`, what Enter does in an
      * agent's box while it works, `commitAuthor`, who authors an agent's
      * commits, `setupFinished`, whether the account
      * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
@@ -234,6 +235,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
       if (
         body.preferences === undefined &&
         body.linkOpen === undefined &&
+        body.pullRequestOpen === undefined &&
         body.agentEnter === undefined &&
         body.commitAuthor === undefined &&
         body.setupFinished === undefined &&
@@ -259,6 +261,13 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         const linkOpen = ownPreferenceFromWire("linkOpen", body.linkOpen);
         if (linkOpen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
         write.linkOpen = linkOpen;
+      }
+      if (body.pullRequestOpen !== undefined) {
+        const pullRequestOpen = ownPreferenceFromWire("pullRequestOpen", body.pullRequestOpen);
+        if (pullRequestOpen === undefined) {
+          return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+        }
+        write.pullRequestOpen = pullRequestOpen;
       }
       if (body.agentEnter !== undefined) {
         const agentEnter = ownPreferenceFromWire("agentEnter", body.agentEnter);

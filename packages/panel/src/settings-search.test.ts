@@ -119,7 +119,7 @@ test("Integrations finds the Workspace page's group as Workspace connections, un
   );
 });
 
-test("searching GitHub while signed in finds Integrations' GitHub row and Profile's token and commit author rows, and a personal access token finds Profile's alone", () => {
+test("searching GitHub while signed in finds Integrations' GitHub row and Profile's token, pull request, and commit author rows, and a personal access token finds Profile's alone", () => {
   const entries = settingsSearchCorpus({
     settings: settingsView(),
     accountDrawn: true,
@@ -135,7 +135,11 @@ test("searching GitHub while signed in finds Integrations' GitHub row and Profil
   );
   assert.deepEqual(
     groups.find((group) => group.page === SETTINGS_VIEW.ACCOUNT)?.items.map((entry) => entry.id),
-    [SETTINGS_SEARCH_ROW.GITHUB_ACCESS, APP_SETTING_ID.COMMIT_AUTHOR],
+    [
+      SETTINGS_SEARCH_ROW.GITHUB_ACCESS,
+      APP_SETTING_ID.PULL_REQUEST_OPEN,
+      APP_SETTING_ID.COMMIT_AUTHOR,
+    ],
   );
   assert.deepEqual(
     (searchSettings(entries, "personal access token")?.groups ?? []).map((group) =>

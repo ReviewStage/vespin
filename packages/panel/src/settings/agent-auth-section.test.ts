@@ -35,13 +35,12 @@ import { AgentConnectSection } from "./agent-auth-section.js";
 import { AgentsPage } from "./agents-page.js";
 
 /**
- * Settings › Agents' harnesses over a bridge answering as the service would:
- * each row's button says how its harness is connected, or Connect, or that
- * its plan needs a hand; its dialog's rows save and remove each credential,
- * and while both are saved its default control picks the one new agents
- * use, sent as the plan's `forAgents`. Nothing pasted stands on the page once kept or
- * reaches a log. Setup's same rows connect in place, with no dialog.
- * Synthetic credentials throughout.
+ * Settings › Agents' credentials over a bridge answering as the service
+ * would: each harness's plan and key as one radio list, each saying how it
+ * stands, the radio sending what new agents use as the plan's `forAgents`,
+ * and each credential set up, replaced, and removed under its own row.
+ * Nothing pasted stands on the page once kept or reaches a log. Setup's
+ * Connect an agent draws the same lists. Synthetic credentials throughout.
  */
 
 /** Low-entropy fakes shaped as a pasted key and token are, built at run time. */
@@ -230,30 +229,28 @@ async function mountSetup(): Promise<{ page: HTMLElement; connected: boolean[] }
   return { page: container, connected };
 }
 
-/** Whether the harnesses' rows stand, which they do once the signed-in account's keys are read. */
+/** Whether the harnesses' lists stand, which they do once the signed-in account's keys are read. */
 function harnessRowsStand(page: HTMLElement): boolean {
-  return [...page.querySelectorAll(".ui-settings-row")].some((row) =>
-    row.textContent?.startsWith("Claude"),
-  );
+  return page.querySelector('[role="radiogroup"][aria-label="New Claude agents use"]') !== null;
 }
 
-/** A harness's row button, or the link it draws in a button's place, the check it may end in having none. */
-const rowButton = (page: HTMLElement, harness: string) =>
-  [...page.querySelectorAll<HTMLElement>(".ui-settings-row")]
-    .find((row) => row.textContent?.startsWith(harness))
-    ?.querySelector<HTMLElement>("button, a") ?? assert.fail(`no ${harness} row`);
+/** A credential's row, by the label its radio reads. */
+const credential = (page: Element, label: string) =>
+  [...page.querySelectorAll<HTMLElement>(".ui-choice-card")].find(
+    (each) => each.querySelector(".ui-choice-label")?.textContent === label,
+  ) ?? assert.fail(`no ${label} row`);
 
-/** What a harness's row says under its name, and in which tint, or nothing where it says nothing. */
-const rowState = (page: HTMLElement, harness: string) => {
-  const line = rowButton(page, harness)
-    .closest(".ui-settings-row")
-    ?.querySelector<HTMLElement>(".ui-settings-row-state");
-  return line === null || line === undefined
-    ? undefined
-    : { words: line.textContent, state: line.dataset.state };
+/** A credential row's radio. */
+const radio = (row: Element) =>
+  row.querySelector<HTMLButtonElement>('[role="radio"]') ?? assert.fail("no radio");
+
+/** What a credential's row says of it under its name, and in which tint, or nothing where it says nothing. */
+const lineOf = (within: Element) => {
+  const line = within.querySelector<HTMLElement>(".ui-settings-row-state");
+  return line === null ? undefined : { words: line.textContent, state: line.dataset.state };
 };
 
-const connectedWith = (words: string) => ({ words, state: SETTINGS_ROW_STATE.CONNECTED });
+const connectedLine = { words: "Connected", state: SETTINGS_ROW_STATE.CONNECTED };
 const needsHand = (words: string) => ({ words, state: SETTINGS_ROW_STATE.ATTENTION });
 
 const button = (within: Element | Document, words: string) =>
@@ -268,42 +265,16 @@ async function press(within: Element | Document, words: string): Promise<void> {
   await settle();
 }
 
-/** Opens a harness's dialog from its row. */
-async function open(page: HTMLElement, harness: string): Promise<HTMLElement> {
-  act(() => rowButton(page, harness).click());
+/** Chooses `item` from a credential's ⋯, named for the credential. */
+async function choose(row: Element, thing: string, item: string): Promise<void> {
+  await press(row, `${thing} actions`);
+  const entry =
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (each) => each.textContent === item,
+    ) ?? assert.fail(`no ${item} item`);
+  act(() => entry.click());
   await settle();
-  return (
-    [...document.querySelectorAll<HTMLElement>('[role="dialog"]')].find((dialog) =>
-      dialog.textContent?.startsWith(harness),
-    ) ?? assert.fail(`no ${harness} dialog`)
-  );
 }
-
-/** Connect Codex, standing over the window, found by the title that names it. */
-const connectCodex = () =>
-  [...document.querySelectorAll<HTMLElement>('[role="dialog"]')].find(
-    (dialog) =>
-      document.getElementById(dialog.getAttribute("aria-labelledby") ?? "")?.textContent ===
-      "Connect Codex",
-  ) ?? assert.fail("no Connect Codex dialog");
-
-/** The dialog's row a label names. */
-const row = (dialog: Element, label: string) =>
-  [...dialog.querySelectorAll<HTMLElement>(".ui-settings-row")].find(
-    (each) => each.querySelector(".ui-settings-row-label")?.textContent === label,
-  ) ?? assert.fail(`no ${label} row`);
-
-/** What a dialog's row says of its credential under its name, and in which tint. */
-const lineOf = (within: Element) => {
-  const line = within.querySelector<HTMLElement>(".ui-settings-row-state");
-  return line === null ? undefined : { words: line.textContent, state: line.dataset.state };
-};
-
-/** An option of the default's control, by its words. */
-const choice = (dialog: Element, label: string) =>
-  [...dialog.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
-    (each) => each.textContent === label,
-  ) ?? assert.fail(`no ${label} choice`);
 
 /** The field a visible label names, as a reader finds it. */
 function labeled(within: Element, words: string): HTMLInputElement {
@@ -330,64 +301,56 @@ async function paste(field: HTMLInputElement, value: string): Promise<void> {
   await settle();
 }
 
-/**
- * The question standing at the one open dialog's foot, never in a card of
- * its own over it, with what the dialog holds stilled behind it.
- */
+/** The question asked over the window. */
 function question(): HTMLElement {
-  const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]');
-  assert.equal(dialogs.length, 1, "the question opens no card over the dialog");
-  const dialog = dialogs[0] ?? assert.fail("no dialog");
-  assert.ok(dialog.querySelector('[data-slot="dialog-body"][inert]'), "the dialog stands still");
-  assert.ok(
-    [...dialog.querySelectorAll("button")].every((each) => each.textContent !== "Done"),
-    "the foot's own answer gives way to the question",
+  return (
+    document.querySelector<HTMLElement>('[role="alertdialog"], [role="dialog"]') ??
+    assert.fail("no question asks")
   );
-  return dialog.querySelector<HTMLElement>('[role="group"]') ?? assert.fail("no question stands");
 }
 
 /** The act a question asks, as its look says what it costs. */
 const actLook = (words: string) => button(question(), words).getAttribute("data-variant");
 
-const forAgentsSent = () =>
-  sent
-    .filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_FOR_AGENTS)
-    .map((each) => each.payload);
+/** The payloads of every act of `kind` the page sent, in order. */
+const sentOf = (kind: AnyAct["kind"]) =>
+  sent.filter((each) => each.kind === kind).map((each) => each.payload);
 
-test("each harness's row names the credential in use, then what is wrong with it, beside the fix: Connect, Manage, Sign in again, or Manage usage", async () => {
-  const empty = await mount();
-  assert.equal(rowButton(empty, "Claude").textContent, "Connect");
-  assert.equal(rowButton(empty, "Codex").textContent, "Connect");
-  assert.equal(rowButton(empty, "Codex").getAttribute("aria-label"), "Connect Codex");
-  const notConnected = { words: "Not connected", state: SETTINGS_ROW_STATE.PLAIN };
-  assert.deepEqual(rowState(empty, "Claude"), notConnected);
-  assert.deepEqual(rowState(empty, "Codex"), notConnected);
+/** Unmounts the page, so the next world draws its own. */
+function leave(): void {
   for (const root of roots.splice(0)) act(() => root.unmount());
+}
+
+test("each credential says how it stands under its name, the radio on what new agents use; one not set up can't be picked and ends in its own Connect or Add key", async () => {
+  const empty = await mount();
+  for (const [label, setUp] of [
+    ["Claude plan", "Connect Claude plan"],
+    ["Anthropic API key", "Add Anthropic API key"],
+    ["ChatGPT plan", "Connect ChatGPT plan"],
+    ["OpenAI API key", "Add OpenAI API key"],
+  ] as const) {
+    const row = credential(empty, label);
+    assert.equal(radio(row).disabled, true, `${label} can't be picked`);
+    assert.equal(lineOf(row), undefined);
+    assert.ok(button(row, setUp));
+  }
+  leave();
 
   held = {
-    keys: [{ ...ANTHROPIC_KEY, provider: PROVIDER_KEY_PROVIDER.OPENAI, hint: "sk-proj-…7Qx2" }],
+    keys: [{ ...ANTHROPIC_KEY, provider: PROVIDER_KEY_PROVIDER.OPENAI }],
     subscriptions: [CLAUDE_PLAN],
   };
   // Note that one client holds the test's worlds, so each later world waits for its own keys to replace the last one's.
   const connected = await mount();
   await vi.waitFor(() =>
-    assert.deepEqual(rowState(connected, "Claude"), connectedWith("Claude plan")),
+    assert.deepEqual(lineOf(credential(connected, "Claude plan")), connectedLine),
   );
-  assert.equal(rowButton(connected, "Claude").textContent, "Manage");
-  assert.equal(rowButton(connected, "Codex").textContent, "Manage");
-  assert.equal(rowButton(connected, "Claude").getAttribute("aria-label"), "Manage Claude");
-  assert.equal(rowButton(connected, "Codex").getAttribute("aria-label"), "Manage Codex");
-  const described = (harness: string) =>
-    (rowButton(connected, harness).getAttribute("aria-describedby") ?? "")
-      .split(" ")
-      .map((id) => document.getElementById(id)?.textContent)
-      .join(" ");
-  assert.match(described("Claude"), /Claude plan/u);
-  assert.deepEqual(rowState(connected, "Claude"), connectedWith("Claude plan"));
-  assert.deepEqual(rowState(connected, "Codex"), connectedWith("OpenAI API key sk-proj-…7Qx2"));
-  for (const root of roots.splice(0)) act(() => root.unmount());
+  assert.equal(radio(credential(connected, "Claude plan")).getAttribute("aria-checked"), "true");
+  assert.deepEqual(lineOf(credential(connected, "OpenAI API key")), connectedLine);
+  assert.equal(radio(credential(connected, "OpenAI API key")).getAttribute("aria-checked"), "true");
+  leave();
 
-  // The plan's default off with a key saved is the key, whatever the plan's state.
+  // A plan set aside for a key leaves the key picked, whatever the plan's state; each lapse offers its fix.
   held = {
     keys: [ANTHROPIC_KEY],
     subscriptions: [
@@ -396,18 +359,27 @@ test("each harness's row names the credential in use, then what is wrong with it
     ],
   };
   const attention = await mount();
+  const claudePlan = () => credential(attention, "Claude plan");
   await vi.waitFor(() =>
     assert.deepEqual(
-      rowState(attention, "Claude"),
-      connectedWith("Anthropic API key sk-ant-…wxyz"),
+      lineOf(claudePlan()),
+      needsHand("Anthropic rejected this token. Paste a new one."),
     ),
   );
-  assert.deepEqual(rowState(attention, "Codex"), needsHand("ChatGPT plan · Signed out"));
-  assert.equal(rowButton(attention, "Codex").textContent, "Sign in again");
-  assert.equal(rowButton(attention, "Codex").getAttribute("aria-label"), "Sign in to Codex again");
-  for (const root of roots.splice(0)) act(() => root.unmount());
+  assert.equal(radio(claudePlan()).getAttribute("aria-checked"), "false");
+  assert.equal(
+    radio(credential(attention, "Anthropic API key")).getAttribute("aria-checked"),
+    "true",
+  );
+  assert.ok(button(claudePlan(), "Replace token"));
+  assert.deepEqual(
+    lineOf(credential(attention, "ChatGPT plan")),
+    needsHand("Signed out of ChatGPT."),
+  );
+  assert.ok(button(credential(attention, "ChatGPT plan"), "Sign in again"));
+  leave();
 
-  // A plan at its limit says so after its name; only ChatGPT's offers Manage usage, which opens ChatGPT's usage settings.
+  // A plan at its limit says so; only ChatGPT's offers Manage usage, which opens ChatGPT's usage settings.
   held = {
     keys: [],
     subscriptions: [
@@ -417,413 +389,272 @@ test("each harness's row names the credential in use, then what is wrong with it
   };
   const limited = await mount();
   await vi.waitFor(() =>
-    assert.deepEqual(rowState(limited, "Claude"), needsHand("Claude plan · Usage limit reached")),
+    assert.deepEqual(lineOf(credential(limited, "Claude plan")), needsHand("Usage limit reached")),
   );
-  assert.equal(rowButton(limited, "Claude").textContent, "Manage");
-  assert.deepEqual(rowState(limited, "Codex"), needsHand("ChatGPT plan · Usage limit reached"));
-  assert.equal(rowButton(limited, "Codex").textContent, "Manage usage");
-  assert.equal(rowButton(limited, "Codex").getAttribute("aria-label"), "Manage Codex usage");
-  act(() => rowButton(limited, "Codex").click());
+  const usage =
+    credential(limited, "ChatGPT plan").querySelector<HTMLAnchorElement>("a") ??
+    assert.fail("no Manage usage");
+  assert.equal(usage.textContent, "Manage usage");
+  act(() => usage.click());
   await settle();
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.WEB_OPEN).map((each) => each.payload),
-    [{ url: "https://chatgpt.com/settings/usage" }],
-  );
-  assert.equal(
-    document.querySelector('[role="dialog"]') === null,
-    true,
-    "Manage usage opens no dialog",
-  );
+  assert.deepEqual(sentOf(ACT_KIND.WEB_OPEN), [{ url: "https://chatgpt.com/settings/usage" }]);
 });
 
-test("each harness's row stands where a link to its section lands", async () => {
+test("each harness's list stands where a link to its section lands", async () => {
   const page = await mount();
   const landed = (section: string) =>
     page.querySelector(`[${SETTINGS_SEARCH_ANCHOR_ATTRIBUTE}="${section}"]`) ??
     assert.fail(`nothing stands at ${section}`);
-  assert.ok(landed(SETTINGS_SECTION.CLAUDE).contains(rowButton(page, "Claude")));
-  assert.ok(landed(SETTINGS_SECTION.CODEX).contains(rowButton(page, "Codex")));
+  assert.ok(landed(SETTINGS_SECTION.CLAUDE).contains(credential(page, "Claude plan")));
+  assert.ok(landed(SETTINGS_SECTION.CODEX).contains(credential(page, "ChatGPT plan")));
 });
 
-test("while both credentials are saved, the dialog's own default control picks the plan or the key, sent as the plan's forAgents; with one saved, none stands", async () => {
-  held = { keys: [], subscriptions: [CLAUDE_PLAN] };
-  const page = await mount();
-  let dialog = await open(page, "Claude");
-  assert.equal(
-    dialog.querySelector('[role="radio"]') === null,
-    true,
-    "one credential is the one used",
-  );
-  await press(dialog, "Done");
-
+test("the radio picks the plan or the key for new agents, sent as the plan's forAgents", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [CLAUDE_PLAN] };
-  for (const root of roots.splice(0)) act(() => root.unmount());
-  const both = await mount();
-  dialog = await open(both, "Claude");
-  assert.equal(
-    row(dialog, "New Claude agents use")
-      .querySelector('[role="radiogroup"]')
-      ?.getAttribute("aria-label"),
-    "New Claude agents use",
-  );
-  assert.equal(choice(dialog, "Claude plan").getAttribute("aria-checked"), "true");
-  act(() => choice(dialog, "API key").click());
+  const page = await mount();
+  const key = () => radio(credential(page, "Anthropic API key"));
+  const plan = () => radio(credential(page, "Claude plan"));
+  assert.equal(plan().getAttribute("aria-checked"), "true");
+  act(() => key().click());
   await settle();
-  assert.deepEqual(forAgentsSent(), [
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS), [
     {
       provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
       kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
       forAgents: false,
     },
   ]);
-  // Note that what the host lays after each act reaches the keys' query a notify later, so the choice is waited on.
-  await vi.waitFor(() =>
-    assert.equal(choice(dialog, "API key").getAttribute("aria-checked"), "true"),
-  );
-  assert.equal(choice(dialog, "Claude plan").getAttribute("aria-checked"), "false");
-  assert.deepEqual(rowState(both, "Claude"), connectedWith("Anthropic API key sk-ant-…wxyz"));
+  // Note that what the host lays after each act reaches the keys' query a notify later, so the pick is waited on.
+  await vi.waitFor(() => assert.equal(key().getAttribute("aria-checked"), "true"));
+  assert.equal(plan().getAttribute("aria-checked"), "false");
 
-  act(() => choice(dialog, "Claude plan").click());
+  act(() => plan().click());
   await settle();
-  assert.equal(forAgentsSent().at(-1)?.forAgents, true);
-  await vi.waitFor(() =>
-    assert.equal(choice(dialog, "Claude plan").getAttribute("aria-checked"), "true"),
-  );
-  assert.deepEqual(rowState(both, "Claude"), connectedWith("Claude plan"));
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS).at(-1), {
+    provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+    kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+    forAgents: true,
+  });
+  await vi.waitFor(() => assert.equal(plan().getAttribute("aria-checked"), "true"));
 });
 
-test("an API key is pasted into a masked field with an eye under its row, sent once, said as Saved with its hint, and removed with its row's Remove after asking", async () => {
+test("an API key's Add key opens a masked field under its row, sent once, said as Connected, the field going and the focus back on the row's press; Remove asks first", async () => {
   const logged = [vi.spyOn(console, "log"), vi.spyOn(console, "error"), vi.spyOn(console, "warn")];
   const page = await mount();
-  const dialog = await open(page, "Claude");
-  const keyCard = row(dialog, "Anthropic API key");
-  const field = labeled(keyCard, "Paste the key");
+  const row = () => credential(page, "Anthropic API key");
+  await press(row(), "Add Anthropic API key");
+  const field = labeled(row(), "Paste the key");
+  assert.ok(document.activeElement === field, "the field has focus");
   assert.equal(field.type, "password");
   assert.equal(field.autocomplete, "off");
   type(field, KEY);
-  await press(keyCard, "Show");
+  await press(row(), "Show");
   assert.equal(field.type, "text", "Show reveals what is being pasted");
-  await press(keyCard, "Hide");
+  await press(row(), "Hide");
   assert.equal(field.type, "password", "Hide masks it again");
-  assert.ok(keyCard.querySelector('a[href="https://console.anthropic.com/settings/keys"]'));
+  assert.ok(row().querySelector('a[href="https://console.anthropic.com/settings/keys"]'));
 
   await paste(field, `  ${KEY}  `);
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_SAVE).map((each) => each.payload),
-    [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, key: KEY }],
-  );
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), [
+    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, key: KEY },
+  ]);
+  await vi.waitFor(() => assert.deepEqual(lineOf(row()), connectedLine));
+  assert.equal(row().querySelector("form") === null, true, "the field goes");
   await vi.waitFor(() =>
-    assert.deepEqual(lineOf(row(dialog, "Anthropic API key")), connectedWith("Saved sk-ant-…wxyz")),
+    assert.ok(document.activeElement === button(row(), "Anthropic API key actions")),
   );
-  assert.equal(
-    row(dialog, "Anthropic API key").querySelector("input") === null,
-    true,
-    "the field closes",
-  );
-  assert.deepEqual(rowState(page, "Claude"), connectedWith("Anthropic API key sk-ant-…wxyz"));
   assert.ok(!document.body.innerHTML.includes(KEY), "the key stands nowhere once kept");
   for (const spy of logged) {
     assert.ok(spy.mock.calls.every((call) => !JSON.stringify(call).includes(KEY)));
   }
-  assert.ok(dialog.querySelector(".ph-no-capture input"), "the dialog's fields are not recorded");
 
-  await press(row(dialog, "Anthropic API key"), "Remove Anthropic API key");
-  await settle();
-  assert.equal(
-    sent.some((each) => each.kind === ACT_KIND.PROVIDER_KEYS_REMOVE),
-    false,
-  );
+  await choose(row(), "Anthropic API key", "Remove key");
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), []);
+  assert.match(question().textContent ?? "", /Remove your Anthropic API key\?/u);
+  assert.equal(actLook("Remove key"), "danger");
   await press(question(), "Remove key");
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_REMOVE).map((each) => each.payload),
-    [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }],
-  );
-  await vi.waitFor(() => assert.equal(rowButton(page, "Claude").textContent, "Connect"));
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
+    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC },
+  ]);
+  await vi.waitFor(() => assert.ok(button(row(), "Add Anthropic API key")));
 });
 
-test("a saved key's row draws its hint from the keys the host holds, the window asking for none of its own", async () => {
+test("a saved key's row is drawn from the keys the host holds, the window asking for none of its own", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [] };
   const page = await mount();
-  assert.deepEqual(rowState(page, "Claude"), connectedWith("Anthropic API key sk-ant-…wxyz"));
-  const dialog = await open(page, "Claude");
-  assert.deepEqual(lineOf(row(dialog, "Anthropic API key")), connectedWith("Saved sk-ant-…wxyz"));
+  assert.deepEqual(lineOf(credential(page, "Anthropic API key")), connectedLine);
   assert.deepEqual(
     sent.map((each) => each.kind).filter((kind) => kind.startsWith("providerKeys.")),
     [ACT_KIND.PROVIDER_KEYS_FOLLOW],
   );
 });
 
-test("replacing a saved API key opens its field showing Saved where the key would be, offers no Show until one is typed, and turns the row's end into Cancel", async () => {
+test("Replace key opens its field showing Saved where the key would be, and Cancel puts it away, dropping the paste and handing the focus back", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [] };
   const page = await mount();
-  const dialog = await open(page, "Claude");
-  const keyCard = row(dialog, "Anthropic API key");
-  await press(keyCard, "Replace Anthropic API key");
-  const field = labeled(keyCard, "Paste the key");
-  assert.ok(document.activeElement === field, "Replace puts the focus in the field");
+  const row = () => credential(page, "Anthropic API key");
+  await choose(row(), "Anthropic API key", "Replace key");
+  const field = labeled(row(), "Paste the key");
   assert.equal(field.placeholder, "Saved");
   assert.equal(field.value, "");
-  assert.equal(field.type, "password");
-  assert.equal(button(keyCard, "Show").disabled, true, "there is nothing in the window to show");
   type(field, KEY);
-  assert.equal(button(keyCard, "Show").disabled, false);
-  await press(keyCard, "Cancel");
-  assert.equal(keyCard.querySelector("input") === null, true, "Cancel closes the field");
+  await press(row(), "Cancel");
+  assert.equal(row().querySelector("form") === null, true, "Cancel puts the field away");
   assert.ok(!document.body.innerHTML.includes(KEY), "and drops what was pasted");
+  assert.ok(document.activeElement === button(row(), "Anthropic API key actions"));
+});
+
+test("removing a key its harness's plan was set aside for turns the plan back on", async () => {
+  held = { keys: [ANTHROPIC_KEY], subscriptions: [{ ...CLAUDE_PLAN, forAgents: false }] };
+  const page = await mount();
+  await choose(credential(page, "Anthropic API key"), "Anthropic API key", "Remove key");
+  await press(question(), "Remove key");
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS), [
+    {
+      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+      forAgents: true,
+    },
+  ]);
+  await vi.waitFor(() =>
+    assert.equal(radio(credential(page, "Claude plan")).getAttribute("aria-checked"), "true"),
+  );
 });
 
 test("a Claude setup-token is saved by its kind, refused with why, and disconnected after asking", async () => {
   refusal = PROVIDER_KEY_REJECTION.INVALID;
   const page = await mount();
-  const dialog = await open(page, "Claude");
-  const field = labeled(row(dialog, "Claude plan"), "Paste the token it prints");
-  assert.equal(field.type, "password");
+  const row = () => credential(page, "Claude plan");
+  await press(row(), "Connect Claude plan");
+  const field = labeled(row(), "Paste the token it prints");
   assert.equal(field.placeholder, "sk-ant-oat01-…");
-  await press(row(dialog, "Claude plan"), "Copy command");
+  await press(row(), "Copy command");
   assert.deepEqual(
     copied,
     ["claude setup-token"],
     "the command that prints a token is a press away",
   );
   await paste(field, TOKEN);
-  assert.match(dialog.textContent ?? "", /That isn't a Claude setup-token\./u);
+  assert.match(row().textContent ?? "", /That isn't a Claude setup-token\./u);
   assert.equal(field.value, TOKEN, "a refused paste stands as pasted");
 
   refusal = undefined;
   act(() => field.form?.requestSubmit());
   await settle();
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_SAVE).at(-1)?.payload,
-    {
-      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      key: TOKEN,
-    },
-  );
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(row(dialog, "Claude plan")), connectedWith("Connected")),
-  );
-  const plan = row(dialog, "Claude plan");
-  assert.deepEqual(rowState(page, "Claude"), connectedWith("Claude plan"));
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE).at(-1), {
+    provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+    kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+    key: TOKEN,
+  });
+  await vi.waitFor(() => assert.deepEqual(lineOf(row()), connectedLine));
   assert.ok(!document.body.innerHTML.includes(TOKEN));
 
-  await press(plan, "Disconnect");
+  await choose(row(), "Claude plan", "Disconnect");
   assert.match(question().textContent ?? "", /Disconnect your Claude plan\?/u);
   assert.equal(actLook("Disconnect Claude plan"), "danger", "a deleted token is past undoing");
   await press(question(), "Disconnect Claude plan");
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_REMOVE).map((each) => each.payload),
-    [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN }],
-  );
-  await vi.waitFor(() => assert.equal(rowButton(page, "Claude").textContent, "Connect"));
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
+    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN },
+  ]);
+  await vi.waitFor(() => assert.ok(button(row(), "Connect Claude plan")));
 });
 
 test("a paste too short to be a setup-token says it isn't one, and is sent nowhere", async () => {
   const page = await mount();
-  const dialog = await open(page, "Claude");
-  await paste(labeled(row(dialog, "Claude plan"), "Paste the token it prints"), "not-a-real-token");
-  assert.match(dialog.textContent ?? "", /That isn't a Claude setup-token\./u);
-  assert.equal(sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_SAVE).length, 0);
-});
-
-test("a harness's dialog opens on the first field it draws, the setup-token's, else the API key's", async () => {
-  const page = await mount();
-  const claude = await open(page, "Claude");
-  assert.ok(
-    document.activeElement === labeled(claude, "Paste the token it prints"),
-    "the setup-token",
+  await press(credential(page, "Claude plan"), "Connect Claude plan");
+  await paste(
+    labeled(credential(page, "Claude plan"), "Paste the token it prints"),
+    "not-a-real-token",
   );
-  act(() => button(document, "Done").click());
-  await settle();
-
-  const codex = await open(page, "Codex");
-  assert.ok(document.activeElement === labeled(codex, "Paste the key"), "the API key");
+  assert.match(page.textContent ?? "", /That isn't a Claude setup-token\./u);
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), []);
 });
 
-test("with both credentials kept, Disconnect's question giving way to the setup-token form leaves focus on its field", async () => {
-  held = { keys: [{ ...ANTHROPIC_KEY }], subscriptions: [CLAUDE_PLAN] };
-  const page = await mount();
-  const dialog = await open(page, "Claude");
-
-  act(() => {
-    button(row(dialog, "Claude plan"), "Disconnect").focus();
-    button(row(dialog, "Claude plan"), "Disconnect").click();
-  });
-  await settle();
-  await press(question(), "Disconnect Claude plan");
-  // Note that the form stands once the keys the host lays after the disconnect reach the query.
-  await vi.waitFor(() =>
-    assert.equal(
-      document.activeElement === labeled(dialog, "Paste the token it prints"),
-      true,
-      "the field has focus",
-    ),
-  );
-});
-
-test("a Claude token Anthropic rejected says so in its row and offers Replace token", async () => {
+test("a Claude token Anthropic rejected offers Replace token, which opens its field showing Saved", async () => {
   held = { keys: [], subscriptions: [{ ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.INVALID }] };
   const page = await mount();
-  assert.deepEqual(rowState(page, "Claude"), needsHand("Claude plan · Needs attention"));
-  const dialog = await open(page, "Claude");
-  const plan = row(dialog, "Claude plan");
-  assert.deepEqual(lineOf(plan), needsHand("Anthropic rejected this token. Paste a new one."));
-  await press(plan, "Replace token");
-  const field = labeled(plan, "Paste the token it prints");
+  await press(credential(page, "Claude plan"), "Replace token");
+  const field = labeled(credential(page, "Claude plan"), "Paste the token it prints");
   assert.equal(field.placeholder, "Saved", "a saved token is said, not shown");
-  assert.equal(field.value, "");
+  assert.ok(document.activeElement === field);
 });
 
-test("a ChatGPT sign-in OpenAI no longer honors says it signed out of ChatGPT, and its row's Sign in again opens the dialog on its Connect", async () => {
-  held = { keys: [], subscriptions: [{ ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.INVALID }] };
-  const page = await mount();
-  assert.deepEqual(rowState(page, "Codex"), needsHand("ChatGPT plan · Signed out"));
-  const dialog = await open(page, "Codex");
-  assert.deepEqual(lineOf(row(dialog, "ChatGPT plan")), needsHand("Signed out of ChatGPT."));
-  assert.ok(
-    document.activeElement === button(row(dialog, "ChatGPT plan"), "Connect ChatGPT plan"),
-    "Connect has focus",
-  );
-});
-
-test("Codex's ChatGPT plan connects through Connect Codex's code, closes it once connected, and disconnects after asking", async () => {
+test("the ChatGPT plan connects in place through Codex's code, which goes once connected, and disconnects after asking", async () => {
   waitOpen = Promise.withResolvers();
   const page = await mount();
-  const dialog = await open(page, "Codex");
-  await press(row(dialog, "ChatGPT plan"), "Connect ChatGPT plan");
-  assert.equal(sent.filter((each) => each.kind === ACT_KIND.CHATGPT_DEVICE_START).length, 1);
-  const connecting = connectCodex();
-  assert.match(connecting.textContent ?? "", /225Q-1343X/u);
-  assert.match(connecting.textContent ?? "", /Waiting for Codex/u);
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.CHATGPT_DEVICE_WAIT).map((each) => each.payload),
-    [{ loginId: DEVICE_LOGIN.loginId, intervalSeconds: DEVICE_LOGIN.intervalSeconds }],
-  );
+  const row = () => credential(page, "ChatGPT plan");
+  await press(row(), "Connect ChatGPT plan");
+  assert.equal(document.querySelector('[role="dialog"]'), null, "it opens in place");
+  assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 1);
+  assert.match(row().textContent ?? "", /225Q-1343X/u);
+  assert.match(row().textContent ?? "", /Waiting for Codex/u);
+  assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_WAIT), [
+    { loginId: DEVICE_LOGIN.loginId, intervalSeconds: DEVICE_LOGIN.intervalSeconds },
+  ]);
 
   held = { ...held, subscriptions: [CHATGPT_PLAN] };
   deliverKeys({ rows: held });
   act(() => waitOpen?.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: held })));
   waitOpen = undefined;
   await settle();
-  assert.ok(!document.body.contains(connecting), "connecting closes Connect Codex");
-  assert.equal(sent.filter((each) => each.kind === ACT_KIND.CHATGPT_DEVICE_CANCEL).length, 0);
-  await vi.waitFor(() => assert.deepEqual(rowState(page, "Codex"), connectedWith("ChatGPT plan")));
-  assert.deepEqual(lineOf(row(dialog, "ChatGPT plan")), connectedWith("Connected"));
+  await vi.waitFor(() => assert.deepEqual(lineOf(row()), connectedLine));
+  assert.doesNotMatch(row().textContent ?? "", /225Q-1343X/u, "the code goes");
+  assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_CANCEL), []);
 
-  await press(row(dialog, "ChatGPT plan"), "Disconnect");
+  await choose(row(), "ChatGPT plan", "Disconnect");
   assert.equal(actLook("Disconnect ChatGPT plan"), "danger", "an ended sign-in is past undoing");
   await press(question(), "Disconnect ChatGPT plan");
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_REMOVE).map((each) => each.payload),
-    [{ provider: PROVIDER_KEY_PROVIDER.OPENAI, kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH }],
-  );
-  await vi.waitFor(() => assert.equal(rowButton(page, "Codex").textContent, "Connect"));
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
+    { provider: PROVIDER_KEY_PROVIDER.OPENAI, kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH },
+  ]);
+  await vi.waitFor(() => assert.ok(button(row(), "Connect ChatGPT plan")));
 });
 
-test("closing Connect Codex withdraws the login still waiting", async () => {
+test("a ChatGPT plan OpenAI signed out offers Sign in again, which asks for a code in place", async () => {
+  waitOpen = Promise.withResolvers();
+  held = { keys: [], subscriptions: [{ ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.INVALID }] };
+  const page = await mount();
+  await press(credential(page, "ChatGPT plan"), "Sign in again");
+  assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 1);
+  assert.match(credential(page, "ChatGPT plan").textContent ?? "", /225Q-1343X/u);
+});
+
+test("Cancel withdraws a ChatGPT login still waiting", async () => {
   waitOpen = Promise.withResolvers();
   const page = await mount();
-  const dialog = await open(page, "Codex");
-  await press(row(dialog, "ChatGPT plan"), "Connect ChatGPT plan");
-  await press(connectCodex(), "Close");
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.CHATGPT_DEVICE_CANCEL).map((each) => each.payload),
-    [{ loginId: DEVICE_LOGIN.loginId }],
-  );
+  await press(credential(page, "ChatGPT plan"), "Connect ChatGPT plan");
+  await press(credential(page, "ChatGPT plan"), "Cancel");
+  assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_CANCEL), [{ loginId: DEVICE_LOGIN.loginId }]);
+  assert.ok(document.activeElement === button(page, "Connect ChatGPT plan"));
 });
 
 test("a login that expires says so with Try again, which asks for a new code", async () => {
   waitOpen = Promise.withResolvers();
   const page = await mount();
-  const dialog = await open(page, "Codex");
-  await press(row(dialog, "ChatGPT plan"), "Connect ChatGPT plan");
+  const row = () => credential(page, "ChatGPT plan");
+  await press(row(), "Connect ChatGPT plan");
   const expired = CHATGPT_DEVICE_FAILURE_MESSAGE[CHATGPT_DEVICE_LOGIN.EXPIRED];
   const waiting = waitOpen;
   waitOpen = Promise.withResolvers();
   act(() => waiting.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.EXPIRED, message: expired })));
   await settle();
-  assert.ok(connectCodex().textContent?.includes(expired));
-  await press(connectCodex(), "Try again");
-  assert.equal(sent.filter((each) => each.kind === ACT_KIND.CHATGPT_DEVICE_START).length, 2);
-  assert.match(connectCodex().textContent ?? "", /225Q-1343X/u);
+  assert.ok(row().textContent?.includes(expired));
+  await press(row(), "Try again");
+  assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 2);
+  assert.match(row().textContent ?? "", /225Q-1343X/u);
 });
 
-test("setup connects Claude in place, with no dialog: Connect opens one row at a time on the plan's setup-token beside a choice of the key, Cancel closes it, and a saved token closes it to its state line", async () => {
+test("setup's lists open one credential's steps at a time and hear whether either harness can start an agent", async () => {
   const { page, connected } = await mountSetup();
-  assert.match(row(page, "Claude").textContent ?? "", /Claude plan or Anthropic API key/u);
-  assert.match(row(page, "Codex").textContent ?? "", /ChatGPT plan or OpenAI API key/u);
-
-  await press(row(page, "Claude"), "Connect Claude");
-  assert.equal(document.querySelector('[role="dialog"]') === null, true, "the row opens in place");
-  assert.equal(choice(page, "Claude plan").getAttribute("aria-checked"), "true");
-  const field = labeled(row(page, "Claude"), "Paste the token it prints");
-  assert.ok(document.activeElement === field, "the setup-token's field has focus");
-  assert.match(row(page, "Claude").textContent ?? "", /Run this in a terminal/u);
-  await press(row(page, "Claude"), "Copy command");
-  assert.deepEqual(copied, ["claude setup-token"]);
-  act(() => choice(page, "API key").click());
-  await settle();
-  assert.ok(labeled(row(page, "Claude"), "Paste the key"));
-
-  await press(row(page, "Codex"), "Connect Codex");
-  assert.equal(row(page, "Claude").querySelector("input") === null, true, "one row stands open");
-  await press(row(page, "Codex"), "Cancel");
+  assert.equal(connected.at(-1), false);
+  await press(credential(page, "Claude plan"), "Connect Claude plan");
+  await press(credential(page, "OpenAI API key"), "Add OpenAI API key");
   assert.equal(
-    row(page, "Codex").querySelector("input, [role='radio']") === null,
+    credential(page, "Claude plan").querySelector("form") === null,
     true,
-    "Cancel closes it",
+    "one credential's steps stand open",
   );
-  assert.ok(document.activeElement === button(page, "Connect Codex"), "and hands focus back");
-
-  await press(row(page, "Claude"), "Connect Claude");
-  await paste(labeled(row(page, "Claude"), "Paste the token it prints"), TOKEN);
-  // Note that the row closes once the keys the host lays after the save reach their query.
-  await vi.waitFor(() =>
-    assert.equal(
-      row(page, "Claude").querySelector("input") === null,
-      true,
-      "connecting closes the row",
-    ),
-  );
-  assert.deepEqual(lineOf(row(page, "Claude")), connectedWith("Claude plan"));
-  assert.equal(button(row(page, "Claude"), "Manage Claude").textContent, "Manage");
-  assert.equal(connected.at(-1), true, "setup hears an agent connected");
-  assert.ok(!document.body.innerHTML.includes(TOKEN));
-});
-
-test("setup's Codex row connects through Connect Codex, which closes with the row once connected", async () => {
-  const { page } = await mountSetup();
-  await press(row(page, "Codex"), "Connect Codex");
-  assert.ok(document.activeElement === button(page, "Connect ChatGPT plan"));
-  await press(row(page, "Codex"), "Connect ChatGPT plan");
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(row(page, "Codex")), connectedWith("ChatGPT plan")),
-  );
-  assert.equal(
-    row(page, "Codex").querySelector("[role='radio']") === null,
-    true,
-    "connecting closes it",
-  );
-});
-
-test("setup's row in place asks before removing a held key, over the window since no dialog holds it", async () => {
-  held = { keys: [ANTHROPIC_KEY], subscriptions: [] };
-  const { page } = await mountSetup();
-  assert.deepEqual(lineOf(row(page, "Claude")), connectedWith("Anthropic API key sk-ant-…wxyz"));
-  await press(row(page, "Claude"), "Manage Claude");
-  assert.equal(choice(page, "API key").getAttribute("aria-checked"), "true", "on the key in use");
-  await press(row(page, "Claude"), "Remove Anthropic API key");
-  assert.equal(sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_REMOVE).length, 0);
-  const asked =
-    document.querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"]') ??
-    assert.fail("no question asks");
-  assert.match(asked.textContent ?? "", /Remove your Anthropic API key\?/u);
-  await press(asked, "Remove key");
-  assert.deepEqual(
-    sent.filter((each) => each.kind === ACT_KIND.PROVIDER_KEYS_REMOVE).map((each) => each.payload),
-    [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }],
-  );
-  await vi.waitFor(() =>
-    assert.match(row(page, "Claude").textContent ?? "", /Claude plan or Anthropic API key/u),
-  );
+  await press(credential(page, "Claude plan"), "Connect Claude plan");
+  await paste(labeled(credential(page, "Claude plan"), "Paste the token it prints"), TOKEN);
+  await vi.waitFor(() => assert.equal(connected.at(-1), true, "setup hears an agent can start"));
 });

@@ -20,6 +20,8 @@ import {
   experimentChoicesFrom,
   experimentOn,
   NO_EXPERIMENTS,
+  PULL_REQUEST_OPEN_LIST,
+  type PullRequestOpen,
   SOUND_WHEN_LIST,
   type SoundWhen,
 } from "@repo/settings";
@@ -74,7 +76,7 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
  * default model each write their own part without reading the other first.
  * The experiments part is the one patch: its keys are merged over what
  * stood, so a Mac that knows fewer experiments never erases another's.
- * `preferences` is the shared part; the link choice, Enter's choice, the
+ * `preferences` is the shared part; the link choice, the pull request choice, Enter's choice, the
  * commit author, setup finished, the setup place, when and which sound plays,
  * whether a notification is posted, and the survey's answers are parts of
  * their own, which a build that predates them never sends.
@@ -82,6 +84,7 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
 export interface AccountPreferencesWrite {
   preferences?: AccountPreferences;
   linkOpen?: LinkOpen;
+  pullRequestOpen?: PullRequestOpen;
   agentEnter?: AgentEnter;
   commitAuthor?: CommitAuthor;
   setupFinished?: boolean;
@@ -101,6 +104,7 @@ export type AccountSeamEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServic
 /** The columns every read and the write's `returning` project, so a row decodes one way whatever wrote it. */
 const PREFERENCE_COLUMNS = {
   linkOpen: accountPreference.linkOpen,
+  pullRequestOpen: accountPreference.pullRequestOpen,
   agentEnter: accountPreference.agentEnter,
   commitAuthor: accountPreference.commitAuthor,
   setupFinished: accountPreference.setupFinished,
@@ -119,6 +123,7 @@ const PREFERENCE_COLUMNS = {
 
 const PreferenceRowSchema = Schema.Struct({
   linkOpen: Schema.NullOr(Schema.String),
+  pullRequestOpen: Schema.NullOr(Schema.String),
   agentEnter: Schema.NullOr(Schema.String),
   commitAuthor: Schema.NullOr(Schema.String),
   setupFinished: Schema.NullOr(Schema.Boolean),
@@ -147,6 +152,7 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
     preferences:
       accountPreferencesFromStored({
         ...(row.linkOpen ? { linkOpen: row.linkOpen } : undefined),
+        ...(row.pullRequestOpen ? { pullRequestOpen: row.pullRequestOpen } : undefined),
         ...(row.agentEnter ? { agentEnter: row.agentEnter } : undefined),
         ...(row.commitAuthor ? { commitAuthor: row.commitAuthor } : undefined),
         ...(row.setupFinished === null ? undefined : { setupFinished: row.setupFinished }),
@@ -264,6 +270,7 @@ export function readAccountAccess(
 const PreferenceWriteSchema = Schema.Struct({
   userId: Schema.String,
   linkOpen: Schema.optionalKey(Schema.Literals(LINK_OPEN_LIST)),
+  pullRequestOpen: Schema.optionalKey(Schema.Literals(PULL_REQUEST_OPEN_LIST)),
   agentEnter: Schema.optionalKey(Schema.Literals(AGENT_ENTER_LIST)),
   commitAuthor: Schema.optionalKey(Schema.Literals(COMMIT_AUTHOR_LIST)),
   setupFinished: Schema.optionalKey(Schema.Boolean),
@@ -292,6 +299,9 @@ function writtenColumns(write: PreferenceWrite) {
   return {
     ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),
     ...(write.linkOpen === undefined ? undefined : { linkOpen: write.linkOpen }),
+    ...(write.pullRequestOpen === undefined
+      ? undefined
+      : { pullRequestOpen: write.pullRequestOpen }),
     ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
     ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
     ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
@@ -365,6 +375,9 @@ export function writeAccountPreferences(
       userId,
       ...(write.preferences === undefined ? undefined : { updatedAt }),
       ...(write.linkOpen === undefined ? undefined : { linkOpen: write.linkOpen }),
+      ...(write.pullRequestOpen === undefined
+        ? undefined
+        : { pullRequestOpen: write.pullRequestOpen }),
       ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
       ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
       ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),

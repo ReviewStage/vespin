@@ -8,9 +8,11 @@ builds a control of its own.
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow`, `SplitView`,
-  `EmptyState`, `PageHeader`, `Button` and `Chip`, `ChoiceList`, and the
-  marks (`UnreadDot`, `TaskStatusMark`, `Avatar`). `GlassBar` is a composer's
-  bar of Liquid Glass through `expo-glass-effect`.
+  `EmptyState`, `PageHeader`, `Button` and `Chip`, `ChoiceList`, `AuthPage`
+  and `ProviderButton`, `SettingsForm` and its rows, and the marks
+  (`UnreadDot`, `TaskStatusMark`, `Avatar`, and `BrandMark`, the Keel mark the
+  app's asset catalog holds).
+  `GlassBar` is a composer's bar of Liquid Glass through `expo-glass-effect`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows and message markdown. `Pressable`, `TextInput`, and the
   rest of React Native's controls appear only here.

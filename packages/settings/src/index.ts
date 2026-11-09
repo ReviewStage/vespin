@@ -71,6 +71,14 @@ export {
   type SurveyRole,
 } from "./onboarding-survey.js";
 export {
+  isPullRequestOpen,
+  PULL_REQUEST_OPEN,
+  PULL_REQUEST_OPEN_DEFAULT,
+  PULL_REQUEST_OPEN_LABEL,
+  PULL_REQUEST_OPEN_LIST,
+  type PullRequestOpen,
+} from "./pull-request-open.js";
+export {
   APP_SETTING_ID,
   APP_SETTING_SCHEMA,
   DIFF_SETTING_GROUPS,

@@ -19,7 +19,9 @@
  * its own door's: which tab stands for the thing, and how the window goes to
  * a place, kind by kind.
  *
- * The choices, by surface:
+ * The choices, by surface, where the account opens pull requests in the
+ * app; where it chose GitHub (`pull-request-opens.ts`), a pull request's page
+ * leaves for the browser from every surface:
  *
  * - An Inbox item (`inbox-item-links.ts`) opens beside it what the panel
  *   standing for what holds it draws: a file of any repository, read through
@@ -96,6 +98,8 @@ export type Address =
       readonly number: number;
       /** The agent of a task or the agent on no task the window lists that opened it, and its task; none where the window lists none, or is not asked. */
       readonly listed: ReturnType<typeof listedPullRequestOf>;
+      /** Whether the account opens pull requests on GitHub (`pull-request-opens.ts`), so no surface opens it in a tab and the window leaves it for the browser; none where it is not asked. */
+      readonly onGitHub?: boolean;
     }
   | {
       readonly kind: typeof ADDRESS.FILE;

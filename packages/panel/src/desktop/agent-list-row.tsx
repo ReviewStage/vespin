@@ -1,7 +1,6 @@
-import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
-import type { CatalogModel, MacOffer } from "@repo/features/models-wire";
+import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
 import {
-  type ListRowMenu,
+  InlineEdit,
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
@@ -14,18 +13,23 @@ import {
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import type { ReactNode, RefObject } from "react";
+import { type ReactNode, useRef } from "react";
+import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
 import { PullRequestCard, peopleOf } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
+import type { AgentsControl } from "../tasks/use-agents.js";
 import { openerOf } from "../tasks/use-link-standing.js";
+import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
+import { rowMenu } from "./action-menu.js";
+import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
 
 /**
- * agent-list-row.tsx -- one agent as a list of agents draws it, at the head of a task's description and on a person's page alike, in a task's row's anatomy: its glyph wearing where it stands, its name, then one trailing run packed against when it last moved.
+ * agent-list-row.tsx -- one agent as every list of agents draws it, at the head of a task's description and on a person's page alike, in a task's row's anatomy, offering the agent's one menu, so the lists never drift.
  *
  * The row is a `TaskRow` in a list of its own (`TaskRows`, or
  * `VirtualTaskRows` where it draws only the rows near the view), its cells
@@ -42,9 +46,16 @@ import { WaitingCount } from "./task-row-parts.js";
  * names among what the card says (`pull-request-card.tsx`); and where it
  * runs (`runs-on.tsx`), Cloud or the device, with its failed mark once its
  * turn failed. Its time says when it last moved, and its ⋯ comes in over
- * it, as a task's does. While its name is edited (`editor`) the field
- * stands in the name's place and the row hangs no hint; what went wrong
- * with the row, such as a rename refused, stands under the name (`note`).
+ * it, as a task's does.
+ *
+ * A press opens the agent, and its ⋯, a right-click, a long press, and the
+ * menu key offer the agent's one menu over the doors a row has
+ * (`agent-actions.tsx`), as a task's row offers the task's wherever it
+ * stands: Copy link, Rename, which turns the row's name into its field
+ * until the edit ends, Archive, asking first while a teammate's agent
+ * still works, and Permanently delete, asked first. A rename refused is
+ * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
+ * press away.
  */
 
 /** The cells an agent's row draws, in a task's row's order: where a task's repository stands, a start's row says why it is unavailable (`AgentStartRow`). */
@@ -57,61 +68,62 @@ export const AGENT_ROW_CELLS = [
   TASK_ROW_CELL.UPDATED,
 ] as const satisfies readonly TaskRowCell[];
 
+/** What an agent's row is, naming its ⋯ and menu "Agent actions". */
+const AGENT_THING = "Agent";
+
 /** One agent's row; see the module's head. */
 export function AgentListRow({
   agent,
+  agents,
+  shown,
   subject,
   at,
-  editor,
   card,
-  models,
-  devices,
   pullRequest,
   waits = 0,
-  note,
   edges,
   place,
-  pressRef,
-  menu,
   more,
   onPress,
   onOpenPullRequest,
-  children,
 }: {
   agent: AgentSummary;
+  /** The agents control its menu acts through, which gives its models and the member's devices too. */
+  agents: AgentsControl;
+  /** Whether the list is on screen, which its menu and its Archive's question ask on. */
+  shown: boolean;
   /** What it is called and what its card says, which its pull request's card names too. */
   subject: AgentSubject;
   /** Epoch milliseconds it last moved (`agentLastMovedAt`). */
   at: number;
-  /** The field its name gives way to while it is renamed; none while it is not. */
-  editor?: ReactNode;
   /** The card the row hangs; none where the place hangs none. */
   card: ReactNode | undefined;
-  models: readonly CatalogModel[] | undefined;
-  /** The member's devices, which give a device's platform (`RunsOnPlace`). */
-  devices: readonly MacOffer[] | undefined;
   pullRequest: AgentPullRequest | undefined;
   /** How many of its threads wait on the developer. */
   waits?: number | undefined;
-  /** What went wrong with the row, said under its name. */
-  note?: ReactNode;
   /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`). */
   edges?: TaskRowEdges | undefined;
   /** Where it stands in its list's run of rows, where the list draws only those near the view (`VirtualRows`). */
   place?: VirtualRowPlace | undefined;
-  /** Its press, for what focuses it again once an edit ends. */
-  pressRef?: RefObject<HTMLButtonElement | null> | undefined;
-  menu?: ListRowMenu | undefined;
+  /** Whether it draws its ⋯, as its list does. */
   more?: boolean | undefined;
   /** Opens the agent, as its pull request's card offers too. */
   onPress: () => void;
   onOpenPullRequest: () => void;
-  /** What stands beside its cells and draws nothing in the grid: a dialog its menu opens. */
-  children?: ReactNode;
 }): React.JSX.Element {
+  const { models, macs } = agents;
   const changesPeople = useChangesPeople(pullRequest === undefined ? undefined : agent.id);
   const people = pullRequest === undefined ? undefined : peopleOf(changesPeople, pullRequest);
   const { name } = subject;
+  const actions = useAgentActions(agent, agents, {
+    label: name,
+    shown,
+    terminals: { onOpenTerminal: undefined },
+  });
+  const press = useRef<HTMLButtonElement | null>(null);
+  const { rename } = actions;
+  const editing = rename?.editing === true;
+  const endedByKey = useRefocusAfterEdit(editing, press);
   const row = (
     <TaskRow
       taskId={agent.id}
@@ -146,23 +158,40 @@ export function AgentListRow({
           ),
         [TASK_ROW_CELL.AGENTS]: (
           <ReplayMask>
-            <RunsOnPlace agent={agent} devices={devices} />
+            <RunsOnPlace agent={agent} devices={macs} />
             {agentEndMark(agent, true)}
           </ReplayMask>
         ),
         [TASK_ROW_CELL.UPDATED]: <Time at={at} hint={false} />,
       }}
-      editor={editor}
-      note={note}
-      menu={menu}
+      editor={
+        editing ? (
+          <InlineEdit
+            value={rename.asked ?? name}
+            label="Agent name"
+            maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
+            editing
+            onEnd={(edit) => {
+              endedByKey(edit.byKey);
+              rename.end(edit.value);
+            }}
+          />
+        ) : undefined
+      }
+      note={rename?.refused === true ? RENAME_FAILED : undefined}
+      menu={
+        editing
+          ? undefined
+          : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), shown, true)
+      }
       more={more}
       edges={edges ?? TASK_ROW_EDGES.UNCHOSEN}
-      hint={card === undefined || editor !== undefined ? undefined : { Hint: RowHint, label: name }}
+      hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
-      pressRef={pressRef}
+      pressRef={press}
       place={place}
     >
-      {children}
+      {actions.dialog}
     </TaskRow>
   );
   // Note that the card reaches the row's hint by its options, because the row takes its hint as a component, which must stay one across renders.

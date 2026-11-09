@@ -20,6 +20,7 @@
  */
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import {
   APP_COMMAND,
@@ -148,6 +149,8 @@ export const PANEL_COMMAND = {
   ADD_RELATION: unkeyed("Add task relation", <NetworkIcon />),
   REMOVE_PARENT: unkeyed("Remove parent", <UnlinkIcon />),
   OPEN_ON_GITHUB: keyed(APP_COMMAND.OPEN_ON_GITHUB, <GLYPH.OPEN_ON_GITHUB />),
+  /** A pull request in its agent's Pull request tab, offered where a press opens its page on GitHub instead (`pull-request-opens.ts`). */
+  OPEN_IN_APP: unkeyed(`Open in ${PRODUCT_NAME}`, <GLYPH.PULL_REQUEST />),
   COPY_GITHUB_LINK: unkeyed("Copy GitHub link", <GLYPH.LINK />),
 } as const satisfies Record<string, PanelCommand>;
 

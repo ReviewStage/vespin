@@ -367,11 +367,6 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title={team === undefined ? "Create a team workspace" : "Your team workspace"}
-        description={
-          team === undefined
-            ? "Your team shares tasks, agents, and the repositories you connect next."
-            : "Change its name or photo, or invite more of your team."
-        }
         foot={
           <AuthStepFoot
             at={at + 1}
@@ -397,7 +392,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title="Connect an agent"
-        description="Run agents on your ChatGPT or Claude plan, or an API key."
+        description="Set up a plan or an API key. Pick which one new agents use."
         foot={foot(agent, last ? "Finish" : "Continue")}
       >
         <AgentConnectSection onConnected={onConnected} />

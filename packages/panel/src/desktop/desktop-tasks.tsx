@@ -967,6 +967,7 @@ function DescriptionDocument({
         // Overview's agents stand open, its list the task's own rather than a fold under the description's head.
         folded={false}
         waiting={waitingOf}
+        shown={tasks.shown}
         onOpenAgent={(agentId) => openAgentTab(agentTab(agentId))}
         onOpenPullRequest={openPullRequestDoor}
         // Note that New agent stands at every width, a fresh plan's one next step, as the "+" offers it.
