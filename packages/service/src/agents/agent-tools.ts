@@ -295,6 +295,9 @@ export const AGENT_TOOL_REFUSAL = {
   UNREADABLE_PAGE:
     `Not run: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered, and at most one ` +
     "place, before or after, as a page answered it.",
+  UNREADABLE_TRANSCRIPT:
+    "Not run: a message of that agent's transcript on this page could not be read, so the " +
+    "page would leave it out.",
   UNREADABLE_TASKS:
     "Not run: narrow the tasks by words of their name, by a status " +
     `(${Object.values(TASK_STATUS).join(", ")}), and by an assignee as a member's mention link ` +
@@ -1911,15 +1914,16 @@ interface PageRows {
   readonly next: number | undefined;
 }
 
-/** The messages a page reads next from a sequence, the way it reads; none where they do not read. */
+/** The messages a page reads next from a sequence, the way it reads; nothing where one of them does not read. */
 const pageRowsAt = (agent: Agent, way: PageWay, at: number) => {
   const { PAGE_ROWS } = AGENT_TOOL_BOUNDS;
   return Effect.map(
     way === PAGE_WAY.BACK
       ? listMessagesBefore(agent.userId, agent.conversationId, CODER_TOOL_SET, at, PAGE_ROWS)
       : listMessagesFrom(agent.userId, agent.conversationId, CODER_TOOL_SET, at, PAGE_ROWS),
-    (read): PageRows => {
-      const rows = read.ok ? read.value : [];
+    (read): PageRows | undefined => {
+      if (!read.ok) return undefined;
+      const rows = read.value;
       const ordered = way === PAGE_WAY.BACK ? rows.toReversed() : rows;
       const last = ordered.at(-1);
       const next = way === PAGE_WAY.BACK ? last?.seq : (last?.seq ?? 0) + 1;
@@ -1934,8 +1938,9 @@ const pageRowsAt = (agent: Agent, way: PageWay, at: number) => {
  * many as asked or the next would take it past its budget of characters,
  * which leaves at least one on a page however long. Note that a page reads
  * the store a few messages at a time, because one journal can hold a whole
- * run's calls and a page rarely needs many; and that a message that does
- * not read ends the page as though the transcript ended there.
+ * run's calls and a page rarely needs many; and that a page reaching a
+ * message that does not read is nothing, as a fork's replay is, because a
+ * page that stopped there would pass for the transcript's own end.
  */
 const transcriptPage = (agent: Agent, asked: PageAsked) =>
   Effect.gen(function* () {
@@ -1948,7 +1953,9 @@ const transcriptPage = (agent: Agent, asked: PageAsked) =>
           : asked.place.seq + 1
         : (asked.place?.seq ?? 0);
     while (at !== undefined) {
-      const { rows, next }: PageRows = yield* pageRowsAt(agent, asked.way, at);
+      const rowsRead: PageRows | undefined = yield* pageRowsAt(agent, asked.way, at);
+      if (rowsRead === undefined) return undefined;
+      const { rows, next }: PageRows = rowsRead;
       const senders = yield* lineSendersOf(
         { userId: agent.userId, conversationId: agent.conversationId },
         rows.filter((row) => row.message.role === MESSAGE_ROLE.USER).map((row) => row.id),
@@ -2027,13 +2034,15 @@ export function runReadAgent(
         step,
       );
       const published = yield* publishedOf(callerUserId(call.caller), agent);
+      const read = yield* transcriptPage(agent, page);
+      if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: readingRecord(reading),
         ...(published === undefined
           ? undefined
           : { published: { branch: published.branch, pullRequest: published.pullRequest } }),
-        ...pageAnswer(page, yield* transcriptPage(agent, page)),
+        ...pageAnswer(page, read),
       };
     }),
   );

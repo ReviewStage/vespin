@@ -114,6 +114,7 @@ import {
   AssistantMessageBuilder,
   isRecord,
   isWireString,
+  MESSAGE_ROLE,
   RUN_EVENT,
   RUN_STATUS,
   RUN_TURN_ORIGIN,
@@ -1018,6 +1019,27 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
     ["2", "3", "4", "5"].map((each) => [`Said: ${each}`, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS, "…"]),
   );
   assert.ok(full.older !== undefined, "the entry that did not fit is the next page's");
+
+  // A page that reaches a message that does not read is refused, rather than passing for the transcript's end.
+  await database.run(
+    Database.use((db) =>
+      db.insert(messages).values({
+        userId: agents.teammates.userId,
+        conversationId: agents.teammates.conversationId,
+        seq: 1_000_000,
+        clientId: randomUUID(),
+        role: MESSAGE_ROLE.USER,
+        // SAFETY: a text part with no text is the row a read cannot decode, which is the point.
+        parts: [{ type: "text" }] as never,
+        createdAt: new Date(NOW),
+        placedAt: new Date(NOW),
+      }),
+    ),
+  );
+  assert.deepEqual(await call(AGENT_TOOL.READ_AGENT, { agentId }), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason: AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT,
+  });
 
   // An agent of another workspace is none of the caller's, even one its starter is also in.
   for (const other of [agents.otherWorkspaces, agents.strangers]) {
