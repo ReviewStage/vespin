@@ -519,6 +519,36 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "a NUL a tool's answer carries lands as a replacement character, not a refused batch",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        // A command's output may hold a NUL, which no Postgres text or jsonb value can hold.
+        const events = workflowTurn(agent.lineId).map(
+          (event) =>
+            // SAFETY: each event is one the pinned SDK or the runner emits, one tool answer's text alone changed.
+            JSON.parse(
+              JSON.stringify(event).replace("File created", "File\\u0000created"),
+            ) as RunnerEvent,
+        );
+
+        const landed = yield* post(agent.bearer, events.slice(0, 4));
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(landed, {
+          status: HOSTED_HTTP_STATUS.OK,
+          body: { applied: 4, sequence: 3 },
+        });
+        assert.deepEqual(rows.at(-1)?.parts.map(drawn).at(-1), [
+          "tool-Write",
+          "output-available",
+          "File\uFFFDcreated",
+        ]);
+      }),
+  );
+
+  it.effect(
     "a Claude Code session the store held from its first entry is held no longer once the SDK says it dropped a batch of its transcript",
     () =>
       Effect.gen(function* () {
