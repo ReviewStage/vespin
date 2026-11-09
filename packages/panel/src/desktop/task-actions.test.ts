@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
   DESCRIPTION_ACTOR,
   TASK_BLOCK_CHANGE,
@@ -37,7 +38,12 @@ import {
   fakeAppBridgeCalls,
 } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handMembers, readExperiments, writeExperiments } from "../testing/app-state.js";
+import {
+  handHostReads,
+  handMembers,
+  readExperiments,
+  writeExperiments,
+} from "../testing/app-state.js";
 import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -323,7 +329,7 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
   assert.equal(asking(), false, "the question went with the task it was asked of");
 });
 
-test("⌘K's Change repository shows Overview where an agent's tab hides the description, and the plan's path, its repository plain words, has its menu opened under it for the ask once, not again on a later draw", () => {
+test("⌘K's Change repository shows Overview where an agent's tab hides the description, and the plan's path has its repository's menu opened under it for the ask once, not again on a later draw", () => {
   const told: string[] = [];
   const { tasks } = openTab({ [TASK.id]: "acme/app" });
   const asked = (overview: boolean): TasksControl => ({
@@ -359,13 +365,6 @@ test("⌘K's Change repository shows Overview where an agent's tab hides the des
   const head = () => container.querySelector(".plan-task-path");
   const menu = () => head()?.querySelector('[role="dialog"][aria-label="Repository"]') ?? null;
   assert.ok(menu(), "the ask opens the repository's menu under the plan's path");
-  assert.equal(
-    [...(head()?.querySelectorAll("button") ?? [])].some((each) =>
-      each.textContent?.includes("acme/app"),
-    ),
-    false,
-    "the crumb itself is words, not a press",
-  );
 
   // The head drawn afresh, as another tab and back would, opens nothing for the ask already answered.
   draw({ ...asked(true), region: { kind: DOCUMENT_REGION.READING } });
@@ -876,6 +875,54 @@ test("a sidebar row's Task relation asks for the relation beside the menu, then 
     ],
   ]);
   assert.deepEqual(asked.opened, [], "relating from a row opens no task");
+});
+
+test("a sidebar row's Change repository searches the workspace's repositories beside the menu and gives the task the one picked where it stands, never opening it", async () => {
+  const set: [string, string | null][] = [];
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_REPOSITORY]: ({ taskId, repository }) => {
+      set.push([taskId, repository]);
+      return Promise.resolve({ repository });
+    },
+  });
+  const reads = handHostReads({});
+  const tasks = tasksControl({ tasks: [OTHER] });
+  const asked: Asked = { opened: [], changed: [], deleted: [], renamed: [] };
+  const row = mountSidebarTask(tasks, OTHER, asked);
+
+  rightClick(row, 40, 60);
+  choose("Choose a repository");
+  // The host lays the workspace's repositories once the submenu follows them.
+  act(() =>
+    reads.deliverRepositoryLists({
+      [OTHER.workspaceId]: {
+        rows: {
+          installed: true,
+          repositories: ["api", "web"].map((name) => ({
+            owner: "acme",
+            name,
+            fullName: `acme/${name}`,
+            defaultBranch: "main",
+            private: true,
+            updatedAt: 1,
+            access: GITHUB_ACCESS.APP,
+          })),
+        },
+      },
+    }),
+  );
+  await act(async () => undefined);
+  const web = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
+    each.textContent?.includes("web"),
+  );
+  assert.ok(web, "the submenu lists the workspace's repositories");
+  act(() => web.click());
+  await act(async () => undefined);
+
+  assert.deepEqual(set, [[OTHER.id, "acme/web"]]);
+  assert.equal(document.querySelector('[role="menu"]'), null, "the pick closes the menu");
+  assert.deepEqual(asked, { opened: [], changed: [], deleted: [], renamed: [] }, "no task opens");
 });
 
 test("the open task's topbar and its sidebar row offer the one menu, Status, Priority, Assignee, Version history, and Change repository among it, Choose a repository on a task with none, the topbar's printing the chords that act on the open task; another task's row prints only U, S, and P, which act on the focused row", () => {

@@ -25,6 +25,7 @@ import {
   RepositoryCard,
   RepositoryPicture,
   repositoryMenuRow,
+  SEARCHABLE_MENU_LAYER,
   SearchableMenu,
   Spinner,
   Tooltip,
@@ -54,7 +55,9 @@ import { useOpenSettings } from "../open-settings.js";
  * menu drops from the first crumb of the task's path over its title
  * (`task-standing.tsx`, through `useRepositoryMenu`), reading `Choose a
  * repository` while the task has none and the repository once the task
- * names one; ⌘K's Change repository opens its menu from there. Its menu is the shared searchable one: a search over every
+ * names one; ⌘K's Change repository opens its menu from there, and a task
+ * row's menu holds the same list as Change repository's submenu
+ * (`RepositoryMenuPanel`). Its menu is the shared searchable one: a search over every
  * repository the GitHub connected to the workspace reaches, the
  * repositories the account's tasks were about lately first and the rest as
  * GitHub last saw them change, each under its owner's picture, one the
@@ -351,24 +354,36 @@ type MenuPlace = ReturnType<typeof useMenuPlace>;
 
 type SearchableMenuProps = React.ComponentProps<typeof SearchableMenu>;
 
-/** The searched menu a repository's opener drops, over the rows it lists. Note that every row names a repository and its owner, so each stays masked, and the note, which can name the workspace, is left unmarked. */
+/** What a repository's menu lists and what a pick does, whichever layer it stands in. */
+type ListedMenu = Pick<
+  SearchableMenuProps,
+  "rows" | "value" | "checked" | "note" | "onPick" | "foot"
+>;
+
+/** The searched menu's props over the rows it lists. Note that every row names a repository and its owner, so each stays masked, and the note, which can name the workspace, is left unmarked. */
+function repositoryMenuProps(menu: ListedMenu, id: string) {
+  return {
+    ...menu,
+    id,
+    label: menu.checked === undefined ? "Repository" : "Repositories",
+    placeholder: "Search repositories",
+    replayUnmasked: true,
+    rows: menu.rows.map((row) => ({ ...row, replayMasked: true })),
+    noMatch: NO_MATCH,
+  };
+}
+
+/** The searched menu a repository's opener drops, hung from the opener's room. */
 function repositoryMenu(
   place: MenuPlace,
-  menu: Pick<SearchableMenuProps, "rows" | "value" | "checked" | "note" | "onPick" | "foot"> & {
-    align: PopoverAlign;
-  },
+  menu: ListedMenu & { align: PopoverAlign },
 ): React.ReactNode {
   return place.drawn.mounted ? (
     <SearchableMenu
-      {...menu}
+      {...repositoryMenuProps(menu, place.menuId)}
+      align={menu.align}
       leaving={place.drawn.leaving}
       ref={place.drawn.ref}
-      id={place.menuId}
-      label={menu.checked === undefined ? "Repository" : "Repositories"}
-      placeholder="Search repositories"
-      replayUnmasked
-      rows={menu.rows.map((row) => ({ ...row, replayMasked: true }))}
-      noMatch={NO_MATCH}
       onClose={place.close}
       onLeave={place.leave}
     />
@@ -438,27 +453,29 @@ export interface RepositoryMenu {
   readonly menu: React.ReactNode;
 }
 
-/** The repository's menu, read and placed as the chip's always was, for whatever opener draws it (`RepositoryMenu`). */
-export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
-  const { chooser, openRequest, onAsked, onUnreached, onListed, onClear, value } = props;
+/** What a repository's opener names and its menu lists, read once for whichever layer the menu stands in. */
+interface RepositoryListing {
+  readonly label: string;
+  readonly hint: string | undefined;
+  readonly glyph: React.JSX.Element;
+  readonly menu: ListedMenu;
+}
+
+/**
+ * The repository's list as the chip's menu always read it, its opener's
+ * words and mark beside it; a pick, and a press that leaves for Settings,
+ * runs through `choose`, which closes the menu first.
+ */
+function useRepositoryListing(
+  props: RepositoryMenuProps,
+  choose: (pick: () => void) => void,
+): RepositoryListing {
+  const { chooser, onUnreached, onListed, onClear, value } = props;
   const openSettings = useOpenSettings();
-  const place = useMenuPlace();
   // Note that the host asks the list again as a window comes forward, which is how a developer returns from installing the App in the browser.
   const scope = chooser.scope ?? EVERY_WORKSPACE;
   const list = useQuery(repositoryListsQuery(scope));
   const retry = useMutation(repositoryListsRetryMutation());
-  // Each ask from elsewhere, ⌘K's Change repository, opens the menu once, and is answered.
-  const answered = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (openRequest === undefined || openRequest === 0 || openRequest === answered.current) return;
-    answered.current = openRequest;
-    place.ask();
-    onAsked?.(openRequest);
-  }, [openRequest, onAsked, place.ask]);
-  const choose = (pick: () => void) => {
-    place.close();
-    pick();
-  };
 
   const listed = list.data;
   const failure = list.isError ? TASK_CALL_FAILURE.UNANSWERED : undefined;
@@ -550,7 +567,6 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
     ) : undefined;
 
   return {
-    ...place,
     label,
     hint: value === null ? undefined : picked.join(", "),
     glyph:
@@ -563,16 +579,11 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
       ) : (
         firstPicture(value, chooser.pictures)
       ),
-    card:
-      value === null || picked.length > 1 || place.open ? undefined : (
-        <RepositoryCard repository={value} pictures={chooser.pictures} />
-      ),
-    menu: repositoryMenu(place, {
+    menu: {
       rows,
       value: several === undefined ? (value ?? undefined) : undefined,
       checked: several === undefined ? undefined : checkedAmong(rows, picked),
       note,
-      align: props.align ?? POPOVER_ALIGN.END,
       onPick: (repository) =>
         several === undefined
           ? choose(() => props.onChoose(repository))
@@ -588,8 +599,68 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
                 onPress: () => choose(onClear),
               },
             ],
-    }),
+    },
   };
+}
+
+/** The repository's menu, read and placed as the chip's always was, for whatever opener draws it (`RepositoryMenu`). */
+export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
+  const { openRequest, onAsked, value, several } = props;
+  const place = useMenuPlace();
+  // Each ask from elsewhere, ⌘K's Change repository, opens the menu once, and is answered.
+  const answered = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (openRequest === undefined || openRequest === 0 || openRequest === answered.current) return;
+    answered.current = openRequest;
+    place.ask();
+    onAsked?.(openRequest);
+  }, [openRequest, onAsked, place.ask]);
+  const listing = useRepositoryListing(props, (pick) => {
+    place.close();
+    pick();
+  });
+  const many = (several?.also.length ?? 0) > 0;
+  return {
+    ...place,
+    label: listing.label,
+    hint: listing.hint,
+    glyph: listing.glyph,
+    card:
+      value === null || many || place.open ? undefined : (
+        <RepositoryCard repository={value} pictures={props.chooser.pictures} />
+      ),
+    menu: repositoryMenu(place, { ...listing.menu, align: props.align ?? POPOVER_ALIGN.END }),
+  };
+}
+
+/**
+ * The repository's menu standing in a menu's panel, as a task's menu holds
+ * Change repository beside its item: the same search and rows as the chip's,
+ * placed by the menu around it. A pick closes the whole menu, and Escape
+ * goes back to the item.
+ */
+export function RepositoryMenuPanel(
+  props: RepositoryMenuProps & {
+    /** Goes back to the item that opened it, the menu standing. */
+    onBack: () => void;
+    /** Closes the whole menu. */
+    onClose: () => void;
+  },
+): React.JSX.Element {
+  const { onBack, onClose } = props;
+  const id = useId();
+  const listing = useRepositoryListing(props, (pick) => {
+    onClose();
+    pick();
+  });
+  return (
+    <SearchableMenu
+      {...repositoryMenuProps(listing.menu, id)}
+      layer={SEARCHABLE_MENU_LAYER.EMBEDDED}
+      onClose={onBack}
+      onLeave={() => undefined}
+    />
+  );
 }
 
 /** Where a repository chip stands and what its row says of it. */

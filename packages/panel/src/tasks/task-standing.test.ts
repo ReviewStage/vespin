@@ -33,8 +33,8 @@ import {
  * task-standing.test.ts -- a task's head names it by its path and says where
  * it stands and how much it matters: a pick from the status chip's menu is
  * handed to the page to send, the chips take no pick without a door to send
- * it through, the repository leads the path as plain words where the page
- * hands its doors, its menu opening under the path for an ask from elsewhere, the parent's stands after it for a child task, and a task from
+ * it through, the repository leads the path where the page hands its doors,
+ * its menu opening under the path for a press on it or an ask from elsewhere, the parent's stands after it for a child task, and a task from
  * a service before keys draws neither path nor chips.
  */
 
@@ -113,18 +113,16 @@ test("names the task by its workspace's prefix and its number, with its status a
   assert.ok(chip(host, "Priority").textContent?.includes("High"));
 });
 
-test("the repository leads the path as plain words where the page hands its doors, reading the repository, or Choose a repository on a task with none, and an ask from elsewhere opens its menu under the path", async () => {
+test("the repository leads the path where the page hands its doors, reading the repository, or Choose a repository on a task with none, and a press on it or an ask from elsewhere opens its menu under the path", async () => {
   const door: TaskRepositoryDoor = { chooser: UNREAD_CHOOSER, onChoose: () => undefined };
   const named = drawn(TASK, () => undefined, { repository: door });
   await act(async () => undefined);
   const path = named.querySelector('nav[aria-label="Task path"]');
   assert.match(path?.textContent ?? "", /acme\/web.*ACME-42/u, "the repository, then the key");
-  assert.equal(
-    [...(path?.querySelectorAll("button") ?? [])].some((each) =>
-      each.textContent?.includes("acme/web"),
-    ),
-    false,
-    "the repository is words, not a press",
+  act(() => chip(named, "acme/web").click());
+  assert.ok(
+    named.querySelector('.plan-task-path [role="dialog"][aria-label="Repository"]'),
+    "a press on the repository opens its menu under the path",
   );
 
   const bare = drawn({ ...TASK, repository: null }, () => undefined, {

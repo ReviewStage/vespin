@@ -193,9 +193,9 @@ Dictate, and Start.
   window.
 - The description says the rest around its title (`tasks/task-standing.tsx`). Over
   it stands the task's path: its repository, or "Choose a repository" while
-  it has none, then its parent task where it has one, then its key. The
-  repository's crumb drops the composer's searchable menu, as ⌘K's Change
-  repository does: a pick is saved through `PATCH /api/plans/{id}`, and a
+  it has none, then its parent task where it has one, then its key. A
+  press on the repository's crumb drops the composer's searchable menu, as
+  ⌘K's Change repository does: a pick is saved through `PATCH /api/plans/{id}`, and a
   refusal is said under the path. A task can be used without a repository.
   Under the title stand the status, priority, and assignee chips.
 - **The task's menu**, from the ⋯ in the side panel's bar while the Description tab
@@ -206,7 +206,9 @@ Dictate, and Start.
   Permanently delete, last and red. The Description tab's menu leaves out the
   task's status, priority, assignee, and repository, which its chips and
   path change; a row's menu, with no chips beside it, holds Status,
-  Priority, and Assignee as submenus, and Change repository. Permanently
+  Priority, and Assignee as submenus, and Change repository as a submenu
+  searching the workspace's repositories, which sets the task's repository
+  where it stands without opening it. Permanently
   delete asks first in a dialog that offers Mark done instead, and ⌘⌫ asks
   to delete the open task from any of its tabs. A task is not archived but
   settled: Mark done, on a sidebar row's hover or in the menu bar, sets it

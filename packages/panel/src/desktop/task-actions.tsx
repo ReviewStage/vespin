@@ -1,5 +1,5 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   DESCRIPTION_ACTOR,
   TASK_BOUNDS,
@@ -31,6 +31,7 @@ import {
   OneLine,
   RowHint,
   RowHintOptions,
+  STATUS_TONE,
   TIME_LOOK,
   Time,
   Tooltip,
@@ -84,7 +85,7 @@ import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { lastEditOf } from "../tasks/description-body.js";
 import { EditedBy, type EditPlace, useEditReader } from "../tasks/edit-ref.js";
 import { useTaskSendFailed } from "../tasks/failed-lines.js";
-import { CHOOSE_LABEL } from "../tasks/repository-chip.js";
+import { CHOOSE_LABEL, RepositoryMenuPanel } from "../tasks/repository-chip.js";
 import { PlanGlyph } from "../tasks/tab-look.js";
 import { useTaskDelete } from "../tasks/task-delete.js";
 import {
@@ -101,6 +102,7 @@ import {
   taskRelationMenuPanel,
 } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import {
   NO_ASSIGNEE,
   PRIORITY_ROWS,
@@ -118,6 +120,7 @@ import {
   useTaskRelationWrites,
 } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
@@ -542,6 +545,56 @@ function relationDoor(
   };
 }
 
+/**
+ * Change repository beside its item, the repository chip's own search
+ * (`RepositoryMenuPanel`) over the repositories the task's workspace
+ * reaches, its repository checked; a pick gives the task that repository
+ * where it stands, without opening it, and a refusal says why in a toast,
+ * since the menu that asked has closed.
+ */
+function TaskRepositoryPanel({
+  task,
+  writes,
+  onBack,
+  onClose,
+}: {
+  task: TaskSummary;
+  writes: Pick<TaskRelationWrites, "onSetRepository">;
+  /** Goes back to Change repository, the menu standing. */
+  onBack: () => void;
+  /** Closes the whole menu. */
+  onClose: () => void;
+}): React.JSX.Element {
+  const chooser = useRepositoryChooser(task.workspaceId);
+  const toast = useToast();
+  const choose = (repository: string) => {
+    if (repository === task.repository) return;
+    void writes.onSetRepository(task.id, repository).then((note) => {
+      if (note === undefined) return;
+      toast({
+        words: note,
+        tone: STATUS_TONE.DANGER,
+        hold: TOAST_HOLD.FAILED,
+        failure: {
+          surface: FAILURE_SURFACE.REPOSITORY_PIN,
+          cause: FAILURE_CONDITION.REFUSED,
+          refused: true,
+          about: { taskId: task.id },
+        },
+      });
+    });
+  };
+  return (
+    <RepositoryMenuPanel
+      value={task.repository}
+      chooser={chooser}
+      onChoose={choose}
+      onBack={onBack}
+      onClose={onClose}
+    />
+  );
+}
+
 /** What the task's menu is named, wherever a right-click on what names the task opens it. */
 export const TASK_MENU_LABEL = "Task actions";
 
@@ -656,9 +709,17 @@ function taskActionGroups(
     () => tasks.onChangeRepository(taskId),
     drawn,
   );
-  // Note that both menus name the pick a task with no repository still needs, as the plan's path does.
-  const repository: MenuAction =
-    task !== undefined && task.repository === null ? { ...change, label: CHOOSE_LABEL } : change;
+  // Note that a task the list holds picks its repository in a submenu, where it stands, and that both menus name the pick a task with no repository still needs, as the plan's path does.
+  const repository: MenuEntry =
+    task === undefined
+      ? change
+      : {
+          label: task.repository === null ? CHOOSE_LABEL : change.label,
+          icon: <GLYPH.REPOSITORY />,
+          panel: ({ back, close }) => (
+            <TaskRepositoryPanel task={task} writes={writes} onBack={back} onClose={close} />
+          ),
+        };
   const move = moveToEntries(doors.section, doors.askMove, drawn);
   const remove: MenuAction = {
     ...commandAction(PANEL_COMMAND.DELETE_TASK, doors.askDelete, drawn),
