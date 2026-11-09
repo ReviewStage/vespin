@@ -3,9 +3,9 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
@@ -517,25 +517,34 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
 );
 
 it.effect(
-  "a thread resumed in a sandbox that no longer holds its rollout has it written back whole from the service's store first, across its pages",
+  "a thread resumed in a sandbox that no longer holds its rollout has every file of it written back whole from the service's store first, across its pages, a revert's segment among them",
   () =>
     Effect.gen(function* () {
       const home = mkdtempSync(join(tmpdir(), "codex-home-"));
       const subpath = `sessions/2026/11/06/rollout-2026-11-06T18-00-00-${THREAD}.jsonl`;
+      const segment = subpath.replace(".jsonl", "_01a1c22e-c54f-77b3-8748-7037accf178c.jsonl");
       const kept = [
         { type: "session_meta", payload: { id: THREAD } },
         { type: "response_item", payload: { type: "message", role: "user" } },
       ];
-      // The store answers the rollout a line a page, so the restore joins both pages in order.
+      const segmentKept = [
+        {
+          type: "session_meta",
+          payload: { id: THREAD, history_base: { end_ordinal_exclusive: 1 } },
+        },
+      ];
+      // The store answers the thread's file a line a page, so the restore joins both pages in order.
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
         const call = JSON.parse(String(init?.body));
         const answer =
           call.call === "listSubkeys"
-            ? { subkeys: [subpath] }
+            ? { subkeys: [subpath, segment] }
             : call.call === "loadPage"
-              ? call.after === null
-                ? { entries: kept.slice(0, 1), next: 1 }
-                : { entries: kept.slice(1), next: null }
+              ? call.key.subpath === segment
+                ? { entries: segmentKept, next: null }
+                : call.after === null
+                  ? { entries: kept.slice(0, 1), next: 1 }
+                  : { entries: kept.slice(1), next: null }
               : {};
         return new Response(JSON.stringify(answer));
       });
@@ -552,9 +561,11 @@ it.effect(
       yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      assert.equal(
-        readFileSync(join(home, subpath), "utf8"),
-        kept.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
+      const lines = (entries: readonly unknown[]) =>
+        entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
+      assert.deepEqual(
+        [readFileSync(join(home, subpath), "utf8"), readFileSync(join(home, segment), "utf8")],
+        [lines(kept), lines(segmentKept)],
       );
       vi.restoreAllMocks();
       rmSync(home, { recursive: true, force: true });
@@ -1142,6 +1153,111 @@ it.effect("reverts a rewound thread to before the turn that took the line the re
     assert.deepEqual(received(process, "thread/revert"), [
       { threadId: THREAD, beforeTurnId: "turn-2" },
     ]);
+  }),
+);
+
+/** The lines of a thread's file app-server just wrote, which the store holds none of yet: a fork's whole file, or a revert's segment. */
+const FRESH_LINES = [
+  { type: "session_meta", payload: { id: THREAD } },
+  { type: "response_item", payload: { type: "message", role: "user" } },
+];
+
+const FORKED_FILE = `sessions/2026/11/09/rollout-2026-11-09T21-52-40-${THREAD}.jsonl`;
+const SEGMENT_FILE = FORKED_FILE.replace(".jsonl", "_01a1c24c-01e2-79a2-bc69-837e26c4ac0e.jsonl");
+
+/** The thread forked into the file at the path given, under the same id the recorded turn names. */
+function forked(path: string): Exchange {
+  return { method: "thread/fork", reply: [{ id: 2, result: { thread: { id: THREAD, path } } }] };
+}
+
+/** The thread reverted to before the steered line's turn, Codex naming the segment it began at the path given. */
+function revertedInto(path: string): Exchange[] {
+  return [
+    turnsPage([{ id: "turn-2", line: LINE.STEERED }]),
+    {
+      method: "thread/revert",
+      reply: [
+        {
+          id: 91,
+          result: {
+            thread: { id: THREAD, path },
+            turnsBackwardsCursor: null,
+            itemsBackwardsCursor: null,
+          },
+        },
+      ],
+    },
+  ];
+}
+
+const SOURCE_THREAD = "00000000-0000-4000-8000-0000000000ff";
+
+it.effect.each([
+  {
+    opened: "the segment a revert began",
+    files: [SEGMENT_FILE],
+    config: { threadId: THREAD, rewindBefore: LINE.STEERED },
+    exchanges: ([segment = ""]: readonly string[]) => [...RESUME, ...revertedInto(segment)],
+  },
+  {
+    opened: "a forked thread's file",
+    files: [FORKED_FILE],
+    config: { threadId: SOURCE_THREAD, fork: true },
+    exchanges: ([file = ""]: readonly string[]) => [
+      exchange(RESUMED, 0),
+      exchange(RESUMED, 1),
+      forked(file),
+    ],
+  },
+  {
+    opened: "a fork's file, then the segment the fork's cut began",
+    files: [FORKED_FILE, SEGMENT_FILE],
+    config: { threadId: SOURCE_THREAD, fork: true, rewindBefore: LINE.STEERED },
+    exchanges: ([file = "", segment = ""]: readonly string[]) => [
+      exchange(RESUMED, 0),
+      exchange(RESUMED, 1),
+      forked(file),
+      ...revertedInto(segment),
+    ],
+  },
+])("mirrors $opened to the service's store from its first line", ({ files, config, exchanges }) =>
+  Effect.gen(function* () {
+    const home = mkdtempSync(join(tmpdir(), "codex-home-"));
+    const paths = files.map((file) => join(home, file));
+    // Codex writes each file as it answers, so it stands with lines the store has none of.
+    for (const path of paths) {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, FRESH_LINES.map((line) => `${JSON.stringify(line)}\n`).join(""));
+    }
+    const appended: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const call = JSON.parse(String(init?.body));
+      if (call.call === "append") appended.push({ key: call.key, entries: call.entries });
+      return new Response(JSON.stringify(call.call === "listSubkeys" ? { subkeys: [] } : {}));
+    });
+    const script: Script = { exchanges: [...exchanges(paths), RESUMED_TURN] };
+    const { spawned, write, run } = yield* launch([script], fakeService(), {
+      ...ENV,
+      CODEX_HOME: home,
+    });
+    yield* write({
+      ...CONFIG,
+      ...config,
+      transcriptsUrl: "https://app.test/api/agents/runner-transcripts",
+    });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    assert.deepEqual(spawned[0]?.unexpected, []);
+    assert.deepEqual(
+      appended,
+      files.map((subpath) => ({
+        key: { projectKey: "codex", sessionId: THREAD, subpath },
+        entries: FRESH_LINES,
+      })),
+    );
+    vi.restoreAllMocks();
+    rmSync(home, { recursive: true, force: true });
   }),
 );
 

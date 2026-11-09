@@ -11,6 +11,16 @@
  * thread's id as ever. A mirror reads the file past what it already sent,
  * whole lines alone, and sends them; one the store did not take is sent
  * again with the next turn's.
+ *
+ * Note that a thread is more than one file once it is reverted: Codex
+ * 0.163's `thread/revert` starts a segment of its own beside the thread's
+ * file (`rollout-…-<thread>_<segment>.jsonl`), whose `session_meta` names
+ * the line of the file before it the thread now stands on
+ * (`history_base`), and writes the thread's later lines there alone. A cold
+ * `thread/resume` with every file written back reads the thread from its
+ * newest segment, the reverted turns dropped; with the first file alone, it
+ * reads the reverted turns back and none of the later ones. So the mirror
+ * follows the thread onto the segment a revert starts.
  */
 
 import { existsSync } from "node:fs";
@@ -55,15 +65,22 @@ export const restoreRollouts = Effect.fn("agent-runner/codex/restoreRollouts")(f
   }
 });
 
-/** A mirror of the thread's rollout at the path app-server named, past what the file already holds, which the store holds already. */
+/**
+ * A mirror of the thread's rollout at the path app-server named: past what
+ * the file already holds where the store holds it already (`held`), as it
+ * does a resumed thread's, written back from it or mirrored before; from its
+ * first line otherwise, as for a thread the launch forked, whose file Codex
+ * writes whole as it forks it, or a segment a revert began.
+ */
 export const openRolloutMirror = Effect.fn("agent-runner/codex/openRolloutMirror")(function* (
   store: TranscriptStore,
   codexHome: string,
   threadId: string,
   path: string,
+  held: boolean,
 ) {
   const sent = yield* Effect.tryPromise(async () => {
-    if (!existsSync(path)) return 0;
+    if (!held || !existsSync(path)) return 0;
     const file = await open(path);
     try {
       return (await file.stat()).size;

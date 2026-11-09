@@ -891,7 +891,9 @@ const TURNS_PAGE = 10;
  * The resumed thread reverted to before the turn that took the message a
  * rewind dropped, found by its client id reading back from the thread's
  * end; a thread no turn of which took it is left whole, as a rewind Codex
- * never heard of leaves nothing of its own to cut. A revert that fails is
+ * never heard of leaves nothing of its own to cut. Answers the path of the
+ * segment the revert began (`codex-rollout.ts`), where Codex named one,
+ * which the thread's later lines are written to. A revert that fails is
  * logged and the thread goes on whole, since the launch's message still
  * stands to be answered.
  */
@@ -899,7 +901,7 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
   server: AppServer,
   threadId: string,
   rewindBefore: string,
-) {
+): Effect.fn.Return<string | undefined, AppServerError> {
   let cursor: string | null = null;
   for (;;) {
     const page = decodeTurnsPage(
@@ -911,15 +913,19 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
         itemsView: "full",
       }),
     );
-    if (Option.isNone(page)) return;
+    if (Option.isNone(page)) return undefined;
     const taking = page.value.data.find((turn) =>
       turn.items.some((item) => item.type === "userMessage" && item.clientId === rewindBefore),
     );
     if (taking !== undefined) {
-      yield* server.request(METHOD.THREAD_REVERT, { threadId, beforeTurnId: taking.id });
-      return;
+      const answer = yield* server.request(METHOD.THREAD_REVERT, {
+        threadId,
+        beforeTurnId: taking.id,
+      });
+      const reverted = decodeThreadAnswer(answer);
+      return Option.isSome(reverted) ? (reverted.value.thread.path ?? undefined) : undefined;
     }
-    if (page.value.nextCursor === null) return;
+    if (page.value.nextCursor === null) return undefined;
     cursor = page.value.nextCursor;
   }
 });
@@ -1262,20 +1268,46 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     );
   }
   const { path, ...server } = opened.success;
-  const mirror =
-    store === undefined || path === undefined
-      ? undefined
-      : yield* openRolloutMirror(store.store, store.codexHome, server.threadId, path).pipe(
-          Effect.option,
-          Effect.map(Option.getOrUndefined),
-        );
-  if (config.threadId !== undefined && config.rewindBefore !== undefined) {
-    yield* revertedBefore(opened.success.server, opened.success.threadId, config.rewindBefore).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`agent-runner: the thread was not rewound: ${error.method}`),
-      ),
-    );
+  const reverting =
+    config.threadId !== undefined && config.rewindBefore !== undefined
+      ? revertedBefore(server.server, server.threadId, config.rewindBefore).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning(`agent-runner: the thread was not rewound: ${error.method}`),
+              undefined,
+            ),
+          ),
+        )
+      : Effect.succeed(undefined);
+  const segment = yield* reverting;
+  const resumed = config.threadId !== undefined && config.fork !== true;
+  // A fork cut by a revert stands on the file Codex forked it into, which the store holds none of, so it is sent whole before the mirror follows the thread.
+  if (store !== undefined && path !== undefined && segment !== undefined && !resumed) {
+    const forked = yield* openRolloutMirror(
+      store.store,
+      store.codexHome,
+      server.threadId,
+      path,
+      false,
+    ).pipe(Effect.option);
+    if (Option.isSome(forked)) {
+      yield* mirrorRollout(forked.value).pipe(
+        Effect.catch(() => Effect.logWarning("agent-runner: the forked rollout was not mirrored")),
+      );
+    }
   }
+  // The mirror follows the thread onto the segment a revert began, which the store holds none of yet.
+  const mirroredPath = segment ?? path;
+  const mirror =
+    store === undefined || mirroredPath === undefined
+      ? undefined
+      : yield* openRolloutMirror(
+          store.store,
+          store.codexHome,
+          server.threadId,
+          mirroredPath,
+          resumed && segment === undefined,
+        ).pipe(Effect.option, Effect.map(Option.getOrUndefined));
   const launch: CodexLaunch = {
     context,
     signals,
