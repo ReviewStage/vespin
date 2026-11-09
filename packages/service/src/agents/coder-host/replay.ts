@@ -1226,20 +1226,25 @@ export interface RestartFit {
  * Nothing where it took no step of its own yet, or where its rows cannot be
  * read, which then opens the session on its next turn's words alone. Note
  * that a line in no turn yet, as the one being sent and any waiting for the
- * launch, is left out, since each is handed on its own; and that an agent
+ * launch, is left out, since each is handed on its own, as is the line being
+ * sent where a turn already took it (`sending`), as a retried turn's opening
+ * line is; and that an agent
  * handed its description is handed none of it again here, since the next
  * turn hands its task as it stands now.
  */
 export const restartReplayOf = (
   agent: Agent,
   fit: RestartFit,
+  sending?: string,
 ): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> =>
   Effect.gen(function* () {
     const read = yield* recordsOf(agent, undefined);
     if (read === undefined) return undefined;
     const records = read.records.filter(
       (record, index) =>
-        index === 0 || record.message.role !== MESSAGE_ROLE.USER || record.turnId !== undefined,
+        index === 0 ||
+        record.message.role !== MESSAGE_ROLE.USER ||
+        (record.turnId !== undefined && record.clientId !== sending),
     );
     const senders = yield* lineSendersOf(
       { userId: agent.userId, conversationId: agent.conversationId },

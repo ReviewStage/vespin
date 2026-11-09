@@ -222,3 +222,37 @@ test("a limit lifted before the turn failed for another reason fails it as that 
     false,
   );
 });
+
+test("a turn whose launch lost its session goes on once in a replayed launch, and a second loss fails it", () => {
+  const context = {
+    conversationId: "c_projection",
+    now: 0,
+    queuedTurnId: "t_lost",
+    model: undefined,
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+  const lostLaunch = [
+    { kind: NATIVE_MOMENT.LINE_ACCEPTED, clientId: "line_lost" },
+    { kind: NATIVE_MOMENT.RESULT, failure: "error_during_execution No conversation found" },
+    { kind: NATIVE_MOMENT.SESSION_LOST },
+    { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE },
+  ] as const;
+  const first = projectMoments(heldProjection(null), lostLaunch, {
+    ...context,
+    sequence: 0,
+    attempt: 1,
+  });
+  const second = projectMoments(first.state, lostLaunch, { ...context, sequence: 1, attempt: 2 });
+  const kinds = (writes: typeof first.writes) =>
+    writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.RETRY || write.kind === NATIVE_WRITE.FAILED
+        ? [{ kind: write.kind, replay: write.kind === NATIVE_WRITE.RETRY && write.replay }]
+        : [],
+    );
+  assert.deepEqual(
+    [kinds(first.writes), kinds(second.writes)],
+    [[{ kind: NATIVE_WRITE.RETRY, replay: true }], [{ kind: NATIVE_WRITE.FAILED, replay: false }]],
+  );
+});

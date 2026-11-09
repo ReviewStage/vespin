@@ -688,6 +688,7 @@ class Fold {
       refusal: _refusal,
       refusing: _refusing,
       compactionFailed: _compaction,
+      limited: _limited,
       sessionLost: _lost,
       waiting: _waiting,
       ...kept
