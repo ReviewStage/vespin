@@ -22,7 +22,7 @@ const AUTH_COLUMN_WIDTH = 360;
 
 type AuthPageProps = {
   readonly title: string;
-  /** The ways in, each a full-width `Button`. */
+  /** The ways in, each a `ProviderButton`. */
   readonly children: ReactNode;
   /** Why the last attempt did not finish, in the danger color under the buttons. */
   readonly error?: string | undefined;

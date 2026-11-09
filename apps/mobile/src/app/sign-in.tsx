@@ -5,14 +5,14 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
 import { SIGN_IN_FAILURE, SIGN_IN_FAILURE_WORDS, type SignInFailure } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { AuthPage, BUTTON_LOOK, BUTTON_SIZE, BUTTON_WIDTH, Button, Screen } from "@repo/ui-native";
+import { AuthPage, PROVIDER_MARK_ASSET, ProviderButton, Screen } from "@repo/ui-native";
 import { useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 
-/** The ways in, in the web's order: Google filled, as the desktop's gate fills it first, and GitHub beside it. */
+/** The ways in, in the web's order, each with the provider's mark as the web's buttons carry it. */
 const WAYS_IN = [
-  { provider: ACCOUNT_PROVIDER.GOOGLE, look: BUTTON_LOOK.PROMINENT },
-  { provider: ACCOUNT_PROVIDER.GITHUB, look: BUTTON_LOOK.BORDERED },
+  { provider: ACCOUNT_PROVIDER.GOOGLE, mark: PROVIDER_MARK_ASSET.GOOGLE },
+  { provider: ACCOUNT_PROVIDER.GITHUB, mark: PROVIDER_MARK_ASSET.GITHUB },
 ] as const;
 
 /**
@@ -44,13 +44,11 @@ export default function SignInScreen() {
         title={`Sign in to ${PRODUCT_NAME}`}
         error={failure === undefined ? undefined : SIGN_IN_FAILURE_WORDS[failure]}
       >
-        {WAYS_IN.map(({ provider, look }) => (
-          <Button
+        {WAYS_IN.map(({ provider, mark }) => (
+          <ProviderButton
             key={provider}
             label={`${opening === provider ? "Opening" : "Continue with"} ${SOCIAL_PROVIDER_LABEL[provider]}`}
-            look={look}
-            size={BUTTON_SIZE.LARGE}
-            width={BUTTON_WIDTH.FILL}
+            mark={mark}
             disabled={opening !== undefined}
             onPress={() => signIn(provider)}
           />

@@ -5,11 +5,9 @@ export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 export {
   BUTTON_LOOK,
   BUTTON_SIZE,
-  BUTTON_WIDTH,
   Button,
   type ButtonLook,
   type ButtonSize,
-  type ButtonWidth,
   Chip,
 } from "./button.js";
 export { type Choice, ChoiceList } from "./choice-list.js";
@@ -33,6 +31,11 @@ export { MarkdownPage } from "./markdown-page.js";
 export { Avatar, TaskStatusMark, UnreadDot } from "./marks.js";
 export { monogramOf } from "./monogram.js";
 export { PageHeader } from "./page-header.js";
+export {
+  PROVIDER_MARK_ASSET,
+  ProviderButton,
+  type ProviderMarkAsset,
+} from "./provider-button.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
 export {

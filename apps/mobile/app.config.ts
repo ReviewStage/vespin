@@ -3,6 +3,7 @@
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND_PALETTE } from "@repo/brand/palette";
+import { GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
 
@@ -26,6 +27,25 @@ const BRAND_MARK = {
   LIGHT_IMAGE: "../../packages/brand/assets/mark/mark-color-light-1024.png",
   DARK_IMAGE: "../../packages/brand/assets/mark/mark-color-dark-1024.png",
 } as const;
+
+// The marks the sign-in's ways in carry, by the names `@repo/ui-native`'s
+// `ProviderButton` reads them under (`PROVIDER_MARK_ASSET`), drawn as vectors
+// from the brand's own paths, the web's sign-in buttons' marks: GitHub's in
+// whatever ink its button's words take, Google's in its own four colors.
+const PROVIDER_MARKS = [
+  {
+    NAME: "GitHubMark",
+    SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="#000" d="${GITHUB_PATH}"/></svg>`,
+    TEMPLATE: true,
+  },
+  {
+    NAME: "GoogleMark",
+    SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">${GOOGLE_MARK_LAYERS.map(
+      ({ fill, path }) => `<path fill="${fill}" d="${path}"/>`,
+    ).join("")}</svg>`,
+    TEMPLATE: false,
+  },
+] as const;
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
@@ -121,52 +141,86 @@ const withBrandMark = (config: ExpoConfig): ExpoConfig =>
     },
   ]);
 
+// The provider marks as vector image sets of the asset catalog, GitHub's a
+// template SwiftUI tints as it tints the words beside it.
+const withProviderMarks = (config: ExpoConfig): ExpoConfig =>
+  withDangerousMod(config, [
+    "ios",
+    (modConfig) => {
+      const catalog = join(
+        IOSConfig.Paths.getSourceRoot(modConfig.modRequest.projectRoot),
+        "Images.xcassets",
+      );
+      for (const mark of PROVIDER_MARKS) {
+        const imageSet = join(catalog, `${mark.NAME}.imageset`);
+        mkdirSync(imageSet, { recursive: true });
+        const file = `${mark.NAME}.svg`;
+        writeFileSync(join(imageSet, file), mark.SVG);
+        const contents = {
+          images: [{ filename: file, idiom: "universal" }],
+          info: { author: "xcode", version: 1 },
+          properties: {
+            "preserves-vector-representation": true,
+            "template-rendering-intent": mark.TEMPLATE ? "template" : "original",
+          },
+        };
+        writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+      return modConfig;
+    },
+  ]);
+
 // Note that the deployment target is iOS 26 while the SDK is iOS 27's,
 // because iOS 26 runs on every iPhone iOS 27 does and already draws Liquid
 // Glass, so what 27 adds is used behind a version check. Expo generates the
 // UIScene lifecycle and the New Architecture on its own; neither is named
 // here because neither can be set another way.
 const config = (_context?: ConfigContext): ExpoConfig =>
-  withBrandMark(
-    withAccentColor({
-      name: "Vespin",
-      slug: "vespin",
-      version: "0.1.0",
-      scheme: URL_SCHEME,
-      orientation: "default",
-      userInterfaceStyle: "automatic",
-      platforms: ["ios"],
-      ios: {
-        bundleIdentifier: BUNDLE_IDENTIFIER,
-        buildNumber: BUILD_NUMBER,
-        deploymentTarget: "26.0",
-        supportsTablet: true,
-        icon: "../../packages/brand/assets/ios/Vespin.icon",
-        // The app's universal links, and the sign-in's HTTPS callback, which
-        // `ASWebAuthenticationSession` catches only on a host the app shares
-        // web credentials with.
-        associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`, `webcredentials:${ASSOCIATED_DOMAIN}`],
-        // The TestFlight build takes its pushes from production APNs, which
-        // the distribution profile release-ios.yml exports it with allows; a
-        // simulator build is unsigned and carries no entitlement at all.
-        entitlements: { "aps-environment": "production" },
-      },
-      plugins: [
-        "expo-router",
-        [
-          "expo-splash-screen",
-          {
-            backgroundColor: BRAND_PALETTE.LIGHT.GROUND,
-            image: SPLASH.LIGHT_IMAGE,
-            imageWidth: SPLASH.IMAGE_WIDTH,
-            dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
-          },
+  withProviderMarks(
+    withBrandMark(
+      withAccentColor({
+        name: "Vespin",
+        slug: "vespin",
+        version: "0.1.0",
+        scheme: URL_SCHEME,
+        orientation: "default",
+        userInterfaceStyle: "automatic",
+        platforms: ["ios"],
+        ios: {
+          bundleIdentifier: BUNDLE_IDENTIFIER,
+          buildNumber: BUILD_NUMBER,
+          deploymentTarget: "26.0",
+          supportsTablet: true,
+          icon: "../../packages/brand/assets/ios/Vespin.icon",
+          // The app's universal links, and the sign-in's HTTPS callback, which
+          // `ASWebAuthenticationSession` catches only on a host the app shares
+          // web credentials with.
+          associatedDomains: [
+            `applinks:${ASSOCIATED_DOMAIN}`,
+            `webcredentials:${ASSOCIATED_DOMAIN}`,
+          ],
+          // The TestFlight build takes its pushes from production APNs, which
+          // the distribution profile release-ios.yml exports it with allows; a
+          // simulator build is unsigned and carries no entitlement at all.
+          entitlements: { "aps-environment": "production" },
+        },
+        plugins: [
+          "expo-router",
+          [
+            "expo-splash-screen",
+            {
+              backgroundColor: BRAND_PALETTE.LIGHT.GROUND,
+              image: SPLASH.LIGHT_IMAGE,
+              imageWidth: SPLASH.IMAGE_WIDTH,
+              dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
+            },
+          ],
         ],
-      ],
-      // Builds come from GitHub's macOS runners and TestFlight, never an
-      // over-the-air update, so Expo's update client is left out of the app.
-      updates: { enabled: false },
-    }),
+        // Builds come from GitHub's macOS runners and TestFlight, never an
+        // over-the-air update, so Expo's update client is left out of the app.
+        updates: { enabled: false },
+      }),
+    ),
   );
 
 export default config;
