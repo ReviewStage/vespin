@@ -108,6 +108,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   type ContentBlock,
+  IMAGE_MEDIA_TYPE,
   INPUT_LINE,
   type InputLine,
   type IntegrationServer,
@@ -189,6 +190,7 @@ import {
   Redacted,
   Result,
   Schedule,
+  Schema,
 } from "effect";
 import { SqlError } from "effect/sql/SqlError";
 import { HostedEnvironment } from "../../environment.js";
@@ -355,12 +357,7 @@ const FINGERPRINT_CHARS = 32;
 const FAILED_STATUS = { UNAVAILABLE: 503, REFUSED: 422 } as const;
 
 /** The image types a message's file may carry to the harness as an image block. */
-const IMAGE_TYPES: ReadonlySet<string> = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-]);
+const isImageMediaType = Schema.is(Schema.Literals(Object.values(IMAGE_MEDIA_TYPE)));
 
 /** How many hex digits a session id spells the instant it was minted in: enough for every millisecond until the year 10889. */
 const MINTED_AT_DIGITS = 12;
@@ -497,14 +494,13 @@ function runnerContent(
     const mediaType = part.type === "file" ? part.mediaType : (part.mediaType ?? "");
     const data = part.type === "file" ? part.data : part.image;
     const base64 = base64Of(data);
-    if (IMAGE_TYPES.has(mediaType) && base64 !== undefined) {
+    if (isImageMediaType(mediaType) && base64 !== undefined) {
       return [
         {
           type: "image" as const,
           source: {
             type: "base64" as const,
-            // SAFETY: the type is one of the four the set holds, which are the protocol's image types.
-            media_type: mediaType as "image/png",
+            media_type: mediaType,
             data: base64,
           },
         },
