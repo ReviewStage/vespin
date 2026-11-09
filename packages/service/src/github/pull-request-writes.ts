@@ -45,7 +45,9 @@ import {
   GitHubUnavailable,
   githubPost,
   githubSendRequest,
+  repositoryPath,
   send,
+  unreadable,
 } from "./github-app.js";
 
 /** GitHub's GraphQL endpoint, under the API's origin. */
@@ -84,10 +86,6 @@ function refusalOf(messages: readonly string[]): GitHubWriteRefused {
   return new GitHubWriteRefused({
     words: messages.join(" ").slice(0, PULL_REQUEST_WRITE_BOUNDS.MAX_REFUSAL_CHARS),
   });
-}
-
-function unreadable(status: number): GitHubUnavailable {
-  return new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE, status });
 }
 
 /**
@@ -296,12 +294,6 @@ type RestWriteBody =
 /** A path segment as GitHub takes it, so a label's name with a slash or a space stays one segment. */
 function segment(value: string): string {
   return encodeURIComponent(value);
-}
-
-/** The repository's own path under the API, each half a segment of its own. */
-function repositoryPath(fullName: string): string {
-  const [owner = "", name = ""] = fullName.split("/");
-  return `/repos/${segment(owner)}/${segment(name)}`;
 }
 
 /**
