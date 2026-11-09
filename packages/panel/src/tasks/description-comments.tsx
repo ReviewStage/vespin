@@ -864,7 +864,12 @@ function CommentEntry({
   );
 }
 
-/** The field a comment's words are edited in, in its place: Cancel, then Save. */
+/**
+ * The field a comment's words are edited in, in their place, as the field a
+ * thread's first comment is written in: the words stay where they were read,
+ * bare on the card with no box around them, and the composer's foot stands
+ * under them, Cancel beside the round send, which saves.
+ */
 function CommentEditField({
   value,
   onChange,
@@ -876,8 +881,14 @@ function CommentEditField({
   onSave: () => void;
   onCancel: () => void;
 }): React.JSX.Element {
+  // Note that only the agent box's editor counts its words against the bound, as a reply's foot does.
+  const counts = useCommentEditor() !== undefined;
   return (
-    <ComposerFrame look={COMPOSER_LOOK.FIELD} className="comment-field comment-editing">
+    <ComposerFrame
+      look={COMPOSER_LOOK.BARE}
+      className="comment-field comment-editing"
+      data-variant={REPLY_VARIANT.EDIT}
+    >
       <CommentText
         value={value}
         label={COMMENT_WORDS.EDIT}
@@ -886,15 +897,20 @@ function CommentEditField({
         onCancel={onCancel}
         autoFocus
       />
-      <div className="comment-field-foot">
-        <Button onClick={onCancel}>
-          <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
-        </Button>
-        {/* Note that an edit is drawn on the press, which closes the field, so Save is never busy. */}
-        <Button variant={BUTTON_VARIANT.PRIMARY} busy={false} onClick={onSave}>
-          <ReplayUnmask>{COMMENT_WORDS.SAVE}</ReplayUnmask>
-        </Button>
-      </div>
+      <ComposerFoot
+        counter={
+          counts
+            ? { length: value.length, limit: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS }
+            : undefined
+        }
+        actions={
+          <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} onClick={onCancel}>
+            <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
+          </Button>
+        }
+        // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, and that an edit is drawn on the press, which closes the field, so it is never busy.
+        send={{ label: COMMENT_WORDS.SAVE, icon: <CheckIcon />, empty: false, onSend: onSave }}
+      />
     </ComposerFrame>
   );
 }
@@ -1405,8 +1421,8 @@ function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachmen
   return was.length === now.length && was.every((file, at) => file === now[at]);
 }
 
-/** How a comment's field stands: as a thread's first comment, the card itself, or as a reply under its comments. */
-const REPLY_VARIANT = { FIRST: "first", REPLY: "reply" } as const;
+/** How a comment's field stands: as a thread's first comment, the card itself, as a reply under its comments, or as a comment's words edited in their place (`CommentEditField`). */
+const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
 
 type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
 

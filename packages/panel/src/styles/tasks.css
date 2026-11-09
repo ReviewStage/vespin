@@ -2807,9 +2807,8 @@ svg.lucide {
 }
 
 /* The field that answers a thread, or starts one, on `@repo/ui`'s
-   `ComposerFrame`: a reply as every box in the window is, an edit in the
-   card's well, a first comment bare on the card. What stands here lays out
-   what it holds. */
+   `ComposerFrame`: a reply as every box in the window is, a first comment
+   and an edit bare on the card. What stands here lays out what it holds. */
 .comment-field {
   --comment-field-inline: var(--ui-space-8);
   /* The plain field's insets and height (`PlainCommentText`), the editor's below. */
@@ -2840,18 +2839,15 @@ svg.lucide {
   line-height: 1.45;
 }
 
-/* A field's foot, a reply's `ComposerFoot` and an edit's Cancel and Save,
-   holds its tools a size under a page's, at the field's padding; a
+/* A field's foot, its `ComposerFoot`, holds its tools a size under a page's, at the field's padding; a
    dictation's strip stands at their height. A finger keeps the page's size,
    so on a coarse pointer the tools stand a touch target tall and Dictate's
    press never reaches Reply. */
-.comment-field-foot,
 .comment-field .ui-composer-foot {
   padding: var(--ui-space-2) var(--ui-item-gap) var(--ui-item-gap);
 }
 
 @media not all and (pointer: coarse) {
-  .comment-field-foot,
   .comment-field .ui-composer-foot {
     --ui-control-height: 26px; /* off-scale: a field's foot holds its tools a size under a page's */
   }
@@ -2862,25 +2858,37 @@ svg.lucide {
   padding: var(--ui-item-gap) var(--ui-item-gap) 0;
 }
 
-.comment-field-foot {
-  display: flex;
-  min-height: 26px; /* off-scale: as its tools */
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-item-gap);
-}
-
 /* A thread's first comment is the card itself (`COMPOSER_LOOK.BARE`): its
    words on the card's own surface, no well inside it, its tools along the
    card's foot. */
-.comment-field[data-variant="first"] {
+.comment-field:is([data-variant="first"], [data-variant="edit"]) {
   --comment-field-inline: 0;
   margin-top: 0;
 }
 
-.comment-field[data-variant="first"] :is(.ui-composer-files, .ui-composer-foot) {
+.comment-field:is([data-variant="first"], [data-variant="edit"])
+  :is(.ui-composer-files, .ui-composer-foot) {
   padding-right: 0;
   padding-left: 0;
+}
+
+/* A comment's words edited in their place stand where they were read, in
+   the comment's body with no inset over them, so opening Edit moves no
+   word: only the caret lands in them and the foot opens under them. */
+.comment-field[data-variant="edit"] {
+  --ui-text-area-inset-start: 0;
+  --ui-text-area-inset-end: 0;
+  --ui-text-area-least: 0;
+}
+
+.comment-field[data-variant="edit"] :is(.agent-composer-placeholder, .agent-composer-input) {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.comment-field[data-variant="edit"] .ui-composer-foot {
+  padding-bottom: 0;
 }
 
 /* One of an agent's log's rows (`agent-tab.tsx`, drawn only near the view
