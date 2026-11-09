@@ -320,7 +320,7 @@ function agentNoteOf(
   const message = agent.archived
     ? ""
     : ` To message it, call \`${AGENT_TOOL.MESSAGE_AGENT}\` with its id.`;
-  return `The developer pointed you at another agent of your workspace ${taskWords(agent, task)}, "${agent.name}" (id \`${agent.id}\`)${archived}${working}${branch}${pullRequest}.${readingOf(agent, task?.repository ?? null)}${message} Read its conversation with \`${AGENT_TOOL.READ_AGENT}\` and its id: the newest page first, with \`from: "start"\` from its first message, and each page's \`older\` or \`newer\` as \`before\` or \`after\` for the next, to find what was said and by whom.`;
+  return `The developer pointed you at another agent of your workspace ${taskWords(agent, task)}, "${agent.name}" (id \`${agent.id}\`)${archived}${working}${branch}${pullRequest}.${readingOf(agent, task?.repository ?? null)}${message} Read its conversation with \`${AGENT_TOOL.READ_AGENT}\` and its id.`;
 }
 
 /** What a member's role is said as. */
