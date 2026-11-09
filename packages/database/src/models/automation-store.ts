@@ -39,7 +39,7 @@ import { noOpenInboxItem, noOpenPullRequest } from "./agent-store.js";
 import { InstantColumnSchema } from "./columns.js";
 import { taskMadeByRun } from "./run-tasks.js";
 import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
-import { AGENT_WORKSPACE, isWorkspaceMember, roleAmong } from "./workspace-store.js";
+import { isWorkspaceMember, roleAmong } from "./workspace-store.js";
 
 /**
  * automation-store.ts -- an account's automations and their runs: made, listed, changed, and deleted by the account, and a run recorded once per firing.
@@ -662,7 +662,12 @@ const archivableAgent = and(
     queryBuilder
       .select({ one: member.id })
       .from(member)
-      .where(and(eq(member.userId, agentTable.userId), eq(member.organizationId, AGENT_WORKSPACE))),
+      .where(
+        and(
+          eq(member.userId, agentTable.userId),
+          eq(member.organizationId, agentTable.organizationId),
+        ),
+      ),
   ),
   noOpenInboxItem,
   // Note that an agent whose pull request is open or a draft still stands (`noOpenPullRequest`).

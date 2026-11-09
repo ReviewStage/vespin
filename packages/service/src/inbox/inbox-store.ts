@@ -10,7 +10,6 @@ import { CURRENT_TXID } from "@repo/database/core/txid";
 import { automationReadableBy } from "@repo/database/models/automation-store";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import {
-  AGENT_WORKSPACE,
   agentReachableBy,
   agentSeenBy,
   agentVisibleTo,
@@ -640,7 +639,7 @@ function itemVisibleTo(userId: string): SQL {
 }
 
 /** The step a link names the agent's workspace by: its slug, or its id where it has none, as a description's picture names it. */
-const AGENT_WORKSPACE_STEP = sql<string>`coalesce((select ${organization.slug} from ${organization} where ${organization.id} = ${AGENT_WORKSPACE}), ${AGENT_WORKSPACE})`;
+const AGENT_WORKSPACE_STEP = sql<string>`coalesce((select ${organization.slug} from ${organization} where ${organization.id} = ${agentTable.organizationId}), ${agentTable.organizationId})`;
 
 /** The agent's row under its own lock, where the account started it and is still a member of its workspace, which serializes one agent's posts. */
 const lockAgent = SqlSchema.findOneOption({
@@ -655,7 +654,7 @@ const lockAgent = SqlSchema.findOneOption({
       db
         .select({
           id: agentTable.id,
-          organizationId: AGENT_WORKSPACE,
+          organizationId: agentTable.organizationId,
           workspaceStep: AGENT_WORKSPACE_STEP,
         })
         .from(agentTable)

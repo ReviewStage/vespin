@@ -3,11 +3,7 @@ import { queryBuilder } from "@repo/database/core/query";
 import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
 import { taskBlockedFor } from "@repo/database/models/task-block-store";
-import {
-  AGENT_WORKSPACE,
-  agentVisibleTo,
-  taskReachableBy,
-} from "@repo/database/models/workspace-store";
+import { agentVisibleTo, taskReachableBy } from "@repo/database/models/workspace-store";
 import {
   agentPin,
   agentPullRequest,
@@ -181,7 +177,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       columns: {
         id: agentTable.id,
         planId: agentTable.taskId,
-        workspaceId: AGENT_WORKSPACE,
+        workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,
         contextWindow: sql<string | null>`${agentTable.contextWindow}`,

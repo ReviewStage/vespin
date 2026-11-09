@@ -96,7 +96,6 @@ import {
 } from "./message-reads.js";
 import { TaskAgentUnstopped } from "./task-store.js";
 import {
-  AGENT_WORKSPACE,
   agentReachableBy,
   agentVisibleTo,
   reachableTask,
@@ -176,7 +175,7 @@ export interface Agent {
   readonly userId: string;
   /** The task the agent works on; null for an agent an automation started with no task. */
   readonly taskId: string | null;
-  /** The workspace the agent belongs to: its own, or its task's on a row the backfill has not reached. */
+  /** The workspace the agent belongs to. */
   readonly organizationId: string;
   /** The automation whose run started the agent; null for one started by hand or once that automation is deleted. */
   readonly automationId: string | null;
@@ -371,7 +370,7 @@ const AGENT_COLUMNS = {
   id: agentTable.id,
   userId: agentTable.userId,
   taskId: agentTable.taskId,
-  organizationId: AGENT_WORKSPACE,
+  organizationId: agentTable.organizationId,
   automationId: agentTable.automationId,
   automationOrigin: agentTable.automationOrigin,
   automationRunId: agentTable.automationRunId,
@@ -411,7 +410,7 @@ const AGENT_LINE_COLUMNS = {
   id: agentTable.id,
   userId: agentTable.userId,
   taskId: agentTable.taskId,
-  organizationId: AGENT_WORKSPACE,
+  organizationId: agentTable.organizationId,
   automationId: agentTable.automationId,
   automationName: agentAutomationNameSql(agentTable),
   automationRunId: agentTable.automationRunId,
@@ -1643,7 +1642,7 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
   const { userId, organizationId, repository, taskId, words, except } = request;
   return and(
     agentVisibleTo(userId),
-    eq(AGENT_WORKSPACE, organizationId),
+    eq(agentTable.organizationId, organizationId),
     request.ownOnly ? eq(agentTable.userId, userId) : undefined,
     request.startedBy === null ? undefined : eq(agentTable.userId, request.startedBy),
     request.includeArchived ? undefined : isNull(agentTable.archivedAt),

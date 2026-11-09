@@ -21,7 +21,6 @@ import { agentSectionEntry, taskSection, taskSectionEntry } from "../schemas/tas
 import { InstantColumnSchema } from "./columns.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import {
-  AGENT_WORKSPACE,
   agentVisibleTo,
   isWorkspaceMember,
   taskReachableBy,
@@ -85,7 +84,7 @@ const AGENT_ENTRY_COLUMNS = {
 export function agentEntryStands(userId: string) {
   return and(
     eq(agentSectionEntry.userId, userId),
-    eq(AGENT_WORKSPACE, taskSection.organizationId),
+    eq(agentTable.organizationId, taskSection.organizationId),
     isNull(agentTable.taskId),
     agentVisibleTo(userId),
   );
@@ -264,7 +263,7 @@ const findAgentIn = SqlSchema.findOneOption({
         .where(
           and(
             eq(agentTable.id, agentId),
-            eq(AGENT_WORKSPACE, organizationId),
+            eq(agentTable.organizationId, organizationId),
             isNull(agentTable.taskId),
             agentVisibleTo(userId),
           ),
