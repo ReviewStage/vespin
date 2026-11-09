@@ -216,7 +216,8 @@ function cachedFile(attachmentId: string, base64: string): string {
  * could not be read, is absent. Note that each file is asked for once while
  * the thread stands, whatever `media` list names it, because the thread's
  * item is made anew on every change to it, its read mark as it opens among
- * them, and each read carries the whole file.
+ * them, and each read carries the whole file; one whose read failed is asked
+ * for again on the thread's next change.
  */
 export function useThreadMedia(
   itemId: string | undefined,
@@ -239,18 +240,23 @@ export function useThreadMedia(
     for (const each of media) {
       if (ids.has(each.attachmentId)) continue;
       ids.add(each.attachmentId);
-      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({ itemId, attachmentId: each.attachmentId }).then(
-        (read) => {
+      // A read that fails is forgotten, so the thread's next change asks for it again.
+      const forget = (error: unknown) => {
+        if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
+        refused("Reading a thread's file")(error);
+      };
+      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({ itemId, attachmentId: each.attachmentId })
+        .then((read) => {
           // A read that lands once another thread stands is that thread's no longer.
-          if (asked.current.itemId !== itemId || !("base64" in read)) return;
+          if (asked.current.itemId !== itemId) return;
+          if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
           const source =
             each.kind === INBOX_MEDIA.VIDEO
               ? cachedFile(each.attachmentId, read.base64)
               : `data:${read.contentType};base64,${read.base64}`;
           setSources((held) => new Map(held).set(each.attachmentId, source));
-        },
-        refused("Reading a thread's file"),
-      );
+        })
+        .catch(forget);
     }
   }, [acts, itemId, media]);
   return sources;

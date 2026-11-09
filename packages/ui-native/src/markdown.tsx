@@ -594,13 +594,6 @@ export interface MarkdownVideo {
   readonly onOpenElsewhere?: (() => void) | undefined;
 }
 
-/**
- * Words drawn as the Markdown they were written in, as the panel draws a
- * message: the panel's parse (`@repo/features/markdown-tree`), read into
- * blocks by `markdown-model.ts`, in the brand's colors for the window's
- * scheme and at the reader's Dynamic Type size. It draws no scroller of its
- * own, so a screen stands it in its own.
- */
 /** Each picture drawn from the address its words name it by. */
 function namedSource(written: string): string {
   return written;
@@ -611,6 +604,13 @@ function noVideo(): undefined {
   return undefined;
 }
 
+/**
+ * Words drawn as the Markdown they were written in, as the panel draws a
+ * message: the panel's parse (`@repo/features/markdown-tree`), read into
+ * blocks by `markdown-model.ts`, in the brand's colors for the window's
+ * scheme and at the reader's Dynamic Type size. It draws no scroller of its
+ * own, so a screen stands it in its own.
+ */
 export function Markdown({
   words,
   repository = null,
