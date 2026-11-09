@@ -277,6 +277,8 @@ Just me, asking first where someone joined it.
 - An Inbox thread's hover card drops its answer line ([#7534](https://github.com/ReviewStage/vespin/pull/7534))
 - An expired integration's toast names the integration alone ([#7716](https://github.com/ReviewStage/vespin/pull/7716))
 - Connecting a ChatGPT plan raises no notice to acknowledge ([#7744](https://github.com/ReviewStage/vespin/pull/7744))
+- A mention chip wraps with the words around it, and one held to a single line
+  fades at its end rather than ending in an ellipsis ([#7817](https://github.com/ReviewStage/vespin/pull/7817))
 
 ### Fixes
 
@@ -348,6 +350,9 @@ Just me, asking first where someone joined it.
 - Fixed the Cloud Terminal and Local Terminal rows drawing an agent's dots instead
   of the terminal glyph ([#7429](https://github.com/ReviewStage/vespin/pull/7429))
 - Fixed a mark in a mention pill sitting low beside its name ([#7761](https://github.com/ReviewStage/vespin/pull/7761))
+- Fixed a hover card cutting a task's name at two lines ([#7809](https://github.com/ReviewStage/vespin/pull/7809))
+- Fixed the task named over a side panel tab ending in an ellipsis with room to
+  spare ([#7808](https://github.com/ReviewStage/vespin/pull/7808))
 - Fixed the title bar's icons, and other hand-drawn icons, drawing smaller than
   those beside them
   ([#7728](https://github.com/ReviewStage/vespin/pull/7728),
