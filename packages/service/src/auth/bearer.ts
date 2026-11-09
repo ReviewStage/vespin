@@ -15,6 +15,8 @@ import { BearerCallers, type OAuthUserInfo, type UserInfoEndpoint } from "./bear
 import { resolveBrowserSessionUserId } from "./browser-session.js";
 import { CREDENTIAL_HEADER, sessionCredential } from "./session-credential.js";
 
+export type { OAuthUserInfo, UserInfoEndpoint } from "./bearer-callers.js";
+
 /** The address a relay page's headers are read against as a request: only the headers are read. */
 const RELAY_PAGE_BASE = "http://localhost/";
 
