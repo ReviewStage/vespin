@@ -783,8 +783,8 @@ export function MainTabContent({
   shown: boolean;
   views: TabViews;
   onOpenDelegation: (agentId: string, callId: string, task: string, status: AgentStatus) => void;
-  /** Opens the agent's pull request in the side panel, by the agent; none where no side panel stands to show it. */
-  onOpenPullRequest?: ((agentId: string) => void) | undefined;
+  /** Opens the agent's pull request in the side panel, by the agent, or another it opened by its number; none where no side panel stands to show it. */
+  onOpenPullRequest?: ((agentId: string, number?: number) => void) | undefined;
   /** Opens what a call in the agent's transcript is about in the tab that draws it. */
   onOpenTarget: (target: ToolTarget) => void;
   /** The cards the transcript's rows that open a tab hang, as those tabs hang them. */
@@ -845,7 +845,9 @@ export function MainTabContent({
               onOpenDelegation(agentId, callId, task, status)
             }
             onOpenPullRequest={
-              onOpenPullRequest === undefined ? undefined : () => onOpenPullRequest(agentId)
+              onOpenPullRequest === undefined
+                ? undefined
+                : (number?: number) => onOpenPullRequest(agentId, number)
             }
             onOpenTarget={onOpenTarget}
             cards={cards.agent(agentId)}

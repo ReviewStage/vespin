@@ -162,6 +162,7 @@ export * from "./components/sidebar/sidebar.js";
 export * from "./components/skeleton/skeleton.js";
 export * from "./components/slider/slider.js";
 export * from "./components/spinner/spinner.js";
+export * from "./components/split-bar/split-bar.js";
 export * from "./components/split-button/split-button.js";
 export * from "./components/status-dot/status-dot.js";
 export * from "./components/stepped-back/stepped-back.js";

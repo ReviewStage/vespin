@@ -15,9 +15,11 @@ import {
   List,
   ListRow,
   linesCount,
+  MENU_DETAIL,
   MoreButton,
   RowHint,
   RowHintOptions,
+  SplitBar,
   Tooltip,
   useMenu,
 } from "@repo/ui";
@@ -28,7 +30,13 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction, rowMenu } from "../desktop/action-menu.js";
-import { checkoutCommand, publishedUrl, pullRequestStateWord } from "./agent-model.js";
+import {
+  checkoutCommand,
+  type DockedPullRequest,
+  publishedUrl,
+  pullRequestStateLabel,
+  pullRequestStateWord,
+} from "./agent-model.js";
 import { MentionChipCard } from "./mention-chip.js";
 import { holderTaskId } from "./mention-holder.js";
 import { PullRequestMark } from "./pull-request-mark.js";
@@ -72,11 +80,17 @@ export interface PublishedDoors {
   copy: (words: string, label: string) => void;
   /** Opens the agent's pull request in a tab of the side panel's own; none where the view stands in no panel. */
   openPullRequest?: (() => void) | undefined;
+  /** Opens another pull request the agent opened, by its number, in that same tab; none where the view stands in no panel. */
+  openPullRequestNumber?: ((number: number) => void) | undefined;
 }
 
 const MENU_LABEL = "Branch actions";
 /** What the branch's chip is, which names its ⋯. */
 const BRANCH_THING = "Branch";
+/** What the segment of the agent's other pull requests names its menu. */
+const OTHERS_LABEL = "Other pull requests";
+/** The width, in the bar's type size, from which a segment has room for its line counts. */
+const SEGMENT_ROOMY_EM = 18;
 /** What the pull request's row is, which names its ⋯ and its menu. */
 const PUBLISHED_THING = "Pull request";
 const CHECKS_FAILING = "Checks failing";
@@ -264,6 +278,95 @@ export function PublishedRow({
           />
         </RowHintOptions>
       </List>
+    </div>
+  );
+}
+
+/** Opens one of the agent's pull requests: the one it stands on in its Pull request tab, another by its number in that tab, each on GitHub where the view stands in no panel. */
+function openDocked(docked: DockedPullRequest, doors: PublishedDoors): void {
+  const { pullRequest } = docked;
+  const inPanel = docked.current ? doors.openPullRequest : undefined;
+  const byNumber = doors.openPullRequestNumber;
+  if (inPanel !== undefined) inPanel();
+  else if (byNumber !== undefined) byNumber(pullRequest.number);
+  else doors.openGitHub(pullRequest.url);
+}
+
+/** One pull request's segment of the split bar: its mark and number and title, its line counts where the segment has room, a press opening it, and a right-click offering its page and its link. */
+function PublishedSegment({
+  docked,
+  roomy,
+  doors,
+}: {
+  docked: DockedPullRequest;
+  roomy: boolean;
+  doors: PublishedDoors;
+}): ReactNode {
+  const { pullRequest, branch } = docked;
+  const actions = branchActions(branch, doors, pullRequest.url, pullRequest.url);
+  return (
+    <ListRow
+      leading={<PullRequestMark pullRequest={pullRequest} />}
+      title={pullRequestLabelOf(pullRequest)}
+      meta={
+        roomy ? (
+          <LinesChanged additions={pullRequest.additions} deletions={pullRequest.deletions} />
+        ) : undefined
+      }
+      hint={{ Hint: RowHint, label: pullRequest.title }}
+      onPress={() => openDocked(docked, doors)}
+      menu={rowMenu(PUBLISHED_THING, actions, undefined, true)}
+      more={false}
+    />
+  );
+}
+
+/**
+ * Every pull request the agent opened, pinned over the box: the one row of
+ * the pull request from the branch it stands on where it opened one
+ * (`PublishedRow`), and where it opened more, one
+ * bar split into an equal segment for each (`SplitBar`), those that do not
+ * fit its width folded into a last segment whose press lists them; nothing
+ * before it opened one.
+ */
+export function PublishedBar({
+  published,
+  docked,
+  doors,
+}: {
+  /** What the agent's tab read of the branch it stands on, which the one row draws. */
+  published: AgentPullRequestAnswer | undefined;
+  docked: readonly DockedPullRequest[];
+  doors: PublishedDoors;
+}): ReactNode {
+  if (docked.length < 2) {
+    return published === undefined || published.pullRequest === null ? null : (
+      <PublishedRow pullRequest={published.pullRequest} branch={published.branch} doors={doors} />
+    );
+  }
+  return (
+    <div className="agent-published">
+      <SplitBar
+        label={PUBLISHED_THING}
+        items={docked}
+        keyOf={(each) => each.pullRequest.url}
+        roomy={SEGMENT_ROOMY_EM}
+        segment={(each, roomy) => <PublishedSegment docked={each} roomy={roomy} doors={doors} />}
+        more={{
+          icon: <GLYPH.PULL_REQUEST aria-hidden="true" />,
+          words: (count) => `${count} more`,
+          label: OTHERS_LABEL,
+          entries: (folded) =>
+            folded.map((each) => ({
+              key: each.pullRequest.url,
+              label: pullRequestLabelOf(each.pullRequest),
+              icon: <PullRequestMark pullRequest={each.pullRequest} />,
+              detail: pullRequestStateLabel(each.pullRequest),
+              detailPlace: MENU_DETAIL.BESIDE,
+              onSelect: () => openDocked(each, doors),
+            })),
+        }}
+      />
     </div>
   );
 }

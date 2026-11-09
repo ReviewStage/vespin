@@ -1,0 +1,27 @@
+/* split-bar.css -- one bar split into equal segments, the last naming the rest at its own width. */
+
+@layer components {
+  .ui-split-bar {
+    display: flex;
+    gap: var(--ui-item-gap);
+    min-width: 0;
+  }
+
+  .ui-split-bar-segment {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .ui-split-bar-more {
+    flex: none;
+    width: max-content;
+  }
+
+  /* Note that a row sized to its words gives its press's end inset to its
+     end's track, which an empty end leaves no room for, so the words would
+     run to the edge: they take the row's inset themselves, standing as far
+     from its end as its glyph does from its start. */
+  .ui-split-bar-more .ui-list-row-text {
+    padding-inline-end: var(--ui-list-row-inset-inline);
+  }
+}

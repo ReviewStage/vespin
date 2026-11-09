@@ -72,6 +72,7 @@
 @import "./components/skeleton/skeleton.css";
 @import "./components/shimmer/shimmer.css";
 /* After the button's, whose edge and corners it joins. */
+@import "./components/split-bar/split-bar.css";
 @import "./components/split-button/split-button.css";
 /* After the button's, whose glyph button its × is. */
 @import "./components/tabs/tabs.css";

@@ -57,6 +57,19 @@ const PULL_REQUEST_ORDER = [
   new Set<TaskPullRequestLine["state"]>([PULL_REQUEST_STATE.CLOSED]),
 ] as const;
 
+/** Where a pull request stands in `PULL_REQUEST_ORDER`, earliest first. */
+function rankOf(pullRequest: Pick<TaskPullRequestLine, "state">): number {
+  return PULL_REQUEST_ORDER.findIndex((states) => states.has(pullRequest.state));
+}
+
+/** Items in the order a task's readers name their pull requests (`pullRequestOf`): those still to be acted on first, then merged, then closed, each rank in the order handed. */
+export function inPullRequestOrder<Item>(
+  items: readonly Item[],
+  pullRequestOf: (item: Item) => Pick<TaskPullRequestLine, "state">,
+): readonly Item[] {
+  return items.toSorted((a, b) => rankOf(pullRequestOf(a)) - rankOf(pullRequestOf(b)));
+}
+
 /** The pull request a task's status names: the first of the earliest state in `PULL_REQUEST_ORDER`. */
 function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state">>(
   pullRequests: readonly PullRequest[],
