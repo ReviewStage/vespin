@@ -409,8 +409,8 @@ it.effect(
         "mcp_servers.linear.tool_timeout_sec=600.0",
         'approval_policy="never"',
         'sandbox_mode="danger-full-access"',
-        'shell_environment_policy.inherit="core"',
-        "shell_environment_policy.ignore_default_excludes=false",
+        'shell_environment_policy.inherit="all"',
+        "shell_environment_policy.ignore_default_excludes=true",
         'shell_environment_policy.exclude=["APP_RUNNER_TOKEN"]',
         'shell_environment_policy.set={ PLAYWRIGHT_BROWSERS_PATH = "0" }',
       ]);
@@ -883,7 +883,7 @@ it.effect(
       // The command inherits the bearer; no command the agent runs does.
       assert.equal(process?.env[RUNNER_ENV.BEARER], BEARER);
       assert.equal(override(process, "shell_environment_policy.exclude"), '["APP_RUNNER_TOKEN"]');
-      assert.equal(override(process, "shell_environment_policy.inherit"), '"core"');
+      assert.equal(override(process, "shell_environment_policy.inherit"), '"all"');
 
       // What the command printed went to app-server alone: never argv, an event, or a log.
       const posted = service.bodies.join("\n");
