@@ -14,7 +14,8 @@ import { Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
  * (`TooltipCard`), and every card an app hangs says what it says in these
  * parts, so the same name reads at the same size wherever the pointer rests.
  * The head is the subject's glyph where it wears one, its name in the card's
- * one weight, wrapped to two lines, or on one line faded where it is cut
+ * one weight, wrapped whole, since the card is where a name cut short
+ * elsewhere is read in full, or on one line faded where it is cut
  * short as a tab's label is; under the name, a quieter line of what it runs
  * on, whose it is, or where it comes from; and at the head's right its
  * corner, muted, which holds one short word and nothing else: the subject's
@@ -60,7 +61,7 @@ import { Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
  * menu glyph's footprint on the name's first line, so the rows listed under
  * the head start their words on the name's column, and sizes whatever it
  * holds bar a face, which brings its own. The name is in the medium weight,
- * wrapped to two lines or on one faded at its end; the line under it and
+ * wrapped whole or on one faded at its end; the line under it and
  * the corner a size down, never under 12px under a finger. Notes wrap to
  * three lines, or one faded. A row is set as a menu's row is: its height
  * and corner, its wash off the card's edge by a menu's inset under the
@@ -161,7 +162,7 @@ export function HoverCardHead({
   mark?: ReactNode;
   glyph?: ReactNode;
   name: ReactNode;
-  /** Whether the name stands on one line, faded where it is cut short, rather than wrapping to two: a task standing in for a title. */
+  /** Whether the name stands on one line, faded where it is cut short, rather than wrapping whole: a task standing in for a title. */
   oneLine?: boolean;
   /** The quieter line under the name: what the subject runs on, whose it is, where it comes from, or when it ran. */
   sub?: ReactNode;
@@ -183,7 +184,7 @@ export function HoverCardHead({
             {name}
           </ClippedLine>
         ) : (
-          <span className={`${NAME} line-clamp-2`}>{name}</span>
+          <span className={NAME}>{name}</span>
         )}
         {sub === undefined ? null : <span className={SUB}>{sub}</span>}
       </div>
