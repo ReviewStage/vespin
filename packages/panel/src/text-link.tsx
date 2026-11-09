@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { opensAsLink } from "./tasks/use-open-link.js";
 
 /**
- * text-link.tsx -- a plain link in written words, drawn one way in every place that draws words: its label underlined quietly in the words' own ink, a bare address cut to its host and path, the whole address in the window's hint.
+ * text-link.tsx -- a plain link in written words, drawn one way in every place that draws words: its label underlined quietly in the words' own ink, a bare address whole but for its scheme, the whole address in the window's hint.
  *
  * A link the window knows better, a mention, is drawn as its chip
  * (`tasks/mention-chip.tsx`) before it ever reaches here; what is left
@@ -12,10 +12,10 @@ import { opensAsLink } from "./tasks/use-open-link.js";
  * through this one element, a transcript's (`tasks/transcript-blocks.tsx`)
  * and a description's (`markdown-message.tsx`), and the description's editor gives its
  * link mark the same classes, so a link reads alike wherever it is written.
- * Where words are their own address (`@repo/ui/link-face`), they say it as
- * a reader names a page. Note that it wears no ↗, because every link that
- * is no chip leaves the window, so the arrow would say nothing the
- * underline does not. What it looks like is `@repo/ui`'s underlined
+ * Where words are their own address (`@repo/ui/link-face`), they say it
+ * whole but for its scheme, wrapping where it runs long. Note that it wears
+ * no ↗, because every link that is no chip leaves the window, so the arrow
+ * would say nothing the underline does not. What it looks like is `@repo/ui`'s underlined
  * TextLink; what is the window's own is here: the face, the hint, and the
  * press that opens the address through the app rather than the page.
  *
@@ -24,7 +24,7 @@ import { opensAsLink } from "./tasks/use-open-link.js";
  * than the link, so a section's block under it opens no editor. A place
  * that opens none, or an address the window refuses, draws the same words
  * going nowhere. A label that is more than words, one an edit or a
- * version's change marks inside, is drawn as it is and never cut short, so
+ * version's change marks inside, is drawn as it is, its scheme kept, so
  * its caret and its marks stay where they stand.
  */
 
@@ -66,7 +66,7 @@ export function TextLink({
           onOpen?.(href);
         }}
       >
-        {face?.shortened === true ? face.words : children}
+        {face?.bare === true ? face.words : children}
       </SharedTextLink>
     </Tooltip>
   );
