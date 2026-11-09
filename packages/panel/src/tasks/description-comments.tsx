@@ -92,7 +92,7 @@ import {
   usePressAway,
   VisuallyHidden,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
+import { type Actor, APP_ACTOR, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import {
   type DescriptionCommentsControl,
@@ -521,7 +521,12 @@ function useWriter(
       ),
     };
   }
-  return { author: commentAuthor(person), nameRef: <ActorRef actor={person} nameOnly /> };
+  // Note that the service names a member's entry by nobody only once their account is deleted.
+  const member =
+    writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER && writer.by === undefined
+      ? DELETED_ACCOUNT_ACTOR
+      : person;
+  return { author: commentAuthor(member), nameRef: <ActorRef actor={member} nameOnly /> };
 }
 
 /** One entry of a thread as a comment (`Comment`): its writer's face and name, when it was written, what stands at the head's end, then its words. */

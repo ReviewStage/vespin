@@ -219,7 +219,7 @@ test("two agents of one name each keep a face, told apart by their ids, and agen
   assert.equal(editors([edit("agent-1"), edit("agent-2"), edit()]).length, 3);
 });
 
-test("a plan's creator is the member it names, or, from a service that names only the owner's id, the reader as their account or a member the read lists, and never a face with no name", () => {
+test("a plan's creator is the member it names, or, from a service that names only the owner's id, the reader as their account or a member the read lists, a deleted account where it names neither, and never a face with no name", () => {
   const you = accountActor({ id: SAM.userId, email: SAM.email, name: SAM.name });
   const someone = { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED };
   const unread: EditReader = { members: undefined, readerId: SAM.userId };
@@ -232,6 +232,12 @@ test("a plan's creator is the member it names, or, from a service that names onl
   assert.equal(called(creatorActor({ ownerId: DANA.userId }, SAM_READS, you)), "Dana Reyes");
   assert.deepEqual(creatorActor({ ownerId: SAM.userId }, unread, undefined), someone);
   assert.deepEqual(creatorActor({ ownerId: DANA.userId }, unread, you), someone);
+  // A creator who deleted their account since is named by neither field, and never by a name of theirs.
+  assert.deepEqual(creatorActor({}, SAM_READS, you), {
+    kind: ACTOR_KIND.SOMEONE,
+    reason: SOMEONE_REASON.DELETED,
+  });
+  assert.equal(called(creatorActor({}, SAM_READS, you)), "Deleted account");
 });
 
 test("a task wears its creator only where someone other than the reader created it, a member by their face and one whose account is gone on the outline", () => {

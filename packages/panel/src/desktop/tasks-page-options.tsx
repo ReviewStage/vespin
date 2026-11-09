@@ -30,6 +30,7 @@ import {
   APP_ACTOR,
   actorName,
   creatorActor,
+  DELETED_ACCOUNT_ACTOR,
   memberActor,
   personActor,
 } from "@repo/ui/actor-model";
@@ -48,7 +49,6 @@ import {
   SlidersHorizontalIcon,
   UserCheckIcon,
   UserIcon,
-  UserXIcon,
 } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { NO_REPOSITORY, repositoryLabel, repositoryParts } from "@repo/ui/task-list-model";
@@ -239,8 +239,8 @@ const PROPERTY_WORDS = {
   [TASK_PROPERTY.UPDATED]: "Last updated",
 } as const satisfies Record<TaskProperty, string>;
 
-/** What the List calls a task nobody is named for. */
-export const NO_CREATOR = "No one";
+/** What the List calls the creator of a task whose creator deleted their account since, which names none. */
+export const NO_CREATOR = actorName(DELETED_ACCOUNT_ACTOR);
 
 /** How many values a chip names before it counts the rest. */
 const CHIP_VALUES = 2;
@@ -394,7 +394,15 @@ function fieldValues(
     case TASKS_FILTER_FIELD.CREATOR:
       return [
         ...peopleValues(held, reader, (id) => creatorFor(id, reader, tasks)),
-        ...(held.has(null) ? [{ value: null, words: NO_CREATOR, icon: <UserXIcon /> }] : []),
+        ...(held.has(null)
+          ? [
+              {
+                value: null,
+                words: NO_CREATOR,
+                icon: <ActorMark actor={DELETED_ACCOUNT_ACTOR} size={ACTOR_SIZE.INLINE} />,
+              },
+            ]
+          : []),
       ];
     case TASKS_FILTER_FIELD.MADE_BY:
       return TASK_MAKER_ORDER.map((maker) => ({

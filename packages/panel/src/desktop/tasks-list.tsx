@@ -68,8 +68,8 @@ import {
   useMinute,
   useRovingKeys,
 } from "@repo/ui";
-import { actorName, creatorActor } from "@repo/ui/actor-model";
-import { GLYPH, ListTodoIcon, PinIcon, UserXIcon } from "@repo/ui/icons";
+import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
+import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { childTaskCounts, NO_REPOSITORY, repositoryLabel } from "@repo/ui/task-list-model";
 import {
@@ -478,7 +478,10 @@ function groupHead(
           };
     case TASKS_GROUP.CREATOR:
       return head.creatorId === null
-        ? { icon: <UserXIcon />, name: NO_CREATOR }
+        ? {
+            icon: <ActorMark actor={DELETED_ACCOUNT_ACTOR} size={ACTOR_SIZE.MARK} />,
+            name: NO_CREATOR,
+          }
         : {
             icon: <ReplayMask>{people.creatorMark(head.creatorId)}</ReplayMask>,
             name: people.creatorName(head.creatorId),

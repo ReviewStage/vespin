@@ -50,7 +50,7 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import { BotIcon, HistoryIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
+import { BotIcon, HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
 import { automationNextText, automationOwnerName } from "./desktop/automation-words.js";
@@ -67,7 +67,9 @@ import { AgentMark } from "./tasks/tab-look.js";
  * loads, and the first letter of their name on the hue read off their id
  * until then and where it fails, as a workspace's tile does; a member who left keeps their own
  * picture or letter, grayed and muted, their name saying they left, so
- * color is never the only sign; someone the service names nobody for
+ * color is never the only sign; an account deleted since stands by a
+ * crossed-out person on that same gray tile, called "Deleted account" and
+ * never by a name of theirs; someone the service names nobody for
  * stands on a quiet outline. Someone GitHub names
  * who is no member stands by their GitHub avatar, a person on a circle and
  * an App's bot on a square, its robot until the avatar loads, and its name
@@ -168,7 +170,7 @@ function squared(actor: Actor): boolean {
  */
 function ringOf(actor: Actor, pile: ActorPile, tiled: boolean): string {
   if (pile === ACTOR_PILE.NONE) {
-    return actor.kind === ACTOR_KIND.SOMEONE && !leftWithFace(actor) ? "shadow-actor-outline" : "";
+    return actor.kind === ACTOR_KIND.SOMEONE && !grayed(actor) ? "shadow-actor-outline" : "";
   }
   if (squared(actor) && !tiled) return "";
   if (pile === ACTOR_PILE.IN_PILE && actor.kind === ACTOR_KIND.SOMEONE) {
@@ -260,6 +262,20 @@ function GlyphSquare({
   );
 }
 
+/** The glyph for why the window cannot name someone: a person crossed out for one who left or whose account is gone, the history's for the description before it began, and a person for the rest. */
+const SOMEONE_GLYPHS = {
+  [SOMEONE_REASON.FORMER]: UserRoundXIcon,
+  [SOMEONE_REASON.DELETED]: UserRoundXIcon,
+  [SOMEONE_REASON.UNNAMED]: UserRoundIcon,
+  [SOMEONE_REASON.EARLIER]: HistoryIcon,
+} as const satisfies Record<(typeof SOMEONE_REASON)[keyof typeof SOMEONE_REASON], LucideIcon>;
+
+/** The glyph someone the window cannot name stands by, for why. */
+function SomeoneGlyph({ actor }: { actor: ActorOf<typeof ACTOR_KIND.SOMEONE> }): React.JSX.Element {
+  const Glyph = SOMEONE_GLYPHS[actor.reason];
+  return <Glyph />;
+}
+
 /** Someone the window cannot name, by the glyph for why, on the circle the mark outlines. */
 function SomeoneDisc({ glyph, size }: { glyph: ReactNode; size: ActorSize }): React.JSX.Element {
   return <Avatar name="" glyph={glyph} size={AVATAR_OF_SIZE[size]} decorative />;
@@ -344,20 +360,7 @@ function Face({
           />
         );
       }
-      return (
-        <SomeoneDisc
-          glyph={
-            actor.reason === SOMEONE_REASON.FORMER ? (
-              <UserRoundXIcon />
-            ) : actor.reason === SOMEONE_REASON.EARLIER ? (
-              <HistoryIcon />
-            ) : (
-              <UserRoundIcon />
-            )
-          }
-          size={size}
-        />
-      );
+      return <SomeoneDisc glyph={<SomeoneGlyph actor={actor} />} size={size} />;
   }
 }
 
@@ -408,17 +411,7 @@ export function commentAuthor(actor: Actor): CommentAuthor {
           picture: picture(actor.pictureUrl),
         };
       }
-      return {
-        name: actorName(actor),
-        glyph:
-          actor.reason === SOMEONE_REASON.FORMER ? (
-            <UserRoundXIcon />
-          ) : actor.reason === SOMEONE_REASON.EARLIER ? (
-            <HistoryIcon />
-          ) : (
-            <UserRoundIcon />
-          ),
-      };
+      return { name: actorName(actor), glyph: <SomeoneGlyph actor={actor} /> };
   }
 }
 
@@ -428,6 +421,14 @@ function leftWithFace(actor: Actor): boolean {
     actor.kind === ACTOR_KIND.SOMEONE &&
     actor.reason === SOMEONE_REASON.FORMER &&
     actor.name !== undefined
+  );
+}
+
+/** Whether the actor is drawn grayed on the tile: a member who left, by their own face, or an account deleted since, by the glyph that stands for it. */
+function grayed(actor: Actor): boolean {
+  return (
+    leftWithFace(actor) ||
+    (actor.kind === ACTOR_KIND.SOMEONE && actor.reason === SOMEONE_REASON.DELETED)
   );
 }
 
@@ -474,8 +475,8 @@ export function ActorMark({
         actor.kind === ACTOR_KIND.APP &&
           "text-working [&_.ui-product-mark]:size-actor-mark-share! [&_.ui-product-mark]:text-inherit",
         actor.kind === ACTOR_KIND.SOMEONE && "text-muted-foreground",
-        // A member who left keeps their own face, grayed and muted on the tile, their name saying they left.
-        leftWithFace(actor) && "bg-actor-tile [&>*]:opacity-80 [&>*]:grayscale",
+        // A member who left keeps their own face, and a deleted account its glyph, grayed and muted on the tile, their name saying why.
+        grayed(actor) && "bg-actor-tile [&>*]:opacity-80 [&>*]:grayscale",
         ringOf(actor, pile, tiled),
         overlapping && "-ml-actor-overlap",
       )}
@@ -682,6 +683,7 @@ export function AppCard({
 /** What a card says of someone the window cannot name, by why. */
 const SOMEONE_NOTES = {
   [SOMEONE_REASON.FORMER]: "No longer in this workspace",
+  [SOMEONE_REASON.DELETED]: "This account was deleted",
   [SOMEONE_REASON.UNNAMED]: "Who made this change isn't known.",
   [SOMEONE_REASON.EARLIER]: "The description before its history began",
 } as const;

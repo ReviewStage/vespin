@@ -51,7 +51,13 @@ import {
   usePageScroll,
   VisuallyHidden,
 } from "@repo/ui";
-import { ACTOR_KIND, type Actor, actorName, personActor } from "@repo/ui/actor-model";
+import {
+  ACTOR_KIND,
+  type Actor,
+  actorName,
+  DELETED_ACCOUNT_ACTOR,
+  personActor,
+} from "@repo/ui/actor-model";
 import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
 import { markdownTree } from "@repo/ui/markdown-words";
 import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
@@ -591,7 +597,11 @@ function MemoryList({
   const [asked, setAsked] = useState<readonly MemorySummary[]>([]);
   const found = searchTokens(query);
   const all = memories.map((memory): ShownMemory => {
-    const actor = personActor(memory.keptBy ?? undefined, members, readerId, former);
+    // Note that the service names a memory's keeper as nobody only once their account is deleted.
+    const actor =
+      memory.keptBy === null
+        ? DELETED_ACCOUNT_ACTOR
+        : personActor(memory.keptBy, members, readerId, former);
     const keeper = memory.keptBy?.name ?? "";
     return { memory, actor, keeper };
   });
