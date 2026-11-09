@@ -12,7 +12,7 @@
 
 import net from "node:net";
 import { type Cause, Effect, Queue, Stream } from "effect";
-import type { ListenOnLoopback, LoopbackConnection } from "../compose-port-forwards.js";
+import type { ListenOnLoopback, LoopbackConnection } from "../relay-socket.js";
 
 const LOOPBACK = "127.0.0.1";
 

@@ -7,12 +7,12 @@ import { noNetwork } from "@repo/wire/testing";
 import { type Cause, Effect, Queue, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import { TestClock } from "effect/testing";
-import {
-  composePortForwards,
-  type LoopbackConnection,
-  PORT_FORWARD,
-} from "./compose-port-forwards.js";
-import type { TerminalSocketArrival, TerminalSocketFrame } from "./compose-terminals.js";
+import { composePortForwards, PORT_FORWARD } from "./compose-port-forwards.js";
+import type {
+  LoopbackConnection,
+  TerminalSocketArrival,
+  TerminalSocketFrame,
+} from "./relay-socket.js";
 
 /**
  * A coding agent's cloud ports forwarded to the Mac's loopback, over a

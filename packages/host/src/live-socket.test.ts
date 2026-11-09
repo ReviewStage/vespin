@@ -5,12 +5,12 @@ import { type LiveSocketAsk, liveSocketAskSchema } from "@repo/features/live-wir
 import { type Cause, Deferred, Duration, Effect, Exit, Fiber, Queue, Schema, Stream } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { TestClock } from "effect/testing";
+import { liveSocketClient } from "./live-socket.js";
 import type {
   OpenTerminalSocket,
   TerminalSocketArrival,
   TerminalSocketOpening,
-} from "./compose-terminals.js";
-import { liveSocketClient } from "./live-socket.js";
+} from "./relay-socket.js";
 
 /**
  * The host's client with its live reads over one socket, on a scripted

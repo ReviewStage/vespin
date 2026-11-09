@@ -29,11 +29,13 @@ import {
   TERMINAL_OPENING_RETRY,
   TERMINAL_RECONNECT,
   type TerminalClient,
-  type TerminalSocket,
-  type TerminalSocketArrival,
-  type TerminalSocketFrame,
-  type TerminalSocketOpening,
 } from "./compose-terminals.js";
+import type {
+  TerminalSocket,
+  TerminalSocketArrival,
+  TerminalSocketFrame,
+  TerminalSocketOpening,
+} from "./relay-socket.js";
 
 /**
  * A coding agent's terminals as the host answers the desktop for them, over

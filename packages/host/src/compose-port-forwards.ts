@@ -50,28 +50,19 @@ import { Deferred, Duration, Effect, Exit, Result, Schedule, Schema, Scope, Stre
 import { Base64 } from "effect/encoding";
 import * as HttpClient from "effect/http/HttpClient";
 import type { AccountComposer } from "./compose-account.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./compose-terminals.js";
 import type { Composer } from "./composer.js";
 import type { PORT_FORWARD_ACTS } from "./contract/index.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
 import { openedUnderCredential } from "./relay-credential.js";
+import type {
+  ListenOnLoopback,
+  LoopbackConnection,
+  OpenTerminalSocket,
+  TerminalSocket,
+} from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
-
-/** One TCP connection a loopback listener accepted. */
-export interface LoopbackConnection {
-  /** What the connection's far side sent, ending once it closes. */
-  readonly received: Stream.Stream<Uint8Array>;
-  write(bytes: Uint8Array): Effect.Effect<void>;
-  /** Ends the connection once what was written is flushed. */
-  readonly close: Effect.Effect<void>;
-}
-
-/** Listens on this Mac's `127.0.0.1` at the port given for the scope's life: the connections it accepts, or nothing where the port is taken. */
-export type ListenOnLoopback = (
-  port: number,
-) => Effect.Effect<Stream.Stream<LoopbackConnection> | undefined, never, Scope.Scope>;
 
 export const PORT_FORWARD = {
   /** How often the forwarded agent's listening ports are read while forwarding is on. */

@@ -50,8 +50,8 @@ import {
   type HttpClientRequest,
   HttpClientResponse,
 } from "effect/http";
-import type { OpenTerminalSocket, TerminalSocket } from "./compose-terminals.js";
 import { openedUnderCredential } from "./relay-credential.js";
+import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 
 /** How long each socket and each ask is given, by what bounds it. */
 const LIVE_SOCKET_BOUNDS = {

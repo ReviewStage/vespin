@@ -29,8 +29,7 @@ import type { FileSystem } from "effect/FileSystem";
 import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
-import type { ListenOnLoopback } from "../compose-port-forwards.js";
-import type { OpenTerminalSocket } from "../compose-terminals.js";
+import type { ListenOnLoopback, OpenTerminalSocket } from "../relay-socket.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
 

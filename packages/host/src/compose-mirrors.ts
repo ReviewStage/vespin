@@ -52,13 +52,13 @@ import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 import type { AccountComposer } from "./compose-account.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./compose-terminals.js";
 import type { Composer } from "./composer.js";
 import type { MirrorPlatformSeam } from "./effect/seams.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
 import { mirrorDeleted, mirrorMatched, mirrorWritten } from "./mirror-disk.js";
 import { openedUnderCredential } from "./relay-credential.js";
+import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
