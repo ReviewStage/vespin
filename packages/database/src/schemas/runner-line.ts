@@ -37,7 +37,8 @@ export interface RunnerLineFile {
  * `handed_at` is when a read first answered a runner the message line, so a
  * rewind tells a line no runner was ever handed, which it withdraws with no
  * runner to stop, from one a runner may be acting on; null until then, and
- * for every other kind. `files` are the files a message line names, which a launch writes into its
+ * for every other kind, but a row queued by a writer that names no
+ * `handed_at`, which reads as handed. `files` are the files a message line names, which a launch writes into its
  * place before its runner reads the line, kept here so the line carries
  * them to whichever launch takes it; null where it names none. `handed` is
  * what the session will have been handed once its runner takes the message
@@ -66,8 +67,12 @@ export const runnerLine = pgTable(
     createdAt: createdAt(),
     /** When the runner said it took the message line; null until then, and for every other kind. */
     acceptedAt: timestamptz("accepted_at"),
-    /** When a read first answered a runner the message line; null until then, and for every other kind. */
-    handedAt: timestamptz("handed_at"),
+    /**
+     * When a read first answered a runner the message line; null until then, and for every other kind.
+     * Note that it defaults to the insert's instant, and the queue names it null, because a writer
+     * that names no `handed_at`, as one deployed before the column, never stamps its reads either.
+     */
+    handedAt: timestamptz("handed_at").default(sql`now()`),
     /** The files the message line names, each its path, its bytes in base64, and its mode; null where it names none. */
     files: jsonb("files").$type<readonly RunnerLineFile[]>(),
     /** What the session will have been handed once its runner takes the message line; null for every other kind. */

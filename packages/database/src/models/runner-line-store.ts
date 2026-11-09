@@ -113,6 +113,7 @@ const insertLine = SqlSchema.findAll({
               lineId: sql<string | null>`${lineId}::uuid`.as("line_id"),
               createdAt: sql<Date>`${now}::timestamptz`.as("created_at"),
               acceptedAt: sql<Date | null>`null::timestamptz`.as("accepted_at"),
+              handedAt: sql<Date | null>`null::timestamptz`.as("handed_at"),
               files: sql<
                 readonly RunnerLineFile[] | null
               >`${files === null ? null : JSON.stringify(files)}::jsonb`.as("files"),

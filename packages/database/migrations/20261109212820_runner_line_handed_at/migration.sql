@@ -2,9 +2,7 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "runner_line";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "runner_line";
 --> statement-breakpoint
-ALTER TABLE "runner_line" ADD COLUMN "handed_at" timestamp with time zone;
---> statement-breakpoint
-UPDATE "runner_line" SET "handed_at" = coalesce("accepted_at", now()) WHERE "line_id" IS NOT NULL;
+ALTER TABLE "runner_line" ADD COLUMN "handed_at" timestamp with time zone DEFAULT now();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_runner_line"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE

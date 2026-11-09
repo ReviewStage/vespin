@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "8f27c04f-8ee1-4093-a5d1-0e2417165c5f",
+  "id": "91544c40-5646-46c6-9146-a82e34515467",
   "prevIds": ["7e79ad2c-24a0-47b1-9bc7-a9bf896d4d6d"],
   "ddl": [
     {
@@ -9361,7 +9361,7 @@
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
-      "default": null,
+      "default": "now()",
       "generated": null,
       "identity": null,
       "name": "handed_at",
