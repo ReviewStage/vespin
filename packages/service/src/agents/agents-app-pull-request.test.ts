@@ -716,10 +716,10 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           review: "review-required",
           checks: "pending",
         });
-        // Note that whether the member may edit the description is read on their own token, beside the App's reads.
+        // Note that what the member may do to the pull request is read on their own token, beside the App's reads.
         assert.ok(
           calls
-            .filter((call) => !call.query.includes("ViewerCanUpdate"))
+            .filter((call) => !call.query.includes("ViewerRights"))
             .every((call) => call.authorization === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`),
         );
         assert.equal(without?.title, read?.title);
