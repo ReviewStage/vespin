@@ -17,7 +17,7 @@ import { inboxItem } from "./inbox.js";
  * the earlier one on the lock screen. The scheduled sweep takes the rows of
  * members no longer present and sends each whose thread still waits on them
  * or whose agent still stands on that failed turn, and drops the rest
- * (`packages/service/src/push/held-pushes.ts`). A row leaves with its thread,
+ * (`packages/service/src/push/inbox-pushes.ts`). A row leaves with its thread,
  * its agent, or its account.
  */
 export const heldPush = pgTable(

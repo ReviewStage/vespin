@@ -10,7 +10,8 @@ import { Schema as EffectSchema } from "effect";
  * unregisters on sign-out. `POST /api/account/push-devices` registers and
  * `POST /api/account/push-devices/unregister` unregisters, each with the
  * token in its body, never in its address, so no token lands in a request
- * log. The phone's table is apart from the `device` table of the Macs and
+ * log; `/status` reads the phone's "Notify me" and how its pushes fared, and
+ * `/notify` sets the choice, the same way. The phone's table is apart from the `device` table of the Macs and
  * Linux hosts that run local agents, which hold no push token.
  */
 

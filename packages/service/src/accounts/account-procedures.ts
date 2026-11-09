@@ -219,7 +219,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
       };
     }),
 
-    /** The caller stamped active now, as their desktop or web client's beat says, which holds their phone's pushes (`../push/held-pushes.ts`). */
+    /** The caller stamped active now, as their desktop or web client's beat says, which holds their phone's pushes (`../push/inbox-pushes.ts`). */
     active: signedIn.active.effect(function* ({ context }) {
       yield* hostedStoreOrUnavailable(stampPresence(context.userId));
       return PRESENCE_DONE;
