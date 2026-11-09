@@ -45,11 +45,13 @@ import type {
   AccountPreferencesWritten,
   AccountSeamEffect,
 } from "@repo/database/models/account-store";
+import { stampPresence } from "@repo/database/models/presence-store";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import { contextWindowSchema } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL_DEFAULT, isChaptersModel } from "@repo/features/chapters-model-choice";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { AGENT_DEFAULT_CHOICE } from "@repo/features/models-wire";
+import type { PresenceDoneAnswer } from "@repo/features/presence-wire";
 import { failureKind } from "@repo/runtime/effect";
 import {
   accountPreferencesFromWire,
@@ -100,6 +102,9 @@ export interface AccountProcedureSeams {
     write: AccountPreferencesWrite,
   ) => AccountSeamEffect<AccountPreferencesWritten>;
 }
+
+/** What a beat answers once the stamp is kept. */
+const PRESENCE_DONE: PresenceDoneAnswer = { done: true };
 
 /** A coding-agent choice as a write names it; the catalog decides whether it is one. */
 const ModelChoiceSchema = Schema.Struct({
@@ -212,6 +217,12 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         admin: isAdminRole(access.role),
         supportAccessUntil: standingSupportAccess(access.supportAccessUntil, now),
       };
+    }),
+
+    /** The caller stamped active now, as their desktop or web client's beat says, which holds their phone's pushes (`../push/held-pushes.ts`). */
+    active: signedIn.active.effect(function* ({ context }) {
+      yield* hostedStoreOrUnavailable(stampPresence(context.userId));
+      return PRESENCE_DONE;
     }),
 
     /**

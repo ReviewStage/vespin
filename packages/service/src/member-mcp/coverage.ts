@@ -139,6 +139,7 @@ type MemberMcpExclusions = {
 export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
+    active: INTERNAL,
     writePreferences: NOT_YET_BUILT,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
@@ -323,7 +324,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     overviewChecks: NOT_YET_BUILT,
     overviewConversation: NOT_YET_BUILT,
   },
-  pushDevices: { register: INTERNAL, unregister: INTERNAL },
+  pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
