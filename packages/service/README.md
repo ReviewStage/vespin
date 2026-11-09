@@ -1512,7 +1512,7 @@ and effort and its `messages` rows as `UIMessage`s, and a batch posted again
 writes nothing twice; and it takes the developer's lines from
 `/api/agents/runner-lines` (`runner-lines-app.ts`), a held read woken through
 Sync. The runner stays warm past its turn, and the sandbox, its credential
-on the firewall, stops five minutes after anything last touched it
+on the firewall, stops three minutes after anything last touched it
 (`@repo/sandbox`'s `SANDBOX_IDLE`). The instructions (`src/agents/coder-host/instructions.ts`, worded for the
 harness and handed to it at every launch) tell the agent to read `AGENTS.md`
 and `CLAUDE.md` first, reread the code the description names and say where it no
