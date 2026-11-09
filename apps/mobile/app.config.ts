@@ -1,6 +1,6 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -17,6 +17,15 @@ export const URL_SCHEME = "vespin";
 const ASSOCIATED_DOMAIN = "vespin.dev";
 
 const ACCENT_COLOR_NAME = "AccentColor";
+
+// The Keel mark the sign-in screen draws, by the name `@repo/ui-native`'s
+// `BrandMark` reads it under (`BRAND_MARK_ASSET`), from the splash's own
+// copper PNGs, one per appearance.
+const BRAND_MARK = {
+  NAME: "BrandMark",
+  LIGHT_IMAGE: "../../packages/brand/assets/mark/mark-color-light-1024.png",
+  DARK_IMAGE: "../../packages/brand/assets/mark/mark-color-dark-1024.png",
+} as const;
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
@@ -79,47 +88,85 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
   });
 };
 
+// The Keel mark as an image set of the asset catalog, light and dark, so
+// SwiftUI draws the appearance's own mark by name and nothing redraws it.
+const withBrandMark = (config: ExpoConfig): ExpoConfig =>
+  withDangerousMod(config, [
+    "ios",
+    (modConfig) => {
+      const { projectRoot } = modConfig.modRequest;
+      const imageSet = join(
+        IOSConfig.Paths.getSourceRoot(projectRoot),
+        "Images.xcassets",
+        `${BRAND_MARK.NAME}.imageset`,
+      );
+      mkdirSync(imageSet, { recursive: true });
+      const lightFile = "mark-light.png";
+      const darkFile = "mark-dark.png";
+      copyFileSync(join(projectRoot, BRAND_MARK.LIGHT_IMAGE), join(imageSet, lightFile));
+      copyFileSync(join(projectRoot, BRAND_MARK.DARK_IMAGE), join(imageSet, darkFile));
+      const contents = {
+        images: [
+          { filename: lightFile, idiom: "universal" },
+          {
+            appearances: [{ appearance: "luminosity", value: "dark" }],
+            filename: darkFile,
+            idiom: "universal",
+          },
+        ],
+        info: { author: "xcode", version: 1 },
+      };
+      writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      return modConfig;
+    },
+  ]);
+
 // Note that the deployment target is iOS 26 while the SDK is iOS 27's,
 // because iOS 26 runs on every iPhone iOS 27 does and already draws Liquid
 // Glass, so what 27 adds is used behind a version check. Expo generates the
 // UIScene lifecycle and the New Architecture on its own; neither is named
 // here because neither can be set another way.
 const config = (_context?: ConfigContext): ExpoConfig =>
-  withAccentColor({
-    name: "Vespin",
-    slug: "vespin",
-    version: "0.1.0",
-    scheme: URL_SCHEME,
-    orientation: "default",
-    userInterfaceStyle: "automatic",
-    platforms: ["ios"],
-    ios: {
-      bundleIdentifier: BUNDLE_IDENTIFIER,
-      buildNumber: BUILD_NUMBER,
-      deploymentTarget: "26.0",
-      supportsTablet: true,
-      icon: "../../packages/brand/assets/ios/Vespin.icon",
-      associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`],
-      // The TestFlight build takes its pushes from production APNs, which
-      // the distribution profile release-ios.yml exports it with allows; a
-      // simulator build is unsigned and carries no entitlement at all.
-      entitlements: { "aps-environment": "production" },
-    },
-    plugins: [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          backgroundColor: BRAND_PALETTE.LIGHT.GROUND,
-          image: SPLASH.LIGHT_IMAGE,
-          imageWidth: SPLASH.IMAGE_WIDTH,
-          dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
-        },
+  withBrandMark(
+    withAccentColor({
+      name: "Vespin",
+      slug: "vespin",
+      version: "0.1.0",
+      scheme: URL_SCHEME,
+      orientation: "default",
+      userInterfaceStyle: "automatic",
+      platforms: ["ios"],
+      ios: {
+        bundleIdentifier: BUNDLE_IDENTIFIER,
+        buildNumber: BUILD_NUMBER,
+        deploymentTarget: "26.0",
+        supportsTablet: true,
+        icon: "../../packages/brand/assets/ios/Vespin.icon",
+        // The app's universal links, and the sign-in's HTTPS callback, which
+        // `ASWebAuthenticationSession` catches only on a host the app shares
+        // web credentials with.
+        associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`, `webcredentials:${ASSOCIATED_DOMAIN}`],
+        // The TestFlight build takes its pushes from production APNs, which
+        // the distribution profile release-ios.yml exports it with allows; a
+        // simulator build is unsigned and carries no entitlement at all.
+        entitlements: { "aps-environment": "production" },
+      },
+      plugins: [
+        "expo-router",
+        [
+          "expo-splash-screen",
+          {
+            backgroundColor: BRAND_PALETTE.LIGHT.GROUND,
+            image: SPLASH.LIGHT_IMAGE,
+            imageWidth: SPLASH.IMAGE_WIDTH,
+            dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
+          },
+        ],
       ],
-    ],
-    // Builds come from GitHub's macOS runners and TestFlight, never an
-    // over-the-air update, so Expo's update client is left out of the app.
-    updates: { enabled: false },
-  });
+      // Builds come from GitHub's macOS runners and TestFlight, never an
+      // over-the-air update, so Expo's update client is left out of the app.
+      updates: { enabled: false },
+    }),
+  );
 
 export default config;

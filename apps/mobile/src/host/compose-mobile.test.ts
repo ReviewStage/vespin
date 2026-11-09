@@ -1,6 +1,7 @@
 import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { AUTH_SESSION_END } from "@repo/credentials";
+import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
@@ -10,8 +11,10 @@ import { THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { Context, Effect, Layer } from "effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { expect } from "vitest";
 import { composeMobile, type DeviceSeams, MobileHostTag } from "./compose-mobile.js";
+import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server.js";
 
 /**
  * compose-mobile.test.ts -- the shared host as the Expo app composes it,
@@ -24,17 +27,33 @@ import { composeMobile, type DeviceSeams, MobileHostTag } from "./compose-mobile
 /** A thread the Inbox profile stages, by its title (`@repo/host/fixture-inbox`). */
 const STAGED_THREAD = "Who can withdraw an invite?";
 
-/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front. */
+/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a cipher that seals in the clear, and a sign-in sheet closed at once. */
 const testDevice: DeviceSeams = {
   fileSystem: NodeFileSystem.layer,
   createId: () => crypto.randomUUID(),
   openExternal: () => Promise.resolve(),
   openSocket: () => Effect.succeed({ unreachable: true }),
   onAppActiveChanged: () => () => undefined,
+  cipher: {
+    isAvailable: () => true,
+    encrypt: (plainText) => new TextEncoder().encode(plainText),
+    decrypt: (cipherText) => new TextDecoder().decode(cipherText),
+  },
+  authSession: {
+    open: () => Promise.resolve({ end: AUTH_SESSION_END.CLOSED }),
+    dismiss: () => undefined,
+  },
 };
 
+/** The device a flow signs in on against the stubbed account service: its sheet granting at once. */
+const stubDevice: DeviceSeams = { ...testDevice, authSession: stubAuthSession };
+
 /** The host stood up in a scope of its own over `stateRoot`, reaching no network, its counts run on the test's own services. */
-const standingHost = (stateRoot: string, fixture: RunProfile | undefined) =>
+const standingHost = (
+  stateRoot: string,
+  fixture: RunProfile | undefined,
+  device: DeviceSeams = testDevice,
+) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<never>();
     const built = yield* Layer.build(
@@ -46,7 +65,7 @@ const standingHost = (stateRoot: string, fixture: RunProfile | undefined) =>
         fixture,
         appVersion: "0.1.0",
         stateRoot,
-        device: testDevice,
+        device,
       }),
     );
     return Context.get(built, MobileHostTag);
@@ -94,4 +113,48 @@ it.effect(
         expect(reread.settings?.stored.theme).toBe(THEME.DARK);
       }),
     ),
+);
+
+it.effect(
+  "signs in against the stubbed account service as the ios client, stands signed in at the next launch, and signs out revoking its token",
+  () => {
+    // Each OAuth form the host posted, by the endpoint it went to and the client it named.
+    const posted: (readonly [string, string | null])[] = [];
+    const recording: typeof globalThis.fetch = async (input, init) => {
+      const request = new Request(input, init);
+      const endpoint = new URL(request.url).pathname.split("/oauth2/")[1];
+      if (endpoint !== undefined && request.method === "POST") {
+        const form = new URLSearchParams(await request.clone().text());
+        posted.push([endpoint, form.get("client_id")]);
+      }
+      return stubAuthFetch(request);
+    };
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const answer = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const { acts } = yield* standingHost(root, undefined, stubDevice);
+            return yield* Effect.promise(() =>
+              acts[ACT_KIND.ACCOUNT_BEGIN_SIGN_IN]({ provider: ACCOUNT_PROVIDER.GITHUB }),
+            );
+          }),
+        );
+        expect(answer).toMatchObject({
+          account: { status: ACCOUNT_STATUS.SIGNED_IN, email: STUB_ACCOUNT.email },
+        });
+
+        const { acts, bridge } = yield* standingHost(root, undefined, stubDevice);
+        const relaunched = yield* Effect.promise(() => bridge.requestAppState());
+        expect(relaunched.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
+
+        const signedOut = yield* Effect.promise(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]());
+        expect(signedOut.status).toBe(ACCOUNT_STATUS.SIGNED_OUT);
+        expect(posted).toEqual([
+          ["token", "ios"],
+          ["revoke", "ios"],
+        ]);
+      }),
+    ).pipe(Effect.provideService(FetchHttpClient.Fetch, recording));
+  },
 );

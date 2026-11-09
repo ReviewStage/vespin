@@ -6,6 +6,13 @@ export {
 } from "./account/session-manager.js";
 export { ACCOUNT_STATUS } from "./account/snapshot.js";
 export {
+  AUTH_SESSION_END,
+  AUTH_SESSION_REASON,
+  type AuthSession,
+  type AuthSessionAnswer,
+  authSessionConsent,
+} from "./auth-session-consent.js";
+export {
   LOOPBACK_CONSENT_CANCELED,
   type LoopbackConsentOptions,
   type OpenConsent,

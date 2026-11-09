@@ -1,0 +1,32 @@
+# sign-in.yaml -- sign in, relaunch still signed in, and sign out, against the stubbed account service.
+#
+# The app is launched with `-authServer stub` (`src/host/launch-arguments.ts`),
+# which answers the account service in the app and grants the authorization
+# page at once (`src/host/stub-auth-server.ts`), so the flow signs in through
+# the host's real `ios` client, its tokens sealed by the Keychain's cipher in
+# the settings file, without a network or the system's sign-in sheet.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      authServer: stub
+- assertVisible: "Sign in to Vespin"
+- takeScreenshot: sign-in
+- tapOn: "Continue with GitHub"
+- assertVisible: "Inbox"
+# The next launch reads the tokens back from the settings file and opens on
+# the Inbox, never the sign-in screen.
+- stopApp
+- launchApp:
+    arguments:
+      authServer: stub
+- assertVisible: "Inbox"
+- assertNotVisible: "Sign in to Vespin"
+- tapOn: "Settings"
+- assertVisible: "Ada Lovelace"
+- assertVisible: "Analytical Engines"
+- takeScreenshot: settings
+- tapOn: "Analytical Engines"
+- tapOn: "Sign out"
+- assertVisible: "Sign in to Vespin"

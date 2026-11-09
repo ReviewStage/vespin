@@ -1,11 +1,12 @@
 // button.tsx -- the app's buttons and chips: the system's own, in the brand's accent.
 
-import { Button as SwiftUIButton } from "@expo/ui/swift-ui";
+import { Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
   buttonBorderShape,
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
+  frame,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -30,25 +31,46 @@ export const BUTTON_SIZE = {
 
 export type ButtonSize = (typeof BUTTON_SIZE)[keyof typeof BUTTON_SIZE];
 
+/** How wide a button stands: around its words, or across its column, as a sign-in page's ways in do. */
+export const BUTTON_WIDTH = {
+  FIT: "fit",
+  FILL: "fill",
+} as const;
+
+export type ButtonWidth = (typeof BUTTON_WIDTH)[keyof typeof BUTTON_WIDTH];
+
 type ButtonProps = {
   readonly label: string;
   readonly symbol?: SfSymbol | undefined;
   readonly look?: ButtonLook | undefined;
   readonly size?: ButtonSize | undefined;
+  readonly width?: ButtonWidth | undefined;
   /** Whether the act deletes or undoes something, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
 };
 
-/** A button, filled in the accent unless it says otherwise. */
+/**
+ * A button, filled in the accent unless it says otherwise. Note that a
+ * button across its column widens its words rather than itself, because a
+ * bordered button's shape is drawn around its label, so the label is a
+ * `Text` framed to the column's width and the symbol is left out.
+ */
 export function Button(props: ButtonProps) {
   const { label, symbol, look = BUTTON_LOOK.PROMINENT, size = BUTTON_SIZE.REGULAR } = props;
   const colors = useColors();
+  const content =
+    props.width === BUTTON_WIDTH.FILL
+      ? {
+          children: (
+            <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY })]}>{label}</Text>
+          ),
+        }
+      : { label, ...(symbol === undefined ? {} : { systemImage: symbol }) };
   return (
     <SwiftUIButton
-      label={label}
-      {...(symbol === undefined ? {} : { systemImage: symbol })}
+      {...content}
       role={props.destructive === true ? "destructive" : "default"}
       onPress={props.onPress}
       modifiers={[

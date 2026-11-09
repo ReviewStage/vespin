@@ -1,19 +1,62 @@
 // host-provider.tsx -- the host started as the app mounts, its document followed into the Query client every screen reads.
 
+import type { ActPortClient } from "@repo/host/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Effect } from "effect";
 import Constants from "expo-constants";
-import { type ReactNode, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { HostFailedScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
-import { launchFixtureProfile } from "./launch-arguments.js";
-import { type StandingMobileHost, startMobileHost } from "./mobile-runtime.js";
+import { launchFixtureProfile, launchStubsAuthServer } from "./launch-arguments.js";
+import {
+  type MobileHostStartOptions,
+  type StandingMobileHost,
+  startMobileHost,
+} from "./mobile-runtime.js";
+import { stubAuthFetch, stubAuthSession } from "./stub-auth-server.js";
 
 /** The version a build that names none reports, which no shipped build is. */
 const UNVERSIONED = "0.0.0";
 
-/** Where the host's start stands: not yet answered, standing with its document in a client, or failed. */
-type Standing = { readonly client: QueryClient } | { readonly failed: true };
+/** Where the host's start stands: not yet answered, standing with its document in a client and its act port, or failed. */
+type Standing =
+  | { readonly client: QueryClient; readonly acts: ActPortClient }
+  | { readonly failed: true };
+
+/** The act port the screens act through, once the host stands. */
+const HostActs = createContext<ActPortClient | undefined>(undefined);
+
+/** The host's act port, for a screen drawn under `HostProvider`. */
+export function useHostActs(): ActPortClient {
+  const acts = useContext(HostActs);
+  if (acts === undefined) throw new Error("A screen acted outside the host's provider.");
+  return acts;
+}
+
+/**
+ * What this launch starts the host on: the device, or, where a flow names
+ * the stubbed account service, the device with its sign-in sheet and every
+ * service call answered by the stub and its socket never reached.
+ */
+function launchOptions(): MobileHostStartOptions {
+  const device = deviceSeams();
+  const base = {
+    fixture: launchFixtureProfile(),
+    appVersion: Constants.expoConfig?.version ?? UNVERSIONED,
+    stateRoot: hostStateRoot(),
+  };
+  if (!launchStubsAuthServer()) return { ...base, device };
+  return {
+    ...base,
+    device: {
+      ...device,
+      authSession: stubAuthSession,
+      openSocket: () => Effect.succeed({ unreachable: true }),
+    },
+    fetch: stubAuthFetch,
+  };
+}
 
 /**
  * Starts the host once, follows its document into a Query client of the
@@ -34,12 +77,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     let started: StandingMobileHost | undefined;
     let stopFollowing: (() => void) | undefined;
     setStanding(undefined);
-    startMobileHost({
-      fixture: launchFixtureProfile(),
-      appVersion: Constants.expoConfig?.version ?? UNVERSIONED,
-      stateRoot: hostStateRoot(),
-      device: deviceSeams(),
-    }).then(
+    startMobileHost(launchOptions()).then(
       async (host) => {
         started = host;
         const client = new QueryClient();
@@ -53,7 +91,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
             error,
           );
         }
-        if (live) setStanding({ client });
+        if (live) setStanding({ client, acts: host.acts });
         else void host.close();
       },
       (error: unknown) => {
@@ -71,5 +109,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
   if ("failed" in standing) {
     return <HostFailedScreen onRetry={() => setAttempt((count) => count + 1)} />;
   }
-  return <QueryClientProvider client={standing.client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={standing.client}>
+      <HostActs.Provider value={standing.acts}>{children}</HostActs.Provider>
+    </QueryClientProvider>
+  );
 }

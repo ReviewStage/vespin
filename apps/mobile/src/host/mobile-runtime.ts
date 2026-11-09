@@ -8,7 +8,7 @@
  */
 
 import type { RunProfile } from "@repo/host/app-state";
-import { Effect, type Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -29,6 +29,13 @@ export interface MobileHostStartOptions {
   readonly device: DeviceSeams;
   /** The client every service call goes out on; the device's fetch where none is given. */
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>;
+  /**
+   * The `fetch` every fetch client of the host calls, its own account and
+   * settings clients among them, which build theirs rather than take the one
+   * above: the stubbed account service a flow signs in against, or the
+   * device's where none is given.
+   */
+  readonly fetch?: typeof globalThis.fetch;
 }
 
 /** The host as started: what the screens read and act through, and its close, which drains it. */
@@ -51,15 +58,18 @@ export async function startMobileHost(
   const fork = (effect: Effect.Effect<void>): void => {
     runtime.runFork(Effect.withErrorReporting(effect, { defectsOnly: true }));
   };
+  const composed = composeMobile({
+    httpClient,
+    fork,
+    fixture: options.fixture,
+    appVersion: options.appVersion,
+    stateRoot: options.stateRoot,
+    device: options.device,
+  });
   runtime = ManagedRuntime.make(
-    composeMobile({
-      httpClient,
-      fork,
-      fixture: options.fixture,
-      appVersion: options.appVersion,
-      stateRoot: options.stateRoot,
-      device: options.device,
-    }),
+    options.fetch === undefined
+      ? composed
+      : Layer.provideMerge(composed, Layer.succeed(FetchHttpClient.Fetch, options.fetch)),
   );
   try {
     const host = await runtime.runPromise(MobileHostTag);
