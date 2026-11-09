@@ -68,9 +68,10 @@ sign in with your ChatGPT plan, we store it encrypted with AES-256-GCM under a
 per-credential key that is itself encrypted with a server-only secret held
 outside the database. We keep a short hint (such as `sk-ant-…abcd`), the
 email of the ChatGPT account a plan signed in as, the name you give a plan,
-and whether the provider accepts it. We never send a saved credential back to your
-device, log it, or include it in analytics, error reports, or screen
-recordings.
+and whether the provider accepts it. We never log a saved credential or
+include it in analytics, error reports, or screen recordings. We never send
+one to your devices, except to run an agent on your own machine with Bring
+your own host (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
@@ -110,6 +111,16 @@ can reach. Their work stays on that machine, though their transcripts are
 stored like any other. To tell your machines apart, each sends us a keyed hash
 of its hardware or machine id, never the id itself, and a Mac sends its model
 name.
+
+When such an agent starts, we send that machine the Anthropic or OpenAI
+credential it runs on, sealed until the machine picks it up, when we erase our
+copy. For an agent on your ChatGPT plan, the machine instead fetches an access
+token from us while the agent runs. For a Claude agent, the credential sits in
+the agent's environment for that run, so any command the agent runs can read
+it. A Codex agent keeps it out of the commands it runs, but its commands still
+have full access to that machine's account. We take exact copies of the
+credential out of what the agent sends back to us, so a command that prints it
+does not put it in the transcript.
 
 For a repository the Vespin GitHub App reaches, an agent on your machine gets
 a GitHub token from us that lasts an hour and works only for that repository.
