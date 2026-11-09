@@ -161,9 +161,10 @@ uploads a build App Store Connect has not seen. The build carries
 `aps-environment: production`.
 
 It needs an App Store Connect API key apart from the Mac release's, whose role is
-**App Manager** with access to cloud-managed distribution certificates (or **Admin**),
-because automatic signing creates the distribution certificate and profile on the first
-run; the Developer role the Mac's notarization key holds cannot upload. Create it under
+**Admin**, because automatic signing creates the distribution certificate and profile on
+the first run, and only an Admin key may: the access to cloud-managed distribution
+certificates App Store Connect offers an App Manager is given to people, never to a key.
+The Developer role the Mac's notarization key holds cannot upload at all. Create it under
 **Users and Access → Integrations**, download its `.p8` at once, and set it as three
 secrets, beside the repository **variable** `APPLE_TEAM_ID`, the paid team's
 ten-character ID from the Apple Developer account's Membership details:
