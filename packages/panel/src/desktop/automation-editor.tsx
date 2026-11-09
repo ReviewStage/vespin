@@ -141,7 +141,6 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TextArea,
   TextField,
   Toolbar,
   type ToolbarPickUp,
@@ -196,6 +195,7 @@ import { useListedAgent } from "../tasks/use-workspace-agents.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { OWNER_MARK_SIZE, OwnerMark } from "./automation-owner.js";
+import { AutomationPrompt } from "./automation-prompt.js";
 import { AutomationRunsPanel, AutomationRunsScreen } from "./automation-runs-panel.js";
 import { automationDeleteQuestion, automationOwnerName } from "./automation-words.js";
 import { useRunsPanel } from "./folded-groups.js";
@@ -2287,8 +2287,6 @@ function EditorForm({
             : trigger,
         )
       : TRIGGERS;
-  // The prompt's Escape lets go of the caret and keeps the press, as every field's here does.
-  const prompt = useRef<HTMLTextAreaElement>(null);
   // The form is the area its reveals move, so the groups under a trigger's rows glide as they unroll.
   const form = useRef<HTMLDivElement>(null);
   const workspaceName = workspace?.name ?? "Workspace";
@@ -2385,14 +2383,14 @@ function EditorForm({
           title={<ReplayUnmask>{EDITOR_SECTION.PROMPT}</ReplayUnmask>}
           frame={SETTINGS_SECTION_FRAME.NONE}
         >
-          <TextArea
-            ref={prompt}
+          <AutomationPrompt
+            workspace={workspace}
+            repository={draft.repository}
+            disabledServers={draft.disabledServers}
             label="Prompt"
             rows={PROMPT_ROWS}
-            placeholder="Find the flakiest test in CI this week and fix it."
             value={draft.prompt}
             invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
-            onEscape={() => prompt.current?.blur()}
             onChange={(text) => onDraft({ prompt: text })}
           />
           {/* What stops a save, said under the prompt once a save was pressed. */}

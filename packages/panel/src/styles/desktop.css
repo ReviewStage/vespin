@@ -1262,6 +1262,32 @@ body,
   );
 }
 
+/* The prompt is the composer's own field (`automation-prompt.tsx`) in a
+   text field's frame: it stands the rows its placeholder held
+   (`--automation-prompt-rows`) at a text area's insets, and grows a line at
+   a time to the composer's cap. */
+.automation-prompt .agent-composer-field {
+  --agent-composer-field-block: calc(2 * var(--ui-space-6));
+  --agent-composer-field-lines: calc(
+    24 *
+    var(--ui-type-body-leading) +
+    var(--agent-composer-field-block)
+  );
+}
+
+.automation-prompt .agent-composer-input {
+  min-height: calc(
+    var(--automation-prompt-rows) *
+    var(--ui-type-body-leading) +
+    var(--agent-composer-field-block)
+  );
+  padding: var(--ui-space-6) var(--ui-control-inset);
+}
+
+.automation-prompt .agent-composer-placeholder {
+  padding: var(--ui-space-6) var(--ui-control-inset) 0;
+}
+
 /* The runs standing alone beside a folded sidebar stand under the title
    bar's row, so its buttons stand over the row rather than over their way
    back. */

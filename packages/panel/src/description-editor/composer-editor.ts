@@ -32,7 +32,7 @@ import {
 } from "@tiptap/pm/state";
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
-import { enterKeyHint, enterSends } from "../enter-sends.js";
+import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
 import {
   INLINE_MARK,
   INLINE_SPAN,
@@ -111,7 +111,10 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * coarse pointer, a phone's or a tablet's, Enter is a new line, since its
  * keyboard has no Shift+Enter to type one, and the visible Send beside the
  * box sends; ⌘ or Ctrl with Enter, from a keyboard attached to it, still
- * sends. The return key's label (`enterkeyhint`) says which Enter does
+ * sends. A box whose words are kept rather than sent, as an automation's
+ * prompt is, writes a new line on every bare Enter, as a document's text
+ * does, and hands its owner ⌘ or Ctrl with Enter alone (`enterWrites`).
+ * The return key's label (`enterkeyhint`) says which Enter does
  * (`../enter-sends.ts`).
  */
 
@@ -756,13 +759,13 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       class: `${props.className} ${EDITOR_CLASS}`,
       ...rootAria(state.aria),
       "aria-label": props.label,
-      enterkeyhint: enterKeyHint(),
+      enterkeyhint: enterKeyHint(props.enterWrites === true),
     }),
     // Note that a key an input method is composing is the input method's alone, the owner's included.
     handleKeyDown: (view, event) => {
       if (composing(view, event)) return false;
       if (props.onKey(event) || removedChip(view, event.key)) return true;
-      if (!enterSends(event)) return false;
+      if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
       return true;
     },
