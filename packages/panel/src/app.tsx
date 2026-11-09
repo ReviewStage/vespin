@@ -916,13 +916,11 @@ function AppWindow(): React.JSX.Element {
                               links={copyLink}
                               doors={settingsDoors}
                             />
-                            {/* The tabs and places stood on last, across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
+                            {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
                             <ShellRoomContext.Provider value={room}>
                               <TabSwitcher
                                 available={!accountGated}
-                                tab={tab}
-                                place={routedHere?.place}
-                                onTabChange={changeTab}
+                                steps={history}
                                 tasks={tasks}
                               />
                             </ShellRoomContext.Provider>

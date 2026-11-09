@@ -1,24 +1,20 @@
 /**
  * tab-switcher.tsx -- ⌃Tab and ⌃⇧Tab: the screens the window stood on last, across every task, as cards to step through while ⌃ is held, as ⌘Tab steps through apps.
  *
- * The switcher keeps the window's stops most recent first
- * (`tab-switcher-model.ts`), each a whole screen as a step of Back's is: a
- * task with the tabs both its panes showed, or a place. It reads where the
- * window stands on each render: another page, a column tab chosen by a
- * press or a key, or the side panel shown by a door naming a thing, is a
- * stop of its own, and anything else shown on the page standing, a tab
- * chosen in the panel's strip or one the window chose by itself among it,
- * takes the stop standing in place, by the rule Back's steps keep
- * (`places/task-step.ts`). A quick tap of ⌃Tab goes to the screen before
+ * The screens are Back's own steps, most recent first
+ * (`places/window-history.ts`'s `recent`): what is one screen, which
+ * screens can still be gone to, and what each is called are Back's rules
+ * and no others, so Settings, a version history, an Inbox item, and an
+ * automation's page are each a screen as they are a step of Back's, and a
+ * tab chosen in the side panel's strip takes the screen standing in place
+ * as it takes Back's step. A quick tap of ⌃Tab goes to the screen before
  * this one without drawing anything, so two taps flip between two. Held a
  * beat, the cards show over the window: the screen here first and dimmed,
  * the one after it chosen. Tab and → step on, ⇧Tab and ← back, wrapping
  * around; letting go of ⌃, or ⏎, goes to the card chosen, Escape goes
- * nowhere, and a press on a card goes to it. Going is the window's own:
- * both of a task's panes through the doors that show a tab on a task
- * (`onShowColumnTab`, the side panel's `onShow`), opening it where it is
- * another, and a place through its own, so the window's history records it
- * as any move.
+ * nowhere, and a press on a card goes to it. Going is a visit after the
+ * screen standing, which stands the step as Back stands one it lands on
+ * (`onVisitStep`), asking first where a page holds unsaved work.
  *
  * The keys are heard before anything under them, a terminal's or a text
  * field's, since a Control chord is otherwise theirs: a cloud Browser tab
@@ -28,56 +24,52 @@
  * while it stands, as ⌘K's palette does, and leaves ⌃Tab to a dialog over
  * the window.
  *
- * A task's card is named as Back's list names the screen
- * (`history-titles.ts`): the task's status glyph and name, then its panes'
- * tabs, "Fix token refresh · Code", the task and an agent's tab by the
- * names they go by now and a person's card by the name the workspace's
- * members give them, each falling back to what was kept as it stood, the
- * column's agent wearing its glyph as its tab drew it (`switcher-looks.ts`),
- * at work or failed as everywhere. An agent's page is named by the agent,
- * on a task or with none, wearing its glyph as its tab would, and an
- * automation's agent by its automation under it, as its page's bar leads
- * with it.
+ * A card is named as Back's list names the step now (`history-titles.ts`):
+ * a task's by its status glyph and name, then its panes' tabs, "Fix token
+ * refresh · Code", the column's agent wearing its glyph as its tab drew it
+ * (`switcher-looks.ts`), at work or failed as everywhere; an agent's page
+ * by the agent, on a task or with none, wearing its glyph as its tab would,
+ * and an automation's agent by its automation under it, as its page's bar
+ * leads with it; a person's by their face; and any other place by the
+ * glyph its door wears.
  * Its preview is a still of the whole work area, taken once the window
  * settles on the screen and again as ⌃Tab leaves it: main takes a downscaled
  * picture of that part of the window (`window.capture`). A still is a picture
  * of the window's words, so it is kept in this window's memory alone, a few
  * at a time, never written, traced, or counted, and the session recording
- * leaves it out (`ph-no-capture`). Until a stop has one, its card shows its
+ * leaves it out (`ph-no-capture`). Until a screen has one, its card shows its
  * glyph.
  */
 
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { type WorkspaceMember, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
-import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
-import { STRIP_TAB_KIND, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
+import {
+  DIALOG_SIZE,
+  Dialog,
+  GearIcon,
+  makeWait,
+  TabCard,
+  TabCards,
+  VisuallyHidden,
+} from "@repo/ui";
+import { InboxIcon, ShieldUserIcon } from "@repo/ui/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
-import { HouseIcon, InboxIcon, ListTodoIcon, ZapIcon } from "lucide-react";
-import { useContext, useEffect, useId, useRef, useState } from "react";
+import { HistoryIcon, HouseIcon, ListTodoIcon, ZapIcon } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
-import { liveStepTitle, memberName, NAMED_STEP, stepTitle, taskName } from "../history-titles.js";
-import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
-import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
-import {
-  type AutomationsDoor,
-  type BoardDoor,
-  type InboxDoor,
-  useAutomationsDoor,
-  useBoardDoor,
-  useInboxDoor,
-} from "../places/routed-doors.js";
+import { HOME_WORDS, INBOX_WORDS, VERSION_HISTORY_WORDS } from "../history-titles.js";
+import { MemberDirectory, usePerson } from "../member-directory.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
-import type { StepTitle } from "../places/window-steps.js";
-import { SHELL_ROOM } from "../shell-room.js";
-import { ShellRoomContext } from "../stage-room.js";
+import type { TaskStep } from "../places/task-step.js";
+import type { RecentStep, RecentSteps } from "../places/window-history.js";
+import { type Place, type StepTitle, sameScreen } from "../places/window-steps.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
@@ -85,23 +77,13 @@ import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
-import { type RoutedViews, useRoutedViews } from "../workspace-routes.js";
 import { AutomationGlyph } from "./automation-agent-run.js";
 import { type HeldLook, heldLook, LOOK_STRIP } from "./switcher-looks.js";
 import {
-  forgotten,
-  moved,
-  STOP_KIND,
-  type Stop,
   SWITCH_STEP,
   SWITCHER_LET_GO,
-  SWITCHER_PLACE,
-  type SwitcherPlace,
   type SwitcherState,
   type SwitchStep,
-  sameStop,
-  shownStop,
-  stopTask,
   switcherChose,
   switcherPressed,
   switcherShown,
@@ -111,10 +93,10 @@ import {
 /** How long ⌃ is held after ⌃Tab before the cards show, so a quick tap flips without drawing them. */
 const HOLD_SHOWS = "150 millis";
 
-/** How long the window stands on a stop before its still is taken, so a still is of the stop settled rather than arriving. */
+/** How long the window stands on a screen before its still is taken, so a still is of the screen settled rather than arriving. */
 const STILL_SETTLES = "800 millis";
 
-/** How many stills the window keeps, the most recent stops': as many as the cards, and a few the cards may reach once a tab closes. */
+/** How many stills the window keeps, the most recent screens': as many as the cards, and a few the cards may reach once a tab closes. */
 const STILLS_KEPT = 8;
 
 /** The two chords, each the step it takes. */
@@ -125,16 +107,25 @@ const STEP_OF = {
   [APP_COMMAND.PREVIOUS_RECENT_TAB]: SWITCH_STEP.BACK,
 } as const satisfies Record<(typeof SWITCH_COMMANDS)[number], SwitchStep>;
 
-/** The part of the window a stop's still is of: the work area beside the sidebar, both of a task's panes as they stand. */
+/** The part of the window a screen's still is of: the work area beside the sidebar, both of a task's panes as they stand. */
 const WORK_AREA = ".desktop-main";
 
-/** What a place's card wears, as the sidebar's row for it does. */
-const PLACE_LOOK = {
-  [SWITCHER_PLACE.HOME]: { icon: HouseIcon, label: "Home" },
-  [SWITCHER_PLACE.INBOX]: { icon: InboxIcon, label: TAB_WORDS.INBOX },
-  [SWITCHER_PLACE.BOARD]: { icon: ListTodoIcon, label: "Tasks" },
-  [SWITCHER_PLACE.AUTOMATIONS]: { icon: ZapIcon, label: "Automations" },
-} as const satisfies Record<SwitcherPlace, { icon: typeof HouseIcon; label: string }>;
+/** What a place's card wears where nothing names it otherwise: the glyph its door wears, and the app's word for it where Back's list names it nothing. */
+const PLACE_LOOKS: ReadonlyMap<
+  RoutedPlace,
+  { readonly icon: React.JSX.Element; readonly word: string }
+> = new Map<RoutedPlace, { readonly icon: React.JSX.Element; readonly word: string }>([
+  [ROUTED_PLACE.HOME, { icon: <HouseIcon />, word: HOME_WORDS }],
+  [ROUTED_PLACE.INBOX, { icon: <InboxIcon />, word: INBOX_WORDS }],
+  [ROUTED_PLACE.BOARD, { icon: <ListTodoIcon />, word: "Tasks" }],
+  [ROUTED_PLACE.AUTOMATIONS, { icon: <ZapIcon />, word: "Automations" }],
+  [ROUTED_PLACE.SETTINGS, { icon: <GearIcon />, word: "Settings" }],
+  [ROUTED_PLACE.ADMIN, { icon: <ShieldUserIcon />, word: "Admin" }],
+  [ROUTED_PLACE.VERSION_HISTORY, { icon: <HistoryIcon />, word: VERSION_HISTORY_WORDS }],
+]);
+
+/** What a screen's card is called where the window names it nothing. */
+const SCREEN_WORDS = "Page";
 
 /** What a task's card is called where the window lists no name for it. */
 const TASK_WORDS = "Task";
@@ -145,16 +136,16 @@ const PERSON_WORDS = "Profile";
 /** The hold before the cards show: the window's one, as it has one switcher, so each press held afresh calls off the one before. */
 const holdWait = makeWait();
 
-/** The wait before a still is taken of the stop the window settled on, each settle calling off the one before. */
+/** The wait before a still is taken of the screen the window settled on, each settle calling off the one before. */
 const settleWait = makeWait();
 
-/** A still kept of a stop. */
+/** A still kept of a screen. */
 interface HeldStill {
-  readonly stop: Stop;
+  readonly place: Place;
   readonly src: string;
 }
 
-/** How a card wears its stop: its glyph and name, and under them the words a task's tabs are named by, its agent's glyph before them and its end mark after. */
+/** How a card wears its screen: its glyph and name, and under them the words a task's tabs are named by, its agent's glyph before them and its end mark after. */
 interface CardLook extends KindLook {
   /** Whether the name is the app's own word, a place's or the word for a thing no name is known for, which a screen recording shows as it reads (`TabCard`'s). */
   readonly labelReplayUnmasked?: boolean | undefined;
@@ -183,109 +174,102 @@ function automationDetail(
       };
 }
 
-/** A person's page stop wears their face, read against the members around it as every person is drawn. */
+/** A person's page wears their face, read against the members around it as every person is drawn. */
 function PersonStopFace({ userId, name }: { userId: string; name: string }): React.JSX.Element {
   return <ActorMark actor={usePerson({ userId, name })} size={ACTOR_SIZE.INLINE} />;
 }
 
-/**
- * How a card wears its stop, from what the window holds of it now and what
- * Back's list named it while it stood: a task, its agent's tab, and a person
- * by the names they go by now, as Back's list names a step again
- * (`liveStepTitle`), and by what was kept where nothing names them now.
- */
-function cardLook(
-  stop: Stop,
-  tasks: TasksControl,
-  title: StepTitle | undefined,
-  members: readonly WorkspaceMember[] | undefined,
-): CardLook {
-  switch (stop.kind) {
-    case STOP_KIND.TASK: {
-      const task = tasks.tasks.find((each) => each.id === stop.taskId);
-      const column: HeldLook | undefined =
-        stop.column === undefined
-          ? undefined
-          : (heldLook(LOOK_STRIP.COLUMN, stop.taskId, stop.column) ??
-            tabWordLook(stop.column, task));
-      const panel =
-        stop.panel === undefined
-          ? undefined
-          : (heldLook(LOOK_STRIP.PANEL, stop.taskId, stop.panel) ?? tabWordLook(stop.panel, task));
-      const { taskId } = stop;
-      const named = { kind: NAMED_STEP.TASK, taskId, column: stop.column, side: stop.panel };
-      const live = liveStepTitle(named, title, tasks, members);
-      // The words are the tabs as their strips drew them, where nothing names the screen now or as it stood.
-      const words = [column?.label, panel?.label].filter((word) => word !== undefined);
-      return {
-        icon: <PlanGlyph status={task?.status} />,
-        label: live?.label ?? TASK_WORDS,
-        labelReplayUnmasked: live?.label === undefined,
-        detail: live?.detail ?? (words.join(" · ") || undefined),
-        detailIcon: column?.icon,
-        endMark: column?.endMark,
-      };
-    }
-    case STOP_KIND.PLACE: {
-      const { icon: Icon, label } = PLACE_LOOK[stop.place];
-      return { icon: <Icon />, label, labelReplayUnmasked: true, detail: undefined };
-    }
-    case STOP_KIND.AGENT: {
-      const { standing, archived } = tasks.listedAgents;
-      const taskless = [...standing, ...archived].find((each) => each.id === stop.agentId);
-      // Note that an agent on a task, an automation's run's among them, has no row of its own in the sidebar, so it is read off every agent the list carries.
-      const live = tasks.liveAgents?.find((each) => each.id === stop.agentId);
-      const agent =
-        taskless === undefined ? live : tasklessRowSubject(taskless, tasks.agents).agent;
-      const workspaceId = (taskless ?? live)?.workspaceId;
-      if (agent === undefined || workspaceId === undefined) {
-        return {
-          ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
-          labelReplayUnmasked: true,
-          detail: undefined,
-        };
-      }
-      return {
-        ...tabLook({ kind: TAB_KIND.AGENT, name: agentName(agent, tasks.agents.models), agent }),
-        ...automationDetail(agent, workspaceId),
-        endMark: agentEndMark(agent, false),
-      };
-    }
-    case STOP_KIND.PERSON: {
-      const known = memberName(members, stop.userId) ?? stop.name;
-      const name = known ?? PERSON_WORDS;
-      return {
-        icon: <PersonStopFace userId={stop.userId} name={name} />,
-        label: name,
-        labelReplayUnmasked: known === undefined,
-        detail: undefined,
-      };
-    }
-  }
+/** A task's card: its status glyph and its name as Back's list names the step now, then its panes' tabs as their strips drew them where nothing names them. */
+function taskLook(step: TaskStep, title: StepTitle | undefined, tasks: TasksControl): CardLook {
+  const { taskId } = step;
+  const task = tasks.tasks.find((each) => each.id === taskId);
+  const side = step.side ?? (step.panel?.open === true ? step.panel.tab : undefined);
+  const column: HeldLook | undefined =
+    step.column === undefined
+      ? undefined
+      : (heldLook(LOOK_STRIP.COLUMN, taskId, step.column) ?? tabWordLook(step.column, task));
+  const panel =
+    side === undefined
+      ? undefined
+      : (heldLook(LOOK_STRIP.PANEL, taskId, side) ?? tabWordLook(side, task));
+  // The words are the tabs as their strips drew them, where nothing names the screen now or as it stood.
+  const words = [column?.label, panel?.label].filter((word) => word !== undefined);
+  return {
+    icon: <PlanGlyph status={task?.status} />,
+    label: title?.label ?? TASK_WORDS,
+    labelReplayUnmasked: title?.label === undefined,
+    detail: title?.detail ?? (words.join(" · ") || undefined),
+    detailIcon: column?.icon,
+    endMark: column?.endMark,
+  };
 }
 
-/** One card of a stop, named against the workspace's members around it (`cardLook`). */
-function StopCard({
-  stop,
+/** An agent's own page's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
+function agentLook(agentId: string, tasks: TasksControl): CardLook {
+  const { standing, archived } = tasks.listedAgents;
+  const taskless = [...standing, ...archived].find((each) => each.id === agentId);
+  // Note that an agent on a task, an automation's run's among them, has no row of its own in the sidebar, so it is read off every agent the list carries.
+  const live = tasks.liveAgents?.find((each) => each.id === agentId);
+  const agent = taskless === undefined ? live : tasklessRowSubject(taskless, tasks.agents).agent;
+  const workspaceId = (taskless ?? live)?.workspaceId;
+  if (agent === undefined || workspaceId === undefined) {
+    return {
+      ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
+      labelReplayUnmasked: true,
+      detail: undefined,
+    };
+  }
+  return {
+    ...tabLook({ kind: TAB_KIND.AGENT, name: agentName(agent, tasks.agents.models), agent }),
+    ...automationDetail(agent, workspaceId),
+    endMark: agentEndMark(agent, false),
+  };
+}
+
+/** How a card wears its screen, from what Back's list calls the step now and what the window holds of what it names. */
+function cardLook(step: RecentStep, tasks: TasksControl): CardLook {
+  const { place, title, routed, params } = step;
+  if (place.task !== undefined) return taskLook(place.task, title, tasks);
+  if (routed === ROUTED_PLACE.AGENT && params.agentId !== undefined) {
+    return agentLook(params.agentId, tasks);
+  }
+  if (routed === ROUTED_PLACE.PERSON && params.userId !== undefined) {
+    const name = title?.label ?? PERSON_WORDS;
+    return {
+      icon: <PersonStopFace userId={params.userId} name={name} />,
+      label: name,
+      labelReplayUnmasked: title?.label === undefined,
+      detail: title?.detail,
+    };
+  }
+  const look = routed === undefined ? undefined : PLACE_LOOKS.get(routed);
+  return {
+    icon: look?.icon ?? <HouseIcon />,
+    label: title?.label ?? look?.word ?? SCREEN_WORDS,
+    labelReplayUnmasked: title?.label === undefined,
+    detail: title?.detail,
+  };
+}
+
+/** One card of a screen. */
+function ScreenCard({
+  step,
   tasks,
-  title,
   still,
   here,
   chosen,
   onPoint,
   onPick,
 }: {
-  stop: Stop;
+  step: RecentStep;
   tasks: TasksControl;
-  title: StepTitle | undefined;
   still: string | undefined;
   here: boolean;
   chosen: boolean;
   onPoint: () => void;
   onPick: () => void;
 }): React.JSX.Element {
-  const { members } = useMemberDirectory();
-  const look = cardLook(stop, tasks, title, members);
+  const look = cardLook(step, tasks);
   return (
     <TabCard
       icon={look.icon}
@@ -303,42 +287,6 @@ function StopCard({
       onPick={onPick}
     />
   );
-}
-
-/** Where the window stands now, as the switcher reads it, Home by its route. */
-function standingOf(
-  tab: PanelTab,
-  tasks: TasksControl,
-  place: RoutedPlace | undefined,
-  views: RoutedViews,
-): Stop | undefined {
-  const { mainTabs, sidePanel } = tasks;
-  const { userId, name, workspace } = views.person;
-  const column = mainTabs.tab;
-  return shownStop({
-    over: tab === PANEL_TAB.SETTINGS || place === ROUTED_PLACE.ADMIN || tasks.history.open,
-    inbox: place === ROUTED_PLACE.INBOX,
-    agentId: tasks.agentView.agentId,
-    person:
-      userId === undefined
-        ? undefined
-        : {
-            userId,
-            name,
-            workspaceId:
-              workspace === undefined
-                ? undefined
-                : workspaceOfSlug(tasks.workspaces, workspace)?.id,
-          },
-    board: views.board,
-    automations: views.automations !== undefined,
-    home: place === ROUTED_PLACE.HOME,
-    boundFor: tasks.boundFor,
-    openTaskId: tasks.activeTaskId,
-    column,
-    panel: sidePanel.open ? sidePanel.tab : undefined,
-    fullScreen: sidePanel.fullScreen,
-  });
 }
 
 /** A part of the window, in whole CSS pixels. */
@@ -366,21 +314,17 @@ function claim(event: Event): void {
 
 /**
  * The switcher, answering ⌃Tab while `available`, past the sign-in, on a
- * desktop app. It is mounted once for the window and draws nothing until
- * its cards show.
+ * desktop app, over the window's steps (`steps`). It is mounted once for
+ * the window and draws nothing until its cards show.
  */
 export function TabSwitcher({
   available,
-  tab,
-  place,
-  onTabChange,
+  steps,
   tasks,
 }: {
   available: boolean;
-  tab: PanelTab;
-  /** The routed place the window stands on, which names its step; none while the window's state says where it stands. */
-  place: RoutedPlace | undefined;
-  onTabChange: (tab: PanelTab) => void;
+  /** The window's steps as ⌃Tab steps through them (`places/window-history.ts`). */
+  steps: RecentSteps;
   tasks: TasksControl;
 }): React.JSX.Element | null {
   const desktop =
@@ -389,33 +333,16 @@ export function TabSwitcher({
   const answers = available && desktop;
   // Note that a still is the window's own action, sent on its mutation; nothing the service holds.
   const { mutateAsync: sendCapture } = useMutation(actMutation(ACT_KIND.WINDOW_CAPTURE));
-  const [state, setState] = useState<SwitcherState>(SWITCHER_LET_GO);
+  const [state, setState] = useState<SwitcherState<RecentStep>>(SWITCHER_LET_GO);
   // Counts the stills kept, so one landing while the cards show is drawn at once.
   const [, setStillsKept] = useState(0);
   // Note that these are refs, because the keys and the stills read them as they land, which no render stands between.
-  const latest = useRef<SwitcherState>(SWITCHER_LET_GO);
-  const stops = useRef<readonly Stop[]>([]);
-  const shown = useRef<Stop | undefined>(undefined);
+  const latest = useRef<SwitcherState<RecentStep>>(SWITCHER_LET_GO);
   const stills = useRef<readonly HeldStill[]>([]);
-  // What Back's list called each stop while it stood, which its card says.
-  const titles = useRef<readonly { readonly stop: Stop; readonly title: StepTitle }[]>([]);
-  // How many presses and keys the window has heard, and how many it had as the stops were last moved, as Back's steps count them.
-  const presses = useRef(0);
-  const pressesMoved = useRef(0);
-  // How many times a door naming a thing had opened it in the side panel as the stops were last moved, as Back's steps count them.
-  const openedMoved = useRef(tasks.sidePanel.opened);
-  // The tasks the window's list has named, so a task gone from it after is one deleted rather than one not yet listed.
-  const listed = useRef(new Set<string>());
-  const places = {
-    board: useBoardDoor(tasks),
-    automations: useAutomationsDoor(tasks),
-    inbox: useInboxDoor(tasks),
-  };
-  const views = useRoutedViews();
-  // Note that a narrow room shows one pane at a time, so the side panel opened over the plan is a stop of its own, as it is a step of Back's.
-  const narrow = useContext(ShellRoomContext) === SHELL_ROOM.NARROW;
-  const doors = useRef({ tab, tasks, onTabChange, places });
-  doors.current = { tab, tasks, onTabChange, places };
+  // The screen the window last settled on, whose still is taken once it has stood a beat.
+  const settled = useRef<Place | undefined>(undefined);
+  const doors = useRef(steps);
+  doors.current = steps;
   // The switcher's waits are called off as it leaves, since what they would do is draw it.
   useEffect(
     () => () => {
@@ -426,147 +353,65 @@ export function TabSwitcher({
   );
   useOverlayHold(state.held);
   const titleId = useId();
-  const [face, setFace] = useState<SwitcherState>(state);
+  const [face, setFace] = useState<SwitcherState<RecentStep>>(state);
   if (state.held && state.shown && face !== state) setFace(state);
 
-  const move = (next: SwitcherState) => {
+  const move = (next: SwitcherState<RecentStep>) => {
     latest.current = next;
     setState(next);
   };
 
-  // The stop on screen, the most recent, which the cards dim and a let-go there leaves.
-  const here = (): Stop | undefined => {
-    const first = stops.current[0];
-    const standing = shown.current;
-    return first !== undefined && standing !== undefined && sameStop(standing, first)
-      ? first
-      : undefined;
-  };
+  // The screen the window stands on, where it stands on a step.
+  const here = (): Place | undefined => doors.current.standingStep();
 
-  const keep = (stop: Stop, src: string) => {
+  const keep = (place: Place, src: string) => {
     stills.current = [
-      { stop, src },
-      ...stills.current.filter((held) => !sameStop(held.stop, stop)),
+      { place, src },
+      ...stills.current.filter((held) => !sameScreen(held.place, place)),
     ].slice(0, STILLS_KEPT);
     if (latest.current.held) setStillsKept((count) => count + 1);
   };
 
-  // A still of the work area as it is drawn now, kept once main answers; a stop no longer on screen by then keeps what it had.
-  const takeStill = (stop: Stop) => {
+  // A still of the work area as it is drawn now, kept once main answers; a screen no longer on screen by then keeps what it had.
+  const takeStill = (place: Place) => {
     const area = areaOf(WORK_AREA);
     if (area === undefined) return;
     sendCapture(area).then(
       (src) => {
-        if (src !== null) keep(stop, src);
+        if (src !== null) keep(place, src);
       },
       () => undefined,
     );
   };
 
-  // A press or a key, which makes the tab it chooses a stop of its own rather than one the window chose by itself.
+  // The screen the window settled on is taken as a still once it has stood a beat, checked on each render.
   useEffect(() => {
-    const heard = () => {
-      presses.current += 1;
-    };
-    window.addEventListener("pointerdown", heard, true);
-    window.addEventListener("keydown", heard, true);
-    return () => {
-      window.removeEventListener("pointerdown", heard, true);
-      window.removeEventListener("keydown", heard, true);
-    };
-  }, []);
-
-  // The window's stops follow where it stands, each render, and what Back's list calls the stop standing.
-  const now = standingOf(tab, tasks, place, views);
-  const title = stepTitle(place, tasks, views);
-  useEffect(() => {
-    const before = shown.current;
-    shown.current = now;
-    const first = stops.current[0];
-    const pressed = presses.current !== pressesMoved.current;
-    const opened = tasks.sidePanel.opened !== openedMoved.current;
-    pressesMoved.current = presses.current;
-    openedMoved.current = tasks.sidePanel.opened;
-    stops.current = moved(stops.current, before, now, { pressed, opened }, narrow);
-    // A tab closed on its task's page is let go then, before a page standing in its place can hide the close.
-    standing();
-    titles.current = [
-      ...(now === undefined || title === undefined ? [] : [{ stop: now, title }]),
-      ...titles.current.filter(
-        (held) =>
-          (now === undefined || !sameStop(held.stop, now)) &&
-          stops.current.some((stop) => sameStop(stop, held.stop)),
-      ),
-    ];
-    const settled = stops.current[0];
-    if (settled === undefined || (first !== undefined && sameStop(first, settled))) return;
+    const standing = here();
+    const before = settled.current;
+    settled.current = standing;
+    if (standing === undefined || (before !== undefined && sameScreen(before, standing))) return;
     settleWait.start(
       Effect.andThen(
         Effect.sleep(STILL_SETTLES),
         Effect.sync(() => {
           const standingOn = here();
-          if (standingOn !== undefined && sameStop(standingOn, settled)) takeStill(settled);
+          if (standingOn !== undefined && sameScreen(standingOn, standing)) takeStill(standing);
         }),
       ),
     );
   });
 
-  // Goes to a stop through the window's own doors, as any move there would: the stop's own door moves the window first,
-  // and the rest of its screen, and the stops' order, follow once that move lands, so a leave kept at the ask moves
-  // nothing, the stops' order included (`places/place-leave.ts`'s `arrive`). The routed place standing, Settings or
-  // Admin, is left as the move lands where the stop's door left it standing, as the sidebar's rows leave it (`app.tsx`'s
-  // `changeTab`). Note that where an ask holds the move, the stop's door moves over whatever place stands, so the one
-  // move held is the one the ask is about.
-  const go = (stop: Stop) => {
-    const { tasks: control, onTabChange: changeTab, places: placeDoors } = doors.current;
-    control.placeLeave.arrive(
-      (free) => openStop(control, placeDoors, stop, !free),
-      () => {
-        changeTab(PANEL_TAB.TASKS);
-        if (stop.kind === STOP_KIND.TASK) standScreen(doors.current.tasks, stop);
-        // Note that the stop is the most recent now, before the window's own moves arrive, so they take it in place.
-        stops.current = [stop, ...stops.current.filter((each) => !sameStop(each, stop))];
-      },
-    );
-  };
-
-  // The stops that still stand: no tab the open task no longer holds, as its strips' own state says, and no task the window no longer lists.
-  const standing = (): readonly Stop[] => {
-    const control = doors.current.tasks;
-    const open = control.activeTaskId;
-    stops.current = forgotten(stops.current, (stop) => {
-      const taskId = stopTask(stop);
-      if (taskId === undefined) return false;
-      if (taskName(control, taskId) !== undefined) listed.current.add(taskId);
-      // Note that the open task is judged by the list only once its row has reached it, because a task just made stands open before it does.
-      const awaited = taskId === open && !listed.current.has(taskId);
-      if (control.listRead && !awaited && taskName(control, taskId) === undefined) return true;
-      // Note that only the task's own page says which of its tabs stand, because the Inbox or an agent's page standing in its place hands the panel a strip of its own.
-      const standingOn = shown.current;
-      if (taskId !== open || standingOn === undefined || stopTask(standingOn) !== open)
-        return false;
-      if (stop.kind !== STOP_KIND.TASK) return false;
-      const { panel, column } = stop;
-      if (panel !== undefined && !control.sidePanel.strip.some((each) => sameTab(each, panel))) {
-        return true;
-      }
-      if (column === undefined) return false;
-      // Note that an agent's tab is judged only once the task's agents are read, since none stands open before.
-      const { openAgents, tabs } = control.mainTabs;
-      if (typeof column !== "string" && column.kind === STRIP_TAB_KIND.AGENT) {
-        return openAgents !== undefined && !openAgents.includes(column.agent);
-      }
-      return !tabs.some((each) => sameTab(each, column));
-    });
-    return stops.current;
+  const pressedNow = (state: SwitcherState<RecentStep>, step: SwitchStep) => {
+    const screens = doors.current.recent();
+    return switcherPressed(state, { screens, here: screens[0]?.standing === true, step });
   };
 
   const press = (step: SwitchStep) => {
     const before = latest.current;
-    const next = switcherPressed(before, { stops: standing(), here: here(), step });
+    const next = pressedNow(before, step);
     if (!next.held) return;
     if (!before.held) {
-      // The stop being left is taken afresh, before the cards can cover it.
+      // The screen being left is taken afresh, before the cards can cover it.
       const leaving = here();
       if (leaving !== undefined) takeStill(leaving);
       holdWait.start(
@@ -583,16 +428,14 @@ export function TabSwitcher({
     const target = going ? switcherTarget(latest.current) : undefined;
     holdWait.stop();
     move(SWITCHER_LET_GO);
-    if (target !== undefined) go(target);
+    if (target !== undefined) doors.current.onVisitStep(target.place);
   };
 
   // The menu bar's items, and ⌘K's rows, go at once, as a tap would: no ⌃ is held to let go of.
   const tap = (step: SwitchStep) => () => {
     if (latest.current.held || overlayHoldsKeyboard()) return;
-    const target = switcherTarget(
-      switcherPressed(SWITCHER_LET_GO, { stops: standing(), here: here(), step }),
-    );
-    if (target !== undefined) go(target);
+    const target = switcherTarget(pressedNow(SWITCHER_LET_GO, step));
+    if (target !== undefined) doors.current.onVisitStep(target.place);
   };
   useAppCommand(APP_COMMAND.NEXT_RECENT_TAB, answers ? tap(SWITCH_STEP.ON) : undefined);
   useAppCommand(APP_COMMAND.PREVIOUS_RECENT_TAB, answers ? tap(SWITCH_STEP.BACK) : undefined);
@@ -661,13 +504,12 @@ export function TabSwitcher({
       <VisuallyHidden id={titleId}>Recent tabs</VisuallyHidden>
       <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
         <TabCards label="Recent tabs">
-          {cards.map((stop, at) => (
-            <StopCard
+          {cards.map((screen, at) => (
+            <ScreenCard
               key={at}
-              stop={stop}
+              step={screen}
               tasks={tasks}
-              title={titles.current.find((held) => sameStop(held.stop, stop))?.title}
-              still={stills.current.find((held) => sameStop(held.stop, stop))?.src}
+              still={stills.current.find((held) => sameScreen(held.place, screen.place))?.src}
               here={face.here && at === 0}
               chosen={at === chosen}
               onPoint={() => move(switcherChose(latest.current, at))}
@@ -681,86 +523,4 @@ export function TabSwitcher({
       </MemberDirectory>
     </Dialog>
   );
-}
-
-/**
- * Opens a stop through its own door, which moves the window there: a task's
- * on the screen's column tab where the screen had the column in sight, else
- * on its panel's tab, else as it last stood; `over` a place standing beside
- * the task's place too, as a move an ask holds is made (`go`).
- */
-function openStop(
-  tasks: TasksControl,
-  doors: Parameters<typeof openPlace>[1],
-  stop: Stop,
-  over: boolean,
-): void {
-  switch (stop.kind) {
-    case STOP_KIND.TASK: {
-      const { taskId, column, panel, fullScreen } = stop;
-      // Note that the column's own door gives up a panel filling the window, so it is used only where the screen had the column in sight.
-      if (column !== undefined && !fullScreen) tasks.onShowColumnTab(taskId, column, over);
-      else if (panel !== undefined) tasks.onShowPanelTab(taskId, panel, over);
-      else tasks.onRestoreTask(taskId, over);
-      break;
-    }
-    case STOP_KIND.AGENT:
-      tasks.agentView.onOpen(stop.agentId);
-      break;
-    case STOP_KIND.PERSON:
-      tasks.onOpenPerson(stop.userId, stop.name, stop.workspaceId);
-      break;
-    case STOP_KIND.PLACE:
-      openPlace(tasks, doors, stop.place);
-      break;
-  }
-}
-
-/**
- * Stands the rest of the screen a task's stop held, once its door's move has
- * landed (`openStop`): its side panel's tab beside the column's, the panel
- * shut where the stop had it shut, and filling the window where it did.
- */
-function standScreen(
-  tasks: TasksControl,
-  stop: Extract<Stop, { kind: typeof STOP_KIND.TASK }>,
-): void {
-  const { taskId, column, panel, fullScreen } = stop;
-  const { sidePanel, mainTabs } = tasks;
-  const columnShown = column !== undefined && !fullScreen;
-  // Note that the panel's own door is used beside the column's, so the task is opened once.
-  if (panel !== undefined && columnShown) sidePanel.onShow(taskId, panel);
-  if (panel === undefined && sidePanel.open) sidePanel.onSetOpen(false);
-  if (column !== undefined && fullScreen) mainTabs.onShow(taskId, column);
-  // Note that a narrow room's panel fills the window whenever it stands, and its toggle shuts it, so it is left as it opens.
-  const filling = columnShown || !sidePanel.open ? false : sidePanel.fullScreen;
-  if (panel !== undefined && !sidePanel.fullScreenOnly && fullScreen !== filling) {
-    sidePanel.onToggleFullScreen();
-  }
-}
-
-/** Opens a place through its own door. */
-function openPlace(
-  tasks: TasksControl,
-  doors: {
-    readonly board: BoardDoor;
-    readonly automations: AutomationsDoor;
-    readonly inbox: InboxDoor;
-  },
-  place: SwitcherPlace,
-): void {
-  switch (place) {
-    case SWITCHER_PLACE.HOME:
-      tasks.onGoHome();
-      return;
-    case SWITCHER_PLACE.INBOX:
-      doors.inbox.open();
-      return;
-    case SWITCHER_PLACE.BOARD:
-      doors.board.open();
-      return;
-    case SWITCHER_PLACE.AUTOMATIONS:
-      doors.automations.open();
-      return;
-  }
 }
