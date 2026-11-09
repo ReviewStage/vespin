@@ -173,7 +173,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
         const chosen = await (window === null
           ? dialog.showSaveDialog(options)
           : dialog.showSaveDialog(window, options));
-        if (chosen.canceled || chosen.filePath === undefined) return false;
+        if (chosen.canceled) return false;
         await fs.promises.writeFile(chosen.filePath, text, "utf8");
         return true;
       },
