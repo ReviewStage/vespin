@@ -102,6 +102,9 @@ import { transcriptStore } from "./transcripts.js";
 /** The variable that bounds how long the CLI's first turn waits on a pending MCP server, in milliseconds (Claude Code 2.1.274 on). */
 const CLAUDE_CODE_MCP_STARTUP_WAIT = "CLAUDE_CODE_MCP_STARTUP_WAIT_MS";
 
+/** The variable that keeps the CLI's prompt cache for an hour rather than five minutes, set to "1" (Claude Code 2.1.108 on). */
+const ENABLE_PROMPT_CACHING_1H = "ENABLE_PROMPT_CACHING_1H";
+
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
 
@@ -216,6 +219,8 @@ function queryOptions(
       ...SANDBOX_TOOL_ENV,
       [RUNNER_ENV.BEARER]: undefined,
       [CLAUDE_CODE_MCP_STARTUP_WAIT]: "0",
+      // Note that it is unset where the config does not ask for it, whatever the runner's own environment holds, so the other half keeps the CLI's default.
+      [ENABLE_PROMPT_CACHING_1H]: config.promptCacheHour === true ? "1" : undefined,
     },
     // Note that the SDK puts an HTTP server's config, headers and all, in the
     // CLI's argv, which any process in the sandbox can read, so ours is an

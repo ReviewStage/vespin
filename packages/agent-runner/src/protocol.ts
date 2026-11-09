@@ -395,6 +395,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   effort: Schema.optionalKey(EffortSchema),
   /** Whether Claude Code's own fast mode is on, for an agent on a model's fast version. */
   fast: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the CLI keeps its prompt cache for an hour rather than five
+   * minutes (`ENABLE_PROMPT_CACHING_1H`), for an agent of the half the
+   * service runs it on; a runner from before this key ignores it.
+   */
+  promptCacheHour: Schema.optionalKey(Schema.Boolean),
   /** Our coder instructions, appended to Claude Code's own system prompt. */
   append: Schema.String,
   /** The CLI's session id to resume, where this launch continues one. */
