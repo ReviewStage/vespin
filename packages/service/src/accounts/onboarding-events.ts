@@ -54,6 +54,7 @@ import { accountCall, callAnswered, fixedBearer } from "../core.js";
 import { afterResponse } from "../http/after-response.js";
 import { readAccountPerson } from "./account-person.js";
 import { greetingOf, WELCOME_MAIL_ENVIRONMENT } from "./welcome-mail.js";
+import { present } from "../environment.js";
 
 const RESEND = {
   BASE_URL: "https://api.resend.com",
@@ -135,12 +136,6 @@ function contactPath(email: string): string {
   return `${RESEND.CONTACTS_PATH}/${encodeURIComponent(email)}`;
 }
 
-/** A variable as the deployment holds it, trimmed, and nothing where it is unset or blank. */
-function presentText(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
-
 /**
  * The reporter over Resend, once the deployment names the key and the
  * welcome's sender, read as the services are built; one that sends nothing
@@ -157,8 +152,8 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
       key: Config.option(Config.Redacted(WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY)),
       from: Config.option(Config.String(WELCOME_MAIL_ENVIRONMENT.FROM)),
     }).pipe(Effect.orElseSucceed(() => ({ key: Option.none(), from: Option.none() })));
-    const key = presentText(Option.map(read.key, Redacted.value));
-    if (key === undefined || presentText(read.from) === undefined) {
+    const key = present(Option.map(read.key, Redacted.value));
+    if (key === undefined || present(read.from) === undefined) {
       yield* Effect.logWarning(EVENTS_UNSET);
       return {
         signedUp: () => Effect.void,

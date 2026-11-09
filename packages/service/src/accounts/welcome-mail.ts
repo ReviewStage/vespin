@@ -27,6 +27,7 @@ import { Clock, Config, Context, Effect, Layer, Option, Redacted } from "effect"
 import * as HttpClient from "effect/http/HttpClient";
 import { accountCall, callAnswered, fixedBearer } from "../core.js";
 import { INVITATION_MAIL_ENVIRONMENT } from "./invitation-mail.js";
+import { present } from "../environment.js";
 
 /** The deployment's variables the sender is read from: the Resend key invitations send with, and the address the note comes from. */
 export const WELCOME_MAIL_ENVIRONMENT = {
@@ -77,12 +78,6 @@ export function greetingOf(name: string): string {
   return first === "" ? "Hey," : `Hey ${first},`;
 }
 
-/** A variable as the deployment holds it, trimmed, and nothing where it is unset or blank. */
-function presentText(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
-
 /**
  * The sender over Resend, once the deployment names both its key and its
  * address, read as the services are built; one that sends nothing otherwise.
@@ -95,8 +90,8 @@ export const welcomeMailFromEnvironment: Layer.Layer<WelcomeMail, never, HttpCli
         key: Config.option(Config.Redacted(WELCOME_MAIL_ENVIRONMENT.RESEND_API_KEY)),
         from: Config.option(Config.String(WELCOME_MAIL_ENVIRONMENT.FROM)),
       }).pipe(Effect.orElseSucceed(() => ({ key: Option.none(), from: Option.none() })));
-      const key = presentText(Option.map(read.key, Redacted.value));
-      const from = presentText(read.from);
+      const key = present(Option.map(read.key, Redacted.value));
+      const from = present(read.from);
       if (key === undefined || from === undefined) {
         yield* Effect.logWarning(MAIL_UNSET);
         return { send: () => Effect.void };

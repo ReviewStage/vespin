@@ -61,6 +61,7 @@ import {
   Ref,
   Result,
 } from "effect";
+import { present } from "../environment.js";
 
 /** The deployment's variables the sender is read from: the APNs key's id, the team that owns it, the key itself as its `.p8` PEM, and the app the pushes are for. */
 export const APNS_ENVIRONMENT = {
@@ -223,12 +224,6 @@ function unsetMessage(missing: readonly string[]): string {
   return `${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} not set, so no push is sent to a phone.`;
 }
 
-/** A variable as the deployment holds it, trimmed, and nothing where it is unset or blank. */
-function presentText(value: Option.Option<string>): string | undefined {
-  const trimmed = Option.getOrUndefined(value)?.trim();
-  return trimmed === "" ? undefined : trimmed;
-}
-
 /** The key as the environment holds it, with the newlines a dashboard paste may have flattened to `\n` restored; none where it is not a key. */
 function signingKeyOf(pem: string): KeyObject | undefined {
   const parsed = Result.try(() => createPrivateKey(pem.replaceAll("\\n", "\n")));
@@ -387,10 +382,10 @@ export const apnsSenderFromEnvironment: Layer.Layer<ApnsSender, never, ApnsTrans
           bundleId: Option.none(),
         })),
       );
-      const keyId = presentText(read.keyId);
-      const teamId = presentText(read.teamId);
-      const pem = presentText(Option.map(read.privateKey, Redacted.value));
-      const bundleId = presentText(read.bundleId);
+      const keyId = present(read.keyId);
+      const teamId = present(read.teamId);
+      const pem = present(Option.map(read.privateKey, Redacted.value));
+      const bundleId = present(read.bundleId);
       const missing = [
         [APNS_ENVIRONMENT.KEY_ID, keyId],
         [APNS_ENVIRONMENT.TEAM_ID, teamId],
