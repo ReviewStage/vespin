@@ -718,7 +718,7 @@ function ownTitleWindow(
       newest?.status === TURN_STATUS.SETTLED &&
       newest.settledAt !== null &&
       newest.settledAt >= since;
-    if (!completed || newest.settledAt === null) return Option.none();
+    if (!completed) return Option.none();
     const ran = yield* turnsBefore(
       target.userId,
       target.conversationId,
@@ -965,7 +965,7 @@ export function transcriptNewest(
       messages,
       cursor,
       status,
-      ...(runStartedAt === undefined ? undefined : { runStartedAt }),
+      runStartedAt,
       ...(failureReason === undefined ? undefined : { failureReason }),
       ...(hostLost === undefined ? undefined : { hostLost }),
     };

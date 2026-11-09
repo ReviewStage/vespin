@@ -962,7 +962,8 @@ function seedHost(host: DemoHost) {
       secretHash: host.secretHash,
       machine: { name: DEMO_HOST.name, platform: DEMO_HOST.platform, arch: DEMO_HOST.arch },
     });
-    if (!enrolled) return yield* Effect.fail(new DemoSeedRefused({ step: "the demo's host" }));
+    if (Option.isNone(enrolled))
+      return yield* Effect.fail(new DemoSeedRefused({ step: "the demo's host" }));
     const place = { machine: AGENT_MACHINE.DEVICE, deviceId: DEMO_HOST.id } as const;
     yield* keepRunsOnPick(DEMO_DEAN.id, place);
     return place;

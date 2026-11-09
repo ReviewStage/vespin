@@ -332,7 +332,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         write.onboardingSurvey === undefined
           ? undefined
           : (yield* hostedStoreOrUnavailable(seams.readPreferences(context.userId)))?.preferences
-              ?.onboardingSurvey;
+              .onboardingSurvey;
       const row = yield* hostedStoreOrUnavailable(seams.writePreferences(context.userId, write));
       // The survey's answers, once kept and changed, are recorded as a response to our onboarding survey.
       const answered = onboardingSurveyFrom(write.onboardingSurvey);
