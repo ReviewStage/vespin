@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -11,4 +12,13 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      // The catalog, and the Inbox threads prototype beside it on the same components.
+      input: {
+        catalog: fileURLToPath(new URL("index.html", import.meta.url)),
+        inbox: fileURLToPath(new URL("inbox-prototype.html", import.meta.url)),
+      },
+    },
+  },
 });

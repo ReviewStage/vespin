@@ -1,0 +1,248 @@
+/* inbox.css -- the prototype's own layout: the chrome, the phone's and the
+   desktop's frames, and the columns a design lays its places in, drawn in
+   the shared tokens. Every control and its look is @repo/ui's own; this sheet
+   only places them. */
+
+.inbox-proto-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.inbox-proto-chrome {
+  padding: var(--ui-space-12) var(--ui-space-16);
+  border-bottom: 1px solid var(--ui-color-border);
+  background: var(--ui-color-sidebar);
+}
+
+.inbox-proto-stage {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--ui-space-24);
+  overflow: auto;
+}
+
+.inbox-proto-note {
+  padding: var(--ui-space-8) var(--ui-space-16) var(--ui-space-16);
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* The device: a phone's 412 by 900, or a desktop window's. */
+.inbox-proto-frame {
+  position: relative;
+  display: flex;
+  flex: none;
+  overflow: hidden;
+  background: var(--ui-color-ground);
+  border: 1px solid var(--ui-color-border-strong);
+  box-shadow: 0 var(--ui-space-12) var(--ui-space-40) var(--ui-color-shadow);
+}
+
+.inbox-proto-frame[data-frame="phone"] {
+  width: 412px;
+  height: 900px;
+  border-radius: var(--ui-space-40);
+  padding-top: var(--ui-space-24);
+}
+
+.inbox-proto-frame[data-frame="desktop"] {
+  width: 1280px;
+  height: 800px;
+  border-radius: var(--ui-radius-14);
+}
+
+/* On a phone the frame is the screen, under the chrome. */
+.inbox-proto-page[data-on-phone] {
+  height: 100dvh;
+}
+
+.inbox-proto-page[data-on-phone] .inbox-proto-chrome {
+  padding: var(--ui-space-8);
+  overflow-x: auto;
+}
+
+.inbox-proto-page[data-on-phone] .inbox-proto-stage {
+  padding: 0;
+  min-height: 0;
+}
+
+.inbox-proto-page[data-on-phone] .inbox-proto-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding-top: 0;
+  box-shadow: none;
+}
+
+/* A design's screen: one place on a phone, the list beside it on a desktop. */
+.inbox-proto-screen {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.inbox-proto-rail {
+  display: flex;
+  flex: none;
+  width: 360px;
+  border-right: 1px solid var(--ui-color-border);
+  background: var(--ui-color-sidebar);
+}
+
+.inbox-proto-detail {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* A place: its head, the room that scrolls, and its foot. */
+.inbox-proto-column {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.inbox-proto-column[data-centered] {
+  justify-content: center;
+}
+
+.inbox-proto-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.inbox-proto-document {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--ui-space-16);
+}
+
+.inbox-proto-document ul,
+.inbox-proto-chat {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbox-proto-foot {
+  padding: var(--ui-space-8) var(--ui-space-12) var(--ui-space-12);
+  border-top: 1px solid var(--ui-color-border);
+}
+
+.inbox-proto-dock {
+  padding: 0 var(--ui-space-12) var(--ui-space-8);
+}
+
+.inbox-proto-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Design B's agent head under its bar, and its crumbs. */
+.inbox-proto-agent-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-12);
+  padding: 0 var(--ui-space-16) var(--ui-space-12);
+  border-bottom: 1px solid var(--ui-color-border);
+}
+
+.inbox-proto-crumbs {
+  padding: var(--ui-space-8) var(--ui-space-16) 0;
+}
+
+/* Design D's strip and filter over the chat. */
+.inbox-proto-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-8);
+  padding: var(--ui-space-8) var(--ui-space-16);
+  border-bottom: 1px solid var(--ui-color-border);
+}
+
+/* The chat: its lines, the member's at the end side, a thread's lit. */
+.inbox-proto-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-16);
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--ui-space-16);
+}
+
+.inbox-proto-line {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--ui-radius-10);
+}
+
+.inbox-proto-line[data-side="end"] {
+  align-items: flex-end;
+}
+
+.inbox-proto-line[data-highlight] {
+  outline: 2px solid var(--ui-color-attention);
+  outline-offset: var(--ui-space-4);
+}
+
+.inbox-proto-bubble {
+  max-width: 85%;
+  margin-left: auto;
+}
+
+.inbox-proto-bubble[data-side="start"] {
+  margin-left: 0;
+}
+
+.inbox-proto-end {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Design C's sheet on a phone: risen from the screen's foot over a scrim. */
+.inbox-proto-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.inbox-proto-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-color-scrim);
+  opacity: 0;
+  transition: opacity var(--ui-duration-pane) var(--ease-plain);
+}
+
+.inbox-proto-sheet-card {
+  position: relative;
+  padding: var(--ui-space-8);
+  transform: translateY(100%);
+  transition: transform var(--ui-duration-pane) var(--ease-pane);
+}
+
+.inbox-proto-sheet[data-open="true"] {
+  pointer-events: auto;
+}
+
+.inbox-proto-sheet[data-open="true"] .inbox-proto-scrim {
+  opacity: 1;
+}
+
+.inbox-proto-sheet[data-open="true"] .inbox-proto-sheet-card {
+  transform: none;
+}
