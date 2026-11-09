@@ -179,6 +179,37 @@ type CodeCardLines =
       code?: never;
     };
 
+/**
+ * The header a block's card wears, a code card's and a draft card's alike:
+ * a glyph and a title naming what the block is, on the hover fill over a
+ * hairline, its actions, the one Copy among them, flush with its right edge.
+ */
+export function BlockCardHeader({
+  glyph,
+  title,
+  titleIs = CODE_CARD_TITLE.NAME,
+  actions,
+}: {
+  glyph?: ReactNode;
+  title: ReactNode;
+  titleIs?: CodeCardTitle;
+  actions: ReactNode;
+}): React.JSX.Element {
+  return (
+    <figcaption className="ui-code-card-header flex min-w-0 items-center justify-between gap-control-gap border-b border-border bg-muted pl-list-inset text-caption text-muted-foreground">
+      <span className={TITLE_CLASS[titleIs]} data-title={titleIs}>
+        {glyph === undefined ? null : <span className={GLYPH}>{glyph}</span>}
+        {typeof title === "string" ? (
+          <OneLine hint={wholeWordsHint(title)}>{title}</OneLine>
+        ) : (
+          title
+        )}
+      </span>
+      <span className="ui-code-card-actions ml-auto flex flex-none">{actions}</span>
+    </figcaption>
+  );
+}
+
 /** A block of code in its card: `title` and the Copy over its lines, cut at 40 until the rest is asked for. */
 export function CodeCard({
   glyph,
@@ -242,20 +273,19 @@ export function CodeCard({
       aria-label={label}
       {...data}
     >
-      <figcaption className="ui-code-card-header flex min-w-0 items-center justify-between gap-control-gap border-b border-border bg-muted pl-list-inset text-caption text-muted-foreground">
-        <span className={TITLE_CLASS[titleIs]} data-title={titleIs}>
-          {glyph === undefined ? null : <span className={GLYPH}>{glyph}</span>}
-          {typeof title === "string" ? (
-            <OneLine hint={wholeWordsHint(title)}>{title}</OneLine>
-          ) : (
-            title
-          )}
-        </span>
-        <span className="ui-code-card-actions ml-auto flex flex-none">
-          {actions}
-          {copied === undefined ? null : <CopyButton text={copied} what={COPY_WHAT} copy={copy} />}
-        </span>
-      </figcaption>
+      <BlockCardHeader
+        glyph={glyph}
+        title={title}
+        titleIs={titleIs}
+        actions={
+          <>
+            {actions}
+            {copied === undefined ? null : (
+              <CopyButton text={copied} what={COPY_WHAT} copy={copy} />
+            )}
+          </>
+        }
+      />
       {code === undefined ? (
         body
       ) : (

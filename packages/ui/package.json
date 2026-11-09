@@ -39,6 +39,7 @@
     "./integration-search": "./src/integration-search.js",
     "./agent-servers-model": "./src/agent-servers-model.js",
     "./github-html": "./src/github-html.js",
+    "./draft-text": "./src/draft-text.js",
     "./held-link": "./src/held-link.js",
     "./link-route": "./src/link-route.js",
     "./pull-request-link": "./src/pull-request-link.js",

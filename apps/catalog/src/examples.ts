@@ -44,6 +44,7 @@ import { DEVICE_CODE_STEPS_EXAMPLE } from "./examples/device-code-steps";
 import { DIALOG_ACTIONS_EXAMPLE } from "./examples/dialog-actions";
 import { DIALOGS_EXAMPLE } from "./examples/dialogs";
 import { DISCLOSURES_EXAMPLE } from "./examples/disclosures";
+import { DRAFT_CARDS_EXAMPLE } from "./examples/draft-cards";
 import { DRAWER_SWIPES_EXAMPLE } from "./examples/drawer-swipes";
 import { DROP_SLOTS_EXAMPLE } from "./examples/drop-slots";
 import { EDITABLE_DOCUMENT_EXAMPLE } from "./examples/editable-document";
@@ -210,6 +211,7 @@ export const EXAMPLES: readonly Example[] = [
   DIALOGS_EXAMPLE,
   DIALOG_ACTIONS_EXAMPLE,
   DISCLOSURES_EXAMPLE,
+  DRAFT_CARDS_EXAMPLE,
   DRAWER_SWIPES_EXAMPLE,
   DROP_SLOTS_EXAMPLE,
   EMAIL_CHIPS_EXAMPLE,
