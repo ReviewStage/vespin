@@ -321,7 +321,8 @@ function schemaMark(schema: Schema, mark: InlineMark): Mark {
  * into marks, each `/name` of a known skill and each mention its chip. Note
  * that a fenced block's lines, its fences included, stand as the words they
  * are, because code read into marks is written back changed, ``` ``a`` ```
- * as `` `a` ``, and a prompt kept and opened again would be saved so.
+ * as `` `a` ``, and a prompt kept and opened again would be saved so; and
+ * words typed in one make no mark either (`handleTextInput`).
  */
 function paragraphsOf(schema: Schema, text: string, chipping: Chipping): PmNode[] {
   const tokens = chipTokens(text, chipping);
@@ -715,6 +716,19 @@ function guardPlugin(state: ComposerState, props: ComposerEditorProps): Plugin {
   });
 }
 
+/** Whether the line a place in the words stands on is a fenced block's, its fences included. */
+function inFence(text: string, at: number): boolean {
+  let fence: string | undefined;
+  let start = 0;
+  for (const line of text.split(NEWLINE)) {
+    const before = fence;
+    fence = fenceAfter(fence, line);
+    if (at <= start + line.length) return before !== undefined || fence !== undefined;
+    start += line.length + NEWLINE.length;
+  }
+  return false;
+}
+
 /**
  * Whether a caret stands in code: the character after it is code's, or the
  * one before it on its own line is, as a caret just inside a span's closing
@@ -784,6 +798,13 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       if (event.shiftKey) return false;
       if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
+      return true;
+    },
+    // Note that words typed in a fenced block are the code's, so no Markdown rule makes a mark of them, as none is read from its lines (`paragraphsOf`).
+    handleTextInput: (view, from, _to, _text, typed) => {
+      const { doc } = view.state;
+      if (!inFence(textOf(doc), offsetAt(doc, from))) return false;
+      view.dispatch(typed());
       return true;
     },
     handleDOMEvents: {
