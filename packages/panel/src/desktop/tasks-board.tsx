@@ -130,6 +130,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
+import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import {
@@ -531,6 +532,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
               menu.close(false);
               onOpen();
             }}
+            onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           >
             <span id={nameId} className={BOARD_NAME}>
               <ReplayMask>{task.name}</ReplayMask>

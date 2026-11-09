@@ -152,7 +152,7 @@ import { Fold, FoldBody } from "../ai-elements/fold.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   type HandTabActions,
@@ -1142,10 +1142,10 @@ function ThreadMenu({
 }): React.JSX.Element | null {
   const menu = useMenu(true);
   const jumps = useContext(ThreadJumpContext);
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   const jump = useThreadJump(thread, there);
   const place = jumps?.place(thread, here);
-  const copy = place === undefined ? undefined : copyLink(place);
+  const links = place === undefined ? [] : linkItemsOf(place);
   // Note that a Conversation thread's own path and lines already open it in Files changed, so only Files changed offers a View in.
   const views: MenuAction[] =
     jump === undefined || there === PULL_REQUEST_THREAD_VIEW.FILES
@@ -1157,7 +1157,7 @@ function ThreadMenu({
             onSelect: jump,
           },
         ];
-  const groups = [copy === undefined ? [] : [copy], views].filter((group) => group.length > 0);
+  const groups = [links, views].filter((group) => group.length > 0);
   if (groups.length === 0) return null;
   const label = moreLabel(THREAD_REVEAL_WORDS.THING);
   return (

@@ -76,10 +76,11 @@ import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useCopyToast } from "../copy-feedback.js";
 import {
-  copyLinkItem,
   LinkWorkspaceProvider,
+  linkItems,
   useChordLinks,
-  useCopyLinkItem,
+  useLinkItems,
+  useOpenInTab,
 } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
@@ -421,7 +422,7 @@ function PersonActions({
   const link = slug === undefined ? undefined : linkOf({ kind: LINK_PLACE.PERSON, userId }, slug);
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
   const copies = [
-    ...(link === undefined ? [] : [copyLinkItem(copy, link, chord)]),
+    ...(link === undefined ? [] : linkItems(copy, link, chord)),
     ...(email === undefined
       ? []
       : [{ label: "Copy email", icon: <MailIcon />, onSelect: () => copy(email, "Email copied") }]),
@@ -523,7 +524,8 @@ function AutomationRow({
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const nextWords = automationNextText(automation, now);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
   const coarse = useCoarsePointer();
   return (
     <RowHintOptions card={<AutomationCard automation={automation} workspaceName={workspaceName} />}>
@@ -556,11 +558,8 @@ function AutomationRow({
         }
         hint={{ Hint: RowHint, label: automation.name }}
         onPress={onOpen}
-        menu={
-          copyLink === undefined
-            ? undefined
-            : rowMenu(AUTOMATION_THING, [[copyLink]], undefined, true)
-        }
+        onOpenInTab={openInTab}
+        menu={links.length === 0 ? undefined : rowMenu(AUTOMATION_THING, [links], undefined, true)}
         more={!coarse}
       />
     </RowHintOptions>

@@ -5,7 +5,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { useEffect } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { copyLinkItem, openInTabItem } from "../copy-link-item.js";
+import { linkItems, openInTabOf } from "../copy-link-item.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 
 /**
@@ -32,35 +32,33 @@ export function taskLinkPlace(
 }
 
 /** A task's link: its own address, naming it by its number where it has one. */
-export function taskLink(task: Pick<TaskSummary, "id" | "number">, place: MentionPlace): string {
+function taskLink(task: Pick<TaskSummary, "id" | "number">, place: MentionPlace): string {
   return linkOf({ kind: LINK_PLACE.TASK, planId: taskLinkStep(task) }, place.workspace);
 }
 
-/**
- * Copy link, the plan's, through `copy`, the window's menu copy
- * (`useCopyToast`), which says so in a toast. Note that it prints ⇧⌘C only
- * while the chord would copy this link, because the chord copies the most
- * specific link at hand, an agent's tab's over its task's
- * (`links-at-hand.ts`), so the open task's item need not be its target.
- */
-function copyTaskLinkItem(
-  copy: (words: string, label: string) => void,
-  task: Pick<TaskSummary, "id" | "number">,
-  place: MentionPlace,
-  chord: readonly string[],
-): MenuAction {
-  return copyLinkItem(copy, taskLink(task, place), chord);
+/** Opens a task in a tab of its own, which a middle-click on its row or card takes; none where the window opens no tabs. */
+export function openTaskInTab(
+  workspaces: readonly Workspace[],
+  task: Pick<TaskSummary, "id" | "number" | "workspaceId" | "repository">,
+): (() => void) | undefined {
+  return openInTabOf(taskLink(task, taskLinkPlace(workspaces, task)));
 }
 
-/** Copy link, the task's, and Open in new tab under it where the window opens tabs (`copyTaskLinkItem`, `openInTabItem`). */
+/**
+ * Copy link, the task's, through `copy`, the window's menu copy
+ * (`useCopyToast`), which says so in a toast, and Open in new tab under it
+ * where the window opens tabs (`linkItems`). Note that Copy link prints ⇧⌘C
+ * only while the chord would copy this link, because the chord copies the
+ * most specific link at hand, an agent's tab's over its task's
+ * (`links-at-hand.ts`), so the open task's item need not be its target.
+ */
 export function taskLinkItems(
   copy: (words: string, label: string) => void,
   task: Pick<TaskSummary, "id" | "number">,
   place: MentionPlace,
   chord: readonly string[],
 ): MenuAction[] {
-  const inTab = openInTabItem(taskLink(task, place));
-  return [copyTaskLinkItem(copy, task, place, chord), ...(inTab === undefined ? [] : [inTab])];
+  return linkItems(copy, taskLink(task, place), chord);
 }
 
 /** Whether a task is unread, as its sidebar row's weight says, and the mark that makes it unread or read. */

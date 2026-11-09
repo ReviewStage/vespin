@@ -543,7 +543,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const addressee = usePerson(addressedTo);
   const coarse = useCoarsePointer();
   // Note that U, H, and E act only on the chosen item, so only its row names their chords.
-  const { groups } = useInboxItemActions(item, {
+  const { groups, openInTab } = useInboxItemActions(item, {
     onMark: onMark === undefined ? undefined : (_item, next) => onMark(listed, next),
     onResolve,
     keyed: chosen,
@@ -600,6 +600,7 @@ export const InboxItemRow = memo(function InboxItemRow({
         selectKey={selectKey}
         selectBox={!coarse}
         onPress={() => onChoose(listed)}
+        onOpenInTab={openInTab}
         menu={
           several === undefined
             ? rowMenu(ITEM_THING, groups(), undefined, true)

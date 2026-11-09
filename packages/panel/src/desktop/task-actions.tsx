@@ -78,7 +78,7 @@ import {
 import { useDescriptionDrafted } from "../composer-drafts.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
-import { openInTabOf, useChordLinks } from "../copy-link-item.js";
+import { useChordLinks } from "../copy-link-item.js";
 import { confirmFailure } from "../failure-report.js";
 import { renameWrite } from "../rename-write.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
@@ -90,9 +90,9 @@ import { PlanGlyph } from "../tasks/tab-look.js";
 import { useTaskDelete } from "../tasks/task-delete.js";
 import {
   markReadItem,
+  openTaskInTab,
   type ReadMark,
   renameTaskItem,
-  taskLink,
   taskLinkItems,
   taskLinkPlace,
   versionHistoryItem,
@@ -1196,7 +1196,7 @@ export function SidebarTask({
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
-          onOpenInTab={openInTabOf(taskLink(task, taskLinkPlace(tasks.workspaces, task)))}
+          onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           selectKey={task.id}
           menu={
             rename.editing
