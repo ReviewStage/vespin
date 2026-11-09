@@ -389,22 +389,26 @@ export function SettingsRowMeter({
 export const SETTINGS_ROW_STATE = {
   CONNECTED: "connected",
   ATTENTION: "attention",
+  SPARE: "spare",
   PLAIN: "plain",
 } as const;
 
 export type SettingsRowState = (typeof SETTINGS_ROW_STATE)[keyof typeof SETTINGS_ROW_STATE];
 
-/** What each state draws: the finished session's dot before the words, the attention tint, or nothing. */
+/** What each state draws: the finished session's dot before the words, the attention tint, the complete green for room to spare, or nothing. */
 const STATE_CLASS = {
   [SETTINGS_ROW_STATE.CONNECTED]:
     "before:size-settings-row-state-dot before:flex-none before:rounded-ui-full before:bg-complete",
   [SETTINGS_ROW_STATE.ATTENTION]: "text-attention",
+  [SETTINGS_ROW_STATE.SPARE]: "text-complete",
   [SETTINGS_ROW_STATE.PLAIN]: "",
 } as const satisfies Record<SettingsRowState, string>;
 
 /**
  * Where a row's subject stands, under its name: connected with the dot a
- * finished session wears, what needs a hand in the attention tint, or plain.
+ * finished session wears, what needs a hand in the attention tint, room
+ * worth leaning on, a plan's week going unused, in the complete green, or
+ * plain.
  * `block` stands it on a line of its own under the row's description, and
  * `wrap` lets its parts break between each other, never inside one.
  */

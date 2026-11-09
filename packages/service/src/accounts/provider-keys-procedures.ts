@@ -76,6 +76,7 @@ import {
   planStanding,
   SUBSCRIPTION_KIND_PROVIDER,
   type SubscriptionKeySummary,
+  type WeeklyPlanUsage,
 } from "@repo/features/provider-key-wire";
 import { Clock, DateTime, Duration, Effect, Option, Redacted, Result } from "effect";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
@@ -142,6 +143,20 @@ function usageOf(row: ProviderKeyRow, now: number): PlanUsage | undefined {
   };
 }
 
+/** A plan's weekly usage as last heard, none where none was, where its reset went unsaid, or where the week has reset since. */
+function weeklyUsageOf(row: ProviderKeyRow, now: number): WeeklyPlanUsage | undefined {
+  const { weeklyUsagePercent, weeklyUsageResetsAt, weeklyUsageReadAt } = row;
+  if (weeklyUsagePercent === null || weeklyUsageResetsAt === null || weeklyUsageReadAt === null) {
+    return undefined;
+  }
+  if (weeklyUsageResetsAt.getTime() <= now) return undefined;
+  return {
+    usedPercent: Math.min(Math.max(weeklyUsagePercent, 0), 100),
+    resetsAt: weeklyUsageResetsAt.getTime(),
+    readAt: weeklyUsageReadAt.getTime(),
+  };
+}
+
 /**
  * The account's credentials of one kind as it is shown them, each one the
  * ring cannot open answered unreadable, and a ChatGPT plan the retired
@@ -178,7 +193,7 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
         ? { limitResetsAt: row.limitResetsAt.getTime() }
         : undefined),
     };
-    return { summary, row, usage: usageOf(row, now) };
+    return { summary, row, usage: usageOf(row, now), weeklyUsage: weeklyUsageOf(row, now) };
   });
 });
 
@@ -193,7 +208,7 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   const subscriptions: SubscriptionKeySummary[] = [];
   for (const kind of SUBSCRIPTION_KINDS) {
-    for (const { summary, row, usage } of yield* summariesOf(userId, kind, ring)) {
+    for (const { summary, row, usage, weeklyUsage } of yield* summariesOf(userId, kind, ring)) {
       subscriptions.push({
         ...summary,
         kind,
@@ -202,6 +217,7 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
         forAgents: row.forAgents,
         ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
         ...(usage === undefined ? undefined : { usage }),
+        ...(weeklyUsage === undefined ? undefined : { weeklyUsage }),
       });
     }
   }

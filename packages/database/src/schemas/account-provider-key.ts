@@ -73,6 +73,17 @@ export const accountProviderKey = pgTable(
     usageWindowMins: integer("usage_window_mins"),
     /** When the window `usagePercent` reads resets, where the harness said; null otherwise. */
     usageResetsAt: timestamptz("usage_resets_at"),
+    /**
+     * How much of its weekly window a plan had used, in percent, as a turn on
+     * it last heard its harness report; null until one has. Kept apart from
+     * `usagePercent`, which reads the shorter window, so neither reading
+     * overwrites the other, and only the latest is kept.
+     */
+    weeklyUsagePercent: doublePrecision("weekly_usage_percent"),
+    /** When the weekly window `weeklyUsagePercent` reads resets, where the harness said; null otherwise. */
+    weeklyUsageResetsAt: timestamptz("weekly_usage_resets_at"),
+    /** When `weeklyUsagePercent` was heard, which a pace through the week is read from; null until it was. */
+    weeklyUsageReadAt: timestamptz("weekly_usage_read_at"),
     /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
     /** The name the account gave the subscription or API key; null for the name it is shown by default. */

@@ -311,6 +311,15 @@ const lineOf = (within: Element) => {
   return line === null ? undefined : { words: line.textContent, state: line.dataset.state };
 };
 
+/** What a plan's row says of its week under its own line, and in which tint, or nothing where it says nothing. */
+const weekOf = (within: Element) => {
+  const line = within.querySelectorAll<HTMLElement>(".ui-settings-row-state")[1];
+  return line === undefined ? undefined : { words: line.textContent, state: line.dataset.state };
+};
+
+/** A weekly reading heard halfway through a week that resets on Nov 16, 2026. */
+const HALFWAY = { readAt: Date.UTC(2026, 10, 12, 12), resetsAt: Date.UTC(2026, 10, 16) };
+
 /** How full a plan's usage bar stands, or nothing where it draws none. */
 const meterOf = (within: Element) =>
   within.querySelector('[data-slot="progress"]')?.getAttribute("data-tone") ?? undefined;
@@ -419,7 +428,13 @@ test("each card opens on its harness and its Add; each credential says how it st
 
   held = {
     keys: [{ ...ANTHROPIC_KEY, provider: PROVIDER_KEY_PROVIDER.OPENAI, position: 0 }],
-    subscriptions: [{ ...CLAUDE_PLAN, usage: { usedPercent: 42.4, windowMins: 300 } }],
+    subscriptions: [
+      {
+        ...CLAUDE_PLAN,
+        usage: { usedPercent: 42.4, windowMins: 300 },
+        weeklyUsage: { usedPercent: 20, ...HALFWAY },
+      },
+    ],
   };
   // Note that one client holds the test's worlds, so each later world waits for its own keys to replace the last one's.
   const connected = await mount();
@@ -428,6 +443,11 @@ test("each card opens on its harness and its Add; each credential says how it st
     assert.deepEqual(lineOf(claudePlan()), plain("42% of the 5-hour limit used")),
   );
   assert.equal(meterOf(claudePlan()), "working");
+  // A fifth of the week used halfway through paces to 40% by the reset, leaving 60% to lean on.
+  assert.deepEqual(weekOf(claudePlan()), {
+    words: "20% of the weekly limit used · about 60% will go unused",
+    state: SETTINGS_ROW_STATE.SPARE,
+  });
   assert.deepEqual(lineOf(credential(connected, KEY_NAME)), readyLine);
   assert.equal(meterOf(credential(connected, KEY_NAME)), undefined, "a key draws no bar");
   assert.doesNotMatch(connected.textContent ?? "", /In use/u);

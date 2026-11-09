@@ -1,6 +1,8 @@
 import {
   FAST_ACCESS,
   type FastAccess,
+  PLAN_USAGE_WINDOW,
+  type PlanUsageWindow,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
@@ -66,6 +68,9 @@ const SealedRowSchema = Schema.Struct({
   usagePercent: Schema.NullOr(Schema.Number),
   usageWindowMins: Schema.NullOr(Schema.Int),
   usageResetsAt: Schema.NullOr(InstantColumnSchema),
+  weeklyUsagePercent: Schema.NullOr(Schema.Number),
+  weeklyUsageResetsAt: Schema.NullOr(InstantColumnSchema),
+  weeklyUsageReadAt: Schema.NullOr(InstantColumnSchema),
   position: Schema.Int,
   label: Schema.NullOr(Schema.String),
   accountEmail: Schema.NullOr(Schema.String),
@@ -107,6 +112,9 @@ const ROW_COLUMNS = {
   usagePercent: accountProviderKey.usagePercent,
   usageWindowMins: accountProviderKey.usageWindowMins,
   usageResetsAt: accountProviderKey.usageResetsAt,
+  weeklyUsagePercent: accountProviderKey.weeklyUsagePercent,
+  weeklyUsageResetsAt: accountProviderKey.weeklyUsageResetsAt,
+  weeklyUsageReadAt: accountProviderKey.weeklyUsageReadAt,
   position: accountProviderKey.position,
   label: accountProviderKey.label,
   accountEmail: accountProviderKey.accountEmail,
@@ -227,6 +235,9 @@ const savedColumns = (write: typeof SavedSchema.Type) => ({
   usagePercent: null,
   usageWindowMins: null,
   usageResetsAt: null,
+  weeklyUsagePercent: null,
+  weeklyUsageResetsAt: null,
+  weeklyUsageReadAt: null,
   createdAt: write.now,
 });
 
@@ -439,6 +450,28 @@ const updatePlanUsage = SqlSchema.void({
           usagePercent: write.usagePercent,
           usageWindowMins: write.usageWindowMins,
           usageResetsAt: write.usageResetsAt,
+        })
+        .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy))),
+    ),
+});
+
+/** A plan's weekly usage as a turn on it last heard it, and when, on the same terms as `updatePlanUsage`. */
+const updateWeeklyPlanUsage = SqlSchema.void({
+  Request: Schema.Struct({
+    ...TargetSchema.fields,
+    weeklyUsagePercent: Schema.Number,
+    weeklyUsageResetsAt: Schema.NullOr(Schema.Date),
+    weeklyUsageReadAt: Schema.Date,
+    savedBy: Schema.Date,
+  }),
+  execute: (write) =>
+    Database.use((db) =>
+      db
+        .update(accountProviderKey)
+        .set({
+          weeklyUsagePercent: write.weeklyUsagePercent,
+          weeklyUsageResetsAt: write.weeklyUsageResetsAt,
+          weeklyUsageReadAt: write.weeklyUsageReadAt,
         })
         .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy))),
     ),
@@ -808,11 +841,13 @@ export function setPlanStatus(
   });
 }
 
-/** How much of its usage window a plan had used, as its harness last reported it. */
+/** How much of one of its usage windows a plan had used, as its harness last reported it. */
 export interface PlanUsage {
+  /** Which window the reading is of. */
+  readonly window: PlanUsageWindow;
   /** The share of the window used, in percent. */
   readonly usedPercent: number;
-  /** How long the window is, in minutes, where the harness said. */
+  /** How long the window is, in minutes, where the harness said; the week's is always a week. */
   readonly windowMins?: number;
   /** When the window resets, where the harness said. */
   readonly resetsAt?: Date;
@@ -821,9 +856,9 @@ export interface PlanUsage {
 /**
  * Writes the usage a coding agent's turn heard its harness report on the
  * account's plan of this kind, the subscription of this id or the first of
- * its kind where none is named, over whatever reading the row held. As with
- * `setPlanStatus`, a credential saved after the turn opened (`savedBy`) is
- * not given it.
+ * its kind where none is named, over whatever reading of that window the row
+ * held; a weekly reading keeps `readAt` beside it. As with `setPlanStatus`, a
+ * credential saved after the turn opened (`savedBy`) is not given it.
  */
 export function setPlanUsage(
   userId: string,
@@ -831,13 +866,26 @@ export function setPlanUsage(
   kind: ProviderKeyKind,
   usage: PlanUsage,
   savedBy: Date,
+  readAt: Date,
   subscriptionId?: string,
 ): TaskStoreEffect<void> {
-  return updatePlanUsage({
+  const target = {
     userId,
     provider,
     kind,
     ...(subscriptionId === undefined ? {} : { subscriptionId }),
+  };
+  if (usage.window === PLAN_USAGE_WINDOW.WEEKLY) {
+    return updateWeeklyPlanUsage({
+      ...target,
+      weeklyUsagePercent: usage.usedPercent,
+      weeklyUsageResetsAt: usage.resetsAt ?? null,
+      weeklyUsageReadAt: readAt,
+      savedBy,
+    });
+  }
+  return updatePlanUsage({
+    ...target,
     usagePercent: usage.usedPercent,
     usageWindowMins: usage.windowMins ?? null,
     usageResetsAt: usage.resetsAt ?? null,

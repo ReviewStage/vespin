@@ -197,6 +197,19 @@ const providerKeySummarySchema = EffectSchema.Struct({
 
 export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
 
+/**
+ * Which of a plan's windows a reading is of: the shorter one its line reads
+ * (Claude's and Codex's five hours), or the week, which a pace through it is
+ * read from. Each is kept in columns of its own, so neither overwrites the
+ * other.
+ */
+export const PLAN_USAGE_WINDOW = {
+  SHORT: "short",
+  WEEKLY: "weekly",
+} as const;
+
+export type PlanUsageWindow = (typeof PLAN_USAGE_WINDOW)[keyof typeof PLAN_USAGE_WINDOW];
+
 /** How much of its usage window a plan has used, as a turn on it last heard its harness report. */
 const planUsageSchema = EffectSchema.Struct({
   /** The share of the window used, in percent. */
@@ -208,6 +221,18 @@ const planUsageSchema = EffectSchema.Struct({
 });
 
 export type PlanUsage = typeof planUsageSchema.Type;
+
+/** How much of its weekly window a plan has used, and when that was heard, which its pace through the week is read from. */
+const weeklyPlanUsageSchema = EffectSchema.Struct({
+  /** The share of the week used, in percent. */
+  usedPercent: countedNumber,
+  /** When the week resets, in epoch milliseconds. */
+  resetsAt: countedNumber,
+  /** When the share was heard, in epoch milliseconds. */
+  readAt: countedNumber,
+});
+
+export type WeeklyPlanUsage = typeof weeklyPlanUsageSchema.Type;
 
 /** What the account sees of one stored subscription credential: never the credential, only what tells it apart. */
 const subscriptionKeySummarySchema = EffectSchema.Struct({
@@ -229,6 +254,8 @@ const subscriptionKeySummarySchema = EffectSchema.Struct({
   forAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
   /** How much of its usage window it has used, as last heard; absent until a turn heard it, and once that window has reset. */
   usage: EffectSchema.optionalKey(planUsageSchema),
+  /** How much of its weekly window it has used, as last heard; absent until a turn heard it with its reset, and once the week has reset. */
+  weeklyUsage: EffectSchema.optionalKey(weeklyPlanUsageSchema),
 });
 
 export type SubscriptionKeySummary = typeof subscriptionKeySummarySchema.Type;

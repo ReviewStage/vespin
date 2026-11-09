@@ -26,6 +26,15 @@
     cursor: var(--ui-cursor-press);
   }
 
+  /* A plan's week (`week-pace-chart.tsx`): as long as the meter above it,
+     and a short line tall. */
+  .ui-chart.ui-week-pace-chart {
+    aspect-ratio: auto;
+    width: 100%;
+    height: var(--ui-space-32);
+    margin-top: var(--ui-space-6);
+  }
+
   .ui-chart .recharts-cartesian-axis-tick text {
     fill: var(--ui-color-text-muted);
   }

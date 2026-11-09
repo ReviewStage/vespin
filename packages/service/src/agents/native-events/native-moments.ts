@@ -1,4 +1,4 @@
-import { PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
+import { type PlanUsageWindow, PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
 import type { RunUsage, ToolCallSettlement } from "@repo/features/turn-run";
 import type { UnparsedWireValue, WireValue } from "@repo/wire";
 
@@ -161,6 +161,8 @@ export type NativeMoment =
     }
   | {
       readonly kind: typeof NATIVE_MOMENT.PLAN_USAGE;
+      /** Which of the plan's windows it reads: the shorter one, or the week. */
+      readonly window: PlanUsageWindow;
       /** The share of the window used, in percent. */
       readonly usedPercent: number;
       /** How long the window is, in minutes, where the harness said. */

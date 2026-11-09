@@ -2053,6 +2053,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         );
 
         const resetsAt = Date.UTC(2026, 9, 22, 9);
+        const weekResetsAt = Date.UTC(2026, 9, 25, 9);
         yield* post(
           agent.bearer,
           refusedLaunch(
@@ -2075,7 +2076,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
                       windowDurationMins: 300,
                       resetsAt: resetsAt / 1000,
                     },
-                    secondary: null,
+                    secondary: {
+                      usedPercent: 30,
+                      windowDurationMins: 10080,
+                      resetsAt: weekResetsAt / 1000,
+                    },
                     rateLimitReachedType: "rate_limit_reached",
                   },
                 },
@@ -2085,6 +2090,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         );
         const rows = yield* listProviderKeyRows(agent.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
 
+        // The secondary window is the week's, kept beside the five hours rather than over them.
         assert.deepEqual(
           rows.map((row) => [
             row.id === second,
@@ -2092,10 +2098,20 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             row.limitResetsAt?.toISOString() ?? null,
             row.usagePercent,
             row.usageWindowMins,
+            row.weeklyUsagePercent,
+            row.weeklyUsageResetsAt?.toISOString() ?? null,
           ]),
           [
-            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null, null],
-            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString(), 100, 300],
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null, null, null, null],
+            [
+              true,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              new Date(resetsAt).toISOString(),
+              100,
+              300,
+              30,
+              new Date(weekResetsAt).toISOString(),
+            ],
           ],
         );
       }),
@@ -2411,7 +2427,24 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           ]),
         );
 
-        yield* launch(ran(agent.lineIds[2] ?? ""));
+        // A weekly reading the next turn hears lands beside the five hours, not over them.
+        const weekResetsAt = Date.UTC(2026, 9, 25, 9);
+        const third = ran(agent.lineIds[2] ?? "");
+        yield* launch([
+          ...third.slice(0, 2),
+          {
+            type: "rate_limit_event",
+            rate_limit_info: {
+              status: "allowed",
+              rateLimitType: "seven_day",
+              resetsAt: weekResetsAt / 1000,
+              utilization: 0.25,
+            },
+            uuid: randomUUID(),
+            ...top,
+          },
+          ...third.slice(2),
+        ]);
 
         yield* launch(
           failedClaudeLaunch(agent.lineIds[3] ?? "", [
@@ -2445,8 +2478,14 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         );
         assert.deepEqual(
-          [row?.usagePercent, row?.usageWindowMins, row?.usageResetsAt?.toISOString()],
-          [100, 300, new Date(resetsAt).toISOString()],
+          [
+            row?.usagePercent,
+            row?.usageWindowMins,
+            row?.usageResetsAt?.toISOString(),
+            row?.weeklyUsagePercent,
+            row?.weeklyUsageResetsAt?.toISOString(),
+          ],
+          [100, 300, new Date(resetsAt).toISOString(), 25, new Date(weekResetsAt).toISOString()],
         );
       }),
   );

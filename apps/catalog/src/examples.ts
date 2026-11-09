@@ -149,6 +149,7 @@ import { TOOLTIPS_EXAMPLE } from "./examples/tooltips";
 import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
 import { VIDEO_PLAYER_EXAMPLE } from "./examples/video-player";
+import { WEEK_PACE_EXAMPLE } from "./examples/week-pace";
 import { WRITING_GLYPHS_EXAMPLE } from "./examples/writing-glyphs";
 import { ZOOM_IMAGES_EXAMPLE } from "./examples/zoom-images";
 
@@ -204,6 +205,7 @@ export const EXAMPLES: readonly Example[] = [
   COMMENTS_EXAMPLE,
   COMPLETION_SOUNDS_EXAMPLE,
   DAILY_BARS_EXAMPLE,
+  WEEK_PACE_EXAMPLE,
   DATA_TABLE_EXAMPLE,
   DETAIL_PAGE_EXAMPLE,
   DEVICE_CODE_STEPS_EXAMPLE,

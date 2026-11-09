@@ -1,6 +1,7 @@
 import { CODEX_ERROR_INFO, codexErrorKind } from "@repo/agent-runner/protocol";
 import { CODEX_TOOL, WORKSPACE_MCP_SERVER_NAMES } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
+import { PLAN_USAGE_WINDOW, type PlanUsageWindow } from "@repo/features/provider-key-wire";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Predicate, Schema } from "effect";
 import { storedServerCall } from "../../integrations/connection-tools.js";
@@ -695,25 +696,27 @@ function turnCompletedMoments(params: unknown): readonly NativeMoment[] {
   ];
 }
 
-/** How much of its primary window the plan has used, where the update names that window. */
-function primaryUsage(
-  primary: (typeof RATE_LIMIT_WINDOW)["Type"] | undefined,
+/** How much of one of its windows the plan has used, where the update names that window. */
+function windowUsage(
+  window: PlanUsageWindow,
+  reading: (typeof RATE_LIMIT_WINDOW)["Type"] | undefined,
 ): readonly NativeMoment[] {
-  if (primary == null) return [];
+  if (reading == null) return [];
   return [
     {
       kind: NATIVE_MOMENT.PLAN_USAGE,
-      usedPercent: primary.usedPercent,
-      ...(primary.windowDurationMins == null ? {} : { windowMins: primary.windowDurationMins }),
+      window,
+      usedPercent: reading.usedPercent,
+      ...(reading.windowDurationMins == null ? {} : { windowMins: reading.windowDurationMins }),
       // Note that Codex counts a window's reset in seconds since the epoch.
-      ...(primary.resetsAt === null ? {} : { resetsAt: primary.resetsAt * 1000 }),
+      ...(reading.resetsAt === null ? {} : { resetsAt: reading.resetsAt * 1000 }),
     },
   ];
 }
 
 /**
  * The plan's limits as Codex last heard them: how much of its primary
- * window it has used, and, where one is reached, the latest reset among the
+ * (five-hour) and secondary (weekly) windows it has used, and, where one is reached, the latest reset among the
  * windows spent. Note that a rolling update may leave out what it does not
  * know, so one that names no reached limit lifts nothing: the turn's end
  * clears the limit instead.
@@ -722,7 +725,10 @@ function rateLimitMoments(params: unknown): readonly NativeMoment[] {
   const read = readRateLimits(params);
   if (Option.isNone(read)) return [];
   const { primary, secondary, rateLimitReachedType } = read.value.rateLimits;
-  const usage = primaryUsage(primary);
+  const usage = [
+    ...windowUsage(PLAN_USAGE_WINDOW.SHORT, primary),
+    ...windowUsage(PLAN_USAGE_WINDOW.WEEKLY, secondary),
+  ];
   const spent = [primary, secondary].filter(
     (window) => window != null && window.usedPercent >= WINDOW_SPENT_PERCENT,
   );

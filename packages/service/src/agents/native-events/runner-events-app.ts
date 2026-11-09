@@ -613,11 +613,13 @@ function landWrite(
         row.provider,
         row.kind,
         {
+          window: write.window,
           usedPercent: write.usedPercent,
           ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
           ...(write.resetsAt === undefined ? {} : { resetsAt: new Date(write.resetsAt) }),
         },
         new Date(write.turnOpenedAt ?? now),
+        new Date(now),
         applying.subscriptionId,
       );
     }

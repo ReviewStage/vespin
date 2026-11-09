@@ -50,6 +50,7 @@ const DAY_WITH_YEAR = new Intl.DateTimeFormat(LOCALE, {
   year: "numeric",
 });
 const WEEKDAY = new Intl.DateTimeFormat(LOCALE, { weekday: "long" });
+const SHORT_WEEKDAY = new Intl.DateTimeFormat(LOCALE, { weekday: "short" });
 const DAY_AND_TIME = new Intl.DateTimeFormat(LOCALE, {
   month: "short",
   day: "numeric",
@@ -183,6 +184,11 @@ export function dueText(at: number, now: number): string {
 /** A day and a time in the fewest words, as a version is named: "Oct 11, 2:14 PM". */
 export function dayAndTimeText(at: number): string {
   return DAY_AND_TIME.format(at);
+}
+
+/** A moment's weekday in its fewest letters: "Thu". */
+export function shortWeekdayText(at: number): string {
+  return SHORT_WEEKDAY.format(at);
 }
 
 /** A moment's weekday and time of day: "Mon 2:05 PM". */

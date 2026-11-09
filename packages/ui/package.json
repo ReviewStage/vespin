@@ -22,6 +22,8 @@
     "./icons": "./src/icons/icons.js",
     "./landed": "./src/components/landed/landed.js",
     "./daily-bars": "./src/chart/daily-bars.js",
+    "./week-pace": "./src/week-pace.js",
+    "./week-pace-chart": "./src/chart/week-pace-chart.js",
     "./markdown": "./src/markdown/markdown.js",
     "./markdown-class": "./src/markdown/markdown-class.js",
     "./virtual-rows": "./src/components/virtual-rows/virtual-rows.js",

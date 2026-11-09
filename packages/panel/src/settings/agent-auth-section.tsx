@@ -16,8 +16,8 @@ import {
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { dueText } from "@repo/features/time-format";
-import { readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
+import { dueText, shortWeekdayText } from "@repo/features/time-format";
+import { countWords, readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
@@ -58,6 +58,7 @@ import {
   SettingsRowMark,
   SettingsRowMeter,
   type SettingsRowSkeletonShape,
+  type SettingsRowState,
   SettingsRowStateLine,
   SettingsSection,
   SettingsSectionsSkeleton,
@@ -73,10 +74,12 @@ import {
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
+import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { WEEK_PACE, type WeekPace, type WeekPaceKind, weekPace } from "@repo/ui/week-pace";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
@@ -225,6 +228,12 @@ const WORDS = {
   SIGNED_OUT: SIGNED_OUT_WORDS,
   ADD: "Add",
   READY: "Ready",
+  PACE_RUNS_OUT: "runs out",
+  PACE_RAN_OUT: "ran out",
+  PACE_BEFORE_RESET: "before reset",
+  PACE_ABOUT: "about",
+  PACE_UNUSED: "will go unused",
+  PACE_ON_TRACK: "on track",
   AT_LIMIT: "At its limit",
   BACK_AT: "back at",
   RENAME: "Rename",
@@ -400,6 +409,92 @@ function limitWords(plan: SubscriptionKeySummary, now: number): string {
 function roomWords(plan: SubscriptionKeySummary): string {
   if (plan.usage === undefined) return WORDS.READY;
   return `${String(Math.round(plan.usage.usedPercent))}% of ${windowWords(plan.usage.windowMins)} used`;
+}
+
+/** A day and an hour, by which a pace's lead on the reset is counted. */
+const DAY_MS = MINUTES.DAY * 60_000;
+const HOUR_MS = MINUTES.HOUR * 60_000;
+const DAY_NOUN = { one: "day", many: "days" } as const;
+const HOUR_NOUN = { one: "hour", many: "hours" } as const;
+
+/** The step an unused share of the week is rounded to, since a pace says it only about. */
+const UNUSED_STEP_PERCENT = 5;
+
+/** How far ahead of the reset a pace runs out, in its largest whole unit: "2 days", "5 hours". */
+function leadWords(leadMs: number): string {
+  if (leadMs >= DAY_MS) return countWords(Math.round(leadMs / DAY_MS), DAY_NOUN);
+  return countWords(Math.max(1, Math.round(leadMs / HOUR_MS)), HOUR_NOUN);
+}
+
+/** What a plan's pace through its week says: "runs out Thu, 2 days before reset", "about 40% will go unused", "on track". */
+function paceWords(pace: WeekPace): string {
+  switch (pace.kind) {
+    case WEEK_PACE.RUNS_OUT: {
+      // Note that only a week the reading found spent has run out; a pace says when it would.
+      const verb = pace.usedPercent >= 100 ? WORDS.PACE_RAN_OUT : WORDS.PACE_RUNS_OUT;
+      return `${verb} ${shortWeekdayText(pace.runsOutAt)}, ${leadWords(pace.resetsAt - pace.runsOutAt)} ${WORDS.PACE_BEFORE_RESET}`;
+    }
+    case WEEK_PACE.UNUSED: {
+      const unused = 100 - pace.projectedPercent;
+      return `${WORDS.PACE_ABOUT} ${String(Math.round(unused / UNUSED_STEP_PERCENT) * UNUSED_STEP_PERCENT)}% ${WORDS.PACE_UNUSED}`;
+    }
+    case WEEK_PACE.ON_TRACK:
+      return WORDS.PACE_ON_TRACK;
+  }
+}
+
+/** The tint a plan's week line wears, by its pace: the attention tint where it runs out, the complete green where much goes unused. */
+const PACE_STATE = {
+  [WEEK_PACE.RUNS_OUT]: SETTINGS_ROW_STATE.ATTENTION,
+  [WEEK_PACE.UNUSED]: SETTINGS_ROW_STATE.SPARE,
+  [WEEK_PACE.ON_TRACK]: SETTINGS_ROW_STATE.PLAIN,
+} as const satisfies Record<WeekPaceKind, SettingsRowState>;
+
+/** A plan's week under its line: how much of it is used and what its pace says, and the pace to chart, where one is read. */
+interface WeekLine {
+  readonly words: string;
+  readonly state: SettingsRowState;
+  readonly pace?: WeekPace;
+}
+
+/** What a plan's week says, where a turn heard its weekly usage: "61% of the weekly limit used · runs out Thu, 2 days before reset". */
+function weekLine(plan: SubscriptionKeySummary): WeekLine | undefined {
+  if (plan.weeklyUsage === undefined) return undefined;
+  const used = `${String(Math.round(plan.weeklyUsage.usedPercent))}% of ${windowWords(MINUTES.WEEK)} used`;
+  const pace = weekPace(plan.weeklyUsage);
+  if (pace === undefined) return { words: used, state: SETTINGS_ROW_STATE.PLAIN };
+  return { words: `${used} · ${paceWords(pace)}`, state: PACE_STATE[pace.kind], pace };
+}
+
+/** Whether the week's chart has landed (`LazyBoundary`'s `loaded`). */
+let weekChartLanded = false;
+
+/**
+ * A plan's week as a small chart, loaded as a chunk of its own the first
+ * time a plan's pace is drawn, since the chart's engine is weighty and the
+ * setup that draws these rows opens before Settings ever does.
+ */
+const WEEK_PACE_CHART = lazy(() =>
+  import("./week-pace-chart.js").then((loaded) => {
+    weekChartLanded = true;
+    return { default: loaded.WeekPaceChart };
+  }),
+);
+
+/** The week's line under a plan's own, with its chart under it where a pace is read. */
+function PlanWeek({ week }: { week: WeekLine }): React.JSX.Element {
+  return (
+    <>
+      <SettingsRowStateLine state={week.state} block>
+        {week.words}
+      </SettingsRowStateLine>
+      {week.pace === undefined ? null : (
+        <LazyBoundary fallback={null} loaded={() => weekChartLanded}>
+          <WEEK_PACE_CHART pace={week.pace} />
+        </LazyBoundary>
+      )}
+    </>
+  );
 }
 
 /** What a Claude token that does not stand says. */
@@ -1161,6 +1256,11 @@ function PlanRow({
   const removal = usePlanRemoval(provider, plan, onUnconfirmed);
   const door = useRef<HTMLButtonElement | null>(null);
   const line = planLine(provider, plan, Date.now());
+  // Note that a plan that does not stand reads only what is wrong with it, so its week is left out.
+  const week =
+    standing(plan) || plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
+      ? weekLine(plan)
+      : undefined;
   const own = [
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => onOpen(STEPS.RENAME) }] : []),
     ...moveActions(at, count, onMove),
@@ -1189,6 +1289,7 @@ function PlanRow({
             {line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
+            {week === undefined ? null : <PlanWeek week={week} />}
           </>
         }
         controls={SETTINGS_ROW_CONTROLS.BESIDE}

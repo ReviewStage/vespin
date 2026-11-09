@@ -1,6 +1,7 @@
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
 import { CLAUDE_CODE_UNRECORDED_TOOL } from "@repo/features/agent-tools";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import type { PlanUsageWindow } from "@repo/features/provider-key-wire";
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
@@ -247,6 +248,7 @@ export type NativeWrite =
     }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_USAGE;
+      readonly window: PlanUsageWindow;
       readonly usedPercent: number;
       readonly windowMins?: number;
       /** When the window resets, in epoch milliseconds, where the harness said. */

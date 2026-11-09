@@ -2,6 +2,7 @@ import type { RunnerMessage } from "@repo/agent-runner/protocol";
 import { CLAUDE_CODE_TOOL, claudeCodeWorkspaceTool } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
+import { PLAN_USAGE_WINDOW, type PlanUsageWindow } from "@repo/features/provider-key-wire";
 import type { ToolCallSettlement } from "@repo/features/turn-run";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Predicate, Schema } from "effect";
@@ -301,12 +302,14 @@ const INFORMATIONAL_WARNING = "warning";
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
 const RATE_LIMIT_REFUSED = "rejected";
 
-/** How long each of the plan's limits runs, in minutes, by the `rateLimitType` the SDK names it. */
-const RATE_LIMIT_WINDOW_MINS: Readonly<Record<string, number>> = {
-  five_hour: 5 * 60,
-  seven_day: 7 * 24 * 60,
-  seven_day_opus: 7 * 24 * 60,
-  seven_day_sonnet: 7 * 24 * 60,
+/** How long each of the plan's limits runs, in minutes, and which of its windows it is, by the `rateLimitType` the SDK names it. */
+const RATE_LIMIT_WINDOWS: Readonly<
+  Record<string, { readonly mins: number; readonly window: PlanUsageWindow }>
+> = {
+  five_hour: { mins: 5 * 60, window: PLAN_USAGE_WINDOW.SHORT },
+  seven_day: { mins: 7 * 24 * 60, window: PLAN_USAGE_WINDOW.WEEKLY },
+  seven_day_opus: { mins: 7 * 24 * 60, window: PLAN_USAGE_WINDOW.WEEKLY },
+  seven_day_sonnet: { mins: 7 * 24 * 60, window: PLAN_USAGE_WINDOW.WEEKLY },
 };
 
 /**
@@ -593,8 +596,7 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
   if (rateLimitType !== undefined) words.push(rateLimitType);
   if (resetsAtMs !== undefined) words.push(`resets ${new Date(resetsAtMs).toISOString()}`);
   const refused = status === RATE_LIMIT_REFUSED;
-  const windowMins =
-    rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOW_MINS[rateLimitType];
+  const named = rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOWS[rateLimitType];
   return [
     // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.
     ...(utilization === undefined
@@ -602,8 +604,10 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
       : [
           {
             kind: NATIVE_MOMENT.PLAN_USAGE,
+            // Note that a limit the SDK names no window for is read as the shorter one, as the plan's line always has.
+            window: named?.window ?? PLAN_USAGE_WINDOW.SHORT,
             usedPercent: utilization * 100,
-            ...(windowMins === undefined ? {} : { windowMins }),
+            ...(named === undefined ? {} : { windowMins: named.mins }),
             ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
           } as const,
         ]),

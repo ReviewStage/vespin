@@ -20,6 +20,7 @@ import {
   chatGptDevicePollAnswerSchema,
   chatGptDeviceStartAnswerSchema,
   FAST_ACCESS,
+  PLAN_USAGE_WINDOW,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
@@ -987,7 +988,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
-    "a plan's usage is answered as last heard until its window resets, then not at all",
+    "a plan's usage, weekly beside it, is answered as last heard until its window resets, then not at all",
     () =>
       Effect.gen(function* () {
         const device = fakeDeviceAuth();
@@ -1001,19 +1002,38 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           owner,
           PROVIDER_KEY_PROVIDER.OPENAI,
           PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-          { usedPercent: 42, windowMins: 300, resetsAt },
+          { window: PLAN_USAGE_WINDOW.SHORT, usedPercent: 42, windowMins: 300, resetsAt },
+          now,
           now,
         );
-        const usage = (read: Answer) => keysOf(read).subscriptions?.map((plan) => plan.usage);
+        const weeklyResetsAt = new Date(now.getTime() + 2 * 24 * 60 * 60_000);
+        yield* setPlanUsage(
+          owner,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          { window: PLAN_USAGE_WINDOW.WEEKLY, usedPercent: 61, resetsAt: weeklyResetsAt },
+          now,
+          now,
+        );
+        const usage = (read: Answer) =>
+          keysOf(read).subscriptions?.map((plan) => [plan.usage, plan.weeklyUsage]);
 
         const heard = usage(yield* ask(request(owner)));
         yield* TestClock.adjust("31 minutes");
         const reset = usage(yield* ask(request(owner)));
 
         assert.deepEqual(heard, [
-          { usedPercent: 42, windowMins: 300, resetsAt: resetsAt.getTime() },
+          [
+            { usedPercent: 42, windowMins: 300, resetsAt: resetsAt.getTime() },
+            { usedPercent: 61, resetsAt: weeklyResetsAt.getTime(), readAt: now.getTime() },
+          ],
         ]);
-        assert.deepEqual(reset, [undefined]);
+        assert.deepEqual(reset, [
+          [
+            undefined,
+            { usedPercent: 61, resetsAt: weeklyResetsAt.getTime(), readAt: now.getTime() },
+          ],
+        ]);
       }),
   );
 
