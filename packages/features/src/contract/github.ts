@@ -8,15 +8,14 @@
  * pull request, and issue; and the repositories members added to a workspace on
  * their own tokens.
  *
- * Every read of a repository is a GET whose input is its query, so each
- * field is declared by what the query carries, text, and decodes to the
- * wire's own value: a workspace, a repository's full name, a folder, and a
- * number. A key named more than once reaches the schema as a list and is
- * refused as an invalid request, as the old group refused it, and a key it
- * does not name is ignored, as the old group ignored one. The claim's body
- * is read exactly, a key it does not name refused. Each output is the wire
- * schema flipped, so oRPC's output check encodes the handler's value into
- * the bytes the wire carries (`packages/service/src/orpc/base.ts`).
+ * Every read of a repository is a GET whose input is its query, so each field
+ * is declared by what the query carries, text, and decodes to the wire's own
+ * value: a workspace, a repository's full name, a folder, and a number. A key
+ * named more than once reaches the schema as a list and is refused as an
+ * invalid request, and a key it does not name is ignored. The claim's body is
+ * read exactly, a key it does not name refused. Each output is the wire
+ * schema flipped, so oRPC's output check encodes the handler's value into the
+ * bytes the wire carries (`packages/service/src/orpc/base.ts`).
  *
  * The connection's procedures declare their own refusals: each refuses as
  * any procedure may (a bearer or session not taken, a store that could not

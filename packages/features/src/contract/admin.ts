@@ -2,13 +2,13 @@
  * admin.ts -- the admin dashboard's reads and its one star write, as one resource (`admin-wire.ts`).
  *
  * Every procedure declares the dashboard's own refusals beside those any
- * procedure may answer (`declaredProcedure`), since the gate and each
- * handler answer in the dashboard's vocabulary and nothing else. Each read takes
- * its query as its input, every parameter optional text: which values a
- * parameter may carry is the handler's to say, with the refusal the page
- * words for it (`invalid-window`, `invalid-search`, ...), as the old group
- * said it, so the schema checks only that each is one value. A key named more
- * than once reaches the schema as a list and is refused as an invalid request.
+ * procedure may answer (`declaredProcedure`), since the gate and each handler
+ * answer in the dashboard's vocabulary and nothing else. Each read takes its
+ * query as its input, every parameter optional text: which values a parameter
+ * may carry is the handler's to say, with the refusal the page words for it
+ * (`invalid-window`, `invalid-search`, ...), so the schema checks only that
+ * each is one value. A key named more than once reaches the schema as a list
+ * and is refused as an invalid request.
  *
  * The star is one address under two methods, PUT to set it and DELETE to take
  * it back, each naming the account in its query; the input is read
@@ -16,7 +16,7 @@
  *
  * The answers declare no output schema: the dashboard's answers are typed
  * in `admin-answer-wire.ts` as plain shapes, not schemas, and they are
- * written as the handler returns them, the bytes the old group wrote.
+ * written as the handler returns them.
  */
 
 import type { ErrorMapItem } from "@orpc/contract";

@@ -67,8 +67,7 @@ const providerParams = EffectSchema.Struct({ provider: EffectSchema.String });
 
 /**
  * The account a provider's route is about, and on a Connect whether it signs
- * in a new one; any other key is let through unread, as the old routes
- * ignored it.
+ * in a new one; any other key is let through unread.
  */
 const accountQuery = EffectSchema.StructWithRest(
   EffectSchema.Struct({
@@ -95,7 +94,7 @@ const toolsInput = EffectSchema.Struct({
 
 /**
  * A rename: the provider, the account, and the label, the body read
- * exactly as the old route read it (`exactInput`), which is
+ * exactly (`exactInput`), which is
  * `exactBodyInput`'s shape with the query read, since the account a rename
  * is about is the query's; the headers the detailed input carries are let
  * through unread.

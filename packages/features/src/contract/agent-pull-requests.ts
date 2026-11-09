@@ -3,12 +3,11 @@
  *
  * Each names the agent by its id in the path and, where the tab shows a
  * pull request of the agent's repository other than the agent's own, that
- * pull request's number in the `number` query, which the service reads as it
- * always did, so it travels as the query's own text. The outputs are the
- * wire schemas flipped (`packages/service/src/orpc/base.ts`). The change is
- * the one procedure with a body, read exactly, and with a path and a query
- * beside it, so it takes its input detailed: the body stays the change
- * alone, its keys counted as the old endpoint counted them.
+ * pull request's number in the `number` query, as the query's own text.
+ * The outputs are the wire schemas flipped
+ * (`packages/service/src/orpc/base.ts`). The change is the one procedure
+ * with a body, read exactly, and with a path and a query beside it, so it
+ * takes its input detailed: the body stays the change alone.
  */
 
 import { openapi } from "@orpc/openapi";
