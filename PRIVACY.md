@@ -65,13 +65,13 @@ state, and checks, and any chapters you generate for it.
 
 If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
 your Claude plan's setup token, or sign in with your ChatGPT plan, we store it
-encrypted with AES-256-GCM under a per-credential key that is itself encrypted with a server-only secret held
-outside the database. We keep a short hint (such as `sk-ant-…abcd`), the
-email of the ChatGPT account a plan signed in as, the name you give a plan,
-and whether the provider accepts it. We never log a saved credential or
-include it in analytics, error reports, or screen recordings. We never send
-one to your devices, except to run an agent on your own machine with Bring
-your own host (see Agents on your own machines below).
+encrypted with AES-256-GCM under a per-credential key that is itself encrypted
+with a server-only secret held outside the database. We keep a short hint
+(such as `sk-ant-…abcd`), the email of the ChatGPT account a plan signed in
+as, the name you give a plan, and whether the provider accepts it. We never
+log a saved credential or include it in analytics, error reports, or screen
+recordings. We never send one to your devices, except to run an agent on your
+own machine with Bring your own host (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
