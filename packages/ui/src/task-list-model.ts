@@ -556,20 +556,15 @@ export function homedTaskRows(
     if (row.kind !== TASK_ROW.TASK) return list;
     const walked = new Set([row.task.id]);
     let at = row.task;
-    let looped = false;
-    // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached.
-    for (let above = heldAncestor(at, held, every); above !== undefined; ) {
-      const parent = byId.get(above);
-      if (parent === undefined || walked.has(parent.id)) {
-        looped = true;
-        break;
-      }
-      walked.add(parent.id);
-      at = parent;
+    let above = heldAncestor(at, held, every);
+    // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached, `above` still set.
+    while (above !== undefined && !walked.has(above)) {
+      walked.add(above);
+      at = byId.get(above) ?? at;
       above = heldAncestor(at, held, every);
     }
     // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
-    return !looped && underParent(at) ? undefined : listOf.get(at.id);
+    return above === undefined && underParent(at) ? undefined : listOf.get(at.id);
   };
   const homed = lists.map((rows, list) => rows.map((row) => ({ row, home: homeOf(row, list) })));
   return lists.map((_, list) => [
