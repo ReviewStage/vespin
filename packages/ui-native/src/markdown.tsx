@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { type Glyph, isLucideSymbol } from "./glyph.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -30,8 +31,8 @@ import {
   type MarkdownRun,
   markdownBlocks,
 } from "./markdown-model.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
+import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
@@ -43,8 +44,13 @@ export interface MarkdownPlace {
   readonly href: string;
 }
 
-/** The glyph each kind of entity leads its chip with, as the panel's `entity-mark.tsx` gives each kind its own. */
-const ENTITY_SYMBOL: { readonly [K in EntityKind]: SfSymbol } = {
+/**
+ * The glyph each kind of entity leads its chip with, as the panel's
+ * `entity-mark.tsx` gives each kind its own: a pull request's is Lucide's
+ * own, as the panel's chip draws it before GitHub has said where the pull
+ * request stands, and the rest the SF Symbol closest to the panel's.
+ */
+const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
   [ENTITY_KIND.PLAN]: "checklist",
   [ENTITY_KIND.SECTION]: "number",
   [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
@@ -54,7 +60,7 @@ const ENTITY_SYMBOL: { readonly [K in EntityKind]: SfSymbol } = {
   [ENTITY_KIND.WORKER]: "gearshape.2",
   [ENTITY_KIND.APP]: "app",
   [ENTITY_KIND.CHANGES]: "plusminus",
-  [ENTITY_KIND.PULL_REQUEST]: "arrow.triangle.pull",
+  [ENTITY_KIND.PULL_REQUEST]: LUCIDE_SYMBOL.GIT_PULL_REQUEST,
   [ENTITY_KIND.PULL_REQUEST_THREAD]: "text.bubble",
   [ENTITY_KIND.ISSUE]: "smallcircle.filled.circle",
   [ENTITY_KIND.LINK]: "link",
@@ -152,6 +158,33 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/**
+ * A chip's glyph at `size` points in `color`: an SF Symbol through the
+ * system's symbol view, or one of Lucide's from the asset catalog, which
+ * React Native's image reads by its name and tints as a template.
+ */
+function ChipGlyph({
+  glyph,
+  size,
+  color,
+}: {
+  readonly glyph: Glyph;
+  readonly size: number;
+  readonly color: string;
+}) {
+  if (!isLucideSymbol(glyph)) {
+    return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
+  }
+  return (
+    <Image
+      source={{ uri: glyph }}
+      resizeMode="contain"
+      style={{ width: size, height: size, tintColor: color }}
+      accessibilityElementsHidden
+    />
+  );
+}
+
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -179,11 +212,10 @@ function MentionChip({
           },
         ]}
       >
-        <SymbolView
-          name={ENTITY_SYMBOL[chip.entity]}
+        <ChipGlyph
+          glyph={ENTITY_SYMBOL[chip.entity]}
           size={size * fontScale}
-          tintColor={colors.TEXT_MUTED}
-          accessibilityElementsHidden
+          color={colors.TEXT_MUTED}
         />
         <Text
           numberOfLines={1}

@@ -47,8 +47,15 @@ builds a control of its own.
   unread dot, the task's status ring and name with the time, the thread's
   title, and the glyph of what it asks with its words), and `TaskRow` the
   phone's task row; an avatar stands only where the panel's row has one. A
-  glyph is the SF Symbol closest to the panel's lucide glyph for the same
-  thing (`inbox-line-model.ts`, `status-mark-model.ts`), in the panel's ink.
+  glyph is the SF Symbol closest to the panel's Lucide glyph for the same
+  thing (`inbox-line-model.ts`, `status-mark-model.ts`), in the panel's ink,
+  except a mark of ours that SF Symbols has no drawing of (a pull request in
+  each state, a branch, a decide ask), which is Lucide's own (`glyph.ts`'s
+  `Glyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`
+  `@repo/ui` pins, into a custom symbol template, and the app's config writes
+  it into the asset catalog as a symbol set, so it sizes with Dynamic Type
+  and weighs with its words as an SF Symbol does. Tabs, menus, swipe
+  actions, and every generic glyph stay SF Symbols.
 - **Words match the panel's** (`docs/DESIGN.md`): a row's time is
   `@repo/features/time-format`'s, a status's name the panel's.
 - **No DOM and no Electron.** React here is the `mobile` catalog's (React

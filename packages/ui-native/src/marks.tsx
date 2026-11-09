@@ -1,4 +1,4 @@
-// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, a person's avatar, and an agent's tile.
+// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, a person's avatar, an agent's tile, and a glyph in its tone.
 
 import { Circle, Image, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
 import {
@@ -10,9 +10,10 @@ import {
   opacity,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import { STATUS_MARK_LABEL, STATUS_MARK_LOOK } from "./status-mark-model.js";
-import { toneColor, useColors } from "./tokens/colors.js";
+import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** The share of an avatar's width its letters stand at. */
@@ -42,6 +43,24 @@ export function UnreadDot({
         opacity(unread ? (faded ? FADED_OPACITY : 1) : 0),
         unread ? accessibilityLabel("Unread") : accessibilityHidden(),
       ]}
+    />
+  );
+}
+
+/**
+ * A glyph in a tone's ink at the caption's size, so it grows with Dynamic
+ * Type beside the words it leads: an SF Symbol from the system, or one of
+ * Lucide's from the asset catalog's symbol sets, which SwiftUI sizes,
+ * weighs, and sets on the baseline alike.
+ */
+export function ToneGlyph({ glyph, tone }: { readonly glyph: Glyph; readonly tone: StatusTone }) {
+  const colors = useColors();
+  const drawn = isLucideSymbol(glyph) ? { assetName: glyph } : { systemName: glyph };
+  return (
+    <Image
+      {...drawn}
+      color={toneColor(colors, tone)}
+      modifiers={[font({ textStyle: "caption" })]}
     />
   );
 }

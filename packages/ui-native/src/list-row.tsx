@@ -1,15 +1,6 @@
 // list-row.tsx -- the rows the panel draws in the Inbox and Tasks: an Inbox thread's three lines, and a task's one.
 
-import {
-  Button,
-  ContextMenu,
-  HStack,
-  Image,
-  Spacer,
-  SwipeActions,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
+import { Button, ContextMenu, HStack, Spacer, SwipeActions, Text, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -27,9 +18,9 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { Avatar, TaskStatusMark, UnreadDot } from "./marks.js";
+import { Avatar, TaskStatusMark, ToneGlyph, UnreadDot } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
-import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 /** How far the unread dot stands down, so it centers on the row's first line rather than the row. */
@@ -213,13 +204,7 @@ function ThreadLine(props: ListRowProps & { readonly colors: BrandColors }) {
   if (summary === undefined) return null;
   return (
     <HStack spacing={SPACE.TIGHT} alignment="firstTextBaseline">
-      {look === undefined ? null : (
-        <Image
-          systemName={look.symbol}
-          color={toneColor(colors, look.tone)}
-          modifiers={[font({ textStyle: "caption" })]}
-        />
-      )}
+      {look === undefined ? null : <ToneGlyph glyph={look.symbol} tone={look.tone} />}
       <Text
         modifiers={[
           font({ textStyle: "caption" }),
@@ -288,13 +273,7 @@ export function TaskRow(props: TaskRowProps) {
         {name}
       </Text>
       <Spacer />
-      {pull === undefined ? null : (
-        <Image
-          systemName={pull.symbol}
-          color={toneColor(colors, pull.tone)}
-          modifiers={[font({ textStyle: "caption" })]}
-        />
-      )}
+      {pull === undefined ? null : <ToneGlyph glyph={pull.symbol} tone={pull.tone} />}
       {at === undefined ? null : <RowTime at={at} now={now} colors={colors} />}
     </HStack>
   );
