@@ -1294,19 +1294,21 @@ export function inboxThreadMessages(
 ): readonly InboxThreadMessage[] {
   return (item.thread ?? []).map((message) => {
     const agent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
-    const files = inboxCommentFiles(message.files ?? [], message.text, item.id);
-    const media = [...files.pictures, ...files.others].flatMap((file): InboxMessageMedia[] => {
-      const kind = mediaKindOf(file);
-      return kind === undefined
-        ? []
-        : [{ kind, attachmentId: file.attachmentId, name: file.name, mediaType: file.mediaType }];
-    });
     const carried = new Map((message.files ?? []).map((file) => [file.attachmentId, file]));
     const drawn = picturesDrawn(message.text, item.id).map(({ attachmentId }) => {
       const file = carried.get(attachmentId);
       const kind =
         file === undefined ? INBOX_MEDIA.PICTURE : (mediaKindOf(file) ?? INBOX_MEDIA.PICTURE);
       return { kind, attachmentId };
+    });
+    // Note that a file the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
+    const drawnIds = new Set(drawn.map(({ attachmentId }) => attachmentId));
+    const files = inboxCommentFiles(message.files ?? [], message.text, item.id);
+    const media = [...files.pictures, ...files.others].flatMap((file): InboxMessageMedia[] => {
+      const kind = mediaKindOf(file);
+      return kind === undefined || drawnIds.has(file.attachmentId)
+        ? []
+        : [{ kind, attachmentId: file.attachmentId, name: file.name, mediaType: file.mediaType }];
     });
     return {
       id: message.id,
