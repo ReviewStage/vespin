@@ -98,10 +98,14 @@ export interface SettingsStep {
  * account's own agents use, the product's MCP lets outside agents use the
  * account, CLI is the `vespin` command an agent with a shell runs, so a
  * reader who landed on one looking for another is sent across, and Hosts
- * says what a host is and where it is picked. No other page has one.
+ * says what a host is and where it is picked. Agents says once, for both
+ * harnesses' lists, the order their credentials are tried in. No other page
+ * has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
+    case SETTINGS_VIEW.AGENTS:
+      return <ReplayUnmask>Plans and API keys are used in the order listed.</ReplayUnmask>;
     case SETTINGS_VIEW.INTEGRATIONS:
       return (
         <ReplayUnmask>

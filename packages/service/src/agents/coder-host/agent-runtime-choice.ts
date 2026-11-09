@@ -30,13 +30,13 @@
  *
  * The runtime is written on the agent's conversation as it starts and never
  * changes. Who pays is chosen again at each launch, a message to a warm
- * runner among them (`turnPayerOf`): the first of the account's
- * subscriptions of the harness's plan, in the account's order, with room,
- * that is, signed in and at no limit whose named reset is still ahead, so an
- * agent goes back to the top subscription as soon as its limit resets; where
- * none has room, the account's API key for the provider wherever one is
- * saved; and where neither, the plan's refusal, naming when its soonest
- * limit resets. The payer and the subscription it names are written on the
+ * runner among them (`turnPayerOf`): the first credential of the
+ * provider's, in the one order the account keeps its subscriptions of the
+ * harness's plan and its API key in, with room, a subscription having room
+ * where it is signed in and at no limit whose named reset is still ahead,
+ * and a key always, so an agent goes back to the top subscription as soon
+ * as its limit resets; where none has room, a Preview's stand-in key; and
+ * where neither, the plan's refusal, naming when its soonest limit resets. The payer and the subscription it names are written on the
  * agent as each launch chooses them, so a turn's limit is written to the
  * subscription it ran on, and a runner launched on another credential than
  * the choice now names is launched again (`runner-sessions.ts`'s
@@ -443,13 +443,18 @@ const signsInOwnGithub = (userId: string, deviceId: string) =>
     ),
   );
 
+/** A provider's credentials in the order they pay in, the first first: by position, then the earlier added. */
+const byPlace = (a: ProviderKeyRow, b: ProviderKeyRow): number =>
+  a.position - b.position || a.createdAt.getTime() - b.createdAt.getTime();
+
 /**
  * Who pays for the next turn of the account's agent on the provider's
  * harness, chosen now and written on the agent (`recordAgentPayer`), as
- * above: the first subscription with room, in the account's order; else its
- * API key, wherever one is saved; else the plan on the subscription whose
- * limit resets soonest, or its first, whose own refusal the harness answers
- * in the plan's words, as it would with no subscription at all.
+ * above: the first of its subscriptions and its saved API key, in the
+ * account's order, with room, where a key always has room; else a
+ * Preview's stand-in key; else the plan on the subscription whose limit
+ * resets soonest, or its first, whose own refusal the harness answers in
+ * the plan's words, as it would with no subscription at all.
  */
 export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -460,9 +465,17 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const environment = yield* deploymentEnvironment;
   const now = yield* Clock.currentTimeMillis;
   const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
-  const roomy = plans.find((row) => hasRoom(row, now));
-  let chosen: TurnPayer = { payer: PLAN_PAYER[provider], subscriptionId: roomy?.id };
-  if (roomy === undefined) {
+  const keys = rows.filter(
+    (row) => row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === provider,
+  );
+  const first = [...plans, ...keys]
+    .toSorted(byPlace)
+    .find((row) => row.kind === PROVIDER_KEY_KIND.API_KEY || hasRoom(row, now));
+  let chosen: TurnPayer =
+    first?.kind === PROVIDER_KEY_KIND.API_KEY
+      ? { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined }
+      : { payer: PLAN_PAYER[provider], subscriptionId: first?.id };
+  if (first === undefined) {
     chosen = (yield* keepsApiKey(userId, provider, rows, environment))
       ? { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined }
       : { payer: PLAN_PAYER[provider], subscriptionId: soonestReset(plans, now)?.id };

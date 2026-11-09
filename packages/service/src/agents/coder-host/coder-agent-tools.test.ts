@@ -3822,7 +3822,7 @@ test("a Codex agent on its Mac's own sign-in lists its GPT models alone with no 
     {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason:
-        "Not changed: that agent runs on Codex, which runs a fast version on the ChatGPT plan or an OpenAI API key alone; choose the model itself.",
+        "Not changed: that agent runs on Codex, which runs a fast version on the Codex plan or an OpenAI API key alone; choose the model itself.",
     },
     {
       status: ACTION_RESULT_STATUS.REJECTED,

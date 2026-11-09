@@ -64,6 +64,9 @@ const SealedRowSchema = Schema.Struct({
   accessExpiresAt: Schema.NullOr(InstantColumnSchema),
   forAgents: Schema.Boolean,
   limitResetsAt: Schema.NullOr(InstantColumnSchema),
+  usagePercent: Schema.NullOr(Schema.Number),
+  usageWindowMins: Schema.NullOr(Schema.Int),
+  usageResetsAt: Schema.NullOr(InstantColumnSchema),
   position: Schema.Int,
   label: Schema.NullOr(Schema.String),
   accountEmail: Schema.NullOr(Schema.String),
@@ -102,6 +105,9 @@ const ROW_COLUMNS = {
   accessExpiresAt: accountProviderKey.accessExpiresAt,
   forAgents: accountProviderKey.forAgents,
   limitResetsAt: accountProviderKey.limitResetsAt,
+  usagePercent: accountProviderKey.usagePercent,
+  usageWindowMins: accountProviderKey.usageWindowMins,
+  usageResetsAt: accountProviderKey.usageResetsAt,
   position: accountProviderKey.position,
   label: accountProviderKey.label,
   accountEmail: accountProviderKey.accountEmail,
@@ -219,14 +225,17 @@ const savedColumns = (write: typeof SavedSchema.Type) => ({
   fastAccess: write.fastAccess,
   accessExpiresAt: write.accessExpiresAt,
   limitResetsAt: null,
+  usagePercent: null,
+  usageWindowMins: null,
+  usageResetsAt: null,
   createdAt: write.now,
 });
 
 const IdSchema = Schema.Struct({ id: Schema.String });
 
-/** The provider's one API key written, or written over the one it held. */
+/** The provider's one API key written at `position`, or written over the one it held, which keeps its own. */
 const upsertApiKey = SqlSchema.findOne({
-  Request: SavedSchema,
+  Request: Schema.Struct({ ...SavedSchema.fields, position: Schema.Int }),
   Result: IdSchema,
   execute: (write) =>
     Database.use((db) =>
@@ -236,6 +245,7 @@ const upsertApiKey = SqlSchema.findOne({
           userId: write.userId,
           provider: write.provider,
           kind: write.kind,
+          position: write.position,
           ...savedColumns(write),
         })
         .onConflictDoUpdate({
@@ -247,11 +257,16 @@ const upsertApiKey = SqlSchema.findOne({
     ),
 });
 
-/** The account's subscriptions of a kind, locked, in its order: what a save chooses the row it lands on from. */
-const lockKindRows = SqlSchema.findAll({
-  Request: KindKeySchema,
+/**
+ * The account's credentials of the provider, its plans and its API key
+ * alike, locked, in the one order they pay in: what a save chooses the row
+ * it lands on and the bottom of the order from, and what a reorder moves.
+ */
+const lockProviderRows = SqlSchema.findAll({
+  Request: KeySchema,
   Result: Schema.Struct({
     id: Schema.String,
+    kind: KindSchema,
     position: Schema.Int,
     accountEmail: Schema.NullOr(Schema.String),
   }),
@@ -260,15 +275,25 @@ const lockKindRows = SqlSchema.findAll({
       db
         .select({
           id: accountProviderKey.id,
+          kind: accountProviderKey.kind,
           position: accountProviderKey.position,
           accountEmail: accountProviderKey.accountEmail,
         })
         .from(accountProviderKey)
-        .where(ofKind(key))
+        .where(
+          and(
+            eq(accountProviderKey.userId, key.userId),
+            eq(accountProviderKey.provider, key.provider),
+          ),
+        )
         .orderBy(asc(accountProviderKey.position), asc(accountProviderKey.createdAt))
         .for("update"),
     ),
 });
+
+/** The position past the bottom of a provider's order, where a credential added now lands. */
+const bottomOf = (rows: readonly { readonly position: number }[]): number =>
+  Math.max(-1, ...rows.map((row) => row.position)) + 1;
 
 const PlacedSchema = Schema.Struct({
   ...SavedSchema.fields,
@@ -418,6 +443,28 @@ const updatePlanStatus = SqlSchema.void({
               : []),
           ),
         ),
+    ),
+});
+
+/** A plan's usage as a turn on it last heard it, on whatever credential the row holds now, saved no later than the turn opened. */
+const updatePlanUsage = SqlSchema.void({
+  Request: Schema.Struct({
+    ...TargetSchema.fields,
+    usagePercent: Schema.Number,
+    usageWindowMins: Schema.NullOr(Schema.Int),
+    usageResetsAt: Schema.NullOr(Schema.Date),
+    savedBy: Schema.Date,
+  }),
+  execute: (write) =>
+    Database.use((db) =>
+      db
+        .update(accountProviderKey)
+        .set({
+          usagePercent: write.usagePercent,
+          usageWindowMins: write.usageWindowMins,
+          usageResetsAt: write.usageResetsAt,
+        })
+        .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy))),
     ),
 });
 
@@ -576,15 +623,6 @@ export function saveProviderKey(
   placement: SubscriptionPlacement = {},
 ): TaskStoreEffect<string> {
   const write = { userId, provider, kind, ...sealed, hint, fastAccess, accessExpiresAt, now };
-  if (kind === PROVIDER_KEY_KIND.API_KEY) {
-    return Effect.map(
-      upsertApiKey(write).pipe(
-        // An upsert that returned no row is the database breaking its own contract, not an outcome.
-        Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
-      ),
-      (row) => row.id,
-    );
-  }
   const placed = {
     ...write,
     accountEmail: placement.accountEmail ?? null,
@@ -593,14 +631,23 @@ export function saveProviderKey(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
-        const rows = yield* lockKindRows({ userId, provider, kind });
-        const id = landingOf(rows, placement);
+        const rows = yield* lockProviderRows({ userId, provider });
+        // An upsert or insert that returned no row is the database breaking its own contract, not an outcome.
+        if (kind === PROVIDER_KEY_KIND.API_KEY) {
+          // Note that a key replaced keeps its place, which the upsert leaves as it stood.
+          return (yield* upsertApiKey({ ...write, position: bottomOf(rows) }).pipe(
+            Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
+          )).id;
+        }
+        const id = landingOf(
+          rows.filter((row) => row.kind === kind),
+          placement,
+        );
         if (id !== undefined) {
           yield* overwriteSubscription({ ...placed, id });
           return id;
         }
-        const position = Math.max(-1, ...rows.map((row) => row.position)) + 1;
-        return (yield* insertSubscription({ ...placed, position }).pipe(
+        return (yield* insertSubscription({ ...placed, position: bottomOf(rows) }).pipe(
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         )).id;
       }),
@@ -714,21 +761,21 @@ export function setSubscriptionLabel(
 }
 
 /**
- * Puts the account's subscriptions of a kind in the order `ids` names, the
- * first paying first, under the kind's rows' locks. An id the account does
- * not hold is passed over, and a subscription the order leaves out, such as
- * one added meanwhile, keeps its place after those named.
+ * Puts the account's credentials of the provider, its subscriptions and its
+ * API key alike, in the order `ids` names, the first paying first, under
+ * their rows' locks. An id the account does not hold is passed over, and a
+ * credential the order leaves out, such as one added meanwhile, keeps its
+ * place after those named.
  */
 export function reorderSubscriptions(
   userId: string,
   provider: ProviderKeyProvider,
-  kind: ProviderKeyKind,
   ids: readonly string[],
 ): TaskStoreEffect<void> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
-        const rows = yield* lockKindRows({ userId, provider, kind });
+        const rows = yield* lockProviderRows({ userId, provider });
         const held = new Set(rows.map((row) => row.id));
         const named = ids.filter((id) => held.has(id));
         const left = rows.map((row) => row.id).filter((id) => !named.includes(id));
@@ -787,6 +834,43 @@ export function setPlanStatus(
     limitResetsAt: status === PROVIDER_KEY_STATUS.LIMIT_REACHED ? (limitResetsAt ?? null) : null,
     savedBy,
     now,
+  });
+}
+
+/** How much of its usage window a plan had used, as its harness last reported it. */
+export interface PlanUsage {
+  /** The share of the window used, in percent. */
+  readonly usedPercent: number;
+  /** How long the window is, in minutes, where the harness said. */
+  readonly windowMins?: number;
+  /** When the window resets, where the harness said. */
+  readonly resetsAt?: Date;
+}
+
+/**
+ * Writes the usage a coding agent's turn heard its harness report on the
+ * account's plan of this kind, the subscription of this id or the first of
+ * its kind where none is named, over whatever reading the row held. As with
+ * `setPlanStatus`, a credential saved after the turn opened (`savedBy`) is
+ * not given it.
+ */
+export function setPlanUsage(
+  userId: string,
+  provider: ProviderKeyProvider,
+  kind: ProviderKeyKind,
+  usage: PlanUsage,
+  savedBy: Date,
+  subscriptionId?: string,
+): TaskStoreEffect<void> {
+  return updatePlanUsage({
+    userId,
+    provider,
+    kind,
+    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    usagePercent: usage.usedPercent,
+    usageWindowMins: usage.windowMins ?? null,
+    usageResetsAt: usage.resetsAt ?? null,
+    savedBy,
   });
 }
 

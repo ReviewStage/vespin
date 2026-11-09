@@ -2045,10 +2045,12 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             row.id === second,
             row.status,
             row.limitResetsAt?.toISOString() ?? null,
+            row.usagePercent,
+            row.usageWindowMins,
           ]),
           [
-            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null],
-            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString()],
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null, null],
+            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString(), 100, 300],
           ],
         );
       }),
@@ -2337,6 +2339,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
                 status: "rejected",
                 rateLimitType: "five_hour",
                 resetsAt: resetsAt / 1000,
+                utilization: 1,
               },
               uuid: randomUUID(),
               ...top,
@@ -2372,6 +2375,15 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+        // The usage the limit reported stays the plan's latest, in percent of its five hours, through the turns after it.
+        const [row] = yield* listProviderKeyRows(
+          agent.userId,
+          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+        );
+        assert.deepEqual(
+          [row?.usagePercent, row?.usageWindowMins, row?.usageResetsAt?.toISOString()],
+          [100, 300, new Date(resetsAt).toISOString()],
+        );
       }),
   );
 

@@ -15,6 +15,7 @@ import { ANNOUNCE } from "../announcer/announcer.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
+import { Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
@@ -356,6 +357,26 @@ export function SettingsRowMark({ children }: { children: ReactNode }): React.JS
   return (
     <span className="ui-settings-row-mark grid size-settings-row-mark flex-none place-items-center">
       {children}
+    </span>
+  );
+}
+
+/**
+ * How much of a whole a row's subject has used, as a bar under its state
+ * line in its description: a plan's share of its usage window. The words
+ * beside it say the same, so the bar is their picture alone.
+ */
+export function SettingsRowMeter({
+  value,
+  tone,
+}: {
+  /** The share used, in percent. */
+  value: number;
+  tone?: ProgressTone | undefined;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-meter mt-ui-6 block">
+      <Progress value={value} tone={tone} />
     </span>
   );
 }

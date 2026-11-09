@@ -14,7 +14,8 @@ import { cn } from "../cn.js";
  * (`bg-secondary`), clipped on both axes (`overflow-hidden` rather than
  * `overflow-x-hidden`, whose scroller rounds a full bar's start a shade
  * differently), and the indicator fills in the working ink rather than
- * `primary`, with no `transition-all`, since the bar has never glided; and
+ * `primary`, or in the attention ink under a root marked `data-tone="attention"`,
+ * with no `transition-all`, since the bar has never glided; and
  * the root says only what the component puts in it, without the visually
  * hidden "x" Base UI appends to the root's children, so a bar beside words
  * that say the same adds nothing to them. `ProgressLabel` and
@@ -61,7 +62,7 @@ function ProgressIndicator({ className, ...props }: ProgressPrimitive.Indicator.
   return (
     <ProgressPrimitive.Indicator
       data-slot="progress-indicator"
-      className={cn("block h-full bg-working", className)}
+      className={cn("block h-full bg-working in-data-[tone=attention]:bg-attention", className)}
       render={<span />}
       {...props}
     />

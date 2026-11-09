@@ -7,7 +7,15 @@ import {
   type ProviderKeyStatus,
 } from "@repo/features/provider-key-wire";
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -62,7 +70,18 @@ export const accountProviderKey = pgTable(
     forAgents: boolean("for_agents").notNull().default(true),
     /** When a plan's reached usage limit resets, where its provider said; null for every other status. */
     limitResetsAt: timestamptz("limit_resets_at"),
-    /** Where the subscription stands in the account's order of its kind, the first paying first; an API key's is 0. */
+    /**
+     * How much of its usage window a plan had used, in percent, as a turn on
+     * it last heard its harness report; null until one has. Only the latest
+     * reading is kept, of the window the harness reported, and a saved
+     * credential starts without one.
+     */
+    usagePercent: doublePrecision("usage_percent"),
+    /** How long the window `usagePercent` reads is, in minutes, where the harness said; null otherwise. */
+    usageWindowMins: integer("usage_window_mins"),
+    /** When the window `usagePercent` reads resets, where the harness said; null otherwise. */
+    usageResetsAt: timestamptz("usage_resets_at"),
+    /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
     /** The name the account gave the subscription; null for the name it is shown by default. */
     label: text("label"),

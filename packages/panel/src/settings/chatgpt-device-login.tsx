@@ -61,12 +61,13 @@ const WORDS = {
   TURN_ON_HINT:
     "If you don't see this option, ask your workspace admin to enable device code authentication for Codex CLI",
   CODE: "Code",
-  ENTER_CODE: "Sign in to ChatGPT, select your workspace if prompted, and enter the code:",
+  ENTER_CODE:
+    "Sign in with your Codex account, select your workspace if prompted, and enter the code:",
   VERIFICATION_PAGE: "Verification page",
   WAITING: "Waiting for Codex",
   GETTING_CODE: "Getting a code",
-  START_FAILED: "Couldn't reach ChatGPT for a code. Try again.",
-  WAIT_FAILED: "Couldn't reach ChatGPT to finish connecting. Try again.",
+  START_FAILED: "Couldn't reach Codex for a code. Try again.",
+  WAIT_FAILED: "Couldn't reach Codex to finish connecting. Try again.",
   TRY_AGAIN: "Try again",
 } as const;
 

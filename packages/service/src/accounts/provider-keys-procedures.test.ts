@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { listProviderKeyRows, setPlanStatus } from "@repo/database/models/provider-key-store";
+import {
+  listProviderKeyRows,
+  setPlanStatus,
+  setPlanUsage,
+} from "@repo/database/models/provider-key-store";
 import {
   accountChatGptDeviceLogin,
   accountProviderKey,
@@ -446,6 +450,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const saved = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC));
         const read = yield* ask(request(owner));
 
+        const [kept] = keysOf(saved).keys;
         assert.deepEqual(keysOf(saved), {
           keys: [
             {
@@ -454,6 +459,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               addedAt: savedAt,
               status: PROVIDER_KEY_STATUS.VERIFIED,
               statusAt: savedAt,
+              id: kept?.id,
+              position: 0,
             },
           ],
         });
@@ -936,6 +943,37 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a plan's usage is answered as last heard until its window resets, then not at all",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const { owner, ask } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
+        yield* TestClock.adjust("1 hour");
+        yield* connectPlan(ask, owner);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const resetsAt = new Date(now.getTime() + 30 * 60_000);
+        yield* setPlanUsage(
+          owner,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          { usedPercent: 42, windowMins: 300, resetsAt },
+          now,
+        );
+        const usage = (read: Answer) => keysOf(read).subscriptions?.map((plan) => plan.usage);
+
+        const heard = usage(yield* ask(request(owner)));
+        yield* TestClock.adjust("31 minutes");
+        const reset = usage(yield* ask(request(owner)));
+
+        assert.deepEqual(heard, [
+          { usedPercent: 42, windowMins: 300, resetsAt: resetsAt.getTime() },
+        ]);
+        assert.deepEqual(reset, [undefined]);
+      }),
+  );
+
+  it.effect(
     "removing the ChatGPT plan revokes its refresh token at OpenAI first and answers whether OpenAI confirmed it",
     () =>
       Effect.gen(function* () {
@@ -1099,7 +1137,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         });
         assert.deepEqual(refused, {
           outcome: CHATGPT_DEVICE_LOGIN.REFUSED,
-          message: "ChatGPT did not connect this account. Start again to try once more.",
+          message: "Codex did not connect this account. Start again to try once more.",
         });
         assert.deepEqual(stillRefused, refused);
         for (const userId of [owner, other]) {
