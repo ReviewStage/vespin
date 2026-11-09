@@ -59,6 +59,26 @@
     }
   }
 
+  /* Under a finger a head pressed for its fold or its menu takes a press
+     `--ui-touch-target` tall at least, centered on it, while it draws at its
+     own compact height, so the sidebar's switcher and a section's head keep
+     their place among the rows (`button.css`). */
+  @media (pointer: coarse) {
+    button.ui-group-header-lead {
+      position: relative;
+    }
+
+    button.ui-group-header-lead::before {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: max(100%, var(--ui-touch-target));
+      transform: translateY(-50%);
+      content: "";
+    }
+  }
+
   /* Under a finger each compact action is as wide as a finger's target,
      its glyph centered in it, so two side by side each take a whole press
      rather than splitting the room their presses overlap in (`button.css`). */
