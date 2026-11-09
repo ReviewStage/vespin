@@ -62,6 +62,7 @@ import {
   memberMcpResourceUrl,
   oauthResourceRecord,
 } from "../member-mcp/resource.js";
+import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf } from "../providers/model-catalog.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 import { FAKE_IMAGE } from "./agent-browser-fake.js";
@@ -227,6 +228,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
       harness.layer,
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+      Layer.succeed(PageLinks, { sandbox: undefined }),
     );
     yield* seedRows.pipe(Effect.provide(services));
     // The key set is fetched from the auth service over HTTP, as on a deployment: here the in-process handler, and nothing else answers.

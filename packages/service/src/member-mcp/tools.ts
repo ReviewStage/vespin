@@ -212,6 +212,7 @@ import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
+import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import {
   COMMENT_TOOL_REFUSAL,
@@ -231,10 +232,11 @@ import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
   | AgentSandbox
+  | PageLinks
   | DatabaseServices
   | HttpClient.HttpClient
   | GitHubApp
@@ -1169,7 +1171,7 @@ const LIST_AGENT_PORTS_TOOL = memberMcpTool({
   description:
     "List the TCP ports a server listens on in the cloud sandbox of a coding agent the member " +
     "can see, by its id, such as a dev server it started, the lowest first, and the port it " +
-    `shares by a public link now, if any, with that link, to choose one to share with ` +
+    `shares by link now, if any, with that link, to choose one to share with ` +
     `${MEMBER_MCP_TOOL.SHARE_AGENT_PORT}. A sandbox that is not running is never woken: it ` +
     "answers running false with no ports, as does an agent on a Mac. Answers `accepted` with " +
     "whether the sandbox is running, its ports, and the port shared with its link, or shared " +
@@ -1183,8 +1185,9 @@ const SHARE_AGENT_PORT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.SHARE_AGENT_PORT,
   description:
     "Share a port of the cloud sandbox of a coding agent the member can see, by its id, by a " +
-    "public link, so a running app, such as a dev server it started, opens from a browser, as " +
-    "the member's Share by link would. Anyone holding the link can open it. One port is " +
+    "link, so a running app, such as a dev server it started, opens from a browser, as the " +
+    "member's Share would: a member of the agent's workspace who can reach it opens it signed " +
+    "in. One port is " +
     "shared at a time: sharing another replaces the first, and the link lives only while the " +
     "sandbox runs; a sandbox that is not running is refused, never woken. Pass null to stop " +
     "sharing. Answers `accepted` with the port and its link, or with shared null once sharing " +

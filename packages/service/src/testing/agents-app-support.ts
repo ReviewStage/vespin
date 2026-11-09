@@ -87,6 +87,7 @@ import { type InboxTitleModelOf, inboxProcedures } from "../inbox/inbox-procedur
 import type { postInboxThread } from "../inbox/inbox-store.js";
 import { type MemberMcpAuth, memberMcpApp } from "../member-mcp/app.js";
 import { hostedFetch } from "../orpc/handler.js";
+import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import type { WebServices } from "../runtime.js";
 import { tasksProcedures } from "../tasks/tasks-procedures.js";
@@ -437,6 +438,7 @@ export const standing = (
       modelCatalogOf(CATALOG),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+      Layer.succeed(PageLinks, { sandbox: undefined }),
       ANALYTICS.layer,
     );
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
