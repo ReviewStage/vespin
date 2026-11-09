@@ -29,7 +29,7 @@ export type HarnessMarkProps =
 
 /** The mark of the harness a provider's models run in, for the rows, tabs, and chips that name an agent or a model. */
 export function HarnessMark({ provider, codexArt }: HarnessMarkProps): React.JSX.Element {
-  if (provider === MODEL_PROVIDER.OPENAI && codexArt !== undefined) {
+  if (provider === MODEL_PROVIDER.OPENAI) {
     return (
       <img
         className="ui-harness-mark"

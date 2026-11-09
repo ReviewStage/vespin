@@ -628,7 +628,7 @@ export function GroupHeader({
               head === GROUP_HEAD.STICKS ? STICKS : "",
               subgrid ? SUBGRID.HEAD : "",
             ].join(" ")}
-            data-menu-open={menuOpen || (drops && menu?.["aria-expanded"]) ? "true" : undefined}
+            data-menu-open={menuOpen || (drops && menu["aria-expanded"]) ? "true" : undefined}
             {...withContextMenu<HTMLDivElement>(contextMenu, {})}
           >
             {named}

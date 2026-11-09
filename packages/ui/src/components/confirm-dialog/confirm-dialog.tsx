@@ -426,7 +426,7 @@ export function FootQuestion({
   newestWithdraw.current = withdraw;
   const shown = answer.shown && foot !== undefined;
   useLayoutEffect(() => {
-    if (!shown || foot === undefined) return;
+    if (!shown) return;
     return foot.claim({
       withdraw: () => newestWithdraw.current(),
       focus: cancel,
@@ -435,7 +435,7 @@ export function FootQuestion({
     });
   }, [shown, foot, settling, refused]);
 
-  if (!shown || foot?.slot == null) return null;
+  if (!shown || foot.slot == null) return null;
   return createPortal(
     // biome-ignore lint/a11y/useSemanticElements: a question is its words and its two answers, not a form's fields, so it is no `<fieldset>`.
     <div
