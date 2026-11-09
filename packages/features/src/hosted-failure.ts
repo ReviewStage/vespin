@@ -43,7 +43,7 @@ export const HOSTED_CALL_FAILURE = {
 export type HostedRenames = Readonly<Partial<Record<HostedApiError, string>>>;
 
 /** No renames. */
-type NoRenames = Readonly<Record<never, never>>;
+export type NoRenames = Readonly<Record<never, never>>;
 
 /**
  * How a domain reads its procedures' refusals: each renamed where `as`
@@ -74,7 +74,7 @@ type DataFieldsOf<Slug> = Slug extends keyof typeof HOSTED_REFUSAL_DATA
   : never;
 
 /** A union of records as the one record that holds each of their fields. */
-type Merged<Union> = (Union extends unknown ? (record: Union) => void : never) extends (
+export type Merged<Union> = (Union extends unknown ? (record: Union) => void : never) extends (
   record: infer Record,
 ) => void
   ? Record

@@ -28,6 +28,7 @@ import {
   type HostedFailed,
   type HostedReading,
   type HostedRenames,
+  type NoRenames,
   spelledFailure,
 } from "./hosted-failure.js";
 import {
@@ -59,9 +60,6 @@ export interface HostedCallOptions<As extends HostedRenames, Live extends boolea
   /** The poll a live read is asked as; only a procedure whose input names a poll takes one. */
   readonly poll?: Input extends LivePollInput ? HostedPoll : never;
 }
-
-/** No renames. */
-type NoRenames = Readonly<Record<never, never>>;
 
 /** The refusals a procedure's client says it may fail with, by the slug each is coded as. */
 type DeclaredBy<Failure> =
