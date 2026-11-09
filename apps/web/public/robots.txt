@@ -15,3 +15,4 @@ Disallow: /page-in-mac-app.html
 Disallow: /sign-in.html
 
 Sitemap: https://vespin.dev/sitemap.xml
+Sitemap: https://vespin.dev/docs/sitemap.xml
