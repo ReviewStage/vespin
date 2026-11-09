@@ -2,6 +2,7 @@ import "@orpc/experimental-effect/extensions/effect";
 import { createORPCErrorConstructorMap } from "@orpc/contract";
 import type { WithEffectContext } from "@orpc/experimental-effect";
 import { type AnyProcedure, implement, ORPCError } from "@orpc/server";
+import { Effect } from "effect";
 import { ACT_ERROR, actPortContract, panelOnlyOf } from "../contract/index.js";
 
 /**
@@ -46,6 +47,11 @@ export function refusedBy(procedure: AnyProcedure, cause?: unknown): ORPCError<s
   // Note that every act contract declares the refusal (`contract/base.ts`), so this is an invariant rather than a branch.
   if (refused === undefined) throw new Error("An act procedure declares no refusal.");
   return refused({ cause });
+}
+
+/** The refusal a window that is not a panel hears, in its act's own words, or nothing for a panel. */
+export function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
+  return actor.panel ? Effect.void : Effect.fail(refused());
 }
 
 /** Whether an error is a declared refusal, which crosses as it is. */

@@ -14,7 +14,7 @@ import { Effect } from "effect";
 import { isWebAddress } from "../acts.js";
 import { TASKS_ACT_KIND, TASKS_ACTS } from "../contract/index.js";
 import type { HostActTable } from "../host-acts.js";
-import { type ActSender, actPort } from "./base.js";
+import { actPort, refuseUnlessPanel } from "./base.js";
 import { declaredAnswer } from "./declared-acts.js";
 
 /** What the task procedures are handed: the doors of the window's process they open or read. */
@@ -27,11 +27,6 @@ export interface TasksProceduresDependencies {
   openExternal: (url: string) => Promise<void>;
   /** The hosted service's origin, without a trailing slash, the only origin a page the host names may open on. */
   serviceBaseUrl: string;
-}
-
-/** The refusal a window that draws no Tasks tab hears, or nothing for a panel. */
-function refuseUnlessPanel<E>(actor: ActSender, refused: () => E): Effect.Effect<void, E> {
-  return actor.panel ? Effect.void : Effect.fail(refused());
 }
 
 /** Whether an address the host answered parses and stands on the service's own origin. */
