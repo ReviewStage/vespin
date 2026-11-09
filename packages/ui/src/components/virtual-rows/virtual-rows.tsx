@@ -183,6 +183,8 @@ export interface VirtualRowPlace {
   readonly "data-row-key": string;
   readonly "aria-setsize": number;
   readonly "aria-posinset": number;
+  /** Marks the run's last row, which a log's foot pads (`conversation.tsx`), so what stands after the rows is a row the virtualizer measures. */
+  readonly "data-row-last": "" | undefined;
 }
 
 /**
@@ -427,28 +429,6 @@ export function VirtualRows({
     opened.current = true;
     virtualizer.scrollToEnd();
   });
-  // A run anchored to its end keeps a reader who stood at the scroller's end there as its rows grow, a line finishing its drawing after the run opened among them.
-  // Note that the virtualizer's own keeping counts only how far the rows run past the view, not what the scroller draws after them (a log's working line, its end row, its padding), so a reader at the scroller's end stood further from the rows' end than it allows, and was left short of it.
-  useEffect(() => {
-    const box = scroller.current;
-    const element = block.current;
-    if (!fromEnd || box === null || element === null) return;
-    const fromBottom = () => box.scrollHeight - box.clientHeight - box.scrollTop;
-    // Whether the reader stood at the end, as the last scroll left it: a row growing fires no scroll, so this is where they stood before it grew.
-    let stood = fromBottom() <= END_THRESHOLD_PX;
-    const heardScroll = () => {
-      stood = fromBottom() <= END_THRESHOLD_PX;
-    };
-    const grew = new ResizeObserver(() => {
-      if (stood && box.clientHeight > 0 && fromBottom() > 1) virtualizer.scrollToEnd();
-    });
-    box.addEventListener("scroll", heardScroll, { passive: true });
-    grew.observe(element);
-    return () => {
-      box.removeEventListener("scroll", heardScroll);
-      grew.disconnect();
-    };
-  }, [fromEnd, scroller, virtualizer]);
   const holdBlock = useCallback(
     (element: HTMLElement | null) => {
       block.current = element;
@@ -540,6 +520,7 @@ export function VirtualRows({
       [VIRTUAL_ROW_KEY_ATTRIBUTE]: String(item.key),
       "aria-setsize": keys.length,
       "aria-posinset": item.index + 1,
+      "data-row-last": item.index === keys.length - 1 ? "" : undefined,
     };
     places.current.set(item.key, place);
     return place;
@@ -608,6 +589,7 @@ export function VirtualRows({
             role="listitem"
             aria-setsize={place["aria-setsize"]}
             aria-posinset={place["aria-posinset"]}
+            data-row-last={place["data-row-last"]}
             {...{ [VIRTUAL_ROW_KEY_ATTRIBUTE]: place[VIRTUAL_ROW_KEY_ATTRIBUTE] }}
             className={rowClassOf(rowClassName, item.index)}
           >

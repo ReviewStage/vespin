@@ -2446,6 +2446,49 @@ function AgentTranscriptView({
     const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || origin !== undefined);
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
+    // What stands after the messages is the log's last row, so the virtualizer measures it as it does a message (`ConversationRows`' `foot`).
+    const footed =
+      working || ended !== undefined || endTrail !== undefined || (failed && connected);
+    const foot = !footed
+      ? undefined
+      : () => (
+          <>
+            {working ? <WorkingLine startedAt={startedAt} words={workingLineWords(phase)} /> : null}
+            {ended === undefined && endTrail === undefined ? null : (
+              <div
+                className="agent-end flex flex-col items-start gap-control-gap"
+                data-ended={ended === undefined ? undefined : ""}
+              >
+                {ended === undefined
+                  ? null
+                  : (signInCard ?? (
+                      <AgentEndRow
+                        ended={ended}
+                        endReason={endReason}
+                        keyProvider={keyProvider}
+                        onOpenApiKeys={onOpenApiKeys}
+                        about={failureAbout ?? { agentId, taskId }}
+                        press={endPress}
+                      />
+                    ))}
+                {endTrail}
+              </div>
+            )}
+            {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
+            {failed && connected ? (
+              <ErrorState
+                failure={failureShown({
+                  surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
+                  cause: failedWith ?? FAILURE_CONDITION.UNREAD,
+                  about: { agentId },
+                })}
+                onRetry={onRetry}
+              >
+                {TRANSCRIPT_FAILED_LINE}
+              </ErrorState>
+            ) : null}
+          </>
+        );
     return (
       <TranscriptAgent value={agentId}>
         <LiveDoors value={live}>
@@ -2475,6 +2518,7 @@ function AgentTranscriptView({
                   gap={0}
                   rowClassName={rowClassOf}
                   handle={rowsHandle}
+                  foot={foot}
                 >
                   {(at) => {
                     const entry = entries[at];
@@ -2539,42 +2583,6 @@ function AgentTranscriptView({
                     );
                   }}
                 </ConversationRows>
-                {working ? (
-                  <WorkingLine startedAt={startedAt} words={workingLineWords(phase)} />
-                ) : null}
-                {ended === undefined && endTrail === undefined ? null : (
-                  <div
-                    className="agent-end flex flex-col items-start gap-control-gap"
-                    data-ended={ended === undefined ? undefined : ""}
-                  >
-                    {ended === undefined
-                      ? null
-                      : (signInCard ?? (
-                          <AgentEndRow
-                            ended={ended}
-                            endReason={endReason}
-                            keyProvider={keyProvider}
-                            onOpenApiKeys={onOpenApiKeys}
-                            about={failureAbout ?? { agentId, taskId }}
-                            press={endPress}
-                          />
-                        ))}
-                    {endTrail}
-                  </div>
-                )}
-                {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
-                {failed && connected ? (
-                  <ErrorState
-                    failure={failureShown({
-                      surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
-                      cause: failedWith ?? FAILURE_CONDITION.UNREAD,
-                      about: { agentId },
-                    })}
-                    onRetry={onRetry}
-                  >
-                    {TRANSCRIPT_FAILED_LINE}
-                  </ErrorState>
-                ) : null}
               </ConversationContent>
               <ConversationScrollButton />
             </Conversation>
