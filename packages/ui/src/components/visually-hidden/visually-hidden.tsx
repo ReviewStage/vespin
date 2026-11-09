@@ -4,7 +4,8 @@
  * A control says its state in a glyph, a ring, or a color; these are the
  * words behind it that a screen reader speaks. The element is chosen by what
  * the words are (a `legend` names a fieldset, a `p` or a `span` with a live
- * `role` announces a change), and the words stay in the page, so a copy or a
+ * `role` announces a change, an `h1` names a page whose look says its name
+ * already), and the words stay in the page, so a copy or a
  * find still reaches them.
  *
  * Words may also give way only while the room around them is narrow
@@ -26,6 +27,7 @@ export const VISUALLY_HIDDEN_ELEMENT = {
   SPAN: "span",
   P: "p",
   LEGEND: "legend",
+  H1: "h1",
 } as const;
 
 export type VisuallyHiddenElement =

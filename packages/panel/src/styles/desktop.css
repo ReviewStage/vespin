@@ -978,8 +978,7 @@ body,
 }
 
 /* The list's name stands centered over the list, between its way back and
-   the list's far edge, each kept as far in as the other, as the window's
-   Inbox centers it over its list while the sidebar is folded. */
+   the list's far edge, each kept as far in as the other. */
 .agent-threads .inbox-tasks {
   --ui-toolbar-center: on;
   --ui-toolbar-end-at: var(--ui-space-8);
@@ -1135,30 +1134,6 @@ body,
    stands at the window's top right. */
 .inbox-view[data-columns="both"] .inbox-tasks {
   --ui-toolbar-end-at: var(--column-inset);
-}
-
-/* While the sidebar is folded the window's Inbox's list is its first column, so its
-   name stands centered over the list, as a sidebar's title does, rather than
-   pushed past the title bar's buttons (`Toolbar`'s centered title): the room
-   kept for the buttons is what the bar's start stands at. The list standing
-   alone is a page rather than a column, so its name leads its bar past the
-   title bar's buttons, as a page's title does. */
-.desktop-shell[data-sidebar-collapsed="true"]
-  .desktop-main
-  > .desktop-task
-  > .page-find
-  > .inbox-view
-  .inbox-tasks {
-  --ui-toolbar-center: on;
-}
-
-.desktop-shell[data-sidebar-collapsed="true"]
-  .desktop-main
-  > .desktop-task
-  > .page-find
-  > .inbox-view[data-columns="list"]
-  .inbox-tasks {
-  --ui-toolbar-center: off;
 }
 
 /* A task's own Inbox draws in the side panel (`inboxBody` reaches `SidePanel`

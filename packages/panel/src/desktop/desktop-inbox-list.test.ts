@@ -1618,26 +1618,39 @@ function paneTitle(page: HTMLElement): string | null | undefined {
   return page.querySelector(".inbox-view-items .inbox-subject-title")?.textContent;
 }
 
-test("the list's search stands under the Inbox's head, its name and buttons never giving way, and narrows the list to the items saying every word typed, the item open leaving the list but not the pane; Escape empties it", async () => {
+test("the Inbox's head is one row in the list, its search beside its buttons and the title bar's row over it empty; the search narrows the list to the items saying every word typed, the item open leaving the list but not the pane, gives its place to a selection and comes back with its words, and Escape empties it", async () => {
   const { page } = mount([], { chosen: ON_THRESHOLD });
   await settle();
-  const title = headTitle(page);
+  const row = page.querySelector<HTMLElement>(".inbox-head-row") ?? assert.fail("the row stands");
   const buttons = () =>
-    [...(page.querySelector(".inbox-tasks > .ui-toolbar")?.querySelectorAll("button") ?? [])].map(
-      (each) => each.getAttribute("aria-label"),
-    );
+    [...row.querySelectorAll("button")]
+      .filter((each) => each.closest("search") === null)
+      .map((each) => each.getAttribute("aria-label"));
   assert.deepEqual(buttons(), ["Mark all as read", "View options"]);
-  const input = page.querySelector<HTMLInputElement>(
-    '.inbox-tasks input[aria-label="Search inbox"]',
+  assert.equal(
+    page.querySelector(".inbox-tasks > .ui-toolbar")?.querySelector("button, h1"),
+    null,
+    "the title bar's row over the list holds nothing of the Inbox's",
   );
+  assert.equal(headTitle(page), "Inbox", "the list is still named to a reader");
+  const input = row.querySelector<HTMLInputElement>('input[aria-label="Search inbox"]');
   assert.ok(input, "the search stands before anything is pressed");
 
   // Note that the retry question is found by its answer's note, which only its thread holds.
   searchList(page, "on-call");
   assert.deepEqual(listed(page), ["How is a failed email retried?"]);
   assert.equal(paneTitle(page), "Alert at 80%?", "the pane keeps the item open");
-  assert.equal(headTitle(page), title, "the name stands while the search is used");
-  assert.deepEqual(buttons(), ["Mark all as read", "View options"], "and so do the buttons");
+  assert.deepEqual(buttons(), ["Mark all as read", "View options"], "the buttons stand");
+
+  commandClick(page, "How is a failed email retried?");
+  assert.notEqual(input.closest("search[hidden]"), null, "the selection takes the search's place");
+  assert.ok(row.textContent?.includes("1 selected"));
+  assert.equal(buttons().includes("Mark all as read"), false, "and its buttons'");
+  act(() => rowNamed(page, "How is a failed email retried?").focus());
+  keyOn(rowNamed(page, "How is a failed email retried?"), "Escape");
+  assert.equal(selectionBar(page), null, "the selection is let go");
+  assert.equal(input.closest("search[hidden]"), null, "the search is back");
+  assert.equal(input.value, "on-call", "with its words");
 
   searchList(page, "zzz");
   assert.deepEqual(listed(page), []);

@@ -425,13 +425,14 @@
   pointer-events: none;
 }
 
-/* The list's search, the first thing in the sheet under its head on the
-   frame, stands a row's inset in from the sheet's top as from its rows. */
+/* The list's search, or the window's Inbox's head row holding it, the
+   first thing in the sheet under its head on the frame, stands a row's
+   inset in from the sheet's top as from its rows. */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
   .desktop-task
-  .inbox-search {
+  :is(.inbox-search, .inbox-head-row) {
   padding-top: var(--ui-row-inset);
 }
 
