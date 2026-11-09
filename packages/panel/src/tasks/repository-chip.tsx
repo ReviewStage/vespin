@@ -123,14 +123,17 @@ export const CHIP_PLACE = {
   COMPOSER: "composer",
   /** A form row's value, or the plan's chip row, as a Settings picker's chip is drawn. */
   FIELD: "field",
+  /** A press among a row's outlined buttons, its words the press's own, as setup's Add repositories. */
+  ACTION: "action",
 } as const;
 
 type ChipPlace = (typeof CHIP_PLACE)[keyof typeof CHIP_PLACE];
 
-/** The chip's look in each place: the composer's pill, or a form row's field. */
+/** The chip's look in each place: the composer's pill, a form row's field, or an outlined button's. */
 const PLACE_LOOK = {
   [CHIP_PLACE.COMPOSER]: CHIP_LOOK.PILL,
   [CHIP_PLACE.FIELD]: CHIP_LOOK.FIELD,
+  [CHIP_PLACE.ACTION]: CHIP_LOOK.OUTLINE,
 } as const satisfies Record<ChipPlace, ChipLook>;
 
 /** The chip's words while it waits on a pick. */
@@ -680,23 +683,26 @@ export function RepositoryChip(props: RepositoryMenuProps & ChipStanding): React
   return <MenuChip {...props} menu={useRepositoryMenu(props)} named={props.value !== null} />;
 }
 
-/** A form row's repository chip over rows its caller lists, as setup's token card does, each pick checked and the menu standing open between presses. */
+/**
+ * A press named `label` among a row's outlined buttons, over rows its caller
+ * lists, as setup's Add repositories is: each pick checked, the menu standing
+ * open between presses, and the press keeping its words, since what is
+ * picked is listed beside it.
+ */
 export function CheckedRepositoryChip(props: {
   rows: readonly MenuRow[];
   picked: readonly string[];
-  pictures: boolean;
-  empty: string;
+  label: string;
   note: React.ReactNode;
   onToggle: (repository: string) => void;
   onOpen: () => void;
 }): React.JSX.Element {
   const place = useMenuPlace();
-  const first = props.picked[0];
   const menu: RepositoryMenu = {
     ...place,
-    label: first === undefined ? props.empty : pickedRepositoriesWords(props.picked),
-    hint: first === undefined ? undefined : props.picked.join(", "),
-    glyph: first === undefined ? <GLYPH.ADD /> : firstPicture(first, props.pictures),
+    label: props.label,
+    hint: undefined,
+    glyph: <GLYPH.ADD />,
     card: undefined,
     press: (from) => {
       if (!place.open) props.onOpen();
@@ -711,7 +717,7 @@ export function CheckedRepositoryChip(props: {
       onPick: props.onToggle,
     }),
   };
-  return <MenuChip place={CHIP_PLACE.FIELD} menu={menu} named={first !== undefined} />;
+  return <MenuChip place={CHIP_PLACE.ACTION} menu={menu} named={false} />;
 }
 
 /**

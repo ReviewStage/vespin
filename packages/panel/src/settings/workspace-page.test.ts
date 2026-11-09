@@ -1707,7 +1707,7 @@ test("an owner or an admin of a connected workspace sees GitHub's row, led by it
   }
 });
 
-/** What each line folded open under an account's row says. */
+/** What each repository's line folded open under an account's row says: its whole name, then its Token mark where it wears one. */
 const foldLines = (row: HTMLElement) =>
   [...row.querySelectorAll("li")].map((line) => line.textContent);
 
@@ -1716,7 +1716,7 @@ const foldOn = (row: HTMLElement) =>
   row.querySelector<HTMLButtonElement>('button[aria-label$="repositories"]') ??
   assert.fail("no fold");
 
-test("an active account counts the App's repositories whose owner is its login in any case and folds them under it by name, closed until pressed, and an inactive account draws no row", async () => {
+test("an active account counts the App's repositories whose owner is its login in any case and folds them under it by whole name, closed until pressed, and an inactive account draws no row", async () => {
   githubRepositories = ["acme-org/relay", "ACME-ORG/site", "acme-labs/old", "other/thing"];
   tokenReach = ["acme-org/forked"];
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
@@ -1728,10 +1728,10 @@ test("an active account counts the App's repositories whose owner is its login i
   assert.equal(foldOn(org).getAttribute("aria-label"), "acme-org's repositories");
   assert.deepEqual(foldLines(org), [], "a few repositories start folded too");
   act(() => foldOn(org).click());
-  assert.deepEqual(foldLines(org), ["relay", "site"]);
+  assert.deepEqual(foldLines(org), ["acme-org/relay", "ACME-ORG/site"]);
 });
 
-test("an account given every repository says All N and opens on six lines before Show all, and one given a selection, named and found by the login GitHub holds now, or one the service says nothing of, says the count alone", async () => {
+test("an account given every repository says All N and folds every one open, and one given a selection, named and found by the login GitHub holds now, or one the service says nothing of, says the count alone", async () => {
   const shown = Array.from({ length: 8 }, (_, at) => `acme-org/r${at + 1}`);
   githubRepositories = [...shown, "acme-labs-renamed/one", "acme-tools/a", "acme-tools/b"];
   listedInstallations = [
@@ -1759,15 +1759,7 @@ test("an account given every repository says All N and opens on six lines before
     ["acme-tools", "2 repositories"],
   ]);
   act(() => foldOn(org).click());
-  assert.deepEqual(foldLines(org), [
-    ...shown.slice(0, 6).map((fullName) => fullName.split("/")[1]),
-    "Show all 8",
-  ]);
-  act(() => button(org, "Show all 8").click());
-  assert.deepEqual(
-    foldLines(org),
-    shown.map((fullName) => fullName.split("/")[1]),
-  );
+  assert.deepEqual(foldLines(org), shown);
 });
 
 test("while the repositories are read each account's line says so, and a read that failed says so once with Retry rather than as none, which reads them again", async () => {
@@ -1898,7 +1890,7 @@ test("a member reads every account connected, or is told to ask an owner or admi
   }
 });
 
-test("the repositories members added on their tokens stand by owner after the App's accounts, each owner a row like theirs, its ⋯ removing what the reader may after asking, and no ⋯ where they may remove none", async () => {
+test("the repositories members added on their tokens stand by owner after the App's accounts, each owner a row like theirs whose lines wear the Token mark, its ⋯ removing what the reader may after asking, and no ⋯ where they may remove none", async () => {
   tokenRepositories = [
     { fullName: "octo-member/side", addedBy: MEMBER.userId, addedAt: 3, removable: false },
     { fullName: "acme/relay", addedBy: READER_ID, addedAt: 2, removable: true },
@@ -1915,7 +1907,7 @@ test("the repositories members added on their tokens stand by owner after the Ap
     ["octo-member", "1 repository"],
   ]);
   act(() => foldOn(rowNamed(group, "acme")).click());
-  assert.deepEqual(foldLines(rowNamed(group, "acme")), ["relay", "notes"]);
+  assert.deepEqual(foldLines(rowNamed(group, "acme")), ["acme/relayToken", "ACME/notesToken"]);
   assert.deepEqual(rowActions(rowNamed(group, "octo-member")), []);
   assert.deepEqual(rowActions(rowNamed(group, "acme")), ["Remove relay", "Remove notes"]);
 
@@ -1965,7 +1957,10 @@ test("Add repository offers the repositories the reader's own token may push to 
   unfold(page, FOLD.GITHUB);
   act(() => foldOn(rowNamed(githubGroup(page), "octo-member")).click());
   await vi.waitFor(() =>
-    assert.deepEqual(foldLines(rowNamed(githubGroup(page), "octo-member")), ["side", "notes"]),
+    assert.deepEqual(foldLines(rowNamed(githubGroup(page), "octo-member")), [
+      "octo-member/sideToken",
+      "octo-member/notesToken",
+    ]),
   );
 });
 

@@ -4,8 +4,11 @@
  * A line shows its owner's picture, then its name. Where another repository
  * in the view shares the name, the line says `owner/name`. No repository is a
  * crossed-out folder. A glyph slot holds the picture, or that folder, alone.
- * The card shows the owner under the name. The catalog asks nothing of the
- * network, so every picture stands as the repository's glyph.
+ * The card shows the owner under the name. A workspace's repositories stand
+ * one line each, `owner/name`, a Token mark where a member's token reaches
+ * one, in a list about six lines tall that scrolls the rest. The catalog
+ * asks nothing of the network, so every picture stands as the repository's
+ * glyph.
  */
 
 import {
@@ -13,6 +16,7 @@ import {
   Inline,
   NoRepositoryGlyph,
   RepositoryCard,
+  RepositoryLines,
   RepositoryName,
   RepositoryPicture,
   Stack,
@@ -28,6 +32,15 @@ const VIEW = [
   { repository: "labs/site" },
   { repository: null },
 ] as const;
+
+/** A workspace's repositories, more than the list stands tall, two reached on a member's token. */
+const REACHED = [
+  ...["relay", "site", "docs", "infra", "mobile", "design", "billing", "search"].map((name) => ({
+    repository: `acme/${name}`,
+  })),
+  { repository: "labs/site", token: true },
+  { repository: "labs/release-notifications-for-every-workspace", token: true },
+];
 
 function Repositories(): React.JSX.Element {
   return (
@@ -55,6 +68,15 @@ function Repositories(): React.JSX.Element {
           <RepositoryPicture repository="acme/relay" pictures={false} />
           <NoRepositoryGlyph />
         </Inline>
+      </CatalogSection>
+      <CatalogSection id="repository-lines" title="A workspace's repositories, scrolling past six">
+        <div className="catalog-narrow">
+          <RepositoryLines
+            label="Repositories agents reach"
+            repositories={REACHED}
+            pictures={false}
+          />
+        </div>
       </CatalogSection>
       <CatalogSection id="repository-card" title="Card">
         <RepositoryCard repository="acme/relay" pictures={false} />
