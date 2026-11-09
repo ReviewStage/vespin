@@ -15,11 +15,13 @@ import { messages, turns } from "../../schemas/storage.js";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
 import { settleLapsedTurns } from "../abandoned-turns.js";
+import { writeAgentRunnerRecord } from "../agent-runner-record.js";
 import { createAgent } from "../agent-store.js";
 import {
   lapsedAgents,
   lapsedTurnsOf,
   progressTurns,
+  runningTurnSandboxes,
   turnAwaitedByLine,
   turnsAwaitingRunner,
 } from "../turn-state.js";
@@ -314,6 +316,49 @@ it.layer(getTestDB())("a turn's one record", (it) => {
         assert.deepEqual(queuedSince, []);
         assert.deepEqual(queuedBefore, [queuedAgent.target.conversationId]);
         assert.deepEqual(pastPickup, []);
+      }),
+  );
+
+  it.effect(
+    "a running turn's sandbox is kept up inside its progress deadline and let go past it, and a queued turn's is not",
+    () =>
+      Effect.gen(function* () {
+        // Note that the clock runs on from the cases before, so every instant is read from where it stands.
+        const at = yield* Clock.currentTimeMillis;
+        const runner = (agentId: string, sandboxName: string) => ({
+          agentId,
+          sandboxName,
+          firstSequence: 1,
+          fingerprint: null,
+          sandboxSessionId: `sbx-${randomUUID()}`,
+          commandId: `cmd-${randomUUID()}`,
+        });
+        const queuedAgent = yield* openAgent;
+        yield* sent(queuedAgent.target, "never taken");
+        const queuedSandbox = `agent-sandbox-${randomUUID()}`;
+        yield* writeAgentRunnerRecord(
+          queuedAgent.target.userId,
+          randomUUID(),
+          runner(queuedAgent.agentId, queuedSandbox),
+        );
+        const runningAgent = yield* openAgent;
+        yield* sent(runningAgent.target, "taken");
+        const [running] = yield* turnsOf(runningAgent.target);
+        assert.ok(running !== undefined);
+        yield* started(runningAgent.target, running.id, 1);
+        const runningSandbox = `agent-sandbox-${randomUUID()}`;
+        yield* writeAgentRunnerRecord(
+          runningAgent.target.userId,
+          randomUUID(),
+          runner(runningAgent.agentId, runningSandbox),
+        );
+        const kept = (now: number) =>
+          Effect.map(runningTurnSandboxes(new Date(now), 1000), (names) =>
+            names.filter((name) => name === queuedSandbox || name === runningSandbox),
+          );
+
+        assert.deepEqual(yield* kept(at + TURN_DEADLINE.PROGRESS_MS - 1), [runningSandbox]);
+        assert.deepEqual(yield* kept(at + TURN_DEADLINE.PROGRESS_MS + 1), []);
       }),
   );
 

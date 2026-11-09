@@ -28,6 +28,8 @@ interface MaintenanceSweeps {
   reconcileAgents: (now: number) => SweepRead<number>;
   /** Publishes again the coding agents' turns still queued for a runner whose message may have been lost, a sweep's worth, answering how many (`coder-host/turn-delivery.ts`). */
   republishTurns: (now: number) => SweepRead<number>;
+  /** Touches the sandbox of every cloud turn still running inside its progress deadline, a sweep's worth, answering how many (`coder-host/reconcile.ts`). */
+  keepSandboxesUp: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -54,6 +56,8 @@ interface MaintenanceSweepAnswer {
   turns: Swept<number>;
   /** Coding agents' turns still queued, published again. */
   republished: Swept<number>;
+  /** Running cloud turns' sandboxes touched. */
+  keptUp: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -91,6 +95,7 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     syncLog: yield* isolated("pruneSyncLog", sweeps.pruneSyncLog(now)),
     turns: yield* isolated("reconcileAgents", sweeps.reconcileAgents(now)),
     republished: yield* isolated("republishTurns", sweeps.republishTurns(now)),
+    keptUp: yield* isolated("keepSandboxesUp", sweeps.keepSandboxesUp(now)),
   };
 });
 

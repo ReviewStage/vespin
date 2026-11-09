@@ -41,6 +41,14 @@
  * the log and reported as an issue under the agent's ids, since nothing the
  * developer did ends a run this way; a runner's stderr stays in the turn's
  * row alone, never a log line or a report, which reach Sentry.
+ *
+ * The same sweep keeps up the sandbox of every cloud turn still running
+ * inside its progress deadline (`keepRunningSandboxesUp`), whatever its
+ * runner posts: a sandbox stops `SANDBOX_IDLE` after its last touch, shorter
+ * than a turn's progress deadline, so a runner whose posts stop reaching us
+ * through a long silent command would otherwise have its sandbox stop under
+ * a turn this reap would still call alive. Past that deadline it is let go,
+ * and this reap fails the turn.
  */
 
 import { RUNNER_EXIT } from "@repo/agent-runner/protocol";
@@ -69,12 +77,13 @@ import {
   lapsedAgents,
   lapsedTurnsOf,
   pastCap,
+  runningTurnSandboxes,
 } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { causeKind } from "@repo/runtime/effect";
-import { COMMAND_GONE, type CommandExit, Sandbox } from "@repo/sandbox";
+import { COMMAND_GONE, type CommandExit, Sandbox, touchSandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, ErrorReporter, Exit, Option } from "effect";
 import { RUN_STATUS, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { FoundPlace, MachineLifecycle, RecordedRunner } from "../machine/agent-machine.js";
@@ -92,6 +101,9 @@ export type ReconciledAgent = Pick<
   Agent,
   "id" | "userId" | "conversationId" | "machine" | "deviceId"
 >;
+
+/** The most running turns' sandboxes one sweep keeps up, each one read and at most one extend, a few at a time, so the sweep answers within its minute. */
+const KEEP_UP_SWEEP = { SANDBOXES: 100, CONCURRENCY: 10 } as const;
 
 /** The most agents one sweep reaps, each with at most a few calls to its machine, so the sweep answers within its minute. */
 const RECONCILE_SWEEP = { AGENTS: 20, CONCURRENCY: 5 } as const;
@@ -512,6 +524,24 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
   if (failures > 0) return yield* new ReapsFailed({ failures, settled });
   return settled;
 });
+
+/**
+ * The minute sweep's keep-alive: the sandbox of every cloud turn still
+ * running inside its progress deadline touched, at most a sweep's worth, a
+ * few at a time; answers how many. A touch that fails is said in the log by
+ * `touchSandbox` and passed over, since the next minute's sweep touches it
+ * again well inside its idle window.
+ */
+export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunningSandboxesUp")(
+  function* (now: number) {
+    const names = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
+    yield* Effect.forEach(names, touchSandbox, {
+      concurrency: KEEP_UP_SWEEP.CONCURRENCY,
+      discard: true,
+    });
+    return names.length;
+  },
+);
 
 /** A sweep in which some agent's reap failed, each said in the log already. */
 class ReapsFailed extends Data.TaggedError("ReapsFailed")<{
