@@ -30,7 +30,6 @@ import {
   PULL_REQUEST_CHAPTERS_FAILURE,
   PULL_REQUEST_CHAPTERS_STATUS,
   type PullRequestChaptersFailure,
-  type PullRequestChaptersStatus,
 } from "../pull-request-chapters-vocabulary.js";
 import { pullRequestChapters } from "../schemas/pull-request-chapters.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -69,29 +68,6 @@ export interface ChapterGenerationRequest {
   readonly now: Date;
 }
 
-/** A pull request's chapters as the store keeps them for one head commit. */
-export interface PullRequestChapters {
-  readonly id: string;
-  readonly organizationId: string;
-  readonly repository: string;
-  readonly pullRequestNumber: number;
-  readonly baseSha: string;
-  readonly headSha: string;
-  readonly status: PullRequestChaptersStatus;
-  /** Null unless `status` is `failed`. */
-  readonly failureKind: PullRequestChaptersFailure | null;
-  /** Null unless `status` is `ready`. */
-  readonly model: string | null;
-  /** The chapters as JSON, for the endpoint to decode with their wire schema; null unless `status` is `ready`. */
-  readonly chapters: unknown;
-  /** Null once the member's account is gone. */
-  readonly requestedBy: string | null;
-  readonly startedAt: Date;
-  readonly finishedAt: Date | null;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
-
 /** What a chapters store operation answers: an effect over the ambient client, composed into whatever called it. */
 export type PullRequestChaptersEffect<A> = Effect.Effect<
   A,
@@ -107,15 +83,22 @@ const ChaptersRowSchema = Schema.Struct({
   baseSha: Schema.String,
   headSha: Schema.String,
   status: Schema.Literals(Object.values(PULL_REQUEST_CHAPTERS_STATUS)),
+  /** Null unless `status` is `failed`. */
   failureKind: Schema.NullOr(Schema.Literals(Object.values(PULL_REQUEST_CHAPTERS_FAILURE))),
+  /** Null unless `status` is `ready`. */
   model: Schema.NullOr(Schema.String),
+  /** The chapters as JSON, for the endpoint to decode with their wire schema; null unless `status` is `ready`. */
   chapters: Schema.Unknown,
+  /** Null once the member's account is gone. */
   requestedBy: Schema.NullOr(Schema.String),
   startedAt: InstantColumnSchema,
   finishedAt: Schema.NullOr(InstantColumnSchema),
   createdAt: InstantColumnSchema,
   updatedAt: InstantColumnSchema,
 });
+
+/** A pull request's chapters as the store keeps them for one head commit. */
+export type PullRequestChapters = typeof ChaptersRowSchema.Type;
 
 const CHAPTERS_COLUMNS = {
   id: pullRequestChapters.id,
