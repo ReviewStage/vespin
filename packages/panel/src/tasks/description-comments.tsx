@@ -868,7 +868,8 @@ function CommentEntry({
  * The field a comment's words are edited in, in their place, as the field a
  * thread's first comment is written in: the words stay where they were read,
  * bare on the card with no box around them, and the composer's foot stands
- * under them, Cancel beside the round send, which saves.
+ * under them, its microphone and Cancel beside the round send, which saves.
+ * It takes no files, since an edit changes a comment's words alone.
  */
 function CommentEditField({
   value,
@@ -881,35 +882,74 @@ function CommentEditField({
   onSave: () => void;
   onCancel: () => void;
 }): React.JSX.Element {
-  // Note that only the agent box's editor counts its words against the bound, as a reply's foot does.
-  const counts = useCommentEditor() !== undefined;
+  const editor = useRef<ComposerEditorHandle | undefined>(undefined);
+  const [heard, setHeard] = useState<string | undefined>(undefined);
+  const dictation = useDictation({ editor, keywords: NO_KEYWORDS, onNote: setHeard });
+  const dictating = dictation.phase !== DICTATION_PHASE.IDLE;
+  // Note that only the agent box's editor takes a dictation and counts its words against the bound, as a reply's foot does.
+  const dictates = useCommentEditor() !== undefined;
+  // Whether the last paste was cut to the room the field has left, until the words change again.
+  const [cut, setCut] = useState(false);
+  const write = (words: string) => {
+    setCut(false);
+    onChange(words);
+  };
+  // Note that a dictation's note is said before the cut paste's, as a reply's field says them.
+  const note =
+    heard ?? (cut ? pasteCutWords(DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS) : undefined);
   return (
     <ComposerFrame
       look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
       data-variant={REPLY_VARIANT.EDIT}
+      data-held={dictating}
     >
       <CommentText
         value={value}
         label={COMMENT_WORDS.EDIT}
-        onChange={onChange}
+        onChange={write}
         onSubmit={onSave}
         onCancel={onCancel}
         autoFocus
+        editor={editor}
+        dictation={dictation}
+        onPasteCut={() => {
+          setHeard(undefined);
+          setCut(true);
+        }}
       />
       <ComposerFoot
         counter={
-          counts
+          dictates
             ? { length: value.length, limit: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS }
             : undefined
         }
         actions={
-          <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} onClick={onCancel}>
-            <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
-          </Button>
+          <>
+            <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} onClick={onCancel}>
+              <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
+            </Button>
+            {dictates ? <DictateButton dictation={dictation} disabled={false} /> : null}
+          </>
         }
-        // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, and that an edit is drawn on the press, which closes the field, so it is never busy.
-        send={{ label: COMMENT_WORDS.SAVE, icon: <CheckIcon />, empty: false, onSend: onSave }}
+        strip={dictating ? <DictationStrip dictation={dictation} /> : undefined}
+        // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, that a dictation's words land before it saves, and that an edit is drawn on the press, which closes the field, so it is never busy.
+        send={{ label: COMMENT_WORDS.SAVE, empty: false, held: dictating, onSend: onSave }}
+        note={
+          note === undefined
+            ? undefined
+            : {
+                words: note,
+                failure:
+                  note === heard
+                    ? failureShown({
+                        surface: FAILURE_SURFACE.DICTATION,
+                        cause: FAILURE_CONDITION.REFUSED,
+                        refused: true,
+                      })
+                    : UNREPORTED.INPUT,
+              }
+        }
       />
     </ComposerFrame>
   );
