@@ -27,6 +27,7 @@ const FILLED: ReadonlyMap<string, string> = new Map([
   ["<page-id>", "page-1"],
   ["<number>", "7"],
   ["<agent-id>", "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"],
+  ["<automation-id>", "4e3d2c1b-0a9f-4e8d-9c7b-6a5f4e3d2c1b"],
   ["<issue-id>", "3f0e6f5c-7d1a-4f6e-9a55-000000000042"],
   ["<item-id>", "9b2e4c6a-1d3f-4e5a-8b7c-0d1e2f3a4b5c"],
 ]);
@@ -80,6 +81,7 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
           ...(onTask ? own : [MENTION_KIND.PAGE]),
           MENTION_KIND.AGENT,
           LINK_PLACE.TASK,
+          LINK_PLACE.AUTOMATION,
           LINK_PLACE.INBOX_ITEM,
         ],
         `${brief} ${onTask}`,
