@@ -556,9 +556,13 @@ function memberReader(values: readonly string[]): (value: UnparsedWireValue) => 
     isWireString(value) && members.has(value) ? value : undefined;
 }
 
-const COUNT_BUCKETS: ReadonlySet<number> = new Set(Object.values(PRODUCT_SESSION_COUNT_BUCKET));
+const isProductSessionCountBucket = Schema.is(
+  Schema.Literals(Object.values(PRODUCT_SESSION_COUNT_BUCKET)),
+);
 
-const readsExperimentScope = memberReader(Object.values(PRODUCT_EXPERIMENT_SCOPE));
+const isProductExperimentScope = Schema.is(
+  Schema.Literals(Object.values(PRODUCT_EXPERIMENT_SCOPE)),
+);
 
 /**
  * An experiment toggle's scope, an account's where none is named. Note that
@@ -568,22 +572,17 @@ const readsExperimentScope = memberReader(Object.values(PRODUCT_EXPERIMENT_SCOPE
  */
 function experimentScopeReader(value: UnparsedWireValue): ProductExperimentScope | undefined {
   if (value === undefined) return PRODUCT_EXPERIMENT_SCOPE.ACCOUNT;
-  // SAFETY: the reader answers only a member of the scope set declared above.
-  return readsExperimentScope(value) as ProductExperimentScope | undefined;
+  return isProductExperimentScope(value) ? value : undefined;
 }
 
-const ELAPSED_RUNGS: ReadonlySet<number> = new Set(Object.values(PRODUCT_ELAPSED_SECONDS));
+const isProductElapsedSeconds = Schema.is(Schema.Literals(Object.values(PRODUCT_ELAPSED_SECONDS)));
 
 function elapsedReader(value: UnparsedWireValue): ProductElapsedSeconds | undefined {
-  if (!isWireNumber(value) || !ELAPSED_RUNGS.has(value)) return undefined;
-  // SAFETY: the value is a member of the elapsed ladder declared above.
-  return value as ProductElapsedSeconds;
+  return isProductElapsedSeconds(value) ? value : undefined;
 }
 
 function bucketReader(value: UnparsedWireValue): ProductSessionCountBucket | undefined {
-  if (!isWireNumber(value) || !COUNT_BUCKETS.has(value)) return undefined;
-  // SAFETY: the value is a member of the bucket ladder declared above.
-  return value as ProductSessionCountBucket;
+  return isProductSessionCountBucket(value) ? value : undefined;
 }
 
 /**

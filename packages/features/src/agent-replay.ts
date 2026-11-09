@@ -235,8 +235,8 @@ const STEP_OPEN = new RegExp(
 const STEP_ATTRIBUTE = / ([a-z-]+)=([A-Za-z0-9_.:@-]+)/gu;
 const ATTRIBUTE_VALUE = /^[A-Za-z0-9_.:@-]+$/u;
 const INSTANT_VALUE = /^\d+$/u;
-const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(REPLAY_TOOL_STATE));
-const SENDER_KINDS: ReadonlySet<string> = new Set(Object.values(REPLAY_SENDER));
+const isReplayToolState = Schema.is(Schema.Literals(Object.values(REPLAY_TOOL_STATE)));
+const isReplaySenderKind = Schema.is(Schema.Literals(Object.values(REPLAY_SENDER)));
 /** The app's sender as a marker written before it was `app` spells it. */
 const LEGACY_APP_SENDER = "luke";
 const isReplayValueForm = Schema.is(Schema.Literals(Object.values(REPLAY_VALUE_FORM)));
@@ -247,7 +247,7 @@ const SUMMARY_OPEN = new RegExp(
   "u",
 );
 
-const STEP_KINDS: ReadonlySet<string> = new Set(Object.values(REPLAY_STEP_KIND));
+const isReplayStepKind = Schema.is(Schema.Literals(Object.values(REPLAY_STEP_KIND)));
 /** Each heading a note may stand under, as it is spelled and as it is read: today's, then the retired spelling. */
 const NOTE_HEADINGS: readonly (readonly [string, StartNoteHeading])[] = [
   ...Object.values(START_NOTE_HEADING).map((heading) => [heading, heading] as const),
@@ -327,18 +327,16 @@ function calledFields(
 ): Pick<ReplayStep, "state" | "input" | "output"> {
   const state = attributes.get("state") ?? "";
   const inputChars = Number(attributes.get("input-chars") ?? Number.NaN);
-  if (!TOOL_STATES.has(state) || !Number.isInteger(inputChars)) return {};
+  if (!isReplayToolState(state) || !Number.isInteger(inputChars)) return {};
   if (!words.startsWith(TOOL_WORDS.INPUT)) return {};
   const inputEnd = TOOL_WORDS.INPUT.length + inputChars;
   if (!words.startsWith(TOOL_WORDS.RESULT, inputEnd)) return {};
   const input = words.slice(TOOL_WORDS.INPUT.length, inputEnd);
   const result = words.slice(inputEnd + TOOL_WORDS.RESULT.length);
-  // SAFETY: the state was checked against the vocabulary just above.
-  const known = state as ReplayToolState;
-  if (known === REPLAY_TOOL_STATE.RUNNING) return { state: known, input };
-  if (known === REPLAY_TOOL_STATE.DONE) return { state: known, input, output: result };
+  if (state === REPLAY_TOOL_STATE.RUNNING) return { state, input };
+  if (state === REPLAY_TOOL_STATE.DONE) return { state, input, output: result };
   if (!result.startsWith(TOOL_WORDS.FAILED)) return {};
-  return { state: known, input, output: result.slice(TOOL_WORDS.FAILED.length) };
+  return { state, input, output: result.slice(TOOL_WORDS.FAILED.length) };
 }
 
 /** A line's sender and when it was sent read back from its marker; none of either where it names none it knows. */
@@ -352,11 +350,10 @@ function lineFields(attributes: ReadonlyMap<string, string>): Pick<ReplayStep, "
 function senderFields(attributes: ReadonlyMap<string, string>): Pick<ReplayStep, "sender"> {
   const spelled = attributes.get("sender") ?? "";
   const kind = spelled === LEGACY_APP_SENDER ? REPLAY_SENDER.APP : spelled;
-  if (!SENDER_KINDS.has(kind)) return {};
+  if (!isReplaySenderKind(kind)) return {};
   const member = attributes.get("member");
-  // SAFETY: the kind was checked against the vocabulary just above.
   const sender = {
-    kind: kind as ReplaySenderKind,
+    kind,
     ...(member === undefined ? undefined : { memberId: member }),
   };
   return { sender };
@@ -469,7 +466,7 @@ function stepsFrom(
   while (close === undefined) {
     const open = STEP_OPEN.exec(text.slice(at, at + 512));
     const [marker, kind = "", named = "", chars = ""] = open ?? [];
-    if (marker === undefined || !STEP_KINDS.has(kind)) return undefined;
+    if (marker === undefined || !isReplayStepKind(kind)) return undefined;
     const body = markedRun(text, at + marker.length, Number(chars));
     if (body === undefined) return undefined;
     const split = body.run.indexOf("\n");
@@ -479,8 +476,7 @@ function stepsFrom(
     );
     const words = body.run.slice(split + 1);
     steps.push({
-      // SAFETY: the kind was checked against the vocabulary just above.
-      kind: kind as ReplayStepKind,
+      kind,
       summary: body.run.slice(0, split),
       words,
       ...(kind === REPLAY_STEP_KIND.TOOL ? toolFields(attributes, words) : undefined),
