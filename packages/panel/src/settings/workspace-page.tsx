@@ -134,33 +134,10 @@ import {
  *
  * The page shows the workspace the tasks' sidebar lists and no other, so
  * there is one choice of workspace in the window: a Settings link that names
- * another lists it in the sidebar first. It is drawn in the shape of the
- * other Settings pages, one kind of thing to a group. Its first row is the
- * workspace as Account's first row is the account: its tile, its name, who
- * shares it, and for an owner or an admin Rename and the photo's acts, and
- * for the owner Change slug; an account's first workspace is named by its
- * owner's account name, so it offers no Rename. The members follow as the service
- * holds them now, each with their email and their role in one column; the
- * owner makes a member an admin, an admin a member or the owner, and
- * removes anyone else, and an admin removes members. Under them, an owner
- * or an admin invites people by address and role, an admin as a member alone,
- * sees the invitations still pending with each one's accept link, which the
- * service has emailed to the invitee and which can still be copied and sent
- * by hand, and cancels one. Workspace connections holds what the workspace
- * connects for everyone, named apart from the account's own Integrations
- * page, each drawn as Settings › Integrations draws its rows. GitHub,
- * the one place a workspace's repositories are set: every GitHub
- * account whose installation of our GitHub App is connected and active,
- * then every owner of a repository a member added on their own token, each
- * the same row inset under GitHub's, its picture on GitHub, its count of
- * repositories, and their names folded under it
- * (`workspace-github-accounts.tsx`);
- * an owner or an admin connects the first with Connect, and once one is,
- * Manage on GitHub opens the one GitHub page that both adds an account and
- * chooses an account's repositories, where which accounts and repositories
- * we reach is managed, so nothing here disconnects one. A member sees
- * the same list, or is told to ask. Last, anyone but the owner leaves, and
- * the owner hands the workspace to an admin first.
+ * another lists it in the sidebar first. Workspace connections holds what
+ * the workspace connects for everyone, named apart from the account's own
+ * Integrations page; GitHub's row is the one place a workspace's
+ * repositories are set.
  *
  * Its rows are the Settings kit's: a row's one constructive act stands at
  * its end, and the rest are its ⋯'s (`menu-row.tsx`), each act that cannot
@@ -173,14 +150,12 @@ import {
 /** The photo's removal, which its tile offers and the confirm asks. */
 const PHOTO_WORDS = {
   REMOVE: "Remove photo",
-  /** What goes with a removed photo, which the confirm says in one line. */
   REMOVE_BODY: "The photo is deleted, and the workspace is marked by its first letter instead.",
 } as const;
 
 /** The member's removal, which the menu item and its confirm both say. */
 const REMOVE_MEMBER = "Remove from workspace";
 
-/** What the toast says once an invitation's accept link is on the clipboard. */
 const INVITE_LINK_COPIED = "Invite link copied";
 
 /** What a list's line says where its read did not land, in `ErrorState`'s words. */
@@ -277,11 +252,7 @@ function transferAsk(
 /** The outline face an invited address wears until it is a member, so its words stand in the members' column. */
 const INVITED_ACTOR = { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED } as const;
 
-/**
- * What every integration's row says under its name, GitHub's, Slack's, and
- * Sentry's alike: Connected once it is, else that it is not, and to a member,
- * who cannot connect it, whom to ask.
- */
+/** What every integration's row says under its name, GitHub's, Slack's, and Sentry's alike. */
 const CONNECTION_LINE = {
   CONNECTED: "Connected",
   MANAGES: "Not connected.",
@@ -305,21 +276,19 @@ function connectionLine(connected: boolean, manages: boolean): React.ReactNode {
 const GITHUB_FOLD = "GitHub accounts";
 const SLACK_BOT_FOLD = "Slack settings";
 
-/** GitHub's own mark, which leads its row as a provider's leads Settings › Integrations'. */
+/** Each service's own mark, which leads its row as a provider's leads Settings › Integrations'. */
 const GITHUB_MARK = (
   <SettingsRowMark>
     <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />
   </SettingsRowMark>
 );
 
-/** Sentry's own mark, which leads its row as GitHub's leads GitHub's. */
 const SENTRY_MARK = (
   <SettingsRowMark>
     <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />
   </SettingsRowMark>
 );
 
-/** Slack's own mark, which leads Slack's row as Sentry's leads Sentry's. */
 const SLACK_MARK = (
   <SettingsRowMark>
     <ProviderMark provider={INTEGRATION_PROVIDER.SLACK} />
@@ -406,10 +375,7 @@ function memberActs(workspace: Workspace, member: WorkspaceMember, self: boolean
   };
 }
 
-/**
- * Whether the reader's role removes a member of `role`: the owner an admin
- * or a member, and an admin a member alone, as the service holds it.
- */
+/** Whether the reader's role removes a member of `role`, as the service holds it. */
 function removes(reader: Workspace["role"], role: WorkspaceMember["role"]): boolean {
   if (reader === WORKSPACE_ROLE.OWNER) return role !== WORKSPACE_ROLE.OWNER;
   return reader === WORKSPACE_ROLE.ADMIN && role === WORKSPACE_ROLE.MEMBER;
@@ -434,17 +400,11 @@ function useMembersRead(workspace: Workspace) {
 }
 
 /**
- * One member's row: their face, their name with You on the reader's own,
- * their email under it, and their role as the row's value in one column,
- * then in its ⋯ their profile, where the window offers one, whose page
- * holds their Copy link, and what the reader may do to them (`memberActs`).
- * Make admin and Make member take hold at once, since either is undone by
- * the other; Make owner and Remove from workspace ask first, and a removal
- * confirmed takes the row away at once, as the host draws it on the press.
- * A role change refused is said under the row, and a removal refused, its
- * row back, in a toast. A row with no ⋯ in a list where others have one
- * keeps the ⋯'s room, so every role ends in the same place. The row is
- * `@repo/ui`'s `SettingsRow` led by the face, through `MenuRow`.
+ * One member's row, its ⋯ holding what the reader may do to them
+ * (`memberActs`). Make admin and Make member take hold at once, since either
+ * is undone by the other; Make owner and Remove from workspace ask first. A
+ * role change refused is said under the row, and a removal refused, its row
+ * back, in a toast.
  */
 function MemberRow({
   workspace,
@@ -605,12 +565,9 @@ function useOwnAutomations(workspaceId: string, asked: boolean): readonly string
 }
 
 /**
- * The leave for a member or an admin: drawn as Account's Delete account is,
- * its name, a line saying what goes, and the red button, which asks first,
- * naming what stays and what stops, the automations the reader made among
- * them by name where the service says whose they are. A leave the service
- * carried says so in the window's toast as the window turns to the personal
- * workspace, where it rests with no task open; a refusal, offline among them, is said in the dialog,
+ * The leave for a member or an admin, drawn as Account's Delete account is.
+ * A leave the service carried says so in a toast as the window turns to the
+ * personal workspace; a refusal, offline among them, is said in the dialog,
  * which stays open to try again.
  */
 function MemberLeave({
@@ -763,13 +720,10 @@ function HeirChip({
 }
 
 /**
- * The owner's leave, which waits on the workspace being handed over: the
- * row says so, and with an admin to hand it to offers Transfer ownership,
- * the confirm dialog with the admin to make the owner as its field, the
- * first admin unless another is chosen; with none it says to make one
- * first. The roles the service answers after the handover stand in the
- * members at once, and the reader's own new role arrives with the followed
- * workspaces, which turns this row into a member's leave.
+ * The owner's leave, which waits on the workspace being handed over to an
+ * admin, the first listed unless another is chosen. The reader's own new
+ * role arrives with the followed workspaces, which turns this row into a
+ * member's leave.
  */
 function OwnerLeave({
   workspace,
@@ -846,14 +800,10 @@ function OwnerLeave({
 }
 
 /**
- * The owner's delete of a team workspace: drawn as Leave is, its name, a
- * line saying what goes, and the red button, which asks first and waits on
- * the workspace's name typed, since it is deleted for every member and
- * nobody can bring it back. A delete the service carried turns the window
- * to the personal workspace, as a leave does, saying so in a toast; a
- * refusal, offline among them, is said in the dialog, which stays open to
- * try again. An agent still starting never refuses it: the service retires
- * its session and deletes all the same.
+ * The owner's delete of a team workspace, drawn and answered as Leave is.
+ * Its confirm waits on the workspace's name typed, since it is deleted for
+ * every member and nobody can bring it back. An agent still starting never
+ * refuses it: the service retires its session and deletes all the same.
  */
 function WorkspaceDelete({
   workspace,
@@ -1039,10 +989,9 @@ function MemberRows({
 }
 
 /**
- * Members' Invite, at the end of the section's head, for an owner or an
- * admin: an outline `Button` that opens the card inviting addresses
- * (`useInviteDialog`), where a link or a search result naming the
- * invitations lands.
+ * Members' Invite, for an owner or an admin, which opens the card inviting
+ * addresses (`useInviteDialog`). A link or a search result naming the
+ * invitations lands on it.
  */
 function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const invite = useInviteDialog({
@@ -1061,15 +1010,11 @@ function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Elemen
 }
 
 /**
- * The workspace's invitations still pending, for an owner or an admin, under
- * the members, and nothing where none is: each under the outline face a
- * person not yet in wears, saying as what and until when, with its link to
- * copy and Cancel invitation in its ⋯, which asks first in the accent rather
- * than red: inviting the address again undoes it, but the link already sent
- * to the invitee stops working. A cancel is drawn by the host on the press,
- * and one refused, its invitation back, is said in a toast. Each is a
- * `SettingsRow` led by the face, through `MenuRow`, Copy link its outline
- * `Button`.
+ * The workspace's invitations still pending, for an owner or an admin.
+ * Cancel invitation asks first in the accent rather than red: inviting the
+ * address again undoes it, but the link already sent to the invitee stops
+ * working. A cancel is drawn by the host on the press, and one refused, its
+ * invitation back, is said in a toast.
  */
 function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Element {
   const { mutate: sendWorkspaceInvitationCancel } = useMutation(
@@ -1139,7 +1084,7 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
                 <ReplayMask>{dayAndTimeText(Date.parse(one.expiresAt))}</ReplayMask>
               </>
             ),
-            // We send no mail: the accept link is copied and sent by hand.
+            // The service mails the accept link where the deployment names a sender; Copy link sends it by hand.
             control: (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
@@ -1183,14 +1128,10 @@ function connectionsOf(workspace: Workspace): readonly ShownConnection[] {
 
 /**
  * The workspace's GitHub, for an owner or an admin: Connect while none is,
- * which installs our GitHub App on a GitHub account for this
- * workspace, and once one is, Manage on GitHub, which opens the same page:
- * GitHub lists every account there, to install the App on another or to
- * configure one it is on, so one door does both. Either press opens the
- * browser through the one connect, whose return to the app adds the
- * installation to this workspace; a page that could not be opened says why
- * under the row. The row is `@repo/ui`'s `SettingsRow` led by GitHub's mark,
- * its press the outline `Button`.
+ * and once one is, Manage on GitHub, which opens the same page. GitHub lists
+ * every account there, to install the App on another or to configure one it
+ * is on, so one door does both. The connect's return to the app adds the
+ * installation to this workspace.
  */
 function ManagedGitHub({
   workspace,
@@ -1490,8 +1431,7 @@ function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.
  * The workspace's Slack bot, for an owner or an admin: Connect
  * while it is not connected, which asks Slack which team the bot answers
  * for and keeps it, a connect that failed saying why under the row; and
- * once it is, a ⋯ whose menu disconnects it, which asks first, as the
- * page's other rows hold their acts. A disconnect stops the bot writing to
+ * once it is, a ⋯ whose menu disconnects it, which asks first. A disconnect stops the bot writing to
  * the workspace's members; the bot stays installed in Slack, which the
  * dialog says. Add channel stands beside the ⋯ once Slack has listed the
  * team's channels (`channels`).
@@ -1740,7 +1680,6 @@ export interface WorkspaceSettingsControl {
   onLeft: (workspaceId: string) => void;
   /** Whether the read the workspaces arrive with failed, so none will arrive until it is asked again. */
   listFailed: boolean;
-  /** Asks for the workspaces again. */
   onRetryList: () => void;
 }
 
@@ -1758,15 +1697,12 @@ interface SlugAsk {
 }
 
 /**
- * The workspace's slug, which its owner alone changes, from the identity
- * row's ⋯: the slug every link to the workspace is written under, typed in
- * a dialog of its own, the address it makes said under it as it is typed,
- * and what is wrong with its shape said there too, in the words the service
- * refuses it with. Each opening starts from the slug as it stands. Save
- * stands the new slug at once, as the host draws it on the press, and closes
- * the card; one the service refuses, as one another workspace holds, goes
- * back, its words in a toast. The slug it leaves stays the workspace's, so
- * no link written under it stops opening.
+ * The workspace's slug, which every link to the workspace is written under
+ * and its owner alone changes. A shape problem is said in the words the
+ * service refuses it with. Save stands the new slug at once, as the host
+ * draws it on the press; one the service refuses, as one another workspace
+ * holds, goes back, its words in a toast. The slug it leaves stays the
+ * workspace's, so no link written under it stops opening.
  */
 function useSlugDialog(workspace: Workspace): SlugAsk {
   const { mutate: sendWorkspaceSlugSet } = useMutation(pressMutation(ACT_KIND.WORKSPACE_SLUG_SET));
@@ -1838,21 +1774,11 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
 
 /**
  * The page's first row, drawn as Account's account row is: the workspace's
- * tile, its name, and who shares it in one line, then for an owner or an
- * admin Rename beside the owner's Change slug in its ⋯ (`useSlugDialog`),
- * the tile itself the press that picks the photo or, with one set, offers
- * Replace and Remove (`PhotoPick`), as setup and New workspace draw it. Rename opens
- * the name in place on its own line, as the sidebar renames a task, and
- * Return or a press elsewhere sends what was typed with its ends trimmed,
- * while Escape, an empty name, or the same one renames nothing; an account's
- * first workspace is named by its owner's account name, so it offers no
- * Rename. Upload photo picks a PNG, JPEG, or WebP image and sends it drawn
- * square; Remove photo, where one is set, asks first. The new name stands
+ * tile, its name, and who shares it. An account's first workspace is named
+ * by its owner's account name, so it offers no Rename. The new name stands
  * at once, as the host draws it on the press, and the photo once the
  * service answers it; a refusal, its name back, or a file that cannot be a
  * photo, is said under the row until the next try.
- * The row is `@repo/ui`'s `SettingsRow` led by the tile, through `MenuRow`,
- * and Rename its outline `Button`.
  */
 function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const { mutateAsync: sendWorkspacePhotoSet } = useMutation(
@@ -1998,12 +1924,9 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
 }
 
 /**
- * The page for the listed workspace, one kind of thing to a group: its
- * identity, its members and under them its invitations for an owner or an
- * admin, its GitHub, and last the leave for anyone but an owner, the members and
- * GitHub under the anchors their links have always named; placeholder
- * sections in the page's shape before the workspaces are read, and Retry
- * where that read failed.
+ * The page for the listed workspace, the members and GitHub under the
+ * anchors their links have always named; placeholder sections in the page's
+ * shape before the workspaces are read, and Retry where that read failed.
  */
 export function WorkspacePage({
   control,

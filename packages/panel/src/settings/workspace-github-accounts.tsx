@@ -37,13 +37,8 @@ import { MenuRow } from "./menu-row.js";
  *
  * Every account stands as the same row (`GitHubOwnerRow`), inset under
  * GitHub's so it reads as one of GitHub's accounts rather than an
- * integration of its own: its picture on GitHub, its login, how many
- * repositories it holds as its one line, and a chevron folding their names
- * open under its words. Every account starts closed, and a long list shows
- * its first lines and then Show all, which draws only the names near the
- * view of an account's thousands (`VirtualRows`). A row's ⋯,
- * where it holds acts at all, is the only way one row differs from another
- * (`workspace-token-repositories.tsx`).
+ * integration of its own. A row's ⋯, where it holds acts at all, is the
+ * only way one row differs from another (`workspace-token-repositories.tsx`).
  *
  * The accounts here are those whose installation of our GitHub App is
  * connected and active; one suspended or removed on GitHub draws no row,
@@ -56,9 +51,7 @@ import { MenuRow } from "./menu-row.js";
  * an account's old one after a rename, else the stored one. Where the
  * listing says the installation was given every repository, the line says
  * All; a service older than it says nothing of it, and the line counts
- * alone. While the list is read each account's line says so, and a read
- * that failed says so once under the accounts with Retry, neither drawn as
- * an account with none. Members read the same as owners and admins.
+ * alone. Members read the same as owners and admins.
  */
 
 /** What an account's line says while its repositories are not yet known. */
@@ -127,11 +120,10 @@ function AccountMark({ login }: { login: string }): React.JSX.Element {
 }
 
 /**
- * One GitHub account's row, every account's alike: its picture, its login,
- * its one line, and the names of its repositories folded open under its
- * words, closed until its chevron is pressed and capped with Show all
- * where they are many; none to fold where `names` is empty or not yet
- * known. `actions` is its ⋯'s, drawn only where it holds one.
+ * One GitHub account's row, every account's alike, the names of its
+ * repositories folded under its words and capped with Show all where they
+ * are many. Show all draws only the names near the view (`VirtualRows`), so
+ * an account's thousands stay quick.
  */
 export function GitHubOwnerRow({
   login,

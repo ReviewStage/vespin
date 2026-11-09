@@ -44,22 +44,14 @@ import { GitHubOwnerRow, repositoryCount } from "./workspace-github-accounts.js"
  * They stand under GitHub's row by owner, after the App's accounts and in
  * order of the owners' logins, each owner the same row every account is
  * (`GitHubOwnerRow`), with nothing saying how its repositories got there.
- * An owner's ⋯ holds Remove for each repository its adder or a workspace's
- * owner or admin reads, and stands nowhere where the reader may remove
- * none; Remove asks first, in the accent rather than red: adding it again
- * undoes it, but its agents stop reaching it for every member meanwhile. One the workspace's App reaches is
- * left out by the service, since the App wins. Add repository drops the
- * app's searched menu over the repositories the reader's own token may
- * push to that neither the App nor the workspace's list already holds, read
- * as the menu opens from the addable the repository picker's listing
- * answers beside its own, each drawn as the repository chip's menu draws one
- * (`repositoryMenuRow`); a pick adds it, and the list the service then
- * answers lands where the host holds it. Add repository is drawn only while
- * a token of the reader's is saved, as the host holds it: not while that is
- * still being read, nor once its read failed, nor with none saved. The list is the
- * host's (`LIVE_READ.TOKEN_REPOSITORIES`), read, still being read, or
- * refused: while it is read the rows say Reading, and refused they say so
- * with Retry, neither drawn as a workspace with none.
+ * A repository's adder or a workspace's owner or admin removes it; Remove
+ * asks first, in the accent rather than red: adding it again undoes it, but
+ * its agents stop reaching it for every member meanwhile. One the
+ * workspace's App reaches is left out by the service, since the App wins.
+ * Add repository offers the repositories the reader's own token may push to
+ * that neither the App nor the workspace's list already holds, read as the
+ * menu opens from the addable the repository picker's listing answers
+ * beside its own.
  */
 
 /** The words the rows and the menu say: labels and facts alone. */
@@ -179,10 +171,9 @@ function candidatesOf(
 }
 
 /**
- * Add repository and its menu: the outline `Button`, and under it the
- * app's searched menu hung from it at a Settings picker's width. Drawn only
- * while the reader's own GitHub token is saved (`LIVE_READ.GITHUB_TOKEN`),
- * so a reader with none, or whose token is unread, is offered no press.
+ * Add repository and its menu, drawn only while the reader's own GitHub
+ * token is saved (`LIVE_READ.GITHUB_TOKEN`), so a reader with none, or whose
+ * token is unread, is offered no press.
  */
 export function AddTokenRepository(props: {
   workspaceId: string;
@@ -368,12 +359,10 @@ function tokenOwners(listed: readonly WorkspaceTokenRepository[]): readonly Toke
 
 /**
  * One owner's token repositories, drawn as every GitHub account under
- * GitHub's row is (`GitHubOwnerRow`): its picture, its login, its count, and
- * the names folded under it; its ⋯ holds Remove for each the reader may
- * remove and stands nowhere where they may remove none. Remove asks first;
- * the removal takes the name away at once, as the host draws it on the
- * press, so the question lets go with it, and a refusal, its name back, is
- * said in a toast.
+ * GitHub's row is (`GitHubOwnerRow`), its ⋯ holding Remove for each the
+ * reader may remove. The removal takes the name away at once, as the host
+ * draws it on the press, so the question lets go with it, and a refusal,
+ * its name back, is said in a toast.
  */
 function TokenOwnerRow({
   owner,

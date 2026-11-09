@@ -39,24 +39,15 @@ import { Picker, PickerRow } from "./picker-row.js";
  *
  * Drawn as GitHub's rows are on the same card: the bot's row holds Add
  * channel (`AddSlackChannel`) beside its ⋯, as GitHub's holds Add
- * repository, and under it, each a row of the card inset under the bot's
- * words, the Default repository picker, then one row per channel the bot is
- * in. A channel is named as Slack's sidebar names it, its mark (a hash, or a
- * lock for a private channel) saying its kind; its row holds its repository
- * picker, the default until one is chosen, and a ⋯ whose Remove from channel
- * asks first, since the bot leaves the channel for everyone in it. Where the
- * bot is in no channel, one row says so and how to add one, a private one by
- * `/invite`. A Slack start works in the repository its message names, else
- * its channel's, else the default. The repositories are the workspace's
- * held integrations' and the channels Slack's own list the host holds, so a
- * repository chosen draws at once, and a channel joined or left draws as
- * its answer lands; a refusal is said under the row that asked.
+ * repository, and under it the Default repository picker, then one row per
+ * channel the bot is in. A Slack start works in the repository its message
+ * names, else its channel's, else the default. Remove from channel asks
+ * first, since the bot leaves the channel for everyone in it.
  */
 
 /** The menu row that picks no repository: the default in a channel's menu, none in the default's. */
 const NONE_ROW = "none";
 
-/** What the rows say. */
 const WORDS = {
   DEFAULT_LABEL: "Default repository",
   NONE: "None",
@@ -71,7 +62,6 @@ const WORDS = {
   REMOVE: "Remove from channel",
 } as const;
 
-/** The repositories the workspace reaches, as the menu reads them: still reading, not read, or their rows. */
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 /** A channel as a sentence names it, as Slack writes one. */
@@ -199,11 +189,7 @@ function DefaultRepositoryRow({
   );
 }
 
-/**
- * One channel the bot is in, inset under the bot's row: its mark and name,
- * its repository picker, the default until one is named (`repository`),
- * and a ⋯ whose Remove from channel asks first.
- */
+/** One channel the bot is in, its repository the default until one is named (`repository`). */
 function ChannelRow({
   workspace,
   channel,
