@@ -57,6 +57,7 @@
     "./ios-app-links": "./src/ios-app-links.js",
     "./ios-sign-in-wire": "./src/ios-sign-in-wire.js",
     "./video-signature": "./src/video-signature.js",
+    "./markdown-nesting": "./src/markdown-nesting.js",
     "./markdown-tree": "./src/markdown-tree.js",
     "./media-signature": "./src/media-signature.js",
     "./agent-origin-live": "./src/agent-origin-live.js",
