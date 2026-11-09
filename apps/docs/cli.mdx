@@ -44,6 +44,9 @@ echo "Fix the login redirect" | vespin task create "Login redirect" --prompt -
 vespin agent logs <id> --follow
 vespin agent wait <id>
 
+# Continue it as a new agent on its task, which stops this one
+vespin agent continue <id>
+
 # Fetch its branch, as gh pr checkout does
 vespin agent checkout <id>
 

@@ -37,6 +37,7 @@ Other commands:
 | `task list [--mine] [--status s]` · `task view <task>` · `task update <task> [--status] [--priority] [--assignee] [--name]` | Find, read, and change tasks; `--status done` marks one done |
 | `description show <task>` · `description edit <task> -F <file\|->` | Print the description as Markdown; replace it whole |
 | `agent start <task> [-F prompt] [--model m --effort e] [--branch b] [--cloud\|--on <device>] [--follow\|--wait]` | Start an agent; `vespin models` lists `--model` and `--effort` values |
+| `agent continue <id> [-F note] [--at <message-id>] [--model m --effort e] [--cloud\|--on <device>] [--follow\|--wait]` | Continue an agent as the app's Continue does: it is stopped, and a new agent on its task is handed its brief and transcript, then the note. `--at` forks at one of its assistant messages instead (ids from `agent logs --json`), and it goes on. It runs on the agent's model and where it runs unless you name them |
 | `agent list [<task>] [--offset n]` · `agent view <id>` | Agents, newest first, the workspace's 50 a page (`--offset` the `nextOffset` it printed); one agent's status |
 | `agent send <id> -F <msg\|->` · `agent stop <id>` | Message an agent; stop its turn (what it pushed stays) |
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
@@ -88,6 +89,13 @@ Answer the first unread thread:
 t=$(vespin inbox list --unread -q | head -1)
 vespin inbox view "$t" --json     # read the ask
 vespin inbox answer "$t" Approve
+```
+
+Continue an agent whose turn failed, with a note, and wait on the new one:
+
+```sh
+vespin agent wait "$id" || id=$(echo "Pick up where it stopped" | vespin agent continue "$id" -F - -q)
+vespin agent wait "$id"
 ```
 
 React to how a wait ended:
