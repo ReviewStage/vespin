@@ -343,6 +343,14 @@ function AgentPageBar({
         onEnd: (edit: InlineEditEnd) => rename.end(edit.value),
       }
     : undefined;
+  // A phone's Show panel runs on in the menu's last group, before the red acts it ends on.
+  const last = groups.at(-1) ?? [];
+  const red = last.findIndex((entry) => "danger" in entry && entry.danger === true);
+  const cut = red === -1 ? last.length : red;
+  const showPanel =
+    phone?.onShowPanel === undefined
+      ? []
+      : [{ label: SHOW_PANEL, icon: <SidePanelIcon />, onSelect: phone.onShowPanel }];
   // The agent's menu: a right-click on its name, or a phone's ⋯, which has no right-click to offer it on.
   const drawnMenu =
     menu.drawn === undefined ? null : (
@@ -355,14 +363,7 @@ function AgentPageBar({
             ? groups
             : leadWithPhoneFind([
                 ...groups.slice(0, -1),
-                [
-                  ...(groups.at(-1) ?? []),
-                  ...(phone.onShowPanel === undefined
-                    ? []
-                    : [
-                        { label: SHOW_PANEL, icon: <SidePanelIcon />, onSelect: phone.onShowPanel },
-                      ]),
-                ],
+                [...last.slice(0, cut), ...showPanel, ...last.slice(cut)],
               ])
         }
         onClose={menu.close}
