@@ -34,7 +34,7 @@
  * provider's, in the one order the account keeps its subscriptions of the
  * harness's plan and its API keys in, with room, a subscription having room
  * where it is signed in and at no limit whose named reset is still ahead,
- * and a key unless its provider last refused it for quota or credit, so an
+ * and a key unless its provider refused it or last refused it for quota or credit, so an
  * agent goes back to the top subscription as soon as its limit resets;
  * where none has room, its first key, which a turn finds topped up or not;
  * else a Preview's stand-in key; and where neither, the plan's refusal,
@@ -158,7 +158,7 @@ export interface TurnPayer {
   readonly subscriptionId: string | undefined;
 }
 
-/** The statuses of a ChatGPT sign-in an agent cannot launch on: OpenAI signed it out or said the account is not eligible, or the deployment cannot open it. */
+/** The statuses of a ChatGPT sign-in or an API key an agent cannot launch on: its provider refused it or said the account is not eligible, or the deployment cannot open it. */
 const UNUSABLE_SIGN_IN: ReadonlySet<string> = new Set([
   PROVIDER_KEY_STATUS.INVALID,
   PROVIDER_KEY_STATUS.INELIGIBLE,
@@ -216,16 +216,17 @@ function keptPlans(
 }
 
 /**
- * Whether a credential has room for a turn at `now`: a subscription signed
- * in and at no limit that still stands, and a key its provider did not last
- * refuse for quota. Note that a key refused as invalid keeps its room, as it
- * always had, since its refusal is the account's to mend by hand.
+ * Whether a credential has room for a turn at `now`: one its provider did
+ * not refuse and the deployment can open, as `UNUSABLE_SIGN_IN` says of a
+ * sign-in and a key alike; a subscription at no limit that still stands, and
+ * a key its provider did not last refuse for quota. Note that a launch falls
+ * back to the first key where no key has room (`turnPayerOf`), as before.
  */
 const hasRoom = (row: ProviderKeyRow, now: number): boolean =>
-  row.kind === PROVIDER_KEY_KIND.API_KEY
+  !UNUSABLE_SIGN_IN.has(row.status) &&
+  (row.kind === PROVIDER_KEY_KIND.API_KEY
     ? row.status !== PROVIDER_KEY_STATUS.QUOTA_EXCEEDED
-    : !UNUSABLE_SIGN_IN.has(row.status) &&
-      planStanding(row, now) !== PROVIDER_KEY_STATUS.LIMIT_REACHED;
+    : planStanding(row, now) !== PROVIDER_KEY_STATUS.LIMIT_REACHED);
 
 /**
  * The subscription a turn is refused on where none has room and no key
