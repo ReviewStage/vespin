@@ -286,6 +286,9 @@ function stateClass(look: InlineRefLook, fit: InlineRefFit): string {
     : state;
 }
 
+/** U+200E, which sets what follows it left to right without isolating it. */
+const LEFT_TO_RIGHT_MARK = "\u200E";
+
 /** What a screen reader hears after a gone subject's name, which its strike-through says to the eye alone. */
 const GONE_HEARD = " (gone)";
 
@@ -376,6 +379,8 @@ function InlineRefRoot({
   const leaving = pressable && leaves && linkHref !== undefined;
   const stated = !(state === undefined || state === null || labelHidden);
   const labelClassName = labelClass({ look, fit, name, gone, pressable });
+  // Note that a path that wraps keeps its own order in words of either direction by isolating its whole token rather than its name, because a browser breaks wherever the direction's level changes, which would part the name from its glyph.
+  const isolated = name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.FLOW;
   const face = (
     <>
       {kind === undefined ? null : <span className="ui-visually-hidden">{`${kind} `}</span>}
@@ -411,13 +416,17 @@ function InlineRefRoot({
           )}
         </Text>
       )}
-      {!stated ? null : <span className={stateClass(look, fit)}>{state}</span>}
+      {/* Note that an isolated path's standing opens on a left-to-right mark, so its lines stay after a path ending in right-to-left words rather than joining them, as a mark that changes no level adds no break. */}
+      {!stated ? null : (
+        <span className={stateClass(look, fit)}>
+          {isolated ? LEFT_TO_RIGHT_MARK : null}
+          {state}
+        </span>
+      )}
       {heard === undefined ? null : <span className="ui-visually-hidden">{heard}</span>}
       {gone ? <span className="ui-visually-hidden">{GONE_HEARD}</span> : null}
     </>
   );
-  // Note that a path that wraps keeps its own order in words of either direction by isolating its whole token rather than its name, because a browser breaks wherever the direction's level changes, which would part the name from its glyph.
-  const isolated = name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.FLOW;
   const own = {
     ...rest,
     className: `${rootClass({ look, fit, gone, pressable, leaving })}${pressable ? " group/inline-ref" : ""}`,
