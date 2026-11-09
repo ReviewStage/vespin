@@ -12,47 +12,16 @@
  */
 
 import type { AppStateSnapshot } from "@repo/host/app-state";
+import { workspaceExperimentChoices, workspaceExperimentOnIn } from "@repo/host/app-state-reads";
 import {
   type ExperimentChoices,
-  experimentOn,
   experimentsIn,
   NO_EXPERIMENTS,
-  NO_WORKSPACE_EXPERIMENTS,
   type WorkspaceExperiment,
-  type WorkspaceExperimentChoices,
-  workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { appStateQuery, selectStoredExperimentChoices } from "./use-app-state.js";
-
-/** What a workspace's choices are read from: its entry on the account's list. */
-interface ChoosingWorkspace {
-  readonly id: string;
-  readonly experiments?: readonly { readonly experiment: string; readonly on: boolean }[];
-}
-
-/** The choices of the workspace `workspaceId` names among `workspaces`; every one off where none is named or listed. */
-export function workspaceExperimentChoices(
-  workspaces: readonly ChoosingWorkspace[],
-  workspaceId: string | undefined,
-): WorkspaceExperimentChoices {
-  if (workspaceId === undefined) return NO_WORKSPACE_EXPERIMENTS;
-  const workspace = workspaces.find((each) => each.id === workspaceId);
-  return workspace === undefined
-    ? NO_WORKSPACE_EXPERIMENTS
-    : workspaceExperimentChoicesFrom(workspace.experiments);
-}
-
-/** Whether the workspace `workspaceId` names has `experiment` on, as main's document lists it now; for a callback that cannot wait a render. */
-function workspaceExperimentOnIn(
-  state: AppStateSnapshot | undefined,
-  workspaceId: string | undefined,
-  experiment: WorkspaceExperiment,
-): boolean {
-  const workspaces = state?.tasks.workspaces ?? [];
-  return experimentOn(workspaceExperimentChoices(workspaces, workspaceId), experiment);
-}
 
 /**
  * Whether a workspace has one experiment on: the one way a surface about a

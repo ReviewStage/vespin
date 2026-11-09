@@ -12,7 +12,7 @@
  * drives the polling.
  *
  * The device authorization and its user code, which together claim the
- * sign-in, stay on the service, sealed on the account's one pending login
+ * sign-in, stay on the service, sealed on the pending login
  * (`@repo/database/models/chatgpt-device-login-store`), and the panel holds
  * only the login's opaque id. A poll runs under the login's row lock, so two
  * polls at once never exchange one authorization code twice, and a settled
@@ -20,9 +20,10 @@
  *
  * A login is kept only once its ID token checks out against OpenAI's
  * published keys under Codex's client (`verifyCodexDeviceIdToken`), and it
- * is kept on the account's `chatgpt_oauth` row, replacing whichever ChatGPT
- * sign-in it held, so payer choice, statuses, limits, and the sweep read it
- * as they read any. An exchange is never retried: a lost answer may have
+ * is kept on one of the account's `chatgpt_oauth` rows: the one signed in
+ * as the same email where it holds one, else a new one at the bottom of the
+ * account's order where the login was started to add one, else its first,
+ * so payer choice, statuses, limits, and the sweep read it as they read any. An exchange is never retried: a lost answer may have
  * spent the code, so it settles the login refused, and the account starts
  * again.
  *
@@ -127,13 +128,15 @@ const succeeded = (status: number) =>
 
 /**
  * Begins a device-code connection for the account: asks OpenAI for a user
- * code under Codex's client and keeps what claims the sign-in sealed on
- * the account's pending login, replacing any it held. None where OpenAI
- * could not be asked or answered no code.
+ * code under Codex's client and keeps what claims the sign-in sealed on a
+ * pending login of its own, beside any the account holds, which adds a
+ * subscription where `add` says to rather than replacing its first. None
+ * where OpenAI could not be asked or answered no code.
  */
 export const startChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   ring: KeyRing,
+  add = false,
 ) {
   const answered = yield* postToOpenAi(CODEX_DEVICE_OAUTH.USER_CODE_URL, {
     json: { client_id: CODEX_DEVICE_OAUTH.CLIENT_ID },
@@ -151,7 +154,7 @@ export const startChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(functio
   const sealed = sealChatGptDeviceCodes(ring, owner, Redacted.make(codes));
   const now = yield* DateTime.nowAsDate;
   const expiresAt = new Date(now.getTime() + Duration.toMillis(DEVICE_CODE_LIFETIME));
-  yield* beginChatGptDeviceLogin(owner, sealed, expiresAt, now);
+  yield* beginChatGptDeviceLogin(owner, sealed, expiresAt, now, add);
   const start: ChatGptDeviceStartAnswer = {
     loginId: owner.loginId,
     userCode,
@@ -199,6 +202,7 @@ const exchangeCode = /* @__PURE__ */ Effect.fnUntraced(function* (
     refreshToken: tokens.value.refresh_token,
     idToken: tokens.value.id_token,
     accountId: checked.accountId,
+    email: checked.email,
     chatgptAccountId: checked.chatgptAccountId,
     accessExpiresAt,
   };
@@ -208,8 +212,8 @@ const exchangeCode = /* @__PURE__ */ Effect.fnUntraced(function* (
  * One check of the account's device-code login, under its row's lock: how
  * it settled, where it did; expired once its code lapsed; still pending
  * while OpenAI says the code is not entered, or could not answer; and
- * otherwise connected, its credentials kept on the account's ChatGPT row,
- * or refused. A login that is not the account's, or no longer stands, reads
+ * otherwise connected, its credentials kept on one of the account's
+ * ChatGPT rows as the module's header says, or refused. A login that is not the account's, or no longer stands, reads
  * as canceled.
  */
 export const pollChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -268,6 +272,10 @@ export const pollChatGptDeviceLogin = /* @__PURE__ */ Effect.fnUntraced(function
         null,
         now,
         tokens.accessExpiresAt,
+        {
+          add: row.adds,
+          ...(tokens.email === undefined ? undefined : { accountEmail: tokens.email }),
+        },
       );
       yield* settleChatGptDeviceLogin(owner, CHATGPT_DEVICE_LOGIN.CONNECTED);
       return answer(CHATGPT_DEVICE_LOGIN.CONNECTED, true);

@@ -1,8 +1,8 @@
+import { searchTokens } from "@repo/features/search-tokens";
 import { APP_SHORTCUTS, type KeyedCommand } from "@repo/settings/shortcuts";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { type SearchSubject, searchHit } from "../../search-score.js";
-import { searchTokens } from "../../search-tokens.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
   AnchoredPopover,
@@ -232,6 +232,8 @@ export interface MenuHead {
 /** The menu's last line, pressed by nothing: who pays for the agent, and the link that manages it where its provider asks for one. */
 export interface MenuLastLine {
   words: string;
+  /** Whether its words name a person's thing, a plan by its account's email, kept masked in a screen recording even in a menu that unmasks its own. */
+  masked?: boolean | undefined;
   /** A link at the line's end, set apart from the words: Manage usage. */
   end?: React.ReactNode;
 }
@@ -549,7 +551,7 @@ function LastLine({ line }: { line: MenuLastLine }): React.JSX.Element {
     <div className={LAST_LINE}>
       <div className={LAST_LINE_BODY}>
         <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {line.words}
+          {line.masked === true ? <ReplayWords masked>{line.words}</ReplayWords> : line.words}
         </Text>
         {line.end === undefined ? null : (
           <span className={LAST_LINE_END}>

@@ -1,7 +1,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readQueuedFile } from "@repo/database/models/agent-queue-store";
 import { hasRepository } from "@repo/database/models/agent-store";
-import { readConversationPicture } from "@repo/database/models/conversation-pictures";
+import { readServedConversationPicture } from "@repo/database/models/conversation-pictures";
 import { childConversationId } from "@repo/database/models/ids";
 import { agentCallIdSchema } from "@repo/features/agent-wire";
 import { githubImageOf } from "@repo/features/github-image";
@@ -21,11 +21,12 @@ import {
   hostedNotFoundRoute,
   hostedRefusing,
   hostedStoreOrUnavailable,
+  playableVideoOf,
   resolvedUserId,
   type UserIdResolver,
   uuidOf,
 } from "../http/http-effect.js";
-import { readInboxAttachment } from "../inbox/inbox-store.js";
+import { readServedInboxAttachment } from "../inbox/inbox-store.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { reachedAgent } from "./agent-reach.js";
@@ -130,7 +131,8 @@ const githubImageEndpoint = /* @__PURE__ */ Effect.fn("web/agentGitHubImageEndpo
 /**
  * GET serves one attachment of an inbox item, an image block's picture or a
  * file the developer's answer carried, as its bytes under the media type
- * the service sniffed a picture to be or a file traveled as, to the
+ * the service sniffed a picture to be or a file traveled as, a recording
+ * as its MP4 copy to a caller that plays MP4 (`playableVideoOf`), to the
  * members of the item's workspace alone: an attachment of another
  * workspace's, or of another item's, is not found, as an item is.
  */
@@ -145,7 +147,9 @@ const inboxAttachmentEndpoint = /* @__PURE__ */ Effect.fn("web/inboxAttachmentEn
   const itemId = yield* idOf(request);
   const attachmentId = yield* attachmentIdOf(request);
   const userId = yield* resolvedUserId(seams, request);
-  const found = yield* hostedStoreOrUnavailable(readInboxAttachment(userId, itemId, attachmentId));
+  const found = yield* hostedStoreOrUnavailable(
+    readServedInboxAttachment(userId, itemId, attachmentId, playableVideoOf(request)),
+  );
   if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   return HttpServerResponse.uint8Array(found.value.bytes, {
     status: HOSTED_HTTP_STATUS.OK,
@@ -182,7 +186,9 @@ const pictureEndpoint = /* @__PURE__ */ Effect.fn("web/agentPictureEndpoint")(fu
   const { agent } = yield* reachedAgent(seams, request);
   const conversationId =
     callId === undefined ? agent.conversationId : childConversationId(agent.conversationId, callId);
-  const found = yield* hostedStoreOrUnavailable(readConversationPicture(conversationId, pictureId));
+  const found = yield* hostedStoreOrUnavailable(
+    readServedConversationPicture(conversationId, pictureId, playableVideoOf(request)),
+  );
   if (Option.isNone(found)) {
     const queued =
       callId === undefined

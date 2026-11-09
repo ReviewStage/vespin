@@ -1,3 +1,4 @@
+import { claudeProjectKey, RUNNER_TRANSCRIPTS } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
@@ -8,6 +9,7 @@ import {
   readAgentRouting,
 } from "@repo/database/models/agent-store";
 import { copySessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
+import { readForkCut, readNativeRewind } from "@repo/database/models/conversation-rewind";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
@@ -25,6 +27,7 @@ import {
   AGENT_MACHINE,
   type AgentAlsoRepository,
   type AgentAttachment,
+  type AgentMachineKind,
   type AgentPullRequest,
   type AgentRunsOnRequest,
   type AgentStartFrom,
@@ -35,7 +38,7 @@ import type { ModelChoice } from "@repo/features/models-wire";
 import { bothInOrder } from "@repo/runtime/effect";
 import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { START_LINE_BRIEF } from "@repo/wire";
-import { Effect, Option } from "effect";
+import { Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { SERVER_AGENT_START_KIND, type ServerAgentStartKind } from "../../events/server-events.js";
 import {
@@ -46,9 +49,11 @@ import {
 import { ModelCatalog } from "../../providers/model-catalog.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { agentSandboxOf } from "../agent-sandbox-open.js";
+import { macCheckoutsOf } from "../machine/device-machine.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import type { AccountKeyRows, AgentRuntimeChoice } from "./agent-runtime-choice.js";
+import { CODER } from "./bounds.js";
 import { contextWindowOf } from "./context.js";
 import { agentPublished } from "./published.js";
 import {
@@ -652,23 +657,82 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   };
 });
 
+/** The source's CLI session a Start carries, the line its session is cut just before as the new agent forks it, none where it is forked whole, and the source's checkout where the new agent's stands at another path. */
+interface CarriedSession {
+  readonly session: string;
+  readonly cutBefore: string | undefined;
+  readonly movedFrom: string | undefined;
+}
+
+/** Where agents on a machine keep their checkouts, by an agent's id, and whether their runners keep the CLI's transcript at the service. */
+interface MachineCheckouts {
+  readonly transcriptsKept: boolean;
+  readonly checkoutPathOf: (agentId: string) => string;
+}
+
+/** A sandbox's: every agent's checkout at the one path, its transcript kept. */
+const SANDBOX_CHECKOUTS: MachineCheckouts = {
+  transcriptsKept: true,
+  checkoutPathOf: () => CODER.CHECKOUT_PATH,
+};
+
+/** The checkouts of the machine given, a Mac's as the account holds it (`macCheckoutsOf`); none where the account holds no such Mac standing. */
+const checkoutsOn = (
+  userId: string,
+  machine: AgentMachineKind,
+  deviceId: string | null | undefined,
+): Effect.Effect<Option.Option<MachineCheckouts>, HostedRefusal, DatabaseServices> => {
+  if (machine !== AGENT_MACHINE.DEVICE) return Effect.succeed(Option.some(SANDBOX_CHECKOUTS));
+  if (deviceId === null || deviceId === undefined) return Effect.succeed(Option.none());
+  return hostedStoreOrUnavailable(macCheckoutsOf(userId, deviceId));
+};
+
 /**
- * The source's CLI session a continue or a fork of a whole agent forks as
- * its own, in place of a replay of its steps: one the service holds the
- * transcript of from its first entry (`holdsSession`), since the fork reads
- * the copy alone, on the harness the new agent runs (`runtime`), for an agent
- * in the cloud, where its runner reads the transcript back; none for a fork
- * at a message, which is replayed to that message, and wherever else.
+ * Where the source's session is cut as the new agent forks it: a fork at a
+ * message just before the line that opened the turn after it, or the
+ * source's own rewind still waiting where none did (`readForkCut`); a
+ * continue just before that rewind, since a rewind the source never
+ * relaunched after has not cut its session yet. None where it cannot be cut:
+ * a fork of a reply still being written, or at a message whose next line a
+ * turn under way took, which no harness cuts through, so it is replayed.
+ */
+const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
+  const { source, told } = from;
+  const target = { userId: source.userId, conversationId: source.conversationId };
+  if (told.messageId === undefined) {
+    const rewind = yield* hostedStoreOrUnavailable(readNativeRewind(target));
+    return Option.some(Option.getOrUndefined(rewind));
+  }
+  if (told.cut !== undefined) return Option.none();
+  const cut = yield* hostedStoreOrUnavailable(readForkCut(target, told.messageId));
+  return Result.isSuccess(cut) ? Option.some(cut.success) : Option.none();
+});
+
+/**
+ * The source's CLI session a continue or a fork forks as its own, in place
+ * of a replay of its steps, cut where `sessionCutOf` cuts it: one the
+ * service holds the transcript of from its first entry (`holdsSession`),
+ * since the fork reads the copy alone, on the harness the new agent runs
+ * (`runtime`), for an agent on a machine whose runner reads the transcript
+ * back, the cloud or a Mac whose release keeps it, and from a source whose
+ * checkout's place is still known, since a Mac keeps each agent's checkout
+ * at a path of its own, which the copy re-keys the session to; none
+ * wherever else, and for a fork its session cannot be cut for.
  */
 const carriedSessionOf = Effect.fnUntraced(function* (
+  userId: string,
   ask: Pick<TakeoverAsk, "runsOn">,
   from: StartFrom,
   runtime: Effect.Effect<AgentRuntimeChoice, HostedRefusal, DatabaseServices>,
 ) {
-  if (from.told.messageId !== undefined) return undefined;
   const { source } = from;
-  const place = ask.runsOn ?? { machine: source.machine ?? AGENT_MACHINE.VERCEL };
-  if (place.machine !== AGENT_MACHINE.VERCEL) return undefined;
+  const sourceMachine = source.machine ?? AGENT_MACHINE.VERCEL;
+  const place = ask.runsOn ?? { machine: sourceMachine, deviceId: source.deviceId };
+  const [onto, off] = yield* Effect.all([
+    checkoutsOn(userId, place.machine, "deviceId" in place ? place.deviceId : undefined),
+    checkoutsOn(source.userId, sourceMachine, source.deviceId),
+  ]);
+  if (Option.isNone(onto) || !onto.value.transcriptsKept || Option.isNone(off)) return undefined;
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
   if (read?.nativeSession == null) return undefined;
@@ -676,17 +740,31 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const held = yield* hostedStoreOrUnavailable(
     holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
-  return held ? read.nativeSession : undefined;
+  if (!held) return undefined;
+  const cut = yield* sessionCutOf(from);
+  if (Option.isNone(cut)) return undefined;
+  // Note that sandboxes alone share one checkout path, since every Mac agent's checkout is its own.
+  const shared = place.machine === AGENT_MACHINE.VERCEL && sourceMachine === AGENT_MACHINE.VERCEL;
+  return {
+    session: read.nativeSession,
+    cutBefore: cut.value,
+    movedFrom: shared ? undefined : off.value.checkoutPathOf(source.id),
+  } satisfies CarriedSession;
 });
 
-/** The source as a Start hands it on where its transcript is carried: none of its steps replayed, and its session named. */
-function carryingTranscript(from: StartFrom, session: string): StartFrom {
+/** The source as a Start hands it on where its transcript is carried: none of its steps replayed, and its session named with where it is cut. */
+function carryingTranscript(from: StartFrom, carried: CarriedSession): StartFrom {
   return {
     ...from,
     steps: [],
     totalSteps: 0,
     carriedSummary: undefined,
-    told: { ...from.told, transcript: session },
+    told: {
+      ...from.told,
+      transcript: carried.session,
+      transcriptCut: carried.cutBefore,
+      transcriptMovedFrom: carried.movedFrom,
+    },
   };
 }
 
@@ -764,7 +842,12 @@ export const landedInheriting = <
   return Effect.gen(function* () {
     if (rules.checksPlanWriter) yield* admitsPlanWriter(userId, from.source);
     const read = yield* accepted;
-    const session = yield* carriedSessionOf(ask, from, runtimeOf(read.choice.model, read.keys));
+    const session = yield* carriedSessionOf(
+      userId,
+      ask,
+      from,
+      runtimeOf(read.choice.model, read.keys),
+    );
     const handedFrom = session === undefined ? from : carryingTranscript(from, session);
     const fitter = yield* replayFitterOf(
       userId,
@@ -817,9 +900,10 @@ const stoppedSource = (
 
 /**
  * The new agent's `opening` run around what it inherits: the source's CLI
- * transcript made the new agent's own before its first open forks it, then
- * the opening, and once that succeeded the source of a continue stopped,
- * since the work goes on in the new agent.
+ * transcript made the new agent's own before its first open forks it,
+ * Claude Code's sessions re-keyed to the project of the new agent's
+ * checkout (`claudeProjectKey`), then the opening, and once that succeeded
+ * the source of a continue stopped, since the work goes on in the new agent.
  */
 export const openedTakingOver = <E, R>(
   agentSessions: Effect.Effect<
@@ -835,10 +919,21 @@ export const openedTakingOver = <E, R>(
   Effect.gen(function* () {
     const { from, rules } = inherited;
     if (from !== undefined && agent.startedFrom?.session !== undefined) {
+      const checkouts = yield* checkoutsOn(
+        agent.userId,
+        agent.machine ?? AGENT_MACHINE.VERCEL,
+        agent.deviceId,
+      );
+      // Note that a Mac the account no longer holds standing launches nothing, so its copy is left unkeyed.
+      const rekey = Option.map(checkouts, (each) => ({
+        projectKey: claudeProjectKey(each.checkoutPathOf(agent.id)),
+        keptProject: RUNNER_TRANSCRIPTS.CODEX_PROJECT,
+      }));
       yield* hostedStoreOrUnavailable(
         copySessionEntries(
           { userId: from.source.userId, conversationId: from.source.conversationId },
           agent.conversationId,
+          Option.getOrUndefined(rekey),
         ),
       );
     }

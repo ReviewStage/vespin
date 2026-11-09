@@ -863,6 +863,8 @@ export interface LatestTurn {
   readonly settledAt: Date | null;
   /** The deadline of the state it stands in while it is queued or runs (`turn-state.ts`); null for a turn from before the deadline. Optional, so a turn built by hand in a test need not name it. */
   readonly leaseUntil?: Date | null;
+  /** When the usage limit an open turn is held for resets (`turns.waits_until`); null where it waits on none. Optional as `leaseUntil` is. */
+  readonly waitsUntil?: Date | null;
   /** What the turn ran under and what it cost, as the row holds them; null where the row names no model, and until the turn settles. */
   readonly model: string | null;
   readonly usage: StoredTurnUsage | null;
@@ -883,6 +885,7 @@ const LatestTurnRowSchema = Schema.Struct({
   settledAt: Schema.NullOr(InstantColumnSchema),
   /** The deadline of the state it stands in while it is open (`turn-state.ts`); null for a turn from before the deadline. */
   leaseUntil: Schema.NullOr(InstantColumnSchema),
+  waitsUntil: Schema.NullOr(InstantColumnSchema),
   model: Schema.NullOr(Schema.String),
   usage: Schema.NullOr(TurnUsageColumnSchema),
   fastRefused: Schema.Boolean,
@@ -913,6 +916,7 @@ const findLatestTurns = SqlSchema.findAll({
           startedAt: turns.startedAt,
           settledAt: turns.settledAt,
           leaseUntil: turns.leaseUntil,
+          waitsUntil: turns.waitsUntil,
           model: turns.model,
           usage: turns.usage,
           fastRefused: turns.fastRefused,

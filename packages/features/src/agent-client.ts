@@ -54,6 +54,7 @@ import {
   type ChatGptDeviceLoginParams,
   type ChatGptDevicePollAnswerView,
   type ChatGptDeviceStartAnswerView,
+  type ChatGptDeviceStartParams,
   type DevicePresenceAnswerView,
   type DictationTranscribeAnswerView,
   type DictationTranscribeParams,
@@ -68,6 +69,8 @@ import {
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
+  type SubscriptionLabelParams,
+  type SubscriptionOrderParams,
 } from "./agent-view.js";
 import {
   AGENT_LIST_ARCHIVED,
@@ -150,6 +153,8 @@ import {
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeySaveRequestSchema,
+  subscriptionLabelRequestSchema,
+  subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import {
   PULL_REQUEST_CHAPTERS_RENAMES,
@@ -168,6 +173,7 @@ import {
   readServiceAnswer,
 } from "./service-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
+import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
 
 /**
  * agent-client.ts -- the window's side of a task's coding agents, as the host asks the service for them.
@@ -339,8 +345,13 @@ function reachUnsaid(answer: PullRequestChaptersAnswerView): PullRequestChapters
   return failed;
 }
 
-/** The types an inbox item's attachment is served under: a block's picture's or recording's, or any a file an answer carried traveled as. */
-const inboxFileTypeSchema = Schema.Literals(Object.values(INBOX_FILE_TYPE));
+/** The types an inbox item's attachment is served under: a block's picture's or recording's, a recording's MP4 copy to a reader that plays MP4, or any a file an answer carried traveled as. */
+const inboxFileTypeSchema = Schema.Literals([...Object.values(INBOX_FILE_TYPE), MP4_TYPE]);
+
+/** The headers a byte read asks for the video it plays by: `video/mp4` for MP4, and none for the WebM a read answers by default. */
+function playableHeaders(playable: PlayableVideoType): Record<string, string> | undefined {
+  return playable === PLAYABLE_VIDEO_TYPE.MP4 ? { accept: MP4_TYPE } : undefined;
+}
 
 /** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds; unanswered under any other type. */
 function readInboxFile(response: Response): Effect.Effect<AgentInboxAttachmentView> {
@@ -529,12 +540,14 @@ export class HostedAgentClient {
   }
 
   /** Codex's device-code login begun on the service: the code to enter, where, how often to ask again, and when it lapses. */
-  startChatGptDeviceLogin(): Effect.Effect<
-    ChatGptDeviceStartAnswerView,
-    never,
-    HttpClient.HttpClient
-  > {
-    return hostedCall(this.#hosted.account.startChatGptDeviceLogin, undefined);
+  startChatGptDeviceLogin(
+    params: ChatGptDeviceStartParams,
+  ): Effect.Effect<ChatGptDeviceStartAnswerView, never, HttpClient.HttpClient> {
+    // Note that a start that replaces sends no body, as every desktop before adding did.
+    return hostedCall(
+      this.#hosted.account.startChatGptDeviceLogin,
+      params?.add === true ? { add: true } : undefined,
+    );
   }
 
   /** How a device-code login stands, the keys once it connected; a login id the service would refuse by shape never travels. */
@@ -568,6 +581,24 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.account.setProviderKeyForAgents, admitted);
   }
 
+  /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */
+  renameSubscription(
+    params: SubscriptionLabelParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(subscriptionLabelRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.renameSubscription, admitted);
+  }
+
+  /** The account's subscriptions of a kind put in a new order, answering the keys as they then stand; a request the service would refuse by shape never travels. */
+  reorderSubscriptions(
+    params: SubscriptionOrderParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(subscriptionOrderRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.reorderSubscriptions, admitted);
+  }
+
   /** One provider's key of the kind named, an API key where none is, removed, answering the keys as they then stand. */
   removeProviderKey(
     params: ProviderKeyRemoveParams,
@@ -577,6 +608,9 @@ export class HostedAgentClient {
       query: {
         [PROVIDER_KEY_QUERY.PROVIDER]: params.provider,
         ...(params.kind === undefined ? undefined : { [PROVIDER_KEY_QUERY.KIND]: params.kind }),
+        ...(params.subscriptionId === undefined
+          ? undefined
+          : { [PROVIDER_KEY_QUERY.SUBSCRIPTION_ID]: params.subscriptionId }),
       },
     });
   }
@@ -1102,11 +1136,13 @@ export class HostedAgentClient {
     agentId: string,
     pictureId: string,
     callId?: string,
+    playable: PlayableVideoType = PLAYABLE_VIDEO_TYPE.WEBM,
   ): Effect.Effect<AgentInboxAttachmentView, never, HttpClient.HttpClient> {
     return Effect.flatMap(
       this.#call.send({
         method: HTTP_METHOD.GET,
         path: agentPicturePath(agentId, pictureId, callId),
+        headers: playableHeaders(playable),
       }),
       (answer): Effect.Effect<AgentInboxAttachmentView> => {
         if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
@@ -1194,9 +1230,14 @@ export class HostedAgentClient {
   inboxAttachment(
     itemId: string,
     attachmentId: string,
+    playable: PlayableVideoType = PLAYABLE_VIDEO_TYPE.WEBM,
   ): Effect.Effect<AgentInboxAttachmentView, never, HttpClient.HttpClient> {
     return Effect.flatMap(
-      this.#call.send({ method: HTTP_METHOD.GET, path: inboxAttachmentPath(itemId, attachmentId) }),
+      this.#call.send({
+        method: HTTP_METHOD.GET,
+        path: inboxAttachmentPath(itemId, attachmentId),
+        headers: playableHeaders(playable),
+      }),
       (answer): Effect.Effect<AgentInboxAttachmentView> => {
         if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
         if (!answer.response.ok) {

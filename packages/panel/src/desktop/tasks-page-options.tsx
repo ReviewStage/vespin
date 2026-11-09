@@ -1,4 +1,11 @@
+import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { NO_REPOSITORY, repositoryLabel, repositoryParts } from "@repo/features/task-list-model";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import { TASK_PRIORITY_ORDER, TASK_STATUS_ORDER, type TaskSummary } from "@repo/features/task-wire";
 import { noMatchWords, TERM } from "@repo/features/words";
 import {
@@ -51,7 +58,6 @@ import {
   UserIcon,
 } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { NO_REPOSITORY, repositoryLabel, repositoryParts } from "@repo/ui/task-list-model";
 import {
   BOARD_GROUPINGS,
   BOARD_PROPERTIES,
@@ -85,12 +91,6 @@ import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.j
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { memberReadNote, memberRows } from "../member-rows.js";
-import { NEEDS_YOU } from "../tasks/inbox-model.js";
-import {
-  NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-} from "../tasks/task-standing.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { actionSearchPanel } from "./action-search-menu.js";
 import { type MenuAsk, useAskedMenu } from "./phone-head.js";

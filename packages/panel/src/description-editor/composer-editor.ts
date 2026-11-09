@@ -1,3 +1,12 @@
+import {
+  INLINE_MARK,
+  INLINE_SPAN,
+  type InlineMark,
+  type InlineMarkName,
+  readInline,
+  writeInline,
+} from "@repo/features/composer-markdown";
+import { fenceAfter } from "@repo/features/description-document";
 import { WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
 import {
@@ -32,15 +41,7 @@ import {
 } from "@tiptap/pm/state";
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
-import { enterKeyHint, enterSends } from "../enter-sends.js";
-import {
-  INLINE_MARK,
-  INLINE_SPAN,
-  type InlineMark,
-  type InlineMarkName,
-  readInline,
-  writeInline,
-} from "./composer-markdown.js";
+import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -111,7 +112,10 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * coarse pointer, a phone's or a tablet's, Enter is a new line, since its
  * keyboard has no Shift+Enter to type one, and the visible Send beside the
  * box sends; ⌘ or Ctrl with Enter, from a keyboard attached to it, still
- * sends. The return key's label (`enterkeyhint`) says which Enter does
+ * sends. A box whose words are kept rather than sent, as an automation's
+ * prompt is, writes a new line on every bare Enter, as a document's text
+ * does, and hands its owner ⌘ or Ctrl with Enter alone (`enterWrites`).
+ * The return key's label (`enterkeyhint`) says which Enter does
  * (`../enter-sends.ts`).
  */
 
@@ -312,13 +316,28 @@ function schemaMark(schema: Schema, mark: InlineMark): Mark {
   return schema.mark(mark.name, mark.href === undefined ? null : { href: mark.href });
 }
 
-/** The paragraphs lines of words stand for: one per line, its Markdown read into marks, each `/name` of a known skill and each mention its chip. */
+/**
+ * The paragraphs lines of words stand for: one per line, its Markdown read
+ * into marks, each `/name` of a known skill and each mention its chip. Note
+ * that a fenced block's lines, its fences included, stand as the words they
+ * are, because code read into marks is written back changed, ``` ``a`` ```
+ * as `` `a` ``, and a prompt kept and opened again would be saved so; and
+ * words typed in one make no mark either (`handleTextInput`).
+ */
 function paragraphsOf(schema: Schema, text: string, chipping: Chipping): PmNode[] {
   const tokens = chipTokens(text, chipping);
   const paragraphs: PmNode[] = [];
   let lineStart = 0;
+  let fence: string | undefined;
   for (const line of text.split(NEWLINE)) {
     const lineEnd = lineStart + line.length;
+    const fenceBefore = fence;
+    fence = fenceAfter(fence, line);
+    if (fenceBefore !== undefined || fence !== undefined) {
+      paragraphs.push(schema.node("paragraph", null, line === "" ? [] : [schema.text(line)]));
+      lineStart = lineEnd + NEWLINE.length;
+      continue;
+    }
     const chips = tokens.filter((each) => each.start >= lineStart && each.end <= lineEnd);
     const atoms = chips.map((each) => ({
       start: each.start - lineStart,
@@ -697,6 +716,19 @@ function guardPlugin(state: ComposerState, props: ComposerEditorProps): Plugin {
   });
 }
 
+/** Whether the line a place in the words stands on is a fenced block's, its fences included. */
+function inFence(text: string, at: number): boolean {
+  let fence: string | undefined;
+  let start = 0;
+  for (const line of text.split(NEWLINE)) {
+    const before = fence;
+    fence = fenceAfter(fence, line);
+    if (at <= start + line.length) return before !== undefined || fence !== undefined;
+    start += line.length + NEWLINE.length;
+  }
+  return false;
+}
+
 /**
  * Whether a caret stands in code: the character after it is code's, or the
  * one before it on its own line is, as a caret just inside a span's closing
@@ -756,14 +788,23 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       class: `${props.className} ${EDITOR_CLASS}`,
       ...rootAria(state.aria),
       "aria-label": props.label,
-      enterkeyhint: enterKeyHint(),
+      enterkeyhint: enterKeyHint(props.enterWrites === true),
     }),
     // Note that a key an input method is composing is the input method's alone, the owner's included.
     handleKeyDown: (view, event) => {
       if (composing(view, event)) return false;
       if (props.onKey(event) || removedChip(view, event.key)) return true;
-      if (!enterSends(event)) return false;
+      // Note that Shift with Enter is never the owner's, ⌘ or Ctrl held too, since Shift is what breaks a line.
+      if (event.shiftKey) return false;
+      if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
+      return true;
+    },
+    // Note that words typed in a fenced block are the code's, so no Markdown rule makes a mark of them, as none is read from its lines (`paragraphsOf`).
+    handleTextInput: (view, from, _to, _text, typed) => {
+      const { doc } = view.state;
+      if (!inFence(textOf(doc), offsetAt(doc, from))) return false;
+      view.dispatch(typed());
       return true;
     },
     handleDOMEvents: {

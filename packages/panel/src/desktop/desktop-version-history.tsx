@@ -60,7 +60,7 @@ import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { useCopyToast } from "../copy-feedback.js";
-import { copyLinkItem, useChordLinks } from "../copy-link-item.js";
+import { linkItems, openInTabOf, useChordLinks } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { workspaceMembersQuery } from "../live-reads.js";
@@ -139,8 +139,8 @@ import type { SidebarCollapse } from "./sidebar-collapse.js";
  * chosen in it, so Back returns to wherever it was opened from, the task as
  * it was left, side panel and all; a restore that lands leaves for the task
  * it restored, where the window's toast offers its Undo. Every row and the version beside them name what
- * the description held, so both are left out of the screen recording
- * (`ph-no-capture`) as a second line behind the recording's text masking.
+ * the description held, which the screen recording masks as it masks every
+ * word.
  *
  * What the history is of is handed in as its subject: the open task's
  * (`taskVersionSubject`).
@@ -248,7 +248,8 @@ function RevisionRow({
   onOpenSections,
   source,
   onRestore,
-  copyLink,
+  links,
+  openInTab,
   summary,
 }: {
   line: DescriptionRevisionLine;
@@ -265,8 +266,10 @@ function RevisionRow({
   source: SourceDoor | undefined;
   /** Restores the version, asking nothing; none for the description as it stands. */
   onRestore: (() => void) | undefined;
-  /** Copy link, the version's; none for a history with no link of its own. */
-  copyLink: MenuAction | undefined;
+  /** Copy link and Open in new tab, the version's (`linkItems`); none for a history with no link of its own. */
+  links: readonly MenuAction[];
+  /** Opens the version in a tab of its own, which a middle-click takes; none where its menu offers no link or the window opens no tabs. */
+  openInTab: (() => void) | undefined;
   /** What the revision did, in a few words. */
   summary: string;
 }): React.JSX.Element {
@@ -274,7 +277,7 @@ function RevisionRow({
   const coarse = useCoarsePointer();
   const groups = [
     [
-      ...(copyLink === undefined ? [] : [copyLink]),
+      ...links,
       ...(onOpenSections === undefined
         ? []
         : [{ label: SECTIONS_LABEL, icon: <GLYPH.SECTION />, onSelect: onOpenSections }]),
@@ -304,6 +307,7 @@ function RevisionRow({
         meta={<Time at={lastEdit.at} now={now} />}
         current={selected ? LIST_ROW_CURRENT.ITEM : undefined}
         onPress={onSelect}
+        onOpenInTab={openInTab}
         actionsAt={LIST_ROW_ACTIONS.HOVER}
         hint={card === undefined ? undefined : { Hint: RowHint, label: actorName(author) }}
         menu={rowMenu(VERSION_THING, groups)}
@@ -373,7 +377,8 @@ function SectionRow({
   rowRef,
   onSelect,
   source,
-  copyLink,
+  links,
+  openInTab,
 }: {
   section: ChangedSection;
   selected: boolean;
@@ -381,15 +386,14 @@ function SectionRow({
   onSelect: () => void;
   /** The way to the place that wrote its revision, which its right-click offers. */
   source: SourceDoor | undefined;
-  /** Copy link, its revision's, since a link names no section of a version; none for a history with no link of its own. */
-  copyLink: MenuAction | undefined;
+  /** Copy link and Open in new tab, its revision's, since a link names no section of a version; none for a history with no link of its own. */
+  links: readonly MenuAction[];
+  /** Opens its revision in a tab of its own, which a middle-click takes; none where its menu offers no link or the window opens no tabs. */
+  openInTab: (() => void) | undefined;
 }): React.JSX.Element {
   const word = SECTION_CHANGE_WORDS[section.change];
   const coarse = useCoarsePointer();
-  const items = [
-    ...(copyLink === undefined ? [] : [copyLink]),
-    ...(source === undefined ? [] : [sourceItem(source)]),
-  ];
+  const items = [...links, ...(source === undefined ? [] : [sourceItem(source)])];
   return (
     <ListRow
       ref={rowRef}
@@ -397,6 +401,7 @@ function SectionRow({
       meta={word}
       current={selected ? LIST_ROW_CURRENT.ITEM : undefined}
       onPress={onSelect}
+      onOpenInTab={openInTab}
       menu={items.length === 0 ? undefined : rowMenu(SECTION_THING, [items])}
       more={!coarse}
     />
@@ -804,20 +809,24 @@ export function DesktopVersionHistory({
   const chord = useChordLinks();
   const numbered = useNumberedPlace();
   const linked = subject.task;
-  const versionLinkItem = (revision: number): MenuAction | undefined =>
+  const versionLink = (revision: number): string | undefined =>
     linked === undefined
       ? undefined
-      : copyLinkItem(
-          copy,
-          linkOf(
-            numbered(
-              { kind: LINK_PLACE.VERSION, planId: linked.taskId, revision },
-              linked.place.workspace,
-            ),
+      : linkOf(
+          numbered(
+            { kind: LINK_PLACE.VERSION, planId: linked.taskId, revision },
             linked.place.workspace,
           ),
-          chord,
+          linked.place.workspace,
         );
+  const versionLinks = (revision: number): MenuAction[] => {
+    const link = versionLink(revision);
+    return link === undefined ? [] : linkItems(copy, link, chord);
+  };
+  const versionInTab = (revision: number): (() => void) | undefined => {
+    const link = versionLink(revision);
+    return link === undefined ? undefined : openInTabOf(link);
+  };
   const reader = readerOf(account, people?.members, people?.former);
   // A restore that lands leaves for the task it restored, which is not always the one Back returns to.
   const restore = useVersionRestore(versions, onRestored);
@@ -882,11 +891,7 @@ export function DesktopVersionHistory({
       className={`desktop-version-history ${PLACE_SPLIT}`}
       data-single={String(split.single)}
     >
-      <nav
-        className={`version-log ph-no-capture ${PLACE_LIST}`}
-        aria-label="Versions"
-        hidden={hidden.list}
-      >
+      <nav className={`version-log ${PLACE_LIST}`} aria-label="Versions" hidden={hidden.list}>
         {narrow ? (
           // A phone's header: the way out, or from a revision's sections back to every version, and the title.
           <PhoneHead
@@ -987,7 +992,8 @@ export function DesktopVersionHistory({
                             opensSections(line) ? () => openSections(line.seq) : undefined
                           }
                           onRestore={restoreOf(line)}
-                          copyLink={versionLinkItem(line.seq)}
+                          links={versionLinks(line.seq)}
+                          openInTab={versionInTab(line.seq)}
                           summary={subject.summary(line)}
                         />
                       );
@@ -1043,7 +1049,8 @@ export function DesktopVersionHistory({
                           }}
                           onSelect={() => chooseUnit(section.unit)}
                           source={openedSource}
-                          copyLink={opened === undefined ? undefined : versionLinkItem(opened.seq)}
+                          links={opened === undefined ? [] : versionLinks(opened.seq)}
+                          openInTab={opened === undefined ? undefined : versionInTab(opened.seq)}
                         />
                       ))}
                     </List>
@@ -1056,11 +1063,7 @@ export function DesktopVersionHistory({
         {/* Last, so the drag strip above the way back does not take the edge's top from it. */}
         {split.single ? null : <ResizeEdge edge={edge} />}
       </nav>
-      <section
-        className={`version-page ph-no-capture ${PLACE_PAGE}`}
-        aria-label="Version"
-        hidden={hidden.item}
-      >
+      <section className={`version-page ${PLACE_PAGE}`} aria-label="Version" hidden={hidden.item}>
         <PageFind page={FIND_PAGE.VERSION_HISTORY} at={String(versions.selected)} active>
           <VersionPage
             subject={subject}

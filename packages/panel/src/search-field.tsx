@@ -1,5 +1,5 @@
+import { type MatchRange, matchRanges } from "@repo/features/search-tokens";
 import { SearchMatch } from "@repo/ui";
-import { type MatchRange, matchRanges } from "@repo/ui/search-tokens";
 import { focusSeek } from "./focus-seek.js";
 
 /**

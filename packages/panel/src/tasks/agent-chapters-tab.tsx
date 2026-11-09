@@ -197,7 +197,8 @@ import { TranscriptWords } from "./transcript-blocks.js";
  * → step to the previous and the next chapter, and ⇧V marks the chapter
  * viewed (`CHAPTERS_SHORTCUTS`), each answering only past the list's own
  * keys, none of which they share. Every word here is the repository's or
- * a model's about it, so the view stands inside the tab's `ph-no-capture`.
+ * a model's about it, which the recording masks, and the diff's lines are
+ * left out of it whole (`file-diff.tsx`).
  */
 
 /** The view's own words. */

@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./palette": "./src/generated/brand-palette.ts",
+    "./provider-marks": "./src/generated/provider-mark-paths.ts",
     "./assets-directory": "./scripts/assets-directory.mjs",
     "./dmg-window": "./scripts/dmg-window.mjs"
   },

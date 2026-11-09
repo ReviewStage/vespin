@@ -41,7 +41,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
-import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
+import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { SettingsPageLink } from "../open-settings.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
@@ -155,7 +155,8 @@ function SettingsPageRow({
 }): React.JSX.Element {
   const page = settingsPageOf(view);
   const menu = useMenu(true);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.SETTINGS, page: view });
+  const links = useLinkItems()({ kind: LINK_PLACE.SETTINGS, page: view });
+  const openInTab = useOpenInTab()({ kind: LINK_PLACE.SETTINGS, page: view });
   return (
     <li>
       <NavItem
@@ -163,15 +164,16 @@ function SettingsPageRow({
         current={current ? NAV_CURRENT.PAGE : undefined}
         roving
         onClick={onOpen}
-        contextMenu={copyLink === undefined ? undefined : menu.contextMenu()}
+        onOpenInTab={openInTab}
+        contextMenu={links.length === 0 ? undefined : menu.contextMenu()}
       >
         {page.title}
       </NavItem>
-      {menu.drawn === undefined || copyLink === undefined ? null : (
+      {menu.drawn === undefined || links.length === 0 ? null : (
         <ActionMenu
           label={PAGE_ACTIONS}
           menu={menu.drawn}
-          groups={[[copyLink]]}
+          groups={[links]}
           replayUnmasked
           onClose={menu.close}
         />

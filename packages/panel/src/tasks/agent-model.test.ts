@@ -16,6 +16,12 @@ import {
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+  type SubscriptionKeySummary,
+} from "@repo/features/provider-key-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
@@ -43,6 +49,7 @@ import {
   offeredModels,
   offersStop,
   openingLineOf,
+  payerPlanName,
   placedMessages,
   planPayerOf,
   publishedUrl,
@@ -58,6 +65,7 @@ import {
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
+  workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
 
@@ -517,6 +525,17 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
     read({ status: AGENT_STATUS.CANCELED, turn: { ...running, stopAsked: true } }).slice(0, 3),
     [true, "stopping", AGENT_STATUS.CANCELED],
   );
+  // A turn held open for a usage limit's reset works, its line naming when the limit resets.
+  const resetsAt = new Date(2026, 10, 9, 15, 40).getTime();
+  const waiting = tabTurnOf(
+    { status: AGENT_STATUS.RUNNING, turn: { ...running, waitsUntil: resetsAt } },
+    idle,
+  );
+  assert.equal(waiting.working, true);
+  assert.equal(
+    workingLineWords(waiting.phase, waiting.waitsUntil, resetsAt - 60_000),
+    "Waiting for your usage limit to reset at 3:40 PM",
+  );
   // A send not yet answered, or a rewind out, works past an ended turn until its call answers.
   assert.deepEqual(
     read({ status: AGENT_STATUS.COMPLETED, turn: settled }, { ...idle, unanswered: true }).slice(
@@ -887,4 +906,29 @@ test("a message to a teammate's agent its starter's own key refused names the st
       },
     ],
   );
+});
+
+test("a plan payer names the reader's plan the page named, a new agent's first with room left, and none of a plan the reader does not hold", () => {
+  const plan = (id: string, position: number, more: Partial<SubscriptionKeySummary>) => ({
+    provider: PROVIDER_KEY_PROVIDER.OPENAI,
+    kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+    hint: "ChatGPT",
+    addedAt: 0,
+    statusAt: 0,
+    status: PROVIDER_KEY_STATUS.VERIFIED,
+    id,
+    position,
+    ...more,
+  });
+  const plans: SubscriptionKeySummary[] = [
+    plan("third", 2, { email: "side@work.test" }),
+    plan("first", 0, { email: "ana@work.test", status: PROVIDER_KEY_STATUS.LIMIT_REACHED }),
+    plan("second", 1, { email: "ana@home.test", label: "Home" }),
+  ];
+  const { CHATGPT_SUBSCRIPTION, API_KEY } = AGENT_PAYER;
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "third", false), "side@work.test");
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true), "Home");
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "a-teammates", false), undefined);
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, false), undefined);
+  assert.equal(payerPlanName(API_KEY, plans, "third", false), undefined);
 });

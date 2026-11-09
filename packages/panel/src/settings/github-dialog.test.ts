@@ -157,7 +157,7 @@ const dialog = () => document.querySelector('[role="dialog"]') ?? assert.fail("n
 /** The field its visible label names, as a reader finds it. */
 const tokenField = () => {
   const label = [...document.querySelectorAll("label")].find(
-    (each) => each.textContent === "Personal access token",
+    (each) => each.textContent === "Paste the token",
   );
   return label?.control instanceof HTMLInputElement ? label.control : null;
 };
@@ -181,7 +181,7 @@ async function paste(token: string): Promise<void> {
 test("with no token the row offers Add, and a token pasted into the unrecorded field is sent once and drawn as the service's facts on the row", async () => {
   await mountAndOpen();
   assert.equal(dialog().querySelector("h2")?.textContent, "Personal access token");
-  assert.match(dialog().textContent ?? "", /Create token/u);
+  assert.match(dialog().textContent ?? "", /Create a classic token with repo tickedOpen GitHub/u);
 
   const input = tokenField() ?? assert.fail("no token field");
   assert.equal(input.type, "password");
@@ -263,13 +263,13 @@ test("a saved token's Manage opens it with Disconnect, which asks at the dialog'
   assert.match(question.textContent ?? "", /Disconnect your GitHub token\?/u);
   // The question has a one-line body saying what goes.
   assert.match(question.textContent ?? "", /Vespin deletes the token it holds/u);
-  assert.doesNotMatch(dialog().textContent ?? "", /Create token|Done/u, "the foot is the question");
+  assert.doesNotMatch(dialog().textContent ?? "", /Done/u, "the foot is the question");
   assert.ok(document.activeElement === button("Cancel", question), "Cancel takes focus");
 
   act(() => button("Cancel", question).click());
   await settle();
   assert.equal(asked(), null, "Cancel takes the question back");
-  assert.match(dialog().textContent ?? "", /Create token/u, "and the dialog stays");
+  assert.match(dialog().textContent ?? "", /Done/u, "and the dialog stays");
   assert.ok(
     document.activeElement === button("Disconnect", dialog()),
     "focus goes back to Disconnect",

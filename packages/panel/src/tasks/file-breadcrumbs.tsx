@@ -29,8 +29,7 @@ import { FileTreeStage, TREE_READING } from "./file-tree-pane.js";
  * the path's punctuation and nothing more. Each folder is listed through
  * what the tree beside the tab has already listed (`folder-listings.ts`),
  * so a folder it has open asks nothing. Every name here is the
- * repository's, so the tree is left out of the screen recording
- * (`ph-no-capture`), as the pane's is.
+ * repository's, which the screen recording masks, as the pane's are.
  *
  * The path gives way in the stylesheet alone, so the bar measures nothing:
  * every crumb narrows, cut short at its end, the repository and the folders
@@ -184,7 +183,7 @@ function CrumbTree({
     >
       <MenuSurface
         ref={box}
-        className="file-crumb-tree ph-no-capture max-h-crumb-tree w-popover-narrow"
+        className="file-crumb-tree max-h-crumb-tree w-popover-narrow"
         role="dialog"
         aria-label={label}
         tabIndex={-1}

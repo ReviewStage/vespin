@@ -913,10 +913,14 @@ test("an @ in the box on a plan's page offers the plan's pages and its other age
 
   assert.deepEqual(groupsListed(container), [
     ["Agents", ["Wire the desktop"]],
+    ["People", ["Charles Pan", "Dana Reyes"]],
     ["Description", ["Goal", "Rollout", "Invitations"]],
     ["Pages", ["Invites by week"]],
     ["MCP servers", ["Linear"]],
-    ["Mention from", ["Agents", "Description", "Pages", "Files and folders", "Dates", "Linear"]],
+    [
+      "Mention from",
+      ["Agents", "People", "Description", "Pages", "Files and folders", "Dates", "Linear"],
+    ],
   ]);
   assert.equal(agentGlyph?.className, "state-glyph", "the agent's row leads with its tab's glyph");
 });
@@ -1532,6 +1536,7 @@ test("a bare @ ends in a row for each kind the place offers, and → on one narr
 
   assert.deepEqual(kinds, [
     ["Agents", "acme"],
+    ["People", "2 members"],
     ["Description", "2 sections"],
     ["Pages", "1 page"],
     ["Files and folders", "acme/relay"],
@@ -1952,15 +1957,6 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
     { workspace: "acme", place: { kind: LINK_PLACE.PERSON, userId: DANA_ID } },
   ]);
   assert.equal(carryingTarget(container), undefined);
-});
-
-test("off a members' directory an @ offers no people", async () => {
-  const { container } = await box(taskPage());
-
-  typeInComposer(container, "See @dana");
-  await settle();
-
-  assert.deepEqual(peopleListed(container), []);
 });
 
 test("a person's page pasted into the box becomes their chip called by their name, and one of another workspace pastes as the words it is", async () => {

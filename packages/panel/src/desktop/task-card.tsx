@@ -1,6 +1,12 @@
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { taskAgentsStatus } from "@repo/features/task-agents-model";
+import { subTaskCount, subTasksOf, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import type { TaskPullRequestLine, TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
@@ -30,7 +36,6 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import { subTaskCount, subTasksOf, TASK_ORDER, taskTime } from "@repo/ui/task-list-model";
 import { repositoryPageUrl } from "@repo/ui/tasks-model";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
@@ -40,12 +45,7 @@ import { agentName, pullRequestNumberLabel } from "../tasks/agent-model.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
-import {
-  NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-  TaskKey,
-} from "../tasks/task-standing.js";
+import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import { useTaskPullRequests, useTaskWork } from "../tasks/use-task-work.js";

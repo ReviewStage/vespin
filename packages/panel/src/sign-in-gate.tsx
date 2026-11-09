@@ -9,9 +9,7 @@ import {
   PROVIDER_BUTTON_SIZE,
   ProductMark,
   ProviderButton,
-  TEXT_BUTTON_TONE,
   TEXT_LINK_LOOK,
-  TextButton,
   TextLink,
 } from "@repo/ui";
 import { failureShown } from "./failure-report.js";
@@ -39,9 +37,12 @@ const WAYS_IN = [
 /**
  * The sign-in, alone in the window on an AuthPage card: the product's mark over the two ways in.
  * A press sends the browser to the provider and the gate waits in place —
- * the pressed button says so, the other stands disabled, and Cancel takes the
- * wait back — because the browser holds the actual work and there is nothing
- * else here to do meanwhile. The way in this Mac took last is the filled one
+ * the pressed button says so, the other stands disabled, and Cancel at the
+ * waited button's trailing edge takes the wait back — because the browser
+ * holds the actual work and there is nothing else here to do meanwhile.
+ * Note that the wait adds no line to the card, because the card is centered
+ * in the window and a line arriving under the buttons would move them; a
+ * reader hears "Finish in your browser." through the announcer instead. The way in this Mac took last is the filled one
  * and says so; with none kept, Google is. The two never trade places, so the
  * hand that knows where GitHub is still finds it there.
  */
@@ -88,23 +89,11 @@ export function SignInGate({
             }
       }
       footnote={
-        waiting || macAppLink !== undefined ? (
-          <>
-            {waiting ? (
-              <span>
-                {FINISH_IN_BROWSER}{" "}
-                <TextButton tone={TEXT_BUTTON_TONE.ACCENT} onClick={onCancel}>
-                  Cancel
-                </TextButton>
-              </span>
-            ) : null}
-            {macAppLink === undefined ? null : (
-              <TextLink href={macAppLink} look={TEXT_LINK_LOOK.UNDERLINED}>
-                Open in the Mac app
-              </TextLink>
-            )}
-          </>
-        ) : undefined
+        macAppLink === undefined ? undefined : (
+          <TextLink href={macAppLink} look={TEXT_LINK_LOOK.UNDERLINED}>
+            Open in the Mac app
+          </TextLink>
+        )
       }
     >
       {WAYS_IN.map(({ provider, name }) => (
@@ -117,6 +106,7 @@ export function SignInGate({
           lastUsed={lastUsed === provider}
           busy={waiting === provider}
           busyLabel="Waiting for browser"
+          cancel={waiting === provider ? { label: "Cancel", onPress: onCancel } : undefined}
           disabled={busy}
           onPress={() => onBegin(provider)}
         />

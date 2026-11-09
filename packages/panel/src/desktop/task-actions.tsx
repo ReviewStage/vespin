@@ -1,5 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { repositoryLabel, taskFinished } from "@repo/features/task-list-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   DESCRIPTION_ACTOR,
   TASK_BOUNDS,
@@ -43,7 +45,6 @@ import { accountActor, creatorActor } from "@repo/ui/actor-model";
 import { confirmAsked } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { repositoryLabel, taskFinished } from "@repo/ui/task-list-model";
 import {
   DOCUMENT_REGION,
   RENAME_FAILED_NOTE,
@@ -89,10 +90,11 @@ import { CHOOSE_LABEL, RepositoryMenuPanel } from "../tasks/repository-chip.js";
 import { PlanGlyph } from "../tasks/tab-look.js";
 import { useTaskDelete } from "../tasks/task-delete.js";
 import {
-  copyTaskLinkItem,
   markReadItem,
+  openTaskInTab,
   type ReadMark,
   renameTaskItem,
+  taskLinkItems,
   taskLinkPlace,
   versionHistoryItem,
 } from "../tasks/task-menu-items.js";
@@ -103,12 +105,7 @@ import {
 } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
-import {
-  NO_ASSIGNEE,
-  PRIORITY_ROWS,
-  TASK_STATUS_WORDS,
-  useAssigneeRows,
-} from "../tasks/task-standing.js";
+import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { NewTask } from "../tasks/use-new-task.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
@@ -628,7 +625,8 @@ function moveToEntries(
 /**
  * One task's actions in the groups a rule divides, offering only those that
  * apply to it now, the same from every door: Copy description, on the open
- * task alone, since Copy formats the document drawn, and Copy link; then
+ * task alone, since Copy formats the document drawn, Copy link, and Open
+ * in new tab under it where the window opens tabs; then
  * Rename, Version history, and Mark as unread or read; then Status,
  * Priority, and Assignee; then Task relation, the add menu as the menu's
  * panel, and Remove parent where the task has one, New sub-task being the
@@ -676,7 +674,7 @@ function taskActionGroups(
   const link: MenuAction[] =
     task === undefined
       ? []
-      : [copyTaskLinkItem(doors.copy, task, taskLinkPlace(tasks.workspaces, task), doors.chord)];
+      : taskLinkItems(doors.copy, task, taskLinkPlace(tasks.workspaces, task), doors.chord);
   // U and P act on the open task, and on a sidebar row's while it is focused, so both print them.
   const lettered = drawn || doors.rowKeys;
   const read: MenuAction[] = task === undefined ? [] : [markReadItem(doors.read, lettered)];
@@ -1050,7 +1048,8 @@ function SidebarTaskCard({
  * list's order chooses. Pin
  * and Mark done stand in place of all of it while the row is hovered or
  * reached from the keyboard.
- * A press opens it, and its actions are one menu opened alike by the row's ⋯,
+ * A press opens it, and a middle-click opens it in a tab of its own where
+ * the window opens tabs, as on a link, a ⌘-click still choosing it; its actions are one menu opened alike by the row's ⋯,
  * a right-click, a long press, and the menu key (`ListRow`'s `menu`). A
  * finger's row draws neither its ⋯ nor Pin and Mark done, as a phone's
  * Inbox row draws no ⋯, so its name keeps the room and its time runs to the
@@ -1193,6 +1192,7 @@ export function SidebarTask({
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
+          onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           selectKey={task.id}
           menu={
             rename.editing

@@ -120,6 +120,12 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   ) => Effect.Effect<TurnHandover, { readonly _tag: string }>;
   /** The session's runner launched with no message past the answer, where none runs, for an agent on screen (`runner-sessions.ts`'s `warm`); it answers at once and fails nothing. */
   readonly warm: (sessionId: string, conversationId: string) => Effect.Effect<void>;
+  /**
+   * The message handed to a runner launched afresh, any runner up ended
+   * first, so a turn its plan's limit cut short goes on with its own line on
+   * the payer the launch chooses (`runner-sessions.ts`'s `retry`).
+   */
+  readonly retry: AgentSessions<Turn>["send"];
 }
 
 export interface NativeAgentSessionsService {

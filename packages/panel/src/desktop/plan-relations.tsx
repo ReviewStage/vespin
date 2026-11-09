@@ -1,3 +1,5 @@
+import { subTaskCount, subTasksOf, taskFinished } from "@repo/features/task-list-model";
+import { TASK_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_RELATION_KIND,
   type Task,
@@ -19,14 +21,12 @@ import {
 } from "@repo/ui";
 import { GLYPH, NetworkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { subTaskCount, subTasksOf, taskFinished } from "@repo/ui/task-list-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { RelationKindPill } from "../tasks/relation-kind-pill.js";
 import {
   TASK_RELATION_ORDER,
-  TASK_RELATION_WORDS,
   type TaskRelationDoor,
   TaskRelationIcon,
   TaskRelationMenu,

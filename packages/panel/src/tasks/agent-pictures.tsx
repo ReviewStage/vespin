@@ -60,8 +60,8 @@ import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
  * the agent, which its row names by the picture it was kept as rather than
  * carrying its bytes, is read the same way and drawn among the line's files
  * (`MessageFileChips`).
- * Everything here is left out of the screen recording, as the tab around
- * it is.
+ * Every picture and video here is left out of the screen recording
+ * (`PictureSet`).
  */
 
 /** Where an agent's or a worker's pictures are read through: the scope the window keeps them under, and the read. */

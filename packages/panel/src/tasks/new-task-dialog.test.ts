@@ -953,6 +953,61 @@ test("an owner of a workspace whose GitHub reaches no repository is offered Choo
   assert.deepEqual(dialog.links, [WORKSPACE_GITHUB]);
 });
 
+/** A read answering that the App is installed and reaches one repository. */
+const ONE_REACHED = () =>
+  Promise.resolve({
+    repositories: {
+      installed: true,
+      repositories: [
+        {
+          owner: "acme",
+          name: "web",
+          fullName: "acme/web",
+          defaultBranch: "main",
+          private: true,
+          updatedAt: 1,
+        },
+      ],
+      installationUrl: "https://github.com/apps/luke/installations/new",
+    },
+  });
+
+test("an owner's repository list ends in Configure repositories in Settings, opening the workspace's GitHub in Settings", async () => {
+  const dialog = await mount(undefined, undefined, {
+    scope: "workspace-acme",
+    list: ONE_REACHED,
+  });
+
+  await openChip();
+  const configure =
+    [...document.querySelectorAll<HTMLElement>("[role='option'], button")].find(
+      (each) => each.textContent === "Configure repositories in Settings",
+    ) ?? assert.fail("the menu offers Configure repositories in Settings");
+  act(() => configure.click());
+
+  assert.deepEqual(dialog.links, [WORKSPACE_GITHUB]);
+});
+
+test("a member's repository list ends in whom to ask to configure repositories, with nothing to press", async () => {
+  fakeActPort({});
+  handMembers(() => ({ rows: { members: PEOPLE } }));
+  await mount(undefined, undefined, {
+    scope: "workspace-acme",
+    manages: false,
+    list: ONE_REACHED,
+  });
+
+  await openChip();
+
+  await vi.waitFor(() =>
+    assert.equal(
+      document.querySelector(".ui-searchable-menu-last-line")?.textContent,
+      "Ask Dean or Charles to configure repositories",
+    ),
+  );
+  assert.equal(document.body.textContent?.includes("Configure repositories in Settings"), false);
+});
+
 /** How the GitHub row ends for a workspace with a GitHub connected whose read finds none installed. */
 async function lapsedWay(manages: boolean) {
   await mount(undefined, undefined, {

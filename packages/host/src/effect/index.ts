@@ -21,7 +21,12 @@ export {
   hostCapabilities,
   NOT_ON_THIS_PLATFORM,
 } from "../host-concerns.js";
-export { oauthAccountSourceLayer } from "../oauth-account-source.js";
+export {
+  OAUTH_ACCOUNT_CLIENT,
+  type OAuthAccountClient,
+  oauthAccountSourceLayer,
+  oauthAccountSourceLayerFor,
+} from "../oauth-account-source.js";
 export type {
   ListenOnLoopback,
   LoopbackConnection,

@@ -54,8 +54,10 @@ import {
 import {
   listProviderKeyRows,
   removeProviderKey,
+  reorderSubscriptions,
   saveProviderKey,
   setProviderKeyForAgents,
+  setSubscriptionLabel,
 } from "@repo/database/models/provider-key-store";
 import {
   CHATGPT_DEVICE_FAILURE_MESSAGE,
@@ -160,7 +162,7 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
         ? { limitResetsAt: row.limitResetsAt.getTime() }
         : undefined),
     };
-    return { summary, forAgents: row.forAgents };
+    return { summary, row };
   });
 });
 
@@ -175,8 +177,16 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   const subscriptions: SubscriptionKeySummary[] = [];
   for (const kind of SUBSCRIPTION_KINDS) {
-    for (const { summary, forAgents } of yield* summariesOf(userId, kind, ring)) {
-      subscriptions.push({ ...summary, kind, forAgents });
+    for (const { summary, row } of yield* summariesOf(userId, kind, ring)) {
+      subscriptions.push({
+        ...summary,
+        kind,
+        id: row.id,
+        position: row.position,
+        forAgents: row.forAgents,
+        ...(row.label === null ? undefined : { label: row.label }),
+        ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
+      });
     }
   }
   return {
@@ -242,8 +252,24 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         if (refused !== undefined) return yield* keysAnswer(userId, ring, refused);
         const now = yield* DateTime.nowAsDate;
         const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
+        const placement = {
+          ...(input.subscriptionId === undefined
+            ? undefined
+            : { subscriptionId: input.subscriptionId }),
+          ...(input.add === undefined ? undefined : { add: input.add }),
+        };
         yield* hostedStoreOrUnavailable(
-          saveProviderKey(userId, provider, kind, sealed, providerKeyHint(key), null, now),
+          saveProviderKey(
+            userId,
+            provider,
+            kind,
+            sealed,
+            providerKeyHint(key),
+            null,
+            now,
+            null,
+            placement,
+          ),
         );
         yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
         return yield* keysAnswer(userId, ring);
@@ -276,18 +302,23 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** One provider's credential removed, by the provider and the kind the query names; an API key where it names none. A ChatGPT plan is revoked at OpenAI first. */
+    /** One provider's credential removed, by the provider, the kind, and the subscription the query names; an API key where it names no kind, the first of its kind where it names no subscription. A ChatGPT plan is revoked at OpenAI first. */
     removeProviderKey: keyed.removeProviderKey.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       const kind = input.query.kind ?? PROVIDER_KEY_KIND.API_KEY;
+      const { subscriptionId } = input.query;
       if (
         kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
         input.query.provider === SUBSCRIPTION_KIND_PROVIDER[kind]
       ) {
-        const confirmed = yield* hostedStoreOrUnavailable(removeChatGptCredentials(userId, ring));
+        const confirmed = yield* hostedStoreOrUnavailable(
+          removeChatGptCredentials(userId, ring, subscriptionId),
+        );
         return yield* keysAnswer(userId, ring, undefined, !confirmed);
       }
-      yield* hostedStoreOrUnavailable(removeProviderKey(userId, input.query.provider, kind));
+      yield* hostedStoreOrUnavailable(
+        removeProviderKey(userId, input.query.provider, kind, subscriptionId),
+      );
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -295,16 +326,50 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
     setProviderKeyForAgents: keyed.setProviderKeyForAgents.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       yield* hostedStoreOrUnavailable(
-        setProviderKeyForAgents(userId, input.provider, input.kind, input.forAgents),
+        setProviderKeyForAgents(
+          userId,
+          input.provider,
+          input.kind,
+          input.forAgents,
+          input.subscriptionId,
+        ),
       );
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. */
-    startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context }) {
+    /** One of the account's subscriptions named, or its name cleared; one it does not hold changes nothing. */
+    renameSubscription: keyed.renameSubscription.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      // Note that a name is kept as typed but for its ends, and one left empty is the default's.
+      const label = input.label?.trim() ?? "";
+      yield* hostedStoreOrUnavailable(
+        setSubscriptionLabel(
+          userId,
+          input.provider,
+          input.kind,
+          input.subscriptionId,
+          label === "" ? null : label,
+        ),
+      );
+      return yield* keysAnswer(userId, ring);
+    }),
+
+    /** The account's subscriptions of a kind put in the order named, the first paying first. */
+    reorderSubscriptions: keyed.reorderSubscriptions.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      yield* hostedStoreOrUnavailable(
+        reorderSubscriptions(userId, input.provider, input.kind, input.subscriptionIds),
+      );
+      return yield* keysAnswer(userId, ring);
+    }),
+
+    /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. A start that adds keeps the plan it connects at the bottom of the account's order. */
+    startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       if (!(yield* brake.check(userId))) return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
-      const started = yield* hostedStoreOrUnavailable(startChatGptDeviceLogin(userId, ring));
+      const started = yield* hostedStoreOrUnavailable(
+        startChatGptDeviceLogin(userId, ring, input?.add === true),
+      );
       if (Option.isNone(started)) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
       return started.value;
     }),

@@ -1,3 +1,10 @@
+import { INBOX_MISSING, type InboxMissing } from "@repo/features/inbox-ask-words";
+import {
+  ANSWER_TONE,
+  type AnswerTone,
+  decideButtons,
+  RECOMMENDED,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_BOUNDS,
@@ -41,17 +48,12 @@ import { isComposingKey } from "@repo/ui/composing-key";
 import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
-import { INBOX_MISSING, type InboxMissing } from "./inbox-ask-words.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
 import {
-  ANSWER_TONE,
-  type AnswerTone,
   answeredDraft,
-  decideButtons,
   doDecision,
   fieldValueOf,
   type InboxDraft,
-  RECOMMENDED,
   shownTicks,
   stepParts,
   withDoPress,

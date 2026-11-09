@@ -518,8 +518,10 @@ export interface ComposerEditorProps {
   readonly onDraft: (text: string) => void;
   /** A key, heard before the editor's own handling; answers whether the owner took it. */
   readonly onKey: (event: KeyboardEvent) => boolean;
-  /** Enter with no Shift, while no input method is composing; on a coarse pointer, where Enter is a new line, only with ⌘ or Ctrl. */
+  /** Enter with no Shift, while no input method is composing; on a coarse pointer, where Enter is a new line, only with ⌘ or Ctrl; where Enter writes, only with ⌘ or Ctrl. */
   readonly onEnter: () => void;
+  /** Whether a bare Enter writes a new line, as a document's text does, so only ⌘ or Ctrl with Enter is `onEnter`: a box whose words are kept rather than sent, as an automation's prompt is. */
+  readonly enterWrites?: boolean | undefined;
   /** Files pasted; answers whether the owner took them, which keeps them out of the words. */
   readonly onPasteFiles: (files: readonly File[]) => boolean;
   /** Words pasted, before they are laid in; answers whether the owner took them as a file, which keeps them out of the words. */

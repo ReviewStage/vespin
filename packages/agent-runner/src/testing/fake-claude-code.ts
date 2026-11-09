@@ -42,12 +42,12 @@ function stopHookOf(options: Options) {
  * Each `result` names the prompts its turn took, as the CLI's does, but one
  * whose step says it names none. `chain`
  * is the stored session's entries, which every session it is asked for
- * reads as. A CLI that stops `answering` records each control request
+ * reads as, or none where the read is refused. A CLI that stops `answering` records each control request
  * (a model change, an interrupt) and never answers it.
  */
 export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function* (
   steps: readonly Step[],
-  chain: readonly string[] = [],
+  chain: readonly string[] | null = [],
   answering = true,
 ) {
   const prompted = yield* Queue.unbounded<SDKUserMessage>();
@@ -169,7 +169,10 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
 
   /** Lets a script held at `untilReleased` go on. */
   const release = Deferred.succeed(released, undefined);
-  const sessionChain = async () => chain;
+  const sessionChain = async () => {
+    if (chain === null) throw new Error("the session could not be read");
+    return chain;
+  };
   return {
     layer: Layer.succeed(ClaudeCode, { startup, sessionChain }),
     record,

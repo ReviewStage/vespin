@@ -392,7 +392,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title="Connect an agent"
-        description="Run agents on your ChatGPT or Claude plan, or an API key."
+        description="Set up a plan or an API key. Pick which one new agents use."
         foot={foot(agent, last ? "Finish" : "Continue")}
       >
         <AgentConnectSection onConnected={onConnected} />

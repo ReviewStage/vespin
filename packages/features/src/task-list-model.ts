@@ -1,6 +1,6 @@
-import type { TasklessAgent } from "@repo/features/agent-wire";
-import { agentName } from "@repo/features/model-label";
-import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/task-wire";
+import type { TasklessAgent } from "./agent-wire.js";
+import { agentName } from "./model-label.js";
+import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
  * task-list-model.ts -- how the sidebar's task list is grouped and filtered: the view a workspace keeps, the groups it draws, and the time each row shows.
@@ -67,6 +67,12 @@ export interface TaskListView {
   /** Whether a parent's finished sub-tasks stand under it (`taskRowInView`). */
   readonly finishedSubTasks: boolean;
 }
+
+/** What the scope switcher says for Me and Anyone; a member's list is called by their name (the panel's `tasksHeadWords`). */
+export const TASKS_HEAD_WORDS = {
+  [ASSIGNED_TO.ME]: "My tasks",
+  [ASSIGNED_TO.ANYONE]: "Everyone's tasks",
+} as const;
 
 /** The statuses the list shows: the work to do and under way, the backlog and the settled left out. */
 export const SHOWN_STATUSES: readonly TaskStatus[] = [TASK_STATUS.TODO, TASK_STATUS.IN_PROGRESS];
@@ -538,4 +544,38 @@ export function childTaskCounts(
     });
   }
   return counts;
+}
+
+/** The listed tasks as the view groups them: by repository, or in one run. */
+export type TaskSections =
+  | {
+      readonly grouping: typeof TASK_GROUPING.REPOSITORY;
+      readonly groups: readonly RepositoryGroup[];
+    }
+  | { readonly grouping: typeof TASK_GROUPING.NONE; readonly rows: readonly TaskRow[] };
+
+/**
+ * The tasks under Tasks as the view groups them, newest updated first.
+ * Grouped by repository, the pinned repositories' groups stand above the
+ * rest in the order `pinnedRepositories` names them, newest pinned first,
+ * and the rest keep the order's.
+ */
+export function taskSections(
+  rows: readonly TaskRow[],
+  grouping: TaskSections["grouping"],
+  pinnedRepositories: readonly string[],
+): TaskSections {
+  if (grouping === TASK_GROUPING.NONE) {
+    return { grouping, rows: orderTaskRows(rows) };
+  }
+  const grouped = repositoryGroups(rows);
+  const pinnedAt = (group: RepositoryGroup) =>
+    group.repository === null ? -1 : pinnedRepositories.indexOf(group.repository);
+  return {
+    grouping,
+    groups: [
+      ...grouped.filter((group) => pinnedAt(group) >= 0).sort((a, b) => pinnedAt(a) - pinnedAt(b)),
+      ...grouped.filter((group) => pinnedAt(group) < 0),
+    ],
+  };
 }

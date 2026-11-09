@@ -20,6 +20,7 @@ CI's macOS job below. Every command here runs from `apps/mobile`.
 | `pnpm ios -- --device "iPhone 18 Pro"` | Generate `ios/` if it is missing, build a Debug app, install it on that simulator, and start Metro for it |
 | `pnpm start` | Metro alone, for a Debug app already installed |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
+| `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
@@ -93,12 +94,30 @@ build time. The screens read the document as the panel does, with
 `useQuery({ ...appStateQuery, select })` (`src/host/app-state-query.ts`) and
 the selects of `@repo/host/app-state-reads`, and send acts on the host's act
 port, served in-process over `src/host/in-process-channel.ts` in place of a
-`MessageChannel`. Until the sign-in task lands the host runs signed out.
+`MessageChannel`.
+
+The account is the desktop's OAuth source signed in as the `ios` client
+(`OAUTH_ACCOUNT_CLIENT.IOS`), whose bearer every v1 write and the socket
+take, so no session is handed off. Its consent is the system's
+authentication session (`src/host/auth-session.ts`, under
+`@repo/credentials`' `authSessionConsent`), which catches the sign-in's
+HTTPS callback on `vespin.dev` through the `webcredentials:` associated
+domain, and its tokens are sealed in the settings file under a key the
+Keychain keeps (`src/host/keychain-cipher.ts`). The
+root layout stands the tabs and Settings behind the account and the
+sign-in screen in front of them otherwise. A `vespin.dev` link the app
+draws is routed by `src/app/+native-intent.tsx` through
+`@repo/features/ios-app-links`, the same list the host's association file
+claims for the app; any other opens in Safari.
 
 A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
 Inbox profile's threads among it (`@repo/host/fixture-inbox`), which is how
-the Maestro flows run with no server. What Hermes lacks of the web platform
+the Maestro flows run with no server. A `-authServer stub` launch argument
+instead signs in against an account service the app answers itself
+(`src/host/stub-auth-server.ts`), whose authorization page grants at once,
+which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and
+signs out. What Hermes lacks of the web platform
 the host stands on is polyfilled in one place, `src/host/polyfills.ts`, each
 with a line on why; Shiki stays out of the app, and a fenced block is drawn
 plain.

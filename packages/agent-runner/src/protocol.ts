@@ -263,17 +263,46 @@ export type RunnerLinesAnswer = typeof RunnerLinesAnswerSchema.Type;
  * names `transcriptsUrl`: Anthropic's reference `SessionStore`'s five calls
  * (the Agent SDK's `append`, `load`, `listSessions`, `delete`,
  * `listSubkeys`), each one POST under the runner's bearer, run against the
- * agent's own rows.
+ * agent's own rows. A runner loads a transcript a page at a time
+ * (`LOAD_PAGE`), so no one answer must hold a large session whole under the
+ * platform's bound on a function's response; `LOAD` is still answered for a
+ * runner from before pages, which a Mac may bundle.
  */
 export const RUNNER_TRANSCRIPTS = {
   CALL: {
     APPEND: "append",
     LOAD: "load",
+    LOAD_PAGE: "loadPage",
     LIST_SESSIONS: "listSessions",
     DELETE: "delete",
     LIST_SUBKEYS: "listSubkeys",
   },
+  /** The project Codex's threads are kept under (`codex-rollout.ts`), which names no checkout. */
+  CODEX_PROJECT: "codex",
 } as const;
+
+/** How long a Claude Code project key runs before the SDK cuts it and adds the path's hash. */
+const CLAUDE_PROJECT_KEY_CHARS = 200;
+
+/**
+ * The project the Agent SDK keys a Claude Code session's transcript under
+ * for the checkout given, as it keys it from the session's resolved working
+ * folder: each character but an ASCII letter or digit as `-`, and past 200
+ * characters cut there with the path's 32-bit string hash after it in base
+ * 36. Note that a path is read as the SDK reads it on a Mac, composed (NFC),
+ * which changes no ASCII path.
+ */
+export function claudeProjectKey(checkoutPath: string): string {
+  const path = checkoutPath.normalize("NFC");
+  const key = path.replace(/[^a-zA-Z0-9]/g, "-");
+  if (key.length <= CLAUDE_PROJECT_KEY_CHARS) return key;
+  let hash = 0;
+  for (let index = 0; index < path.length; index += 1) {
+    hash = (hash << 5) - hash + path.charCodeAt(index);
+    hash |= 0;
+  }
+  return `${key.slice(0, CLAUDE_PROJECT_KEY_CHARS)}-${Math.abs(hash).toString(36)}`;
+}
 
 /** The SDK's `SessionKey`: a project, a session, and a subpath, absent for the main transcript. */
 const TranscriptKeySchema = Schema.Struct({
@@ -285,6 +314,12 @@ const TranscriptKeySchema = Schema.Struct({
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const TranscriptEntrySchema = Schema.Record(Schema.String, Schema.Unknown);
 
+/** Where a transcript's next page starts: after the entry the last page ended on. */
+const TranscriptCursorSchema = Schema.Number.check(
+  Schema.isInt(),
+  Schema.isGreaterThanOrEqualTo(0),
+);
+
 /** One call of a runner's transcript store. */
 export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
@@ -295,6 +330,11 @@ export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD),
     key: TranscriptKeySchema,
+  }),
+  Schema.Struct({
+    call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE),
+    key: TranscriptKeySchema,
+    after: Schema.NullOr(TranscriptCursorSchema),
   }),
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS),
@@ -313,6 +353,13 @@ export const RunnerTranscriptLoadSchema = Schema.Struct({
   entries: Schema.NullOr(Schema.Array(TranscriptEntrySchema)),
 });
 export type RunnerTranscriptLoad = typeof RunnerTranscriptLoadSchema.Type;
+
+/** What a page's load is answered: its entries in order, and the cursor the next is read after, none past the last. */
+export const RunnerTranscriptPageSchema = Schema.Struct({
+  entries: Schema.Array(TranscriptEntrySchema),
+  next: Schema.NullOr(TranscriptCursorSchema),
+});
+export type RunnerTranscriptPage = typeof RunnerTranscriptPageSchema.Type;
 
 /** What a listing of a project's sessions is answered: each with its last append, in epoch milliseconds. */
 export const RunnerTranscriptSessionsSchema = Schema.Struct({
@@ -787,7 +834,7 @@ export interface RunnerEventBatch {
  * for as long as it runs, on its own timer whatever its harness says. A harness
  * may say nothing for an hour while a background command or a wakeup it waits
  * on runs, and the service touches the sandbox during a turn only on what the
- * runner posts, about once a minute, against a sandbox that stops five idle
+ * runner posts, about once a minute, against a sandbox that stops three idle
  * minutes after its last touch, so a minute leaves room for heartbeats the
  * service did not take, and costs one small post each.
  */

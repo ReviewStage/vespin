@@ -17,37 +17,62 @@ import {
 } from "./effect/seams.js";
 
 /**
- * The desktop's account: an OAuth sign-in through the developer's browser,
- * whose consent the shell stands up (`SignInConsent`), with the tokens it
- * lands sealed in the settings file by the shell's cipher (`SecretCipher`).
- * These two seams are this source's alone, so a host assembled over another
- * source is handed neither.
+ * Which first-party client an OAuth account signs in as, and what its
+ * session-only calls ride: the Mac's own Better Auth session, handed off
+ * through the browser, or, on the iPhone, the OAuth bearer itself, which the
+ * service takes on every v1 write and the live socket for the `ios` client,
+ * so the iPhone asks no hand-off.
  */
+export interface OAuthAccountClient {
+  readonly clientId: string;
+  readonly sessionHandOff: boolean;
+}
+
+export const OAUTH_ACCOUNT_CLIENT = {
+  DESKTOP: { clientId: FIRST_PARTY_OAUTH_CLIENT_ID.DESKTOP, sessionHandOff: true },
+  IOS: { clientId: FIRST_PARTY_OAUTH_CLIENT_ID.IOS, sessionHandOff: false },
+} as const satisfies Record<string, OAuthAccountClient>;
+
+/**
+ * An account signed in through OAuth as `client`, whose consent the shell
+ * stands up (`SignInConsent`), with the tokens it lands sealed in the
+ * settings file by the shell's cipher (`SecretCipher`): the Mac's browser and
+ * Keychain, or the iPhone's authentication session and Keychain. These two
+ * seams are this source's alone, so a host assembled over another source is
+ * handed neither.
+ */
+export const oauthAccountSourceLayerFor = (
+  client: OAuthAccountClient,
+): Layer.Layer<AccountSource, never, SecretCipher | SignInConsent> =>
+  Layer.effect(
+    AccountSource,
+    Effect.gen(function* () {
+      const cipher = yield* SecretCipher;
+      const consent = yield* SignInConsent;
+      return {
+        tokenCipher: cipher,
+        open: (host: AccountSourceHost) => openOAuthSession(host, consent.open, client),
+      };
+    }),
+  );
+
+/** The desktop's account: an OAuth sign-in through the developer's browser, as the `desktop` client. */
 export const oauthAccountSourceLayer: Layer.Layer<
   AccountSource,
   never,
   SecretCipher | SignInConsent
-> = Layer.effect(
-  AccountSource,
-  Effect.gen(function* () {
-    const cipher = yield* SecretCipher;
-    const consent = yield* SignInConsent;
-    return {
-      tokenCipher: cipher,
-      open: (host: AccountSourceHost) => openOAuthSession(host, consent.open),
-    };
-  }),
-);
+> = oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.DESKTOP);
 
 const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   host: AccountSourceHost,
   openConsent: SignInConsentSeam["open"],
+  oauthClient: OAuthAccountClient,
 ): Effect.fn.Return<AccountSession> {
   const { store, runMode } = host;
 
   const client = new AccountClient({
     baseUrl: host.accountBaseUrl,
-    clientId: FIRST_PARTY_OAUTH_CLIENT_ID.DESKTOP,
+    clientId: oauthClient.clientId,
   });
 
   const session = yield* AccountSessionManager.make({
@@ -90,21 +115,25 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     readAccountKey: () => Effect.map(readStoredAccount(), (account) => account?.email),
   };
 
+  const credential = accountBearer(token);
   // Note that a hand-off that did not land is no failure of the call that
   // asked for it: the call retries on whatever session stands, and its
-  // second refusal is what gets reported.
-  const sessionCredential = sessionBearer({
-    ...token,
-    readSessionToken: () =>
-      runMode.sendsNetwork
-        ? Effect.map(readStoredAccount(), (account) => account?.sessionToken)
-        : Effect.succeed(undefined),
-    obtainSession: () =>
-      session.obtainSession().pipe(
-        Effect.asVoid,
-        Effect.mapError((failed) => new AccountRefreshFailed({ message: failed.message })),
-      ),
-  });
+  // second refusal is what gets reported. A client with no hand-off makes
+  // every session-only call under its bearer.
+  const sessionCredential = oauthClient.sessionHandOff
+    ? sessionBearer({
+        ...token,
+        readSessionToken: () =>
+          runMode.sendsNetwork
+            ? Effect.map(readStoredAccount(), (account) => account?.sessionToken)
+            : Effect.succeed(undefined),
+        obtainSession: () =>
+          session.obtainSession().pipe(
+            Effect.asVoid,
+            Effect.mapError((failed) => new AccountRefreshFailed({ message: failed.message })),
+          ),
+      })
+    : credential;
 
   return {
     snapshot: () => session.snapshot,
@@ -123,7 +152,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     deleteEverywhere: () => session.deleteEverywhere(),
     refreshOnce: session.refreshOnce,
     token,
-    credential: accountBearer(token),
+    credential,
     sessionCredential,
   };
 });

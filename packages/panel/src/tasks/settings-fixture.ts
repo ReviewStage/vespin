@@ -801,6 +801,8 @@ const STAGED_KEYS: AppProviderKeys = {
           status: PROVIDER_KEY_STATUS.VERIFIED,
           statusAt: NOW - HOUR,
           forAgents: true,
+          id: "subscription-claude",
+          position: 0,
         },
         {
           provider: MODEL_PROVIDER.OPENAI,
@@ -810,6 +812,9 @@ const STAGED_KEYS: AppProviderKeys = {
           status: PROVIDER_KEY_STATUS.INVALID,
           statusAt: NOW - 3 * DAY,
           forAgents: true,
+          id: "subscription-chatgpt",
+          position: 0,
+          email: "dev@example.com",
         },
       ],
     },

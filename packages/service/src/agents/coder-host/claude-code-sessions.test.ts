@@ -47,7 +47,6 @@ import {
   removeProviderKey,
   saveProviderKey,
   setPlanStatus,
-  setProviderKeyForAgents,
 } from "@repo/database/models/provider-key-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
@@ -1113,7 +1112,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a local agent recorded on its Mac's sign-in launches on the plan's refusal with none saved in Vespin, and on the account's key where Settings keeps the plan from agents",
+    "a local agent recorded on its Mac's sign-in launches on the plan's refusal with none saved in Vespin, and on the account's key where its subscription is at its limit",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -1149,13 +1148,17 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal("planRefusal" in refused && refused.planRefusal, PLAN_REFUSAL.SIGNED_OUT);
         assert.deepEqual(signedOut.commands, []);
 
-        // A plan Settings keeps from agents stands aside for the account's own key, as Start would choose.
+        // A subscription at its limit stands aside for the account's own key until it resets.
         yield* savePlan(userId);
-        yield* setProviderKeyForAgents(
+        const now = yield* DateTime.nowAsDate;
+        yield* setPlanStatus(
           userId,
           PROVIDER_KEY_PROVIDER.ANTHROPIC,
           PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-          false,
+          PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          new Date(now.getTime() + 30 * 60_000),
+          now,
+          now,
         );
         const ring = parseKeyRing(Redacted.make(RING));
         assert.ok(Result.isSuccess(ring));
@@ -1206,7 +1209,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent its starter's API key pays for launches on ANTHROPIC_API_KEY, never the plan, takes messages whatever the plan says, and is refused once the key is gone",
+    "an agent whose starter's subscription is refused launches on ANTHROPIC_API_KEY alone, takes messages on it, and is refused in the plan's words once the key is gone",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -1228,7 +1231,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         });
         assert.ok(Option.isSome(started));
         const agent = started.value.agent;
-        // The account keeps a plan too, refused: an agent on its key never asks it.
+        // The account keeps a plan too, refused, which has no room for a turn.
         yield* savePlan(userId);
         const now = yield* DateTime.nowAsDate;
         yield* setPlanStatus(
@@ -1298,9 +1301,86 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(yield* deliveredOpen(without, yield* writtenLine(agent, "Go.")), {
           outcome: SESSION_SEND_OUTCOME.FAILED,
           status: 422,
-          keyRefusal: KEY_REFUSAL.MISSING,
+          planRefusal: PLAN_REFUSAL.SIGNED_OUT,
         });
         assert.deepEqual(gone.commands, []);
+      }),
+  );
+
+  it.effect(
+    "a launch runs on the first of the account's subscriptions with room, in its order, records it, and goes back to the first once its limit resets",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const { userId, agent } = yield* openAgent;
+        const ring = parseKeyRing(Redacted.make(RING));
+        assert.ok(Result.isSuccess(ring));
+        const owner = {
+          userId,
+          provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+          kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+        };
+        const secondToken = "sk-ant-oat01-fixture-second-token";
+        const second = yield* saveProviderKey(
+          userId,
+          owner.provider,
+          owner.kind,
+          sealProviderKey(ring.success, owner, Redacted.make(secondToken)),
+          "sk-ant-oat…oken",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+        const now = yield* DateTime.nowAsDate;
+        yield* setPlanStatus(
+          userId,
+          owner.provider,
+          owner.kind,
+          PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          new Date(now.getTime() + 30 * 60_000),
+          now,
+          now,
+        );
+        const sentOn = (on: Agent) =>
+          Effect.gen(function* () {
+            const api = runnerSandboxApi();
+            const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+              Effect.provide(services(api)),
+            );
+            const opened = yield* deliveredOpen(sessions, yield* writtenLine(on, "Go."));
+            assert.equal(opened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+            const routing = Option.getOrThrow(yield* readAgentRouting(userId, on.id));
+            return [
+              anthropicSwaps(api, api.sandboxes[0]?.currentSessionId).map((swap) => swap.sets),
+              routing.payer,
+              routing.subscriptionId === second,
+            ];
+          });
+
+        assert.deepEqual(yield* sentOn(agent), [
+          [`Bearer ${secondToken}`],
+          AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          true,
+        ]);
+
+        yield* TestClock.adjust("31 minutes");
+        const task = yield* startTask(userId, { name: "Invitation emails" });
+        const later = yield* createAgent(userId, {
+          taskId: task.id,
+          idempotencyKey: "start-2",
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          descriptionSnapshot: "# Invitation emails\n",
+          prompt: null,
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+        assert.deepEqual(yield* sentOn(Option.getOrThrow(later).agent), [
+          [`Bearer ${PLAN_TOKEN}`],
+          AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          false,
+        ]);
       }),
   );
 
@@ -2755,6 +2835,31 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a turn its plan's limit cut short, retried on the next payer, hands the line its runner already took to the relaunched runner",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 3 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const sent = yield* writtenLine(agent, "Fix the invitations.");
+        const opened = yield* deliveredOpen(sessions, sent);
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        // The runner took its message, and its plan's limit cut the turn short.
+        yield* runnerTook(agent.id);
+        sequence.next = 4;
+
+        const retried = yield* sessions.retry(opened.sessionId, sent);
+
+        assert.equal(retried.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 2);
+        const [line] = yield* handedLines(userId, api.commands[1]);
+        assert.deepEqual(developerContent(line), [{ type: "text", text: "Fix the invitations." }]);
+      }),
+  );
+
+  it.effect(
     "two messages to a runner that ended both reach the one runner their turn's delivery launches, in order, however often it is delivered",
     () =>
       Effect.gen(function* () {
@@ -3914,7 +4019,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open",
+    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3932,7 +4037,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           descriptionSnapshot: "# Invitations\n",
           prompt: null,
           repository: null,
-          startedFrom: { agentId: agent.id, steps: 0, totalSteps: 0, session: CLI_SESSION },
+          startedFrom: {
+            agentId: agent.id,
+            steps: 0,
+            totalSteps: 0,
+            session: CLI_SESSION,
+            cutBefore: "source-line",
+          },
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
         const continued = Option.getOrThrow(started).agent;
@@ -3943,8 +4054,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [config] = (yield* launchLines(api.commands[0])) as [ClaudeCodeConfig, InputLine];
-        assert.equal(config.resume, CLI_SESSION);
-        assert.equal(config.fork, true);
+        assert.deepEqual(
+          [config.resume, config.fork, config.rewindBefore],
+          [CLI_SESSION, true, "source-line"],
+        );
       }),
   );
 

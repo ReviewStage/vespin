@@ -69,6 +69,8 @@ export type AccountAsksClient = Pick<
   | "saveProviderKey"
   | "removeProviderKey"
   | "setProviderKeyForAgents"
+  | "renameSubscription"
+  | "reorderSubscriptions"
   | "startChatGptDeviceLogin"
   | "pollChatGptDeviceLogin"
   | "cancelChatGptDeviceLogin"
@@ -358,7 +360,11 @@ function actsOf(
       Effect.flatMap(asked(client.removeProviderKey(removal)), keysWritten),
     PROVIDER_KEYS_FOR_AGENTS: (change) =>
       Effect.flatMap(asked(client.setProviderKeyForAgents(change)), keysWritten),
-    CHATGPT_DEVICE_START: () => asked(client.startChatGptDeviceLogin()),
+    SUBSCRIPTION_RENAME: (rename) =>
+      Effect.flatMap(asked(client.renameSubscription(rename)), keysWritten),
+    SUBSCRIPTIONS_REORDER: (order) =>
+      Effect.flatMap(asked(client.reorderSubscriptions(order)), keysWritten),
+    CHATGPT_DEVICE_START: (start) => asked(client.startChatGptDeviceLogin(start)),
     // Note that the login is asked after here, on the interval its start named, so a window waits on one answer rather than asking again on a timer of its own.
     CHATGPT_DEVICE_WAIT: ({ loginId, intervalSeconds }) => {
       const interval = Duration.seconds(intervalSeconds);

@@ -35,7 +35,11 @@ name, its description (a Markdown document written by members and agents) with i
 full revision history, comments on the description, inbox items and their answers,
 pages that agents make, pictures and short videos added to any of these, and,
 if the Memory experiment is on, short facts agents save about how your team
-works. Every member of the workspace can see all of this.
+works. Every member of the workspace can see all of this. Agents record their
+videos as WebM, which iPhones cannot play, so for each video an agent records
+in a cloud sandbox, we also keep an MP4 copy, made in that agent's sandbox.
+The copy is shown to the same people as its video, is deleted with it, and is
+the version the iPhone app plays.
 
 ### Agent conversations
 
@@ -43,7 +47,10 @@ For each turn an agent runs, we store your message, any files you attach, the
 agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
-browser, and answers from your integrations. Transcripts and descriptions are stored
+browser, and answers from your integrations. We also store the agent harness's
+own record of its session, Claude Code's transcript or Codex's thread, its
+thinking text included, so the agent can resume it and an agent continued or
+forked from it goes on from it. Transcripts and descriptions are stored
 as written, not end-to-end encrypted, and our operators can read them.
 
 ### Repository and GitHub data
@@ -64,12 +71,14 @@ state, and checks, and any chapters you generate for it.
 ### Credentials you save
 
 If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
-sign in with your ChatGPT plan, we store it encrypted with AES-256-GCM under a
-per-credential key that is itself encrypted with a server-only secret held
-outside the database. We keep a short hint (such as `sk-ant-…abcd`) and
-whether the provider accepts it. We never send a saved credential back to your
-device, log it, or include it in analytics, error reports, or screen
-recordings.
+your Claude plan's setup token, or sign in with your ChatGPT plan, we store it
+encrypted with AES-256-GCM under a per-credential key that is itself encrypted
+with a server-only secret held outside the database. We keep a short hint
+(such as `sk-ant-…abcd`), the email of the ChatGPT account a plan signed in
+as, the name you give a plan, and whether the provider accepts it. We never
+log a saved credential or include it in analytics, error reports, or screen
+recordings. We never send one to your devices, except to run an agent on your
+own machine with Bring your own host (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
@@ -106,9 +115,23 @@ token, key, or file contents, that goes too.
 If you turn on Bring your own host, agents can run directly on This Mac or on
 another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
-stored like any other. To tell your machines apart, each sends us a keyed hash
+stored like any other, and, on a machine running host 0.11.0 or later, so is
+their harness's own session, its thinking text included, as a cloud agent's
+is. To tell your machines apart, each sends us a keyed hash
 of its hardware or machine id, never the id itself, and a Mac sends its model
 name.
+
+When such an agent starts, we send that machine a copy of the Anthropic or
+OpenAI credential it runs on, sealed until the machine picks it up, when we
+erase that copy; your saved credential stays saved. For an agent on your
+ChatGPT plan, the machine instead fetches an access token from us while the
+agent runs. For a Claude agent, the credential sits in the agent's environment
+for that run, so any command the agent runs can read it. A Codex agent keeps it
+out of the commands it runs, but its commands still have full access to that
+machine's account. We take exact copies of a credential sent with the launch
+out of what the agent sends back to us, so a command that prints it does not
+put it in the transcript. A ChatGPT plan's access token is not taken out this
+way.
 
 For a repository the Vespin GitHub App reaches, an agent on your machine gets
 a GitHub token from us that lasts an hour and works only for that repository.

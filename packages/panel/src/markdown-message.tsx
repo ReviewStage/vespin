@@ -1,3 +1,4 @@
+import { matchRanges } from "@repo/features/search-tokens";
 import { keySpansIn } from "@repo/features/workspace-key";
 import { SEARCH_MATCH_CLASS } from "@repo/ui";
 import {
@@ -8,7 +9,6 @@ import {
   type MarkdownTaskBox,
   markdownStep,
 } from "@repo/ui/markdown";
-import { matchRanges } from "@repo/ui/search-tokens";
 import { isWireString } from "@repo/wire";
 import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 import { createContext, memo, type ReactNode, useContext, useMemo } from "react";

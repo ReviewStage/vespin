@@ -1,7 +1,13 @@
 import type { AgentMachineKind, ContextWindow } from "@repo/features/agent-wire";
 import type { ChaptersPick } from "@repo/features/chapters-model-choice";
 import type { LinkOpen } from "@repo/features/link-open";
-import type { AgentEnter, CommitAuthor, ExperimentChoices, SoundWhen } from "@repo/settings";
+import type {
+  AgentEnter,
+  CommitAuthor,
+  ExperimentChoices,
+  PullRequestOpen,
+  SoundWhen,
+} from "@repo/settings";
 import type { CompletionSound } from "@repo/wire/app-settings";
 import { boolean, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
@@ -25,6 +31,13 @@ export const accountPreference = pgTable("account_preference", {
    * moves no `updated_at`.
    */
   linkOpen: text("link_open").$type<LinkOpen>(),
+  /**
+   * Where a press on a pull request opens (`@repo/settings`'s
+   * `PULL_REQUEST_OPEN`): its agent's Pull request tab or its page on
+   * GitHub; null until the account chooses, which reads as the tab. A part
+   * of the snapshot of its own, as the link choice is, for the same reason.
+   */
+  pullRequestOpen: text("pull_request_open").$type<PullRequestOpen>(),
   /**
    * What Enter does in an agent's message box while it works
    * (`@repo/settings`'s `AGENT_ENTER`): steer the turn or queue the

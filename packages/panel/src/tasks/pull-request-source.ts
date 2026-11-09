@@ -2,10 +2,10 @@ import type { AgentPullRequestWriteAnswerView } from "@repo/features/agent-view"
 import { AGENT_STATUS, type AgentPullRequest } from "@repo/features/agent-wire";
 import type { PullRequestChaptersAnswerView } from "@repo/features/pull-request-chapters-view";
 import type { PullRequestActionRequest } from "@repo/features/pull-request-write-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { createContext, useContext, useMemo } from "react";
 import { sendAct } from "../act.js";
-import { agentStillWriting } from "./agent-model.js";
 import { pullRequestAsked, pullRequestOfTab } from "./pull-request-number.js";
 import type { WritePlace } from "./pull-request-writes.js";
 import type { AgentsControl } from "./use-agents.js";

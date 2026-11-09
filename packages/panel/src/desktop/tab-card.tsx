@@ -1,4 +1,5 @@
 import type { AgentChangesPeople, AgentPullRequest } from "@repo/features/agent-wire";
+import { NEEDS_YOU, needsYouWords } from "@repo/features/inbox-list-model";
 import type { CatalogModel } from "@repo/features/models-wire";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -11,7 +12,7 @@ import { AgentTabCard, type CardReading, taskFoot } from "../tasks/agent-tab-car
 import { PageChipCard, TaskChipCard } from "../tasks/chip-cards.js";
 import { browserOf } from "../tasks/cloud-browser-pane.js";
 import { FileCard } from "../tasks/file-ref.js";
-import { type InboxBoardView, NEEDS_YOU, needsYouWords } from "../tasks/inbox-model.js";
+import type { InboxBoardView } from "../tasks/inbox-model.js";
 import { PageCard, PageNameCard, PageNameSkeleton } from "../tasks/page-card.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { type PlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";

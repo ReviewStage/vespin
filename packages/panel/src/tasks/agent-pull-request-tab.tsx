@@ -152,7 +152,7 @@ import { Fold, FoldBody } from "../ai-elements/fold.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   type HandTabActions,
@@ -206,6 +206,7 @@ import { DiffListTopRoomContext } from "./diff-list.js";
 import { PierreDiff, useDiffLook } from "./file-diff.js";
 import type { TreeShown } from "./file-view.js";
 import { MergeControl, MergeStatus } from "./merge-box.js";
+import { OpenOnGitHubButton } from "./open-on-github-button.js";
 import {
   PENDING_WORDS,
   type PendingActs,
@@ -358,8 +359,8 @@ import {
  * view, the Conversation's ending in stage-cli's two filters, Hide resolved
  * and Hide bots, each counting what it leaves out; the filters and the folds
  * are kept across launches (`conversation-filters.ts`). Every name and word here is
- * the repository's, so the tab is left out of the screen recording
- * (`ph-no-capture`).
+ * the repository's, which the screen recording masks, and a diff's lines
+ * are left out of it whole (`file-diff.tsx`).
  */
 
 /** Whether the Chapters view's module has landed, so its boundary's Reload knows a failed chunk from a failed draw. */
@@ -1142,10 +1143,10 @@ function ThreadMenu({
 }): React.JSX.Element | null {
   const menu = useMenu(true);
   const jumps = useContext(ThreadJumpContext);
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   const jump = useThreadJump(thread, there);
   const place = jumps?.place(thread, here);
-  const copy = place === undefined ? undefined : copyLink(place);
+  const links = place === undefined ? [] : linkItemsOf(place);
   // Note that a Conversation thread's own path and lines already open it in Files changed, so only Files changed offers a View in.
   const views: MenuAction[] =
     jump === undefined || there === PULL_REQUEST_THREAD_VIEW.FILES
@@ -1157,7 +1158,7 @@ function ThreadMenu({
             onSelect: jump,
           },
         ];
-  const groups = [copy === undefined ? [] : [copy], views].filter((group) => group.length > 0);
+  const groups = [links, views].filter((group) => group.length > 0);
   if (groups.length === 0) return null;
   const label = moreLabel(THREAD_REVEAL_WORDS.THING);
   return (
@@ -3563,7 +3564,7 @@ function PullRequestTabBody({
         <AnchorsContext.Provider value={anchors.open}>
           <Fill
             ref={fold.root}
-            className="file-view pull-request-tab ph-no-capture"
+            className="file-view pull-request-tab"
             data-header-fold={phone ? "" : undefined}
             data-fold-lead={phone && fold.shape.lead ? "" : undefined}
             onScrollCapture={fold.onScrollCapture}
@@ -3595,6 +3596,7 @@ function PullRequestTabBody({
                     )}
                     <div className="pull-request-title-actions">
                       {overview === undefined ? null : <MergeStatus pullRequest={overview} />}
+                      {held === undefined ? null : <OpenOnGitHubButton url={held.url} />}
                       {phone ? null : (
                         <PreviewControl checks={landed(parts.checks)} shown={shown} />
                       )}

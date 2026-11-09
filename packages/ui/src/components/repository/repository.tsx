@@ -1,15 +1,21 @@
-import { Fragment, useState } from "react";
+import { NO_REPOSITORY, repositoryParts } from "@repo/features/task-list-model";
+import { Fragment, useRef, useState } from "react";
 import { ICON_SIZE } from "../../icons/icon-size.js";
 import { FolderXIcon, GLYPH } from "../../icons/icons.js";
-import { NO_REPOSITORY, repositoryParts } from "../../task-list-model.js";
 import { repositoryOwnerPictureUrl } from "../../tasks-model.js";
 import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { HoverCard, HoverCardHead } from "../hover-card/hover-card.js";
 import { OneLine } from "../one-line/one-line.js";
+import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
 import type { MenuRow } from "../searchable-menu/searchable-menu.js";
 import { Tooltip } from "../tooltip/hint.js";
+import {
+  VIRTUAL_ROWS_ANCHOR,
+  type VirtualRowPlace,
+  VirtualRows,
+} from "../virtual-rows/virtual-rows.js";
 
 /**
  * repository.tsx -- a GitHub repository as every surface draws it: its owner's picture, then its name.
@@ -36,6 +42,9 @@ const TOKEN_LABEL = "Token";
 
 /** The mark beside the first of several repositories picked, where an agent starts and its pull requests open by default. */
 const PRIMARY_LABEL = "Primary";
+
+/** How tall a repository's line stands, in pixels: the theme's `ui-24`, which `h-ui-24` draws it at. */
+const LINE_PX = 24;
 
 /** The marks a repository's row wears after its owner: whether the developer's own token reaches it, and whether it is the primary of several picked. */
 export interface RepositoryRowMarks {
@@ -194,4 +203,84 @@ export function repositoryMenuRow(
     terms: [repository],
     icon: <RepositoryPicture repository={repository} pictures={pictures} />,
   };
+}
+
+/** One repository the list names: `owner/name`, and whether the developer's own token reaches it rather than the App. */
+export interface RepositoryLineEntry {
+  readonly repository: string;
+  readonly token?: boolean | undefined;
+}
+
+/** One repository's line: its name as the sidebar draws it, whole, and its Token mark where it has one. */
+function RepositoryLine({
+  entry,
+  pictures,
+  place,
+}: {
+  entry: RepositoryLineEntry;
+  pictures: boolean;
+  place: VirtualRowPlace;
+}): React.JSX.Element {
+  return (
+    <li
+      {...place}
+      className="ui-repository-line flex h-ui-24 min-w-0 items-center gap-icon-gap text-body"
+    >
+      <RepositoryName repository={entry.repository} label={entry.repository} pictures={pictures} />
+      {entry.token === true ? <Badge>{TOKEN_LABEL}</Badge> : null}
+    </li>
+  );
+}
+
+/**
+ * The repositories a workspace reaches, one line each, in a short list that
+ * scrolls: each line a repository as the sidebar names one
+ * (`RepositoryName`), its owner's picture and then its whole `owner/name`,
+ * since the list mixes owners, followed by the Token mark where the
+ * developer's own GitHub token reaches it rather than the App, as the
+ * picker's rows wear it (`repositoryMenuRow`). The list stands about six
+ * lines tall, half of a seventh showing where there are more, and scrolls
+ * the rest in its own `ScrollArea`, its cut edges fading; only the lines
+ * near its view are drawn (`VirtualRows`), so an organization's thousands
+ * stay quick. It is a list to a reader, named by `label`, each line an item
+ * that says where it stands among them. Setup's GitHub step and Settings ›
+ * Workspace's GitHub accounts both draw it.
+ */
+export function RepositoryLines({
+  repositories,
+  label,
+  pictures,
+}: {
+  repositories: readonly RepositoryLineEntry[];
+  /** What the list is called, to a reader ("acme's repositories"). */
+  label: string;
+  /** Whether owners' pictures are drawn at all: not in a fixture run. */
+  pictures: boolean;
+}): React.JSX.Element {
+  const scroller = useRef<HTMLDivElement | null>(null);
+  // Note that a line is keyed by its name as spelled, because two names that differ only in case are two lines.
+  const keys = repositories.map(({ repository }) => repository);
+  return (
+    <div className="ui-repository-lines flex min-w-0 max-h-repository-lines flex-col">
+      <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
+        <div className="min-w-0">
+          <VirtualRows
+            scroller={scroller}
+            keys={keys}
+            estimate={LINE_PX}
+            anchor={VIRTUAL_ROWS_ANCHOR.START}
+            listItems
+            aria-label={label}
+          >
+            {(index, place) => {
+              const entry = repositories[index];
+              return entry === undefined ? null : (
+                <RepositoryLine entry={entry} pictures={pictures} place={place} />
+              );
+            }}
+          </VirtualRows>
+        </div>
+      </ScrollArea>
+    </div>
+  );
 }

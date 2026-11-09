@@ -1,3 +1,4 @@
+import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 /**
  * command-items.tsx -- the window's commands as every place offering one words, marks, and keys it: the one list ⌘K and the action menus both read.
  *
@@ -20,6 +21,7 @@
  */
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import {
   APP_COMMAND,
@@ -104,6 +106,7 @@ export const PANEL_COMMAND = {
   COPY_CONTENT: keyed(APP_COMMAND.COPY_CONTENT, <GLYPH.COPY />),
   COPY_DESCRIPTION: keyedAs(APP_COMMAND.COPY_CONTENT, "Copy description", <GLYPH.COPY />),
   COPY_LINK: keyed(APP_COMMAND.COPY_LINK, <GLYPH.LINK />),
+  OPEN_IN_NEW_TAB: unkeyed("Open in new tab", <GLYPH.OPEN_EXTERNALLY />),
   MARK_TASK_DONE: unkeyed("Mark done", <GLYPH.DONE />),
   DELETE: keyed(APP_COMMAND.DELETE, <GLYPH.DELETE />),
   DELETE_TASK: keyedAs(APP_COMMAND.DELETE, "Permanently delete", <GLYPH.DELETE />, NOUN.TASK),
@@ -113,8 +116,8 @@ export const PANEL_COMMAND = {
   PIN_AGENT: keyedAs(APP_COMMAND.PIN, "Pin", <GLYPH.PIN />, NOUN.AGENT),
   UNPIN_AGENT: keyedAs(APP_COMMAND.PIN, "Unpin", <GLYPH.UNPIN />, NOUN.AGENT),
   TOGGLE_READ: keyed(APP_COMMAND.TOGGLE_READ, <MailIcon />),
-  MARK_UNREAD: keyedAs(APP_COMMAND.TOGGLE_READ, "Mark as unread", <MailIcon />),
-  MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, "Mark as read", <MailOpenIcon />),
+  MARK_UNREAD: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.UNREAD, <MailIcon />),
+  MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.READ, <MailOpenIcon />),
   RENAME: unkeyed("Rename", <GLYPH.RENAME />),
   RENAME_TASK: unkeyed("Rename", <GLYPH.RENAME />, NOUN.TASK),
   VERSION_HISTORY: keyed(APP_COMMAND.VERSION_HISTORY, <HistoryIcon />),
@@ -148,6 +151,8 @@ export const PANEL_COMMAND = {
   ADD_RELATION: unkeyed("Add task relation", <NetworkIcon />),
   REMOVE_PARENT: unkeyed("Remove parent", <UnlinkIcon />),
   OPEN_ON_GITHUB: keyed(APP_COMMAND.OPEN_ON_GITHUB, <GLYPH.OPEN_ON_GITHUB />),
+  /** A pull request in its agent's Pull request tab, offered where a press opens its page on GitHub instead (`pull-request-opens.ts`). */
+  OPEN_IN_APP: unkeyed(`Open in ${PRODUCT_NAME}`, <GLYPH.PULL_REQUEST />),
   COPY_GITHUB_LINK: unkeyed("Copy GitHub link", <GLYPH.LINK />),
 } as const satisfies Record<string, PanelCommand>;
 

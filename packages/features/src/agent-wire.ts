@@ -539,8 +539,10 @@ export function turnStatusOfWord(word: string): TurnStatus {
  * A coding agent's newest turn as its row records it, the one record of a
  * turn's state (`@repo/database`'s `turn-state.ts`): its id and when it was
  * queued, which order it against another turn, its status word as a reader
- * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
- * failed where it did, in the wire's word.
+ * takes it (`turnStatusOfWord`), whether a Stop was asked of it, why it
+ * failed where it did, in the wire's word, and, for a turn held open while
+ * its starter's every subscription is at a usage limit and no API key pays,
+ * when the soonest of those limits resets, which it waits for to run again.
  */
 const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -548,6 +550,7 @@ const agentTurnSchema = EffectSchema.Struct({
   status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
   stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   failure: EffectSchema.optionalKey(agentFailureSchema),
+  waitsUntil: EffectSchema.optionalKey(countedNumber),
 });
 
 export type AgentTurn = typeof agentTurnSchema.Type;
@@ -1379,7 +1382,7 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
  * is on screen, at once and then every minute while it stays there. The
  * service answers at once and keeps a cloud agent's sandbox and runner
  * warm past it, launching the runner with no message where none runs, so
- * a message goes straight into the running session; it lets them go five
+ * a message goes straight into the running session; it lets them go three
  * minutes after the later of the agent's last turn's end and the last such
  * call. A Mac's agent, an archived one, and one the caller may not message
  * are answered the same and kept warm by nothing.
@@ -2766,6 +2769,13 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * before payers were recorded, and from a service older than it.
    */
   payer: EffectSchema.optionalKey(agentPayerSchema),
+  /**
+   * The starter's subscription a plan payer runs the agent on, by its id,
+   * which the starter's own Settings names it by, so the chip says which
+   * plan pays. Absent where no launch recorded one, for any other payer,
+   * on a worker's page, and from a service older than it.
+   */
+  payerSubscriptionId: EffectSchema.optionalKey(EffectSchema.String),
   context: EffectSchema.optionalKey(agentContextSchema),
   /**
    * The journal revision the agent's transcript was last rewound at, on

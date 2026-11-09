@@ -14,6 +14,7 @@ import {
 } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { cardTitle } from "@repo/features/plain-words";
 import {
   agentCallLine,
   CALL_KIND,
@@ -104,14 +105,17 @@ import {
   InboxIcon,
   LaptopIcon,
   LayoutListIcon,
+  LinkIcon,
   type LucideIcon,
   PencilLineIcon,
   PlayIcon,
+  PlugIcon,
   ScrollTextIcon,
   SearchIcon,
   SendIcon,
   TerminalIcon,
   TimerIcon,
+  UnlinkIcon,
   WrenchIcon,
 } from "@repo/ui/icons";
 import { siteName } from "@repo/ui/link-face";
@@ -178,7 +182,7 @@ import { linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { cardTitle, type SentWords, todosCount } from "./tool-call-model.js";
+import { type SentWords, todosCount } from "./tool-call-model.js";
 import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
@@ -1042,6 +1046,9 @@ const CALL_ICON = {
   [CALL_KIND.UNARCHIVE_AGENT]: ArchiveRestoreIcon,
   [CALL_KIND.LIST_MODELS]: CpuIcon,
   [CALL_KIND.STOP_AGENT]: CircleStopIcon,
+  [CALL_KIND.LIST_PORTS]: PlugIcon,
+  [CALL_KIND.SHARE_PORT]: LinkIcon,
+  [CALL_KIND.UNSHARE_PORT]: UnlinkIcon,
   [CALL_KIND.UPDATE_AGENT]: PencilLineIcon,
   [CALL_KIND.READ_TASK]: FileTextIcon,
   [CALL_KIND.CREATE_SECTION]: FolderPlusIcon,

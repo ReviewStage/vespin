@@ -136,6 +136,7 @@ import {
 } from "../../events/server-events.js";
 import { LINK_OUTCOME } from "../../github/github-installations.js";
 import { postInboxThread, taskInboxItems } from "../../inbox/inbox-store.js";
+import { PageLinks } from "../../pages/page-links.js";
 import {
   ModelCatalog,
   ModelCatalogUnavailable,
@@ -181,6 +182,7 @@ import {
 import { TASK_BLOCK_REFUSAL } from "../task-block-changes.js";
 import { NO_SECTION_DELETED, TASK_SECTION_TOOL_REFUSAL } from "../task-section-tools.js";
 import { CREATE_TASK_REFUSAL, READ_TASK_REFUSAL } from "../task-tools.js";
+import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { callTool, type ServedTool } from "../tool-catalog/catalog.js";
 import { AGENT_LIST_FILTER_REFUSAL, WORKSPACE_AGENTS_LIST_LIMIT } from "../workspace-agents.js";
 import { EXPERIMENT_OFF_REFUSAL, NO_EXPERIMENT_ON } from "../workspace-experiment-on.js";
@@ -528,9 +530,11 @@ const SENTRY_CONFIGURED = Layer.succeed(
 /** A sandbox no agent tool opens, since none reads a file the agent names. */
 const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
 
-/** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser and the integrations, whose every ask dies, and an environment. */
+/** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser, its sandbox, and the integrations, whose every ask dies, page links with no page sandbox, and an environment. */
 const UNREACHED = Layer.mergeAll(
   Layer.mock(AgentBrowser)({}),
+  Layer.mock(AgentSandbox)({}),
+  Layer.succeed(PageLinks, { sandbox: undefined }),
   integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
   LOCAL_AGENT_ENVIRONMENT,
 );

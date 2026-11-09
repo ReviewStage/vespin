@@ -1,8 +1,11 @@
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
-  TASK_PRIORITY,
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import {
   TASK_PRIORITY_ORDER,
-  TASK_STATUS,
   TASK_STATUS_ORDER,
   type Task,
   type TaskPriority,
@@ -80,24 +83,6 @@ import { TaskRelationAsked, type TaskRelationsDoor } from "./task-relation-menu.
  */
 export const TASK_CARD_STANDING = "task-card-standing flex flex-wrap items-center gap-tight-gap";
 
-/** Each status as its chip, its menu's row, the Board's column, and the sidebar's filter say it. */
-export const TASK_STATUS_WORDS = {
-  [TASK_STATUS.BACKLOG]: "Backlog",
-  [TASK_STATUS.TODO]: "Todo",
-  [TASK_STATUS.IN_PROGRESS]: "In progress",
-  [TASK_STATUS.DONE]: "Done",
-  [TASK_STATUS.CANCELED]: "Canceled",
-} as const satisfies Record<TaskStatus, string>;
-
-/** Each priority as its chip, its menu's row, and a Board card's say it. */
-export const TASK_PRIORITY_WORDS = {
-  [TASK_PRIORITY.NONE]: "No priority",
-  [TASK_PRIORITY.URGENT]: "Urgent",
-  [TASK_PRIORITY.HIGH]: "High",
-  [TASK_PRIORITY.MEDIUM]: "Medium",
-  [TASK_PRIORITY.LOW]: "Low",
-} as const satisfies Record<TaskPriority, string>;
-
 /** The status chip's rows, each status by its mark, which a task row's Status submenu lists too. */
 export const STATUS_ROWS: readonly MenuRow[] = TASK_STATUS_ORDER.map((status) => ({
   id: status,
@@ -124,9 +109,6 @@ function priorityOf(id: string): TaskPriority | undefined {
 
 /** The row of the assignee's menu that assigns the task to no one, apart from every account's id. */
 export const NO_ASSIGNEE = "no-assignee";
-
-/** What the assignee's chip and its first row say of a task no one is assigned to, as its hover card does, and what the Tasks page calls the tasks with none. */
-export const NO_ASSIGNEE_WORDS = "No assignee";
 
 /**
  * The assignee's menu: No assignee, then the workspace's members as every

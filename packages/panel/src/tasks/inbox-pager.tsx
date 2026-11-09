@@ -1,7 +1,12 @@
+import {
+  type InboxListed,
+  type InboxListView,
+  inboxEnds,
+  inboxSteps,
+} from "@repo/features/inbox-list-model";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import { PAGER_AXIS, Pager } from "@repo/ui";
 import { useAppCommand } from "../app-commands.js";
-import { type InboxListed, type InboxListView, inboxEnds, inboxSteps } from "./inbox-model.js";
 
 /**
  * inbox-pager.tsx -- stepping through the Inbox's items one at a time: where the chosen one stands, "2 of 8", and the presses and keys that choose the one above or below it.

@@ -118,6 +118,7 @@ import { SEARCH_MATCHES_EXAMPLE } from "./examples/search-matches";
 import { SEARCHABLE_MENU_EXAMPLE } from "./examples/searchable-menu";
 import { SECRET_FIELDS_EXAMPLE } from "./examples/secret-fields";
 import { SELECTION_EXAMPLE } from "./examples/selection";
+import { SETTINGS_ORDERED_ROWS_EXAMPLE } from "./examples/settings-ordered-rows";
 import { SETTINGS_PAGE_EXAMPLE } from "./examples/settings-page";
 import { SETTINGS_ROW_EXAMPLE } from "./examples/settings-row";
 import { SETTINGS_SECTION_EXAMPLE } from "./examples/settings-section";
@@ -294,6 +295,7 @@ export const EXAMPLES: readonly Example[] = [
   SKELETONS_EXAMPLE,
   SLIDER_EXAMPLE,
   VIDEO_PLAYER_EXAMPLE,
+  SETTINGS_ORDERED_ROWS_EXAMPLE,
   SETTINGS_ROW_EXAMPLE,
   ACCOUNT_WORDS_EXAMPLE,
   AUTH_PAGE_EXAMPLE,
