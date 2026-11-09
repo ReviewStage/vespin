@@ -112,6 +112,8 @@ open the agent or its Inbox thread.
 [#7541](https://github.com/ReviewStage/vespin/pull/7541),
 [#7542](https://github.com/ReviewStage/vespin/pull/7542))
 
+![Settings › Account › Sounds with Play a sound set to Always, Marimba chosen as the sound, and Show a notification switched on; the Sound picker is open on its list of sounds, Chime, Ping, Marimba (checked), Pop, Bell, Glass, Droplet, and Soft, with more below.](apps/web/public/changelog/0.29.0/sounds-when-an-agent-needs-you.png)
+
 ### Share a cloud agent's port
 
 Each port in the plug menu of an agent's box opens on your Mac or shares by a
@@ -131,6 +133,8 @@ localhost.
 [#7676](https://github.com/ReviewStage/vespin/pull/7676),
 [#7704](https://github.com/ReviewStage/vespin/pull/7704))
 
+![The Add teammate invitations agent has started relay's dev server on port 3000 and the invite email's preview on port 3001; its box's plug menu shows Forward to localhost switched on with localhost:3000 and localhost:3001, and localhost:3000's own menu, shared by a public link, offers Open, Open link, Copy link, and Stop sharing.](apps/web/public/changelog/0.29.0/share-a-cloud-agents-port.png)
+
 ### Set up cloud agents' sandboxes
 
 Settings › Environment keeps the workspace's environment variables, and
@@ -143,6 +147,8 @@ checkout, and the agent reads what they printed.
 [#7692](https://github.com/ReviewStage/vespin/pull/7692),
 [#7710](https://github.com/ReviewStage/vespin/pull/7710),
 [#7725](https://github.com/ReviewStage/vespin/pull/7725))
+
+![Settings › Cloud setup in the acme workspace: an install script that installs the Postgres client, redis-tools, the Stripe CLI, and pnpm, and setup scripts for acme/ledger and acme/relay that install dependencies, start their databases, and migrate and seed them.](apps/web/public/changelog/0.29.0/set-up-cloud-agents-sandboxes.png)
 
 ### Delete a workspace
 
