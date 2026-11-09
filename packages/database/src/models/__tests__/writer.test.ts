@@ -129,6 +129,39 @@ const openTarget = Effect.gen(function* () {
 
 it.layer(getTestDB())("the store writer's retried steps", (it) => {
   it.effect(
+    "a repeated usage-limit event is kept once, and a distinct event with identical notice data stays in history",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openTarget;
+        const writer = yield* storeWriter({ tools: TOOLS });
+        const turnId = randomUUID();
+        yield* writer.enqueueTurn(target, {
+          turnId,
+          origin: TURN_ORIGIN.TYPED,
+          runtimeTurnId: "turn_0",
+        });
+        const event = {
+          conversationId: sessionKey(target.conversationId),
+          turnId,
+          sequence: 1,
+          kind: RUN_EVENT.USAGE_LIMIT_REACHED,
+          notice: { agent: "Claude", resetsAt: 60000 },
+        } as const;
+        yield* writer.consume(target, event);
+        yield* writer.consume(target, event);
+        yield* writer.consume(target, { ...event, sequence: 2 });
+        const read = yield* readMessageByClientId(
+          target.userId,
+          target.conversationId,
+          TOOLS,
+          turnId,
+        );
+        assert.ok(read.ok);
+        assert.equal(read.value[0]?.message.parts.length, 2);
+      }),
+  );
+
+  it.effect(
     "the newest step told again settles its unanswered calls as an unknown outcome while the turn runs, and an older step told again leaves the newest step's calls standing",
     () =>
       Effect.gen(function* () {

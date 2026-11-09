@@ -1640,10 +1640,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           ],
           ["data-usage-limit"],
         ]);
-        assert.deepEqual(rows.at(-1)?.parts.at(-1), {
-          type: "data-usage-limit",
-          data: { agent: "Codex", resetsAt: null },
-        });
+        const limitNotice = rows.at(-1)?.parts.at(-1);
+        assert.ok(limitNotice?.type === "data-usage-limit");
+        assert.deepEqual(limitNotice.data, { agent: "Codex", resetsAt: null });
         assert.ok(!JSON.stringify(rows).includes("iVBORw0K"));
         assert.deepEqual(
           ended.map((turn) => [turn.status, turn.failureDetail]),
@@ -2446,14 +2445,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
 
         assert.deepEqual(
           finished.rows.flatMap((row) =>
-            row.parts.filter((part) => part.type === "data-usage-limit"),
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
           ),
-          [
-            {
-              type: "data-usage-limit",
-              data: { agent: "Claude", resetsAt },
-            },
-          ],
+          [{ agent: "Claude", resetsAt }],
         );
         assert.ok(!JSON.stringify(finished.rows).includes("You've hit your session limit"));
         assert.equal(waiting?.status, TURN_STATUS.RUNNING);

@@ -775,6 +775,9 @@ class Fold {
         const turn = this.state.turn;
         if (turn !== undefined && moment.status === PLAN_STATUS.LIMIT_REACHED) {
           this.#setTurn({ ...turn, limited: true });
+        } else if (turn !== undefined && moment.status === PLAN_STATUS.VERIFIED) {
+          const { limited: _limited, ...verified } = turn;
+          this.#setTurn(verified);
         } else if (turn !== undefined && REFUSED_STATUSES.has(moment.status)) {
           this.#setTurn({ ...turn, refused: true });
         }

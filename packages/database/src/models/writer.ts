@@ -1679,10 +1679,14 @@ const usageLimitReached = /* @__PURE__ */ Effect.fnUntraced(function* (
   const opened = yield* journal(context, event.turnId);
   if (Result.isFailure(opened)) return Result.fail(opened.failure);
   const row = opened.success;
+  const id = String(event.sequence);
+  if (row.parts.some((part) => part.type === USAGE_LIMIT_PART && part.id === id)) {
+    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  }
   if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
   return yield* amendJournal(context, event.turnId, row, [
     ...row.parts,
-    { type: USAGE_LIMIT_PART, data: event.notice },
+    { type: USAGE_LIMIT_PART, id, data: event.notice },
   ]);
 });
 

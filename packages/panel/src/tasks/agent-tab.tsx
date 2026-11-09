@@ -2375,11 +2375,14 @@ function AgentTranscriptView({
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
   const lastMessage = messages.at(-1);
-  const lastPart = lastMessage === undefined ? undefined : agentParts(lastMessage).at(-1);
+  const currentParts =
+    lastMessage !== undefined && lastMessage.id === turnId ? agentParts(lastMessage) : [];
+  const lastPart = currentParts.at(-1);
+  const waitingNotice = currentParts.some(
+    (part) => part.kind === AGENT_PART.USAGE_LIMIT && part.notice.resetsAt === waitsUntil,
+  );
   const ended =
-    lastMessage?.id === turnId &&
-    lastPart?.kind === AGENT_PART.USAGE_LIMIT &&
-    lastPart.notice.resetsAt === null
+    lastPart?.kind === AGENT_PART.USAGE_LIMIT && lastPart.notice.resetsAt === null
       ? undefined
       : turnEnded;
   useTurnEndSaid(ended, working);
@@ -2475,7 +2478,7 @@ function AgentTranscriptView({
       ? undefined
       : () => (
           <>
-            {working && waitsUntil === undefined ? (
+            {working && !waitingNotice ? (
               <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
             ) : null}
             {ended === undefined && endTrail === undefined ? null : (

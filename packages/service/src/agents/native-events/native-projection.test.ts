@@ -137,3 +137,44 @@ test("an exhausted payer pool leaves a notice at the pause, while a payer with r
     [{ agent: "Claude", resetsAt: null }],
   );
 });
+
+test("a successful result after a reported limit ends without a usage-limit notice or retry", () => {
+  const result = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.ACTIVE },
+      { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
+      { kind: NATIVE_MOMENT.RESULT },
+      { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.VERIFIED },
+      { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE },
+    ],
+    {
+      conversationId: "c_projection",
+      sequence: 0,
+      now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
+      model: "anthropic/claude-opus-5.5",
+      ownKey: false,
+      retryLimited: true,
+      registered: () => true,
+      report: () => undefined,
+    },
+  );
+  assert.equal(
+    result.writes.some((write) => write.kind === NATIVE_WRITE.WAIT),
+    false,
+  );
+  assert.equal(
+    result.writes.some(
+      (write) =>
+        write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED,
+    ),
+    false,
+  );
+  assert.ok(
+    result.writes.some(
+      (write) => write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TURN_ENDED,
+    ),
+  );
+});
