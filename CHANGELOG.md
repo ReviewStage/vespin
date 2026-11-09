@@ -148,7 +148,7 @@ checkout, and the agent reads what they printed.
 [#7710](https://github.com/ReviewStage/vespin/pull/7710),
 [#7725](https://github.com/ReviewStage/vespin/pull/7725))
 
-![Settings › Cloud setup in the acme workspace: an install script that installs the Postgres client, redis-tools, the Stripe CLI, and pnpm, and setup scripts for acme/ledger and acme/relay that install dependencies, start their databases, and migrate and seed them.](apps/web/public/changelog/0.29.0/set-up-cloud-agents-sandboxes.png)
+![Settings › Cloud setup in the acme workspace: an install script that installs the Postgres client, redis-tools, the Stripe CLI, and pnpm, and setup scripts that install each repository's dependencies and start its database, then migrate acme/ledger and load its Stripe fixtures, and migrate and seed acme/relay.](apps/web/public/changelog/0.29.0/set-up-cloud-agents-sandboxes.png)
 
 ### Delete a workspace
 
