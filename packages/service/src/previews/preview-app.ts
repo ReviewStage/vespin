@@ -18,12 +18,19 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { PREVIEW_SIGN_IN } from "@repo/features/preview-sign-in";
-import type { Sandbox } from "@repo/sandbox";
+import { SANDBOX_STATE } from "@repo/features/terminal-wire";
+import { SANDBOX_TOUCH_EVERY, type Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD } from "@repo/wire";
 import { Clock, Duration, Effect, Layer, Option } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
+import {
+  AgentSandbox,
+  type AgentSandboxService,
+  PREVIEW_STANDING,
+} from "../agents/terminal/agent-sandbox.js";
+import { STARTING_HEADER } from "../agents/terminal/preview-relay.js";
 import { reachedAgentSession, sandboxOrUpstream } from "../agents/terminal/sandbox-reach.js";
+import { afterResponse } from "../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import {
   HOSTED_REFUSAL,
@@ -75,7 +82,14 @@ const DROPPED_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
 const NEVER_KEPT = { "Vercel-CDN-Cache-Control": "no-store" } as const;
 
 const NOT_SIGNED_IN = "Sign in to view this preview.";
-const NOT_SHARED = "This preview isn't running. Ask whoever shared it to share it again.";
+const NOT_SHARED = "This preview isn't shared right now. Ask whoever shared it to share it again.";
+const WAKING = "Waking up the preview. This page reloads when it's ready.";
+
+/** How often the waking page reloads itself. */
+const WAKING_RELOAD_SECONDS = 2;
+
+/** The page a visit sees while the agent's sandbox or its server comes up, reloading itself until the preview answers. */
+const WAKING_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="${WAKING_RELOAD_SECONDS}"><title>Waking up the preview</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#444;text-align:center}h1{font-size:17px;color:#111;margin:0 0 6px}</style></head><body><main><h1>Waking up the preview</h1><p>This page reloads when it's ready.</p></main></body></html>`;
 
 /** The page sandbox, or not found on a deployment that has none. */
 const pageSandbox = Effect.gen(function* () {
@@ -194,6 +208,30 @@ function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, as
   });
 }
 
+/** What a visit is answered where nothing is shared from the agent now. */
+function notShared() {
+  return HttpServerResponse.text(NOT_SHARED, {
+    status: HOSTED_HTTP_STATUS.NOT_FOUND,
+    headers: NEVER_KEPT,
+  });
+}
+
+/** What a visit is answered while the sandbox or its server comes up: a page that reloads itself for a page load, a bare 503 for anything else. */
+function wakingPage(request: Request) {
+  const headers = { ...NEVER_KEPT, "Retry-After": String(WAKING_RELOAD_SECONDS) };
+  if (request.headers.get("sec-fetch-mode") !== "navigate") {
+    return HttpServerResponse.text(WAKING, {
+      status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
+      headers,
+    });
+  }
+  return HttpServerResponse.text(WAKING_PAGE, {
+    status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
+    contentType: "text/html; charset=utf-8",
+    headers,
+  });
+}
+
 /** The request passed on to the shared port's route, and its answer passed back, a redirect to the route's own address turned to the preview's. */
 const passedOn = (request: Request, upstream: string, origin: string, asked: string) =>
   Effect.gen(function* () {
@@ -220,6 +258,8 @@ const passedOn = (request: Request, upstream: string, origin: string, asked: str
       ),
       Effect.mapError(() => HOSTED_REFUSAL.UPSTREAM_ERROR),
     );
+    // The relay answers so while the port's server it started again is still coming up.
+    if (answered.headers.has(STARTING_HEADER)) return wakingPage(request);
     const back = new Headers();
     for (const [name, value] of answered.headers) {
       if (name === "set-cookie" || DROPPED_RESPONSE_HEADERS.has(name)) continue;
@@ -243,7 +283,7 @@ export interface PreviewProxySeams {
 }
 
 /** Any method, any path, on a preview host alone. */
-const proxyEndpoint = (seams: PreviewProxySeams) =>
+const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =>
   Effect.gen(function* () {
     const request = yield* webRequest;
     const sandbox = yield* pageSandbox;
@@ -260,27 +300,38 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
       return signInFirst(sandbox, agentId, request, asked);
     }
     const { sessionId } = yield* reachedAgentSession(member.userId, agentId);
-    const shared =
-      sessionId === undefined
-        ? null
-        : yield* Effect.provide(
-            Effect.gen(function* () {
-              return yield* sandboxOrUpstream((yield* AgentSandbox).shared(sessionId));
-            }),
-            seams.sandbox,
-          );
-    if (shared === null) {
-      return HttpServerResponse.text(NOT_SHARED, {
-        status: HOSTED_HTTP_STATUS.NOT_FOUND,
-        headers: NEVER_KEPT,
-      });
+    if (sessionId === undefined) return notShared();
+    const onSandbox = <A>(call: (agent: AgentSandboxService) => Effect.Effect<A, SandboxError>) =>
+      Effect.provide(
+        Effect.gen(function* () {
+          return yield* sandboxOrUpstream(call(yield* AgentSandbox));
+        }),
+        seams.sandbox,
+      );
+    const preview = yield* onSandbox((agent) => agent.preview(sessionId));
+    if (preview.kind === PREVIEW_STANDING.NONE) return notShared();
+    if (preview.kind === PREVIEW_STANDING.WAKING) {
+      // Note that the visit answers at once and the resume runs after it, so the waking page reloads until the sandbox is up.
+      if (preview.state === SANDBOX_STATE.STOPPED) {
+        yield* afterResponse(
+          "a preview woke its agent's sandbox",
+          Effect.ignore(onSandbox((agent) => agent.resume(sessionId))),
+        );
+      }
+      return wakingPage(request);
     }
-    return yield* passedOn(request, shared.url, previewOrigin(sandbox, agentId), asked);
+    if (now - (touched.get(preview.name) ?? 0) >= Duration.toMillis(SANDBOX_TOUCH_EVERY)) {
+      touched.set(preview.name, now);
+      yield* afterResponse("a preview kept its agent's sandbox up", touchSandbox(preview.name));
+    }
+    return yield* passedOn(request, preview.url, previewOrigin(sandbox, agentId), asked);
   });
 
 /** The preview host's one route. */
 export function previewProxyApp(
   seams: PreviewProxySeams,
 ): WebRoutes<DatabaseServices | PageLinks | Sandbox> {
-  return HttpRouter.add(ANY_METHOD, ANY_PATH, hostedRefusing(proxyEndpoint(seams)));
+  // When each sandbox was last kept up by a visit, so a busy preview touches it at most once a minute per instance.
+  const touched = new Map<string, number>();
+  return HttpRouter.add(ANY_METHOD, ANY_PATH, hostedRefusing(proxyEndpoint(seams, touched)));
 }

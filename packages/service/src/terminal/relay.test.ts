@@ -111,6 +111,7 @@ function world(options: {
     listeningPorts: () => Effect.die("the relay lists no ports"),
     share: () => Effect.die("the relay shares nothing"),
     unshare: () => Effect.die("the relay shares nothing"),
+    preview: () => Effect.die("the relay previews nothing"),
     shared: () => Effect.die("the relay shares nothing"),
     start: () => Effect.die("the relay starts nothing"),
     rename: () => Effect.die("the relay renames nothing"),
