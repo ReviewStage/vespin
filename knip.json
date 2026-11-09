@@ -64,6 +64,16 @@
       ],
       "project": ["src/**"]
     },
+    "packages/service": {
+      "entry": [
+        "src/ui-messages/index.ts",
+        "src/testing/index.ts",
+        "src/effect/index.ts",
+        "src/analytics/index.ts",
+        "src/member-mcp/coverage.ts"
+      ],
+      "project": ["src/**"]
+    },
     "packages/agent-runner": {
       "project": ["src/**", "scripts/**"],
       "ignore": ["src/codex-protocol/**"]
