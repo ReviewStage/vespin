@@ -352,9 +352,7 @@ function browserContent(result: WorkspaceMcpToolResult): readonly McpContent[] {
   const text: McpContent = { type: "text", text: JSON.stringify(storedBrowserOutput(output)) };
   if (shown.type !== "content") return [text];
   const images = shown.value.flatMap((part): readonly McpContent[] =>
-    part.type === "file" && part.data.type === "data" && typeof part.data.data === "string"
-      ? [{ type: "image", data: part.data.data, mimeType: part.mediaType }]
-      : [],
+    part.type === "file" ? [{ type: "image", data: part.data.data, mimeType: part.mediaType }] : [],
   );
   return [text, ...images];
 }
