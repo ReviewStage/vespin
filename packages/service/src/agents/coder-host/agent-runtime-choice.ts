@@ -472,6 +472,28 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * Whether a turn the plan's limit cut short on the subscription named, or
+ * on the account's first where none is named, may go on with another payer
+ * at once, as `turnPayerOf` would choose the next launch's: another
+ * subscription of the plan with room, or the account's API key for the
+ * provider. Note that the limited subscription is passed over by name,
+ * since the turn's own word on it may not be written yet.
+ */
+export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+  limitedSubscriptionId: string | undefined,
+): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
+  const rows = yield* keyRowsOf(userId, undefined);
+  const environment = yield* deploymentEnvironment;
+  const now = yield* Clock.currentTimeMillis;
+  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+  const limited = limitedSubscriptionId ?? plans[0]?.id;
+  if (plans.some((row) => row.id !== limited && hasRoom(row, now))) return true;
+  return yield* keepsApiKey(userId, provider, rows, environment);
+});
+
+/**
  * The provider whose credential an agent lacks to take a message, or none
  * where it may: an agent last on its starter's API key needs a credential of
  * its model's provider, the key or a subscription its next launch turns to

@@ -45,6 +45,7 @@ export function scriptedHarness(
       Option.some(
         Effect.succeed({
           ...script(account),
+          retry: (sessionId, message) => script(account).send(sessionId, message),
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
           checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),

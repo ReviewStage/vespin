@@ -8,6 +8,7 @@ import {
   latestTurnsOfReached,
   RUNNING_TURN_STATUSES,
   readAgent,
+  readAgentOfConversation,
   readAgentRouting,
   taskNamesOf,
   unarchiveAgentFrom,
@@ -26,6 +27,7 @@ import {
   STORE_WRITE_EFFECT,
   STORE_WRITE_REFUSAL,
   type StoreWriter,
+  turnOpeningLine,
 } from "@repo/database/models/writer";
 import { type ConversationRuntime, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/features/agent-wire";
@@ -69,9 +71,9 @@ import {
 import { experimentOnIn } from "../workspace-experiment-on.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { messageCredentialMissing } from "./agent-runtime-choice.js";
-import { harnessOf } from "./native-runtime.js";
+import { harnessOf, nativeRuntimeOfSession } from "./native-runtime.js";
 import { reconciledBeforeWrite } from "./reconcile.js";
-import { failedCallRefusal, routedSessions } from "./runtime-sessions.js";
+import { failedCallRefusal, NativeAgentSessions, routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf } from "./status.js";
 
 /**
@@ -643,6 +645,44 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
     };
     return message;
   });
+
+/**
+ * A turn its plan's limit cut short handed on to a launch on the next
+ * payer, acting for the agent's starter as every native call does: the line
+ * that opened it (`turnOpeningLine`) handed again as it was first
+ * (`lostLineMessage`), to a runner launched afresh in the session the
+ * conversation's record names (`NativeSessions`' `retry`), whose launch
+ * chooses its payer anew. The line keeps its client id, so the turn its
+ * runner opens it in takes no row of it again, and the conversation shows
+ * it once. Nothing it reads is the ended launch's, so it may run long after
+ * that launch ended. An agent gone or on no harness, a session that never
+ * claimed its record, a function that cannot reach the harness, and a turn
+ * that took no line hand nothing on; answers whether the line went.
+ */
+export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function* (turn: {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly turnId: string;
+}) {
+  const target = { userId: turn.userId, conversationId: turn.conversationId };
+  const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
+  if (Option.isNone(agent)) return false;
+  const routing = yield* readAgentRouting(turn.userId, agent.value.id);
+  const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+  if (runtime === undefined) return false;
+  const native = yield* Effect.serviceOption(NativeAgentSessions);
+  const reached = Option.flatMap(native, (service) =>
+    service.sessions(runtime, agent.value.userId),
+  );
+  if (Option.isNone(reached)) return false;
+  const sessionId = yield* recordedRuntimeSession(target);
+  if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) return false;
+  const line = yield* turnOpeningLine(target, turn.turnId);
+  if (Option.isNone(line)) return false;
+  const message = yield* lostLineMessage(target, agent.value, line.value);
+  const sent = yield* (yield* reached.value).retry(sessionId, message);
+  return sent.outcome === SESSION_SEND_OUTCOME.ACCEPTED;
+});
 
 /**
  * The lines of the developer's that the agent's failed turn never took,

@@ -77,7 +77,9 @@ import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
+import { roomAfterLimit } from "../coder-host/agent-runtime-choice.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
+import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
@@ -89,7 +91,12 @@ import {
 } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
-import type { NativeHeld, NativeMoment } from "./native-moments.js";
+import {
+  NATIVE_MOMENT,
+  type NativeHeld,
+  type NativeMoment,
+  PLAN_STATUS,
+} from "./native-moments.js";
 import {
   heldProjection,
   NATIVE_WRITE,
@@ -552,6 +559,9 @@ function landWrite(
     case NATIVE_WRITE.FAILED:
       // Said once the batch has landed, so a turn is said failed only once its row is.
       return Effect.void;
+    case NATIVE_WRITE.RETRY:
+      // Launched once the batch has landed, so the plan's limit is written before the next launch chooses its payer.
+      return Effect.void;
     case NATIVE_WRITE.PLAN_STATUS: {
       // Note that the row is the starter's credential that pays: the plan's subscription the agent ran on,
       // or, for an agent its API key pays for, that key's, which a refusal marks invalid; a plan's limit
@@ -608,6 +618,8 @@ function landWrites(applying: Applying, writes: readonly NativeWrite[], now: num
  * posting, whose runner this launch replaced, failed as their runner lost,
  * or canceled where a Stop was asked of them; and the projection without the
  * turn it held, where that was one of them, so this launch opens its own.
+ * The one turn the projection holds kept open on its plan's limit
+ * (`retrying`) is carried onto this launch instead, which goes on with it.
  */
 function supersededDropped(
   applying: Applying,
@@ -617,7 +629,14 @@ function supersededDropped(
 ) {
   return Effect.gen(function* () {
     const { conversationId } = applying.target;
-    const superseded = yield* supersededTurnsOf(conversationId, launch);
+    const found = yield* supersededTurnsOf(conversationId, launch);
+    if (found.length === 0) return state;
+    // A turn its plan's limit cut short, kept open for the launch on the next payer, is this launch's to go on with.
+    const retrying = state.turn?.retrying === true ? state.turn.id : undefined;
+    if (retrying !== undefined && found.includes(retrying)) {
+      yield* applying.writer.carryTurn(applying.target, { turnId: retrying, attempt: launch });
+    }
+    const superseded = found.filter((turnId) => turnId !== retrying);
     if (superseded.length === 0) return state;
     const failed = yield* settleRunnerLostTurns(
       applying.writer,
@@ -635,6 +654,29 @@ function supersededDropped(
     const { turn, ...rest } = state;
     return turn !== undefined && superseded.includes(turn.id) ? rest : state;
   });
+}
+
+/** Whether an event's moments end the launch with its turn on the plan's limit, as the projection holds it or the moments say it. */
+function endsOnLimit(state: NativeProjection, moments: readonly NativeMoment[]): boolean {
+  if (!moments.some((moment) => moment.kind === NATIVE_MOMENT.ENDED)) return false;
+  return (
+    state.turn?.limited === true ||
+    moments.some(
+      (moment) => moment.kind === NATIVE_MOMENT.PLAN && moment.status === PLAN_STATUS.LIMIT_REACHED,
+    )
+  );
+}
+
+/**
+ * Whether a turn the plan's limit cut short may go on with the next payer
+ * (`roomAfterLimit`): only for an agent its plan pays for, past the
+ * subscription it ran on.
+ */
+function roomAfterLimitOf(applying: Applying) {
+  const provider = providerModelOf(applying.model)?.provider;
+  if (provider === undefined || applying.payer === undefined) return Effect.succeed(false);
+  if (PLAN_ROW[applying.payer] === undefined) return Effect.succeed(false);
+  return roomAfterLimit(applying.target.userId, provider, applying.subscriptionId);
 }
 
 /** The batch's events not yet applied, projected and written, and the place the conversation keeps after them. */
@@ -664,6 +706,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const { launch } = held;
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
+    // Whether another payer has room, read once and only for a batch that ends a turn on the plan's limit.
+    let retryLimited: boolean | undefined;
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
         callName: (callId) => state.turn?.calls[callId],
@@ -671,6 +715,9 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         sequence,
       };
       const moments = applying.read(message, held);
+      if (retryLimited === undefined && endsOnLimit(state, moments)) {
+        retryLimited = yield* roomAfterLimitOf(applying);
+      }
       const projected = projectMoments(state, moments, {
         conversationId,
         sequence,
@@ -679,6 +726,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
+        retryLimited: retryLimited === true,
         registered,
         report: (said) => reports.push(said),
       });
@@ -736,6 +784,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       idle,
       turns: turnsMovedBy(writes),
       failed: writes.filter((write): write is FailedTurn => write.kind === NATIVE_WRITE.FAILED),
+      retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write.turnId] : [])),
       keepsAlive,
     };
     return sequence === null || (last === undefined && !keepsAlive)
@@ -875,6 +924,25 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       ...(taskId === null ? undefined : { taskId }),
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
+  }
+  // A turn kept open on its plan's limit goes on in a launch on the next payer, once the limit is written.
+  for (const turnId of applied.value.retried) {
+    yield* afterResponse(
+      "a limited turn's retry",
+      turnRetried({ ...target, turnId }).pipe(
+        Effect.flatMap((went) =>
+          went ? Effect.void : Effect.logWarning("runner-events: a limited turn was not retried"),
+        ),
+        Effect.catch((failure) =>
+          Effect.logWarning(`runner-events: a limited turn was not retried: ${failure._tag}`),
+        ),
+        Effect.annotateLogs({
+          agentId: agent.value.id,
+          conversationId: target.conversationId,
+          turnId,
+        }),
+      ),
+    );
   }
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end may have finished its work, or archives the agent with a task moved to

@@ -10,6 +10,7 @@ import {
   readAgentContext,
   readAgentRouting,
   recordAgentPayer,
+  recordAgentRunnerLaunch,
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
@@ -2377,6 +2378,66 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
+      }),
+  );
+
+  it.effect(
+    "a turn the plan's limit cuts short, with another subscription standing, stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const first = yield* pasted(agent.userId);
+        yield* saveProviderKey(
+          agent.userId,
+          PROVIDER_KEY_PROVIDER.ANTHROPIC,
+          PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+          { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-token" },
+          "sk-ant-oat01…second",
+          null,
+          new Date(0),
+          null,
+          { add: true },
+        );
+        yield* recordAgentPayer(
+          agent.userId,
+          agent.agentId,
+          AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+          first,
+        );
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const limited = numberedFrom(
+          0,
+          failedClaudeLaunch(agent.lineId, [
+            {
+              type: "rate_limit_event",
+              rate_limit_info: {
+                status: "rejected",
+                rateLimitType: "five_hour",
+                resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+              },
+              uuid: randomUUID(),
+              ...top,
+            },
+          ]),
+        );
+        yield* post(agent.bearer, limited);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+
+        // The launch on the next subscription, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
       }),
   );
 

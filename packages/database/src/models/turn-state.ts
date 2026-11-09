@@ -481,6 +481,35 @@ const pointLines = SqlSchema.void({
     ),
 });
 
+/** A running turn moved onto the newer attempt named, its progress deadline running from `at`, where it still runs under an older one. */
+const moveRunning = SqlSchema.findAll({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    attempt: Schema.Number,
+    at: Schema.Date,
+  }),
+  Result: IdSchema,
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          attempt: row.attempt,
+          leaseUntil: new Date(row.at.getTime() + TURN_DEADLINE.PROGRESS_MS),
+        })
+        .where(
+          and(
+            eq(turns.id, row.turnId),
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.RUNNING),
+            lt(turns.attempt, row.attempt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
 /** The conversation's running turns under an attempt older than the launch named, whose runner that launch replaced. */
 const findSuperseded = SqlSchema.findAll({
   Request: Schema.Struct({ conversationId: Schema.String, launch: Schema.Number }),
@@ -902,6 +931,23 @@ export function supersededTurnsOf(
 ): TurnStateEffect<readonly string[]> {
   return Effect.map(findSuperseded({ conversationId, launch }), (rows) =>
     rows.map((row) => row.id),
+  );
+}
+
+/**
+ * Moves the running turn named onto the newer launch given at `at`, as a
+ * launch that goes on with a turn its plan's limit cut short takes it up,
+ * its progress deadline running from then; answers whether it moved, a
+ * turn ended or already under that launch or a newer one being left as it
+ * stands.
+ */
+export function carryTurn(
+  target: TurnTarget,
+  carry: { readonly turnId: string; readonly attempt: number; readonly at: Date },
+): TurnStateEffect<boolean> {
+  return Effect.map(
+    moveRunning({ ...carry, conversationId: target.conversationId }),
+    (moved) => moved.length > 0,
   );
 }
 

@@ -92,6 +92,7 @@ import {
   type AwaitedTurn,
   awaitedTurn,
   awaitTurn,
+  carryTurn,
   dropAwaitingNothing,
   endTurn,
   queueTurn,
@@ -557,6 +558,15 @@ export interface StoreWriter {
   requeueLine(
     target: ConversationTarget,
     lineId: string,
+  ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
+  /**
+   * Carries the running turn named onto the newer launch given, as one
+   * that goes on with a turn its plan's limit cut short takes it up
+   * (`turn-state.ts`'s `carryTurn`); answers whether it moved.
+   */
+  carryTurn(
+    target: ConversationTarget,
+    carry: { readonly turnId: string; readonly attempt: number },
   ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
 }
 
@@ -2111,6 +2121,47 @@ const LostLineSchema = Schema.Struct({
   senderUserId: Schema.NullOr(Schema.String),
 });
 
+/** The first of the developer's lines the turn named took, as a resend of a lost line reads one; none where it took none. */
+const findOpeningLine = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...ConversationTargetSchema.fields, turnId: Schema.String }),
+  Result: LostLineSchema,
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: messages.id,
+          clientId: messages.clientId,
+          parts: messages.parts,
+          sender: messages.sender,
+          senderUserId: messages.senderUserId,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.userId, key.userId),
+            eq(messages.conversationId, key.conversationId),
+            eq(messages.turnId, key.turnId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(1),
+    ),
+});
+
+/**
+ * The line that opened the coding agent's turn named, as a resend hands it
+ * on (`LostLine`): the first of the developer's lines the turn took, which
+ * a launch on the next payer goes on with once the plan's limit cut the
+ * turn short; none where the turn took none.
+ */
+export function turnOpeningLine(
+  target: ConversationTarget,
+  turnId: string,
+): Effect.Effect<Option.Option<LostLine>, StoreFailure, DatabaseServices> {
+  return findOpeningLine({ ...target, turnId });
+}
+
 const findLostLines = SqlSchema.findAll({
   Request: ConversationTargetSchema,
   Result: LostLineSchema,
@@ -2646,6 +2697,10 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     resendLostLines: (target, dispatch) => Effect.uninterruptible(resentLines(target, dispatch)),
     requeueLine: (target, lineId) =>
       underConversation(target, (context) => requeueLine(context, lineId)),
+    carryTurn: (target, carry) =>
+      underConversation(target, (context) =>
+        Effect.map(carryTurn(context.target, { ...carry, at: context.now }), Result.succeed),
+      ),
   };
 
   return Effect.flatMap(toolsRefusingUnknownOutcome(tools), (refusing) =>

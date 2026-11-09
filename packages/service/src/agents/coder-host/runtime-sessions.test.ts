@@ -158,6 +158,12 @@ function recording(sessionPrefix: string) {
         return answers.handover;
       }),
     warm: () => Effect.void,
+    retry: (sessionId, message) =>
+      Effect.sync(() => {
+        calls.push(`retry:${sessionId}`);
+        messages.push(message);
+        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
+      }),
     checkOut: () => Effect.succeed(RUNNER_CHECKOUT.NOT_LIVE),
     open: (message) =>
       Effect.sync(() => {

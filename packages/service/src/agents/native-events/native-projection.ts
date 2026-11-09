@@ -132,6 +132,8 @@ const TurnSchema = Schema.Struct({
   limited: Schema.optionalKey(Schema.Boolean),
   /** Whether the provider refused the credential that paid, such as a key expired or a plan signed out. */
   refused: Schema.optionalKey(Schema.Boolean),
+  /** Whether the turn's launch ended on the plan's limit and the turn waits, still open, for a launch on the next payer to go on with it (`NATIVE_WRITE.RETRY`). */
+  retrying: Schema.optionalKey(Schema.Boolean),
   /** The MCP servers mentioned to the agent that this turn took as it started, which its calls are handed whatever the switches say. */
   servers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -200,6 +202,8 @@ export const NATIVE_WRITE = {
   CONTEXT: "context",
   /** Say a turn's failure in the log, and as an issue where its user did not expect it. */
   FAILED: "failed",
+  /** Launch the agent again on the next payer, to go on with the turn its plan's limit cut short. */
+  RETRY: "retry",
 } as const;
 
 export type NativeWrite =
@@ -224,6 +228,7 @@ export type NativeWrite =
       /** Whether the provider refused the credential that paid, which opens no issue where the credential is the starter's own. */
       readonly refused: boolean;
     }
+  | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
       readonly status: PlanStatus;
@@ -245,6 +250,8 @@ export interface NativeProjectionContext {
   readonly model: string | undefined;
   /** Whether the starter's own API key pays for the agent, so a refusal of it is theirs to replace in Settings. */
   readonly ownKey: boolean;
+  /** Whether another payer has room for a turn the plan's limit cuts short, which then waits for a launch on it rather than failing (`NATIVE_WRITE.RETRY`). */
+  readonly retryLimited?: boolean;
   /** Whether the stored tool set holds a call of this name; a call of any other is left out, its answer with it. */
   readonly registered: (name: string) => boolean;
   /** Where a moment the record leaves out is said. */
@@ -520,6 +527,7 @@ class Fold {
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
     if (ended === undefined) return;
     const turn = this.#closed(ended.turn);
+    if (this.#retried(turn, ended.openedForEnd, moment.ending)) return;
     // Note that a refusal its launch ended on before the model turn's result still fails the turn.
     const status = statusOf(moment.ending, turn.failure ?? turn.refusing);
     const failed = status === RUN_STATUS.FAILED;
@@ -570,6 +578,36 @@ class Fold {
     this.#setTurn(undefined);
   }
 
+  /**
+   * Whether the turn, its plan's limit having cut it short, is kept open for
+   * a launch on the next payer rather than ended: where another payer has
+   * room (`retryLimited`), and the launch ended on its own rather than on a
+   * Stop. The turn ends nothing and says no failure, so the conversation
+   * reads it as still under way; what its model turn failed with is let go,
+   * and the launch that goes on with it takes it as its own
+   * (`runner-events-app.ts`'s `supersededDropped`).
+   */
+  #retried(
+    turn: Turn,
+    openedForEnd: boolean,
+    ending: (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING],
+  ): boolean {
+    if (turn.limited !== true || this.#context.retryLimited !== true) return false;
+    if (openedForEnd || ending === NATIVE_ENDING.STOPPED) return false;
+    const {
+      failure: _failure,
+      refusal: _refusal,
+      refusing: _refusing,
+      compactionFailed: _compaction,
+      limited: _limited,
+      waiting: _waiting,
+      ...kept
+    } = turn;
+    this.#setTurn({ ...kept, retrying: true });
+    this.writes.push({ kind: NATIVE_WRITE.RETRY, turnId: turn.id });
+    return true;
+  }
+
   #usage(usage: RunUsage): void {
     const turn = this.turn();
     this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, usage) });
@@ -591,7 +629,9 @@ class Fold {
   fold(moment: NativeMoment): void {
     switch (moment.kind) {
       case NATIVE_MOMENT.LINE_ACCEPTED: {
-        const turn = this.turn();
+        // Note that a turn kept open on its plan's limit is under way again once a launch takes its line.
+        const { retrying, ...turn } = this.turn();
+        if (retrying !== undefined) this.#setTurn(turn);
         this.writes.push({
           kind: NATIVE_WRITE.TAKE_LINE,
           turnId: turn.id,
