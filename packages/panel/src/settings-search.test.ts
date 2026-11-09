@@ -212,6 +212,7 @@ test("an experiment is found by its name, what it brings, and what other apps ca
     "Rewind restores files",
     "Done and follow-ups",
     "Run actions",
+    "Computer use",
     "Task descriptions",
     "Skills",
     "Memory",

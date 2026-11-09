@@ -16,6 +16,8 @@ export const EXPERIMENT = {
   SKILLS: "skills",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
+  /** Computer use: agents see and use the apps a member allows on their own Mac, in the background, through the `computer` tool. */
+  COMPUTER_USE: "computer-use",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
   REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
@@ -135,6 +137,14 @@ export const EXPERIMENTS = [
       "and run one in a cloud agent's sandbox from the Run button over its tabs or ⌘K.",
     owner: "Dean",
     since: "2026-11-10",
+  },
+  {
+    key: EXPERIMENT.COMPUTER_USE,
+    name: "Computer use",
+    detail:
+      "Let agents see and use the apps you allow on your Mac, in the background, while you keep working.",
+    owner: "Dean",
+    since: "2026-11-09",
   },
   {
     key: EXPERIMENT.DESCRIPTIONS,

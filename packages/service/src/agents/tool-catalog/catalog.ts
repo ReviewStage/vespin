@@ -629,8 +629,9 @@ const CATALOG = [
     gate: TOOL_GATE.SANDBOX,
     refused: macCommandNotRun,
   }),
-  // One app on the developer's Mac, offered wherever the agent runs, since the Mac it reaches is the task's assignee's.
+  // One app on the developer's Mac, offered wherever the agent runs, since the Mac it reaches is the task's assignee's, where the workspace has Computer use on.
   served(COMPUTER_TOOL, (admitted, input) => runComputerTool(admitted.target, input), {
+    gate: TOOL_GATE.COMPUTER_USE,
     content: computerContent,
     refused: macCommandNotRun,
   }),
