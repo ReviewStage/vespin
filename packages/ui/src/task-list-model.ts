@@ -1,13 +1,22 @@
-import type { TasklessAgent } from "@repo/features/agent-wire";
+import { AGENT_STATUS, PULL_REQUEST_STATE, type TasklessAgent } from "@repo/features/agent-wire";
 import { agentName } from "@repo/features/model-label";
-import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/task-wire";
+import {
+  TASK_STATUS,
+  type TaskPullRequestLine,
+  type TaskStatus,
+  type TaskSummary,
+} from "@repo/features/task-wire";
 
 /**
  * task-list-model.ts -- how the sidebar's task list is grouped and filtered: the view a workspace keeps, the groups it draws, and the time each row shows.
  *
  * The list is one section of the sidebar, the work under way, its tasks
- * drawn by repository or in one run, newest updated first, browsing left
- * to the Tasks page. Home's Recent and ⌘K order tasks by the same last
+ * drawn by repository, by progress, or in one run, newest updated first,
+ * browsing left to the Tasks page. By repository draws its headings only
+ * where the rows span two repositories or more (`repositoryHeadingsDrawn`),
+ * so a workspace of one repository, or of none, reads as one run. By
+ * progress stands each row in the first of its groups it qualifies for
+ * (`taskRowProgress`): Needs you, Working, In review, then Up next. Home's Recent and ⌘K order tasks by the same last
  * activity (`taskTime`), which is the time each row shows, so the order
  * and the label never disagree.
  *
@@ -31,6 +40,7 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/t
 /** How the list groups its tasks. */
 export const TASK_GROUPING = {
   REPOSITORY: "repository",
+  PROGRESS: "progress",
   NONE: "none",
 } as const;
 
@@ -203,6 +213,91 @@ export function repositoryGroups(rows: readonly TaskRow[]): readonly RepositoryG
       return Number(a.repository === null) - Number(b.repository === null);
     }
     return latest(b.rows) - latest(a.rows);
+  });
+}
+
+/**
+ * Whether the list draws its repositories' headings: only where its groups
+ * span two repositories or more, the rows with none counted as one, since a
+ * lone heading over every row tells the reader nothing.
+ */
+export function repositoryHeadingsDrawn(groups: readonly RepositoryGroup[]): boolean {
+  return groups.length > 1;
+}
+
+/** Where a row stands by progress, in the order the groups are drawn. */
+export const TASK_PROGRESS = {
+  NEEDS_YOU: "needs-you",
+  WORKING: "working",
+  IN_REVIEW: "in-review",
+  UP_NEXT: "up-next",
+} as const;
+
+export type TaskProgress = (typeof TASK_PROGRESS)[keyof typeof TASK_PROGRESS];
+
+/** What each progress group's heading says. */
+export const TASK_PROGRESS_LABEL = {
+  [TASK_PROGRESS.NEEDS_YOU]: "Needs you",
+  [TASK_PROGRESS.WORKING]: "Working",
+  [TASK_PROGRESS.IN_REVIEW]: "In review",
+  [TASK_PROGRESS.UP_NEXT]: "Up next",
+} as const satisfies Record<TaskProgress, string>;
+
+/** The rows of one progress group, as the sidebar draws them under its heading. */
+export interface ProgressGroup {
+  readonly progress: TaskProgress;
+  readonly rows: readonly TaskRow[];
+}
+
+/** What a row's progress is read from beside the row itself: the reader's waiting Inbox items, and each task's pull requests. */
+export interface ProgressSignals {
+  /** Whether an Inbox item of the row waits on the reader now (`needsYouOf`). */
+  readonly needsYou: (row: TaskRow) => boolean;
+  /** Every pull request a task's agents opened (`pullRequestsOfTask`). */
+  readonly pullRequests: (taskId: string) => readonly Pick<TaskPullRequestLine, "state">[];
+}
+
+/** The agent statuses under which an agent with no task is at work. */
+const AT_WORK: ReadonlySet<string> = new Set([AGENT_STATUS.STARTING, AGENT_STATUS.RUNNING]);
+
+/**
+ * Where a row stands by progress, the first group it qualifies for: Needs
+ * you where an Inbox item of it waits on the reader or an agent of it
+ * failed; Working where an agent is at work; In review where a pull request
+ * of it is open, a draft not yet asking for review; else Up next.
+ */
+export function taskRowProgress(row: TaskRow, signals: ProgressSignals): TaskProgress {
+  const failed =
+    row.kind === TASK_ROW.TASK
+      ? (row.task.agents?.failed ?? 0) > 0
+      : row.agent.status === AGENT_STATUS.FAILED;
+  if (signals.needsYou(row) || failed) return TASK_PROGRESS.NEEDS_YOU;
+  const working =
+    row.kind === TASK_ROW.TASK
+      ? (row.task.agents?.working ?? 0) > 0
+      : AT_WORK.has(row.agent.status);
+  if (working) return TASK_PROGRESS.WORKING;
+  const pullRequests =
+    row.kind === TASK_ROW.TASK
+      ? signals.pullRequests(row.task.id)
+      : row.agent.pullRequest === undefined
+        ? []
+        : [row.agent.pullRequest];
+  if (pullRequests.some((each) => each.state === PULL_REQUEST_STATE.OPEN)) {
+    return TASK_PROGRESS.IN_REVIEW;
+  }
+  return TASK_PROGRESS.UP_NEXT;
+}
+
+/** The rows grouped by progress (`taskRowProgress`), the groups in their fixed order and an empty one left out, each newest updated first. */
+export function progressGroups(
+  rows: readonly TaskRow[],
+  progressOf: (row: TaskRow) => TaskProgress,
+): readonly ProgressGroup[] {
+  const groups = grouped(orderTaskRows(rows), progressOf);
+  return Object.values(TASK_PROGRESS).flatMap((progress) => {
+    const members = groups.get(progress);
+    return members === undefined ? [] : [{ progress, rows: members }];
   });
 }
 

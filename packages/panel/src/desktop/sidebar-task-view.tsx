@@ -4,14 +4,19 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { GROUP_HEADING, GROUP_LOOK, GroupHeader, MENU_ITEM_MARK, useMenu } from "@repo/ui";
 import { ACTOR_KIND, type Actor, actorName, creatorActor, memberActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { ASSIGNED_TO, type AssignedTo, TASK_GROUPING } from "@repo/ui/task-list-model";
-import { FolderGitIcon, FolderPlusIcon, ListChecksIcon } from "lucide-react";
+import {
+  ASSIGNED_TO,
+  type AssignedTo,
+  TASK_GROUPING,
+  type TaskGrouping,
+} from "@repo/ui/task-list-model";
+import { FolderPlusIcon, ListChecksIcon, Rows3Icon } from "lucide-react";
 import { useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { memberReadNote, PEOPLE_FILTER, peopleFilterActions } from "../member-rows.js";
-import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
+import { ActionMenu, type MenuAction, type MenuEntry, type MenuSubmenu } from "./action-menu.js";
 import { actionSearchPanel } from "./action-search-menu.js";
 import { NEW_SECTION } from "./sidebar-sections.js";
 import type { TaskListViewControl } from "./task-list-view.js";
@@ -24,9 +29,10 @@ import type { TaskListViewControl } from "./task-list-view.js";
  * and the list: "My tasks ▾", "Everyone's tasks ▾", or one member's, in the
  * label's ink, so it reads as the switch it is rather than one more group.
  * Its menu holds, in a shared workspace, Assigned to: Me, Anyone, or each
- * member by face; Group by repository, a switch; Show finished sub-tasks, a
- * switch that stands each parent's finished sub-tasks back under it, muted,
- * as Linear's Always hide completed sub-issues turned off does; and, while
+ * member by face; Group by, a choice of Repository, Progress, or None;
+ * Show finished sub-tasks, a switch that stands each parent's finished
+ * sub-tasks back under it, muted, as Linear's Always hide completed
+ * sub-issues turned off does; and, while
  * the account keeps sections, New section. Note that the switcher's own
  * words say whose tasks the list holds wherever it stands, so a list of
  * someone else's never passes for the reader's, and no dot repeats them.
@@ -40,8 +46,15 @@ const VIEW_OPTIONS = "View options";
 /** What Assigned to's search field asks for. */
 const ASSIGNED_TO_PLACEHOLDER = "Search members";
 
-/** The switch that groups the list under its repositories' headers, or lists it in one run. */
-const GROUP_BY_REPOSITORY = "Group by repository";
+/** The submenu that chooses how the list groups its tasks. */
+const GROUP_BY = "Group by";
+
+/** What each grouping is called among Group by's choices, in the order they are offered. */
+const GROUPING_WORDS = {
+  [TASK_GROUPING.REPOSITORY]: "Repository",
+  [TASK_GROUPING.PROGRESS]: "Progress",
+  [TASK_GROUPING.NONE]: "None",
+} as const satisfies Record<TaskGrouping, string>;
 
 /** The switch that stands each parent's finished sub-tasks under it, or leaves them out. */
 const SHOW_FINISHED_SUB_TASKS = "Show finished sub-tasks";
@@ -109,16 +122,15 @@ function viewEntries(
   onNewSection: (() => void) | undefined,
 ): MenuEntry[][] {
   const { view } = control;
-  const byRepository = view.grouping === TASK_GROUPING.REPOSITORY;
-  // Note that the list groups by repository or not at all, so the choice is one switch rather than a submenu of two.
-  const grouping: MenuAction = {
-    label: GROUP_BY_REPOSITORY,
-    icon: <FolderGitIcon />,
-    checked: byRepository,
-    mark: MENU_ITEM_MARK.SWITCH,
-    stays: true,
-    onSelect: () =>
-      control.onGrouping(byRepository ? TASK_GROUPING.NONE : TASK_GROUPING.REPOSITORY),
+  const grouping: MenuSubmenu = {
+    label: GROUP_BY,
+    icon: <Rows3Icon />,
+    items: Object.values(TASK_GROUPING).map((choice) => ({
+      label: GROUPING_WORDS[choice],
+      checked: view.grouping === choice,
+      stays: true,
+      onSelect: () => control.onGrouping(choice),
+    })),
   };
   const finished: MenuAction = {
     label: SHOW_FINISHED_SUB_TASKS,
@@ -228,7 +240,7 @@ function offer(offered: boolean, changes: boolean, run: () => void): (() => void
 
 /**
  * The view's choices as ⌘K offers them, each only while it would change
- * the list: Group tasks by repository, or in one list; Show or Hide
+ * the list: Group tasks by repository or by progress, or in one list; Show or Hide
  * finished sub-tasks; and in a shared workspace Show my tasks and Show
  * everyone's tasks. They act as the View options menu's choices do.
  */
@@ -248,6 +260,7 @@ export function useTaskViewCommands({
   const assign = (to: AssignedTo) =>
     offer(offered && shared, assignedTo.kind !== to.kind, () => control.onAssignedTo(to));
   useAppCommand(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY, group(TASK_GROUPING.REPOSITORY));
+  useAppCommand(APP_COMMAND.GROUP_TASKS_BY_PROGRESS, group(TASK_GROUPING.PROGRESS));
   useAppCommand(APP_COMMAND.LIST_TASKS_UNGROUPED, group(TASK_GROUPING.NONE));
   const finished = (shown: boolean) =>
     offer(offered, finishedSubTasks !== shown, () => control.onFinishedSubTasks(shown));

@@ -153,6 +153,7 @@ test("a folded repository leaves the task that is open and the task that needs y
         task("p-1", "Invite expiry", "acme/relay"),
         task("p-2", "Retry audit", "acme/relay"),
         task("p-3", "Webhook retries", "acme/relay"),
+        task("p-4", "Billing export", "acme/console"),
       ],
       activeTaskId: "p-1",
     }),
@@ -161,13 +162,13 @@ test("a folded repository leaves the task that is open and the task that needs y
     [...sidebar.querySelectorAll('nav[aria-label="My tasks"] .ui-list-row-title')]
       .map((title) => title.firstChild?.textContent)
       .sort();
-  assert.deepEqual(names(), ["Invite expiry", "Retry audit", "Webhook retries"]);
+  assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
-  assert.deepEqual(names(), ["Invite expiry", "Webhook retries"]);
+  assert.deepEqual(names(), ["Billing export", "Invite expiry", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
-  assert.deepEqual(names(), ["Invite expiry", "Retry audit", "Webhook retries"]);
+  assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);
 });
 
 test("a repository's header folds on its name, says it is kept at top, counts its plans folded, keeps its + outside the fold, and opens its menu on a right-click", () => {
@@ -178,6 +179,7 @@ test("a repository's header folds on its name, says it is kept at top, counts it
       tasks: [
         { ...task("p-1", "Invite expiry", "acme/relay"), readThrough: 1 },
         { ...task("p-2", "Retry audit", "acme/relay"), readThrough: 2 },
+        task("p-3", "Billing export", "acme/console"),
       ],
       newTask: newTaskControl({ onOpenIn: (repository) => asked.push(repository) }),
     }),

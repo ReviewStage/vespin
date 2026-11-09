@@ -1,3 +1,4 @@
+import type { TaskProgress } from "@repo/ui/task-list-model";
 import { Schema, SchemaTransformation } from "effect";
 import { useCallback, useState } from "react";
 import {
@@ -19,7 +20,8 @@ import { keptKey, useKept } from "../use-kept.js";
  * task goes leaves its entry behind: it is a few bytes, and a task on it
  * later comes back folded as it was left. Pinned is kept under a key of
  * its own, since it is no repository, and so are the account's own
- * sections, each by its id. A task's child tasks nested under
+ * sections, each by its id, and the groups of By progress, each by its
+ * progress (`TASK_PROGRESS`). A task's child tasks nested under
  * its row stand folded until it is opened, so the tasks opened are kept,
  * each by its id, under a key of their own. A fixture run starts with every group open
  * and keeps nothing, so its frames never wear a developer's folds. The
@@ -48,6 +50,7 @@ const STORAGE_KEY = {
   PINNED: "app.sidebarPinnedFolded",
   SECTIONS: "app.sidebarFoldedSections",
   OPENED_TASKS: "app.sidebarOpenedTasks",
+  PROGRESS: "app.sidebarFoldedProgress",
   INBOX_SHOW: "app.inboxShow",
   INBOX_WHOSE: "app.inboxWhose",
   INBOX_LIST_WIDTH: "app.inboxListWidth",
@@ -153,6 +156,7 @@ const KEPT = {
   PINNED_FOLDED: keptKey(STORAGE_KEY.PINNED, storedFlag),
   FOLDED_SECTIONS: keptKey(STORAGE_KEY.SECTIONS, storedTasks),
   OPENED_TASKS: keptKey(STORAGE_KEY.OPENED_TASKS, storedTasks),
+  PROGRESS: keptKey(STORAGE_KEY.PROGRESS, storedTasks),
   INBOX_LIST_WIDTH: keptKey(STORAGE_KEY.INBOX_LIST_WIDTH, storedWidth),
   FILE_TREE_WIDTH: keptKey(STORAGE_KEY.FILE_TREE_WIDTH, storedWidth),
   PAGE_COMMENTS_WIDTH: keptKey(STORAGE_KEY.PAGE_COMMENTS_WIDTH, storedWidth),
@@ -167,6 +171,8 @@ interface Folds {
   readonly sections: readonly string[];
   /** The tasks whose child tasks stand open under them, by id. */
   readonly openedTasks: readonly string[];
+  /** The groups of By progress folded, by progress. */
+  readonly progress: readonly string[];
 }
 
 const OPEN: Folds = {
@@ -174,6 +180,7 @@ const OPEN: Folds = {
   pinned: false,
   sections: [],
   openedTasks: [],
+  progress: [],
 };
 
 /** The folds with `held` folded where it was open, and open where it was folded. */
@@ -193,6 +200,9 @@ export interface FoldedGroups {
   /** Whether a task's child tasks stand open under its row, by its id; folded until first opened. */
   taskOpened: (taskId: string) => boolean;
   toggleTask: (taskId: string) => void;
+  /** Whether a group of By progress is folded, by its progress. */
+  progressFolded: (progress: TaskProgress) => boolean;
+  toggleProgress: (progress: TaskProgress) => void;
 }
 
 /** The sidebar's folds, each kept as it is pressed, unless the run is `staged`. */
@@ -204,8 +214,9 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
   const [pinned, keepPinned] = useKept(KEPT.PINNED_FOLDED, OPEN.pinned);
   const [sections, keepSections] = useKept(KEPT.FOLDED_SECTIONS, OPEN.sections);
   const [openedTasks, keepOpenedTasks] = useKept(KEPT.OPENED_TASKS, OPEN.openedTasks);
+  const [progress, keepProgress] = useKept(KEPT.PROGRESS, OPEN.progress);
   const [stagedFolds, setStagedFolds] = useState<Folds>(OPEN);
-  const folds = staged ? stagedFolds : { groups, pinned, sections, openedTasks };
+  const folds = staged ? stagedFolds : { groups, pinned, sections, openedTasks, progress };
   const fold = (next: Partial<Folds>) => {
     if (staged) {
       setStagedFolds({ ...stagedFolds, ...next });
@@ -215,6 +226,7 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     if (next.pinned !== undefined) keepPinned(next.pinned);
     if (next.sections !== undefined) keepSections(next.sections);
     if (next.openedTasks !== undefined) keepOpenedTasks(next.openedTasks);
+    if (next.progress !== undefined) keepProgress(next.progress);
   };
   const toggle = (repository: string | null) => fold({ groups: toggled(folds.groups, repository) });
   return {
@@ -226,6 +238,8 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     toggleSection: (sectionId) => fold({ sections: toggled(folds.sections, sectionId) }),
     taskOpened: (taskId) => folds.openedTasks.includes(taskId),
     toggleTask: (taskId) => fold({ openedTasks: toggled(folds.openedTasks, taskId) }),
+    progressFolded: (held) => folds.progress.includes(held),
+    toggleProgress: (held) => fold({ progress: toggled<string>(folds.progress, held) }),
   };
 }
 
