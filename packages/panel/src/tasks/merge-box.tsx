@@ -461,7 +461,7 @@ function bypassQuestion(
   const { base } = pullRequest;
   return {
     title: "Merge without waiting for requirements?",
-    body: `${sentenceOf(pullRequest)}. This merges it into ${base} now by ${METHOD_NOUNS[method]}, as you on GitHub, bypassing the rules ${base} requires.`,
+    body: `${sentenceOf(pullRequest, MERGE_ACTION.BYPASS)}. This merges it into ${base} now by ${METHOD_NOUNS[method]}, as you on GitHub, bypassing the rules ${base} requires.`,
     verb: BOX_WORDS.BYPASS,
     running: BUSY_WORDS[PULL_REQUEST_ACTION.MERGE],
     loss: CONFIRM_LOSS.IRREVERSIBLE,
