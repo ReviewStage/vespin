@@ -5,7 +5,8 @@ import { readLink } from "./link-grammar.js";
 /**
  * ios-app-links.test.ts -- the links the association hands the app are the
  * links the app routes, read through Apple's own matching: components in
- * order, the first match deciding, each `*` any run of characters.
+ * order, the first match deciding, each `*` any run of characters and each
+ * `?` any one.
  */
 
 /** Whether Apple would open `path` in the app, as its components decide. */
@@ -13,7 +14,7 @@ function claimed(path: string): boolean {
   const match = IOS_APP_LINK_COMPONENTS.find((component) => {
     const pattern = component["/"]
       .split("*")
-      .map((literal) => literal.replace(/[.?+^$()[\]{}|\\]/gu, "\\$&"))
+      .map((literal) => literal.replace(/[.+^$()[\]{}|\\]/gu, "\\$&").replaceAll("?", "."))
       .join(".*");
     return new RegExp(`^${pattern}$`, "u").test(path);
   });

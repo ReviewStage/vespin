@@ -27,7 +27,13 @@ const decodeDocument = Schema.decodeUnknownSync(
       details: Schema.Array(
         Schema.Struct({
           appIDs: Schema.Array(Schema.String),
-          components: Schema.Array(Schema.Struct({ "/": Schema.String })),
+          components: Schema.Array(
+            Schema.Struct({
+              "/": Schema.String,
+              exclude: Schema.optionalKey(Schema.Literal(true)),
+              comment: Schema.String,
+            }),
+          ),
         }),
       ),
     }),
@@ -63,7 +69,7 @@ it.effect(
           details: [
             {
               appIDs: [appId],
-              components: IOS_APP_LINK_COMPONENTS.map((component) => ({ "/": component["/"] })),
+              components: IOS_APP_LINK_COMPONENTS,
             },
           ],
         },
