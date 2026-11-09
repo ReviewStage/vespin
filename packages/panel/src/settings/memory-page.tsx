@@ -1,6 +1,7 @@
 import { markdownTree } from "@repo/features/markdown-tree";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   countWords,
@@ -60,7 +61,6 @@ import {
   personActor,
 } from "@repo/ui/actor-model";
 import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
-import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   VIRTUAL_ROWS_ANCHOR,

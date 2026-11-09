@@ -77,7 +77,7 @@ import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
-import { roomAfterLimit } from "../coder-host/agent-runtime-choice.js";
+import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
 import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
@@ -562,6 +562,14 @@ function landWrite(
     case NATIVE_WRITE.RETRY:
       // Launched once the batch has landed, so the plan's limit is written before the next launch chooses its payer.
       return Effect.void;
+    case NATIVE_WRITE.WAIT:
+      // Note that the turn stays open past its progress deadline until the reset, when the minute sweep launches it.
+      return Effect.asVoid(
+        applying.writer.holdTurn(applying.target, {
+          turnId: write.turnId,
+          until: new Date(write.until),
+        }),
+      );
     case NATIVE_WRITE.PLAN_STATUS: {
       // Note that the row is the starter's credential that pays: the plan's subscription the agent ran on,
       // or, for an agent its API key pays for, that key's, which a refusal marks invalid; a plan's limit
@@ -669,14 +677,23 @@ function endsOnLimit(state: NativeProjection, moments: readonly NativeMoment[]):
 
 /**
  * Whether a turn the plan's limit cut short may go on with the next payer
- * (`roomAfterLimit`): only for an agent its plan pays for, past the
- * subscription it ran on.
+ * (`roomAfterLimit`), and where none has room, when the soonest limit
+ * among the other subscriptions resets (`soonestResetBeside`), which it may
+ * wait for: only for an agent its plan pays for, past the subscription it
+ * ran on.
  */
 function roomAfterLimitOf(applying: Applying) {
-  const provider = providerModelOf(applying.model)?.provider;
-  if (provider === undefined || applying.payer === undefined) return Effect.succeed(false);
-  if (PLAN_ROW[applying.payer] === undefined) return Effect.succeed(false);
-  return roomAfterLimit(applying.target.userId, provider, applying.subscriptionId);
+  return Effect.gen(function* () {
+    const provider = providerModelOf(applying.model)?.provider;
+    if (provider === undefined || applying.payer === undefined) return { room: false };
+    if (PLAN_ROW[applying.payer] === undefined) return { room: false };
+    const { userId } = applying.target;
+    if (yield* roomAfterLimit(userId, provider, applying.subscriptionId)) return { room: true };
+    return {
+      room: false,
+      resetsBeside: yield* soonestResetBeside(userId, provider, applying.subscriptionId),
+    };
+  });
 }
 
 /** The batch's events not yet applied, projected and written, and the place the conversation keeps after them. */
@@ -706,8 +723,10 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const { launch } = held;
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
-    // Whether another payer has room, read once and only for a batch that ends a turn on the plan's limit.
-    let retryLimited: boolean | undefined;
+    // Whether another payer has room, or when a limit resets, read once and only for a batch that ends a turn on the plan's limit.
+    let afterLimit:
+      | { readonly room: boolean; readonly resetsBeside?: number | undefined }
+      | undefined;
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
         callName: (callId) => state.turn?.calls[callId],
@@ -715,8 +734,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         sequence,
       };
       const moments = applying.read(message, held);
-      if (retryLimited === undefined && endsOnLimit(state, moments)) {
-        retryLimited = yield* roomAfterLimitOf(applying);
+      if (afterLimit === undefined && endsOnLimit(state, moments)) {
+        afterLimit = yield* roomAfterLimitOf(applying);
       }
       const projected = projectMoments(state, moments, {
         conversationId,
@@ -726,7 +745,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
-        retryLimited: retryLimited === true,
+        retryLimited: afterLimit?.room === true,
+        resetsBeside: afterLimit?.resetsBeside,
         registered,
         report: (said) => reports.push(said),
       });

@@ -4,6 +4,7 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
+import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { EXPERIMENT } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
@@ -12,8 +13,7 @@ import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { agentStillWriting } from "./agent-model.js";
-import { deviceMark, RUNS_ON_WORDS } from "./runs-on.js";
+import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**

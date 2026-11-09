@@ -409,8 +409,8 @@ it.effect(
         "mcp_servers.linear.tool_timeout_sec=600.0",
         'approval_policy="never"',
         'sandbox_mode="danger-full-access"',
-        'shell_environment_policy.inherit="core"',
-        "shell_environment_policy.ignore_default_excludes=false",
+        'shell_environment_policy.inherit="all"',
+        "shell_environment_policy.ignore_default_excludes=true",
         'shell_environment_policy.exclude=["APP_RUNNER_TOKEN"]',
         'shell_environment_policy.set={ PLAYWRIGHT_BROWSERS_PATH = "0" }',
       ]);
@@ -517,7 +517,7 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
 );
 
 it.effect(
-  "a thread resumed in a sandbox that no longer holds its rollout has it written back from the service's store first",
+  "a thread resumed in a sandbox that no longer holds its rollout has it written back whole from the service's store first, across its pages",
   () =>
     Effect.gen(function* () {
       const home = mkdtempSync(join(tmpdir(), "codex-home-"));
@@ -526,13 +526,16 @@ it.effect(
         { type: "session_meta", payload: { id: THREAD } },
         { type: "response_item", payload: { type: "message", role: "user" } },
       ];
+      // The store answers the rollout a line a page, so the restore joins both pages in order.
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
         const call = JSON.parse(String(init?.body));
         const answer =
           call.call === "listSubkeys"
             ? { subkeys: [subpath] }
-            : call.call === "load"
-              ? { entries: kept }
+            : call.call === "loadPage"
+              ? call.after === null
+                ? { entries: kept.slice(0, 1), next: 1 }
+                : { entries: kept.slice(1), next: null }
               : {};
         return new Response(JSON.stringify(answer));
       });
@@ -923,7 +926,7 @@ it.effect(
       // The command inherits the bearer; no command the agent runs does.
       assert.equal(process?.env[RUNNER_ENV.BEARER], BEARER);
       assert.equal(override(process, "shell_environment_policy.exclude"), '["APP_RUNNER_TOKEN"]');
-      assert.equal(override(process, "shell_environment_policy.inherit"), '"core"');
+      assert.equal(override(process, "shell_environment_policy.inherit"), '"all"');
 
       // What the command printed went to app-server alone: never argv, an event, or a log.
       const posted = service.bodies.join("\n");

@@ -1097,7 +1097,10 @@ export const UPDATE_TASK_TOOL = {
     "and several go in one call. Mark a task whose work is " +
     "done Done, with status done, as the menu's Mark done does, such as one whose pull requests " +
     "merged, or one the developer asked you to clean up; that withdraws every ask still open on its " +
-    "threads, so mark it done only once you no longer need them; never a teammate's " +
+    "threads, so mark it done only once you no longer need them, and archives every other " +
+    "agent on the task, an idle one at once and one still at work once its turn ends; a " +
+    "change of its status off Done brings them back, while a turn that reopens the task " +
+    "does not; never a teammate's " +
     "task still in use unless the developer asked for it. A task is never archived: a settled " +
     `one stands Done or Canceled, which ${AGENT_TOOL.LIST_TASKS} lists by status. A block is ` +
     "Linear's: the blocker's work comes first and the task it blocks waits on it, as one child " +
@@ -1384,8 +1387,7 @@ export const LIST_TASKS_TOOL = {
     "workspace's sidebar, each with its id and title. Narrow it by words of a task's name with " +
     `nameContains, by where it stands with status, and by who it is assigned to with assignee. Call it to find the task to start an agent on with ${AGENT_TOOL.START_AGENT}'s ` +
     `taskId, to narrow ${AGENT_TOOL.LIST_AGENTS} to one, or to find the task and the section ` +
-    `${AGENT_TOOL.UPDATE_TASK}'s sectionId names, and ${AGENT_TOOL.DELETE_SECTION} where you ` +
-    "are offered it.",
+    `${AGENT_TOOL.UPDATE_TASK}'s sectionId names, and ${AGENT_TOOL.DELETE_SECTION}.`,
   inputSchema: LIST_TASKS_INPUT,
 } as const;
 

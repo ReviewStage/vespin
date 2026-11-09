@@ -199,6 +199,8 @@ export interface StoredStartedFrom {
   readonly sandbox?: string;
   /** The source's CLI session, whose transcript the Start copied to this agent's and which its first open forks as its own; absent where it was handed a replay instead. */
   readonly session?: string;
+  /** The client id of the source's line its session is cut just before as this agent forks it: the line that opened the turn after the message forked at, or the source's own rewind still waiting on a launch; absent where the session is forked whole. */
+  readonly cutBefore?: string;
 }
 
 /**

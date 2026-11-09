@@ -18,7 +18,7 @@ import {
   workspaceReachableBy,
 } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { attachment } from "@repo/database/schemas/attachment";
+import { attachment, servedColumns } from "@repo/database/schemas/attachment";
 import { member, organization, user } from "@repo/database/schemas/auth";
 import { automation } from "@repo/database/schemas/automation";
 import { inboxItem } from "@repo/database/schemas/inbox";
@@ -74,6 +74,12 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
+import {
+  MP4_TYPE,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+  playableVideoTypeSchema,
+} from "@repo/features/video-signature";
 import {
   and,
   count,
@@ -222,6 +228,8 @@ export interface StoredInboxItem {
 export interface InboxImage {
   readonly contentType: ConversationMediaType;
   readonly bytes: Uint8Array;
+  /** A recording's MP4 copy, made in the agent's sandbox beside it for a phone; none for a still, or where the sandbox made none. */
+  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /** A picture as the agent's message on a thread carries it: its file's own name, the type its bytes were sniffed to be, and the bytes. */
@@ -796,6 +804,7 @@ const MessageFileWriteSchema = Schema.Struct({
   position: Schema.Number,
   contentType: inboxFileTypeSchema,
   bytes: Schema.Uint8Array,
+  mp4Bytes: Schema.optional(Schema.Uint8Array),
   now: Schema.Date,
   messageId: Schema.String,
   /** The id the file is kept under, where the message's words name it; minted by the database where none is given. */
@@ -807,8 +816,9 @@ const insertMessageFiles = SqlSchema.void({
   execute: (files) =>
     Database.use((db) =>
       db.insert(attachment).values(
-        files.map(({ now, itemId, messageId, ...file }) => ({
+        files.map(({ now, itemId, messageId, mp4Bytes, ...file }) => ({
           ...file,
+          mp4Bytes: mp4Bytes ?? null,
           inboxItemId: itemId,
           inboxMessageId: messageId,
           kind: INBOX_ATTACHMENT_KIND.MESSAGE,
@@ -979,28 +989,48 @@ function deleteMessage(target: {
   return Effect.andThen(deleteMessageRow(target), rereadLastWriter({ itemId: target.itemId }));
 }
 
-/** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task: its type and its bytes. */
-const findAttachment = SqlSchema.findOneOption({
-  Request: Schema.Struct({
-    userId: Schema.String,
-    itemId: Schema.String,
-    attachmentId: Schema.String,
-  }),
-  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
-  execute: ({ userId, itemId, attachmentId }) =>
-    Database.use((db) =>
-      db
-        .select({ contentType: attachment.contentType, bytes: attachment.bytes })
-        .from(attachment)
-        .innerJoin(inboxItem, eq(inboxItem.id, attachment.inboxItemId))
-        .where(
-          and(
-            eq(attachment.inboxItemId, itemId),
-            eq(attachment.id, attachmentId),
-            itemVisibleTo(userId),
-          ),
+/** Which attachment of which item an account reads. */
+const AttachmentAskSchema = Schema.Struct({
+  userId: Schema.String,
+  itemId: Schema.String,
+  attachmentId: Schema.String,
+});
+
+/** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task, served as the reader plays a video. */
+function attachmentQuery(
+  { userId, itemId, attachmentId }: typeof AttachmentAskSchema.Type,
+  playable: PlayableVideoType,
+) {
+  return Database.use((db) =>
+    db
+      .select(servedColumns(playable))
+      .from(attachment)
+      .innerJoin(inboxItem, eq(inboxItem.id, attachment.inboxItemId))
+      .where(
+        and(
+          eq(attachment.inboxItemId, itemId),
+          eq(attachment.id, attachmentId),
+          itemVisibleTo(userId),
         ),
-    ),
+      ),
+  );
+}
+
+/** The attachment as it was kept: its type and its bytes. */
+const findAttachment = SqlSchema.findOneOption({
+  Request: AttachmentAskSchema,
+  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
+  execute: (ask) => attachmentQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
+});
+
+/** The attachment as a reader that plays the video given is served it. */
+const findServedAttachment = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...AttachmentAskSchema.fields, playable: playableVideoTypeSchema }),
+  Result: Schema.Struct({
+    contentType: Schema.Union([inboxFileTypeSchema, Schema.Literal(MP4_TYPE)]),
+    bytes: Schema.Uint8Array,
+  }),
+  execute: ({ playable, ...ask }) => attachmentQuery(ask, playable),
 });
 
 /**
@@ -2535,6 +2565,7 @@ function keepPost(
         position,
         contentType: picture.contentType,
         bytes: picture.bytes,
+        mp4Bytes: picture.mp4Bytes,
         now,
       })),
     );
@@ -2731,6 +2762,16 @@ export function readInboxAttachment(
   attachmentId: string,
 ): InboxStoreEffect<Option.Option<InboxFile>> {
   return findAttachment({ userId, itemId, attachmentId });
+}
+
+/** The attachment as `readInboxAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
+export function readServedInboxAttachment(
+  userId: string,
+  itemId: string,
+  attachmentId: string,
+  playable: PlayableVideoType,
+): InboxStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
+  return findServedAttachment({ userId, itemId, attachmentId, playable });
 }
 
 /**

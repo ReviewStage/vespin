@@ -14,10 +14,10 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import { MENTION_KIND, type Mention, type NumberedTaskIdOf } from "@repo/features/mention-link";
+import { repositoryParts } from "@repo/features/task-list-model";
 import type { TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { AppLinkStanding, AppStateSnapshot } from "@repo/host/app-state";
-import { repositoryParts } from "@repo/ui/task-list-model";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
 import { linkStandingQuery } from "../live-reads.js";

@@ -25,6 +25,7 @@ import {
 } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import type { PageLine } from "@repo/features/page-wire";
+import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
 import { thingOfMention } from "@repo/features/thing-kind";
@@ -78,7 +79,6 @@ import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
 import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
-import { searchTokens } from "@repo/ui/search-tokens";
 import { type SkillOption, skillWord } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import {
@@ -112,7 +112,7 @@ import { useAutomations } from "../desktop/use-automations.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
-import { useMemberDirectory } from "../member-directory.js";
+import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
@@ -198,8 +198,10 @@ import { useTaskStatus } from "./use-known-names.js";
  * lead the list with that task, as words that read as a date lead it with
  * the date.
  *
- * Wherever the words stand in a workspace whose members the window has
- * read (`../member-directory.tsx`), the list offers its people too, each by
+ * Wherever the words stand in a workspace, New task's box and the Inbox's
+ * as much as a task's page, the list offers its people too, read as it
+ * opens where no directory of that workspace stands around the box
+ * (`../member-directory.tsx`'s `useWorkspaceDirectory`), each by
  * their name and picture, the reader among them as You, found by their name
  * or their email: a mention of a person names them by their account's id,
  * so it names them still once they rename themselves, and an agent the
@@ -1741,8 +1743,6 @@ export function useMentionPicker({
   side: MentionMenuSide;
   onChoose: (mention: MentionNode) => void;
 }): MentionPicker {
-  const directory = useMemberDirectory();
-  const { readerId } = directory;
   const now = useMinute();
   const listId = useId();
   const [trigger, setTrigger] = useState<ComposerTrigger | undefined>(undefined);
@@ -1793,9 +1793,6 @@ export function useMentionPicker({
     if (askedAt !== undefined) askSkills?.();
   }, [askedAt, askSkills]);
 
-  // The people offered are the workspace's as read.
-  const people =
-    directory.members === undefined ? [] : directoryPeople(directory.members, readerId);
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
   const listed = useQuery({ ...appStateQuery, select: selectListedTasks }).data ?? NO_LISTED_TASKS;
   const tasksWorkspaceId =
@@ -1803,6 +1800,11 @@ export function useMentionPicker({
     listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
     (source === undefined ? undefined : workspaceOfSlug(listed.workspaces, source.workspace))?.id;
   const tasksWorkspace = listed.workspaces.find((each) => each.id === tasksWorkspaceId);
+  // The people offered are the members of that workspace, read while the list stands open wherever the words stand, so every box offers the same people.
+  const directory = useWorkspaceDirectory(open ? tasksWorkspace : undefined);
+  const { readerId } = directory;
+  const people =
+    directory.members === undefined ? [] : directoryPeople(directory.members, readerId);
   // While the workspace has Descriptions off there is no description to mention, its sections or the whole of it, so the task itself is offered among the workspace's tasks.
   const descriptionsOn = useWorkspaceExperiment(tasksWorkspaceId, EXPERIMENT.DESCRIPTIONS);
   const taskRowsOffered = open

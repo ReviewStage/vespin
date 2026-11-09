@@ -139,7 +139,7 @@ function launch(
   steps: readonly Step[],
   service: ReturnType<typeof fakeService>,
   env: Record<string, string> = ENV,
-  chain: readonly string[] = [],
+  chain: readonly string[] | null = [],
   answering = true,
 ) {
   return Effect.gen(function* () {
@@ -1394,4 +1394,26 @@ it.effect.each([
     assert.equal(cli.options?.resume, resume);
     assert.equal(cli.options?.resumeSessionAt, at);
   }),
+);
+
+it.effect(
+  "fails a launch whose session to cut the service's store does not answer, rather than resume it whole",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { cli, write, run } = yield* launch(SHORT_TURN, service, ENV, null);
+      yield* write({
+        ...CONFIG,
+        rewindBefore: "10000000-0000-4000-8000-000000000003",
+        transcriptsUrl: "https://app.test/runner/transcripts",
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(cli.options, undefined, "the CLI never started");
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: "the session to cut could not be read from the service",
+      });
+    }),
 );

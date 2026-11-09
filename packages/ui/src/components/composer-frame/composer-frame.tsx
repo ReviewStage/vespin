@@ -42,7 +42,8 @@ export type ComposerElement = (typeof COMPOSER_ELEMENT)[keyof typeof COMPOSER_EL
  * Each look's edge, corner, and ground: the card on the surface's ground at
  * the dialog's corner, lifted by a soft shadow rather than ringed by a dark
  * edge; the field, the input, and the bare look flat in what holds them, the
- * input brightening once the caret is in it.
+ * input brightening once the caret is in it. Any look is edged in the
+ * danger ink while what it holds stops its form (`invalid`).
  */
 const LOOK_CLASS: Record<ComposerLook, string> = {
   [COMPOSER_LOOK.CARD]: "rounded-dialog border border-border bg-surface shadow-composer",
@@ -55,11 +56,15 @@ const LOOK_CLASS: Record<ComposerLook, string> = {
 /** The edge while files are dragged over it, brightened, so the drop target is the frame itself. */
 const DROPPING = "data-[dropping=true]:border-border-selected";
 
+/** The edge while what it holds is what stops a form, shaken and in the danger ink, as a text field's is. */
+const INVALID = "data-[invalid=true]:animate-field-shake data-[invalid=true]:border-destructive";
+
 /** `children` framed as a composer. */
 export function ComposerFrame({
   as: Element = COMPOSER_ELEMENT.DIV,
   look = COMPOSER_LOOK.CARD,
   dropping = false,
+  invalid = false,
   className,
   ref,
   children,
@@ -69,6 +74,8 @@ export function ComposerFrame({
   look?: ComposerLook;
   /** Whether files are dragged over it, which brightens its edge, so the drop target is the frame itself. */
   dropping?: boolean | undefined;
+  /** Whether what it holds is what stops its form, as a text field marked invalid is drawn. */
+  invalid?: boolean | undefined;
   /** The owner's own class, which names, places, and lays out what it holds, and sets nothing of its frame. */
   className?: string | undefined;
   /** The frame's element, for what asks whether the focus is inside it. */
@@ -81,12 +88,19 @@ export function ComposerFrame({
     {
       ...rest,
       ref,
-      className: ["ui-composer-frame group/composer", LOOK_CLASS[look], DROPPING, className ?? ""]
+      className: [
+        "ui-composer-frame group/composer",
+        LOOK_CLASS[look],
+        DROPPING,
+        INVALID,
+        className ?? "",
+      ]
         .filter((part) => part !== "")
         .join(" "),
       noValidate: Element === COMPOSER_ELEMENT.FORM ? true : undefined,
       "data-look": look,
       "data-dropping": dropping ? "true" : undefined,
+      "data-invalid": invalid ? "true" : undefined,
     },
     children,
   );

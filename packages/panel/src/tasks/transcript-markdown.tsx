@@ -1,14 +1,12 @@
 import type { CodeLines } from "@repo/features/tasks-view";
-import { ACT_KIND, COLORED_CODE_MAX_CHARS, FENCE_LANGUAGE_MAX_CHARS } from "@repo/host/acts";
 import { CODE_CARD_TITLE, CODE_ROW, CodeCard, type CodeRow } from "@repo/ui";
 import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
-import { askAct } from "../act.js";
+import { colorable, coloringQueryOptions } from "../code-coloring.js";
 import { codeLanguage, codeTitle } from "../code-language.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { QUERY_ROOT } from "../query-keys.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
 /**
@@ -63,23 +61,6 @@ const FENCE_OPENING = /^ {0,3}(`{3,}|~{3,})/u;
 const QUOTE_MARKS = /^[\s>]*/u;
 
 /**
- * A block's coloring, asked of main the first time it is wanted and held for
- * the window's life while drawn, since a block's colors never change; one let
- * go of no longer drawn is forgotten after Query's garbage-collection time.
- * Note that a refusal draws the block plain and is held as one, so it is not
- * asked again.
- */
-function coloringQueryOptions(language: string, code: string) {
-  return queryOptions({
-    queryKey: [QUERY_ROOT.CODE_COLORING, language, code],
-    queryFn: (): Promise<CodeLines | null> =>
-      askAct(ACT_KIND.TASKS_COLOR_CODE, { language, code }).catch(() => null),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  });
-}
-
-/**
  * The last line written inside a fenced block of a transcript's words still
  * waiting for its closing fence, or none where every fence closed, which a
  * block reads to tell whether it is the one still streaming. Note that it
@@ -88,16 +69,6 @@ function coloringQueryOptions(language: string, code: string) {
  * the words after the last block stream draws no block again.
  */
 const OpenFenceTail = createContext<string | undefined>(undefined);
-
-/** Whether main is asked to color a block at all: a named language, and code within the bound. */
-function colorable(language: string, code: string): boolean {
-  return (
-    language !== "" &&
-    language.length <= FENCE_LANGUAGE_MAX_CHARS &&
-    code.trim() !== "" &&
-    code.length <= COLORED_CODE_MAX_CHARS
-  );
-}
 
 /** Whether `line` closes a fence opened with `marker`: the opening's character at least as long, alone but for the quote marks of a block inside a quote. */
 function closesFence(line: string, marker: string): boolean {

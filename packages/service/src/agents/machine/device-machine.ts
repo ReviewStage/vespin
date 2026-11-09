@@ -630,6 +630,9 @@ function deviceMachineOver(
             ? answer.bytes
             : undefined,
       ),
+
+    // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
+    phoneVideo: () => Effect.succeed(undefined),
   };
 }
 

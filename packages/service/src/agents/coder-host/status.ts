@@ -305,6 +305,7 @@ function agentTurnOf(turn: AgentLatestTurn | undefined): AgentTurn | undefined {
     status: turnStatusOfWord(turn.status),
     ...(turn.cancelRequestedAt === null ? undefined : { stopAsked: true }),
     ...(failure === undefined ? undefined : { failure }),
+    ...(turn.waitsUntil == null ? undefined : { waitsUntil: turn.waitsUntil.getTime() }),
   };
 }
 

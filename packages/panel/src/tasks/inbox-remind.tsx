@@ -1,4 +1,5 @@
 import { dateChipText, readerZone } from "@repo/features/date-mention";
+import { hasReminder } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { dropBelowStart, STATUS_TONE, useMenu } from "@repo/ui";
@@ -14,7 +15,6 @@ import {
   type DatePickerMoment,
   useDatePicker,
 } from "./date-picker.js";
-import { hasReminder } from "./inbox-model.js";
 import { useInboxPresses } from "./inbox-writes.js";
 
 /**

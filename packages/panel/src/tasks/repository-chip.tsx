@@ -2,6 +2,7 @@ import type { GitHubRepository } from "@repo/features";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { NO_REPOSITORY, repositoryParts } from "@repo/features/task-list-model";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { countWords, orList, readingWords } from "@repo/features/words";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
@@ -32,7 +33,6 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { NO_REPOSITORY, repositoryParts } from "@repo/ui/task-list-model";
 import { repositoryFailureNote } from "@repo/ui/tasks-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useMutation, useQuery } from "@tanstack/react-query";

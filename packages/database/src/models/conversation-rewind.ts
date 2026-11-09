@@ -1,5 +1,5 @@
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
-import { and, asc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -332,6 +332,61 @@ const findNativeRewind = SqlSchema.findOneOption({
     ),
 });
 
+/** The place of one of the account's own conversation's messages, any sender's. */
+const findMessageSeq = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    messageId: Schema.String,
+  }),
+  Result: Schema.Struct({ seq: Schema.Number }),
+  execute: ({ userId, conversationId, messageId }) =>
+    Database.use((db) =>
+      db
+        .select({ seq: messages.seq })
+        .from(messages)
+        .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+        .where(
+          and(
+            eq(conversations.id, conversationId),
+            eq(conversations.userId, userId),
+            eq(messages.id, messageId),
+          ),
+        ),
+    ),
+});
+
+/** The developer's first line past a place in the conversation, where one stands. */
+const findLineAfter = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
+  Result: Schema.Struct({
+    seq: Schema.Number,
+    clientId: Schema.String,
+    turnId: Schema.NullOr(Schema.String),
+    takenAfterStep: Schema.NullOr(Schema.Number),
+  }),
+  execute: ({ conversationId, seq }) =>
+    Database.use((db) =>
+      db
+        .select({
+          seq: messages.seq,
+          clientId: messages.clientId,
+          turnId: messages.turnId,
+          takenAfterStep: messages.takenAfterStep,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            gt(messages.seq, seq),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(1),
+    ),
+});
+
 /** Where a cut at the line named starts: its row and the instant the turns it drops were queued from; refused where it stands inside a turn. */
 const cutPoint = (conversationId: string, messageId: string) =>
   Effect.gen(function* () {
@@ -489,6 +544,39 @@ export function readNativeRewind(
   return Effect.map(findNativeRewind(target), (row) =>
     Option.flatMap(row, ({ nativeRewind }) => Option.fromNullishOr(nativeRewind)),
   );
+}
+
+/**
+ * Where a harness's session is cut as another agent forks it at one of the
+ * conversation's messages, read without cutting anything: just before the
+ * developer's first line past that message, where a turn took it as the
+ * line that opened it, since the session holds everything up to that line
+ * and nothing of the turn it opened; or, where no such line was heard, just
+ * before the line a rewind still waits to cut, or nowhere, for a session
+ * that ends at the message. Refused where the account holds no such
+ * message, and where that line was taken into a turn under way, which no
+ * harness can cut through, so the fork is replayed instead.
+ */
+export function readForkCut(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<Result.Result<string | undefined, RewindRefusal>, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const { conversationId } = target;
+    const message = yield* findMessageSeq({ ...target, messageId });
+    if (Option.isNone(message)) return Result.fail(REWIND_REFUSAL.NOT_FOUND);
+    const next = yield* findLineAfter({ conversationId, seq: message.value.seq });
+    if (Option.isSome(next) && next.value.turnId !== null) {
+      const { seq, clientId, turnId, takenAfterStep } = next.value;
+      if (takenAfterStep !== null) return Result.fail(REWIND_REFUSAL.INSIDE_TURN);
+      const [opening] = yield* findTurnLines({ conversationId, turnId });
+      return opening === undefined || opening.seq === seq
+        ? Result.succeed(clientId)
+        : Result.fail(REWIND_REFUSAL.INSIDE_TURN);
+    }
+    // Note that a line no turn took never reached the session, so it cuts nothing there.
+    return Result.succeed(Option.getOrUndefined(yield* readNativeRewind(target)));
+  });
 }
 
 /** Lets the harness's cut go once a launch has handed it over, unless a newer rewind replaced it meanwhile. */

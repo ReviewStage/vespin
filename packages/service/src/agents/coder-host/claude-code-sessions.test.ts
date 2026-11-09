@@ -3994,7 +3994,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open",
+    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4012,7 +4012,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           descriptionSnapshot: "# Invitations\n",
           prompt: null,
           repository: null,
-          startedFrom: { agentId: agent.id, steps: 0, totalSteps: 0, session: CLI_SESSION },
+          startedFrom: {
+            agentId: agent.id,
+            steps: 0,
+            totalSteps: 0,
+            session: CLI_SESSION,
+            cutBefore: "source-line",
+          },
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
         const continued = Option.getOrThrow(started).agent;
@@ -4023,8 +4029,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const [config] = (yield* launchLines(api.commands[0])) as [ClaudeCodeConfig, InputLine];
-        assert.equal(config.resume, CLI_SESSION);
-        assert.equal(config.fork, true);
+        assert.deepEqual(
+          [config.resume, config.fork, config.rewindBefore],
+          [CLI_SESSION, true, "source-line"],
+        );
       }),
   );
 

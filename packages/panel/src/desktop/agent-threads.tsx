@@ -1,3 +1,14 @@
+import {
+  EVERYONES,
+  INBOX_SHOW,
+  type InboxListed,
+  inboxAtNow,
+  inboxCounts,
+  inboxGroup,
+  listedItems,
+  NOTHING_HERE,
+  taskHolder,
+} from "@repo/features/inbox-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
@@ -12,17 +23,7 @@ import {
   INBOX_VIEW_ITEMS,
   useInboxColumns,
 } from "../tasks/inbox-columns.js";
-import { InboxList, InboxListNote, InboxPaneEmpty, NOTHING_HERE } from "../tasks/inbox-list.js";
-import {
-  EVERYONES,
-  INBOX_SHOW,
-  type InboxListed,
-  inboxAtNow,
-  inboxCounts,
-  inboxGroup,
-  listedItems,
-  taskHolder,
-} from "../tasks/inbox-model.js";
+import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
 import { useHeldInboxList } from "../tasks/use-held-inbox-list.js";

@@ -8,7 +8,10 @@
  * rollout through the runner itself. Each call is one of Anthropic's
  * reference Postgres store's five (`@repo/database`'s
  * `claude-session-entries.ts`), run on the conversation the bearer names
- * alone, so no runner reads or writes another agent's transcript.
+ * alone, so no runner reads or writes another agent's transcript. A load is
+ * answered a page at a time, held under the platform's 4.5 MB bound on a
+ * function's response; the whole-transcript load is still answered for a
+ * runner from before pages.
  *
  * The bearer is admitted as the events route admits it
  * (`../workspace-mcp/bearer.ts`): one no standing agent holds, a retired
@@ -21,6 +24,7 @@ import {
   type RunnerTranscriptCall,
   RunnerTranscriptCallSchema,
   type RunnerTranscriptLoad,
+  type RunnerTranscriptPage,
   type RunnerTranscriptSessions,
   type RunnerTranscriptSubkeys,
 } from "@repo/agent-runner/protocol";
@@ -31,6 +35,7 @@ import {
   listSessionEntrySessions,
   listSessionEntrySubkeys,
   loadSessionEntries,
+  loadSessionEntryPage,
 } from "@repo/database/models/claude-session-entries";
 import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Layer, Option, Schema } from "effect";
@@ -71,6 +76,10 @@ const answerOf = Effect.fn("web/runnerTranscriptAnswer")(function* (
       const entries = yield* loadSessionEntries(userId, conversationId, call.key);
       // Note that a key never written is answered none, as the SDK's `load` answers null.
       return { entries: Option.getOrNull(entries) } satisfies RunnerTranscriptLoad;
+    }
+    case RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE: {
+      const page = yield* loadSessionEntryPage(userId, conversationId, call.key, call.after);
+      return page satisfies RunnerTranscriptPage;
     }
     case RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS: {
       const sessions = yield* listSessionEntrySessions(userId, conversationId, call.projectKey);

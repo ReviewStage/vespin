@@ -1,5 +1,5 @@
 /**
- * video-signature.ts -- what a video's first bytes say it is: a WebM, or not, and the size in pixels its video track states.
+ * video-signature.ts -- what a video's first bytes say it is: a WebM, or not, and the size in pixels its video track states; and whether an MP4 copy of one is one iOS's player streams.
  *
  * An agent records what it did in its sandbox as a WebM, the one format the
  * encoder already in its sandbox writes (Playwright's `recordVideo`, or the
@@ -17,8 +17,36 @@
  * segment's, and such an element runs to the end of its parent.
  */
 
+import { Schema } from "effect";
+
 /** The media type a WebM is kept and served under. */
 export const WEBM_TYPE = "video/webm";
+
+/** The media type a recording's MP4 copy is served under. */
+export const MP4_TYPE = "video/mp4";
+
+/**
+ * The video a reader plays, as it asks an attachment read for one
+ * (`Accept`): a WebM, as the web and the desktop play, or an MP4, as
+ * iOS's player plays, which a recording kept with an MP4 copy is answered
+ * as and one kept without it answers its WebM.
+ */
+export const PLAYABLE_VIDEO_TYPE = { WEBM: WEBM_TYPE, MP4: MP4_TYPE } as const;
+
+export type PlayableVideoType = (typeof PLAYABLE_VIDEO_TYPE)[keyof typeof PLAYABLE_VIDEO_TYPE];
+
+/** A playable video type as a request or an act carries it. */
+export const playableVideoTypeSchema = Schema.Literals(Object.values(PLAYABLE_VIDEO_TYPE));
+
+/**
+ * The bound on a recording's MP4 copy, which the service keeps beside its
+ * WebM for a player that plays no WebM (iOS's AVPlayer): the most bytes a
+ * function answers whole, as the WebM's own bound is, so the read serves
+ * either. It is counted in no owner's bound, which count the WebM alone.
+ */
+export const PHONE_VIDEO_BOUNDS = {
+  MAX_BYTES: 4_000_000,
+} as const;
 
 /** The four bytes every EBML file opens with: the EBML header's ID. */
 const EBML_MAGIC = [0x1a, 0x45, 0xdf, 0xa3] as const;
@@ -156,4 +184,48 @@ export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
     }
   }
   return undefined;
+}
+
+/** The four-character types of the MP4 boxes read: the file type, the movie's index, its media, and an H.264 sample entry. */
+const MP4_BOX = { FTYP: "ftyp", MOOV: "moov", MDAT: "mdat", AVC1: "avc1" } as const;
+
+/** The ASCII of the four bytes at `at`. */
+function fourCc(bytes: Uint8Array, at: number): string {
+  return String.fromCharCode(...bytes.subarray(at, at + 4));
+}
+
+/** Whether the bytes hold the ASCII of `word` anywhere between `from` and `to`. */
+function holdsWord(bytes: Uint8Array, word: string, from: number, to: number): boolean {
+  for (let at = from; at + word.length <= to; at += 1) {
+    if (fourCc(bytes, at) === word) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether the bytes are an MP4 iOS's player streams as it arrives: an
+ * `ftyp` box first, the movie's index (`moov`) before its media
+ * (`mdat`), as ffmpeg's `+faststart` moves it, and an H.264 track in the
+ * index. Each top-level box is a 32-bit big-endian size and a type; a size
+ * of 1 is a 64-bit size after the type, and a size of 0 runs to the end.
+ */
+export function streamableMp4(bytes: Uint8Array): boolean {
+  if (bytes.length < 8 || fourCc(bytes, 4) !== MP4_BOX.FTYP) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 0;
+  while (at + 8 <= bytes.length) {
+    const short = view.getUint32(at);
+    const type = fourCc(bytes, at + 4);
+    const size =
+      short === 1 && at + 16 <= bytes.length
+        ? Number(view.getBigUint64(at + 8))
+        : short === 0
+          ? bytes.length - at
+          : short;
+    if (size < 8 || at + size > bytes.length) return false;
+    if (type === MP4_BOX.MDAT) return false;
+    if (type === MP4_BOX.MOOV) return holdsWord(bytes, MP4_BOX.AVC1, at + 8, at + size);
+    at += size;
+  }
+  return false;
 }

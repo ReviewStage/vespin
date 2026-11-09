@@ -9,11 +9,15 @@
  * them at once while their follows come back.
  */
 
+import {
+  type InboxGroup,
+  type InboxListed,
+  inboxGroups,
+  needsYou,
+} from "@repo/features/inbox-list-model";
 import { useMemo } from "react";
-import { type InboxGroup, type InboxListed, needsYou } from "./inbox-model.js";
 import {
   agentHoldings,
-  inboxGroups,
   NO_HOLDINGS,
   taskHoldings,
   useHolderInboxItems,

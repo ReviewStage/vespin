@@ -22,12 +22,23 @@
 
 import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { claudeBrokenSessions, claudeSessionEntries } from "../schemas/claude-session-entry.js";
 import { conversations } from "../schemas/storage.js";
 
 type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/**
+ * The most entries one page of a transcript holds, and the most bytes its
+ * entries hold together, counted as Postgres writes each entry out, which is
+ * never less than the JSON a page is answered as. Note that the bytes are
+ * held well under the platform's 4.5 MB bound on a function's response; a
+ * page holds its first entry however large, which an append's own bound on
+ * its request already keeps under it.
+ */
+const PAGE_ENTRIES = 1_000;
+const PAGE_BYTES = 2 * 1024 * 1024;
 
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const EntrySchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -38,6 +49,12 @@ export interface SessionEntryKey {
   readonly projectKey: string;
   readonly sessionId: string;
   readonly subpath?: string | undefined;
+}
+
+/** One page of a transcript: its entries in order, and the cursor the next page is read after, none past its last. */
+export interface SessionEntryPage {
+  readonly entries: readonly SessionEntry[];
+  readonly next: number | null;
 }
 
 /** A session of a project and when its main transcript was last appended to, in epoch milliseconds. */
@@ -114,6 +131,56 @@ const findEntries = SqlSchema.findAll({
           ),
         )
         .orderBy(asc(claudeSessionEntries.id)),
+    ),
+});
+
+/**
+ * One page of a transcript, walked an entry at a time along the key's index
+ * from the cursor, each entry measured as Postgres writes it out, until the
+ * page's count or bytes are spent. The walk goes on past each entry the page
+ * keeps, so it takes one entry past the page,
+ * answered as its id alone, so the page's end is told from the transcript's;
+ * no entry past that one is read or measured. The page's first entry is kept
+ * however large, and the walk only goes on where the account owns the
+ * conversation, which its first step checks.
+ */
+const findPage = SqlSchema.findAll({
+  Request: Schema.Struct({ ...KeyFields, after: Schema.NullOr(Schema.Number) }),
+  Result: Schema.Struct({
+    id: Schema.NumberFromString,
+    entry: Schema.NullOr(Schema.fromJsonString(EntrySchema)),
+  }),
+  execute: ({ userId, conversationId, projectKey, sessionId, subpath, after }) =>
+    Effect.flatMap(
+      SqlClient.SqlClient,
+      (client) => client`
+        with recursive walk(id, n, running) as (
+          (select stored.id, 1, octet_length(stored.entry::text)::bigint
+            from claude_session_entries stored
+            join conversations on conversations.id = stored.conversation_id
+            where conversations.id = ${conversationId} and conversations.user_id = ${userId}
+              and stored.conversation_id = ${conversationId}
+              and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+              and stored.subpath is not distinct from ${subpath}
+              and stored.id > ${after ?? 0}
+            order by stored.id limit 1)
+          union all
+          (select step.id, walk.n + 1, walk.running + octet_length(step.entry::text)
+            from walk cross join lateral (
+              select stored.id, stored.entry from claude_session_entries stored
+                where stored.conversation_id = ${conversationId}
+                  and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+                  and stored.subpath is not distinct from ${subpath}
+                  and stored.id > walk.id
+                order by stored.id limit 1
+            ) step
+            where walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES}))
+        )
+        select walk.id::text as id,
+          case when walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES})
+            then stored.entry::text end as entry
+          from walk join claude_session_entries stored on stored.id = walk.id
+          order by walk.id`,
     ),
 });
 
@@ -310,6 +377,33 @@ export function loadSessionEntries(
     Effect.map((rows) =>
       rows.length > 0 ? Option.some(rows.map((row) => row.entry)) : Option.none(),
     ),
+  );
+}
+
+/**
+ * One page of the key's transcript in the account's conversation, from the
+ * entry after the cursor given, or from its first where none is: the entries
+ * in the order they were appended, held to a page's count and bytes, and the
+ * cursor the next page is read after, none where the page holds the last.
+ * A page holds at least one entry wherever one stands past the cursor.
+ */
+export function loadSessionEntryPage(
+  userId: string,
+  conversationId: string,
+  key: SessionEntryKey,
+  after: number | null,
+): EntryEffect<SessionEntryPage> {
+  return findPage({ ...keyFields(userId, conversationId, key), after }).pipe(
+    Effect.map((rows) => {
+      // Note that only the walk's last row can be past the page, so its entries are the rows that carry one.
+      const kept: Array<{ readonly id: number; readonly entry: SessionEntry }> = [];
+      for (const { id, entry } of rows) if (entry !== null) kept.push({ id, entry });
+      const last = kept.at(-1);
+      return {
+        entries: kept.map((row) => row.entry),
+        next: kept.length < rows.length && last !== undefined ? last.id : null,
+      };
+    }),
   );
 }
 

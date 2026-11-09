@@ -1,6 +1,8 @@
 import {
+  AGENT_MACHINE,
   AGENT_STATUS,
   type AgentStatus,
+  type AgentSummary,
   type ListedAgent,
   PULL_REQUEST_STATE,
   type TasklessAgent,
@@ -192,4 +194,67 @@ export function tasklessAgentStatus(
   return agent.pullRequest === undefined
     ? NO_STATUS
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest: agent.pullRequest };
+}
+
+/** The statuses an agent may still write under, which is when it can be stopped. */
+const FOLLOWED_STATUSES: ReadonlySet<AgentStatus> = new Set([
+  AGENT_STATUS.STARTING,
+  AGENT_STATUS.RUNNING,
+]);
+
+/** Whether an agent in this status may still write more. */
+export function agentStillWriting(status: AgentStatus): boolean {
+  return FOLLOWED_STATUSES.has(status);
+}
+
+/**
+ * Agents in the order a task's Agents group lists them: those waiting on
+ * the developer first, then those still writing, then the newest started,
+ * each group's order otherwise kept. An entry with no agent, a draft's, is
+ * started at none.
+ */
+export function inAgentListOrder<Entry>(
+  entries: readonly Entry[],
+  agentOf: (entry: Entry) => Pick<ListedAgent, "status" | "createdAt"> | undefined,
+  waits: (entry: Entry) => boolean,
+): readonly Entry[] {
+  const writing = (entry: Entry) => {
+    const agent = agentOf(entry);
+    return agent !== undefined && agentStillWriting(agent.status);
+  };
+  const started = (entry: Entry) => agentOf(entry)?.createdAt ?? 0;
+  return entries.toSorted(
+    (a, b) =>
+      Number(waits(b)) - Number(waits(a)) ||
+      Number(writing(b)) - Number(writing(a)) ||
+      started(b) - started(a),
+  );
+}
+
+/** What the Runs on menu, its chips, and an agent's row say of where it runs. */
+export const RUNS_ON_WORDS = {
+  LABEL: "Runs on",
+  CLOUD: "Cloud",
+  ONLINE: "Online",
+  OFFLINE: "Offline",
+  UNKNOWN: "Can't check status",
+  CHECKING: "Checking",
+  REMOVED: "Removed device",
+  NO_MATCH: "No devices match",
+} as const;
+
+/** The Mac a local agent runs on, as its row reads it. */
+type RunsOnMac = NonNullable<AgentSummary["mac"]>;
+
+/**
+ * Where an agent runs, as its row says it: Cloud for one in a sandbox, the
+ * device it runs on by `deviceName` (its own name where none is given), and
+ * Removed device for a local agent whose Mac is gone.
+ */
+export function agentRunsOnWords(
+  agent: Pick<AgentSummary, "machine" | "mac">,
+  deviceName: (mac: RunsOnMac) => string = (mac) => mac.name,
+): string {
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return RUNS_ON_WORDS.CLOUD;
+  return agent.mac === undefined ? RUNS_ON_WORDS.REMOVED : deviceName(agent.mac);
 }

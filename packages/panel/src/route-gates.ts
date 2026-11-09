@@ -12,6 +12,7 @@
 
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
+import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import {
   EXPERIMENT,
   type ExperimentChoices,
@@ -34,7 +35,6 @@ import {
   selectSettingsHeld,
   selectStoredExperimentChoices,
 } from "./use-app-state.js";
-import { workspaceExperimentChoices } from "./workspace-experiments.js";
 
 /** What a workspace's gate reads of each of the reader's workspaces: what an address's first step may name it by, and the experiments it chose. */
 type GateWorkspace = Pick<Workspace, "id" | "slug" | "formerSlugs" | "experiments">;

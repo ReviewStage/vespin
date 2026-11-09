@@ -1,7 +1,7 @@
+import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import { commandKeyshortcuts, NAV_CURRENT, NavItem, Shortcut, STATUS_TONE } from "@repo/ui";
 import { InboxIcon } from "@repo/ui/icons";
-import { NEEDS_YOU } from "../tasks/inbox-model.js";
 import { groupCount } from "./sidebar-fold.js";
 
 /**
@@ -16,7 +16,8 @@ import { groupCount } from "./sidebar-fold.js";
  * nothing at none. Its chord takes the count's place
  * while the row is hovered or reached from the keyboard, as New task's and
  * Search's show theirs. A press opens the window's Inbox
- * (`desktop-inbox.tsx`), and the row is the place shown while it stands.
+ * (`desktop-inbox.tsx`), and a middle-click opens it in a tab of its own
+ * where the window opens tabs; the row is the place shown while it stands.
  * Note that it opens no menu: Mark all as read stands on the Inbox's own
  * head, where its reader looks for it.
  */
@@ -25,11 +26,14 @@ export function SidebarInboxRow({
   current,
   disabled,
   onOpen,
+  onOpenInTab,
 }: {
   waiting: number;
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
+  /** Opens the Inbox in a tab of its own, which a middle-click does; none where the window opens no tabs. */
+  onOpenInTab: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <NavItem
@@ -43,6 +47,7 @@ export function SidebarInboxRow({
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.INBOX].chord} />}
       disabled={disabled}
       onClick={onOpen}
+      onOpenInTab={onOpenInTab}
     >
       Inbox
     </NavItem>

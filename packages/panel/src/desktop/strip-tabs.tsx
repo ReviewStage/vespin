@@ -120,7 +120,7 @@ export interface TabDoors
     | "onOpenInTask"
     | "archive"
     | "deletion"
-    | "copyLink"
+    | "links"
   > {
   /** Whether the tab is the one chosen, which ⌘W closes and ⌘J opens the terminal of. */
   chosen: boolean;
@@ -237,12 +237,12 @@ function tabActionGroups(doors: TabDoors): TabActionGroups {
  * which a taskless agent's row has, so it is left out of the menu's doors.
  */
 function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
-  const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, copyLink, chosen } =
+  const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, links, chosen } =
     doors;
   if (doors.document !== undefined) return doors.document.groups().map((group) => [...group]);
   return agentMenuGroups({
     chosen,
-    copyLink,
+    links,
     onCopy,
     onRename,
     onOpenTerminal,
@@ -256,15 +256,16 @@ function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
 /**
  * The chosen tab's actions on what it shows: what its body hands
  * up while it is drawn (`handed`), first, then `contentActionGroups`. Note
- * that a tab's Copy link leads even what its body hands up, alone in its
- * group, because Copy link leads every menu that holds one.
+ * that a tab's Copy link, and Open in new tab under it, lead even what its
+ * body hands up, alone in their group, because Copy link leads every menu
+ * that holds one.
  */
 function tabContentGroups(doors: TabDoors): TabActionGroups {
-  const { handed, copyLink } = doors;
-  if (handed === undefined || copyLink === undefined) {
+  const { handed, links } = doors;
+  if (handed === undefined || links === undefined || links.length === 0) {
     return [...(handed ?? []), ...contentActionGroups(doors)].filter((group) => group.length > 0);
   }
-  return [[copyLink], ...handed, ...contentActionGroups({ ...doors, copyLink: undefined })].filter(
+  return [[...links], ...handed, ...contentActionGroups({ ...doors, links: undefined })].filter(
     (group) => group.length > 0,
   );
 }

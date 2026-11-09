@@ -509,6 +509,7 @@ const StartedFromColumnSchema = Schema.NullOr(
     branch: Schema.optionalKey(Schema.String),
     sandbox: Schema.optionalKey(Schema.String),
     session: Schema.optionalKey(Schema.String),
+    cutBefore: Schema.optionalKey(Schema.String),
   }),
 );
 /** An author as the agent's row holds it. */

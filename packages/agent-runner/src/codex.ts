@@ -559,9 +559,14 @@ const SANDBOX_MODE = "danger-full-access";
  * server and each integration's beside it with the bearer read from the environment and their tools approved up
  * front (under `approval_policy = "never"` Codex 0.163.0 otherwise fails
  * every MCP call, as P16 found) and given as long as the service runs a call, no
- * sandbox (`SANDBOX_MODE`), and commands inheriting the core variables
+ * sandbox (`SANDBOX_MODE`), and commands inheriting the launch's whole
+ * environment, the workspace's variables among it whatever their names,
  * without the bearer or the key, and handed the image's tools' own
- * (`SANDBOX_TOOL_ENV`). Nothing in argv is secret.
+ * (`SANDBOX_TOOL_ENV`), as Claude Code's commands are (`runner.ts`). Note
+ * that Codex's default excludes, which drop every name holding `KEY`,
+ * `SECRET`, or `TOKEN`, are ignored, because a workspace's variables are
+ * mostly such names, and those a member set are its agents' to use. Nothing
+ * in argv is secret.
  */
 function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
   const mcp = `mcp_servers.${MCP_SERVER}`;
@@ -595,10 +600,10 @@ function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
     ...integrations,
     ["approval_policy", toml("never")],
     ["sandbox_mode", toml(SANDBOX_MODE)],
-    ["shell_environment_policy.inherit", toml("core")],
-    ["shell_environment_policy.ignore_default_excludes", "false"],
+    ["shell_environment_policy.inherit", toml("all")],
+    ["shell_environment_policy.ignore_default_excludes", "true"],
     ["shell_environment_policy.exclude", `[${excluded.map(toml).join(", ")}]`],
-    // Note that the image's tools are set apart, since a command inherits only the core variables.
+    // Note that the image's tools are set apart, since app-server's own environment does not hold them.
     [
       "shell_environment_policy.set",
       `{ ${Object.entries(SANDBOX_TOOL_ENV)

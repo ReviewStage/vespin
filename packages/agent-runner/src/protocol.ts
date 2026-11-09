@@ -263,12 +263,16 @@ export type RunnerLinesAnswer = typeof RunnerLinesAnswerSchema.Type;
  * names `transcriptsUrl`: Anthropic's reference `SessionStore`'s five calls
  * (the Agent SDK's `append`, `load`, `listSessions`, `delete`,
  * `listSubkeys`), each one POST under the runner's bearer, run against the
- * agent's own rows.
+ * agent's own rows. A runner loads a transcript a page at a time
+ * (`LOAD_PAGE`), so no one answer must hold a large session whole under the
+ * platform's bound on a function's response; `LOAD` is still answered for a
+ * runner from before pages, which a Mac may bundle.
  */
 export const RUNNER_TRANSCRIPTS = {
   CALL: {
     APPEND: "append",
     LOAD: "load",
+    LOAD_PAGE: "loadPage",
     LIST_SESSIONS: "listSessions",
     DELETE: "delete",
     LIST_SUBKEYS: "listSubkeys",
@@ -285,6 +289,12 @@ const TranscriptKeySchema = Schema.Struct({
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const TranscriptEntrySchema = Schema.Record(Schema.String, Schema.Unknown);
 
+/** Where a transcript's next page starts: after the entry the last page ended on. */
+const TranscriptCursorSchema = Schema.Number.check(
+  Schema.isInt(),
+  Schema.isGreaterThanOrEqualTo(0),
+);
+
 /** One call of a runner's transcript store. */
 export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
@@ -295,6 +305,11 @@ export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD),
     key: TranscriptKeySchema,
+  }),
+  Schema.Struct({
+    call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE),
+    key: TranscriptKeySchema,
+    after: Schema.NullOr(TranscriptCursorSchema),
   }),
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS),
@@ -313,6 +328,13 @@ export const RunnerTranscriptLoadSchema = Schema.Struct({
   entries: Schema.NullOr(Schema.Array(TranscriptEntrySchema)),
 });
 export type RunnerTranscriptLoad = typeof RunnerTranscriptLoadSchema.Type;
+
+/** What a page's load is answered: its entries in order, and the cursor the next is read after, none past the last. */
+export const RunnerTranscriptPageSchema = Schema.Struct({
+  entries: Schema.Array(TranscriptEntrySchema),
+  next: Schema.NullOr(TranscriptCursorSchema),
+});
+export type RunnerTranscriptPage = typeof RunnerTranscriptPageSchema.Type;
 
 /** What a listing of a project's sessions is answered: each with its last append, in epoch milliseconds. */
 export const RunnerTranscriptSessionsSchema = Schema.Struct({

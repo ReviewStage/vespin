@@ -35,7 +35,11 @@ name, its description (a Markdown document written by members and agents) with i
 full revision history, comments on the description, inbox items and their answers,
 pages that agents make, pictures and short videos added to any of these, and,
 if the Memory experiment is on, short facts agents save about how your team
-works. Every member of the workspace can see all of this.
+works. Every member of the workspace can see all of this. Agents record their
+videos as WebM, which iPhones cannot play, so for each video an agent records
+in a cloud sandbox, we also keep an MP4 copy, made in that agent's sandbox.
+The copy is shown to the same people as its video, is deleted with it, and is
+the version the iPhone app plays.
 
 ### Agent conversations
 

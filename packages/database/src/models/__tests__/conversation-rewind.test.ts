@@ -21,6 +21,7 @@ import { createAgent, readNativeHanded, recordNativeHanded } from "../agent-stor
 import {
   clearNativeRewindHanded,
   REWIND_REFUSAL,
+  readForkCut,
   readNativeRewind,
   rewindConversation,
   rewindUnheard,
@@ -99,6 +100,17 @@ const rowAt = (
       takenAfterStep,
     });
     return id;
+  });
+
+/** The id of the conversation's row at the sequence given. */
+const rowOf = (target: Target, seq: number) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [row] = yield* db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(eq(messages.conversationId, target.conversationId), eq(messages.seq, seq)));
+    return row?.id ?? assert.fail(`no row stands at ${seq}`);
   });
 
 /** Two answered lines and a third awaiting its turn. */
@@ -390,6 +402,53 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
         assert.deepEqual(
           rows.map((row) => row.id),
           [kept],
+        );
+      }),
+  );
+
+  it.effect(
+    "cuts a fork before the line that opened the next turn, or else before a rewind still waiting, and nowhere past the last",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const rewound = yield* openConversation;
+        const { answer } = yield* threeLines(target);
+        const kept = yield* threeLines(rewound);
+        yield* rewindConversation(rewound, kept.secondLine);
+
+        assert.deepEqual(
+          yield* readForkCut(target, yield* rowOf(target, 2)),
+          Result.succeed("client-3"),
+        );
+        // The awaiting line past the last answer never reached the session, so nothing is cut.
+        assert.deepEqual(yield* readForkCut(target, answer), Result.succeed(undefined));
+        assert.deepEqual(
+          yield* readForkCut(rewound, yield* rowOf(rewound, 2)),
+          Result.succeed("client-3"),
+        );
+      }),
+  );
+
+  it.effect(
+    "refuses to cut a fork through a turn under way, or in another account's conversation",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const stranger = yield* openConversation;
+        const { second, secondLine } = yield* threeLines(target);
+        const steeredAt = yield* rowAt(target, 6, MESSAGE_ROLE.ASSISTANT, second, 2_002);
+        yield* rowAt(target, 7, MESSAGE_ROLE.USER, second, 2_003, 1);
+
+        assert.deepEqual(
+          yield* readForkCut(target, steeredAt),
+          Result.fail(REWIND_REFUSAL.INSIDE_TURN),
+        );
+        assert.deepEqual(
+          yield* readForkCut(
+            { userId: stranger.userId, conversationId: target.conversationId },
+            secondLine,
+          ),
+          Result.fail(REWIND_REFUSAL.NOT_FOUND),
         );
       }),
   );

@@ -54,6 +54,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import {
   agentHoldingsOf,
+  agentsControl,
   handInbox,
   listedAgent,
   tasksControl,
@@ -1120,6 +1121,52 @@ test("a teammate's agent at rest is archived from its row at once, read again by
     document.querySelector('[role="alertdialog"], [role="dialog"]'),
     null,
     "nothing asked",
+  );
+});
+
+test("archiving chosen agents where a teammate's still works asks once, naming how many, before any is archived", async () => {
+  const archived: [string, boolean][] = [];
+  // Note that Charles has a second agent at work, so Working now on his page holds two.
+  const GUARD = agent(4, "Retry storm guard", CHARLES, AGENT_STATUS.RUNNING, 4 * MINUTE);
+  const STORM = task(5, "Retry storm", CHARLES, 4 * MINUTE, [GUARD]);
+  const tasks = [...TASKS, STORM];
+  const { page } = mountWith(
+    {
+      tasks,
+      listed: { tasks },
+      agents: agentsControl({
+        me: DEAN.userId,
+        onArchive: (agentId, _, how) => {
+          archived.push([agentId, how?.asked === true]);
+          return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
+        },
+      }),
+    },
+    CHARLES.userId,
+  );
+  await settle();
+
+  for (const title of [BACKOFF.title, GUARD.title]) {
+    const box = button(page, title).closest("li")?.querySelector<HTMLElement>('[role="checkbox"]');
+    act(() => (box ?? assert.fail(`${title} draws its box`)).click());
+  }
+  openRowMenu(page, BACKOFF.title, "Agent");
+  act(() => button(document.body, "Archive").click());
+  await settle();
+  const dialog =
+    document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+  assert.match(dialog.textContent ?? "", /Stop and archive 2 agents\?/u);
+  assert.deepEqual(archived, [], "nothing is archived before the answer");
+
+  act(() => button(dialog, "Stop and archive agents").click());
+  await settle();
+  assert.deepEqual(
+    archived.toSorted(),
+    [
+      [BACKOFF.id, true],
+      [GUARD.id, true],
+    ],
+    "both are archived once asked",
   );
 });
 

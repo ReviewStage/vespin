@@ -20,6 +20,7 @@ import {
   type AgentUsage,
 } from "@repo/features/agent-wire";
 import type { DeviceLaunchStep, DeviceLaunchUnstarted } from "@repo/features/device-agent-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppTranscript, OWN_TRANSCRIPT } from "@repo/host/app-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,7 +29,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { askAct } from "../act.js";
 import { transcriptQuery, transcriptRetryMutation } from "../live-reads.js";
 import { jsonBytes, PANEL_SPAN, PANEL_SPAN_ATTRIBUTE, recordPanelSpan } from "../panel-spans.js";
-import { type AgentRun, agentStillWriting } from "./agent-model.js";
+import type { AgentRun } from "./agent-model.js";
 
 /**
  * use-agent-transcript.ts -- one agent's transcript, or one of its workers', as its tab draws it, from the read the host holds of it on app state.

@@ -8,6 +8,7 @@ import {
   readAgentRouting,
 } from "@repo/database/models/agent-store";
 import { copySessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
+import { readForkCut, readNativeRewind } from "@repo/database/models/conversation-rewind";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
@@ -35,7 +36,7 @@ import type { ModelChoice } from "@repo/features/models-wire";
 import { bothInOrder } from "@repo/runtime/effect";
 import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { START_LINE_BRIEF } from "@repo/wire";
-import { Effect, Option } from "effect";
+import { Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { SERVER_AGENT_START_KIND, type ServerAgentStartKind } from "../../events/server-events.js";
 import {
@@ -652,20 +653,47 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   };
 });
 
+/** The source's CLI session a Start carries, and the line its session is cut just before as the new agent forks it, none where it is forked whole. */
+interface CarriedSession {
+  readonly session: string;
+  readonly cutBefore: string | undefined;
+}
+
 /**
- * The source's CLI session a continue or a fork of a whole agent forks as
- * its own, in place of a replay of its steps: one the service holds the
- * transcript of from its first entry (`holdsSession`), since the fork reads
- * the copy alone, on the harness the new agent runs (`runtime`), for an agent
- * in the cloud, where its runner reads the transcript back; none for a fork
- * at a message, which is replayed to that message, and wherever else.
+ * Where the source's session is cut as the new agent forks it: a fork at a
+ * message just before the line that opened the turn after it, or the
+ * source's own rewind still waiting where none did (`readForkCut`); a
+ * continue just before that rewind, since a rewind the source never
+ * relaunched after has not cut its session yet. None where it cannot be cut:
+ * a fork of a reply still being written, or at a message whose next line a
+ * turn under way took, which no harness cuts through, so it is replayed.
+ */
+const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
+  const { source, told } = from;
+  const target = { userId: source.userId, conversationId: source.conversationId };
+  if (told.messageId === undefined) {
+    const rewind = yield* hostedStoreOrUnavailable(readNativeRewind(target));
+    return Option.some(Option.getOrUndefined(rewind));
+  }
+  if (told.cut !== undefined) return Option.none();
+  const cut = yield* hostedStoreOrUnavailable(readForkCut(target, told.messageId));
+  return Result.isSuccess(cut) ? Option.some(cut.success) : Option.none();
+});
+
+/**
+ * The source's CLI session a continue or a fork forks as its own, in place
+ * of a replay of its steps, cut where `sessionCutOf` cuts it: one the
+ * service holds the transcript of from its first entry (`holdsSession`),
+ * since the fork reads the copy alone, on the harness the new agent runs
+ * (`runtime`), for an agent in the cloud, where its runner reads the
+ * transcript back; none wherever else, and for a fork its session cannot be
+ * cut for.
  */
 const carriedSessionOf = Effect.fnUntraced(function* (
   ask: Pick<TakeoverAsk, "runsOn">,
   from: StartFrom,
   runtime: Effect.Effect<AgentRuntimeChoice, HostedRefusal, DatabaseServices>,
 ) {
-  if (from.told.messageId !== undefined) return undefined;
   const { source } = from;
   const place = ask.runsOn ?? { machine: source.machine ?? AGENT_MACHINE.VERCEL };
   if (place.machine !== AGENT_MACHINE.VERCEL) return undefined;
@@ -676,17 +704,21 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const held = yield* hostedStoreOrUnavailable(
     holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
-  return held ? read.nativeSession : undefined;
+  if (!held) return undefined;
+  const cut = yield* sessionCutOf(from);
+  return Option.isNone(cut)
+    ? undefined
+    : ({ session: read.nativeSession, cutBefore: cut.value } satisfies CarriedSession);
 });
 
-/** The source as a Start hands it on where its transcript is carried: none of its steps replayed, and its session named. */
-function carryingTranscript(from: StartFrom, session: string): StartFrom {
+/** The source as a Start hands it on where its transcript is carried: none of its steps replayed, and its session named with where it is cut. */
+function carryingTranscript(from: StartFrom, carried: CarriedSession): StartFrom {
   return {
     ...from,
     steps: [],
     totalSteps: 0,
     carriedSummary: undefined,
-    told: { ...from.told, transcript: session },
+    told: { ...from.told, transcript: carried.session, transcriptCut: carried.cutBefore },
   };
 }
 
