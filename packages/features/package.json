@@ -67,6 +67,7 @@
     "./workspace-tools-model": "./src/workspace-tools-model.js",
     "./workspace-tools-wire": "./src/workspace-tools-wire.js",
     "./agent-failure-words": "./src/agent-failure-words.js",
+    "./carry-on-words": "./src/carry-on-words.js",
     "./chapters-model-choice": "./src/chapters-model-choice.js",
     "./agent-status": "./src/agent-status.js",
     "./turn-deadline": "./src/turn-deadline.js",

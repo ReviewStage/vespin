@@ -1,0 +1,285 @@
+/**
+ * carry-on.ts -- a coding agent's turn cut off by its runner going away carried on by itself: the one step every such cut-off takes, so the developer need not notice and send again.
+ *
+ * A turn whose runner went away before it ended is settled failed by
+ * whoever learns of it first: the Mac's host, settling its launch on its
+ * first beat back after it quit, crashed, or restarted
+ * (`../device-agent.ts`); the minute sweep, failing a Mac's run past its
+ * lease, or a cloud turn whose sandbox stopped under it (`reconcile.ts`).
+ * Every such settle reaches the store writer's one settled-turn listener
+ * (`settled-turns.ts`), whose queue step asks here what comes next
+ * (`agent-queue.ts`'s `queueAtTurnEnd`), and a Mac back from past its
+ * lease asks for its agents at its first beat (`carryOnHostReturned`),
+ * since a line sent while it was away was refused. The carry-on is a line
+ * the service sends the agent (`steerAgentWritten`, under the app's name
+ * and the `carry_on` channel), which opens a fresh turn through the one
+ * path a message takes, so the sweep's reap of the cut-off turn always
+ * lands first and nothing fights it; a steer into a turn still running,
+ * as a lost connection's carry-on is, takes the same line.
+ *
+ * The decision (`carryOnDecision`) resumes only where every one of these
+ * holds: the agent is not archived; the turn was cut off, not failed for a
+ * reason of its own (`cutOffReasonOf`); it had started, since a turn still
+ * queued lost no work and its line is resent with the next message; the
+ * line that opened it was not itself a carry-on, so a Mac that dies at
+ * every resume carries on once and then fails as before; and it was
+ * settled within the window (`CARRY_ON.WINDOW`): an hour covers a reboot,
+ * an update, and a laptop closed over a break, with the sweep's own lag
+ * inside it, while a Mac back a day later would revive every agent it ran
+ * onto work that has since moved on, which is the developer's call. Where
+ * a message stands queued behind the turn, that message carries the agent
+ * on instead, handed on where the turn's end would have paused the queue.
+ * A carry-on refused by the agent's harness, or its send failing, leaves
+ * the turn failed as it was, with its own words.
+ */
+
+import type { DatabaseServices } from "@repo/database/core/query";
+import { agentQueueNow } from "@repo/database/models/agent-queue-store";
+import {
+  type Agent,
+  type AgentLatestTurn,
+  latestTurnsOf,
+  readAgent,
+} from "@repo/database/models/agent-store";
+import { liveDeviceAgents } from "@repo/database/models/device-agent-store";
+import { type LostLine, storeWriter, turnOpeningLine } from "@repo/database/models/writer";
+import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
+import { causeKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
+import { CARRY_ON_REASON, type CarryOnLineMetadata, type CarryOnReason } from "@repo/wire";
+import { Clock, Duration, Effect, Option } from "effect";
+import type * as HttpClient from "effect/http/HttpClient";
+import { MESSAGE_CHANNEL, TURN_FAILURE, TURN_STATUS } from "../../core.js";
+import type { GitHubApp } from "../../github/github-app.js";
+import { agentLogIds } from "./agent-log.js";
+import type { QueueSessions } from "./agent-queue.js";
+import { hostLostOf } from "./status.js";
+import { steerAgentWritten } from "./steer.js";
+import { CODER_TOOL_SET } from "./tool-set.js";
+
+/** The services a carry-on's send runs over: the store, and what a message to an agent reaches (`steerAgentWritten`). */
+export type CarryOnServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
+
+export const CARRY_ON = {
+  /** How long after its settle a cut-off turn is still carried on, as the header says. */
+  WINDOW: Duration.hours(1),
+} as const;
+
+/** What comes after a cut-off turn: a carry-on sent, the queued message handed on in its place, or nothing. */
+export const CARRY_ON_OUTCOME = {
+  RESUME: "resume",
+  QUEUE_NEXT: "queue_next",
+  NONE: "none",
+} as const;
+
+export type CarryOnDecision =
+  | { readonly outcome: typeof CARRY_ON_OUTCOME.RESUME; readonly reason: CarryOnReason }
+  | { readonly outcome: typeof CARRY_ON_OUTCOME.QUEUE_NEXT }
+  | { readonly outcome: typeof CARRY_ON_OUTCOME.NONE };
+
+/** The turn the decision reads: how it ended and when, as its row says. */
+export type CarryOnTurn = Pick<
+  AgentLatestTurn,
+  "status" | "failure" | "failureDetail" | "startedAt" | "settledAt"
+>;
+
+/** What the decision is made over, each read before it. */
+export interface CarryOnInput {
+  readonly agent: Pick<Agent, "archivedAt" | "machine">;
+  /** The agent's newest turn; none before its first. */
+  readonly turn: CarryOnTurn | undefined;
+  /** The channel the line that opened the turn names; none where no line opened it, or it names none. */
+  readonly openerChannel: string | undefined;
+  /** Whether a message stands queued behind the turn. */
+  readonly queued: boolean;
+  /** Epoch milliseconds now. */
+  readonly now: number;
+}
+
+/** The lead of the prompt, so the agent reads it as the app's word rather than the developer's. */
+const PROMPT_LEAD = `From ${PRODUCT_NAME}:`;
+
+/** What cut the turn off, in the prompt's words, by reason. */
+const CUT_OFF_WORDS = {
+  [CARRY_ON_REASON.HOST_RESTART]:
+    "the host on the Mac it ran on stopped before the turn ended, and is back now",
+  [CARRY_ON_REASON.RUNNER_LOST]: "its sandbox stopped before the turn ended",
+  [CARRY_ON_REASON.CONNECTION_LOST]:
+    "the connection to the model's provider was lost, and is back now",
+} as const satisfies Record<CarryOnReason, string>;
+
+/** The one key a carry-on of the turn named is sent under, so a repeat sends once. */
+export function carryOnKey(turnId: string): string {
+  return JSON.stringify([MESSAGE_CHANNEL.CARRY_ON, turnId]);
+}
+
+/** What the carry-on line says carried it. */
+export function carryOnLine(reason: CarryOnReason): CarryOnLineMetadata {
+  return { channel: MESSAGE_CHANNEL.CARRY_ON, reason };
+}
+
+/**
+ * The words the carry-on sends the agent: that its previous turn was
+ * interrupted and why, and to check the state of its work before going on,
+ * since what the turn had under way may be half done and the model's own
+ * memory of it stops where the turn did.
+ */
+export function carryOnPrompt(reason: CarryOnReason): string {
+  return (
+    `${PROMPT_LEAD} your previous turn was interrupted before it ended: ${CUT_OFF_WORDS[reason]}. ` +
+    "Nothing was sent to you meanwhile. Whatever that turn had under way may be half done: " +
+    "check the state of your work first, your files, your branch, and any command or background task it had running, " +
+    "then carry on from where it stopped. If it had finished, say so and end your turn."
+  );
+}
+
+/**
+ * Why the turn was cut off, where it was: its runner gone before it ended,
+ * as the sweep and a Mac's host settle one (`runner_lost`), which on a Mac
+ * is the host there stopping, or its Mac quiet past its lease, which the
+ * sweep words by the Mac's name (`hostLostOf`). Nothing for a turn that
+ * ended any other way, a runner still running but silent among them.
+ */
+export function cutOffReasonOf(
+  agent: Pick<Agent, "machine">,
+  turn: CarryOnTurn | undefined,
+): CarryOnReason | undefined {
+  if (turn?.status !== TURN_STATUS.FAILED) return undefined;
+  const onMac = agent.machine === AGENT_MACHINE.DEVICE;
+  if (turn.failure === TURN_FAILURE.RUNNER_LOST) {
+    return onMac ? CARRY_ON_REASON.HOST_RESTART : CARRY_ON_REASON.RUNNER_LOST;
+  }
+  return hostLostOf(turn) === undefined ? undefined : CARRY_ON_REASON.HOST_RESTART;
+}
+
+/** The decision the header describes, over what was read. */
+export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
+  const { agent, turn } = input;
+  const reason = cutOffReasonOf(agent, turn);
+  if (reason === undefined || turn === undefined) return { outcome: CARRY_ON_OUTCOME.NONE };
+  if (agent.archivedAt !== null) return { outcome: CARRY_ON_OUTCOME.NONE };
+  // A turn that never started lost no work: its line is resent with the next message.
+  if (turn.startedAt === null) return { outcome: CARRY_ON_OUTCOME.NONE };
+  // A carry-on cut off in its turn is not carried on again, so a crash at every resume never loops.
+  if (input.openerChannel === MESSAGE_CHANNEL.CARRY_ON) return { outcome: CARRY_ON_OUTCOME.NONE };
+  const settledAt = turn.settledAt?.getTime() ?? input.now;
+  if (input.now - settledAt > Duration.toMillis(CARRY_ON.WINDOW)) {
+    return { outcome: CARRY_ON_OUTCOME.NONE };
+  }
+  if (input.queued) return { outcome: CARRY_ON_OUTCOME.QUEUE_NEXT };
+  return { outcome: CARRY_ON_OUTCOME.RESUME, reason };
+}
+
+/** The channel the line names, where its row keeps one. */
+function channelOf(line: LostLine | undefined): string | undefined {
+  const metadata = line?.metadata;
+  return metadata != null && "channel" in metadata ? metadata.channel : undefined;
+}
+
+/** The decision over the agent and its newest turn as they stand, the turn's opening line and the queue read for it. */
+export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(function* (
+  agent: Agent,
+  turn: AgentLatestTurn | undefined,
+) {
+  const now = yield* Clock.currentTimeMillis;
+  if (cutOffReasonOf(agent, turn) === undefined || turn === undefined) {
+    return carryOnDecision({ agent, turn, openerChannel: undefined, queued: false, now });
+  }
+  const target = { userId: agent.userId, conversationId: agent.conversationId };
+  const opener = yield* turnOpeningLine(target, turn.id);
+  const queue = yield* agentQueueNow(agent.id);
+  return carryOnDecision({
+    agent,
+    turn,
+    openerChannel: channelOf(Option.getOrUndefined(opener)),
+    queued: queue.messages.length > 0,
+    now,
+  });
+});
+
+/**
+ * The carry-on line sent to the agent, acting for its starter, as the
+ * header says: as a fresh turn where none runs, or a steer into the turn
+ * under way. Answers whether it went; a refusal or a failure is logged by
+ * its kind, and the turn is left as it ended.
+ */
+export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
+  sessionsFor: QueueSessions,
+  agent: Agent,
+  turnId: string,
+  reason: CarryOnReason,
+) {
+  return yield* Effect.gen(function* () {
+    const agentSessions = yield* sessionsFor(agent.userId);
+    yield* steerAgentWritten(
+      agentSessions,
+      storeWriter({ tools: CODER_TOOL_SET }),
+      agent.userId,
+      agent,
+      {
+        text: carryOnPrompt(reason),
+        clientKey: carryOnKey(turnId),
+        sender: { kind: MESSAGE_SENDER.APP },
+        metadata: carryOnLine(reason),
+      },
+    );
+    yield* Effect.logInfo("a cut-off turn was carried on").pipe(
+      Effect.annotateLogs({ turnId, reason }),
+    );
+    return true;
+  }).pipe(
+    Effect.catch((refusal) =>
+      Effect.as(
+        Effect.logWarning(`a cut-off turn was not carried on: ${refusal.error}`).pipe(
+          Effect.annotateLogs({ turnId, reason }),
+        ),
+        false,
+      ),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.as(
+        Effect.logWarning(`a cut-off turn was not carried on: ${causeKind(cause)}`).pipe(
+          Effect.annotateLogs({ turnId, reason }),
+        ),
+        false,
+      ),
+    ),
+    Effect.annotateLogs(agentLogIds(agent)),
+  );
+});
+
+/** How many of a Mac's agents one beat back carries on at most. */
+const HOST_RETURN = { AGENTS: 50 } as const;
+
+/**
+ * The agents of a Mac back from past its lease carried on, for the turns the
+ * sweep failed naming the Mac while it was away, as the header says: each
+ * decided as at its settle, and the queued message handed on in place of a
+ * carry-on through `handOn`. Answers how many lines went.
+ */
+export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostReturned")(function* (
+  sessionsFor: QueueSessions,
+  userId: string,
+  deviceId: string,
+  handOn: (agent: Agent) => Effect.Effect<void, never, CarryOnServices>,
+) {
+  const agentIds = (yield* liveDeviceAgents(userId, deviceId)).slice(0, HOST_RETURN.AGENTS);
+  let went = 0;
+  for (const agentId of agentIds) {
+    const agent = yield* readAgent(userId, agentId);
+    if (Option.isNone(agent)) continue;
+    const { conversationId } = agent.value;
+    const turn = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);
+    if (hostLostOf(turn) === undefined) continue;
+    const decided = yield* decidedCarryOn(agent.value, turn);
+    if (decided.outcome === CARRY_ON_OUTCOME.QUEUE_NEXT) {
+      yield* handOn(agent.value);
+      continue;
+    }
+    if (decided.outcome !== CARRY_ON_OUTCOME.RESUME || turn === undefined) continue;
+    if (yield* carriedOn(sessionsFor, agent.value, turn.id, decided.reason)) went += 1;
+  }
+  return went;
+});

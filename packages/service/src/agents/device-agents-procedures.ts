@@ -65,7 +65,7 @@ import {
   openDeviceAgentLaunches,
   stepDeviceAgentLaunch,
 } from "@repo/database/models/device-agent-store";
-import { beatDevice, machineColumns } from "@repo/database/models/device-store";
+import { beatDevice, devicesNamed, machineColumns } from "@repo/database/models/device-store";
 import {
   HOST_PAIRING,
   type HostPairingOpening,
@@ -73,6 +73,7 @@ import {
   pollHostPairing,
 } from "@repo/database/models/host-pairing-store";
 import { enrollOwnDevice, hostsOf, registerHost } from "@repo/database/models/host-store";
+import { DEVICE_LEASE } from "@repo/features/agent-wire";
 import type { DeviceAgentRelease } from "@repo/features/device-agent-wire";
 import { HOST_RELEASE } from "@repo/features/host-release";
 import {
@@ -83,7 +84,7 @@ import {
   type OwnDeviceEnrollRequest,
   shownHostUserCode,
 } from "@repo/features/host-wire";
-import { Duration, Effect, Option } from "effect";
+import { Clock, Duration, Effect, Option } from "effect";
 import {
   admittedHostVersion,
   hostSecretHash,
@@ -92,6 +93,7 @@ import {
   presentedHostVersion,
 } from "../auth/device-secret.js";
 import { recordServerEvent, SERVER_EVENT, SERVER_HOST_KIND } from "../events/server-events.js";
+import { afterResponse } from "../http/after-response.js";
 import {
   HOSTED_REFUSAL,
   hostedStoreOrUnavailable,
@@ -107,6 +109,9 @@ import {
   pairingHostMiddleware,
   pollSecretMiddleware,
 } from "../orpc/base.js";
+import { queueAtTouch } from "./coder-host/agent-queue.js";
+import { carryOnHostReturned } from "./coder-host/carry-on.js";
+import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   claimedDeviceAgentLine,
   deviceAgentDeviceOf,
@@ -191,6 +196,15 @@ const enrollingMachine = ({ name, platform, arch }: OwnDeviceEnrollRequest) => {
 /** Kept, or not found where the account holds no such row. */
 const keptOrNotFound = (kept: boolean) =>
   kept ? Effect.succeed(DONE) : Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+/** Whether the account's Mac last beat before its lease ran out, so this beat is its first back; a Mac the account does not hold reads as not. */
+const deviceAway = (userId: string, deviceId: string) =>
+  Effect.gen(function* () {
+    const device = (yield* devicesNamed([deviceId])).get(deviceId);
+    if (device === undefined || device.userId !== userId) return false;
+    const now = yield* Clock.currentTimeMillis;
+    return device.lastSeenAt.getTime() < now - DEVICE_LEASE.MS;
+  });
 
 /**
  * The release a beat names, where one is published and the request's
@@ -302,11 +316,23 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     beat: deviceAgents.beat.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
       const { deviceId, update, updateFailure } = input;
+      const { userId } = context;
+      // Read before the beat is written, so a Mac back from past its lease is known as one.
+      const away = yield* hostedStoreOrUnavailable(deviceAway(userId, deviceId));
       yield* keptOrNotFound(
-        yield* hostedStoreOrUnavailable(
-          beatDevice(context.userId, deviceId, { update, updateFailure }),
-        ),
+        yield* hostedStoreOrUnavailable(beatDevice(userId, deviceId, { update, updateFailure })),
       );
+      // The turns the sweep failed naming the Mac while it was away are carried on now that it is back (`coder-host/carry-on.ts`).
+      if (away) {
+        yield* afterResponse(
+          "a returned Mac's carry-ons",
+          Effect.asVoid(
+            carryOnHostReturned(routedSessions, userId, deviceId, (agent) =>
+              queueAtTouch(routedSessions, agent),
+            ),
+          ),
+        );
+      }
       // Note that the launches are read after the beat is written, so a claim the device finished before it sent the beat is among them.
       const openLaunches = yield* hostedStoreOrUnavailable(
         openDeviceAgentLaunches(context.userId, deviceId),

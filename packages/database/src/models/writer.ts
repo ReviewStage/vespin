@@ -19,6 +19,7 @@ import {
   type AgentMessageMetadata,
   type AppLineMetadata,
   type AutomationLineMetadata,
+  type CarryOnLineMetadata,
   type CommentLineMetadata,
   type GitHubLineMetadata,
   isWireString,
@@ -403,6 +404,7 @@ export type AwaitingLineMetadata =
   | StartLineMetadata
   | GitHubLineMetadata
   | AppLineMetadata
+  | CarryOnLineMetadata
   | AutomationLineMetadata
   | SlackLineMetadata;
 
@@ -2151,6 +2153,8 @@ const LostLineSchema = Schema.Struct({
   parts: StoredPartsColumnSchema,
   sender: Schema.NullOr(messageSenderSchema),
   senderUserId: Schema.NullOr(Schema.String),
+  /** What the line says carried it, as the row keeps it (`AwaitingLineMetadata`); null on a row kept with none. */
+  metadata: Schema.NullOr(MessageMetadataColumnSchema),
 });
 
 /** The first of the developer's lines the turn named took, as a resend of a lost line reads one; none where it took none. */
@@ -2166,6 +2170,7 @@ const findOpeningLine = SqlSchema.findOneOption({
           parts: messages.parts,
           sender: messages.sender,
           senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
         })
         .from(messages)
         .where(
@@ -2207,6 +2212,7 @@ const findTurnWaitingLines = SqlSchema.findAll({
           parts: messages.parts,
           sender: messages.sender,
           senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
         })
         .from(messages)
         .where(
@@ -2248,6 +2254,7 @@ const findLostLines = SqlSchema.findAll({
           parts: messages.parts,
           sender: messages.sender,
           senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
         })
         .from(messages)
         .innerJoin(conversations, eq(conversations.id, messages.conversationId))

@@ -111,6 +111,7 @@ import { MESSAGE_BLOCK, messageText } from "@repo/ui/reply-quote";
 import {
   ACTION_RESULT_STATUS,
   type AgentMessageMetadata,
+  type CarryOnLineMetadata,
   type CommentLineMetadata,
   GITHUB_CHECK_CONCLUSION,
   GITHUB_LINE_EVENT,
@@ -1978,6 +1979,12 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
  */
 export function isWakeupLine(message: AgentTranscriptMessage): boolean {
   return userMetadataOf(message)?.channel === MESSAGE_CHANNEL.APP;
+}
+
+/** What the carry-on line the service sent after a cut-off turn says of why, where a line is one; nothing for any other line, or a row this build cannot read. */
+export function carryOnLineOf(message: AgentTranscriptMessage): CarryOnLineMetadata | undefined {
+  const read = userMetadataOf(message);
+  return read?.channel === MESSAGE_CHANNEL.CARRY_ON ? read : undefined;
 }
 
 /** A second, in the milliseconds a wakeup's wait is told in. */

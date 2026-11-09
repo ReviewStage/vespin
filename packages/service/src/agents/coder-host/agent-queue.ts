@@ -49,6 +49,7 @@ import type * as HttpClient from "effect/http/HttpClient";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
+import { CARRY_ON_OUTCOME, carriedOn, decidedCarryOn } from "./carry-on.js";
 import { routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf, startedBlank } from "./status.js";
 import { steerAgentWritten } from "./steer.js";
@@ -253,7 +254,9 @@ export const queueAtTouch = Effect.fn("web/queueAtTouch")(function* (
 
 /**
  * The agent's queue at its turn's end: paused where the turn failed, as its
- * row says, and handed on otherwise. Note that a turn stopped pauses nothing
+ * row says, unless the turn was cut off by its runner going away, which is
+ * carried on by itself, or by the message queued behind it, handed on in
+ * the carry-on's place (`carry-on.ts`); and handed on otherwise. Note that a turn stopped pauses nothing
  * here, because the Stop paused the queue as it was asked (`stop.ts`), and a
  * Resume since then must stand; and that the row is read rather than the
  * runner's word for its end, because a turn the CLI failed may end its
@@ -268,9 +271,21 @@ export const queueAtTurnEnd = Effect.fn("web/queueAtTurnEnd")(function* (
       Effect.as(Effect.logWarning("agent-queue: a turn read failed", cause), undefined),
     ),
   );
-  const status = turns?.get(agent.conversationId)?.status;
-  const because = PAUSE_OF_TURN.get(status ?? "");
+  const turn = turns?.get(agent.conversationId);
+  const because = PAUSE_OF_TURN.get(turn?.status ?? "");
   if (because !== undefined) {
+    // A turn cut off by its runner going away is carried on by itself, or by the message queued behind it (`carry-on.ts`).
+    const decided = yield* decidedCarryOn(agent, turn).pipe(
+      Effect.catchCause((cause) =>
+        Effect.as(Effect.logWarning("agent-queue: a carry-on was not decided", cause), undefined),
+      ),
+    );
+    if (decided?.outcome === CARRY_ON_OUTCOME.RESUME && turn !== undefined) {
+      return yield* Effect.asVoid(carriedOn(sessionsFor, agent, turn.id, decided.reason));
+    }
+    if (decided?.outcome === CARRY_ON_OUTCOME.QUEUE_NEXT) {
+      return yield* handOnQueue(sessionsFor, agent);
+    }
     return yield* Effect.asVoid(pauseAgentQueue(agent.id, because)).pipe(
       Effect.catchCause((cause) => Effect.logWarning("agent-queue: a pause failed", cause)),
     );
