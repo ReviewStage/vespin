@@ -15,15 +15,16 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - takeScreenshot: inbox
 # A row's detail: pushed over the list in a compact window, and beside it in
-# a regular one.
-- tapOn: "Who can withdraw an invite?"
-- assertVisible: "Recommended"
+# a regular one. A plain thread, a notice, opens on its words.
+- tapOn: "acceptInvite can add a member twice"
+- assertVisible: ".*adds them twice.*"
 - takeScreenshot: inbox-thread
 # Note that pressing the Inbox tab again pops its stack back to the list on a
-# compact window, and is a no-op beside the split view on a regular one.
+# compact window, and is a no-op beside the split view on a regular one. A
+# thread with a decide ask opens on its choices, the recommended one marked.
 - tapOn: "Inbox"
-- tapOn: "Run the memberships migration on preview?"
-- assertVisible: "Approve"
+- tapOn: "Who can withdraw an invite?"
+- assertVisible: "Recommended"
 - takeScreenshot: inbox-ask
 - tapOn: "Inbox"
 - tapOn: "Tasks"

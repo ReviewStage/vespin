@@ -20,7 +20,9 @@ type Standing = { readonly client: QueryClient } | { readonly failed: true };
  * app's own, and draws the screens once the first reading is in it, so no
  * screen draws an empty document first. A host that cannot stand is said on
  * the console and shown in the screens' place with Retry, which starts it
- * again, rather than drawing an empty Inbox over nothing. The host is
+ * again, rather than drawing an empty Inbox over nothing; a host that stands
+ * but refuses its first read is said on the console too, and the screens
+ * draw over the empty client, which the next delivery fills. The host is
  * drained as the tree unmounts, which on a device is the app ending.
  */
 export function HostProvider({ children }: { readonly children: ReactNode }) {
@@ -43,7 +45,14 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         const client = new QueryClient();
         const following = followAppStateInto(host.bridge, client);
         stopFollowing = following.stop;
-        await following.written;
+        try {
+          await following.written;
+        } catch (error) {
+          console.error(
+            "The host's document could not be read; the next delivery asks again.",
+            error,
+          );
+        }
         if (live) setStanding({ client });
         else void host.close();
       },

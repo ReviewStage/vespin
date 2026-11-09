@@ -98,11 +98,9 @@ export function expoFileSystem(): Layer.Layer<FileSystem.FileSystem> {
       Effect.suspend(() => {
         const from = fileAt(oldPath);
         if (!from.exists) return Effect.fail(missing("rename", oldPath));
-        // Note that a rename lands over whatever stood at the new path, as Node's does: the settings store writes a file beside its own and renames it over.
+        // Note that a rename lands over whatever stood at the new path in the one move, as Node's does: the settings store writes a file beside its own and renames it over, and a delete before the move would lose the file it keeps where the move then failed.
         return attempt("rename", newPath, () => {
-          const to = fileAt(newPath);
-          if (to.exists) to.delete();
-          from.moveSync(to);
+          from.moveSync(fileAt(newPath), { overwrite: true });
         });
       }),
     remove: (path, options) =>
