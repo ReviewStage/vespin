@@ -198,6 +198,8 @@ export const NATIVE_WRITE = {
   COMPACTED: "compacted",
   /** Record how a turn found the plan that pays for the agent, on its row. */
   PLAN_STATUS: "plan_status",
+  /** Record how much of its usage window the plan that pays for the agent has used, on its row. */
+  PLAN_USAGE: "plan_usage",
   /** Record what the newest model call read on the agent's row, which its context ring reads. */
   CONTEXT: "context",
   /** Say a turn's failure in the log, and as an issue where its user did not expect it. */
@@ -238,6 +240,15 @@ export type NativeWrite =
       /** When a reached limit resets, in epoch milliseconds, where the harness said. */
       readonly resetsAt?: number;
       /** When the turn that found it opened, so a credential saved since is not judged by it. */
+      readonly turnOpenedAt?: number;
+    }
+  | {
+      readonly kind: typeof NATIVE_WRITE.PLAN_USAGE;
+      readonly usedPercent: number;
+      readonly windowMins?: number;
+      /** When the window resets, in epoch milliseconds, where the harness said. */
+      readonly resetsAt?: number;
+      /** When the turn that heard it opened, so a credential saved since is not given it. */
       readonly turnOpenedAt?: number;
     };
 
@@ -743,6 +754,16 @@ class Fold {
                 : undefined),
             }
           : rest;
+        return;
+      }
+      case NATIVE_MOMENT.PLAN_USAGE: {
+        const { kind: _kind, ...usage } = moment;
+        const turnOpenedAt = this.state.turn?.openedAt;
+        this.writes.push({
+          kind: NATIVE_WRITE.PLAN_USAGE,
+          ...usage,
+          ...(turnOpenedAt !== undefined ? { turnOpenedAt } : undefined),
+        });
         return;
       }
       case NATIVE_MOMENT.PLAN: {

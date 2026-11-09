@@ -165,8 +165,9 @@ export function SidebarAgent({
   const editing = rename?.editing ?? false;
   const endedByKey = useRefocusAfterEdit(editing, row);
   const pinned = agent.pinnedAt !== undefined;
-  useFocusedRowKeys(
+  const rowSubject = useFocusedRowKeys(
     item,
+    actions.subject,
     () => reads.mark(agent, !isUnread),
     onPin === undefined ? undefined : () => onPin(!pinned),
   );
@@ -176,7 +177,7 @@ export function SidebarAgent({
     read: { unread: isUnread, onMark: (next) => reads.mark(agent, next) },
     agentPin: onPin === undefined ? undefined : { pinned, onToggle: () => onPin(!pinned) },
     section,
-    rowKeys: true,
+    subject: rowSubject,
   });
   // Note that the row's buttons say Pin and Archive as a task's do, running what the menu's items run.
   const marks: RowMark[] = [

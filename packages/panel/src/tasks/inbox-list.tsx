@@ -142,6 +142,7 @@ import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { PEOPLE_FILTER, PEOPLE_FILTER_WORDS, peopleFilterActions } from "../member-rows.js";
+import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import type { InboxResolver } from "./inbox-close.js";
@@ -152,7 +153,7 @@ import {
   listHeadControl,
   VIEW_OPTIONS,
 } from "./inbox-columns.js";
-import { useInboxItemActions } from "./inbox-item-actions.js";
+import { INBOX_ITEM_KEYS, inboxItemSubject, useInboxItemActions } from "./inbox-item-actions.js";
 import {
   addressedWords,
   HolderGlyph,
@@ -500,11 +501,9 @@ export const InboxItemRow = memo(function InboxItemRow({
   const addressedTo = inboxAddressedTo(item);
   const addressee = usePerson(addressedTo);
   const coarse = useCoarsePointer();
-  // Note that U, H, and E act only on the chosen item, so only its row names their chords.
   const { groups, openInTab } = useInboxItemActions(item, {
     onMark: onMark === undefined ? undefined : (_item, next) => onMark(listed, next),
     onResolve,
-    keyed: chosen,
     remind:
       onRemind === undefined || onPickRemind === undefined
         ? undefined
@@ -1625,6 +1624,8 @@ export function InboxList({
   const footed = head.phone !== undefined || (head.tab === true && phone);
   // Note that E resolves every item chosen where several are, else the item open beside the list, as U and H act on it.
   const resolvable = picks.length > 0 ? picks : drawn.filter(({ item }) => item.id === chosen);
+  // U, H, and E act on the chosen item, so only its menus name their chords.
+  useShortcutTarget(chosen === undefined ? undefined : inboxItemSubject(chosen), INBOX_ITEM_KEYS);
   useAppCommand(
     APP_COMMAND.RESOLVE,
     head.shown &&

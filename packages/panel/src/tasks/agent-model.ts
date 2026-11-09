@@ -158,15 +158,15 @@ const LINE_SEPARATOR = " · ";
 /** Each payer as the model menu's last line names it; a key's line goes on to what the agent has cost. */
 const PAYER_WORDS = {
   [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude plan",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using ChatGPT plan",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex plan",
   [AGENT_PAYER.APP]: `${PRODUCT_NAME}'s API key`,
   [AGENT_PAYER.MAC_SIGN_IN]: "Using your Mac's sign-in",
 } as const satisfies Record<Exclude<AgentPayer, typeof AGENT_PAYER.API_KEY>, string>;
 
-/** Each plan payer as the model menu's last line leads a plan it names: "Using ChatGPT · ana@work.com". */
+/** Each plan payer as the model menu's last line leads a plan it names: "Using Codex · ana@work.com". */
 const PLAN_PAYER_WORDS = {
   [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using ChatGPT",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex",
 } as const satisfies Partial<Record<AgentPayer, string>>;
 
 type PlanPayer = keyof typeof PLAN_PAYER_WORDS;
@@ -985,7 +985,7 @@ export interface ConnectFailure {
 /** What would run a provider's models, as the connect note names it: the harness's plan or the provider's API key. */
 const CONNECT_CREDENTIALS = {
   [MODEL_PROVIDER.ANTHROPIC]: "a Claude plan or an Anthropic API key",
-  [MODEL_PROVIDER.OPENAI]: "a ChatGPT plan or an OpenAI API key",
+  [MODEL_PROVIDER.OPENAI]: "a Codex plan or an OpenAI API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /**

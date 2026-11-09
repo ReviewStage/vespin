@@ -54,6 +54,7 @@ import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppWorkspaceMembers } from "@repo/host/app-state";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
@@ -65,7 +66,7 @@ import { afterEach, beforeAll, beforeEach, onTestFinished, test, vi } from "vite
 import type { SideBundles } from "../bundle-loader.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
-import type { TabActionGroups } from "../desktop/strip-tabs.js";
+import { handedCommand, type TabActionGroups } from "../desktop/strip-tabs.js";
 import {
   DIFF_SELECTION_SIDE,
   type DiffListProps,
@@ -523,8 +524,20 @@ function Switching({
   );
 }
 
-/** What the side panel's toolbar ⋯ offers for the tab, as a row of presses: its items as the tab hands them up. */
+/** What the side panel's toolbar ⋯ offers for the tab, as a row of presses: its items as the tab hands them up, and ⇧⌘O as the panel runs it from them. */
 function Toolbar({ actions }: { actions: TabActionGroups | undefined }) {
+  const chord = handedCommand(actions ?? [], APP_COMMAND.OPEN_ON_GITHUB);
+  return createElement(
+    Fragment,
+    null,
+    chord === undefined
+      ? null
+      : createElement("button", { type: "button", "data-chord": "", onClick: chord }, "⇧⌘O"),
+    createElement(ToolbarItems, { actions }),
+  );
+}
+
+function ToolbarItems({ actions }: { actions: TabActionGroups | undefined }) {
   return createElement(
     "div",
     { "data-toolbar": "" },
@@ -2196,7 +2209,7 @@ test("a merged pull request says so on its pill, as its overview read it, says n
   ]);
 });
 
-test("where what the agent published is not read, the header still says where the pull request stands, and the toolbar's ⋯ opens it on GitHub, as its overview read it; the header holds no ⋯ of its own", async () => {
+test("where what the agent published is not read, the header still says where the pull request stands, and the toolbar's ⋯ and ⇧⌘O open it on GitHub, as its overview read it; the header holds no ⋯ of its own", async () => {
   const control = {
     ...controlAnswering(),
     pullRequests: new Map(),
@@ -2218,6 +2231,9 @@ test("where what the agent published is not read, the header still says where th
   await pressToolbar(tab, "Open on GitHub");
   await settle();
   assert.deepEqual(opened, [PAGE]);
+  const chord = tab.querySelector<HTMLButtonElement>("[data-chord]") ?? assert.fail("⇧⌘O opens it");
+  await act(async () => chord.click());
+  assert.deepEqual(opened, [PAGE, PAGE]);
 });
 
 test("the toolbar's ⋯ offers Refresh dimmed while a read is out, which a refresh would only repeat", async () => {

@@ -101,6 +101,7 @@ import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { AgentCrumbMenu, type CrumbHeld, TaskCrumbMenu } from "../desktop/crumb-menus.js";
 import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
+import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
@@ -130,7 +131,7 @@ import type { InboxCodeDoors } from "./inbox-code-card.js";
 import { INBOX_VIEW_ITEMS } from "./inbox-columns.js";
 import { COMMENT, INBOX_THREAD, InboxComment } from "./inbox-comment.js";
 import type { FormTextDoors } from "./inbox-form-text.js";
-import { useInboxItemActions } from "./inbox-item-actions.js";
+import { INBOX_ITEM_KEYS, inboxItemSubject, useInboxItemActions } from "./inbox-item-actions.js";
 import { AddressedTo, HolderGlyph } from "./inbox-item-parts.js";
 import {
   AgentName,
@@ -1238,10 +1239,11 @@ function InboxItemMenu({
 }): React.JSX.Element | null {
   const menu = useMenu(shown);
   // Note that a time of the reader's own is picked from the item's row, whose list holds the picker, so this menu offers the times alone.
+  // The item the pane shows is the one the Inbox's U, H, and E act on, so its ⋯ names their chords.
+  useShortcutTarget(shown ? inboxItemSubject(item.id) : undefined, INBOX_ITEM_KEYS);
   const { groups: itemGroups } = useInboxItemActions(item, {
     onMark,
     onResolve: onClose,
-    keyed: true,
     remind: onRemind === undefined ? undefined : { onRemind },
   });
   // Note that a phone's ⋯, the one given a lead, also stands in for ⌘F, read here as the menu is drawn rather than as the lead was made.

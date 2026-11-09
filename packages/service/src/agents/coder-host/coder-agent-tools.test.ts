@@ -1053,6 +1053,41 @@ test("read_agent reads a teammate's agent on another task of the caller's worksp
   assert.equal(agentSessions.sent.length, 0, "a read sends nothing");
 });
 
+test("read_agent reads a transcript longer than one read of the store whole, each entry once and in order, on from its start and back from its end", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+  const { userId, conversationId } = agents.teammates;
+  const count = AGENT_TOOL_BOUNDS.PAGE_ROWS * 2 + 5;
+  const lines = Array.from({ length: count }, (_, each) => `Line ${each + 1}`);
+  await database.run(
+    Database.use((db) =>
+      db.insert(messages).values(
+        lines.map((text, each) => ({
+          userId,
+          conversationId,
+          seq: 1_000 + each,
+          clientId: randomUUID(),
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text" as const, text }],
+          metadata: { channel: MESSAGE_CHANNEL.TYPED },
+          createdAt: new Date(NOW),
+          placedAt: new Date(NOW),
+        })),
+      ),
+    ),
+  );
+  const expected = lines.map((text) => `The developer: ${text}`);
+  const agentId = agents.teammates.id;
+  const entries = AGENT_TOOL_BOUNDS.MAX_PAGE_ENTRIES;
+
+  assert.deepEqual(tailTexts(await call(AGENT_TOOL.READ_AGENT, { agentId, entries })), expected);
+  assert.deepEqual(
+    tailTexts(await call(AGENT_TOOL.READ_AGENT, { agentId, from: "start", entries })),
+    expected,
+  );
+});
+
 test("start_agent starts an agent on the caller's own task as the deployment acting for its starter, answering the title it goes by, telling it which agent started it, that it reports back with message_agent, and that threads to the developer are that agent's, leaves the starter's default as it stood, and starts once under the call's key", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const { caller } = agents;
@@ -3863,7 +3898,7 @@ test("a Codex agent on its Mac's own sign-in lists its GPT models alone with no 
     {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason:
-        "Not changed: that agent runs on Codex, which runs a fast version on the ChatGPT plan or an OpenAI API key alone; choose the model itself.",
+        "Not changed: that agent runs on Codex, which runs a fast version on the Codex plan or an OpenAI API key alone; choose the model itself.",
     },
     {
       status: ACTION_RESULT_STATUS.REJECTED,

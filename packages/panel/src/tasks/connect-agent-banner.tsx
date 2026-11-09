@@ -48,7 +48,7 @@ const PROVIDERS: readonly ModelProvider[] = [MODEL_PROVIDER.ANTHROPIC, MODEL_PRO
 /** What the line says, worded once. */
 const CONNECT_AGENT_COPY = {
   NONE_TITLE: "Connect an agent to start",
-  NONE_DETAIL: "Agents run on your Claude or ChatGPT plan, or an API key.",
+  NONE_DETAIL: "Agents run on your Claude or Codex plan, or an API key.",
   OTHER_DETAIL: "Connect it, or choose another model below.",
 } as const;
 

@@ -42,6 +42,7 @@ import type { FailureSurface } from "@repo/features/shown-failure";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { workingTime } from "@repo/features/time-format";
 import { INLINE_DIFF } from "@repo/settings/diff-view";
+import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
   AVATAR_SHAPE,
   AVATAR_SIZE,
@@ -172,6 +173,14 @@ import {
 import { pictureQuery } from "../picture-query.js";
 import { scrollerOf } from "../scroll-within.js";
 import { SHELL_ROOM } from "../shell-room.js";
+import {
+  placedSubject,
+  SHORTCUT_PLACE,
+  SHORTCUT_SUBJECT,
+  type ShortcutSubject,
+  shortcutSubject,
+  useShortcutTarget,
+} from "../shortcut-target.js";
 import { ShellRoomContext, usePhoneRoom } from "../stage-room.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -598,6 +607,17 @@ function durationOf(check: PullRequestCheck): string | undefined {
  * chosen and the panel holds the keys (`side-panel.tsx`), and the page read
  * again, dimmed while a read is out, which a refresh would only repeat.
  */
+/** The keys the Pull request tab's ⋯ hands the side panel, which its Open on GitHub prints. */
+const PULL_REQUEST_TAB_KEYS: readonly KeyedCommand[] = [APP_COMMAND.OPEN_ON_GITHUB];
+
+/** The pull request's page on GitHub as its tab in the side panel acts on it, which ⇧⌘O opens from there alone. */
+function pullRequestTabSubject(url: string): ShortcutSubject {
+  return placedSubject(
+    shortcutSubject(SHORTCUT_SUBJECT.GITHUB_PAGE, url),
+    SHORTCUT_PLACE.SIDE_PANEL_TAB,
+  );
+}
+
 function pullRequestActions(
   url: string,
   reading: boolean,
@@ -605,8 +625,12 @@ function pullRequestActions(
   onRefresh: () => void,
 ): MenuAction[] {
   return [
-    commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), false),
-    commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => appPlatform().openGitHub(url), true),
+    commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), undefined),
+    commandAction(
+      PANEL_COMMAND.OPEN_ON_GITHUB,
+      () => appPlatform().openGitHub(url),
+      pullRequestTabSubject(url),
+    ),
     {
       label: "Refresh",
       icon: <RotateCwIcon aria-hidden="true" />,
@@ -1194,8 +1218,14 @@ function GitHubEntryMenu({ thing, url }: { thing: EntryThing; url: string }): Re
   const menu = useMenu(true);
   const copy = useCopyToast();
   const groups = [
-    [commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), false)],
-    [commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => appPlatform().openGitHub(url), false)],
+    [commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), undefined)],
+    [
+      commandAction(
+        PANEL_COMMAND.OPEN_ON_GITHUB,
+        () => appPlatform().openGitHub(url),
+        shortcutSubject(SHORTCUT_SUBJECT.GITHUB_PAGE, url),
+      ),
+    ],
   ];
   return (
     <span className="pull-request-entry-menu flex">
@@ -3426,6 +3456,11 @@ function PullRequestTabBody({
   // on the screen, Files changed's ⋯ offering none of its own; a write reads back without it.
   const refreshAllNow = useRef<() => void>(refresh);
   const url = none ? undefined : held?.url;
+  // The tab hands the side panel its Open on GitHub, whose ⇧⌘O the panel runs while the tab is chosen (`side-panel.tsx`).
+  useShortcutTarget(
+    url === undefined ? undefined : pullRequestTabSubject(url),
+    PULL_REQUEST_TAB_KEYS,
+  );
   // Until the pull request's own read lands, its link standing, the read its chip's card draws, draws the line under the title.
   const standing = usePlaceStanding(
     source.place,

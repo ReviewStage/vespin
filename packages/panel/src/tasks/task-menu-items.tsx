@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { linkItems, openInTabOf } from "../copy-link-item.js";
 import type { MenuAction } from "../desktop/action-menu.js";
+import type { ShortcutSubject } from "../shortcut-target.js";
 
 /**
  * task-menu-items.tsx -- the items a task's ⋯ menu and the ⋯ beside its title both offer: Copy link, Mark as unread, Rename, and Version history, and the open task's one rename door ⌘K reaches.
@@ -56,9 +57,8 @@ export function taskLinkItems(
   copy: (words: string, label: string) => void,
   task: Pick<TaskSummary, "id" | "number">,
   place: MentionPlace,
-  chord: readonly string[],
 ): MenuAction[] {
-  return linkItems(copy, taskLink(task, place), chord);
+  return linkItems(copy, taskLink(task, place));
 }
 
 /** Whether a task is unread, as its sidebar row's weight says, and the mark that makes it unread or read. */
@@ -67,16 +67,19 @@ export interface ReadMark {
   readonly onMark: (unread: boolean) => void;
 }
 
-/** Mark as unread, or Mark as read on a task already unread, printing U where `keyed`: on the focused sidebar row's menu and the open thing's, which the key marks. */
-export function markReadItem({ unread, onMark }: ReadMark, keyed = false): MenuAction {
+/** Mark as unread, or Mark as read on a thing already unread, printing U where the key marks `subject`: a focused sidebar row's, the open thing's, the Inbox's chosen item's. */
+export function markReadItem(
+  { unread, onMark }: ReadMark,
+  subject: ShortcutSubject | undefined,
+): MenuAction {
   return unread
-    ? commandAction(PANEL_COMMAND.MARK_READ, () => onMark(false), keyed)
-    : commandAction(PANEL_COMMAND.MARK_UNREAD, () => onMark(true), keyed);
+    ? commandAction(PANEL_COMMAND.MARK_READ, () => onMark(false), subject)
+    : commandAction(PANEL_COMMAND.MARK_UNREAD, () => onMark(true), subject);
 }
 
 /** Rename, editing the name where the menu's door draws it. */
 export function renameTaskItem(rename: () => void): MenuAction {
-  return commandAction(PANEL_COMMAND.RENAME_TASK, rename, false);
+  return commandAction(PANEL_COMMAND.RENAME_TASK, rename, undefined);
 }
 
 /** The open task's rename door, by the task it renames: what its page offers while it stands. */
@@ -108,7 +111,7 @@ export function useTaskRenameOffer(): OpenTaskRename | undefined {
   return useSelector(openTaskRenameStore);
 }
 
-/** Version history, opening the description's versions over the window, printing ⌥⇧⌘H where `keyed`: on the open task's menu, whose versions the chord opens. */
-export function versionHistoryItem(open: () => void, keyed = false): MenuAction {
-  return commandAction(PANEL_COMMAND.VERSION_HISTORY, open, keyed);
+/** Version history, opening the description's versions over the window, printing ⌥⇧⌘H where the chord opens `subject`'s: the open task's. */
+export function versionHistoryItem(open: () => void, subject: ShortcutSubject): MenuAction {
+  return commandAction(PANEL_COMMAND.VERSION_HISTORY, open, subject);
 }

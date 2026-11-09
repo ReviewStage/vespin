@@ -197,6 +197,7 @@ import {
   type SettingsSearchInput,
   settingsSearchEntries,
 } from "../settings-search.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD, tasklessRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -229,6 +230,7 @@ import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
+import { actingCommand } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { agentEntries } from "./agent-entries.js";
 import { type AgentReadMarks, useAgentReadMarks } from "./agent-read-marks.js";
@@ -1438,8 +1440,8 @@ function panelTabRows(
  * so, as the plan's menus offer it; none while no plan is looked at. Note
  * that a plan Settings or the Inbox covers is offered nothing, because the
  * row does not name the plan, and going back to it opens it, which takes
- * the mark back before it is ever seen. It wears U, which marks the plan
- * open while no sidebar row has the keyboard, as ⌘K's own field has it.
+ * the mark back before it is ever seen. It wears U where U marks the plan
+ * open, as it does while no sidebar row has the keyboard, as ⌘K's own field has it.
  */
 function readMarkRows(
   tasks: TasksControl,
@@ -1451,13 +1453,13 @@ function readMarkRows(
   if (task.id !== reads.watched) return [];
   const item = markReadItem(
     { unread: reads.markedUnread(task.id), onMark: (unread) => reads.mark(task, unread) },
-    true,
+    shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
   );
   return [
     {
       icon: item.icon,
       label: item.label,
-      command: item.command,
+      command: actingCommand(item),
       terms: [item.label],
       onChoose: () => choose(item.onSelect),
     },
@@ -1481,13 +1483,13 @@ function agentReadMarkRows(
   if (agent === undefined) return [];
   const item = markReadItem(
     { unread: reads.markedUnread(agent.id), onMark: (unread) => reads.mark(agent, unread) },
-    true,
+    shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id),
   );
   return [
     {
       icon: item.icon,
       label: item.label,
-      command: item.command,
+      command: actingCommand(item),
       terms: [item.label],
       onChoose: () => choose(item.onSelect),
     },

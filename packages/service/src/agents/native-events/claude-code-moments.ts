@@ -220,6 +220,7 @@ const readRateLimit = Schema.decodeUnknownOption(
       status: Schema.String,
       rateLimitType: Schema.optionalKey(Schema.String),
       resetsAt: Schema.optionalKey(Schema.Number),
+      utilization: Schema.optionalKey(Schema.Number),
     }),
   }),
 );
@@ -298,6 +299,14 @@ const INFORMATIONAL_WARNING = "warning";
 
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
 const RATE_LIMIT_REFUSED = "rejected";
+
+/** How long each of the plan's limits runs, in minutes, by the `rateLimitType` the SDK names it. */
+const RATE_LIMIT_WINDOW_MINS: Readonly<Record<string, number>> = {
+  five_hour: 5 * 60,
+  seven_day: 7 * 24 * 60,
+  seven_day_opus: 7 * 24 * 60,
+  seven_day_sonnet: 7 * 24 * 60,
+};
 
 /**
  * The errors an answer carries that say the provider refused the plan's
@@ -563,14 +572,27 @@ function resultMoments(message: WireValue): readonly NativeMoment[] {
 function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
   const read = readRateLimit(message);
   if (Option.isNone(read)) return [];
-  const { status, rateLimitType, resetsAt } = read.value.rate_limit_info;
+  const { status, rateLimitType, resetsAt, utilization } = read.value.rate_limit_info;
   // Note that the SDK counts the reset in seconds since the epoch.
   const resetsAtMs = resetsAt === undefined ? undefined : resetsAt * 1000;
   const words = [`rate_limit_${status}`];
   if (rateLimitType !== undefined) words.push(rateLimitType);
   if (resetsAtMs !== undefined) words.push(`resets ${new Date(resetsAtMs).toISOString()}`);
   const refused = status === RATE_LIMIT_REFUSED;
+  const windowMins =
+    rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOW_MINS[rateLimitType];
   return [
+    // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.
+    ...(utilization === undefined
+      ? []
+      : [
+          {
+            kind: NATIVE_MOMENT.PLAN_USAGE,
+            usedPercent: utilization * 100,
+            ...(windowMins === undefined ? {} : { windowMins }),
+            ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
+          } as const,
+        ]),
     {
       kind: NATIVE_MOMENT.RATE_LIMIT,
       refused,

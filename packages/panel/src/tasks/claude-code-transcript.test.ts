@@ -368,6 +368,6 @@ test("an agent paid for by a plan says the plan where an agent on a key names th
   );
   assert.equal(
     agentPayerLine(AGENT_PAYER.CHATGPT_SUBSCRIPTION, MODEL_PROVIDER.OPENAI, 2.41),
-    "Using ChatGPT plan",
+    "Using Codex plan",
   );
 });

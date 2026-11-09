@@ -187,9 +187,25 @@ const providerKeySummarySchema = EffectSchema.Struct({
   statusAt: countedNumber,
   /** When a plan's reached limit resets, in epoch milliseconds, where the provider said; absent otherwise. */
   limitResetsAt: EffectSchema.optionalKey(countedNumber),
+  /** The key's own id, which a reorder names it by among its provider's plans; absent from a service that predates it. */
+  id: EffectSchema.optionalKey(EffectSchema.String),
+  /** Where the key stands in its provider's order, among its plans; absent from a service that predates it, which pays with it last. */
+  position: EffectSchema.optionalKey(countedNumber),
 });
 
 export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
+
+/** How much of its usage window a plan has used, as a turn on it last heard its harness report. */
+const planUsageSchema = EffectSchema.Struct({
+  /** The share of the window used, in percent. */
+  usedPercent: countedNumber,
+  /** How long the window is, in minutes, where the harness said. */
+  windowMins: EffectSchema.optionalKey(countedNumber),
+  /** When the window resets, in epoch milliseconds, where the harness said. */
+  resetsAt: EffectSchema.optionalKey(countedNumber),
+});
+
+export type PlanUsage = typeof planUsageSchema.Type;
 
 /** What the account sees of one stored subscription credential: never the credential, only what tells it apart. */
 const subscriptionKeySummarySchema = EffectSchema.Struct({
@@ -209,6 +225,8 @@ const subscriptionKeySummarySchema = EffectSchema.Struct({
    * A service that predates the default answers none, which reads as on.
    */
   forAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** How much of its usage window it has used, as last heard; absent until a turn heard it, and once that window has reset. */
+  usage: EffectSchema.optionalKey(planUsageSchema),
 });
 
 export type SubscriptionKeySummary = typeof subscriptionKeySummarySchema.Type;
@@ -306,7 +324,8 @@ export const subscriptionLabelRequestSchema = EffectSchema.Struct({
 
 /**
  * Reordering the account's subscriptions of a kind (PUT), first paying
- * first: the ids in their new order. One the account does not hold is
+ * first: the ids in their new order, the provider's API key's among them
+ * where it stands between its plans. One the account does not hold is
  * passed over, and one it holds that the order leaves out keeps its place
  * after those named.
  */
@@ -366,7 +385,7 @@ export const CHATGPT_DEVICE_FAILURE_MESSAGE = {
   [CHATGPT_DEVICE_LOGIN.EXPIRED]:
     "The code expired before it was entered. Start again for a new one.",
   [CHATGPT_DEVICE_LOGIN.REFUSED]:
-    "ChatGPT did not connect this account. Start again to try once more.",
+    "Codex did not connect this account. Start again to try once more.",
   [CHATGPT_DEVICE_LOGIN.CANCELED]: "This connection was canceled. Start again for a new code.",
 } as const satisfies Record<
   Exclude<

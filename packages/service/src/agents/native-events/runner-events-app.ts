@@ -16,7 +16,7 @@ import {
   type NativeProjectionRow,
   withNativeProjection,
 } from "@repo/database/models/native-projection-store";
-import { setPlanStatus } from "@repo/database/models/provider-key-store";
+import { setPlanStatus, setPlanUsage } from "@repo/database/models/provider-key-store";
 import { acceptRunnerLine } from "@repo/database/models/runner-line-store";
 import { progressTurns, queuedTurnOf, supersededTurnsOf } from "@repo/database/models/turn-state";
 import {
@@ -602,6 +602,23 @@ function landWrite(
         new Date(write.turnOpenedAt ?? now),
         new Date(now),
         applying.payer === AGENT_PAYER.API_KEY ? undefined : applying.subscriptionId,
+      );
+    }
+    case NATIVE_WRITE.PLAN_USAGE: {
+      // Note that usage is a plan's alone, which no API key's row takes.
+      const row = applying.payer === undefined ? undefined : PLAN_ROW[applying.payer];
+      if (row === undefined) return Effect.void;
+      return setPlanUsage(
+        target.userId,
+        row.provider,
+        row.kind,
+        {
+          usedPercent: write.usedPercent,
+          ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
+          ...(write.resetsAt === undefined ? {} : { resetsAt: new Date(write.resetsAt) }),
+        },
+        new Date(write.turnOpenedAt ?? now),
+        applying.subscriptionId,
       );
     }
   }

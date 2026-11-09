@@ -531,7 +531,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
             rows.map((row) => [row.sealedKey, row.label]),
           );
 
-        yield* reorderSubscriptions(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, [third, theirs, first]);
+        yield* reorderSubscriptions(owner, ANTHROPIC, [third, theirs, first]);
         yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, "Personal Max");
         yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, theirs, "Taken");
         assert.deepEqual(yield* shownOf(owner), [
@@ -540,7 +540,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
           ["second", null],
         ]);
 
-        yield* reorderSubscriptions(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, [second, first]);
+        yield* reorderSubscriptions(other, ANTHROPIC, [second, first]);
         yield* setSubscriptionLabel(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, "Theirs now");
         assert.deepEqual(
           (yield* shownOf(owner)).map(([seal, label]) => [seal, label]),

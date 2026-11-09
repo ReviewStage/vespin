@@ -75,6 +75,8 @@ export const NATIVE_MOMENT = {
   NOTED: "noted",
   /** The plan's limit refused the harness, until when where it says; `refused` false is the limit lifting. */
   RATE_LIMIT: "rate_limit",
+  /** How much of its usage window the plan has used, as the harness last reported it. */
+  PLAN_USAGE: "plan_usage",
   /**
    * How the provider answered a model turn on the plan that pays for the
    * agent: it ran, or it refused the sign-in, the plan's limit, or the
@@ -155,6 +157,15 @@ export type NativeMoment =
       /** Which limit and when it resets, in the harness's own words, kept for the turn's failure. */
       readonly detail: string;
       /** When the limit resets, in epoch milliseconds, where the harness said. */
+      readonly resetsAt?: number;
+    }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.PLAN_USAGE;
+      /** The share of the window used, in percent. */
+      readonly usedPercent: number;
+      /** How long the window is, in minutes, where the harness said. */
+      readonly windowMins?: number;
+      /** When the window resets, in epoch milliseconds, where the harness said. */
       readonly resetsAt?: number;
     }
   | { readonly kind: typeof NATIVE_MOMENT.PLAN; readonly status: PlanStatus }

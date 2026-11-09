@@ -26,6 +26,7 @@ import {
 } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useCopyToast } from "../copy-feedback.js";
+import type { ShortcutSubject } from "../shortcut-target.js";
 import type { HeldTranscript } from "../tasks/agent-tab-card.js";
 import {
   type CopiedTranscript,
@@ -34,7 +35,7 @@ import {
   transcriptMarkdown,
 } from "../tasks/transcript-copy.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import type { MenuAction, MenuEnds, MenuEntry } from "./action-menu.js";
+import { actingCommand, type MenuAction, type MenuEnds, type MenuEntry } from "./action-menu.js";
 import { type AgentMenuDoors, agentMenuGroups } from "./agent-actions.js";
 import { MenuTab } from "./tab-strip.js";
 
@@ -68,6 +69,22 @@ import { MenuTab } from "./tab-strip.js";
  * say, held here for its glyph the same way.
  */
 
+/**
+ * The keys a strip offers on its chosen tab and what it shows, which that
+ * tab's menu prints: ⌘W and ⌥⌘W on the tab, and an agent tab's copies,
+ * terminal, Open in task, and delete on its agent. Its Pin is not among
+ * them, since P pins the focused row or the open thing, never a tab.
+ */
+export const CHOSEN_TAB_KEYS: readonly KeyedCommand[] = [
+  APP_COMMAND.CLOSE_TAB,
+  APP_COMMAND.CLOSE_OTHER_TABS,
+  APP_COMMAND.COPY_CONTENT,
+  APP_COMMAND.COPY_FULL_TRANSCRIPT,
+  APP_COMMAND.SHOW_TERMINAL,
+  APP_COMMAND.OPEN_IN_TASK,
+  APP_COMMAND.DELETE,
+];
+
 /** What the toast says once a tab's transcript, concise or full, is on the clipboard. */
 const TRANSCRIPT_COPIED_NOTE = "Transcript copied";
 
@@ -83,12 +100,12 @@ export interface TabPin {
 }
 
 /** The Pin or Unpin a tab's menu offers, named for what it pins, since a tab's pin and an agent's are not the same thing. */
-function pinItem(pin: TabPin): MenuAction {
+function pinItem(pin: TabPin, subject: ShortcutSubject): MenuAction {
   const pinned = pin.agent === true ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.UNPIN_TAB;
   const unpinned = pin.agent === true ? PANEL_COMMAND.PIN_AGENT : PANEL_COMMAND.PIN_TAB;
   const command = pin.pinned ? pinned : unpinned;
   return {
-    ...commandAction(command, pin.onToggle, false),
+    ...commandAction(command, pin.onToggle, subject),
     label: `${command.verb} ${command.noun}`,
   };
 }
@@ -122,8 +139,10 @@ export interface TabDoors
     | "deletion"
     | "links"
   > {
-  /** Whether the tab is the one chosen, which ⌘W closes and ⌘J opens the terminal of. */
+  /** Whether the tab is the one chosen, whose agent's copies and delete its strip's keys answer. */
   chosen: boolean;
+  /** The tab, as its menu names what it acts on, which the chosen tab's keys act on (`CHOSEN_TAB_KEYS`). */
+  subject: ShortcutSubject;
   /** Closes the tab; none for the plan's, which always stands. */
   onClose: (() => void) | undefined;
   /** Closes every other tab that closes, none where there is none. */
@@ -144,6 +163,8 @@ export interface TabDoors
  */
 export interface ShownTab {
   readonly label: string;
+  /** The tab, as a menu of it names what it acts on. */
+  readonly subject: ShortcutSubject;
   /** Its actions as the ⋯ at `opener` drops them, an item opening a menu of the tab's own under it. */
   readonly groups: (opener: HTMLElement) => MenuEntry[][];
 }
@@ -171,13 +192,13 @@ export type HandTabActions = (actions: TabActionGroups | undefined) => void;
  */
 export const HandTabActionsContext = createContext<HandTabActions | undefined>(undefined);
 
-/** The press of the action a tab's body hands up that runs `command`, as a Pull request tab's Open on GitHub runs ⇧⌘O; none where it hands none. */
+/** The press of the action a tab's body hands up that runs `command`, as a Pull request tab's Open on GitHub runs ⇧⌘O, where the command acts on what the action does (`actingCommand`); none where it hands none. */
 export function handedCommand(
   groups: TabActionGroups,
   command: KeyedCommand,
 ): (() => void) | undefined {
   for (const action of groups.flat()) {
-    if ("onSelect" in action && action.command === command) return action.onSelect;
+    if ("onSelect" in action && actingCommand(action) === command) return action.onSelect;
   }
   return undefined;
 }
@@ -203,25 +224,19 @@ function tabActionItems(
  * then what it offers on what it shows, its body's own hand first
  * (`tabContentGroups`). Close others is left out where nothing else would
  * close, and on the Plan tab, whose right-click is the task's menu alone.
+ * ⌘W and ⌥⌘W close and keep the chosen tab, so only its Close and Close
+ * others say them (`CHOSEN_TAB_KEYS`).
  */
 function tabActionGroups(doors: TabDoors): TabActionGroups {
   const { onClose } = doors;
   const close: MenuAction[] =
-    onClose === undefined
-      ? []
-      : [
-          // ⌘W closes the tab chosen, so only the chosen tab's Close says it.
-          commandAction(PANEL_COMMAND.CLOSE_TAB, onClose, doors.chosen),
-        ];
-  const pin: MenuAction[] = doors.pin === undefined ? [] : [pinItem(doors.pin)];
+    onClose === undefined ? [] : [commandAction(PANEL_COMMAND.CLOSE_TAB, onClose, doors.subject)];
+  const pin: MenuAction[] = doors.pin === undefined ? [] : [pinItem(doors.pin, doors.subject)];
   // Note that Close others stands only where it would close something, and never on the Plan tab, whose menu is the task's.
   const closeOthers: MenuAction[] =
     doors.onCloseOthers === undefined || doors.document !== undefined
       ? []
-      : [
-          // ⌥⌘W closes the others of the tab chosen, so only its Close others says it.
-          commandAction(PANEL_COMMAND.CLOSE_OTHER_TABS, doors.onCloseOthers, doors.chosen),
-        ];
+      : [commandAction(PANEL_COMMAND.CLOSE_OTHER_TABS, doors.onCloseOthers, doors.subject)];
   return [[...close, ...closeOthers, ...pin], ...tabContentGroups(doors)].filter(
     (group) => group.length > 0,
   );
@@ -237,11 +252,11 @@ function tabActionGroups(doors: TabDoors): TabActionGroups {
  * which a taskless agent's row has, so it is left out of the menu's doors.
  */
 function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
-  const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, links, chosen } =
+  const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, links, subject } =
     doors;
   if (doors.document !== undefined) return doors.document.groups().map((group) => [...group]);
   return agentMenuGroups({
-    chosen,
+    subject,
     links,
     onCopy,
     onRename,
@@ -289,6 +304,7 @@ function sameAction(one: TabAction, other: TabAction | undefined): boolean {
     one.danger === other.danger &&
     one.opens === other.opens &&
     one.command === other.command &&
+    one.subject?.id === other.subject?.id &&
     "onAsk" in one === "onAsk" in other
   );
 }
@@ -378,17 +394,23 @@ function useShownTab(
   onShown: ((shown: ShownTab | undefined) => void) | undefined,
   look: TabLook,
   content: TabActionGroups,
+  subject: ShortcutSubject,
 ): void {
   const groups = useRef<TabActionGroups>(content);
   useLayoutEffect(() => {
     groups.current = content;
   });
   const { selected, label } = look;
+  const { kind, id } = subject;
   useEffect(() => {
     if (onShown === undefined || !selected) return;
-    onShown({ label, groups: (opener) => tabActionItems(groups.current, opener) });
+    onShown({
+      label,
+      subject: { kind, id },
+      groups: (opener) => tabActionItems(groups.current, opener),
+    });
     return () => onShown(undefined);
-  }, [onShown, selected, label]);
+  }, [onShown, selected, label, kind, id]);
 }
 
 /** What a tab of either strip draws, beyond its menu. */
@@ -438,7 +460,7 @@ export function DoorsTab({
   onShown?: ((shown: ShownTab | undefined) => void) | undefined;
 }): React.JSX.Element {
   const content = tabContentGroups(doors);
-  useShownTab(onShown, look, content);
+  useShownTab(onShown, look, content, doors.subject);
   return (
     <MenuTab
       {...look}
