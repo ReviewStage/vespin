@@ -7,8 +7,9 @@
  * this command only chooses the ports and says how they stand. The ports
  * are the ones named, or the ones the sandbox listens on as the command
  * starts (`agentPorts.list`), each on the same local port, or on `--local`
- * for one. A local port another listener holds is refused rather than moved
- * to the next free one, so the address printed is the address asked for.
+ * for one. A local port that will not listen, held by another program or
+ * not the person's to bind, is refused rather than moved to the next free
+ * one, so the address printed is the address asked for.
  *
  * The sandbox's ports are read again every few seconds, as the desktop's
  * forward reads them, until a read says the sandbox stopped; a read that
@@ -124,7 +125,7 @@ export const forwardCommand = Command.make(
             const taken = Option.getOrElse(local, () => busy.port);
             return yield* new CommandFailed({
               exit: CLI_EXIT.REFUSED,
-              message: `Port ${taken} is already in use on this machine. Serve the sandbox's ${busy.port} on another: vespin agent forward ${id} ${busy.port} --local <port>`,
+              message: `Could not listen on port ${taken} on this machine: another program may hold it, or it may not be yours to bind. Serve the sandbox's ${busy.port} on another: vespin agent forward ${id} ${busy.port} --local <port>`,
             });
           }
           yield* answer({
