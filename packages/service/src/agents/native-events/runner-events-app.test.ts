@@ -2614,6 +2614,45 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
+    "a turn whose launch Claude Code could not resume the session of stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        // As the CLI answers a resume of a session it finds nowhere it looks.
+        const refused = numberedFrom(0, [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "result",
+            subtype: "error_during_execution",
+            is_error: true,
+            errors: [`No conversation found with session ID: ${SESSION}`],
+            ...top,
+          },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ]);
+        yield* post(agent.bearer, refused);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+
+        // The launch on a fresh session, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(refused.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
+      }),
+  );
+
+  it.effect(
     "a limit that only warns, or a Claude Code agent an API key pays for, leaves the setup-token as it stood, and the refused API key is marked invalid",
     () =>
       Effect.gen(function* () {

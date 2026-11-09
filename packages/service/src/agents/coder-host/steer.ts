@@ -663,13 +663,19 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
  * the runner that ended. Nothing it reads is the ended launch's, so it may
  * run long after that launch ended. An agent gone or on no harness, a session that never
  * claimed its record, a function that cannot reach the harness, and a turn
- * that took no line hand nothing on; answers whether the line went.
+ * that took no line hand nothing on; answers whether the line went. A turn
+ * whose launch could not resume the harness's session (`replayed`) goes on
+ * the same way in a fresh session, the lost one let go, handed the agent's
+ * steps so far.
  */
-export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function* (turn: {
-  readonly userId: string;
-  readonly conversationId: string;
-  readonly turnId: string;
-}) {
+export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function* (
+  turn: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly turnId: string;
+  },
+  replayed = false,
+) {
   const target = { userId: turn.userId, conversationId: turn.conversationId };
   const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
   if (Option.isNone(agent)) return false;
@@ -687,7 +693,7 @@ export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function
   if (Option.isNone(line)) return false;
   const message = yield* lostLineMessage(target, agent.value, line.value);
   const sessions = yield* reached.value;
-  const sent = yield* sessions.retry(sessionId, message);
+  const sent = yield* sessions.retry(sessionId, message, replayed);
   if (sent.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return false;
   // Note that a line queued for a runner that reads its lines is the relaunch's already, and sent again under its id is the same row.
   const waiting = yield* turnWaitingLines(target, turn.turnId);

@@ -57,6 +57,7 @@ import {
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
+  type SessionMessage,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
 import { agentLogIds } from "./agent-log.js";
@@ -123,9 +124,15 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   /**
    * The message handed to a runner launched afresh, any runner up ended
    * first, so a turn its plan's limit cut short goes on with its own line on
-   * the payer the launch chooses (`runner-sessions.ts`'s `retry`).
+   * the payer the launch chooses (`runner-sessions.ts`'s `retry`); with
+   * `replayed`, the harness's session let go and the agent's steps so far
+   * handed ahead of the line, for a turn whose launch could not resume it.
    */
-  readonly retry: AgentSessions<Turn>["send"];
+  readonly retry: (
+    sessionId: string,
+    message: SessionMessage<Turn>,
+    replayed?: boolean,
+  ) => ReturnType<AgentSessions<Turn>["send"]>;
 }
 
 export interface NativeAgentSessionsService {

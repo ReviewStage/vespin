@@ -1736,6 +1736,8 @@ export const runnerSessions = <
       handsOn: boolean,
       /** Whether a runner up is ended and launched again whatever it holds, as a retry on the next payer asks (`retry`). */
       relaunch = false,
+      /** Whether the harness's session is let go and the conversation replayed, as a retry of a turn whose launch could not resume it asks (`retry`). */
+      replayed = false,
     ) =>
       Effect.gen(function* () {
         // The agent is read beside the place, and its read answers only for a place found or opening.
@@ -1772,11 +1774,11 @@ export const runnerSessions = <
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
         const turnRunning = turn?.status === TURN_STATUS.RUNNING;
-        // A session opened on experiments since changed is opened afresh, on the same place, its
-        // conversation replayed into it: its harness's session is let go before anything is
-        // handed, so every launch past here, the turn's delivery's among them, resumes none, and
-        // the first line, its replay ahead of it, is composed once.
-        const restart = yield* experimentsChanged(agent, turnRunning);
+        // A session the harness could not resume, or opened on experiments since changed, is opened
+        // afresh, on the same place, its conversation replayed into it: its harness's session is let
+        // go before anything is handed, so every launch past here, the turn's delivery's among them,
+        // resumes none, and the first line, its replay ahead of it, is composed once.
+        const restart = replayed || (yield* experimentsChanged(agent, turnRunning));
         if (restart) yield* recordAgentNativeSession(userId, agent.id, null);
         const restartLine = restart
           ? yield* openedLine(agent, sessionId, sent, true, true)
@@ -2425,12 +2427,13 @@ export const runnerSessions = <
       // A turn its plan's limit cut short goes on with its own line in a launch on the next payer:
       // the runner, wherever it runs and whatever it holds, ended and launched again here under the
       // lease, as a message to a Mac's is, its payer chosen afresh as every launch's is
-      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`). Note that on a
-      // machine whose runner reads its lines, the line the ended launch took is put back untaken
-      // first, because the launch queues it again under the same id, and a line taken is never
-      // handed again (`requeueRunnerLine`). The line is resent, since the session it resumes
+      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`); or, for a turn
+      // whose launch could not resume it (`replayed`), let go and the conversation replayed. Note
+      // that on a machine whose runner reads its lines, the line the ended launch took is put back
+      // untaken first, because the launch queues it again under the same id, and a line taken is
+      // never handed again (`requeueRunnerLine`). The line is resent, since the session it resumes
       // already holds it under its id.
-      retry: (sessionId, message) =>
+      retry: (sessionId, message, replayed = false) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);
           return yield* Effect.gen(function* () {
@@ -2444,7 +2447,7 @@ export const runnerSessions = <
                 layout.linesRead
                   ? requeueRunnerLine(userId, agent.id, sent.line.uuid)
                   : Effect.void,
-                sendHolding(sessionId, message, layout, sent, false, true),
+                sendHolding(sessionId, message, layout, sent, false, true, replayed),
               ),
               CODER.RUNNER_LEASE.SEND_WAIT,
             ).pipe(
