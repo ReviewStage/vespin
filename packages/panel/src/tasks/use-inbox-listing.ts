@@ -11,6 +11,7 @@ import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import {
+  anyToMarkRead,
   EVERYONES,
   INBOX_HOLDER,
   INBOX_SHOW,
@@ -334,6 +335,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that a task's items are listed whole, under no view (`TASK_LISTS`).
   const { show, whose } = narrowedTask === undefined ? choices : TASK_LISTS;
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
+  // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
+  const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
   const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,
   // both held still while the page stands: every row while the pointer is over the list, and the chosen row while it stays chosen.
@@ -432,6 +435,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     named,
     marks,
     standing,
+    markable,
     counts,
     list,
     listedRows,

@@ -101,7 +101,8 @@ export function useInboxReadMarks({
   // Note that each notice's nod goes on its own, at the revision the reader was shown, as Got it's does, so one the agent posted over since is not settled unseen; one settled already is not taken and says nothing.
   const nodAll = useCallback(
     (items: readonly InboxItem[]) => {
-      const nodding = items.filter((item) => settledOnRead(item, readerId));
+      const now = Date.now();
+      const nodding = items.filter((item) => settledOnRead(item, readerId, now));
       if (nodding.length === 0) return;
       const nods = nodding.map((item) =>
         sendNod({

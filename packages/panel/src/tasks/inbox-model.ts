@@ -1537,12 +1537,13 @@ export function acknowledgedOnOpen(item: InboxItem, readerId: string | undefined
 }
 
 /**
- * Whether marking the item read by hand acknowledges it too, as opening it
- * does (`acknowledgedOnOpen`): the reader's own notice, asking nothing, and
- * no reminder on it still ahead, since one put away until later keeps it.
+ * Whether marking the item read by hand at `now` acknowledges it too, as
+ * opening it does (`acknowledgedOnOpen`): the reader's own notice, asking
+ * nothing, and no reminder on it still ahead (`remindsLater`), since one put
+ * away until later keeps it; one whose reminder came due is settled.
  */
-export function settledOnRead(item: InboxItem, readerId: string | undefined): boolean {
-  return acknowledgedOnOpen(item, readerId) && !hasReminder(item);
+export function settledOnRead(item: InboxItem, readerId: string | undefined, now: number): boolean {
+  return acknowledgedOnOpen(item, readerId) && !remindsLater(item, now);
 }
 
 /** Whether a listed item needs the reader (`needsReader`), whatever its task's status. */
@@ -1782,10 +1783,14 @@ export function inboxCounts(
   };
 }
 
-/** Whether Mark all as read would change anything: a task's item is unread, or a notice it acknowledges stands (`settledOnRead`), listed or filtered out. */
-export function anyToMarkRead(tasks: readonly InboxGroup[], readerId: string | undefined): boolean {
+/** Whether Mark all as read at `now` would change anything: a task's item is unread, or a notice it acknowledges stands (`settledOnRead`), listed or filtered out. */
+export function anyToMarkRead(
+  tasks: readonly InboxGroup[],
+  readerId: string | undefined,
+  now: number,
+): boolean {
   return tasks.some(({ items }) =>
-    items.some((item) => isUnread(item) || settledOnRead(item, readerId)),
+    items.some((item) => isUnread(item) || settledOnRead(item, readerId, now)),
   );
 }
 

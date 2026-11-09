@@ -18,7 +18,7 @@ import {
   sameTab,
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -42,7 +42,6 @@ import {
 } from "../tasks/inbox-columns.js";
 import { InboxList, InboxListNote, InboxPaneEmpty, NOTHING_HERE } from "../tasks/inbox-list.js";
 import {
-  anyToMarkRead,
   holderAutomationId,
   INBOX_HOLDER,
   type InboxHolder,
@@ -224,6 +223,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     named,
     marks,
     standing,
+    markable: unread,
     counts,
     list,
     listedRows,
@@ -242,8 +242,6 @@ export const DesktopInbox = memo(function DesktopInbox({
     resolveItems,
     onRetry,
   } = useInboxListing(tasks, narrowedTask);
-  // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
-  const unread = useMemo(() => anyToMarkRead(standing, tasks.me), [standing, tasks.me]);
   // Mark all as read marks the listed workspace's items, or a task's alone, each on its own, since the service marks a workspace's whole.
   const { onMarkAll, onMarkEach } = marks;
   const markAll = () =>

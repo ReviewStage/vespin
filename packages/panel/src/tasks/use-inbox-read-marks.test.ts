@@ -79,6 +79,7 @@ const X = "a1b2c3d4-0000-4000-8000-000000000001";
 const Y = "a1b2c3d4-0000-4000-8000-000000000002";
 const Z = "a1b2c3d4-0000-4000-8000-000000000003";
 const W = "a1b2c3d4-0000-4000-8000-000000000004";
+const V = "a1b2c3d4-0000-4000-8000-000000000005";
 const READER = "user-reader";
 
 /** One write the hook sent, and how to answer it. */
@@ -168,20 +169,23 @@ test("a mark the service refused says so once, and Mark all as read names the un
   assert.deepEqual(hook.toasts(), ["Could not mark 1 item unread", "Could not mark 1 item read"]);
 });
 
-test("Mark all as read acknowledges the reader's notices, read or not, leaving a question asking and a notice put away under a reminder, and says a refused nod as one", async () => {
+test("Mark all as read acknowledges the reader's notices, read or not or their reminder come due, leaving a question asking and a notice put away under a reminder still ahead, and says a refused nod as one", async () => {
   const hook = marks();
   const reminded = { ...notice(item(W, false)), remindAt: Date.UTC(2099, 0, 1) };
-  hook.markAll([item(X, true), notice(item(Y, false)), notice(item(Z, true)), reminded]);
+  const due = { ...notice(item(V, false)), remindAt: Date.UTC(2000, 0, 1) };
+  hook.markAll([item(X, true), notice(item(Y, false)), notice(item(Z, true)), reminded, due]);
   await settle();
   assert.deepEqual(hook.sent.map((each) => each.words).toSorted(), [
     `acknowledged:${Y}@1`,
     `acknowledged:${Z}@1`,
+    `acknowledged:${V}@1`,
     `all:${TASK.workspaceId}:${X},${Z}`,
   ]);
   const nodOnY = hook.sent.find((each) => each.words === `acknowledged:${Y}@1`);
   await hook.sent.find((each) => each.words === `acknowledged:${Z}@1`)?.answer();
   await nodOnY?.answer(true);
-  assert.deepEqual(hook.toasts(), ["1 item acknowledged, 1 could not be"]);
+  await hook.sent.find((each) => each.words === `acknowledged:${V}@1`)?.answer();
+  assert.deepEqual(hook.toasts(), ["2 items acknowledged, 1 could not be"]);
 });
 
 test("a refused mark from a caller that says the refusal itself toasts nothing, and still answers not kept", async () => {
