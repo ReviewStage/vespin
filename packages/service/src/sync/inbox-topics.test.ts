@@ -156,7 +156,7 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
   );
 
   it.effect(
-    "a member's message with a file wakes every reader of the item, and its withdrawal the task's and the agent's inbox alone",
+    "a member's message with a file wakes every reader of the item, and so does its withdrawal, which makes the question theirs to answer again",
     () =>
       Effect.gen(function* () {
         const world = yield* openInboxWorld;
@@ -181,14 +181,12 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
           itemTopics(world),
           [teammate.account, teammate.items, teammate.task, teammate.agent],
         );
-        yield* wakes(
-          withdrawInboxMessage(world.teammate, itemId, clientKey),
-          [
-            [TOPIC.TASK, world.taskId],
-            [TOPIC.AGENT, world.agentId],
-          ],
-          [teammate.task, teammate.agent],
-        );
+        yield* wakes(withdrawInboxMessage(world.teammate, itemId, clientKey), itemTopics(world), [
+          teammate.account,
+          teammate.items,
+          teammate.task,
+          teammate.agent,
+        ]);
       }),
   );
 

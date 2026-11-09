@@ -62,28 +62,15 @@ export const openInboxItem = (
     const db = yield* Database;
     const id = randomUUID();
     const now = new Date(yield* Clock.currentTimeMillis);
-    yield* db.insert(inboxItem).values({
-      id,
-      userId,
-      taskId,
-      organizationId,
-      agentId,
-      key: randomUUID(),
-      revision: 1,
-      version: 5,
-      title: "Which base?",
-      needsReply: asking,
-      status: INBOX_STATUS.OPEN,
-      postedAt: now,
-      updatedAt: now,
-    });
+    // Note that the item and its message are written naming only their columns, because a migration's test writes them on a database migrated short of today's.
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql`insert into inbox_item (id, user_id, task_id, organization_id, agent_id, key, revision, version, title, needs_reply, status, posted_at, updated_at)
+      values (${id}, ${userId}, ${taskId}, ${organizationId}, ${agentId}, ${randomUUID()}, 1, 5, 'Which base?', ${asking}, ${INBOX_STATUS.OPEN}, ${now}, ${now})`;
     const ask = {
       type: INBOX_ASK.DECIDE,
       options: [{ label: INBOX_APPROVAL_OPTION.APPROVE }, { label: INBOX_APPROVAL_OPTION.DECLINE }],
       status: INBOX_ASK_STATUS.OPEN,
     } as const;
-    // Note that the message is written naming only its columns, because a migration's test writes it on a database migrated short of today's.
-    const sql = yield* SqlClient.SqlClient;
     const [message] = yield* sql<{
       readonly id: string;
     }>`insert into inbox_message (item_id, author, text, ask, created_at)
