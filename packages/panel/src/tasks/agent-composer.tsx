@@ -405,6 +405,7 @@ export function AgentComposer({
     paying,
     payerSubscriptionId,
     (payer ?? usage?.payer) === undefined,
+    owner,
   );
   const payerValue =
     paying === undefined ? undefined : (

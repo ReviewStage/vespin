@@ -169,15 +169,18 @@ function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
  * agent would start on (`next`), the first of the payer's kind in the
  * reader's order with room left, as a turn picks it; by the name the reader
  * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
- * reader does not hold, a teammate's, or one with neither name.
+ * reader does not hold, one with neither name, or a teammate's agent
+ * (`teammate`), whose starter's plan pays and whose page may name none yet,
+ * since the reader's own next plan is never the one that pays there.
  */
 export function payerPlanName(
   payer: AgentPayer | undefined,
   subscriptions: readonly SubscriptionKeySummary[] | undefined,
   subscriptionId: string | undefined,
   next: boolean,
+  teammate = false,
 ): string | undefined {
-  if (!planPayer(payer) || subscriptions === undefined) return undefined;
+  if (teammate || !planPayer(payer) || subscriptions === undefined) return undefined;
   const kind = PLAN_PAYER_KIND[payer];
   const plan =
     subscriptionId !== undefined

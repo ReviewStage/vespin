@@ -95,17 +95,19 @@ function PayerWords({
 /**
  * The name of the reader's own plan that pays for the agent (`payerPlanName`),
  * read from their keys: the subscription the page named, or, for one a new
- * agent would start on (`next`), the first with room left.
+ * agent would start on (`next`), the first with room left; none on a
+ * teammate's agent (`owner`), whose own plan pays.
  */
 export function usePayerPlanName(
   payer: AgentPayer | undefined,
   subscriptionId: string | undefined,
   next: boolean,
+  owner: Actor | undefined,
 ): string | undefined {
   // Note that a plan is named from the reader's own keys, so a teammate's agent names none of its starter's.
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const keys = useQuery(providerKeysQuery(accountId)).data;
-  return payerPlanName(payer, keys?.subscriptions, subscriptionId, next);
+  return payerPlanName(payer, keys?.subscriptions, subscriptionId, next, owner !== undefined);
 }
 
 /**

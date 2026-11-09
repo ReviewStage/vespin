@@ -112,7 +112,7 @@ export function AgentModelChip({
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);
   const offered = models === undefined ? undefined : runtimeModels(models, model.runtime, paidBy);
-  const planName = usePayerPlanName(paying, payerSubscriptionId, paidBy === undefined);
+  const planName = usePayerPlanName(paying, payerSubscriptionId, paidBy === undefined, owner);
 
   return (
     <div className="agent-model-chip relative flex min-w-0" ref={root}>
