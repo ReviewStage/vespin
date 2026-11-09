@@ -36,6 +36,8 @@ private let MAX_TEXT = 200
 private let ICON_EDGE = 64
 private let LAUNCH_WAIT_SECONDS = 8.0
 private let LINES_PER_PAGE = 12
+private let MAX_CLICKS = 3
+private let MAX_PAGES = 20.0
 
 private let REFUSED_BUNDLE_IDS: Set<String> = [
     "com.apple.Terminal",
@@ -43,7 +45,7 @@ private let REFUSED_BUNDLE_IDS: Set<String> = [
     "dev.warp.Warp-Stable",
     "com.mitchellh.ghostty",
     "net.kovidgoyal.kitty",
-    "io.alacritty",
+    "org.alacritty",
     "com.github.wez.wezterm",
     "co.zeit.hyper",
     "com.1password.1password",
@@ -112,8 +114,10 @@ private func number(_ request: [String: Any], _ key: String) -> Double? {
     (request[key] as? NSNumber)?.doubleValue
 }
 
+/// A whole number in a request, or nothing where the value is not one a request could mean, so no conversion traps.
 private func integer(_ request: [String: Any], _ key: String) -> Int? {
-    number(request, key).map { Int($0) }
+    guard let value = number(request, key), value.isFinite, abs(value) <= Double(Int32.max) else { return nil }
+    return Int(exactly: value.rounded())
 }
 
 // MARK: - Permissions
@@ -194,18 +198,33 @@ private func installedURL(_ name: String) -> URL? {
         .first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
-/// The running app `name` names by bundle id or by name, launched behind the developer's windows when it is not running.
-private func resolveApp(_ name: String) async throws -> NSRunningApplication {
+/// The running app `name` names by bundle id or by name, with or without its `.app`, or nothing where none runs.
+private func runningApp(_ name: String) throws -> NSRunningApplication? {
     let lowered = name.lowercased()
+    let bare = lowered.hasSuffix(".app") ? String(lowered.dropLast(4)) : lowered
     let running = runningApps().first {
-        $0.bundleIdentifier?.lowercased() == lowered || $0.localizedName?.lowercased() == lowered
+        $0.bundleIdentifier?.lowercased() == lowered || $0.localizedName?.lowercased() == bare
     }
-    if let running {
-        guard !isRefused(running.bundleIdentifier) else {
-            throw HelperError(kind: ERROR_KIND.refused, message: "\(name) is never offered to agents.")
-        }
-        return running
+    guard let running else { return nil }
+    guard !isRefused(running.bundleIdentifier) else {
+        throw HelperError(kind: ERROR_KIND.refused, message: "\(name) is never offered to agents.")
     }
+    return running
+}
+
+/// The running app an action names. Note that an action never launches an app, because its numbers came from a state the app's exit has ended.
+private func actedApp(_ request: [String: Any]) throws -> NSRunningApplication {
+    let name = try string(request, "app")
+    guard let running = try runningApp(name) else {
+        throw HelperError(
+            kind: ERROR_KIND.noState, message: "\(name) is not running; read it with get_app_state first.")
+    }
+    return running
+}
+
+/// The running app `name` names, launched behind the developer's windows when it is not running.
+private func resolveApp(_ name: String) async throws -> NSRunningApplication {
+    if let running = try runningApp(name) { return running }
     guard let url = installedURL(name) else {
         throw HelperError(kind: ERROR_KIND.notFound, message: "No app named \(name) is running or installed.")
     }
@@ -433,7 +452,9 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     let image = try await capture(window)
     let asked = (request["shots"] as? [[String: Any]]) ?? [["edge": 1280, "quality": 0.7]]
     let shots = asked.compactMap { shot in
-        jpegBase64(image, edge: integer(shot, "edge") ?? 1280, quality: number(shot, "quality") ?? 0.7)
+        jpegBase64(
+            image, edge: min(max(integer(shot, "edge") ?? 1280, 64), 4096),
+            quality: min(max(number(shot, "quality") ?? 0.7, 0.1), 1))
     }
     guard let first = shots.first, let width = first["width"] as? Int, let height = first["height"] as? Int
     else { throw HelperError(kind: ERROR_KIND.failed, message: "The window could not be encoded.") }
@@ -528,10 +549,10 @@ private func clickPoint(_ point: CGPoint, session: AppSession, button: String, c
 
 private func click(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let current = try session(app)
     let button = (request["mouse_button"] as? String) ?? BUTTON.left
-    let count = integer(request, "click_count") ?? 1
+    let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
@@ -551,7 +572,7 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
 
 private func typeText(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let current = try session(app)
     let words = try string(request, "text")
     for character in words {
@@ -603,7 +624,7 @@ private func chord(_ name: String) throws -> (key: CGKeyCode, flags: CGEventFlag
 
 private func pressKey(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let current = try session(app)
     let pressed = try chord(try string(request, "key"))
     for down in [true, false] {
@@ -618,7 +639,7 @@ private let DIRECTION = (up: "up", down: "down", left: "left", right: "right")
 
 private func scroll(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let current = try session(app)
     let index = integer(request, "element_index")
     let point: CGPoint
@@ -628,7 +649,8 @@ private func scroll(_ request: [String: Any]) async throws -> [String: Any] {
         point = CGPoint(x: current.windowFrame.midX, y: current.windowFrame.midY)
     }
     let direction = (request["direction"] as? String) ?? DIRECTION.down
-    let lines = Int32(max(1, (number(request, "pages") ?? 1) * Double(LINES_PER_PAGE)))
+    let pages = min(max(number(request, "pages") ?? 1, 0), MAX_PAGES)
+    let lines = Int32(max(1, (pages.isFinite ? pages : 1) * Double(LINES_PER_PAGE)))
     let vertical: Int32 = direction == DIRECTION.up ? lines : direction == DIRECTION.down ? -lines : 0
     let horizontal: Int32 = direction == DIRECTION.left ? lines : direction == DIRECTION.right ? -lines : 0
     let event = CGEvent(
@@ -641,7 +663,7 @@ private func scroll(_ request: [String: Any]) async throws -> [String: Any] {
 
 private func drag(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let current = try session(app)
     guard
         let fromX = number(request, "from_x"), let fromY = number(request, "from_y"),
@@ -664,7 +686,7 @@ private func drag(_ request: [String: Any]) async throws -> [String: Any] {
 
 private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let element = try session(app).element(integer(request, "element_index") ?? -1)
     let value = (request["value"] as? String) ?? ""
     let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, value as CFString)
@@ -676,7 +698,7 @@ private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
 
 private func performSecondaryAction(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
-    let app = try await resolveApp(try string(request, "app"))
+    let app = try actedApp(request)
     let element = try session(app).element(integer(request, "element_index") ?? -1)
     let action = try string(request, "action")
     guard actions(element).contains(action) else {
