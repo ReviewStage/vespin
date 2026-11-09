@@ -379,10 +379,10 @@ test("a usage-limit notice stays visible between the work before a pause and the
     storedPart("Bash", { command: "pnpm test" }, "Tests passed."),
     { type: "text", text: "The work is complete." },
   ]);
-  assert.ok(container.textContent?.includes("Paused at your Claude usage limit"));
-  assert.ok(container.textContent?.includes("Picks up again when it resets at"));
+  assert.ok(container.textContent?.includes("Claude usage limit reached"));
+  assert.ok(container.textContent?.includes("Resumes at"));
   assert.ok(
-    (container.textContent ?? "").indexOf("Paused at") <
+    (container.textContent ?? "").indexOf("Claude usage limit reached") <
       (container.textContent ?? "").indexOf("The work is complete."),
   );
 });
@@ -392,6 +392,6 @@ test("a usage limit with no known reset tells the reader to send a message", () 
     type: "data-usage-limit",
     data: { agent: "Codex", resetsAt: null },
   });
-  assert.ok(container.textContent?.includes("Stopped at your Codex usage limit"));
-  assert.ok(container.textContent?.includes("Send a message to carry on"));
+  assert.ok(container.textContent?.includes("Codex usage limit reached"));
+  assert.ok(container.textContent?.includes("Send a message to continue"));
 });
