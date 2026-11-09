@@ -66,6 +66,29 @@ trap '[[ -n "$udid" ]] && xcrun simctl shutdown "$udid" >/dev/null 2>&1 || true'
 # The appearances every flow is shot in, as `xcrun simctl ui` names them.
 APPEARANCES=(light dark)
 
+# How many times a device's flows run in one appearance before they count as
+# failed.
+FLOW_ATTEMPTS=2
+
+# Maestro starts its XCUITest driver on the simulator and waits this long, in
+# milliseconds, for it to answer; a loaded CI runner's first boot has taken
+# longer than Maestro's own default, which then fails every flow unread.
+export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
+
+# Runs every flow under maestro/ once on the booted simulator `$1`, from a
+# clean app, its output under `$2`, which a run before it is cleared from.
+# Maestro's own debug output, the screenshot it takes when a step fails among
+# it, lands beside the flow's screenshots, so a failure can be read.
+run_flows() {
+    rm -rf "$2"
+    xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
+    maestro --udid "$1" test \
+        --test-output-dir "$2" \
+        --debug-output "$2/debug" \
+        --flatten-debug-output \
+        "$APP_DIRECTORY/maestro"
+}
+
 failed=0
 for name in "$@"; do
     slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-')
@@ -81,19 +104,19 @@ for name in "$@"; do
     for appearance in "${APPEARANCES[@]}"; do
         xcrun simctl ui "$udid" appearance "$appearance"
         appearance_output="$device_output/$appearance"
-        # The flows read a clean app, so a state another run left is cleared first.
-        xcrun simctl terminate "$udid" "$bundle_id" 2>/dev/null || true
-        # Maestro's own debug output, the screenshot it takes when a step
-        # fails among it, lands beside the flow's screenshots, so a failure
-        # can be read.
-        if ! maestro --udid "$udid" test \
-            --test-output-dir "$appearance_output" \
-            --debug-output "$appearance_output/debug" \
-            --flatten-debug-output \
-            "$APP_DIRECTORY/maestro"; then
-            echo "error: the flows failed on $name in $appearance; its output is under $appearance_output" >&2
-            failed=1
-        fi
+        # Note that a device's flows run again once where they fail, because
+        # a slow boot or a system prompt that lands late fails a run that a
+        # second one passes, and costs nothing like a whole job's rerun.
+        attempt=1
+        until run_flows "$udid" "$appearance_output"; do
+            if ((attempt == FLOW_ATTEMPTS)); then
+                echo "error: the flows failed on $name in $appearance; its output is under $appearance_output" >&2
+                failed=1
+                break
+            fi
+            attempt=$((attempt + 1))
+            echo "the flows failed on $name in $appearance; running them again ($attempt of $FLOW_ATTEMPTS)" >&2
+        done
     done
     xcrun simctl shutdown "$udid"
     udid=""
