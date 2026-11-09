@@ -1069,6 +1069,7 @@ it.effect(
         ...ENV,
         CLAUDE_CODE_PROMPT_CACHE_TTL: "1h",
         ENABLE_PROMPT_CACHING_1H: "1",
+        FORCE_PROMPT_CACHING_5M: "1",
       };
       const cacheEnvOf = (config: RunnerConfig) =>
         Effect.gen(function* () {
@@ -1077,10 +1078,18 @@ it.effect(
           yield* launched.write(FIRST_MESSAGE);
           yield* Fiber.join(launched.run);
           const env = launched.cli.options?.env;
-          return [env?.CLAUDE_CODE_PROMPT_CACHE_TTL, env?.ENABLE_PROMPT_CACHING_1H];
+          return [
+            env?.CLAUDE_CODE_PROMPT_CACHE_TTL,
+            env?.ENABLE_PROMPT_CACHING_1H,
+            env?.FORCE_PROMPT_CACHING_5M,
+          ];
         });
-      assert.deepEqual(yield* cacheEnvOf(CONFIG), [undefined, undefined]);
-      assert.deepEqual(yield* cacheEnvOf({ ...CONFIG, promptCacheHour: true }), ["1h", undefined]);
+      assert.deepEqual(yield* cacheEnvOf(CONFIG), [undefined, undefined, "1"]);
+      assert.deepEqual(yield* cacheEnvOf({ ...CONFIG, promptCacheHour: true }), [
+        "1h",
+        undefined,
+        undefined,
+      ]);
     }),
 );
 

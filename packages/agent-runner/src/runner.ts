@@ -103,14 +103,16 @@ import { transcriptStore } from "./transcripts.js";
 const CLAUDE_CODE_MCP_STARTUP_WAIT = "CLAUDE_CODE_MCP_STARTUP_WAIT_MS";
 
 /**
- * The variables that set how long the CLI keeps its prompt cache, "5m" or
- * "1h": the main conversation's alone, which leaves workers and other
- * subagents on the CLI's default (`MAIN`), and every request's (`ALL`), set
- * to "1" (CLI 2.1.304, as its binary reads them).
+ * The variables that set how long the CLI keeps its prompt cache: the main
+ * conversation's alone, "5m" or "1h", which leaves workers and other
+ * subagents on the CLI's default (`MAIN`); every request's an hour, set to
+ * "1" (`ALL`); and every request's five minutes, over both (`FORCE_SHORT`)
+ * (CLI 2.1.304, as its binary reads them).
  */
 const PROMPT_CACHE_TTL = {
   MAIN: "CLAUDE_CODE_PROMPT_CACHE_TTL",
   ALL: "ENABLE_PROMPT_CACHING_1H",
+  FORCE_SHORT: "FORCE_PROMPT_CACHING_5M",
 } as const;
 
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
@@ -231,6 +233,9 @@ function queryOptions(
       // whatever the runner's own environment holds, so the other half keeps the CLI's default.
       [PROMPT_CACHE_TTL.MAIN]: config.promptCacheHour === true ? "1h" : undefined,
       [PROMPT_CACHE_TTL.ALL]: undefined,
+      ...(config.promptCacheHour === true
+        ? { [PROMPT_CACHE_TTL.FORCE_SHORT]: undefined }
+        : undefined),
     },
     // Note that the SDK puts an HTTP server's config, headers and all, in the
     // CLI's argv, which any process in the sandbox can read, so ours is an
