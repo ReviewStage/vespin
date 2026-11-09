@@ -1093,6 +1093,20 @@ it.effect(
     }),
 );
 
+it.effect("denies the worker only the tools of ours the config names, and keeps it the rest", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { cli, write, run } = yield* launch(SHORT_TURN, service);
+    yield* write({ ...CONFIG, workerDenied: ["post_thread"] });
+    yield* write(FIRST_MESSAGE);
+    yield* Fiber.join(run);
+
+    const denied = cli.options?.agents?.worker?.disallowedTools;
+    assert.ok(denied?.includes("mcp__workspace__post_thread"));
+    assert.ok(!denied?.includes("mcp__workspace"));
+  }),
+);
+
 /** What a launch hands the CLI that is not a function or a live server, less the place it ran in, which nothing may follow. */
 function launchedAs(options: Options | undefined) {
   assert.ok(options);

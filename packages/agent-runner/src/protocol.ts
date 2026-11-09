@@ -480,6 +480,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   linesUrl: Schema.optionalKey(Schema.String),
   /** Our MCP server's streamable-HTTP endpoint. */
   mcpUrl: Schema.String,
+  /**
+   * Our MCP server's tools the worker subagent (`CLAUDE_CODE_WORKER`) may not
+   * call, by name: every one that does more than read. Absent in a config
+   * written before it, where the worker is denied the whole server.
+   */
+  workerDenied: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the CLI's transcript is kept at the service (`RUNNER_TRANSCRIPTS`), handed to the SDK as its `sessionStore`; none where the CLI's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
