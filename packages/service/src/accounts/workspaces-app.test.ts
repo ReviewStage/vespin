@@ -1618,24 +1618,31 @@ it.effect(
 );
 
 it.effect(
-  "a delete asked only while the owner is alone takes a workspace nobody joined, and leaves one someone joined",
+  "a delete asked only while the owner is alone takes a workspace nobody joined, and leaves one someone joined or one holding an agent",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
       yield* Effect.gen(function* () {
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
+        const alan = yield* openGithubAccount("Alan Turing");
         const joined = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
         const solo = yield* openTeam(plugin.api, grace, []);
+        const working = yield* openTeam(plugin.api, alan, []);
+        yield* openTaskAgent(alan, working, null);
 
         const ofJoined = yield* deletingIfAlone(plugin, ada, joined);
+        const ofWorking = yield* deletingIfAlone(plugin, alan, working);
         const ofSolo = yield* deletingIfAlone(plugin, grace, solo);
 
-        assert.deepEqual(
-          ofJoined,
-          refusedAs(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        const notPermitted = refusedAs(
+          HOSTED_HTTP_STATUS.FORBIDDEN,
+          HOSTED_API_ERROR.NOT_PERMITTED,
         );
+        assert.deepEqual(ofJoined, notPermitted);
         assert.equal((yield* membersOf(joined)).length, 2);
+        assert.deepEqual(ofWorking, notPermitted);
+        assert.equal((yield* membersOf(working)).length, 1);
         assert.deepEqual(ofSolo, { status: HOSTED_HTTP_STATUS.OK, body: { workspaceId: solo } });
         assert.deepEqual(yield* membersOf(solo), []);
       }).pipe(Effect.provide(plugin.database));

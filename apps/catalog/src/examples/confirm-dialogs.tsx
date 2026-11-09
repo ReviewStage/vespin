@@ -8,6 +8,7 @@ import {
   DIALOG_SIZE,
   Dialog,
   DialogActions,
+  type DialogOther,
   type DialogQuestion,
   FootQuestion,
   Inline,
@@ -28,7 +29,8 @@ import { CatalogSection } from "../section";
  * again, its card shaking at the refusal and its act wearing a check as it
  * lands, one in the accent for an act that can be undone but reaches someone
  * else, a long one, one that asks for a field to be filled, and one gated on
- * the subject's name. Only an act past undoing is red. A question asked
+ * the subject's name, and one offering an other way on between Cancel and
+ * the act. Only an act past undoing is red. A question asked
  * inside a dialog about what it holds asks at that dialog's foot instead
  * (`FootQuestion`): a key's Remove, refused the first time.
  */
@@ -62,6 +64,7 @@ function Asking({
   label,
   question,
   gate,
+  other,
   answer = () => ACCEPTED,
   children,
 }: {
@@ -69,6 +72,8 @@ function Asking({
   question: DialogQuestion;
   /** The subject's name the act waits on, for the gravest acts. */
   gate?: string;
+  /** An other way on between Cancel and the act. */
+  other?: DialogOther;
   answer?: () => ActionResult;
   /** What the card holds under its body. */
   children?: React.ReactNode;
@@ -83,7 +88,7 @@ function Asking({
       <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={confirm.ask}>
         {label}
       </Button>
-      <ConfirmDialog open confirm={confirm} question={question} gate={gate}>
+      <ConfirmDialog open confirm={confirm} question={question} gate={gate} other={other}>
         {children}
       </ConfirmDialog>
     </>
@@ -282,6 +287,19 @@ function ConfirmDialogs(): React.JSX.Element {
               "The GitHub App, the Slack bot, and the Sentry integration stay installed on GitHub, Slack, and Sentry.",
             ]}
           />
+        </Asking>
+        <Asking
+          label="Finish setup…"
+          other={{ verb: "Keep it and finish", onPress: () => undefined }}
+          question={{
+            title: "Delete Acme?",
+            body: "You chose Just me. Others joined Acme, so deleting it deletes it for them too. This can't be undone.",
+            verb: "Delete and finish",
+            running: "Deleting",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
+          }}
+        >
+          <ConfirmConsequences lines={["Grace Hopper and Alan Turing joined it."]} />
         </Asking>
         <KeyInADialog />
       </Inline>

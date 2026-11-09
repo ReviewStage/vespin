@@ -433,8 +433,8 @@ export const workspaceLeaveAnswerSchema = workspaceLeaveRequestSchema;
 
 /**
  * Its owner deleting a workspace (POST), answered with the workspace deleted;
- * `ifAlone` refuses it once anyone but the owner is a member, as setup's Just
- * me asks of the team's workspace it made.
+ * `ifAlone` refuses it once anyone but the owner is a member or it holds an
+ * agent, as setup's Just me asks of the team's workspace it made.
  */
 export const workspaceDeleteRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,

@@ -86,13 +86,12 @@ import {
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows } from "@repo/ui/virtual-rows";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useAccountPreferences } from "../account-choices.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, actorMarkWidth, YouBadge } from "../actor-ref.js";
-import { useConfirmAct } from "../confirm-act.js";
+import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { useFormDialog } from "../desktop/use-form-dialog.js";
@@ -181,8 +180,6 @@ const PHOTO_WORDS = {
 /** The member's removal, which the menu item and its confirm both say. */
 const REMOVE_MEMBER = "Remove from workspace";
 
-const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
-
 /** What the toast says once an invitation's accept link is on the clipboard. */
 const INVITE_LINK_COPIED = "Invite link copied";
 
@@ -225,7 +222,7 @@ const LEAVE_WORDS = {
 } as const;
 
 /** What the owner's delete says: its press, its running verb, its row's line, and what goes for everyone and what stays installed. */
-const DELETE_WORDS = {
+export const DELETE_WORDS = {
   PRESS: "Delete",
   VERB: "Delete workspace",
   RUNNING: "Deleting",
@@ -329,18 +326,9 @@ const SLACK_MARK = (
   </SettingsRowMark>
 );
 
-/**
- * What a refused act answers in the dialog that asked: its refusal's own
- * words, which main makes `WORKSPACE_NOT_PERMITTED_REFUSAL` where the
- * account's role is why, and the act's own sentence otherwise.
- */
 /** A write whose answer only says it was kept, so its error alone refuses it. */
 function answeredAll(): undefined {
   return undefined;
-}
-
-function refusedWith(refused: Error): ActionResult {
-  return { status: ACTION_RESULT_STATUS.REJECTED, reason: refused.message };
 }
 
 /** The most rows that stand for the members while they are read, however many the workspace counts. */
@@ -484,7 +472,7 @@ function MemberRow({
   const { userId } = member;
   const may = memberActs(workspace, member, userId === readerId);
   const [refusal, setRefusal] = useState<string>();
-  const answered = () => ACCEPTED;
+  const answered = () => ANSWER_ACCEPTED;
   // Note that the dialog lets go at once, since the row it stands in goes with the removal the host draws on the press.
   const remove = useConfirmDialog(
     { subject: may.remove, surfaceOpen: true },
@@ -649,7 +637,7 @@ function MemberLeave({
         });
         onLeft();
       }),
-    answered: () => ACCEPTED,
+    answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
   const leave = useConfirmDialog(
@@ -807,7 +795,7 @@ function OwnerLeave({
       heir === undefined
         ? Promise.resolve()
         : sendWorkspaceTransfer({ workspaceId: workspace.id, userId: heir.userId }),
-    answered: () => ACCEPTED,
+    answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
   const transfer = useConfirmDialog(
@@ -889,7 +877,7 @@ function WorkspaceDelete({
         });
         onDeleted();
       }),
-    answered: () => ACCEPTED,
+    answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
   const removal = useConfirmDialog(
@@ -1394,7 +1382,7 @@ function ManagedSentry({
       leaving === undefined
         ? Promise.resolve()
         : sendWorkspaceSentryDisconnect({ workspaceId, installationId: leaving.installationId }),
-    answered: () => ACCEPTED,
+    answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
   const disconnect = useConfirmDialog(
@@ -1545,7 +1533,7 @@ function ManagedSlackBot({
   };
   const disconnectAct = useConfirmAct(slackLeaving, {
     send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
-    answered: () => ACCEPTED,
+    answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
   const disconnect = useConfirmDialog(
@@ -1882,7 +1870,7 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const photoRemoving = useMutation(actMutation(ACT_KIND.WORKSPACE_PHOTO_SET));
   const removeAct = useConfirmAct(photoRemoving, {
     send: () => photoRemoving.mutateAsync({ workspaceId, photo: null }),
-    answered: () => ACCEPTED,
+    answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
   const remove = useConfirmDialog(

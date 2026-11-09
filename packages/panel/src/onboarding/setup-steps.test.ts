@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_ACT_KIND, WORKSPACE_ACT_KIND } from "@repo/host/contract";
 import { appSettingsWire, settingsView } from "@repo/settings/testing";
@@ -19,7 +20,8 @@ import { SetupSteps } from "./setup-steps.js";
  * made and then left for Just me lists the account's own workspace again,
  * so GitHub is not installed on the team's, and keeps it until setup
  * finishes as Just me, which deletes it while nobody else joined it, as the
- * service checks. And its survey, kept on the
+ * service checks, and asks first where someone did, offering to keep it.
+ * And its survey, kept on the
  * account once for each set of answers setup goes on with. Synthetic
  * throughout.
  */
@@ -89,8 +91,11 @@ function answeringDeletes(place: string, deleted: unknown[]): void {
   });
 }
 
-/** Setup drawn for the account, with its own workspace and Paperstar listed, each workspace chosen pushed to `chosen`. */
-function setupDrawn(chosen: string[] = []): HTMLElement {
+/** Setup drawn for the account, with its own workspace and Paperstar listed, each workspace chosen pushed to `chosen` and each finish counted in `finished`. */
+function setupDrawn(
+  chosen: string[] = [],
+  finished: { count: number } = { count: 0 },
+): HTMLElement {
   const base = tasksControl();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -105,12 +110,47 @@ function setupDrawn(chosen: string[] = []): HTMLElement {
             onChooseWorkspace: (workspaceId) => chosen.push(workspaceId),
           },
           accountId: ACCOUNT,
-          onFinish: () => undefined,
+          onFinish: () => {
+            finished.count += 1;
+          },
         }),
       ),
     ),
   );
   return container;
+}
+
+/** Setup standing at its last step for the account alone, after Paperstar was made and left, which Grace Hopper joined. */
+function finishingWithGraceJoined(deleted: unknown[]): { count: number } {
+  const place = JSON.stringify({ audience: "me", at: 4, team: PAPERSTAR.id });
+  const members = {
+    [PAPERSTAR.id]: {
+      rows: {
+        members: [
+          { userId: ACCOUNT, name: "Dana", email: "dana@app.test", role: WORKSPACE_ROLE.OWNER },
+          {
+            userId: "account-grace",
+            name: "Grace Hopper",
+            email: "grace@app.test",
+            role: WORKSPACE_ROLE.MEMBER,
+          },
+        ],
+      },
+    },
+  };
+  writeAppState(
+    stateWith(
+      {},
+      {
+        settings: appSettingsWire(settingsView({ setupPlace: place })),
+        [LIVE_READ.WORKSPACE_MEMBERS]: members,
+      },
+    ),
+  );
+  answeringDeletes(place, deleted);
+  const finished = { count: 0 };
+  setupDrawn([], finished);
+  return finished;
 }
 
 test("Just me after a team's workspace was made lists the account's own workspace again and keeps the team's", async () => {
@@ -142,6 +182,35 @@ test("setup finished as Just me deletes the team's workspace it made while nobod
 
   // The service refuses the delete once anyone else is a member, so a workspace someone joined stays.
   await vi.waitFor(() => assert.deepEqual(deleted, [{ workspaceId: PAPERSTAR.id, ifAlone: true }]));
+});
+
+test("Finish as Just me asks before deleting a team's workspace someone joined, and Delete and finish deletes it for them too", async () => {
+  const deleted: unknown[] = [];
+  const finished = finishingWithGraceJoined(deleted);
+  // Note that the members arrive a tick after setup draws, as a live read's first answer does.
+  await act(() => Promise.resolve());
+
+  act(() => buttonStarting(document.body, "Finish").click());
+  await vi.waitFor(() => assert.match(document.body.textContent ?? "", /Grace Hopper joined it\./));
+  assert.deepEqual(deleted, [], "nothing is deleted before the answer");
+  act(() => buttonStarting(document.body, "Delete and finish").click());
+
+  await vi.waitFor(() => assert.equal(finished.count, 1));
+  assert.deepEqual(deleted, [{ workspaceId: PAPERSTAR.id }]);
+});
+
+test("Keep it and finish finishes setup and leaves the team's workspace someone joined", async () => {
+  const deleted: unknown[] = [];
+  const finished = finishingWithGraceJoined(deleted);
+  await act(() => Promise.resolve());
+
+  act(() => buttonStarting(document.body, "Finish").click());
+  await vi.waitFor(() => buttonStarting(document.body, "Keep it and finish"));
+  act(() => buttonStarting(document.body, "Keep it and finish").click());
+  await act(() => Promise.resolve());
+
+  assert.equal(finished.count, 1);
+  assert.deepEqual(deleted, []);
 });
 
 test("the survey keeps its answers on the account, Other's words among them, and again after a refusal", async () => {

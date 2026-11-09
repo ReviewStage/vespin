@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   APP_SETTING_SCHEMA,
@@ -8,15 +9,29 @@ import {
   setupPlaceFrom,
   setupPlaceStored,
 } from "@repo/settings";
-import { AuthPage, AuthStepFoot, ChoiceList, type ChoiceOption, ProductMark } from "@repo/ui";
+import {
+  AuthPage,
+  AuthStepFoot,
+  ChoiceList,
+  type ChoiceOption,
+  CONFIRM_LOSS,
+  ConfirmConsequences,
+  ConfirmDialog,
+  ProductMark,
+  useConfirmDialog,
+} from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
+import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { useWelcomed } from "../desktop/desktop-welcome.js";
+import { confirmFailure } from "../failure-report.js";
+import { workspaceMembersQuery } from "../live-reads.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
 import { AgentConnectSection } from "../settings/agent-auth-section.js";
+import { DELETE_WORDS } from "../settings/workspace-page.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspacesFailed } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
@@ -36,7 +51,8 @@ import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
  * is connected. A team's workspace is required too, once With my team is
  * chosen, since Back leads to Just me for anyone who changed their mind;
  * once made, its step coming back holds it to change rather than make again,
- * and setup finished as Just me deletes it while nobody else has joined it.
+ * and setup finished as Just me deletes it, asking first, in red, where
+ * anyone else joined it, and offering to keep it.
  * The survey and GitHub may be skipped, and the tools need nothing done. Where setup
  * stands is kept on the account (`APP_SETTING_SCHEMA.setupPlace`), so setup
  * left partway resumes at the same step on another machine or on the web,
@@ -53,6 +69,25 @@ const SETUP_FINISHED = keptKey(
   "app.setupFinished",
   Schema.fromJsonString(Schema.Array(Schema.String)),
 );
+
+/**
+ * What Finish asks where the team's workspace setup made and left for Just
+ * me has anyone else in it, or had: its title, the people named, and its two
+ * ways on, the delete in red and a keep that finishes all the same.
+ */
+const TEAM_DELETE_WORDS = {
+  TITLE: (name: string) => `Delete ${name}?`,
+  BODY: "You chose Just me. Others joined it, so deleting it deletes it for them too. This can't be undone.",
+  JOINED: (names: readonly string[]) => `${NAMES_LISTED.format(names)} joined it.`,
+  VERB: "Delete and finish",
+  KEEP: "Keep it and finish",
+  RUNNING: "Deleting",
+  /** The workspace's name where the window's list no longer holds it. */
+  UNNAMED: "your team workspace",
+} as const;
+
+/** People named in a sentence, "Ana, Bo, and Cy". */
+const NAMES_LISTED = new Intl.ListFormat("en", { type: "conjunction" });
 
 /** Where setup starts, for an account of its own or one a team invited. */
 const SETUP_START: SetupPlace = { audience: SETUP_AUDIENCE.ME, at: 0 };
@@ -151,6 +186,9 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
     ...actMutation(ACT_KIND.WORKSPACE_DELETE),
     onError: (error) => console.warn("Setup's team workspace was left standing.", error),
   });
+  const { mutateAsync: sendTeamDelete, ...deletingTeam } = useMutation(
+    actMutation(ACT_KIND.WORKSPACE_DELETE),
+  );
   const [, , keepFinished] = useKept(SETUP_FINISHED, []);
   const stored = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.setupPlace;
   const kept = setupPlaceFrom(stored);
@@ -192,17 +230,47 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const at = Math.min(Math.max(place.at, 0), steps.length - 1);
   const step = steps[at] ?? SETUP_STEP.TOOLS;
   const last = at === steps.length - 1;
+  // The team's workspace setup made and then left for Just me, which Finish deletes or asks about; none otherwise.
+  const leftTeam = audience === SETUP_AUDIENCE.ME ? team : undefined;
+  const leftMembers = useQuery({
+    ...workspaceMembersQuery(leftTeam),
+    enabled: leftTeam !== undefined && last,
+  }).data;
+  // Note that whoever left it is named too, because their agents and tasks may still stand in it.
+  const joined =
+    leftMembers === undefined
+      ? []
+      : [
+          ...leftMembers.members.filter((member) => member.userId !== accountId),
+          ...(leftMembers.former ?? []),
+        ].map((member) => member.name);
+  const teamDeleteAct = useConfirmAct(deletingTeam, {
+    send: () =>
+      leftTeam === undefined
+        ? Promise.resolve()
+        : sendTeamDelete({ workspaceId: leftTeam }).then(finishNow),
+    answered: () => ANSWER_ACCEPTED,
+    failed: refusedWith,
+  });
+  const teamDelete = useConfirmDialog(
+    { subject: leftTeam !== undefined, surfaceOpen: last },
+    teamDeleteAct,
+    confirmFailure(FAILURE_SURFACE.WORKSPACE_DELETE),
+  );
+  // Note that a team's workspace made and then left for Just me is deleted only at Finish, where Just me is final. One nobody else joined goes without a word, while the service still finds nobody else in it and no agent, rather than this window's list, and stays as made where it is refused or fails; one anyone joined asks first, in red, and may be kept.
   const finish = () => {
-    // Note that a team's workspace made and then left for Just me is deleted only here, where Just me is final, and only while nobody else is a member, which the service checks rather than this window's list; one refused or failed stays as made, without a word.
-    if (audience === SETUP_AUDIENCE.ME && team !== undefined) {
-      deleteWorkspace({ workspaceId: team, ifAlone: true });
-    }
+    if (leftTeam === undefined) return finishNow();
+    if (joined.length > 0) return teamDelete.ask();
+    deleteWorkspace({ workspaceId: leftTeam, ifAlone: true });
+    finishNow();
+  };
+  function finishNow(): void {
     // Note that the account's place stands once finished, since finished is read ahead of it on every machine.
     // Note that nothing waits on the write: the window lets the app in at once, and a write lost asks for setup again next time.
     updateSetting({ field: APP_SETTING_SCHEMA.setupFinished.field, value: true });
     keepFinished((finished) => [...finished, accountId]);
     onFinish();
-  };
+  }
   const forward = () => (last ? finish() : setAt(at + 1));
   const back = at === 0 ? undefined : () => setAt(at - 1);
   // A team's workspace made and then left for Just me is not the one GitHub is installed on.
@@ -348,15 +416,42 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       </AuthPage>
     );
   }
+  const teamName =
+    tasks.newTask.workspaces.find((one) => one.id === leftTeam)?.name ?? TEAM_DELETE_WORDS.UNNAMED;
   return (
-    <AuthPage
-      mark={<ProductMark />}
-      title="Connect your tools"
-      description={TOOLS_PURPOSE}
-      foot={foot(true, "Finish")}
-      exit={exit}
-    >
-      <ToolRows />
-    </AuthPage>
+    <>
+      <AuthPage
+        mark={<ProductMark />}
+        title="Connect your tools"
+        description={TOOLS_PURPOSE}
+        foot={foot(true, "Finish")}
+        exit={exit}
+      >
+        <ToolRows />
+      </AuthPage>
+      <ConfirmDialog
+        open
+        confirm={teamDelete}
+        other={{ verb: TEAM_DELETE_WORDS.KEEP, onPress: finishNow }}
+        question={{
+          title: TEAM_DELETE_WORDS.TITLE(teamName),
+          body: TEAM_DELETE_WORDS.BODY,
+          verb: TEAM_DELETE_WORDS.VERB,
+          running: TEAM_DELETE_WORDS.RUNNING,
+          loss: CONFIRM_LOSS.IRREVERSIBLE,
+          replayUnmasked: true,
+          titleReplayMasked: true,
+        }}
+      >
+        <ConfirmConsequences
+          lines={[
+            TEAM_DELETE_WORDS.JOINED(joined),
+            DELETE_WORDS.GONE,
+            DELETE_WORDS.AGENTS,
+            DELETE_WORDS.INSTALLED,
+          ]}
+        />
+      </ConfirmDialog>
+    </>
   );
 }

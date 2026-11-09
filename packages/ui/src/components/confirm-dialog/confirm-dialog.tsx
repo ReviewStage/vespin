@@ -13,7 +13,12 @@ import {
 } from "../../confirm-state.js";
 import { ReplayMask, ReplayWords } from "../../session-replay-marks.js";
 import { DIALOG_ROLE, Dialog, type RestoreTo } from "../dialog/dialog.js";
-import { DIALOG_TONE, DialogActions, type DialogTone } from "../dialog/dialog-actions.js";
+import {
+  DIALOG_TONE,
+  DialogActions,
+  type DialogOther,
+  type DialogTone,
+} from "../dialog/dialog-actions.js";
 import { DIALOG_ANSWERS, DialogReplayUnmasked, useDialogFoot } from "../dialog/dialog-foot.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { FormField } from "../form-field/form-field.js";
@@ -139,6 +144,7 @@ function ConfirmCard({
   question,
   field,
   gate,
+  other,
   restoreTo,
   act,
   children,
@@ -148,6 +154,7 @@ function ConfirmCard({
   question: DialogQuestion;
   field: React.RefObject<HTMLInputElement | null> | undefined;
   gate: string | undefined;
+  other: DialogOther | undefined;
   restoreTo: RestoreTo | undefined;
   act: ActState;
   children: React.ReactNode;
@@ -198,6 +205,18 @@ function ConfirmCard({
         <DialogActions
           onCancel={dismiss}
           cancelRef={cancel}
+          other={
+            other === undefined
+              ? undefined
+              : {
+                  verb: other.verb,
+                  onPress: () => {
+                    if (settling) return;
+                    dismiss();
+                    other.onPress();
+                  },
+                }
+          }
           act={{
             verb: question.verb,
             tone: LOSS_TONE[question.loss],
@@ -300,6 +319,7 @@ export function ConfirmDialog({
   question,
   field,
   gate,
+  other,
   restoreTo,
   children,
 }: {
@@ -315,6 +335,8 @@ export function ConfirmDialog({
    * field that takes focus in Cancel's place. An ordinary delete asks no gate.
    */
   gate?: string | undefined;
+  /** An other way on between Cancel and the act, which withdraws the question as Cancel does and then goes on without the act. */
+  other?: DialogOther | undefined;
   /** Where focus goes once the card is gone if the act took away what asked (`nextRowOrHead`), as `Dialog` takes it. */
   restoreTo?: RestoreTo | undefined;
   /** What the card holds under its body: the field, where the question asks one, or what else the reader needs to act on it, such as a command to run. */
@@ -332,6 +354,7 @@ export function ConfirmDialog({
       question={question}
       field={field}
       gate={gate}
+      other={other}
       restoreTo={restoreTo}
       act={answer}
     >

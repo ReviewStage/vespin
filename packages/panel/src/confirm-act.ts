@@ -14,8 +14,11 @@
  */
 
 import type { ConfirmAct } from "@repo/ui/confirm-state";
-import type { ActionResult } from "@repo/wire";
+import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useState } from "react";
+
+/** The answer of an act whose answer only says it was carried. */
+export const ANSWER_ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 /** What a question reads of its act's mutation (`useMutation`'s result). */
 export interface ConfirmMutation<Answer> {
@@ -33,6 +36,15 @@ export interface ConfirmSend<Answer> {
   readonly failed?: ((error: Error) => ActionResult) | undefined;
   /** Why the act is refused before anything is sent, where it is; none sends it. */
   readonly refusedFirst?: (() => ActionResult | undefined) | undefined;
+}
+
+/**
+ * What a refused act answers in the dialog that asked: its refusal's own
+ * words, which main makes `WORKSPACE_NOT_PERMITTED_REFUSAL` where the
+ * account's role is why, and the act's own sentence otherwise.
+ */
+export function refusedWith(refused: Error): ActionResult {
+  return { status: ACTION_RESULT_STATUS.REJECTED, reason: refused.message };
 }
 
 /** An answer that is already the act's own. */

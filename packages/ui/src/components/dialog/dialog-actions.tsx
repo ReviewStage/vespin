@@ -5,14 +5,17 @@ import { DialogReplayUnmasked } from "./dialog-foot.js";
 
 /**
  * dialog-actions.tsx -- a dialog's foot, the one way its answers are drawn:
- * Cancel and then the act, or a single Done where the dialog only shows.
+ * Cancel and then the act, an other way on between them where the question
+ * offers one, or a single Done where the dialog only shows.
  *
  * It is what `Dialog`'s `actions` slot holds, so the foot lays them out at
  * its end at a common width. Cancel is quiet and comes first; the act comes
  * last, red for an act that destroys and in the accent otherwise, which its
  * owner says by its tone. While the act runs Cancel is stilled with it, and
  * the act names what it is doing; once it lands its check stands in the
- * act's words until it has been seen. A dialog that asks nothing, one that
+ * act's words until it has been seen. An other way on (`other`), one that
+ * goes on without the act as Cancel does not, stands quiet in an outline
+ * between them, and is stilled with Cancel. A dialog that asks nothing, one that
  * shows a secret or a result, closes from its one Done in the accent.
  * Cancel and Done are the foot's own words, so a screen recording shows
  * them as they read (`ReplayUnmask`); the act's word is its owner's, shown
@@ -56,12 +59,19 @@ export interface DialogAct {
   ref?: Ref<HTMLButtonElement> | undefined;
 }
 
-/** What the foot is told: Cancel and the act, or the one Done. */
+/** An answer between Cancel and the act that goes on without the act ("Keep it and finish"). */
+export interface DialogOther {
+  verb: string;
+  onPress: () => void;
+}
+
+/** What the foot is told: Cancel, an other way on where there is one, and the act; or the one Done. */
 export type DialogActionsProps =
   | {
       onCancel: () => void;
       /** Cancel's button, where it takes focus as the card opens. */
       cancelRef?: Ref<HTMLButtonElement> | undefined;
+      other?: DialogOther | undefined;
       act: DialogAct;
       onDone?: undefined;
     }
@@ -69,10 +79,11 @@ export type DialogActionsProps =
       onDone: () => void;
       onCancel?: undefined;
       cancelRef?: undefined;
+      other?: undefined;
       act?: undefined;
     };
 
-/** A dialog's answers at its foot: Cancel then the act, or Done alone. */
+/** A dialog's answers at its foot: Cancel, an other way on, then the act; or Done alone. */
 export function DialogActions(props: DialogActionsProps): React.JSX.Element {
   const unmasked = useContext(DialogReplayUnmasked);
   if (props.onDone !== undefined) {
@@ -82,7 +93,7 @@ export function DialogActions(props: DialogActionsProps): React.JSX.Element {
       </Button>
     );
   }
-  const { act } = props;
+  const { act, other } = props;
   const settling = act.busy === true || act.landed === true;
   return (
     <>
@@ -94,6 +105,11 @@ export function DialogActions(props: DialogActionsProps): React.JSX.Element {
       >
         <ReplayUnmask>{CANCEL}</ReplayUnmask>
       </Button>
+      {other === undefined ? null : (
+        <Button variant={BUTTON_VARIANT.OUTLINE} disabled={settling} onClick={other.onPress}>
+          <ReplayWords unmasked={unmasked}>{other.verb}</ReplayWords>
+        </Button>
+      )}
       <Button
         ref={act.ref}
         variant={ACT_VARIANT[act.tone]}
