@@ -44,7 +44,7 @@ export interface StepsBehind {
 }
 
 /** Whether the side panel stands over a routed place, an Inbox item or an agent's page, or the plan of the task bound, if any. */
-export interface PaneOver {
+interface PaneOver {
   readonly routed: boolean;
   readonly taskId: string | undefined;
 }

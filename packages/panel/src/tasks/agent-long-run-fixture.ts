@@ -26,7 +26,7 @@ import { rendererPause } from "../renderer-runtime.js";
 import { fixtureMoved } from "./fixture-moves.js";
 
 /** How big the run is, and how fast its newest turn is written. */
-export const LONG_RUN = {
+const LONG_RUN = {
   /** The turns it ran, each a line in and a journal out; the newest is still under way. */
   TURNS: 41,
   /** The rounds of work the newest turn has done so far, each as much as a finished turn holds, a teammate's line arriving after some. */

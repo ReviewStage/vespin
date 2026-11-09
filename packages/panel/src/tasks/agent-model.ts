@@ -2927,7 +2927,7 @@ export function publishedUrl(published: AgentPullRequestAnswer): string | undefi
 }
 
 /** What the agent's dock draws of a pull request: the parts its row reads, and its page. */
-export type DockedPullRequestParts = Pick<
+type DockedPullRequestParts = Pick<
   AgentPullRequest,
   "number" | "title" | "state" | "checks" | "additions" | "deletions" | "queued"
 > & { readonly url: string };

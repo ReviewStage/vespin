@@ -133,7 +133,7 @@ export const NO_ASSIGNEE_WORDS = "No assignee";
  * people menu lists them (`memberRows`), each hanging their card; only No assignee while the members
  * are unread. The Tasks page's compact assignee chip drops the same rows.
  */
-export function assigneeRows(
+function assigneeRows(
   members: readonly WorkspaceMember[] | undefined,
   readerId: string | undefined,
 ): readonly MenuRow[] {

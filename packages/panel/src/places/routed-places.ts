@@ -86,10 +86,10 @@ export const NARROW_BACK = {
   PANE: "pane",
 } as const;
 
-export type NarrowBack = (typeof NARROW_BACK)[keyof typeof NARROW_BACK];
+type NarrowBack = (typeof NARROW_BACK)[keyof typeof NARROW_BACK];
 
 /** What a place a narrow room stands another in the place of opens it with: the listed workspace's address step, and the Inbox's door, which stands it in the step's place where told to. */
-export interface NarrowInsteadDoors {
+interface NarrowInsteadDoors {
   readonly workspace: string;
   readonly openInbox: (at: InboxAt, replace?: boolean) => void;
 }

@@ -131,15 +131,3 @@ export function useSteadyDoors<Value>(value: Value): Value {
   kept.current = place;
   return place.steady as Value;
 }
-
-/**
- * A set of doors handed over afresh on each draw, every one of them a
- * steady door calling the newest, whatever it is named: the ways back a
- * window's history hands its screens, which no reader keys a read on.
- */
-export function useSteadyDoorSet<Doors extends object>(doors: Doors): Doors {
-  const kept = useRef<KeptPlace | undefined>(undefined);
-  const place = keptPlace(kept.current, doors, false, () => true);
-  kept.current = place;
-  return place.steady as Doors;
-}
