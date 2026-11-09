@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
+import { agentPullRequest } from "@repo/database/schemas";
 import { accountProviderKey } from "@repo/database/schemas/account-provider-key";
 import { agentTable, type StoredPullRequest } from "@repo/database/schemas/agent";
 import { session, user } from "@repo/database/schemas/auth";
@@ -118,11 +119,20 @@ const startAgent = (
         repository: "acme/relay",
         prompt: "A prompt the page never reads",
         title: "A title the page never reads",
-        published: options.published === undefined ? null : pullRequest(options.published),
+        branch: options.published === undefined ? null : "agent/relay",
         idempotencyKey: randomUUID(),
         createdAt: at(daysAgo),
       })
       .returning({ id: agentTable.id });
+    if (options.published !== undefined) {
+      yield* db.insert(agentPullRequest).values({
+        agentId: agent?.id ?? "",
+        repository: "acme/relay",
+        number: pullRequest(options.published).number,
+        headBranch: "agent/relay",
+        pullRequest: pullRequest(options.published),
+      });
+    }
     if (options.turn !== undefined) {
       yield* db.insert(turns).values({
         userId,

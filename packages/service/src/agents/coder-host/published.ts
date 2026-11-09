@@ -8,7 +8,6 @@ import {
 import {
   type AgentRepositoryEntry,
   readAgentRepositories,
-  recordAgentRepositoryPublished,
 } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
@@ -17,7 +16,7 @@ import {
   readAgent,
   readAgentKeptPublished,
   readAgentPublished,
-  recordAgentPublished,
+  recordAgentPublishedRead,
   type WithRepository,
 } from "@repo/database/models/agent-store";
 import type { StoredPullRequest } from "@repo/database/schemas/agent";
@@ -67,11 +66,11 @@ import { CODER } from "./bounds.js";
  * from the branch, else whether the branch was pushed at all, with the
  * pull request's head's checks and, for an open one, whether GitHub's merge
  * queue holds it (`pull-request-merging.ts`'s `pullRequestQueued`), which the
- * REST pull request does not say. Every answer read is written on the
- * agent's row as well, the pull request or none, which is what the task
- * list reads, so the sidebar says what the last read found without asking
- * GitHub itself. The row keeps beside it the head it was read at and when
- * it merged. The answer is kept per
+ * REST pull request does not say. The pull request a read finds is linked
+ * to the agent (`agent-pull-requests.ts`), with the head it was read at and
+ * when it merged, and the one from the branch the agent stands on is what
+ * the task list reads, so the sidebar says what the last read found without
+ * asking GitHub itself. The answer is kept per
  * agent for `CODER.PUBLISHED_TTL` so a tab reading it beside every page of
  * a held transcript asks GitHub a few times a minute at most, under a key
  * that says whether the agent had ended, so the first read after a turn
@@ -82,7 +81,7 @@ import { CODER } from "./bounds.js";
  * agent's task, so the task is asked to settle once the row is written
  * (`tasks/task-finish.ts`).
  *
- * The row also keeps when that read was and of which branch, so the kept
+ * The agent's row keeps when that read was and of which branch, so the kept
  * answers answer from the row rather than GitHub where it will not have
  * moved or was just read: an archived agent's, an ended agent's whose pull
  * request merged, or closed within `CODER.PUBLISHED_CLOSED_FRESH` of the
@@ -98,9 +97,8 @@ import { CODER } from "./bounds.js";
  * An agent that works in other repositories beside its own
  * (`readAgentRepositories`) has each pull request it opened in one read
  * again with every read of its own, on a token for that repository, and
- * written on that repository's row (`recordAgentRepositoryPublished`), a
- * merge first seen there counted and its task asked to settle as its own
- * would be; what a read answers stays the agent's own pull request, which
+ * linked as its own is, a merge first seen there counted and its task asked
+ * to settle as its own would be; what a read answers stays the agent's own pull request, which
  * the Changes tab and the sidebar show. A read of an extra that fails is
  * logged and fails nothing else.
  *
@@ -379,8 +377,8 @@ const recordRepository = (
   });
 
 /**
- * What the agent published as GitHub holds it now, written on its row as
- * read, and every pull request it opened linked and read again beside it
+ * What the agent published as GitHub holds it now, linked to it with the
+ * read stamped on its row, and every pull request it opened read again beside it
  * (`recordRepository`), those from a branch a delivery from GitHub names
  * (`delivered`) among them. The routes read it through the cache below; an
  * agent tool's read of one agent (`agents/agent-tools.ts`) reads it afresh,
@@ -395,11 +393,11 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
   const found = yield* publishedOnGitHub(userId, agent);
   const at = yield* Clock.currentTimeMillis;
   const read = { at, branch: agent.branch, pushed: found.answer.branch !== null };
-  // Note that the row's own pull request is written last, because an ended agent's read answers from it
-  // once it says merged: a write of the pull requests, or what it leaves to do, that fails reads again.
+  // Note that the read is written last, because an ended agent's read answers from the pull request it
+  // linked once it says merged: a write of the pull requests, or what it leaves to do, that fails reads again.
   if (hasRepository(agent))
     yield* recordRepository(userId, agent, agent.repository, found, delivered);
-  yield* recordAgentPublished(userId, agent.id, found.stored, read);
+  yield* recordAgentPublishedRead(userId, agent.id, read);
   return found.answer;
 });
 
@@ -456,11 +454,11 @@ const extraPublishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * Each pull request the agent opened in a repository it works in beside its
- * own (`readAgentRepositories`), read again from GitHub and written on that
- * repository's row as the agent's own is on its row, a merge first seen
+ * own (`readAgentRepositories`), read again from GitHub and linked as the
+ * agent's own is, a merge first seen
  * counted and its task asked to settle; nothing for an agent in one
  * repository, nor for an extra that opened none. Each read that fails is
- * logged by its kind and leaves its row as it stood, since the agent's own
+ * logged by its kind and leaves its pull requests as they stood, since the agent's own
  * pull request is still read and answered.
  */
 const extrasPublished = (userId: string, agent: Agent, delivered: readonly string[]) =>
@@ -474,16 +472,7 @@ const extrasPublished = (userId: string, agent: Agent, delivered: readonly strin
         if (headBranch === null) return Effect.void;
         return Effect.gen(function* () {
           const found = yield* extraPublishedOnGitHub(userId, agent, { ...extra, headBranch });
-          const at = yield* Clock.currentTimeMillis;
-          const read = { at, branch: headBranch, pushed: found.answer.branch !== null };
           yield* recordRepository(userId, agent, extra.repository, found, delivered);
-          yield* recordAgentRepositoryPublished(
-            userId,
-            agent.id,
-            extra.repository,
-            found.stored,
-            read,
-          );
         }).pipe(Effect.catch(extraUnread));
       },
       // Note that an agent's extras are bounded at its Start, so they are read together.
@@ -528,8 +517,8 @@ export const pullRequestOfNumber = /* @__PURE__ */ Effect.fnUntraced(function* (
  * (`pullRequestOfNumber`): one the agent opened from a branch it has since
  * left, or one no agent opened, which a Pull request tab shows by its
  * number; none where the repository holds no such one. Note that it is
- * never written on the agent's row, which keeps the pull request of the
- * branch the agent stands on.
+ * never linked to the agent, since only a read of the agent's own branches
+ * links one.
  */
 export const agentPullRequestOfNumber = /* @__PURE__ */ Effect.fn("web/agentPullRequestOfNumber")(
   function* (

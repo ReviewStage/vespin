@@ -92,7 +92,7 @@ import {
   readVisibleAgent,
   recordAgentAuthor,
   recordAgentNativeSession,
-  recordAgentPublished,
+  recordAgentPublishedRead,
   recordAgentRunnerToken,
   recordNativeHanded,
   recordTurnFastRefused,
@@ -1122,7 +1122,7 @@ it.layer(getTestDB())("the coding-agent store's kept pull request", (it) => {
   };
 
   it.effect(
-    "a merged pull request is read back whole, its head and merge instant among it, by a member of the agent's workspace, while the list reads only what the wire carries, its head but not its merge instant, and an outsider reads none",
+    "the pull request from the branch the agent stands on is read back whole, its head and merge instant among it, by a member of the agent's workspace, not a newer one from another branch, while the list reads only what the wire carries, and an outsider reads none",
     () =>
       Effect.gen(function* () {
         const starter = yield* openAccount;
@@ -1137,10 +1137,22 @@ it.layer(getTestDB())("the coding-agent store's kept pull request", (it) => {
           headSha: "c0ffee1",
           mergedAt: Date.parse("2026-10-17T09:00:00Z"),
         };
+        const read = {
+          at: Date.parse("2026-10-17T09:01:00Z"),
+          branch: "agent/relay",
+          pushed: true,
+        };
 
-        const read = { at: Date.parse("2026-10-17T09:01:00Z"), branch: "relay", pushed: true };
-
-        yield* recordAgentPublished(starter, agentId, kept, read);
+        yield* updateAgentBranch(starter, agentId, "agent/relay");
+        yield* openedPullRequest(starter, agentId, kept, "acme/api", "agent/relay");
+        yield* openedPullRequest(
+          starter,
+          agentId,
+          { ...onTheWire, number: 8 },
+          "acme/api",
+          "agent/other",
+        );
+        yield* recordAgentPublishedRead(starter, agentId, read);
 
         assert.deepEqual(yield* readAgentPublished(teammate, agentId), kept);
         assert.deepEqual(yield* readAgentKeptPublished(teammate, agentId), {
@@ -1157,38 +1169,33 @@ it.layer(getTestDB())("the coding-agent store's kept pull request", (it) => {
       }),
   );
 
-  it.effect(
-    "a kept read let go, or written over by a write that names none, is no longer kept, while the pull request stays",
-    () =>
-      Effect.gen(function* () {
-        const starter = yield* openAccount;
-        const workspace = yield* openWorkspace(starter);
-        const { agentId } = yield* tasklessAgent(starter, workspace);
-        const read = { at: Date.parse("2026-10-17T09:01:00Z"), branch: "relay", pushed: true };
+  it.effect("a kept read let go is no longer kept, while the pull request stays", () =>
+    Effect.gen(function* () {
+      const starter = yield* openAccount;
+      const workspace = yield* openWorkspace(starter);
+      const { agentId } = yield* tasklessAgent(starter, workspace);
+      const read = { at: Date.parse("2026-10-17T09:01:00Z"), branch: "agent/relay", pushed: true };
 
-        yield* recordAgentPublished(starter, agentId, onTheWire, read);
-        yield* forgetAgentPublishedRead(starter, agentId);
-        assert.equal(yield* readAgentKeptPublished(starter, agentId), null);
-        assert.deepEqual(yield* readAgentPublished(starter, agentId), onTheWire);
+      yield* updateAgentBranch(starter, agentId, "agent/relay");
+      yield* openedPullRequest(starter, agentId, onTheWire, "acme/api", "agent/relay");
+      yield* recordAgentPublishedRead(starter, agentId, read);
+      yield* forgetAgentPublishedRead(starter, agentId);
 
-        yield* recordAgentPublished(starter, agentId, onTheWire, read);
-        yield* recordAgentPublished(starter, agentId, onTheWire);
-        assert.equal(yield* readAgentKeptPublished(starter, agentId), null);
-      }),
+      assert.equal(yield* readAgentKeptPublished(starter, agentId), null);
+      assert.deepEqual(yield* readAgentPublished(starter, agentId), onTheWire);
+    }),
   );
 
   it.effect(
-    "a row kept before the head and merge instant were reads back as it was written, and an agent that published nothing reads none",
+    "a pull request linked before the head and merge instant were kept reads back as it was written, and an agent that published nothing reads none",
     () =>
       Effect.gen(function* () {
         const starter = yield* openAccount;
         const workspace = yield* openWorkspace(starter);
         const { agentId } = yield* tasklessAgent(starter, workspace);
         const quiet = yield* tasklessAgent(starter, workspace);
-        // Written past the store, as a row from before the keys were kept stands.
-        yield* Effect.flatMap(Database, (db) =>
-          db.update(agentTable).set({ published: onTheWire }).where(eq(agentTable.id, agentId)),
-        );
+        yield* updateAgentBranch(starter, agentId, "agent/relay");
+        yield* openedPullRequest(starter, agentId, onTheWire, "acme/api", "agent/relay");
 
         assert.deepEqual(yield* readAgentPublished(starter, agentId), onTheWire);
         assert.deepEqual(
@@ -1200,7 +1207,7 @@ it.layer(getTestDB())("the coding-agent store's kept pull request", (it) => {
   );
 
   it.effect(
-    "a row Factory wrote, its areas beside the head and merge instant, reads back without its areas",
+    "a pull request Factory wrote, its areas beside the head and merge instant, reads back without its areas",
     () =>
       Effect.gen(function* () {
         const starter = yield* openAccount;
@@ -1213,9 +1220,16 @@ it.layer(getTestDB())("the coding-agent store's kept pull request", (it) => {
           headSha: "c0ffee1",
           areas: [{ path: ".", additions: 12, deletions: 3 }],
         };
+        yield* updateAgentBranch(starter, agentId, "agent/relay");
         // Written past the store, as a row from while Factory stood keeps them.
         yield* Effect.flatMap(Database, (db) =>
-          db.update(agentTable).set({ published: factoryRow }).where(eq(agentTable.id, agentId)),
+          db.insert(agentPullRequest).values({
+            agentId,
+            repository: "acme/api",
+            number: onTheWire.number,
+            headBranch: "agent/relay",
+            pullRequest: factoryRow,
+          }),
         );
 
         assert.deepEqual(yield* readAgentPublished(starter, agentId), {

@@ -15,9 +15,9 @@ import {
   type NewAgent,
   readAgent,
   readAgentOfConversation,
-  recordAgentPublished,
   renameAgent,
   takeAgentMentionedServers,
+  updateAgentBranch,
   updateAgentChoice,
 } from "@repo/database/models/agent-store";
 import { listTasks } from "@repo/database/models/task-store";
@@ -151,7 +151,7 @@ function listedLine({ descriptionSnapshot, prompt, automationOrigin, ...row }: A
 
 it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
   it.effect(
-    "the pull request an agent published reads back beside the agents of the plans named, as last recorded, and nothing of another account's is read or written",
+    "the pull request an agent opened from the branch it stands on reads back beside the agents of the plans named, none once it stands on another, and nothing of another account's is read or written",
     () =>
       Effect.gen(function* () {
         const { userId, taskId } = yield* openTask;
@@ -159,19 +159,26 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
         const agent = started(yield* createAgent(userId, start(taskId)));
         const theirs = started(yield* createAgent(other.userId, start(other.taskId)));
 
-        yield* recordAgentPublished(userId, agent.id, PULL_REQUEST);
+        yield* updateAgentBranch(userId, agent.id, "agent/invitations");
+        yield* openedPullRequest(userId, agent.id, PULL_REQUEST, "acme/web", "agent/invitations");
         // Another account's write names no agent of theirs, and another account's read names none of this one's.
-        yield* recordAgentPublished(userId, theirs.id, PULL_REQUEST);
+        yield* updateAgentBranch(userId, theirs.id, "agent/invitations");
+        yield* openedPullRequest(userId, theirs.id, PULL_REQUEST, "acme/web", "agent/invitations");
+        const standing = { ...listedLine(agent), branch: "agent/invitations" };
         assert.deepEqual(yield* listPublishedAgents(userId, [taskId, other.taskId]), [
-          { agent: listedLine(agent), published: PULL_REQUEST, pullRequests: [] },
+          { agent: standing, published: PULL_REQUEST, pullRequests: [PULL_REQUEST] },
         ]);
         assert.deepEqual(yield* listPublishedAgents(other.userId, [other.taskId]), [
           { agent: listedLine(theirs), published: null, pullRequests: [] },
         ]);
 
-        yield* recordAgentPublished(userId, agent.id, null);
+        yield* updateAgentBranch(userId, agent.id, "agent/next");
         assert.deepEqual(yield* listPublishedAgents(userId, [taskId]), [
-          { agent: listedLine(agent), published: null, pullRequests: [] },
+          {
+            agent: { ...listedLine(agent), branch: "agent/next" },
+            published: null,
+            pullRequests: [PULL_REQUEST],
+          },
         ]);
       }),
   );

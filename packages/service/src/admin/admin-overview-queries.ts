@@ -14,6 +14,7 @@ import { Database, type DatabaseServices, queryBuilder } from "@repo/database/co
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
 import { agentAutomationRunSql } from "@repo/database/models/agent-name";
 import { InstantColumnSchema } from "@repo/database/models/columns";
+import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { member, session, user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
@@ -98,17 +99,20 @@ function tag(name: string): SQL.Aliased<string> {
   return sql<string>`${name}::text`.as("tag");
 }
 
-/** When an agent's pull request merged, in epoch milliseconds; null where it has not. */
-const MERGED_AT_MS = sql`(${agentTable.published} ->> 'mergedAt')::numeric`;
+/** When a pull request an agent opened (`agent_pull_request`) merged, in epoch milliseconds; null where it has not. */
+const MERGED_AT_MS = sql`(${agentPullRequest.pullRequest} ->> 'mergedAt')::numeric`;
 
-/** When an agent's pull request merged, as an instant; null where it has not. */
+/** When a pull request an agent opened merged, as an instant; null where it has not. */
 const MERGED_AT = sql`to_timestamp(${MERGED_AT_MS} / 1000)`;
 
-/** Whether an agent's pull request is merged, by its stamp or its state. */
+/** Whether a pull request an agent opened is merged, by its stamp or its state. */
 const PR_MERGED = or(
-  isNotNull(sql`${agentTable.published} ->> 'mergedAt'`),
-  eq(sql`${agentTable.published} ->> 'state'`, PULL_REQUEST_STATE.MERGED),
+  isNotNull(sql`${agentPullRequest.pullRequest} ->> 'mergedAt'`),
+  eq(agentPullRequest.state, PULL_REQUEST_STATE.MERGED),
 );
+
+/** Each pull request an agent opened, beside the agent that opened it. */
+const OPENED_BY_AGENT = eq(agentTable.id, agentPullRequest.agentId);
 
 /** Whether an automation started the agent, as every query asks it. */
 const STARTED_BY_AUTOMATION = agentAutomationRunSql(agentTable);
@@ -184,7 +188,8 @@ export function dailyCountRows(since: Date, until?: Date) {
         userId: userIdOf(agentTable.userId),
         at: atOf(MERGED_AT),
       })
-      .from(agentTable)
+      .from(agentPullRequest)
+      .innerJoin(agentTable, OPENED_BY_AGENT)
       .where(
         and(
           gte(MERGED_AT_MS, since.getTime()),
@@ -358,15 +363,10 @@ const findPrsOpened = SqlSchema.findOneOption({
           opened: count(),
           merged: sql<number>`count(*) filter (where ${PR_MERGED})`,
         })
-        .from(agentTable)
+        .from(agentPullRequest)
+        .innerJoin(agentTable, OPENED_BY_AGENT)
         .innerJoin(user, eq(user.id, agentTable.userId))
-        .where(
-          and(
-            gte(agentTable.createdAt, request.since),
-            isNotNull(agentTable.published),
-            keptByScope(request.scope),
-          ),
-        ),
+        .where(and(gte(agentTable.createdAt, request.since), keptByScope(request.scope))),
     ),
 });
 
@@ -422,14 +422,16 @@ const findFunnel = SqlSchema.findOneOption({
           [FUNNEL_STEP.OPENED_PR]: everDid(
             queryBuilder
               .select({ one })
-              .from(agentTable)
-              .where(and(agentOf, isNotNull(agentTable.published))),
+              .from(agentPullRequest)
+              .innerJoin(agentTable, OPENED_BY_AGENT)
+              .where(agentOf),
           ),
           [FUNNEL_STEP.MERGED_PR]: everDid(
             queryBuilder
               .select({ one })
-              .from(agentTable)
-              .where(and(agentOf, isNotNull(agentTable.published), PR_MERGED)),
+              .from(agentPullRequest)
+              .innerJoin(agentTable, OPENED_BY_AGENT)
+              .where(and(agentOf, PR_MERGED)),
           ),
         })
         .from(user)
@@ -540,11 +542,12 @@ const findPrsMergedBy = SqlSchema.findAll({
     Database.use((db) =>
       db
         .select({ userId: agentTable.userId, value: count() })
-        .from(agentTable)
+        .from(agentPullRequest)
+        .innerJoin(agentTable, OPENED_BY_AGENT)
         .where(
           and(
             inArray(agentTable.userId, request.userIds),
-            gte(sql`(${agentTable.published} ->> 'mergedAt')::numeric`, request.since.getTime()),
+            gte(MERGED_AT_MS, request.since.getTime()),
           ),
         )
         .groupBy(agentTable.userId),

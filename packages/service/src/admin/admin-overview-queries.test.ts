@@ -16,7 +16,7 @@ import { integrationConnection } from "@repo/database/schemas/integration";
 import { conversations } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { getTestDB, openedPullRequest, openWorkspace } from "@repo/database/testing";
 import {
   DAILY_COUNT,
   type DailyCount,
@@ -244,9 +244,8 @@ const seedService = Effect.gen(function* () {
   });
   const adaTask = yield* createTask(ada, adaWorkspace, "2026-10-20T10:00:00Z");
   yield* writeRevision(adaTask, ada, DESCRIPTION_ACTOR.DEVELOPER, "2026-10-18T10:00:00Z");
-  const merged = yield* startAgent(ada, adaWorkspace, "2026-10-20T11:00:00Z", {
-    published: MERGED_PULL_REQUEST,
-  });
+  const merged = yield* startAgent(ada, adaWorkspace, "2026-10-20T11:00:00Z");
+  yield* openedPullRequest(ada, merged, MERGED_PULL_REQUEST);
   yield* fireAutomation(ada, adaWorkspace, "2026-10-20T02:00:00Z");
   // Note that the agent's automation is deleted since, so its row keeps the run's origin and no id.
   yield* startAgent(ada, adaWorkspace, "2026-10-19T02:00:00Z", {

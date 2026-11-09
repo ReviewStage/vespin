@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
@@ -237,28 +238,30 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
         deletions: 1,
         changedFiles: 1,
       };
-      yield* db.insert(agentTable).values([
-        {
-          ...agentRow,
-          // Each agent on a conversation of its own, as every Start makes one.
-          conversationId: yield* openConversation(owner, CONVERSATION_KIND.AGENT),
-          idempotencyKey: randomUUID(),
-          published: { ...pullRequest, mergedAt: AT_YESTERDAY.getTime() },
-        },
-        {
-          ...agentRow,
-          conversationId: yield* openConversation(owner, CONVERSATION_KIND.AGENT),
-          idempotencyKey: randomUUID(),
-          published: { ...pullRequest, mergedAt: AT_YESTERDAY.getTime() },
-        },
+      const opened = [
+        { ...pullRequest, mergedAt: AT_YESTERDAY.getTime() },
+        { ...pullRequest, mergedAt: AT_YESTERDAY.getTime() },
         // Open, never merged.
-        {
-          ...agentRow,
-          conversationId: yield* openConversation(owner, CONVERSATION_KIND.AGENT),
-          idempotencyKey: randomUUID(),
-          published: { ...pullRequest, state: PULL_REQUEST_STATE.OPEN },
-        },
-      ]);
+        { ...pullRequest, state: PULL_REQUEST_STATE.OPEN },
+      ];
+      for (const each of opened) {
+        const [agent] = yield* db
+          .insert(agentTable)
+          .values({
+            ...agentRow,
+            // Each agent on a conversation of its own, as every Start makes one.
+            conversationId: yield* openConversation(owner, CONVERSATION_KIND.AGENT),
+            idempotencyKey: randomUUID(),
+          })
+          .returning({ id: agentTable.id });
+        yield* db.insert(agentPullRequest).values({
+          agentId: agent?.id ?? "",
+          repository: "owner/name",
+          number: each.number,
+          headBranch: "agent/synthetic",
+          pullRequest: each,
+        });
+      }
 
       const usage = yield* readAdminCostUsage({
         now: NOW,

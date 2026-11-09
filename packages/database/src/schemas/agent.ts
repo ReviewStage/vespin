@@ -61,10 +61,10 @@ import { task } from "./task.js";
  * what it read that no provider counts apart (`StoredAgentStep`), and
  * `compacted_at` when its harness last compacted that conversation; both are null
  * until it happens, and both are what the tab's context ring reads.
- * `published` is the pull request from the agent's branch as GitHub last
- * answered a read of it (`coder-host/published.ts`), null before a read
- * found one; the task list reads it so the sidebar asks GitHub nothing.
- * `published_read` is when that read was (`StoredPublishedRead`), which lets
+ * `published` is no longer read or written, its pull requests kept one row
+ * each in `agent_pull_request`, and is dropped once no deployment reads it.
+ * `published_read` is when GitHub was last read of the agent's pull request
+ * (`coder-host/published.ts`, `StoredPublishedRead`), which lets
  * a tab's read answer from the row rather than GitHub; null before one, for
  * a write that names none, and once a change to the pull request lets it go.
  * `archived_at` is when the developer put the agent away, which leaves it
@@ -300,9 +300,9 @@ export const agentTable = pgTable(
     lastStep: jsonb("last_step").$type<StoredAgentStep>(),
     /** When the harness last compacted the agent's own conversation; null where it never has. */
     compactedAt: timestamptz("compacted_at"),
-    /** The pull request from the agent's branch as GitHub last answered; null before a read found one. */
+    /** No longer read or written: its pull requests are `agent_pull_request`'s rows. Dropped once no deployment reads it. */
     published: jsonb("published").$type<StoredPullRequest>(),
-    /** When the read that wrote `published` was, and of which branch; null before one, and once a change lets it go. */
+    /** When GitHub was last read of the agent's pull request, and of which branch; null before one, and once a change lets it go. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
     /** When the developer archived the agent; null while it is not. */
     archivedAt: timestamptz("archived_at"),

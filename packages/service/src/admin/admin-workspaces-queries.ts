@@ -18,11 +18,12 @@ import {
 } from "@repo/database/github-installation-vocabulary";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import { WORKSPACE_NAME } from "@repo/database/models/workspace-store";
+import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { invitation, member, organization, user } from "@repo/database/schemas/auth";
+import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { personalWorkspace } from "@repo/database/schemas/personal-workspace";
-import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { task } from "@repo/database/schemas/task";
 import {
   ADMIN_METRICS_SCOPE,
@@ -122,7 +123,7 @@ function revisionsSince(since: Date): SQL<number> {
  * request, which counts once.
  */
 function prsMergedSince(sinceMs: number): SQL<number> {
-  return sql<number>`(select count(distinct ${agentTable.published} ->> 'url')::int from ${agentTable} where ${eq(agentTable.organizationId, organization.id)} and (${agentTable.published} ->> 'mergedAt')::numeric >= ${sinceMs})`;
+  return sql<number>`(select count(distinct ${agentPullRequest.pullRequest} ->> 'url')::int from ${agentPullRequest} inner join ${agentTable} on ${agentTable.id} = ${agentPullRequest.agentId} where ${eq(agentTable.organizationId, organization.id)} and (${agentPullRequest.pullRequest} ->> 'mergedAt')::numeric >= ${sinceMs})`;
 }
 
 /** Whether the workspace saw a task, an agent, or a description revision since the instant. */

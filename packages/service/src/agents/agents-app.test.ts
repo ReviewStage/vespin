@@ -10,7 +10,6 @@ import {
   discardAgent,
   readAgent,
   recordAgentCompaction,
-  recordAgentPublished,
   recordAgentStep,
   renameAgent,
   takeAgentMentionedServers,
@@ -23,7 +22,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, startTask } from "@repo/database/testing";
+import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
   firstMessageParts,
@@ -155,16 +154,22 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       ]);
       yield* transcriptRow(stored, 5, MESSAGE_ROLE.ASSISTANT, [text("Done.")]);
       yield* updateAgentBranch(opened.owner, source.id, PUBLISHED.branch);
-      yield* recordAgentPublished(opened.owner, source.id, {
-        number: PUBLISHED.number,
-        title: "Expire teammate invitations",
-        url: `https://github.com/${RELAY_FULL_NAME}/pull/${PUBLISHED.number}`,
-        state: PULL_REQUEST_STATE.OPEN,
-        checks: CHECK_SUMMARY.NONE,
-        additions: 4,
-        deletions: 1,
-        changedFiles: 1,
-      });
+      yield* openedPullRequest(
+        opened.owner,
+        source.id,
+        {
+          number: PUBLISHED.number,
+          title: "Expire teammate invitations",
+          url: `https://github.com/${RELAY_FULL_NAME}/pull/${PUBLISHED.number}`,
+          state: PULL_REQUEST_STATE.OPEN,
+          checks: CHECK_SUMMARY.NONE,
+          additions: 4,
+          deletions: 1,
+          changedFiles: 1,
+        },
+        stored.repository ?? RELAY_FULL_NAME,
+        PUBLISHED.branch,
+      );
       return { ...opened, source, stored, firstTurn, laterLine };
     });
   const sourceAgent = sourceAgentOn();

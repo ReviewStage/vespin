@@ -12,9 +12,13 @@
 
 import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
-import { latestTurnsOfReached } from "@repo/database/models/agent-store";
+import {
+  latestTurnsOfReached,
+  PULL_REQUEST_OF_AGENT_BRANCH,
+} from "@repo/database/models/agent-store";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import { utcDayKey } from "@repo/database/models/quota";
+import { agentPullRequest } from "@repo/database/schemas";
 import { accountProviderKey } from "@repo/database/schemas/account-provider-key";
 import { agentTable } from "@repo/database/schemas/agent";
 import { member, organization, session } from "@repo/database/schemas/auth";
@@ -41,6 +45,7 @@ import {
   and,
   asc,
   count,
+  countDistinct,
   desc,
   eq,
   exists,
@@ -69,8 +74,8 @@ type AdminQueryFailure = QueryError | Schema.SchemaError;
 /** The account, and the instant the window opens: its first UTC day's midnight. */
 const WindowRequestSchema = Schema.Struct({ userId: Schema.String, windowStart: Schema.Date });
 
-/** The state of an agent's pull request alone, out of the row GitHub's answer was kept in. */
-const PULL_REQUEST_STATE_OF = sql<string | null>`${agentTable.published} ->> 'state'`;
+/** The state alone of the pull request the agent opened from the branch it stands on, as GitHub last answered. */
+const PULL_REQUEST_STATE_OF = sql<string | null>`${PULL_REQUEST_OF_AGENT_BRANCH} ->> 'state'`;
 
 const findSessionSeen = SqlSchema.findOneOption({
   Request: Schema.String,
@@ -97,9 +102,9 @@ const findTasksCreated = SqlSchema.findOneOption({
 });
 
 /**
- * The window's agents counted whole, with the pull requests opened from
- * them and the ones of those merged, each a count of rows rather than of
- * the bounded read the statuses come from.
+ * The window's agents counted whole, with every pull request they opened
+ * (`agent_pull_request`) and the ones of those merged, each a count of rows
+ * rather than of the bounded read the statuses come from.
  */
 const findAgentTotals = SqlSchema.findOneOption({
   Request: WindowRequestSchema,
@@ -112,11 +117,12 @@ const findAgentTotals = SqlSchema.findOneOption({
     Database.use((db) =>
       db
         .select({
-          started: count(),
-          opened: count(agentTable.published),
-          merged: sql<number>`count(*) filter (where ${PULL_REQUEST_STATE_OF} = ${PULL_REQUEST_STATE.MERGED})`,
+          started: countDistinct(agentTable.id),
+          opened: count(agentPullRequest.agentId),
+          merged: sql<number>`count(*) filter (where ${agentPullRequest.state} = ${PULL_REQUEST_STATE.MERGED})`,
         })
         .from(agentTable)
+        .leftJoin(agentPullRequest, eq(agentPullRequest.agentId, agentTable.id))
         .where(
           and(
             eq(agentTable.userId, request.userId),

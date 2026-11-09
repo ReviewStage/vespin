@@ -1,5 +1,6 @@
 import { liveKeysIn } from "@repo/database/core/live-statement";
 import { queryBuilder } from "@repo/database/core/query";
+import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
 import { taskBlockedFor } from "@repo/database/models/task-block-store";
 import {
@@ -198,7 +199,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         archivedBy: agentTable.archivedBy,
         archiverName: outerJoined(archiver.name),
         disabledServers: agentTable.disabledServers,
-        published: agentTable.published,
+        published: PULL_REQUEST_OF_AGENT_BRANCH,
         pullRequests: sql<
           AgentRow["pullRequests"]
         >`array(select ${agentPullRequest.pullRequest} from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentTable.id} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc)`,

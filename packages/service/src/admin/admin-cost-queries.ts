@@ -12,6 +12,7 @@
  */
 
 import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
@@ -175,8 +176,8 @@ const findDictationSeconds = SqlSchema.findAll({
     ),
 });
 
-/** When GitHub said the agent's pull request merged, in epoch milliseconds, as its row keeps it. */
-const MERGED_AT = sql<number>`(${agentTable.published}->>'mergedAt')::bigint`;
+/** When GitHub said a pull request an agent opened merged, in epoch milliseconds, as its row (`agent_pull_request`) keeps it. */
+const MERGED_AT = sql<number>`(${agentPullRequest.pullRequest}->>'mergedAt')::bigint`;
 
 const MERGED_DAY = utcDayOfEpochMs(MERGED_AT);
 
@@ -195,7 +196,8 @@ const findMergedPullRequests = SqlSchema.findAll({
     Database.use((db) =>
       db
         .select({ day: MERGED_DAY, userId: agentTable.userId, merged: count() })
-        .from(agentTable)
+        .from(agentPullRequest)
+        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
         .innerJoin(user, eq(user.id, agentTable.userId))
         .where(and(gte(MERGED_AT, filter.fetchStart.getTime()), keptAccounts(filter)))
         .groupBy(MERGED_DAY, agentTable.userId),

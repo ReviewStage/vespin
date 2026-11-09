@@ -8,11 +8,12 @@ import {
   GITHUB_INSTALLATION_STATUS,
   type GitHubInstallationStatus,
 } from "@repo/database/github-installation-vocabulary";
+import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { invitation, member, organization, user } from "@repo/database/schemas/auth";
+import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { personalWorkspace } from "@repo/database/schemas/personal-workspace";
-import { descriptionRevision } from "@repo/database/schemas/description-revision";
 import { conversations } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
@@ -242,11 +243,13 @@ const insertAgent = (
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
+    const id = randomUUID();
     const conversationId = randomUUID();
     yield* db
       .insert(conversations)
       .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
     yield* db.insert(agentTable).values({
+      id,
       organizationId,
       userId,
       conversationId,
@@ -257,21 +260,24 @@ const insertAgent = (
       repository: "northwind/web",
       idempotencyKey: randomUUID(),
       createdAt,
-      ...(merged === undefined
-        ? undefined
-        : {
-            published: {
-              number: merged.number,
-              title: "A pull request title",
-              url: `https://github.com/northwind/web/pull/${merged.number}`,
-              state: "merged",
-              checks: "passing",
-              additions: 1,
-              deletions: 1,
-              changedFiles: 1,
-              mergedAt: merged.at.getTime(),
-            },
-          }),
+    });
+    if (merged === undefined) return;
+    yield* db.insert(agentPullRequest).values({
+      agentId: id,
+      repository: "northwind/web",
+      number: merged.number,
+      headBranch: `agent/${merged.number}`,
+      pullRequest: {
+        number: merged.number,
+        title: "A pull request title",
+        url: `https://github.com/northwind/web/pull/${merged.number}`,
+        state: "merged",
+        checks: "passing",
+        additions: 1,
+        deletions: 1,
+        changedFiles: 1,
+        mergedAt: merged.at.getTime(),
+      },
     });
   });
 

@@ -1798,19 +1798,15 @@ export const PublishedReadColumnSchema = Schema.Struct({
   pushed: Schema.Boolean,
 });
 
-const updateAgentPublished = SqlSchema.void({
+const updateAgentPublishedRead = SqlSchema.void({
   Request: Schema.Struct({
     userId: Schema.String,
     agentId: Schema.String,
-    published: Schema.NullOr(PublishedColumnSchema),
-    publishedRead: Schema.NullOr(PublishedReadColumnSchema),
+    publishedRead: PublishedReadColumnSchema,
   }),
-  execute: ({ userId, agentId, published, publishedRead }) =>
+  execute: ({ userId, agentId, publishedRead }) =>
     Database.use((db) =>
-      db
-        .update(agentTable)
-        .set({ published, publishedRead })
-        .where(reachableAgent(userId, agentId)),
+      db.update(agentTable).set({ publishedRead }).where(reachableAgent(userId, agentId)),
     ),
 });
 
@@ -1822,6 +1818,33 @@ const updateAgentPublishedReadForgotten = SqlSchema.void({
     ),
 });
 
+/** Every pull request the agent a statement reads opened (`agent_pull_request`), newest first, as one JSON list. */
+const PULL_REQUESTS_OF_AGENT = sql<
+  readonly AgentPullRequest[]
+>`(select coalesce(jsonb_agg(${agentPullRequest.pullRequest} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc), '[]'::jsonb) from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentTable.id})`;
+
+/**
+ * The pull request an agent opened from a branch of one of its repositories
+ * (`agent_pull_request`), as one value a statement reads beside the agent's
+ * row: the newest linked where several were, and null where it opened none
+ * from that branch, or the branch or repository is null. Note that the
+ * repository matches its case aside, as GitHub matches one.
+ */
+export function pullRequestOfBranch(
+  agentId: SQLWrapper,
+  repository: SQLWrapper,
+  branch: SQLWrapper,
+): SQL<StoredPullRequest | null> {
+  return sql<StoredPullRequest | null>`(select ${agentPullRequest.pullRequest} from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentId} and lower(${agentPullRequest.repository}) = lower(${repository}) and ${agentPullRequest.headBranch} = ${branch} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc limit 1)`;
+}
+
+/** The pull request the agent a statement reads opened from the branch it stands on in its own repository (`pullRequestOfBranch`). */
+export const PULL_REQUEST_OF_AGENT_BRANCH = /* @__PURE__ */ pullRequestOfBranch(
+  agentTable.id,
+  agentTable.repository,
+  agentTable.branch,
+);
+
 const findAgentPublished = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
   Result: Schema.Struct({
@@ -1831,32 +1854,15 @@ const findAgentPublished = SqlSchema.findOneOption({
   execute: ({ userId, agentId }) =>
     Database.use((db) =>
       db
-        .select({ published: agentTable.published, publishedRead: agentTable.publishedRead })
+        .select({
+          published: PULL_REQUEST_OF_AGENT_BRANCH,
+          publishedRead: agentTable.publishedRead,
+        })
         .from(agentTable)
         .where(reachableAgent(userId, agentId))
         .limit(1),
     ),
 });
-
-/** The pull request the agent's row keeps, under the row's lock, as a write of a new one reads it. */
-const lockAgentPublished = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({ published: Schema.NullOr(PublishedColumnSchema) }),
-  execute: ({ userId, agentId }) =>
-    Database.use((db) =>
-      db
-        .select({ published: agentTable.published })
-        .from(agentTable)
-        .where(reachableAgent(userId, agentId))
-        .limit(1)
-        .for("update", { of: agentTable }),
-    ),
-});
-
-/** Every pull request the agent a statement reads opened (`agent_pull_request`), newest first, as one JSON list. */
-const PULL_REQUESTS_OF_AGENT = sql<
-  readonly AgentPullRequest[]
->`(select coalesce(jsonb_agg(${agentPullRequest.pullRequest} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc), '[]'::jsonb) from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentTable.id})`;
 
 const findAgentsOfTasks = SqlSchema.findAll({
   Request: Schema.Struct({
@@ -1874,7 +1880,7 @@ const findAgentsOfTasks = SqlSchema.findAll({
       db
         .select({
           ...AGENT_LINE_COLUMNS,
-          published: agentTable.published,
+          published: PULL_REQUEST_OF_AGENT_BRANCH,
           pullRequests: PULL_REQUESTS_OF_AGENT,
         })
         .from(agentTable)
@@ -1940,7 +1946,7 @@ const findPublishedAgentsById = SqlSchema.findAll({
       db
         .select({
           ...AGENT_COLUMNS,
-          published: agentTable.published,
+          published: PULL_REQUEST_OF_AGENT_BRANCH,
           pullRequests: PULL_REQUESTS_OF_AGENT,
         })
         .from(agentTable)
@@ -1995,7 +2001,7 @@ const findStartedFrom = SqlSchema.findAll({
  * names, as GitHub matches one, its case aside: the one expression every
  * lookup by a delivery's repository is written in, so each is served by the
  * index built on it (`agent_on_branch`, `agent_repository_on_head`,
- * `agent_repository_on_pull_request`).
+ * `agent_pull_request_on_number`, `agent_pull_request_on_head`).
  */
 function namesDeliveredRepository(column: SQLWrapper, repository: string): SQL {
   return eq(sql`lower(${column})`, repository.toLowerCase());
@@ -2725,29 +2731,18 @@ export function newlyMerged(
 }
 
 /**
- * The pull request from the agent's branch as GitHub just answered, or null
- * where it answered none, with the read that found it where one is named;
- * nothing written for an agent of a workspace the account is not in.
- * Answers whether this write is the one that first kept it merged: the row
- * is locked as it is read, so of two reads that find the same merge at once
- * (the webhook's and the sweep's) only the first to write says so.
+ * The read of GitHub that just read the agent's own repository: when it was,
+ * of which branch, and whether GitHub held it, which lets the kept answers
+ * answer in GitHub's place (`readAgentKeptPublished`); the pull request it
+ * found is linked beside it (`recordAgentPullRequests`). Nothing written for
+ * an agent of a workspace the account is not in.
  */
-export function recordAgentPublished(
+export function recordAgentPublishedRead(
   userId: string,
   agentId: string,
-  published: StoredPullRequest | null,
-  read?: StoredPublishedRead,
-): AgentStoreEffect<boolean> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(
-      Effect.gen(function* () {
-        const kept = yield* lockAgentPublished({ userId, agentId });
-        if (Option.isNone(kept)) return false;
-        yield* updateAgentPublished({ userId, agentId, published, publishedRead: read ?? null });
-        return newlyMerged(kept.value.published, published);
-      }),
-    ),
-  );
+  read: StoredPublishedRead,
+): AgentStoreEffect<void> {
+  return updateAgentPublishedRead({ userId, agentId, publishedRead: read });
 }
 
 /** The row's read of GitHub let go, so its pull request is no longer answered in GitHub's place; nothing written for an agent of a workspace the account is not in. */
@@ -2763,7 +2758,7 @@ export function taskHasMergedPullRequest(
   return Effect.map(findMergedAgentOfTask({ userId, taskId }), Option.isSome);
 }
 
-/** The pull request the agent's row keeps as GitHub last answered, whole; null before a read found one, and for an agent the account does not reach. */
+/** The pull request the agent opened from the branch it stands on, as GitHub last answered, whole (`pullRequestOfBranch`); null where it opened none from it, and for an agent the account does not reach. */
 export function readAgentPublished(
   userId: string,
   agentId: string,
@@ -2773,13 +2768,13 @@ export function readAgentPublished(
   );
 }
 
-/** What the agent's row keeps of GitHub's last answer: the pull request, null where it found none, and the read that found it. */
+/** What the agent's rows keep of GitHub's last answer: the pull request from the branch it stands on, null where it opened none, and the last read of GitHub. */
 export interface KeptPublished {
   readonly published: StoredPullRequest | null;
   readonly read: StoredPublishedRead;
 }
 
-/** The row's pull request with the read that wrote it; null where no read is kept, and for an agent the account does not reach. */
+/** The pull request from the branch the agent stands on with the last read of GitHub; null where no read is kept, and for an agent the account does not reach. */
 export function readAgentKeptPublished(
   userId: string,
   agentId: string,

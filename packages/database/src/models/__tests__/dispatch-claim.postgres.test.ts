@@ -16,8 +16,13 @@ import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER } from "../../storage-vocabulary.js";
-import { getTestDB, openWorkspace, STORE_TEST_DATABASE_ENVIRONMENT } from "../../testing/index.js";
-import { deleteAgent, recordAgentPublished } from "../agent-store.js";
+import {
+  getTestDB,
+  openedPullRequest,
+  openWorkspace,
+  STORE_TEST_DATABASE_ENVIRONMENT,
+} from "../../testing/index.js";
+import { deleteAgent } from "../agent-store.js";
 import { readMessageByClientId } from "../message-reads.js";
 import { createTask, finishTaskWork } from "../task-store.js";
 import { type ConversationTarget, STORE_WRITE_EFFECT, storeWriter } from "../writer.js";
@@ -290,7 +295,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
           repository: "acme/api",
           idempotencyKey: randomUUID(),
         });
-        yield* recordAgentPublished(target.userId, agentId, {
+        yield* openedPullRequest(target.userId, agentId, {
           number: 42,
           title: "Teammate invitations",
           url: "https://github.com/acme/api/pull/42",

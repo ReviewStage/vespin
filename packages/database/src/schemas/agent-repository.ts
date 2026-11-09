@@ -6,8 +6,7 @@ import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "./
  * agent-repository.ts -- a repository an agent works in beside its primary one, which its own row keeps.
  *
  * The agent row stays its primary repository's record for good: its
- * `repository`, `start_branch`, `branch`, `published`, and `published_read`
- * are that repository's, and nothing here mirrors them. A row here stands
+ * `repository`, `start_branch`, and `branch` are that repository's, and nothing here mirrors them. A row here stands
  * for each extra repository, the first at position 1 and the next after it,
  * in the order the agent's Start named them (`agent-repositories.ts` reads
  * the primary and these as one list). The repository is `owner/name` as the
@@ -15,10 +14,10 @@ import { agentTable, type StoredPublishedRead, type StoredPullRequest } from "./
  * (`github-repositories.ts`). The base branch is the one its checkout is
  * cloned at and its pull request opens against by default, null for the
  * repository's default branch; the head branch is its pull request's, null
- * until one opens. `published` and `published_read` are that pull request
- * as GitHub last answered and when, in the shapes the agent row keeps its
- * own in (`StoredPullRequest`, `StoredPublishedRead`), null before a read
- * found one. Each row leaves with its agent.
+ * until one opens; its pull requests are `agent_pull_request`'s rows, as
+ * the agent's own are. `published` and `published_read` are no longer read
+ * or written, and are dropped once no deployment reads them. Each row
+ * leaves with its agent.
  */
 export const agentRepository = pgTable(
   "agent_repository",
@@ -34,9 +33,9 @@ export const agentRepository = pgTable(
     baseBranch: text("base_branch"),
     /** Its pull request's head branch; null until one opens. */
     headBranch: text("head_branch"),
-    /** Its pull request as GitHub last answered; null before a read found one. */
+    /** No longer read or written: its pull requests are `agent_pull_request`'s rows. */
     published: jsonb("published").$type<StoredPullRequest>(),
-    /** When the read that wrote `published` was, and of which branch; null before one. */
+    /** No longer read or written. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
   },
   (table) => [
