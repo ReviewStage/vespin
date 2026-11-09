@@ -183,8 +183,8 @@ const isSavedStep = Schema.is(
 );
 
 /** What a place was called as the window stood on it, where it was told. */
-function titleOf(place: Place | undefined): StepTitle | undefined {
-  return place === undefined ? undefined : (place as Titled).title;
+function titleOf(place: Titled | undefined): StepTitle | undefined {
+  return place?.title;
 }
 
 /** Whether two places were called the same. */

@@ -193,10 +193,9 @@ const RECONNECT_BACKOFF = cappedExponential(
 
 /** The reason each of the relay's close codes says. */
 const REASON_BY_CODE: ReadonlyMap<number, BrowserLiveCloseReason> = new Map(
-  Object.entries(BROWSER_LIVE_CLOSE_CODE).map(([reason, code]) => [
-    code,
-    // SAFETY: the entries' keys are the record's own, every one a close reason.
-    reason as BrowserLiveCloseReason,
+  Object.values(BROWSER_LIVE_CLOSE_REASON).map((reason) => [
+    BROWSER_LIVE_CLOSE_CODE[reason],
+    reason,
   ]),
 );
 
