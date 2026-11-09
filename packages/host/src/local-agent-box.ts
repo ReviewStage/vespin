@@ -1,4 +1,5 @@
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
+import { shellQuoted } from "@repo/features/shell-quote";
 import { Effect, Exit } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import type { PlatformError } from "effect/PlatformError";
@@ -100,11 +101,6 @@ export const AGENT_GIT_HELPER_SCRIPT = [
   `git config --add '${CREDENTIAL_HELPER_KEY}' ''`,
   `git config --add '${CREDENTIAL_HELPER_KEY}' "$${HELPER_VARIABLE}"`,
 ].join("\n");
-
-/** A word quoted for a POSIX shell. */
-function shellQuoted(word: string): string {
-  return `'${word.replaceAll("'", `'\\''`)}'`;
-}
 
 /** The folder a path stands in, as `/` joins it. */
 function parentOf(file: string): string {

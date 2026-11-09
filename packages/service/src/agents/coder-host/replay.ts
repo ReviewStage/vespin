@@ -45,6 +45,7 @@ import { mentionMarkdownLink } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { shellQuoted } from "@repo/features/shell-quote";
 import { CALL_KIND, CALL_WORDS as ROW_CALL_WORDS } from "@repo/features/turn-rows";
 import { type FileUIPart, isFileUIPart, isTextUIPart } from "ai";
 import { Effect, Option } from "effect";
@@ -566,11 +567,6 @@ const recordsOf = (source: Agent, messageId: string | undefined) =>
 function fetchWords(branch: string): string {
   const quoted = shellQuoted(branch);
   return `fetch and check that branch out with \`git remote set-branches --add origin ${quoted} && git fetch origin ${quoted} && git switch ${quoted}\`, since your checkout was cloned with the default branch alone`;
-}
-
-/** A word quoted for a POSIX shell, so a branch name git allows but a shell reads, such as one with `;` or `$`, stays one word. */
-function shellQuoted(word: string): string {
-  return `'${word.replaceAll("'", "'\\''")}'`;
 }
 
 function capitalized(words: string): string {
