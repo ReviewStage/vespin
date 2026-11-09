@@ -164,10 +164,10 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAgent;
         const other = yield* openAgent;
-        // Note that four entries of a megabyte each hold more than a page's bytes, though far fewer than its count.
-        const large = ["a", "b", "c", "d"].map((uuid) => ({
+        // Note that each entry of three megabytes holds more than a page's bytes alone, though far fewer than its count.
+        const large = ["a", "b", "c"].map((uuid) => ({
           ...entry(uuid),
-          toolOutput: uuid.repeat(1024 * 1024),
+          toolOutput: uuid.repeat(3 * 1024 * 1024),
         }));
         yield* appendSessionEntries(owner.userId, owner.conversationId, MAIN, large);
 

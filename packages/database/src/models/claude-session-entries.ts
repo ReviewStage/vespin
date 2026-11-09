@@ -20,9 +20,9 @@
  * entries hold a gap however they begin.
  */
 
-import { and, asc, desc, eq, gt, isNotNull, isNull, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { claudeBrokenSessions, claudeSessionEntries } from "../schemas/claude-session-entry.js";
 import { conversations } from "../schemas/storage.js";
@@ -134,47 +134,54 @@ const findEntries = SqlSchema.findAll({
     ),
 });
 
+/**
+ * One page of a transcript, walked an entry at a time along the key's index
+ * from the cursor, each entry measured as Postgres writes it out, until the
+ * page's count or bytes are spent. The walk goes on past each entry the page
+ * keeps, so it takes one entry past the page,
+ * answered as its id alone, so the page's end is told from the transcript's;
+ * no entry past that one is read or measured. The page's first entry is kept
+ * however large, and the walk only goes on where the account owns the
+ * conversation, which its first step checks.
+ */
 const findPage = SqlSchema.findAll({
   Request: Schema.Struct({ ...KeyFields, after: Schema.NullOr(Schema.Number) }),
-  Result: Schema.Struct({ id: Schema.Number, entry: Schema.NullOr(EntrySchema) }),
+  Result: Schema.Struct({
+    id: Schema.NumberFromString,
+    entry: Schema.NullOr(Schema.fromJsonString(EntrySchema)),
+  }),
   execute: ({ userId, conversationId, projectKey, sessionId, subpath, after }) =>
-    Database.use((db) => {
-      const size = sql<number>`octet_length(${claudeSessionEntries.entry}::text)`;
-      // One row past the page's count, each with the bytes of its entry and of every entry before it.
-      const measured = db
-        .select({
-          id: claudeSessionEntries.id,
-          entry: claudeSessionEntries.entry,
-          size: size.as("size"),
-          running: sql<number>`sum(${size}) over (order by ${claudeSessionEntries.id})`.as(
-            "running",
-          ),
-        })
-        .from(claudeSessionEntries)
-        .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
-        .where(
-          and(
-            ownConversation(userId, conversationId),
-            sessionRows(conversationId, projectKey, sessionId),
-            sql`${claudeSessionEntries.subpath} is not distinct from ${subpath}`,
-            after === null ? undefined : gt(claudeSessionEntries.id, after),
-          ),
+    Effect.flatMap(
+      SqlClient.SqlClient,
+      (client) => client`
+        with recursive walk(id, n, running) as (
+          (select stored.id, 1, octet_length(stored.entry::text)::bigint
+            from claude_session_entries stored
+            join conversations on conversations.id = stored.conversation_id
+            where conversations.id = ${conversationId} and conversations.user_id = ${userId}
+              and stored.conversation_id = ${conversationId}
+              and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+              and stored.subpath is not distinct from ${subpath}
+              and stored.id > ${after ?? 0}
+            order by stored.id limit 1)
+          union all
+          (select step.id, walk.n + 1, walk.running + octet_length(step.entry::text)
+            from walk cross join lateral (
+              select stored.id, stored.entry from claude_session_entries stored
+                where stored.conversation_id = ${conversationId}
+                  and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+                  and stored.subpath is not distinct from ${subpath}
+                  and stored.id > walk.id
+                order by stored.id limit 1
+            ) step
+            where walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES}))
         )
-        .orderBy(asc(claudeSessionEntries.id))
-        .limit(PAGE_ENTRIES + 1)
-        .as("measured");
-      // Note that an entry past the page's bytes is answered as its id alone, so the page's end is told from the transcript's.
-      return db
-        .select({
-          id: measured.id,
-          entry:
-            sql<SessionEntry | null>`case when ${measured.running} <= ${PAGE_BYTES} or ${measured.running} = ${measured.size} then ${measured.entry} end`.mapWith(
-              claudeSessionEntries.entry,
-            ),
-        })
-        .from(measured)
-        .orderBy(asc(measured.id));
-    }),
+        select walk.id::text as id,
+          case when walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES})
+            then stored.entry::text end as entry
+          from walk join claude_session_entries stored on stored.id = walk.id
+          order by walk.id`,
+    ),
 });
 
 const findSessions = SqlSchema.findAll({
@@ -388,12 +395,9 @@ export function loadSessionEntryPage(
 ): EntryEffect<SessionEntryPage> {
   return findPage({ ...keyFields(userId, conversationId, key), after }).pipe(
     Effect.map((rows) => {
-      // Since the bytes only grow along the page, its entries are the leading rows that carry one.
+      // Note that only the walk's last row can be past the page, so its entries are the rows that carry one.
       const kept: Array<{ readonly id: number; readonly entry: SessionEntry }> = [];
-      for (const { id, entry } of rows.slice(0, PAGE_ENTRIES)) {
-        if (entry === null) break;
-        kept.push({ id, entry });
-      }
+      for (const { id, entry } of rows) if (entry !== null) kept.push({ id, entry });
       const last = kept.at(-1);
       return {
         entries: kept.map((row) => row.entry),
