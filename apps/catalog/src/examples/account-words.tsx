@@ -1,4 +1,4 @@
-import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import {
   AccountWords,
   BUTTON_VARIANT,
@@ -22,11 +22,9 @@ import { CatalogSection } from "../section";
  * them, at a settings page's measure and narrower than 380px.
  */
 
-type Provider = (typeof INTEGRATION_PROVIDER)[keyof typeof INTEGRATION_PROVIDER];
-
 interface Account {
   readonly key: string;
-  readonly provider: Provider;
+  readonly provider: IntegrationProvider;
   readonly name: string;
   readonly account?: string;
   readonly expired?: boolean;
