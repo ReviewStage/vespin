@@ -19,6 +19,7 @@ CI's macOS job below. Every command here runs from `apps/mobile`.
 | --- | --- |
 | `pnpm ios -- --device "iPhone 18 Pro"` | Generate `ios/` if it is missing, build a Debug app, install it on that simulator, and start Metro for it |
 | `pnpm start` | Metro alone, for a Debug app already installed |
+| `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
@@ -77,6 +78,30 @@ Each simulator's pictures, in each appearance, are under
 `/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
 screenshot is under `debug/<flow>/screenshots/` beside them.
+
+## The host
+
+The app runs the shared client host in its own process, as the web app runs
+it in a tab (`apps/web/src/app/web-host.ts`): `src/host/compose-mobile.ts`
+is `composeWeb`'s twin, started once by the app's one runtime edge
+(`src/host/mobile-runtime.ts`) over the device's seams
+(`src/host/device-seams.ts`): the settings file under the app's Documents
+through `expo-file-system`, ids from `expo-crypto`, the relay socket over
+React Native's `WebSocket` with the bearer header, and the service at
+`https://vespin.dev` unless `EXPO_PUBLIC_SERVICE_ORIGIN` names a Preview at
+build time. The screens read the document as the panel does, with
+`useQuery({ ...appStateQuery, select })` (`src/host/app-state-query.ts`) and
+the selects of `@repo/host/app-state-reads`, and send acts on the host's act
+port, served in-process over `src/host/in-process-channel.ts` in place of a
+`MessageChannel`. Until the sign-in task lands the host runs signed out.
+
+A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
+stands the host on the desktop's synthetic data instead of the service, the
+Inbox profile's threads among it (`@repo/host/fixture-inbox`), which is how
+the Maestro flows run with no server. What Hermes lacks of the web platform
+the host stands on is polyfilled in one place, `src/host/polyfills.ts`, each
+with a line on why; Shiki stays out of the app, and a fenced block is drawn
+plain.
 
 ## Tests
 

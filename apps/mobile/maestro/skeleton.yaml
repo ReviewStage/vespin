@@ -4,20 +4,26 @@
 # which `scripts/simulator-screenshots.sh` names per device.
 appId: dev.vespin.ios
 ---
+# The app is launched on the host's Inbox fixture (`src/host/launch-arguments.ts`),
+# so the Inbox lists the synthetic threads the panel's own fixture run lists
+# (`@repo/host/fixture-inbox`), read from the host's document, and no server
+# is reached; the Tasks tab still draws the placeholder rows.
 - launchApp:
     clearState: true
+    arguments:
+      fixture: inbox
 - assertVisible: "Inbox"
 - takeScreenshot: inbox
 # A row's detail: pushed over the list in a compact window, and beside it in
 # a regular one.
-- tapOn: "Review the invite flow"
-- assertVisible: "A pull request waits for your go."
+- tapOn: "Who can withdraw an invite?"
+- assertVisible: "Recommended"
 - takeScreenshot: inbox-thread
 # Note that pressing the Inbox tab again pops its stack back to the list on a
 # compact window, and is a no-op beside the split view on a regular one.
 - tapOn: "Inbox"
-- tapOn: "Pick the tab bar's placement"
-- assertVisible: "Recommended"
+- tapOn: "Run the memberships migration on preview?"
+- assertVisible: "Approve"
 - takeScreenshot: inbox-ask
 - tapOn: "Inbox"
 - tapOn: "Tasks"

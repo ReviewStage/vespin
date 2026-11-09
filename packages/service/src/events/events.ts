@@ -54,6 +54,7 @@ export const WORKSPACE_GROUP_TYPE = "workspace";
 const PRODUCT_EVENT_LIB = {
   [PRODUCT_PLATFORM.DESKTOP]: "vespin-desktop",
   [PRODUCT_PLATFORM.WEB]: "vespin-web",
+  [PRODUCT_PLATFORM.IOS]: "vespin-ios",
 } as const satisfies Record<ProductClientPlatform, string>;
 
 /** The property every forwarded event names its platform under. */

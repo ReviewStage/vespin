@@ -15,6 +15,7 @@
     "apps/web/server/runtime.ts",
     "apps/web/server/seed-clients.ts",
     "apps/web/src/app/web-root.tsx",
+    "apps/mobile/src/host/mobile-runtime.ts",
     "packages/agent-runner/src/main.ts",
     "tools/claude-code-probe/src/cli.ts",
     "tools/demo-postgres/demo-postgres.ts"

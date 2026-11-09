@@ -1,8 +1,11 @@
-// [id].tsx -- one Inbox thread.
+// [id].tsx -- one Inbox thread, read from the host's document.
 
-import { INBOX_PLACEHOLDER } from "../../../placeholders.js";
+import { useQuery } from "@tanstack/react-query";
+import { appStateQuery } from "../../../host/app-state-query.js";
+import { EMPTY_INBOX, selectInboxCollection } from "../../../host/inbox-rows.js";
 import { CollectionDetailScreen } from "../../../screens/collection-screens.js";
 
 export default function InboxThreadScreen() {
-  return <CollectionDetailScreen collection={INBOX_PLACEHOLDER} />;
+  const { data } = useQuery({ ...appStateQuery, select: selectInboxCollection });
+  return <CollectionDetailScreen collection={data ?? EMPTY_INBOX} />;
 }

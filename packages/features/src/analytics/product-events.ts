@@ -678,6 +678,7 @@ export function productEventBatchFromWire(value: UnparsedWireValue): ProductEven
 export const PRODUCT_PLATFORM = {
   DESKTOP: "desktop",
   WEB: "web",
+  IOS: "ios",
   SERVER: "server",
 } as const;
 
@@ -711,7 +712,7 @@ const ProductEventBuildSchema = Schema.Struct({
   ),
   [PRODUCT_EVENT_BUILD_FIELD.PACKAGED]: Schema.optionalKey(Schema.Boolean),
   [PRODUCT_EVENT_BUILD_FIELD.PLATFORM]: Schema.optionalKey(
-    Schema.Literals([PRODUCT_PLATFORM.DESKTOP, PRODUCT_PLATFORM.WEB]),
+    Schema.Literals([PRODUCT_PLATFORM.DESKTOP, PRODUCT_PLATFORM.WEB, PRODUCT_PLATFORM.IOS]),
   ),
 });
 

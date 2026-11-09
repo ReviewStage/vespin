@@ -14,12 +14,22 @@
   },
   "dependencies": {
     "@expo/ui": "58.0.27",
+    "@formatjs/intl-getcanonicallocales": "3.3.1",
+    "@formatjs/intl-listformat": "9.0.2",
+    "@formatjs/intl-locale": "5.4.3",
+    "@formatjs/intl-pluralrules": "7.0.3",
+    "@formatjs/intl-segmenter": "12.3.2",
+    "@orpc/client": "catalog:",
     "@repo/brand": "workspace:*",
     "@repo/features": "workspace:*",
+    "@repo/host": "workspace:*",
     "@repo/ui-native": "workspace:*",
+    "@tanstack/react-query": "5.106.1",
     "effect": "catalog:",
     "expo": "58.0.23",
     "expo-constants": "58.0.15",
+    "expo-crypto": "58.0.7",
+    "expo-file-system": "58.0.13",
     "expo-glass-effect": "58.0.5",
     "expo-linking": "58.0.16",
     "expo-router": "58.0.30",
@@ -31,7 +41,15 @@
     "react-native-screens": "4.30.1"
   },
   "devDependencies": {
+    "@babel/plugin-transform-parameters": "7.29.7",
+    "@effect/platform-node": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@repo/credentials": "workspace:*",
+    "@repo/runtime": "workspace:*",
+    "@repo/settings": "workspace:*",
+    "@repo/wire": "workspace:*",
     "@types/react": "catalog:mobile",
+    "babel-preset-expo": "58.0.24",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
