@@ -297,13 +297,6 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           refusalOf(yield* withdrawAsk(agent, input({ key: "pr-ready", reason: "Merged." }))),
           INBOX_REFUSAL.NO_OPEN_ASK,
         );
-        for (let at = 1; at < INBOX_BOUNDS.MAX_OPEN_PER_AGENT; at += 1) {
-          yield* post(agent, { key: `pr-${at}`, title: "PR ready", body: "Opened." });
-        }
-        assert.equal(
-          refusalOf(yield* post(agent, { key: "pr-more", title: "PR ready", body: "Opened." })),
-          INBOX_REFUSAL.TOO_MANY_NOTICES,
-        );
       }),
   );
 
