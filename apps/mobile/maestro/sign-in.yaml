@@ -12,6 +12,7 @@ appId: dev.vespin.ios
     arguments:
       authServer: stub
 - assertVisible: "Sign in to Vespin"
+- waitForAnimationToEnd
 - takeScreenshot: sign-in
 - tapOn: "Continue with GitHub"
 - assertVisible: "Inbox"
@@ -26,7 +27,12 @@ appId: dev.vespin.ios
 - tapOn: "Settings"
 - assertVisible: "Ada Lovelace"
 - assertVisible: "Analytical Engines"
+- waitForAnimationToEnd
 - takeScreenshot: settings
 - tapOn: "Analytical Engines"
+# Note that Sign out stands at the form's foot, below the fold of a short
+# window such as the folded iPhone Duo's, so the form scrolls to it first.
+- scrollUntilVisible:
+    element: "Sign out"
 - tapOn: "Sign out"
 - assertVisible: "Sign in to Vespin"

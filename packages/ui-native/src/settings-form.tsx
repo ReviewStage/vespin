@@ -13,6 +13,7 @@ import {
   background,
   font,
   foregroundStyle,
+  labelsHidden,
   listRowBackground,
   pickerStyle,
   scrollContentBackground,
@@ -132,7 +133,7 @@ export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
       onSelectionChange={(id) => {
         if (id !== null) onPick(id);
       }}
-      modifiers={[pickerStyle("inline"), listRowBackground(colors.SURFACE)]}
+      modifiers={[pickerStyle("inline"), labelsHidden(), listRowBackground(colors.SURFACE)]}
     >
       {options.map((option) => (
         <Text key={option.id} modifiers={[tag(option.id), foregroundStyle(colors.TEXT)]}>
