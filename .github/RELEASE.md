@@ -148,7 +148,7 @@ previous release.
 ## iOS releases
 
 The iOS app (`apps/mobile`) reaches testers through TestFlight, by the **Release iOS**
-workflow (`.github/workflows/release-ios.yml`) on a `macos-26` runner with Xcode 27.1. It
+workflow (`.github/workflows/release-ios.yml`) on GitHub's `xcode-27` runner with Xcode 27.1. It
 runs on an `ios-vX.Y.Z` tag, whose version must match `version` in
 `apps/mobile/app.config.ts`, and on a manual dispatch. Both upload: TestFlight is itself
 the rehearsal, since a build reaches no tester until it is added to a group.
@@ -187,12 +187,12 @@ gh variable set APPLE_TEAM_ID --body 'TEAMID'
 ```
 
 To cut a build, bump `version` in `apps/mobile/app.config.ts` through a merged PR, then
-tag the merged commit:
+tag the merged commit with that version in place of `X.Y.Z`:
 
 ```sh
 git fetch origin main
-git tag ios-v0.1.0 origin/main
-git push origin ios-v0.1.0
+git tag ios-vX.Y.Z origin/main
+git push origin ios-vX.Y.Z
 ```
 
 The build appears in App Store Connect under TestFlight once Apple finishes processing it,
