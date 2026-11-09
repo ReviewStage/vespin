@@ -26,6 +26,8 @@ const SPLASH = {
   DARK_IMAGE: "../../packages/brand/assets/mark/mark-color-dark-1024.png",
 };
 
+// An asset catalog's sRGB components, as Xcode writes them; the icon bundle's
+// `iosColor` in generate-brand-assets.mjs is the same conversion in its own format.
 const channel = (hex: string, at: number) =>
   (Number.parseInt(hex.slice(at, at + 2), 16) / 255).toFixed(4);
 const colorComponents = (hex: string) => ({
