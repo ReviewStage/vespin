@@ -7,14 +7,13 @@ import { Client, escapeIdentifier } from "pg";
  *
  * Locally every opening of the store harness is a fresh PGlite, so a
  * statement that forgets to scope itself by account or conversation reaches
- * only the rows its own file wrote. The CI Postgres job used to point every
- * file at the one database `db:migrate` had migrated, and the same statement
- * there deleted another file's rows, in whichever file the scheduler had
- * running beside it: four times a flake that no reading of the failing file
- * could explain. So on Postgres an opening now clones the migrated database
- * as a template (`create database ... template ...`, one copy of an 11 MB
- * database, tens of milliseconds on Postgres 18) and connects to the clone
- * alone, which gives one opening exactly what PGlite gives it. The
+ * only the rows its own file wrote. Note that files sharing the one database
+ * `db:migrate` migrated would let such a statement delete another file's
+ * rows, in whichever file the scheduler ran beside it, a flake no reading of
+ * the failing file explains. So on Postgres an opening clones the migrated
+ * database as a template (`create database ... template ...`, one copy of an
+ * 11 MB database, tens of milliseconds on Postgres 18) and connects to the
+ * clone alone, which gives one opening exactly what PGlite gives it. The
  * clone carries the migrations table, so a test of the migrator sees the
  * database `db:migrate` recorded, and `db:migrate` stays the one runner that
  * applies anything to a Postgres.

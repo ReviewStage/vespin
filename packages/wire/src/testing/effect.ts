@@ -23,8 +23,7 @@ export function runTest<A, E, R>(
 
 /**
  * Runs an Effect under a `TestClock` set to `millis`, for a test still on a
- * promise runner whose subject reads `Clock`: what used to be handed in as
- * `now: () => millis` is the ambient clock instead. A test on `it.effect`
+ * promise runner whose subject reads `Clock`. A test on `it.effect`
  * already runs under a `TestClock` and sets its own time.
  */
 export const atInstant =
