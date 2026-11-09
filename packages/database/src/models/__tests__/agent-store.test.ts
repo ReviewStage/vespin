@@ -2080,7 +2080,6 @@ it.layer(getTestDB())("the coding-agent store's routing of an agent", (it) => {
         const agent = yield* startIn(starter, workspace, {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
-          subscriptionId: null,
         });
 
         const fresh = Option.getOrThrow(yield* readAgentRouting(starter, agent.id));
