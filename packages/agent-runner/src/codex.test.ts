@@ -1210,6 +1210,31 @@ it.effect.each([
     ],
   },
   {
+    opened:
+      "the file of a fork a provider's refusal of the resume made, then the segment its rewind began",
+    files: [FORKED_FILE, SEGMENT_FILE],
+    config: { threadId: SOURCE_THREAD, rewindBefore: LINE.STEERED },
+    exchanges: ([file = "", segment = ""]: readonly string[]) => [
+      exchange(RESUMED, 0),
+      exchange(RESUMED, 1),
+      {
+        method: "thread/resume",
+        reply: [
+          {
+            id: 2,
+            error: {
+              code: -32600,
+              message: "Model provider mismatch",
+              data: { type: "modelProviderMismatch" },
+            },
+          },
+        ],
+      },
+      forked(file),
+      ...revertedInto(segment),
+    ],
+  },
+  {
     opened: "a fork's file, then the segment the fork's cut began",
     files: [FORKED_FILE, SEGMENT_FILE],
     config: { threadId: SOURCE_THREAD, fork: true, rewindBefore: LINE.STEERED },
