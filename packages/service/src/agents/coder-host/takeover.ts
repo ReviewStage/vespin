@@ -12,7 +12,13 @@ import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { type NoteFiles, type Replay, stepsBytes, summaryBytes } from "@repo/features/agent-replay";
+import {
+  type NoteFiles,
+  type Replay,
+  stepsBytes,
+  summaryBytes,
+  utf8Bytes,
+} from "@repo/features/agent-replay";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -244,10 +250,6 @@ function wordsOf(prompt: string | undefined, note: string | undefined): string |
 function noteFilesOf(files: readonly AgentAttachment[]): NoteFiles {
   const text = files.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT).length;
   return { text, other: files.length - text };
-}
-
-function utf8Bytes(text: string): number {
-  return new TextEncoder().encode(text).byteLength;
 }
 
 /** The kind of Start that hands on `from`: a continue where it names no message, a fork where it does. */

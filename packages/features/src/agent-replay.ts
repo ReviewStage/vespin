@@ -380,7 +380,7 @@ export function replayText(replay: Replay): string {
 }
 
 /** The bytes a run of text takes in UTF-8, which is what a model's tokens are estimated from. */
-function utf8Bytes(text: string): number {
+export function utf8Bytes(text: string): number {
   return new TextEncoder().encode(text).byteLength;
 }
 
